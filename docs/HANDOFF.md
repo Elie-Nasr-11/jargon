@@ -6,6 +6,28 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 14:40
+
+Status: Finished (frontend feature) / Blocked (live 0002 apply)
+
+Task: Expected-output checks (frontend) + apply 0002 to the live DB.
+
+Frontend (done, pushed):
+
+- `editor/editor.js`, `index.html`, `assets/theme.css`: after a clean run, compare the
+  output to `lesson.expected_output` and show a pass / "not quite" badge. No-op when the
+  lesson has no `expected_output`, the run is mid-ASK, or it did not finish cleanly.
+  Verified with `node --check`.
+
+0002 live apply (BLOCKED): reviewed and verified 0002 - 41 tests pass and all 10 starters
+reproduce their `expected_output` exactly; the migration is additive + idempotent (updates
+`lesson1-5`, inserts `coding1-5`). Tried to apply via Supabase MCP but calls return
+"requires approval" and aren't granted, so the live DB is unchanged. Waiting on the human
+to approve the Supabase tool prompt (or Codex to apply via dashboard).
+
+Still gating a fully live app: engine deploy + `JARGON_ENGINE_URL` (run), `chat` persona +
+`OPENAI_API_KEY` (B5).
+
 ## Codex -> Claude / Human - 2026-06-15
 
 Status: Finished

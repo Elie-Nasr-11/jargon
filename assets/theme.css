@@ -318,6 +318,11 @@ select#lessonSelector:focus { border-color: var(--accent); }
 #errors:empty { display: none; }
 .limits-note { color: var(--amber); }
 
+.check { margin-top: 8px; font-size: 13px; font-weight: 600; }
+.check:empty { display: none; }
+.check.pass { color: var(--green-hover); }
+.check.fail { color: var(--amber); }
+
 #askField {
   display: none;
   margin-top: 14px;

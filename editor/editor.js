@@ -8,7 +8,7 @@
   "use strict";
 
   let client, getUser;
-  let textarea, statusEl, output, errorsEl, askField, askInput;
+  let textarea, statusEl, output, errorsEl, checkEl, askField, askInput;
   let cm = null; // CodeMirror instance, if available
   let currentLesson = null;
   let code = "";
@@ -50,6 +50,7 @@
     statusEl = root.querySelector("#run-status");
     output = root.querySelector("#output");
     errorsEl = root.querySelector("#errors");
+    checkEl = root.querySelector("#check-result");
     askField = root.querySelector("#askField");
     askInput = root.querySelector("#askInput");
 
@@ -163,6 +164,7 @@
     if (running) return;
     running = true;
     setStatus("running", "Running…");
+    clearCheck();
     try {
       const { data, error } = await client.functions.invoke("run", {
         body: { code, answers },
@@ -183,6 +185,8 @@
         askInput.value = "";
         askInput.focus();
       }
+
+      renderCheck(r.output, r.status, waiting);
 
       if (persist) saveSubmission(r.output.join("\n"));
     } catch (err) {
@@ -275,6 +279,28 @@
     }
   }
 
+  function clearCheck() {
+    checkEl.className = "check";
+    checkEl.textContent = "";
+  }
+
+  // Compare a completed run against the lesson's expected_output (added by the
+  // 0002 lesson-spine migration). No-op when the lesson has no expected output,
+  // the run is mid-ASK, or it did not finish cleanly.
+  function renderCheck(outputLines, status, waiting) {
+    clearCheck();
+    const expected = currentLesson && currentLesson.expected_output;
+    if (!expected || waiting || status !== "ok") return;
+    const actual = outputLines.join("\n").trim();
+    if (actual === String(expected).trim()) {
+      checkEl.classList.add("pass");
+      checkEl.textContent = "✓ Output matches the expected result";
+    } else {
+      checkEl.classList.add("fail");
+      checkEl.textContent = "Not quite — your output doesn’t match the expected result yet";
+    }
+  }
+
   function copyInput() {
     navigator.clipboard.writeText(getCode()).then(() => flashStatus("Input copied"));
   }
@@ -300,6 +326,7 @@
     askField.classList.remove("active");
     output.innerHTML = "";
     errorsEl.innerHTML = "";
+    clearCheck();
     setStatus("", "");
   }
 
