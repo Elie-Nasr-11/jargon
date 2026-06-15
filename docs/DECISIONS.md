@@ -2,6 +2,27 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-15: Pivot To A Conversational Lesson-Runner
+
+Decision:
+
+- The product's primary interface is a stateful, guided conversation that *is* the class
+  (begin/end, grades, retry/continue, multiple answer modes: text/code/file/multiple-choice),
+  not a free-form chatbot or the split-view. The split-view becomes a legacy stepping stone.
+- The `chat` edge function becomes a stateful flow engine (load state -> build cached prompt
+  -> structured-output + tool-use turn -> grade -> persist -> advance), not a passthrough.
+- Lesson flow is hybrid: authored objectives/checkpoints per lesson + AI conversation,
+  enforced by the orchestrator.
+- Mentor LLM is decided by a spike comparing Claude tiers (`claude-haiku-4-5` bulk +
+  `claude-sonnet-4-6` grading, with prompt caching) vs OpenAI `gpt-4o`, measured on real
+  lessons (cost/turn, guardrail adherence, grading quality).
+- Audience is school students; the Level 0-3 ladder (Natural logic -> Baby Jargon -> Jargon
+  -> Python bridge) is the per-student adaptivity axis.
+
+Reason:
+
+- Matches the human's stated product vision; see `docs/VISION.md` for the full architecture.
+
 ## 2026-06-15: Seed A 10-Lesson V1 Spine
 
 Decision:

@@ -6,6 +6,48 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 19:20
+
+Status: Direction set (north star written; no app code changed)
+
+Task: Capture the human's product vision and re-sequence the project around it.
+
+The human defined the real product. Full write-up: `docs/VISION.md` (+ decisions in
+`docs/DECISIONS.md`). Summary:
+
+- Pivot from the split-view to a **stateful conversational lesson-runner** — a guided
+  conversation that *is* the class (begin/end, grades, retry, and multiple student answer
+  modes: text / code / file / multiple-choice), with hard guardrails and per-student adaptation.
+- The `chat` edge function becomes a **flow engine** (load lesson+step+session+mastery ->
+  build cached prompt -> structured-output + tool-use turn -> grade -> persist -> advance),
+  not a passthrough.
+- Flow is **hybrid**: authored objectives/checkpoints + AI conversation, orchestrator-enforced.
+- Mentor LLM is **TBD by a spike**: Claude tiers (`claude-haiku-4-5` + `claude-sonnet-4-6`
+  with prompt caching) vs `gpt-4o`, measured on a real lesson.
+
+Proposed split for the pivot (same ownership model):
+
+- **Codex (backend):**
+  - B7 Data model: `lesson_steps`, `lesson_sessions`, `mastery` (migration on top of 0002);
+    see the schema sketch in `docs/VISION.md`.
+  - B8 The `chat` flow engine: structured-output turn contract
+    `{say, expected_mode, options?, on_topic, advance, step_id, grade?, mastery_signal}` +
+    tools (`run_jargon`, `grade`, `advance_step`); persist turns/grades/mastery.
+  - B9 The model spike: run one real lesson through Claude (Haiku+Sonnet + caching) and
+    gpt-4o; report cost/turn, guardrail adherence, grading quality. Needs an
+    `ANTHROPIC_API_KEY` secret alongside `OPENAI_API_KEY`.
+  - B10 Engine: sandboxed **Python** runner (then other languages).
+- **Claude (frontend):**
+  - The conversational lesson-runner UI: render text / inline code editor / MCQ / file upload
+    by the turn's `expected_mode`, plus session progress, grade, and retry/continue.
+- **Human:** set `ANTHROPIC_API_KEY` (for the spike) in Supabase; decide the model after the spike.
+
+Open: still waiting on Supabase tool approval to apply migration `0002_lesson_spine.sql` to
+the live DB (verified safe; see the 14:40 entry).
+
+Suggested next: Codex starts B7 (data model) + B9 (spike); Claude prototypes the conversational
+turn UI against the structured-turn contract above.
+
 ## Claude -> Codex / Human - 2026-06-15 14:40
 
 Status: Finished (frontend feature) / Blocked (live 0002 apply)
