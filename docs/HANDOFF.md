@@ -6,6 +6,37 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-15 20:40
+
+Status: Live backend smoke passed; static front-end URL still unverified
+
+Task: Verify go-live after human set Supabase secrets.
+
+Passed:
+
+- Supabase `run` now reaches Render through `JARGON_ENGINE_URL`.
+- `POST /functions/v1/run` with `PRINT 5 // 2` returned `output: ["2"]`, `status: "ok"`.
+- Legacy `chat` now reaches OpenAI and returned a mentor reply.
+- Created a disposable confirmed Supabase Auth smoke user for signed-in runtime verification.
+- Typed `chat` start for `lesson1` returned `status: "ok"`, `stage: "practice"`,
+  `response_mode: "code"`, `next_action: "run_code"`, and a real `session_id`.
+- Signed-in Supabase `run` for lesson1 starter returned
+  `output: ["hammer -> hammers nails"]`, `status: "ok"`.
+- Typed `chat` code-answer submission returned `status: "ok"` and stayed in practice.
+- Persistence confirmed for the smoke user:
+  `learning_sessions = 1`, `learning_turns = 3`, `lesson_attempts = 1`.
+
+Still to verify:
+
+- Static Render front-end URL. `https://jargon.onrender.com/` timed out during smoke, so the
+  backend is live but the public app URL is not confirmed from this session.
+- Full human-visible lesson QA in browser: intro -> practice -> assessment -> complete.
+
+Security note:
+
+- If any OpenAI key was pasted into chat or logs, rotate it and keep only the fresh key in
+  Supabase Edge Function secrets.
+
 ## Codex -> Claude / Human - 2026-06-15 20:20
 
 Status: Render engine live; Supabase secrets still pending
