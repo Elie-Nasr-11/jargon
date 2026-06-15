@@ -6,11 +6,22 @@ This repository contains the hardened interpreter, sandbox runner, tests, and co
 
 ## Current Shape
 
+- `AGENTS.md`, `CLAUDE.md`, and `CODEX.md` define cross-agent coordination rules.
 - `jargon_interpreter.py` contains the engine and `run_sandboxed()` entrypoint.
 - `jargon_examples.py` loads older lesson/example `.txt` files and extracts runnable Jargon code.
 - `tools/validate_examples.py` runs a folder of examples as a smoke-test corpus.
 - `tests/` contains regression, hardening, fuzz, sandbox, and example-loader tests.
 - `docs/` explains the language and the project history.
+
+## Working With Agents
+
+Codex and Claude Code coordinate through repo files. Start with:
+
+- `AGENTS.md`
+- `docs/HANDOFF.md`
+- `docs/ROADMAP.md`
+- `docs/DECISIONS.md`
+- `docs/OPEN_QUESTIONS.md`
 
 ## Quick Start
 
