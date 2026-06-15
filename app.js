@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const select = document.getElementById("lessonSelector");
   const userLabel = document.getElementById("user-label");
   const lessonMeta = document.getElementById("lesson-meta");
+  const lessonModule = document.getElementById("lesson-module");
 
   let lessons = [];
   let currentUser = null;
@@ -96,6 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const lesson = lessons.find((l) => l.id === id);
     if (!lesson) return;
     if (lessonMeta) lessonMeta.textContent = lesson.level || lesson.module || "";
+    if (lessonModule) lessonModule.textContent = lesson.module || "Course";
     if (window.Motion) window.Motion.lessonChange();
     LessonRunner.start(lesson);
   }

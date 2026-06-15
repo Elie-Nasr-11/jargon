@@ -36,7 +36,7 @@
     document.getElementById("auth-toggle").textContent = signup
       ? "Have an account? Sign in"
       : "New here? Create an account";
-    document.getElementById("signup-fields").style.display = signup ? "block" : "none";
+    document.getElementById("signup-fields").style.display = signup ? "grid" : "none";
     msgEl.textContent = "";
   }
 

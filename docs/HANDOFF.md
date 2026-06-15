@@ -6,6 +6,46 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-16 00:35
+
+Status: Cinematic static UI redesign implemented locally; ready for commit/deploy
+
+Task: Redesign the no-build Jargon frontend around the approved dark cinematic direction while
+preserving Supabase auth, lessons, runner, and typed chat contracts.
+
+What changed:
+
+- Reworked `index.html` into a dark high-contrast auth entry screen and signed-in course
+  workspace.
+- Rebuilt `assets/theme.css` around sparse white typography, glass panels, thin borders, and an
+  electric blue accent.
+- Replaced the light background in `assets/scene.js` with a full-bleed Three.js logic field:
+  glossy ring/sphere, subtle particles, pointer parallax, and reduced-motion fallback.
+- Reworked `assets/motion.js` for GSAP entrance, lesson, transcript, dock, and run-output motion
+  with safe fallbacks.
+- Updated `runner/runner.js` so the signed-in app feels like a focused lesson workspace while
+  preserving real Supabase `run` + typed `chat` behavior.
+- Updated auth/app glue without changing backend contracts.
+- Created/updated the requested Supabase student account, confirmed email server-side, verified
+  email/password sign-in, and ensured `public.profiles` has `Elie Nasr` / `Student`.
+
+Verification:
+
+- `node --check app.js auth.js runner/runner.js runner/engine-supabase.js runner/engine-mock.js assets/scene.js assets/motion.js` -> passed.
+- Repo secret scan for the temporary account password and pasted API key material -> no new leaks
+  in changed frontend files.
+- Browser-rendered desktop auth, mobile auth, and signed-in app screenshots checked locally.
+- Live signed-in flow was verified against Supabase before this handoff: lessons loaded, starter
+  code ran through Supabase `run`, and the runner stayed out of Preview mode.
+
+Deploy notes:
+
+- Push/redeploy the static Render service from `main`.
+- Verify the correct public student app URL serves this static redesign, not the older React build.
+- After that URL is confirmed, set Render engine env var `JARGON_APP_URL` to the public app URL so
+  `https://jargon-engine.onrender.com/` redirects humans to the app.
+- Ask the human to change the temporary student password after first login.
+
 ## Codex -> Claude / Human - 2026-06-15 23:50
 
 Status: Engine root URL polish implemented

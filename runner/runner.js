@@ -9,7 +9,7 @@
   "use strict";
 
   var client, getUser, root;
-  var lessonEl, levelEl, modeEl, fillEl, progLabel, transcript, dock;
+  var lessonEl, levelEl, modeEl, fillEl, progLabel, transcript, dock, workbenchLabel;
   var currentLesson = null;
   var busy = false;
   var primaryEngine, fallbackEngine, activeEngine;
@@ -23,15 +23,23 @@
     activeEngine = primaryEngine;
     if (!root) return;
     root.innerHTML =
-      '<div class="runner-head">' +
-      '  <div class="runner-title"><span id="runner-lesson"></span>' +
-      '  <span id="runner-level" class="level-chip"></span>' +
-      '  <span id="runner-mode" class="mode-chip"></span></div>' +
-      '  <div class="progress"><div id="progress-fill" class="progress-fill"></div></div>' +
-      '  <div id="progress-label" class="progress-label"></div>' +
-      "</div>" +
-      '<div id="runner-transcript" class="transcript" aria-live="polite"></div>' +
-      '<div id="runner-dock" class="dock"></div>';
+      '<div class="runner-grid">' +
+      '  <section class="mentor-card">' +
+      '    <div class="runner-head">' +
+      '      <div class="mentor-identity"><span class="mentor-avatar"></span><span>Jargon Mentor</span></div>' +
+      '      <div class="runner-title"><span id="runner-lesson"></span>' +
+      '      <span id="runner-level" class="level-chip"></span>' +
+      '      <span id="runner-mode" class="mode-chip"></span></div>' +
+      '    </div>' +
+      '    <div class="progress"><div id="progress-fill" class="progress-fill"></div></div>' +
+      '    <div id="progress-label" class="progress-label"></div>' +
+      '    <div id="runner-transcript" class="transcript" aria-live="polite"></div>' +
+      '  </section>' +
+      '  <section class="workbench-card">' +
+      '    <div class="workbench-head"><div><span id="workbench-label">Your answer</span><small>Practice space</small></div><span class="workbench-spark"></span></div>' +
+      '    <div id="runner-dock" class="dock"></div>' +
+      '  </section>' +
+      '</div>';
     lessonEl = root.querySelector("#runner-lesson");
     levelEl = root.querySelector("#runner-level");
     modeEl = root.querySelector("#runner-mode");
@@ -39,6 +47,7 @@
     progLabel = root.querySelector("#progress-label");
     transcript = root.querySelector("#runner-transcript");
     dock = root.querySelector("#runner-dock");
+    workbenchLabel = root.querySelector("#workbench-label");
   }
 
   async function start(lesson) {
@@ -51,8 +60,11 @@
     levelEl.textContent = "";
     transcript.innerHTML = "";
     dock.innerHTML = "";
+    root.__lastRunResult = null;
     setProgress({ index: 0, total: 1 });
+    bubble("ai", "Syncing this lesson with Jargon Mentor…", "Jargon Mentor");
     try {
+      transcript.innerHTML = "";
       render(await activeEngine.start(lesson));
     } catch (e) {
       // Backend not live yet — fall back to the local preview flow.
@@ -140,6 +152,12 @@
   function renderDock(turn) {
     dock.innerHTML = "";
     var mode = turn.expected_mode;
+    dock.dataset.mode = mode || "";
+    root.__lastRunResult = null;
+    if (workbenchLabel) {
+      workbenchLabel.textContent =
+        mode === "code" ? "Your Code" : mode === "mcq" ? "Choose" : mode === "file" ? "File" : "Your answer";
+    }
 
     if (mode === "text") {
       var ta = el("textarea");
@@ -167,6 +185,9 @@
       var code = el("textarea", "code-input");
       code.value = turn.starter || "";
       code.spellcheck = false;
+      code.addEventListener("input", function () {
+        root.__lastRunResult = null;
+      });
       var out = el("div", "runner-output");
       code.addEventListener("keydown", function (e) {
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -225,7 +246,9 @@
   function submitCode(v) {
     if (busy) return;
     bubble("me", "<em>Submitted code</em>", "You");
-    next({ mode: "code", value: v });
+    var answer = { mode: "code", value: v };
+    if (root.__lastRunResult) answer.run_result = root.__lastRunResult;
+    next(answer);
   }
   function submitFile(input) {
     if (busy) return;
@@ -266,13 +289,16 @@
       var res = await client.functions.invoke("run", { body: { code: code, answers: [] } });
       if (res.error) throw res.error;
       var d = res.data || {};
+      root.__lastRunResult = d;
       var lines = d.output || d.result || [];
       if (!Array.isArray(lines)) lines = [lines];
       var errs = Array.isArray(d.errors) ? d.errors : [];
       var text = (lines.join("\n") + (errs.length ? "\n" + errs.join("\n") : "")).trim();
       out.textContent = text || "[no output]";
+      if (window.Motion) window.Motion.pulseOutput(out);
     } catch (err) {
       out.textContent = "[engine not reachable yet] " + (err.message || err);
+      if (window.Motion) window.Motion.pulseOutput(out);
     }
   }
 
