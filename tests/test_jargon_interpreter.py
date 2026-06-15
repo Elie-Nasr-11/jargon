@@ -2,6 +2,7 @@ import random
 import string
 import unittest
 
+from jargon_examples import extract_code, load_example, run_example
 from jargon_interpreter import JargonLimits, StructuredJargonInterpreter, run_sandboxed
 
 
@@ -256,6 +257,37 @@ class StructuredJargonInterpreterTests(unittest.TestCase):
         self.assertEqual(zero_result["status"], "error")
         self.assertTrue(any("division by zero" in error for error in zero_result["errors"]))
 
+    def test_or_inside_comparison_phrase_is_not_logical_or(self):
+        result = self.run_code(
+            """
+            SET grade (45)
+            IF grade is greater than or equal to 90 THEN
+                PRINT "Excellent"
+            ELSE
+                IF grade is greater than or equal to 60 THEN
+                    PRINT "Pass"
+                ELSE
+                    PRINT "Fail"
+                END
+            END
+            """
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["output"], ["Fail"])
+
+        less_result = self.run_code(
+            """
+            SET temp (5)
+            IF temp is less than or equal to 10 THEN
+                PRINT "Cold"
+            END
+            """
+        )
+
+        self.assertEqual(less_result["status"], "ok")
+        self.assertEqual(less_result["output"], ["Cold"])
+
     def test_huge_collections_ranges_and_strings_are_rejected(self):
         collection_result = self.run_code("PRINT [0] * 10000000")
         self.assertEqual(collection_result["status"], "limit_exceeded")
@@ -276,6 +308,15 @@ class StructuredJargonInterpreterTests(unittest.TestCase):
         string_result = self.run_code('PRINT "x" * 10000000')
         self.assertEqual(string_result["status"], "limit_exceeded")
         self.assertIn("max_string_chars", string_result["limits_hit"])
+
+    def test_power_operator_is_bounded(self):
+        result = self.run_code("PRINT 16 ** 0.5")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["output"], ["4.0"])
+
+        huge_result = self.run_code("PRINT 2 ** 100000")
+        self.assertEqual(huge_result["status"], "limit_exceeded")
+        self.assertIn("max_number_abs", huge_result["limits_hit"])
 
     def test_output_and_error_logs_are_capped(self):
         output_limited = JargonLimits(max_output_items=2, max_steps=20)
@@ -357,6 +398,77 @@ class StructuredJargonInterpreterTests(unittest.TestCase):
             except Exception as exc:
                 self.fail(f"Interpreter raised {type(exc).__name__} for fuzz input {code!r}")
             self.assertIn(result["status"], {"ok", "error", "limit_exceeded", "waiting_for_input"})
+
+    def test_legacy_example_wrapper_can_be_extracted_and_run(self):
+        text = """
+        Name: Selection Sort
+
+        Jargon Code:
+        SET nums ([3, 1, 2])
+        SET sorted ([])
+        REPEAT_UNTIL nums is equal to []
+            SET j (0)
+            SET min_index (0)
+            REPEAT_UNTIL j reaches end of nums
+                IF nums[j] is less than nums[min_index] THEN
+                    SET min_index (j)
+                END
+                SET j (j + 1)
+            END
+            ADD nums[min_index] to sorted
+            SET new_nums ([])
+            SET k (0)
+            REPEAT_UNTIL k reaches end of nums
+                IF k is not equal to min_index THEN
+                    ADD nums[k] to new_nums
+                END
+                SET k (k + 1)
+            END
+            SET nums (new_nums)
+        END
+        PRINT sorted
+
+        Expected Output:
+        [1, 2, 3]
+
+        Explanation:
+        Lesson prose goes here.
+        """
+
+        code = extract_code(text)
+        self.assertNotIn("Name:", code)
+        self.assertNotIn("Expected Output:", code)
+
+        result = self.run_code(code)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["output"], ["[1, 2, 3]"])
+
+    def test_legacy_example_file_loader(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sample.txt"
+            path.write_text(
+                """
+                Code:
+                SET grade (45)
+                IF grade is greater than or equal to 60 THEN
+                    PRINT "Pass"
+                ELSE
+                    PRINT "Fail"
+                END
+
+                Expected Output:
+                Fail
+                """,
+                encoding="utf-8",
+            )
+
+            example = load_example(path)
+            self.assertEqual(example.title, "sample")
+            self.assertEqual(example.expected_output, "Fail")
+            self.assertEqual(run_example(example)["output"], ["Fail"])
 
     def test_sandbox_success_and_metadata(self):
         result = run_sandboxed("PRINT 2 + 3", timeout_seconds=2, memory_mb=256)

@@ -84,6 +84,7 @@ class StructuredJargonInterpreter:
         ast.Div: operator.truediv,
         ast.FloorDiv: operator.floordiv,
         ast.Mod: operator.mod,
+        ast.Pow: operator.pow,
     }
 
     UNARY_OPS = {
@@ -123,6 +124,7 @@ class StructuredJargonInterpreter:
         ast.Div,
         ast.FloorDiv,
         ast.Mod,
+        ast.Pow,
         ast.UAdd,
         ast.USub,
         ast.Not,
@@ -728,12 +730,32 @@ class StructuredJargonInterpreter:
             raise EvaluationError(f"Operator {op_type.__name__} is not allowed.")
         if op_type is ast.Mult and self._is_repeat_operand(left, right):
             return self._safe_repeat(left, right)
+        if op_type is ast.Pow:
+            return self._safe_power(left, right)
 
         try:
             result = self.BIN_OPS[op_type](left, right)
         except Exception as e:
             raise EvaluationError(f"Binary operation failed: {e}") from e
         return self._sanitize_value(result, "binary operation result")
+
+    def _safe_power(self, left, right):
+        if (
+            not isinstance(left, (int, float))
+            or isinstance(left, bool)
+            or not isinstance(right, (int, float))
+            or isinstance(right, bool)
+        ):
+            raise EvaluationError("Power operation requires numeric operands.")
+        if not math.isfinite(float(left)) or not math.isfinite(float(right)):
+            raise EvaluationError("Power operation requires finite operands.")
+        if abs(right) > 64:
+            self._raise_limit("max_number_abs", "Power exponent is too large.")
+        try:
+            result = operator.pow(left, right)
+        except Exception as e:
+            raise EvaluationError(f"Power operation failed: {e}") from e
+        return self._sanitize_value(result, "power operation result")
 
     def _safe_repeat(self, left, right):
         if isinstance(left, (list, str)) and isinstance(right, int) and not isinstance(right, bool):
@@ -1003,7 +1025,7 @@ class StructuredJargonInterpreter:
         return true_block, false_block
 
     def _split_logical(self, text, operator_name):
-        return self._split_word_at_top_level(text, operator_name)
+        return self._split_word_at_top_level(text, operator_name, logical=True)
 
     def _split_phrase(self, text, phrase):
         parts = self._split_word_at_top_level(text, phrase)
@@ -1011,7 +1033,7 @@ class StructuredJargonInterpreter:
             return parts[0].strip(), parts[1].strip()
         return None
 
-    def _split_word_at_top_level(self, text, word):
+    def _split_word_at_top_level(self, text, word, logical=False):
         word_lower = word.lower()
         result = []
         start = 0
@@ -1043,6 +1065,9 @@ class StructuredJargonInterpreter:
                 after_index = i + len(word)
                 after = text[after_index] if after_index < len(text) else " "
                 if not (before.isalnum() or before == "_") and not (after.isalnum() or after == "_"):
+                    if logical and self._is_embedded_condition_word(text, i, word_lower):
+                        i += 1
+                        continue
                     result.append(text[start:i].strip())
                     start = after_index
                     i = after_index
@@ -1053,6 +1078,13 @@ class StructuredJargonInterpreter:
             result.append(text[start:].strip())
             return result
         return [text]
+
+    def _is_embedded_condition_word(self, text, index, word_lower):
+        if word_lower != "or":
+            return False
+        before = text[:index].lower().rstrip()
+        after = text[index + len(word_lower) :].lower().lstrip()
+        return before.endswith("than") and after.startswith("equal to")
 
     def _strip_outer_parens(self, text):
         while text.startswith("(") and text.endswith(")") and self._outer_parens_wrap_all(text):
