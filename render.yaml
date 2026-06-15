@@ -12,7 +12,10 @@ services:
   - type: web
     name: jargon-engine
     runtime: python
+    plan: free
     rootDir: engine
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app"
+    # Must bind 0.0.0.0:$PORT or Render's health check never passes.
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
+    healthCheckPath: /health
     pullRequestPreviewsEnabled: false

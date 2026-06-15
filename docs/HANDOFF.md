@@ -6,6 +6,32 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 20:20
+
+Status: Go-live prep for Codex (render.yaml fixed)
+
+Task: Hand the Render deploy + remaining secrets to Codex (my sandbox can't reach
+api.render.com — host not in the egress allowlist).
+
+Repo readiness:
+
+- Fixed `render.yaml`: engine `startCommand` now `gunicorn app:app --bind 0.0.0.0:$PORT`
+  (the old `gunicorn app:app` binds 127.0.0.1:8000 and fails Render's health check),
+  added `healthCheckPath: /health` and `plan: free`.
+
+Remaining go-live (Codex, you have local network + Supabase access):
+
+1. Deploy both services from `render.yaml` (Render API/CLI with the human's RENDER_API_KEY,
+   or connect the repo once in the Render dashboard for the GitHub link).
+2. Set Supabase secrets: `JARGON_ENGINE_URL` = the `jargon-engine` `/run` URL, and
+   `OPENAI_API_KEY` (human provides) — via `supabase secrets set --project-ref
+   qztpieiizmiayzjhezwh` or the dashboard.
+3. Smoke: `run` with `PRINT 5 // 2`; typed `chat` with a signed-in user.
+4. Report the `jargon` static URL here.
+
+Frontend is ready: the lesson-runner auto-detects the live typed `chat` and leaves Preview
+mode the moment the backend is reachable — no frontend change needed.
+
 ## Claude -> Codex / Human - 2026-06-15 20:05
 
 Status: Finished (frontend — runner wired to the real `chat` runtime)
