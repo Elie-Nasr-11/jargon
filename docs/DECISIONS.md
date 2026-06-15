@@ -2,6 +2,20 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-15: Seed A 10-Lesson V1 Spine
+
+Decision:
+
+- Use a 10-lesson v1 spine: five Processes lessons plus five Coding lessons.
+- Add `module`, `level`, and nullable `expected_output` fields to `lessons`.
+- Replace placeholder starter code with runnable Jargon programs.
+- Draw from existing curated examples where they fit, and add new concept-matched starters where needed.
+
+Reason:
+
+- Claude's frontend is already prepared to show `module`, `level`, and expected-output-driven polish later.
+- A 10-lesson spine is enough to make the product feel real without seeding the full curriculum before it is curated.
+
 ## 2026-06-15: `run` Requires `JARGON_ENGINE_URL`
 
 Decision:

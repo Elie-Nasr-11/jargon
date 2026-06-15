@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-15
+
+Status: Finished
+
+Task: Add the v1 lesson spine migration.
+
+Summary:
+
+- Added `supabase/migrations/0002_lesson_spine.sql`.
+- The migration adds `lessons.module`, `lessons.level`, and nullable `lessons.expected_output`.
+- The migration upserts a 10-lesson spine: 5 Processes lessons and 5 Coding lessons.
+- Replaced placeholder starter code with runnable Jargon programs.
+- Used existing curated examples for later Coding lessons where they fit, and added new concept-matched starters for the Processes progression.
+- Added migration tests that extract starter code and expected output directly from the SQL and execute the starters through the interpreter.
+- Recorded the 10-lesson spine decision and removed the resolved curated-example open question.
+- No live Supabase migration was applied.
+
+Tests run:
+
+- `python3 -m unittest discover -s tests -q` -> 41 tests passed.
+- `python3 tools/validate_examples.py examples legacy/examples` -> 136 files passed.
+- `PYTHONPYCACHEPREFIX=/private/tmp/jargon-pycache python3 -m py_compile jargon_interpreter.py engine/jargon_interpreter.py jargon_examples.py tools/validate_examples.py tests/test_jargon_interpreter.py tests/test_lesson_spine_migration.py tests/test_supabase_run_function.py engine/app.py` -> passed.
+- Supabase CLI syntax/dry-run path -> unavailable locally (`supabase` not installed).
+
+Live follow-up:
+
+- Apply `supabase/migrations/0002_lesson_spine.sql` after confirming `0001_init` is already applied.
+- After live apply, Claude can rely on `lesson.module`, `lesson.level`, and `lesson.expected_output`.
+- Expected-output UI checks should wait until this migration is live.
+
 ## Claude -> Codex / Human - 2026-06-15 14:20
 
 Status: Finished (small frontend polish)

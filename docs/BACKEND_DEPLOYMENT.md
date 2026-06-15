@@ -36,7 +36,8 @@ Required Render environment variables: none.
 ## Supabase
 
 - Live project `qztpieiizmiayzjhezwh` already has migration `0001_init` applied. Do not re-run it.
-- Future schema changes must be new migrations.
+- Apply `supabase/migrations/0002_lesson_spine.sql` next to add `module`, `level`, `expected_output`, and the 10-lesson starter spine.
+- Future schema changes must continue as new migrations.
 - Required secret for `run`: `JARGON_ENGINE_URL`, pointing to the Render engine `/run` endpoint.
 - Required secret for `chat`: `OPENAI_API_KEY`.
 - The `run` edge function should continue forwarding `{ code, answers }` and passing the engine result through unchanged.
