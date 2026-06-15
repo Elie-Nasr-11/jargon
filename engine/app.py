@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, redirect, request
 from flask_cors import CORS
 
 try:
@@ -22,6 +22,23 @@ except ImportError:  # Allows `python app.py` from inside engine/.
 
 app = Flask(__name__)
 CORS(app)
+
+
+@app.get("/")
+def index():
+    app_url = os.environ.get("JARGON_APP_URL", "").strip()
+    if app_url:
+        return redirect(app_url, code=302)
+
+    return jsonify(
+        {
+            "service": "jargon-engine",
+            "status": "ok",
+            "health": "/health",
+            "run": "/run",
+            "message": "This is the Jargon engine API, not the student app.",
+        }
+    )
 
 
 @app.get("/health")

@@ -28,6 +28,7 @@ Fill this in after the live Render engine is created:
 
 The engine service exposes:
 
+- `GET /` redirects to `JARGON_APP_URL` when set, otherwise returns diagnostic JSON.
 - `GET /health`
 - `POST /run` with `{ "code": "...", "answers": [], "preset_answers": {}, "limits": {} }`
 
@@ -36,6 +37,8 @@ Required Render environment variables: none.
 - Optional engine environment variables:
   - `JARGON_TIMEOUT_SECONDS` controls sandbox timeout; default is `2`.
   - `JARGON_MEMORY_MB` controls sandbox memory; default is `128`.
+  - `JARGON_APP_URL` controls where `GET /` redirects. Set this only after the
+    correct public student-app URL is verified.
 
 ## Supabase
 

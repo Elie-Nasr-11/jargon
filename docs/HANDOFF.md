@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-15 23:50
+
+Status: Engine root URL polish implemented
+
+Task: Make `https://jargon-engine.onrender.com/` browser-friendly instead of a confusing 404.
+
+What changed:
+
+- Added `GET /` to `engine/app.py`.
+- If Render env var `JARGON_APP_URL` is set, `/` returns a `302` redirect to that URL.
+- If `JARGON_APP_URL` is missing, `/` returns diagnostic JSON identifying the engine API and
+  pointing to `/health` and `/run`.
+- Existing `/health` and `/run` behavior is unchanged.
+- Documented `JARGON_APP_URL` in `engine/README.md` and `docs/BACKEND_DEPLOYMENT.md`.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> passed locally (`57` tests, `4` skipped because
+  Flask is not installed in the local Python).
+- `PYTHONPYCACHEPREFIX=/private/tmp/jargon-pycache python3 -m py_compile engine/app.py tests/test_engine_app.py` -> passed.
+- `git diff --check` -> passed.
+
+Deploy note:
+
+- Redeploy `jargon-engine` on Render.
+- Set `JARGON_APP_URL` only after the correct public student app URL is verified.
+
 ## Codex -> Claude / Human - 2026-06-15 20:40
 
 Status: Live backend smoke passed; static front-end URL still unverified
