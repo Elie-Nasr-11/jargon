@@ -1,0 +1,14 @@
+JARGON ALGORITHM 70: Min Index Finder
+
+SET dist ([0, 999, 999])
+SET min_index (0)
+IF dist[1] is less than dist[min_index] THEN
+    SET min_index (1)
+END
+PRINT min_index
+
+Expected Output:
+0
+
+Explanation:
+- Compares first two elements and prints index of minimum.

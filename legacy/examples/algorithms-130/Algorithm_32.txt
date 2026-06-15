@@ -1,0 +1,12 @@
+Algorithm 32: Check Compound Conditions
+SET a (5)
+SET b (10)
+IF a is less than 6 AND b is greater than 9 THEN
+    PRINT "Both conditions met"
+END
+
+Expected Output:
+Both conditions met
+
+Explanation:
+This example shows a compound conditional check using AND to ensure both a < 6 and b > 9.

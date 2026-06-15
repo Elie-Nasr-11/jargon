@@ -1,0 +1,13 @@
+# Description:
+# Check whether a name entered by the user exists in a predefined list.
+
+ASK "Enter a name" as name
+SET people (["Ali", "Fatima", "Rami"])
+REPEAT_FOR_EACH person in people
+    IF name is equal to person THEN
+        PRINT "Found!"
+    END
+END
+
+# Expected Output (for input "Fatima"):
+# Found!

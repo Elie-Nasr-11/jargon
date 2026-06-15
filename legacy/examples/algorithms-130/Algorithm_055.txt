@@ -1,0 +1,28 @@
+Algorithm 55: Even vs Odd Count
+
+Code:
+SET nums ([4, 7, 8, 1, 10, 5])
+SET even_count (0)
+SET odd_count (0)
+SET i (0)
+
+REPEAT_UNTIL i reaches end of nums
+    IF nums[i] is even THEN
+        SET even_count (even_count + 1)
+    ELSE
+        SET odd_count (odd_count + 1)
+    END
+    SET i (i + 1)
+END
+
+IF even_count is greater than odd_count THEN
+    PRINT "More evens"
+ELSE
+    PRINT "More odds"
+END
+
+Expected Output:
+More evens
+
+Explanation:
+Counts even and odd numbers, then compares.

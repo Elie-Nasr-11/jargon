@@ -1,0 +1,17 @@
+Title: Letter Break Example
+Jargon Code:
+SET letters (["a", "b", "c", "d"])
+REPEAT_FOR_EACH l in letters
+    IF l is equal to "b" THEN
+        PRINT "Skipping b"
+        BREAK
+    END
+    PRINT l
+END
+
+Expected Output:
+a
+Skipping b
+
+Explanation:
+This shows how BREAK exits the loop immediately when a condition is met, skipping further iterations.

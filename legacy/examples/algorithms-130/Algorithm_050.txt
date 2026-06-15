@@ -1,0 +1,20 @@
+Algorithm 50: Conditional Printing in Loop
+
+Code:
+SET i (0)
+REPEAT 3 times
+    IF i is less than 2 THEN
+        PRINT i
+    ELSE
+        PRINT "done"
+    END
+    SET i (i + 1)
+END
+
+Expected Output:
+0
+1
+done
+
+Explanation:
+Prints numbers less than 2, then prints 'done' once.

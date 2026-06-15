@@ -1,0 +1,20 @@
+Name: Character Category Test
+
+Jargon Code:
+SET ch ("a")
+
+IF ch is in ["0", "1", "2"] THEN
+    PRINT "digit"
+ELSE
+    IF ch is in ["a", "b", "c"] THEN
+        PRINT "letter"
+    ELSE
+        PRINT "other"
+    END
+END
+
+Expected Output:
+letter
+
+Explanation:
+Determines whether the character is a digit, letter, or other.

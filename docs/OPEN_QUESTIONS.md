@@ -2,49 +2,46 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
-## Should the legacy example corpus live in the GitHub repo?
+## Should Jargon support `//` comments in addition to `#`?
 
 Context:
 
-- The Desktop archive has 131 runnable legacy examples after extraction.
-- The canonical repo currently contains the loader and validator, but not the whole corpus.
+- The deployed lesson seed code currently uses `//` comments.
+- The interpreter currently treats `#` as comments and rejects `//` lines.
+- This is deferred until interpreter optimization after the current platform integration.
 
 Options:
 
-- Keep examples outside the repo and document local paths.
-- Import curated examples into `examples/`.
-- Import all legacy examples under `legacy/examples/`.
+- Add `//` as a supported line/comment marker.
+- Update deployed lesson seed code to use `#`.
+- Support both for classroom friendliness.
 
-## What should the first web runner target be?
+Current leaning:
+
+- Support both `#` and `//`, but do it in a focused interpreter pass with tests.
+
+## Should curated examples be copied into Supabase lessons?
+
+Context:
+
+- `examples/` now contains a small curated set.
+- `legacy/examples/` contains the full 131-file corpus.
+- Supabase currently has five seeded lessons with placeholder starter code.
 
 Options:
 
-- Static frontend plus small Python API.
-- FastAPI backend.
-- Flask backend.
-- Netlify/Vercel-style serverless functions.
+- Keep examples in the repo only.
+- Add a migration that maps curated examples into lesson `sample_code`.
+- Add a separate `examples` table later.
 
 ## How should interactive ASK work in the web UI?
 
+Current decision so far:
+
+- Start with stateless rerun using `answers`.
+
 Options:
 
-- Rerun with an `answers` array.
+- Continue stateless `answers`.
 - Use `preset_answers` keyed by variable.
-- Add a resumable execution/session model.
-
-Current leaning:
-
-- Start with stateless rerun using `answers`, then only add sessions if needed.
-
-## What is the canonical audience level?
-
-Options:
-
-- Middle school beginner logic.
-- High school pseudocode bridge.
-- Teacher-facing curriculum tool.
-- Mixed, with levels.
-
-Current leaning:
-
-- Mixed with clear module/level labels.
+- Add a resumable execution/session model later.

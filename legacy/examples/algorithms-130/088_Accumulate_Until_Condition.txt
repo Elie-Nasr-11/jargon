@@ -1,0 +1,17 @@
+# Description:
+# Accumulate values from a list until a condition is met.
+
+SET nums ([1, 2, 3, 4, 5])
+SET result ([])
+SET i (0)
+REPEAT_UNTIL i reaches end of nums
+    IF nums[i] is equal to 3 THEN
+        PRINT result
+        BREAK
+    END
+    ADD nums[i] to result
+    SET i (i + 1)
+END
+
+# Expected Output:
+# [1, 2]

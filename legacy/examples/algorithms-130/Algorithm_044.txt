@@ -1,0 +1,15 @@
+Algorithm 44: Check Name in List
+
+Code:
+SET names (["Ali", "Zara", "Omar"])
+IF "Zara" is in names THEN
+    PRINT "Found Zara"
+ELSE
+    PRINT "Not found"
+END
+
+Expected Output:
+Found Zara
+
+Explanation:
+Since 'Zara' is in the list, it prints the success message.

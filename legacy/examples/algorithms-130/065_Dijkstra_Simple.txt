@@ -1,0 +1,74 @@
+JARGON ALGORITHM 65: Dijkstra Simple (5 nodes)
+
+SET inf (999)
+SET graph_row0 ([0, 10, 999, 30, 100])
+SET graph_row1 ([999, 0, 50, 999, 999])
+SET graph_row2 ([999, 999, 0, 999, 10])
+SET graph_row3 ([999, 999, 20, 0, 60])
+SET graph_row4 ([999, 999, 999, 999, 0])
+SET graph ([graph_row0, graph_row1, graph_row2, graph_row3, graph_row4])
+
+SET dist ([0, 999, 999, 999, 999])
+SET visited ([False, False, False, False, False])
+
+SET i (0)
+REPEAT_UNTIL i is equal to 5
+    SET min_val (999)
+    SET min_index (-1)
+    SET j (0)
+    REPEAT_UNTIL j is equal to 5
+        IF visited[j] is equal to False THEN
+            IF dist[j] is less than min_val THEN
+                SET min_val (dist[j])
+                SET min_index (j)
+            END
+        END
+        SET j (j + 1)
+    END
+
+    SET new_visited ([])
+    SET k (0)
+    REPEAT_UNTIL k is equal to 5
+        IF k is equal to min_index THEN
+            ADD True to new_visited
+        ELSE
+            ADD visited[k] to new_visited
+        END
+        SET k (k + 1)
+    END
+    SET visited (new_visited)
+
+    SET j (0)
+    REPEAT_UNTIL j is equal to 5
+        SET edge_weight (graph[min_index][j])
+        SET new_dist (dist[min_index] + edge_weight)
+        IF visited[j] is equal to False THEN
+            IF edge_weight is not equal to inf THEN
+                IF new_dist is less than dist[j] THEN
+                    SET new_distances ([])
+                    SET k (0)
+                    REPEAT_UNTIL k is equal to 5
+                        IF k is equal to j THEN
+                            ADD new_dist to new_distances
+                        ELSE
+                            ADD dist[k] to new_distances
+                        END
+                        SET k (k + 1)
+                    END
+                    SET dist (new_distances)
+                END
+            END
+        END
+        SET j (j + 1)
+    END
+
+    SET i (i + 1)
+END
+
+PRINT dist
+
+Expected Output:
+[0, 10, 999, 30, 60]
+
+Explanation:
+- Computes shortest paths from node 0 using manual Dijkstra logic.

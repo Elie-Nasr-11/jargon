@@ -1,0 +1,15 @@
+Jargon Code:
+SET i (1)
+REPEAT_UNTIL i is equal to 6
+    IF i is even THEN
+        PRINT i
+    END
+    SET i (i + 1)
+END
+
+Expected Output:
+2
+4
+
+Explanation:
+Prints even numbers from 1 to 5 using the REPEAT_UNTIL loop.

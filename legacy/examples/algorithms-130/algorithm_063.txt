@@ -1,0 +1,34 @@
+Algorithm 63: Count Letters, Digits, and Others
+
+Jargon Code:
+SET text ("abc123XYZ!@#")
+SET digits (0)
+SET letters (0)
+SET others (0)
+SET i (0)
+
+REPEAT_UNTIL i reaches end of text
+    SET ch (text[i])
+    IF ch is in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] THEN
+        SET digits (digits + 1)
+    ELSE
+        IF ch is in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"] THEN
+            SET letters (letters + 1)
+        ELSE
+            SET others (others + 1)
+        END
+    END
+    SET i (i + 1)
+END
+
+PRINT digits
+PRINT letters
+PRINT others
+
+Expected Output:
+3
+6
+3
+
+Explanation:
+This counts the number of digits, letters, and other characters in a string.

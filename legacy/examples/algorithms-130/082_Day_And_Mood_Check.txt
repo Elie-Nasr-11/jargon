@@ -1,0 +1,20 @@
+# Description:
+# Use nested conditionals to determine activity based on day and mood.
+
+SET day ("Monday")
+SET mood ("tired")
+IF day is equal to "Saturday" OR day is equal to "Sunday" THEN
+    PRINT "Weekend"
+ELSE
+    IF mood is equal to "tired" THEN
+        PRINT "Rest needed"
+    ELSE
+        PRINT "Get to work"
+    END
+END
+
+# Expected Output:
+# Rest needed
+
+# Explanation:
+# It's not the weekend, and the mood is tired, so user needs rest.

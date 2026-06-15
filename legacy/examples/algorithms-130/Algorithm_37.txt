@@ -1,0 +1,21 @@
+Algorithm 37: Label Values
+SET i (0)
+REPEAT_UNTIL i is equal to 3
+    SET flag ("Odd")
+    IF i is even THEN
+        SET flag ("Even")
+        IF i is equal to 0 THEN
+            SET flag ("Zero")
+        END
+    END
+    PRINT flag
+    SET i (i + 1)
+END
+
+Expected Output:
+Zero
+Odd
+Even
+
+Explanation:
+Uses nested conditionals to label numbers from 0 to 2.

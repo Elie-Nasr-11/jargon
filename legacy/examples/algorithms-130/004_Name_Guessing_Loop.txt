@@ -1,0 +1,18 @@
+SET correct ("Bob")
+SET got_it ("False")
+
+REPEAT_UNTIL got_it is equal to "True"
+    ASK "Enter your name:" as name
+    IF name is equal to correct THEN
+        PRINT "Welcome, Bob!"
+        SET got_it ("True")
+    ELSE
+        PRINT "Nope. Try again."
+    END
+END
+
+# Expected Output:
+# Repeats until user inputs "Bob". Then prints welcome message.
+
+# Explanation:
+# Simulates an interactive name check loop using REPEAT_UNTIL.

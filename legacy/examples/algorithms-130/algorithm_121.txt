@@ -1,0 +1,18 @@
+Algorithm 121: Even or Odd in List
+SET nums ([1, 2, 3, 4])
+REPEAT_FOR_EACH num in nums
+    IF num is even THEN
+        PRINT "Even"
+    ELSE
+        PRINT "Odd"
+    END
+END
+
+Expected Output:
+Odd
+Even
+Odd
+Even
+
+Explanation:
+Loops through a list and checks if each number is even or odd. Uses REPEAT_FOR_EACH and IF.

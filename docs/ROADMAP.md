@@ -2,7 +2,7 @@
 
 ## Phase 1: Runtime Foundation
 
-Status: Mostly complete.
+Status: Complete for the current platform pass.
 
 - Harden interpreter against malformed/hostile code.
 - Add subprocess sandbox.
@@ -10,41 +10,42 @@ Status: Mostly complete.
 - Add test coverage for abuse cases.
 - Add example loader for legacy lesson files.
 - Validate the legacy example corpus.
+- Move runtime into `engine/`.
+- Add Flask `/run` and `/health` wrapper for Render.
 
-## Phase 2: Clean API Surface
+## Phase 2: Supabase + Render Integration
 
 Status: Next.
 
-- Define one HTTP request/response contract for running Jargon.
-- Use `run_sandboxed()` for untrusted execution.
-- Support interactive `ASK` by accepting `answers` or `preset_answers`.
-- Return the interpreter result dict without ad hoc `output`/`result` drift.
-- Add API tests.
+- Point Supabase `JARGON_ENGINE_URL` to the Render `jargon-engine` service.
+- Keep the root platform wired to Supabase Auth, lessons, chat, and code submissions.
+- Preserve `result = output` for existing `editor.js`.
+- Add deployment smoke tests or documented manual checks.
 
-## Phase 3: Web Runner
+## Phase 3: Web Runner Polish
 
-Status: Not started in canonical repo.
+Status: Started by Claude branch.
 
-- Build a simple code editor and output panel.
+- Replace placeholder lesson sample code with curated examples.
 - Show memory, status, errors, and pending ASK prompts.
-- Let users provide ASK answers without modifying source code.
-- Include sample programs from the example loader.
+- Make ASK interactions feel intentional and clear.
 - Keep the UI quiet, focused, and classroom-friendly.
 
 ## Phase 4: Jargon Mentor
 
-Status: Concept exists in legacy web folders.
+Status: Platform pane exists; prompt extracted for rebuild.
 
 - Rebuild the mentor as a teaching layer, not the runtime.
 - Separate AI coaching from code execution.
 - Add lesson modes from the curriculum: Processes, Coding, Prompting.
 - Keep prompts and examples versioned in the repo.
+- Bridge natural speech -> pseudocode -> Jargon -> Python.
 
 ## Phase 5: Curriculum And Package
 
-Status: Planned.
+Status: Curriculum archive imported; curation remains.
 
 - Curate examples into levels/modules.
 - Add expected-output tests for selected canonical examples.
 - Package docs for teachers/students.
-- Decide deployment target.
+- Decide how much of the full corpus appears in the learner UI.

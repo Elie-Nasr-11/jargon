@@ -1,0 +1,25 @@
+Title: Print 2D Coordinates
+Jargon Code:
+SET i (0)
+REPEAT_UNTIL i is equal to 3
+    SET j (0)
+    REPEAT_UNTIL j is equal to 3
+        PRINT [i, j]
+        SET j (j + 1)
+    END
+    SET i (i + 1)
+END
+
+Expected Output:
+[0, 0]
+[0, 1]
+[0, 2]
+[1, 0]
+[1, 1]
+[1, 2]
+[2, 0]
+[2, 1]
+[2, 2]
+
+Explanation:
+Nested loops to simulate grid or matrix-like coordinates.

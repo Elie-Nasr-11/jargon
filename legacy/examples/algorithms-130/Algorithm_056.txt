@@ -1,0 +1,26 @@
+Algorithm 56: Password Attempt with Break
+
+Code:
+SET password ("open")
+SET correct ("False")
+
+REPEAT 3 times
+    ASK "Enter password" as attempt
+    IF attempt is equal to password THEN
+        PRINT "Access granted"
+        SET correct ("True")
+        BREAK
+    ELSE
+        PRINT "Wrong password"
+    END
+END
+
+IF correct is not equal to "True" THEN
+    PRINT "Access denied"
+END
+
+Expected Output:
+Depends on input; either 'Access granted' or 'Access denied'
+
+Explanation:
+Allows up to 3 password attempts before denying access.

@@ -1,0 +1,17 @@
+Title: Complex Condition Check
+Jargon Code:
+SET a (10)
+SET b (5)
+SET c (3)
+
+IF a is greater than b AND b is greater than c OR c is equal to 3 THEN
+    PRINT "Passes complex condition"
+ELSE
+    PRINT "Fails"
+END
+
+Expected Output:
+Passes complex condition
+
+Explanation:
+Tests complex logical expressions using AND and OR.

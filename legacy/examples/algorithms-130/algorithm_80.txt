@@ -1,0 +1,7 @@
+# Algorithm 80: Update a list value
+# Modifies the second element in the list and prints the new list
+# Expected Output: [1, 5, 3]
+
+SET nums ([1, 2, 3])
+SET nums[1] (5)
+PRINT nums

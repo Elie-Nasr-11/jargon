@@ -1,0 +1,16 @@
+# Description:
+# Count how many times the inner loop runs in a nested structure.
+
+SET count (0)
+REPEAT 3 times
+    REPEAT 2 times
+        SET count (count + 1)
+    END
+END
+PRINT count
+
+# Expected Output:
+# 6
+
+# Explanation:
+# Outer loop runs 3 times, inner loop 2 times per outer -> 3 * 2 = 6

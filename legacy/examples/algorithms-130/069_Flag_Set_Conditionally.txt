@@ -1,0 +1,22 @@
+JARGON ALGORITHM 69: Flag Set Conditionally
+
+SET i (0)
+REPEAT_UNTIL i is equal to 3
+    SET flag ("Odd")
+    IF i is even THEN
+        SET flag ("Even")
+        IF i is equal to 0 THEN
+            SET flag ("Zero")
+        END
+    END
+    PRINT flag
+    SET i (i + 1)
+END
+
+Expected Output:
+Zero
+Even
+Odd
+
+Explanation:
+- Prints a flag depending on the value of i.

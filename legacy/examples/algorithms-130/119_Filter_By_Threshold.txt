@@ -1,0 +1,20 @@
+Title: Count Values Above Threshold
+Jargon Code:
+SET nums ([3, 15, 8, 22, 5, 11])
+SET count (0)
+SET i (0)
+
+REPEAT_UNTIL i reaches end of nums
+    IF nums[i] is greater than 10 THEN
+        SET count (count + 1)
+    END
+    SET i (i + 1)
+END
+
+PRINT count
+
+Expected Output:
+3
+
+Explanation:
+Counts how many numbers in a list exceed a threshold.

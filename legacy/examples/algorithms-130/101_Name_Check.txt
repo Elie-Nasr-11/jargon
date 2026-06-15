@@ -1,0 +1,14 @@
+Jargon Code:
+ASK "What's your name?" as name
+IF name is equal to "Alice" THEN
+    PRINT "Welcome, Alice!"
+ELSE
+    PRINT "Who are you?"
+END
+
+Expected Output:
+Welcome, Alice!    # if name entered is Alice
+Who are you?        # for any other name
+
+Explanation:
+This code asks the user for their name and checks if it matches 'Alice'. Based on the condition, it prints a personalized greeting or a default message.

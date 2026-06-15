@@ -1,0 +1,14 @@
+# Algorithm 79: Grade classification
+# Uses nested IF statements to classify a numeric grade
+# Expected Output: "B" if grade = 85
+
+SET grade (85)
+IF grade is greater than or equal to 90 THEN
+    PRINT "A"
+ELSE
+    IF grade is greater than or equal to 80 THEN
+        PRINT "B"
+    ELSE
+        PRINT "C or below"
+    END
+END

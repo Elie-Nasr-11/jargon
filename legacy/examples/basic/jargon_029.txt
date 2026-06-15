@@ -1,0 +1,9 @@
+Code:
+ASK "Type your name" as name
+PRINT name
+
+Expected Output:
+Echoes whatever the user typed.
+
+Explanation:
+Simple example showcasing ASK for user input followed by output.

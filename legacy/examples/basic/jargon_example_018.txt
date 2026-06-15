@@ -1,0 +1,15 @@
+Example 18
+
+Code:
+ASK "What is your age?" as age
+IF int(age) is less than 13 THEN
+    PRINT "Child"
+ELSE
+    PRINT "Teen or Adult"
+END
+
+Expected Output:
+Expected output: 'Child' or 'Teen or Adult' depending on input
+
+Explanation:
+Checks age category

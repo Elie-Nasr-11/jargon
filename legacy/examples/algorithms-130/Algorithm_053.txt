@@ -1,0 +1,20 @@
+Algorithm 53: Grade Classifier
+
+Code:
+SET score (85)
+
+IF score is greater than or equal to 90 THEN
+    PRINT "Excellent"
+ELSE
+    IF score is greater than or equal to 80 THEN
+        PRINT "Good"
+    ELSE
+        PRINT "Try Again"
+    END
+END
+
+Expected Output:
+Good
+
+Explanation:
+Score is between 80 and 90, so 'Good' is printed.

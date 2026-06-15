@@ -1,0 +1,18 @@
+# Description:
+# Check for even numbers that also belong to a specific set.
+
+SET nums ([4, 7, 2, 8])
+SET i (0)
+REPEAT_UNTIL i reaches end of nums
+    IF nums[i] is even THEN
+        IF nums[i] is in [2, 4, 6, 8] THEN
+            PRINT "target even"
+        END
+    END
+    SET i (i + 1)
+END
+
+# Expected Output:
+# target even
+# target even
+# target even

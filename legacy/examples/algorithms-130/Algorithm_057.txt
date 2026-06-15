@@ -1,0 +1,26 @@
+Algorithm 57: Perfect Square Check
+
+Code:
+SET numbers ([5, 8, 16, 7])
+SET found ("False")
+SET i (0)
+
+REPEAT_UNTIL i reaches end of numbers
+    SET root (numbers[i] ** 0.5)
+    IF root is equal to int(root) THEN
+        PRINT numbers[i]
+        SET found ("True")
+        BREAK
+    END
+    SET i (i + 1)
+END
+
+IF found is equal to "False" THEN
+    PRINT "No perfect square found"
+END
+
+Expected Output:
+16
+
+Explanation:
+Prints first number with an integer square root.

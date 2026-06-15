@@ -1,0 +1,20 @@
+Algorithm 130: Unique Elements in Order
+SET items ([1, 2, 2, 3, 1])
+SET unique ([])
+SET i (0)
+
+REPEAT_UNTIL i reaches end of items
+    IF items[i] is in unique THEN
+    ELSE
+        ADD items[i] to unique
+    END
+    SET i (i + 1)
+END
+
+PRINT unique
+
+Expected Output:
+[1, 2, 3]
+
+Explanation:
+Builds a list of unique elements in the order of their first appearance.

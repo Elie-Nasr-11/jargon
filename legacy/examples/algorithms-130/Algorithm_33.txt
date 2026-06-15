@@ -1,0 +1,15 @@
+Algorithm 33: Filter Even Numbers from List
+SET nums ([1, 2, 3, 4, 5])
+SET evens ([])
+REPEAT_FOR_EACH n in nums
+    IF n is even THEN
+        ADD n to evens
+    END
+END
+PRINT evens
+
+Expected Output:
+[2, 4]
+
+Explanation:
+Iterates over a list and adds only the even numbers to a new list.

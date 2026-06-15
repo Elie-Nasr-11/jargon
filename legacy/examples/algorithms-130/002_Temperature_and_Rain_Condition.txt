@@ -1,0 +1,14 @@
+SET temp (35)
+SET raining ("False")
+
+IF temp is greater than 30 AND raining is equal to "False" THEN
+    PRINT "Hot and dry"
+ELSE
+    PRINT "Not hot and dry"
+END
+
+# Expected Output:
+# Hot and dry
+
+# Explanation:
+# Uses AND logic to evaluate a compound weather condition.

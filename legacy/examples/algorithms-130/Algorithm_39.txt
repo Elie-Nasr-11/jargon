@@ -1,0 +1,13 @@
+Algorithm 39: OR Condition Example
+SET a (7)
+IF a is even OR a is greater than 5 THEN
+    PRINT "Pass"
+ELSE
+    PRINT "Fail"
+END
+
+Expected Output:
+Pass
+
+Explanation:
+Shows the use of OR in a conditional statement.

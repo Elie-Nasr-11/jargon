@@ -1,0 +1,17 @@
+Code:
+SET temperature (30)
+IF temperature is greater than 25 THEN
+    IF temperature is less than 35 THEN
+        PRINT "Warm day"
+    ELSE
+        PRINT "Very hot"
+    END
+ELSE
+    PRINT "Cool"
+END
+
+Expected Output:
+Warm day
+
+Explanation:
+Another conditional nesting example to categorize temperatures.

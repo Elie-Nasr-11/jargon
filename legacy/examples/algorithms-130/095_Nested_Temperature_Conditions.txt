@@ -1,0 +1,16 @@
+SET temp (15)
+IF temp is greater than 30 THEN
+    PRINT "Hot"
+ELSE
+    IF temp is greater than 20 THEN
+        PRINT "Warm"
+    ELSE
+        IF temp is greater than 10 THEN
+            PRINT "Cool"
+        ELSE
+            PRINT "Cold"
+        END
+    END
+END
+
+# Output: Cool

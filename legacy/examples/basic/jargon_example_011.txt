@@ -1,0 +1,21 @@
+Example 11
+
+Code:
+SET words (["apple", "tree", "banana", "dog"])
+SET count (0)
+SET i (0)
+
+REPEAT_UNTIL i reaches end of words
+    IF "a" is in words[i] THEN
+        SET count (count + 1)
+    END
+    SET i (i + 1)
+END
+
+PRINT count
+
+Expected Output:
+Expected output: 2
+
+Explanation:
+Counts how many strings in the list contain the letter 'a'

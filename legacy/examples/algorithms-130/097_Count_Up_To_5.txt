@@ -1,0 +1,11 @@
+SET x (1)
+REPEAT_UNTIL x is equal to 5
+    PRINT x
+    SET x (x + 1)
+END
+
+# Output:
+# 1
+# 2
+# 3
+# 4

@@ -1,0 +1,13 @@
+Algorithm 52: Exact Value Check
+
+Code:
+SET x (10)
+IF x is equal to 10 THEN
+    PRINT "Exactly ten"
+END
+
+Expected Output:
+Exactly ten
+
+Explanation:
+Checks for equality and prints if true.

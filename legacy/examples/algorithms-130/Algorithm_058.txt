@@ -1,0 +1,24 @@
+Algorithm 58: Battle Simulation
+
+Code:
+SET player1 (100)
+SET player2 (100)
+
+REPEAT_UNTIL player1 is less than or equal to 0 OR player2 is less than or equal to 0
+    SET hit1 (10)
+    SET hit2 (15)
+    SET player1 (player1 - hit2)
+    SET player2 (player2 - hit1)
+END
+
+IF player1 is greater than player2 THEN
+    PRINT "Player 1 wins"
+ELSE
+    PRINT "Player 2 wins"
+END
+
+Expected Output:
+Player 2 wins
+
+Explanation:
+Simulates a health battle with damage per round.

@@ -1,0 +1,16 @@
+Example 20
+
+Code:
+ASK "Guess a number between 1 and 10" as guess
+SET answer (7)
+IF guess is equal to answer THEN
+    PRINT "Correct!"
+ELSE
+    PRINT "Wrong, try again."
+END
+
+Expected Output:
+Expected output: Correct! or Wrong, try again.
+
+Explanation:
+Simple number guessing game

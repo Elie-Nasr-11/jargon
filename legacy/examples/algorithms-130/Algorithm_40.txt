@@ -1,0 +1,14 @@
+Algorithm 40: Combined Condition Check
+SET a (4)
+SET b (10)
+IF a is even AND b is greater than 5 THEN
+    PRINT "Both true"
+ELSE
+    PRINT "Condition failed"
+END
+
+Expected Output:
+Both true
+
+Explanation:
+Validates two conditions simultaneously using AND.

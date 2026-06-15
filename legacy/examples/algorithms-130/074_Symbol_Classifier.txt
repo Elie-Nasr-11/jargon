@@ -1,0 +1,20 @@
+Name: Symbol Classifier
+
+Jargon Code:
+SET ch ("?")
+
+IF ch is in ["0", "1", "2"] THEN
+    PRINT "digit"
+ELSE
+    IF ch is in ["a", "b", "c"] THEN
+        PRINT "letter"
+    ELSE
+        PRINT "other"
+    END
+END
+
+Expected Output:
+other
+
+Explanation:
+Classifies a symbol character as digit, letter, or other.

@@ -1,0 +1,14 @@
+Jargon Code:
+SET score (88)
+SET effort ("high")
+IF score is greater than 85 AND effort is equal to "high" THEN
+    PRINT "Great job"
+ELSE
+    PRINT "Keep going"
+END
+
+Expected Output:
+Great job
+
+Explanation:
+Both conditions are true, so the message 'Great job' is printed.

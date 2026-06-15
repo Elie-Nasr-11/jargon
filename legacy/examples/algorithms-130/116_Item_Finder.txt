@@ -1,0 +1,16 @@
+Title: Item Finder in List
+Jargon Code:
+SET items (["pen", "book", "bag"])
+SET target ("book")
+REPEAT_FOR_EACH item in items
+    IF target is in items THEN
+        PRINT "Found it!"
+        BREAK
+    END
+END
+
+Expected Output:
+Found it!
+
+Explanation:
+Breaks the loop once the target is confirmed present in the list.

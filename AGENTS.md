@@ -47,10 +47,8 @@ Run the unit tests:
 python3 -m unittest discover -s tests -q
 ```
 
-If the legacy examples are available locally, run:
+Run the curated and legacy examples:
 
 ```bash
-python3 tools/validate_examples.py /Users/elias/Desktop/jargon/02-examples /Users/elias/Desktop/jargon/03-web-runners/Jargonn/130
+python3 tools/validate_examples.py examples legacy/examples
 ```
-
-The example paths above are local to Elias's machine and may not exist in every clone.

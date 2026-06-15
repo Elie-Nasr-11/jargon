@@ -1,0 +1,24 @@
+Algorithm 61: Find Student with Highest Score
+
+Jargon Code:
+SET scores ([40, 85, 60, 90])
+SET names (["A", "B", "C", "D"])
+SET i (0)
+SET max_index (0)
+
+REPEAT_UNTIL i reaches end of scores
+    IF scores[i] is greater than scores[max_index] THEN
+        SET max_index (i)
+    END
+    SET i (i + 1)
+END
+
+PRINT names[max_index]
+PRINT scores[max_index]
+
+Expected Output:
+D
+90
+
+Explanation:
+This program finds the student with the highest score using parallel arrays for names and scores.

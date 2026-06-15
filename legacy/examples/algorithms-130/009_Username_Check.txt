@@ -1,0 +1,14 @@
+SET allowed (["alice", "bob", "carol"])
+ASK "Enter your username" as name
+
+IF name is in allowed THEN
+    PRINT "Access granted"
+ELSE
+    PRINT "Access denied"
+END
+
+# Expected Output:
+# Access granted (if username is in the list)
+
+# Explanation:
+# Membership test using IS IN operator.

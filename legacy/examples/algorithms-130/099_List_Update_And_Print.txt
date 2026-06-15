@@ -1,0 +1,6 @@
+SET nums ([10, 20, 30])
+SET nums[1] (50)
+PRINT nums
+
+# Output:
+# [10, 50, 30]

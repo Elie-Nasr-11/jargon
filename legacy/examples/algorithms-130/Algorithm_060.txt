@@ -1,0 +1,31 @@
+Algorithm 60: Search in Grid
+
+Code:
+SET grid ([[3, 5], [7, 8]])
+SET target (7)
+SET found ("False")
+SET i (0)
+
+REPEAT_UNTIL i reaches end of grid
+    SET j (0)
+    REPEAT_UNTIL j reaches end of grid[i]
+        IF grid[i][j] is equal to target THEN
+            PRINT i
+            PRINT j
+            SET found ("True")
+            BREAK
+        END
+        SET j (j + 1)
+    END
+    IF found is equal to "True" THEN
+        BREAK
+    END
+    SET i (i + 1)
+END
+
+Expected Output:
+1
+0
+
+Explanation:
+Searches for 7 and prints its grid coordinates.

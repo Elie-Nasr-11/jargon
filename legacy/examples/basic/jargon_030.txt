@@ -1,0 +1,17 @@
+Code:
+SET score (92)
+IF score is greater than or equal to 90 THEN
+    IF score is less than or equal to 100 THEN
+        PRINT "Excellent"
+    ELSE
+        PRINT "Invalid score"
+    END
+ELSE
+    PRINT "Keep trying"
+END
+
+Expected Output:
+Excellent
+
+Explanation:
+Score validation with inclusive bounds and fallback message.

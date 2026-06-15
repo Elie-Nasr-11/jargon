@@ -1,0 +1,25 @@
+Title: Nested Loops Printing Coordinates
+Jargon Code:
+SET i (1)
+REPEAT_UNTIL i is equal to 3
+    SET j (1)
+    REPEAT_UNTIL j is equal to 3
+        PRINT i
+        PRINT j
+        SET j (j + 1)
+    END
+    SET i (i + 1)
+END
+
+Expected Output:
+1
+1
+1
+2
+2
+1
+2
+2
+
+Explanation:
+Illustrates nested REPEAT_UNTIL loops to iterate over pairs of values.

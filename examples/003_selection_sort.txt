@@ -1,0 +1,34 @@
+Name: Selection Sort
+
+Jargon Code:
+SET nums ([5, 3, 8, 2, 9])
+SET sorted ([])
+
+REPEAT_UNTIL nums is equal to []
+    SET j (0)
+    SET min_index (0)
+    REPEAT_UNTIL j reaches end of nums
+        IF nums[j] is less than nums[min_index] THEN
+            SET min_index (j)
+        END
+        SET j (j + 1)
+    END
+    ADD nums[min_index] to sorted
+    SET new_nums ([])
+    SET k (0)
+    REPEAT_UNTIL k reaches end of nums
+        IF k is not equal to min_index THEN
+            ADD nums[k] to new_nums
+        END
+        SET k (k + 1)
+    END
+    SET nums (new_nums)
+END
+
+PRINT sorted
+
+Expected Output:
+[2, 3, 5, 8, 9]
+
+Explanation:
+Implements selection sort by iteratively selecting the smallest element and moving it to a new list.

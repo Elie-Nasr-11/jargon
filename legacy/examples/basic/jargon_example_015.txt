@@ -1,0 +1,24 @@
+Example 15
+
+Code:
+SET nested ([[1, 2, 3], [4], [5, 6]])
+SET count (0)
+SET i (0)
+
+REPEAT_UNTIL i reaches end of nested
+    SET sub (nested[i])
+    SET j (0)
+    REPEAT_UNTIL j reaches end of sub
+        SET count (count + 1)
+        SET j (j + 1)
+    END
+    SET i (i + 1)
+END
+
+PRINT count
+
+Expected Output:
+Expected output: 6
+
+Explanation:
+Counts total elements in a nested list

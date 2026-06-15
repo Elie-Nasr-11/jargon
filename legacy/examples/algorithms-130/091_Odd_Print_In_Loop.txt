@@ -1,0 +1,10 @@
+SET i (0)
+REPEAT 3 times
+    IF i is odd THEN
+        PRINT i
+    END
+    SET i (i + 1)
+END
+
+# Output: 1
+# This loop prints odd numbers less than 3.

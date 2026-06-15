@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jargon</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500&family=Source+Code+Pro&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+  <!-- Auth gate -->
+  <div id="auth-view" class="container" style="display:none;">
+    <header class="app-header">
+      <h1>Jargon</h1>
+    </header>
+    <div class="auth-card">
+      <h2 id="auth-title">Sign in</h2>
+      <form id="auth-form">
+        <input id="auth-email" type="email" placeholder="Email" autocomplete="email" />
+        <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password" />
+        <div id="signup-fields" style="display:none;">
+          <input id="auth-name" type="text" placeholder="Name" autocomplete="name" />
+          <input id="auth-grade" type="text" placeholder="Grade" />
+        </div>
+        <button id="auth-submit" type="submit">Sign in</button>
+      </form>
+      <a id="auth-toggle" href="#">New here? Create an account</a>
+      <p id="auth-message" class="auth-message"></p>
+    </div>
+  </div>
+
+  <!-- Main app -->
+  <div id="app-view" class="container" style="display:none;">
+    <header class="app-header">
+      <div class="header-row">
+        <h1>Jargon</h1>
+        <div class="header-user">
+          <span id="user-label"></span>
+          <button id="logout-btn" type="button">Sign out</button>
+        </div>
+      </div>
+      <label for="lessonSelector">Choose a lesson:</label>
+      <select id="lessonSelector"></select>
+    </header>
+
+    <div class="split">
+      <!-- Mentor: AI tutor chat -->
+      <section id="mentor-pane" class="pane">
+        <h2>Mentor</h2>
+        <div id="chat-container"></div>
+        <form id="chat-form">
+          <textarea id="user-input" placeholder="Message Jargon" rows="1"></textarea>
+          <button type="submit">Send</button>
+        </form>
+      </section>
+
+      <!-- Interpreter: Jargon code editor -->
+      <section id="editor-pane" class="pane">
+        <h2>Interpreter</h2>
+        <textarea id="inputCode" placeholder="Write code here..."></textarea>
+
+        <div class="button-row">
+          <button id="runBtn" type="button" style="font-weight: bold;">Run Code</button>
+          <button id="resetBtn" type="button">Reset</button>
+        </div>
+
+        <div id="output" aria-live="polite"></div>
+
+        <div id="askField">
+          <input id="askInput" type="text" placeholder="" />
+          <button id="submitAnswer" type="button">Submit</button>
+        </div>
+
+        <div class="button-row">
+          <button id="copyInput" type="button">Copy Input</button>
+          <button id="copyOutput" type="button">Copy Output</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="mentor/mentor.js"></script>
+  <script src="editor/editor.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

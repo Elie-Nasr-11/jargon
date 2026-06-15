@@ -1,0 +1,14 @@
+JARGON ALGORITHM 68: Repeat N Times Example
+
+SET total (0)
+REPEAT 4 times
+    SET total (total + 5)
+END
+PRINT total
+
+Expected Output:
+20
+
+Explanation:
+- Adds 5 to total four times.
+- Simple demonstration of REPEAT n times loop.

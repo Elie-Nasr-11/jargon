@@ -1,0 +1,27 @@
+Algorithm 54: Matrix Addition
+
+Code:
+SET A ([[1, 2], [3, 4]])
+SET B ([[5, 6], [7, 8]])
+SET result ([])
+SET i (0)
+
+REPEAT_UNTIL i reaches end of A
+    SET row_result ([])
+    SET j (0)
+    REPEAT_UNTIL j reaches end of A[i]
+        SET sum (A[i][j] + B[i][j])
+        ADD sum to row_result
+        SET j (j + 1)
+    END
+    ADD row_result to result
+    SET i (i + 1)
+END
+
+PRINT result
+
+Expected Output:
+[[6, 8], [10, 12]]
+
+Explanation:
+Adds corresponding elements from two matrices.

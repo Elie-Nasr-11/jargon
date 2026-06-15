@@ -1,0 +1,21 @@
+Example 13
+
+Code:
+SET nums ([2, 3, 6, 12, 15, 18])
+SET count (0)
+SET i (0)
+
+REPEAT_UNTIL i reaches end of nums
+    IF nums[i] % 2 is equal to 0 AND nums[i] % 3 is equal to 0 THEN
+        SET count (count + 1)
+    END
+    SET i (i + 1)
+END
+
+PRINT count
+
+Expected Output:
+Expected output: 3
+
+Explanation:
+Counts numbers divisible by both 2 and 3

@@ -1,0 +1,12 @@
+Algorithm 34: Increment Counter
+SET total (0)
+REPEAT 4 times
+    SET total (total + 2)
+END
+PRINT total
+
+Expected Output:
+8
+
+Explanation:
+Adds 2 to total four times, demonstrating REPEAT n times.

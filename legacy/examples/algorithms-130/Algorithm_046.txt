@@ -1,0 +1,15 @@
+Algorithm 46: Print List Items
+
+Code:
+SET fruits (["apple", "banana", "cherry"])
+REPEAT_FOR_EACH fruit in fruits
+    PRINT fruit
+END
+
+Expected Output:
+apple
+banana
+cherry
+
+Explanation:
+Each fruit is printed in order.

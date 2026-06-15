@@ -1,0 +1,20 @@
+Algorithm 124: Linear Search with Break
+SET items ([4, 7, 2, 9, 5])
+SET target (9)
+SET i (0)
+SET found_index (-1)
+
+REPEAT_UNTIL i reaches end of items
+    IF items[i] is equal to target THEN
+        SET found_index (i)
+        PRINT found_index
+        BREAK
+    END
+    SET i (i + 1)
+END
+
+Expected Output:
+3
+
+Explanation:
+Searches for the first index of a value in a list. Breaks the loop when found.

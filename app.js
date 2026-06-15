@@ -1,0 +1,92 @@
+// App controller — creates the Supabase client, gates on auth, loads lessons from
+// the database, and wires the shared lesson picker to both panes.
+document.addEventListener("DOMContentLoaded", () => {
+  const cfg = window.SUPABASE_CONFIG || {};
+  if (!cfg.url || !cfg.anonKey || cfg.anonKey.indexOf("PASTE") === 0) {
+    document.body.innerHTML =
+      "<p style='padding:2rem;font-family:sans-serif'>Supabase is not configured yet. " +
+      "Set <code>url</code> and <code>anonKey</code> in <code>config.js</code>.</p>";
+    return;
+  }
+
+  const client = window.supabase.createClient(cfg.url, cfg.anonKey);
+
+  const authView = document.getElementById("auth-view");
+  const appView = document.getElementById("app-view");
+  const select = document.getElementById("lessonSelector");
+  const userLabel = document.getElementById("user-label");
+
+  let lessons = [];
+  let currentUser = null;
+
+  Auth.init(client);
+  Mentor.init({ root: document.getElementById("mentor-pane"), client, getUser: () => currentUser });
+  Editor.init({ root: document.getElementById("editor-pane"), client, getUser: () => currentUser });
+
+  client.auth.onAuthStateChange((_event, session) => {
+    const user = session ? session.user : null;
+    const wasSignedIn = !!currentUser;
+    currentUser = user;
+    if (user && !wasSignedIn) showApp();
+    else if (!user) showAuth();
+  });
+
+  client.auth.getSession().then(({ data }) => {
+    currentUser = data.session ? data.session.user : null;
+    if (currentUser) showApp();
+    else showAuth();
+  });
+
+  function showAuth() {
+    authView.style.display = "block";
+    appView.style.display = "none";
+  }
+
+  async function showApp() {
+    authView.style.display = "none";
+    appView.style.display = "block";
+    await loadProfileLabel();
+    if (!lessons.length) await loadLessons();
+    if (lessons.length) {
+      select.value = lessons[0].id;
+      applyLesson(lessons[0].id);
+    }
+  }
+
+  async function loadProfileLabel() {
+    userLabel.textContent = currentUser.email;
+    const { data } = await client
+      .from("profiles")
+      .select("name, grade")
+      .eq("id", currentUser.id)
+      .maybeSingle();
+    if (data && data.name) {
+      userLabel.textContent = data.grade ? `${data.name} (grade ${data.grade})` : data.name;
+    }
+  }
+
+  async function loadLessons() {
+    const { data, error } = await client.from("lessons").select("*").order("position");
+    if (error) {
+      console.error("Failed to load lessons:", error);
+      return;
+    }
+    lessons = data || [];
+    select.innerHTML = "";
+    lessons.forEach((l) => {
+      const opt = document.createElement("option");
+      opt.value = l.id;
+      opt.textContent = `Lesson ${l.position}: ${l.title}`;
+      select.appendChild(opt);
+    });
+  }
+
+  function applyLesson(id) {
+    const lesson = lessons.find((l) => l.id === id);
+    if (!lesson) return;
+    Mentor.setLesson(lesson);
+    Editor.setLesson(lesson);
+  }
+
+  select.addEventListener("change", (e) => applyLesson(e.target.value));
+});

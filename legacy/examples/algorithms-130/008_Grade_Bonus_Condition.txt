@@ -1,0 +1,14 @@
+SET grade (85)
+SET bonus (True)
+
+IF grade is greater than 90 OR grade is greater than 80 AND bonus is equal to True THEN
+    PRINT "Grade bumped!"
+ELSE
+    PRINT "No bump."
+END
+
+# Expected Output:
+# Grade bumped!
+
+# Explanation:
+# Combines OR and AND conditions to trigger a grade bump.

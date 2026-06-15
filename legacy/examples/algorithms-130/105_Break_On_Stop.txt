@@ -1,0 +1,17 @@
+Jargon Code:
+SET words (["hi", "hello", "stop", "bye"])
+REPEAT_FOR_EACH word in words
+    IF word is equal to "stop" THEN
+        PRINT "Found stop"
+        BREAK
+    END
+    PRINT word
+END
+
+Expected Output:
+hi
+hello
+Found stop
+
+Explanation:
+This loop prints each word until it finds 'stop', at which point it prints a message and stops the loop.

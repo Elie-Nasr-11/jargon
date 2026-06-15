@@ -1,0 +1,20 @@
+SET a (10)
+SET b (25)
+SET c (17)
+
+SET max (a)
+
+IF b is greater than max THEN
+    SET max (b)
+END
+IF c is greater than max THEN
+    SET max (c)
+END
+
+PRINT max
+
+# Expected Output:
+# 25
+
+# Explanation:
+# Finds max value among 3 using sequential IF conditions.

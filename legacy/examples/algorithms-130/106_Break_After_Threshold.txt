@@ -1,0 +1,20 @@
+Jargon Code:
+SET nums ([1, 2, 3, 4, 5])
+REPEAT_FOR_EACH n in nums
+    IF n is greater than 2 THEN
+        PRINT "Breaking at"
+        PRINT n
+        BREAK
+    ELSE
+        PRINT n
+    END
+END
+
+Expected Output:
+1
+2
+Breaking at
+3
+
+Explanation:
+The code prints numbers and stops when it encounters a number greater than 2.

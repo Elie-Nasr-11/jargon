@@ -1,0 +1,24 @@
+Algorithm 42: Even and Odd with Nested Conditions
+
+Code:
+SET i (0)
+REPEAT_UNTIL i is equal to 3
+    IF i is even THEN
+        IF i is equal to 0 THEN
+            PRINT "Zero"
+        ELSE
+            PRINT "Even"
+        END
+    ELSE
+        PRINT "Odd"
+    END
+    SET i (i + 1)
+END
+
+Expected Output:
+Zero
+Odd
+Even
+
+Explanation:
+This loop prints 'Zero' for 0, 'Odd' for 1, and 'Even' for 2.

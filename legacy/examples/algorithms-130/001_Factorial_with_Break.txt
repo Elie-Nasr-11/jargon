@@ -1,0 +1,18 @@
+SET num (5)
+SET result (1)
+SET i (1)
+
+REPEAT 100 times
+    IF i is greater than num THEN
+        PRINT result
+        BREAK
+    END
+    SET result (result * i)
+    SET i (i + 1)
+END
+
+# Expected Output:
+# 120
+
+# Explanation:
+# Computes the factorial of a number using a REPEAT loop and BREAK when i exceeds num.

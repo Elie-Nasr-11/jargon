@@ -1,0 +1,16 @@
+SET num (5)
+SET result (1)
+SET i (1)
+
+REPEAT_UNTIL i is greater than num
+    SET result (result * i)
+    SET i (i + 1)
+END
+
+PRINT result
+
+# Expected Output:
+# 120
+
+# Explanation:
+# Computes factorial using REPEAT_UNTIL and condition without using BREAK.

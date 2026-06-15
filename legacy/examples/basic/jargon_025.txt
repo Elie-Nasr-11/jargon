@@ -1,0 +1,13 @@
+Code:
+SET age (20)
+IF age is greater than or equal to 18 THEN
+    PRINT "Adult"
+ELSE
+    PRINT "Minor"
+END
+
+Expected Output:
+Adult
+
+Explanation:
+Inverted case of the previous sample; still demonstrates a simple IF-ELSE construct.

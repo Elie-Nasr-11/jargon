@@ -1,0 +1,20 @@
+Algorithm 59: Age Validation Loop
+
+Code:
+SET eligible ("False")
+
+REPEAT_UNTIL eligible is equal to "True"
+    ASK "Enter your age" as age
+    IF int(age) is greater than or equal to 18 THEN
+        PRINT "You may vote!"
+        SET eligible ("True")
+    ELSE
+        PRINT "You are not eligible. Try again."
+    END
+END
+
+Expected Output:
+Depends on input
+
+Explanation:
+Loops until a valid age for voting is entered.

@@ -1,0 +1,24 @@
+Algorithm 126: Count Even in Nested List
+SET items ([[1, 2], [3, 4], [5, 6]])
+SET count (0)
+SET i (0)
+
+REPEAT_UNTIL i reaches end of items
+    SET inner (items[i])
+    SET j (0)
+    REPEAT_UNTIL j reaches end of inner
+        IF inner[j] is even THEN
+            SET count (count + 1)
+        END
+        SET j (j + 1)
+    END
+    SET i (i + 1)
+END
+
+PRINT count
+
+Expected Output:
+3
+
+Explanation:
+Traverses a 2D list and counts even numbers.

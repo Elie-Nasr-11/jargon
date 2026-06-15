@@ -1,0 +1,17 @@
+SET nums ([1, 2, 3, 4, 5])
+SET result ([])
+SET i (0)
+REPEAT_UNTIL i reaches end of nums
+    IF nums[i] is equal to 3 THEN
+        PRINT "Breaking at 3"
+        PRINT result
+        BREAK
+    END
+    ADD nums[i] to result
+    SET i (i + 1)
+END
+
+# Output:
+# Breaking at 3
+# [1, 2]
+# The loop stops collecting when 3 is encountered.

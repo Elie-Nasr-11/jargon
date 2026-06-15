@@ -1,0 +1,15 @@
+Algorithm 51: Color Match
+
+Code:
+SET color ("blue")
+IF color is equal to "red" THEN
+    PRINT "Fire"
+ELSE
+    PRINT "Water"
+END
+
+Expected Output:
+Water
+
+Explanation:
+The value isn't 'red', so 'Water' is printed.

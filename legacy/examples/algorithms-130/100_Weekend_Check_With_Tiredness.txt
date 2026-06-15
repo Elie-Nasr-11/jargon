@@ -1,0 +1,10 @@
+SET day ("Sunday")
+SET tired ("True")
+IF day is equal to "Saturday" OR day is equal to "Sunday" AND tired is equal to "True" THEN
+    PRINT "Rest day"
+ELSE
+    PRINT "Work time"
+END
+
+# Output:
+# Rest day

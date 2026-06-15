@@ -1,0 +1,15 @@
+Code:
+SET score (92)
+IF score is greater than or equal to 90 THEN
+    PRINT "High score"
+    IF score is less than 95 THEN
+        PRINT "Almost perfect"
+    END
+END
+
+Expected Output:
+High score
+Almost perfect
+
+Explanation:
+Nested IF inside an IF showing compound conditionals and stepwise refinement.

@@ -1,0 +1,12 @@
+Algorithm 38: Reassign and Print
+SET word ("hi")
+PRINT word
+SET word ("bye")
+PRINT word
+
+Expected Output:
+hi
+bye
+
+Explanation:
+Demonstrates reassignment of a variable and sequential output.

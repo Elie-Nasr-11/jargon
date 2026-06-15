@@ -1,0 +1,16 @@
+# Description:
+# Count how many "yes" responses appear in a list.
+
+SET answers (["yes", "no", "yes", "maybe", "yes"])
+SET count (0)
+SET i (0)
+REPEAT_UNTIL i reaches end of answers
+    IF answers[i] is equal to "yes" THEN
+        SET count (count + 1)
+    END
+    SET i (i + 1)
+END
+PRINT count
+
+# Expected Output:
+# 3

@@ -1,0 +1,17 @@
+Code:
+SET grade (45)
+IF grade is greater than or equal to 90 THEN
+    PRINT "Excellent"
+ELSE
+    IF grade is greater than or equal to 60 THEN
+        PRINT "Pass"
+    ELSE
+        PRINT "Fail"
+    END
+END
+
+Expected Output:
+Fail
+
+Explanation:
+Nested IF–ELSE conditions categorize the score into 'Excellent', 'Pass', or 'Fail' based on value thresholds. This sample also demonstrates proper nesting and indentation.

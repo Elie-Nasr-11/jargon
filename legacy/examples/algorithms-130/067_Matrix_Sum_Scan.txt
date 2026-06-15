@@ -1,0 +1,23 @@
+JARGON ALGORITHM 67: Matrix Sum Scan
+
+SET matrix ([[1, 2], [3, 4]])
+SET sum (0)
+SET i (0)
+
+REPEAT_UNTIL i reaches end of matrix
+    SET row (matrix[i])
+    SET j (0)
+    REPEAT_UNTIL j reaches end of row
+        SET sum (sum + row[j])
+        SET j (j + 1)
+    END
+    SET i (i + 1)
+END
+
+PRINT sum
+
+Expected Output:
+10
+
+Explanation:
+- Adds all elements of a 2D matrix using nested loops.

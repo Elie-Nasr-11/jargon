@@ -1,0 +1,21 @@
+Jargon Code:
+SET temp (5)
+IF temp is greater than 30 THEN
+    PRINT "Hot"
+ELSE
+    IF temp is greater than 20 THEN
+        PRINT "Warm"
+    ELSE
+        IF temp is greater than 10 THEN
+            PRINT "Cool"
+        ELSE
+            PRINT "Cold"
+        END
+    END
+END
+
+Expected Output:
+Cold
+
+Explanation:
+This nested conditional checks the value of 'temp' and prints the corresponding temperature category. In this case, 5 is less than 10, so 'Cold' is printed.

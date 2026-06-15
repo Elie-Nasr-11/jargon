@@ -1,0 +1,23 @@
+# Description:
+# Identify character type from a list: digit, letter, or other.
+
+SET chars (["a", "1", "#"])
+SET i (0)
+REPEAT_UNTIL i reaches end of chars
+    SET ch (chars[i])
+    IF ch is in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] THEN
+        PRINT "digit"
+    ELSE
+        IF ch is in ["a", "b", "c", "d", "e", "f", "g"] THEN
+            PRINT "letter"
+        ELSE
+            PRINT "other"
+        END
+    END
+    SET i (i + 1)
+END
+
+# Expected Output:
+# letter
+# digit
+# other

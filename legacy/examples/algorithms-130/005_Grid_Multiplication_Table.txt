@@ -1,0 +1,22 @@
+SET a (1)
+SET b (1)
+SET grid ([])
+
+REPEAT 3 times
+    SET row ([])
+    SET b (1)
+    REPEAT 3 times
+        ADD (a * b) to row
+        SET b (b + 1)
+    END
+    ADD row to grid
+    SET a (a + 1)
+END
+
+PRINT grid
+
+# Expected Output:
+# [[1, 2, 3], [2, 4, 6], [3, 6, 9]]
+
+# Explanation:
+# Nested loop constructs a multiplication table.

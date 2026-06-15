@@ -1,0 +1,30 @@
+Algorithm 64: Caesar Cipher with Increasing Shift
+
+Jargon Code:
+SET text ("HELLO")
+SET shift (1)
+SET result ([])
+SET alphabet (["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"])
+
+SET i (0)
+REPEAT_UNTIL i reaches end of text
+    SET letter (text[i])
+    SET j (0)
+    REPEAT_UNTIL j reaches end of alphabet
+        IF alphabet[j] is equal to letter THEN
+            SET new_index ((j + shift) % 26)
+            ADD alphabet[new_index] to result
+        END
+        SET j (j + 1)
+    END
+    SET shift (shift + 1)
+    SET i (i + 1)
+END
+
+PRINT result
+
+Expected Output:
+['I', 'G', 'N', 'P', 'T']
+
+Explanation:
+Encrypts a word using a Caesar cipher with a shift that increases by 1 after each character.

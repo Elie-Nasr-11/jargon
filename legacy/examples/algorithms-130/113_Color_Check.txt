@@ -1,0 +1,14 @@
+Title: Favorite Color Check
+Jargon Code:
+ASK "What’s your favorite color?" as color
+IF color is equal to "blue" THEN
+    PRINT "Nice choice!"
+ELSE
+    PRINT "Interesting taste!"
+END
+
+Expected Output:
+(Depends on input; e.g., "blue" → "Nice choice!")
+
+Explanation:
+Uses ASK and IF to compare user input to a target string and respond accordingly.

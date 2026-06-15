@@ -1,0 +1,21 @@
+Algorithm 127: Check All Above Threshold
+SET values ([70, 85, 92, 78])
+SET threshold (60)
+SET all_above ("True")
+SET i (0)
+
+REPEAT_UNTIL i reaches end of values
+    IF values[i] is less than threshold THEN
+        SET all_above ("False")
+        BREAK
+    END
+    SET i (i + 1)
+END
+
+PRINT all_above
+
+Expected Output:
+True
+
+Explanation:
+Verifies all elements meet a certain threshold.

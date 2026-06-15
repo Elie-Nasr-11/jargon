@@ -1,0 +1,17 @@
+Jargon Code:
+SET attempts (0)
+REPEAT_UNTIL attempts is equal to 5
+    SET attempts (attempts + 1)
+    IF attempts is equal to 2 THEN
+        PRINT "Quitting early"
+        BREAK
+    END
+    PRINT "Trying..."
+END
+
+Expected Output:
+Trying...
+Quitting early
+
+Explanation:
+This loop simulates attempts and breaks at the second attempt.

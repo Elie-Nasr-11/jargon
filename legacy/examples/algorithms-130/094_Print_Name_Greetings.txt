@@ -1,0 +1,13 @@
+SET names (["Alice", "Bob", "Eve"])
+REPEAT_FOR_EACH name in names
+    IF name is equal to "Bob" THEN
+        PRINT "Hello, Bob!"
+    ELSE
+        PRINT "Hi, " + name
+    END
+END
+
+# Output:
+# Hi, Alice
+# Hello, Bob!
+# Hi, Eve

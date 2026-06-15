@@ -1,0 +1,16 @@
+# Description:
+# Create a list of even numbers from another list.
+
+SET nums ([1, 2, 3, 4, 5])
+SET result ([])
+SET i (0)
+REPEAT_UNTIL i reaches end of nums
+    IF nums[i] is even THEN
+        ADD nums[i] to result
+    END
+    SET i (i + 1)
+END
+PRINT result
+
+# Expected Output:
+# [2, 4]

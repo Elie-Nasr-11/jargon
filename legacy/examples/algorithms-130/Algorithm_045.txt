@@ -1,0 +1,16 @@
+Algorithm 45: Print Even Numbers
+
+Code:
+SET nums ([1, 2, 3, 4])
+REPEAT_FOR_EACH n in nums
+    IF n is even THEN
+        PRINT n
+    END
+END
+
+Expected Output:
+2
+4
+
+Explanation:
+Only even numbers from the list are printed.

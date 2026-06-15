@@ -1,0 +1,16 @@
+Algorithm 49: Eligibility Test
+
+Code:
+SET age (15)
+SET grade (9)
+IF age is greater than 10 AND grade is greater than 8 THEN
+    PRINT "Eligible"
+ELSE
+    PRINT "Not eligible"
+END
+
+Expected Output:
+Eligible
+
+Explanation:
+Both conditions are met, so eligibility is granted.

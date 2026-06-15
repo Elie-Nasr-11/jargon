@@ -1,0 +1,22 @@
+Algorithm 62: Countdown Loop
+
+Jargon Code:
+ASK "Enter a countdown number" as count
+SET count (int(count))
+
+REPEAT_UNTIL count is equal to 0
+    PRINT count
+    SET count (count - 1)
+END
+
+PRINT "Time’s up!" 
+
+Expected Output:
+If input = 3:
+3
+2
+1
+Time’s up!
+
+Explanation:
+This takes a number from the user and counts down to 0, then prints a message.

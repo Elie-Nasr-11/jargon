@@ -1,0 +1,14 @@
+# Algorithm 75: Range check
+# Checks if x falls within the range (5, 20) and prints accordingly
+# Expected Output: "x is between 5 and 20" if x = 10
+
+SET x (10)
+IF x is greater than 5 THEN
+    IF x is less than 20 THEN
+        PRINT "x is between 5 and 20"
+    ELSE
+        PRINT "x is 20 or more"
+    END
+ELSE
+    PRINT "x is 5 or less"
+END

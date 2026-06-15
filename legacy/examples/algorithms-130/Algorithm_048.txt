@@ -1,0 +1,15 @@
+Algorithm 48: Weekend Check
+
+Code:
+SET day ("Saturday")
+IF day is equal to "Sunday" OR day is equal to "Saturday" THEN
+    PRINT "Weekend"
+ELSE
+    PRINT "Weekday"
+END
+
+Expected Output:
+Weekend
+
+Explanation:
+Checks if the day is a weekend day and prints accordingly.

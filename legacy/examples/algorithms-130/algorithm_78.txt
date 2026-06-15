@@ -1,0 +1,10 @@
+# Algorithm 78: Check number type
+# Asks for a number and checks if it's even or odd
+# Example Input: 4 → Expected Output: "Even"
+
+ASK "Enter a number:" as input
+IF int(input) is even THEN
+    PRINT "Even"
+ELSE
+    PRINT "Odd"
+END

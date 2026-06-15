@@ -1,0 +1,12 @@
+Algorithm 41: Empty Loop Test
+
+Code:
+REPEAT 0 times
+    PRINT "Should not print"
+END
+
+Expected Output:
+
+
+Explanation:
+This loop has 0 iterations, so the PRINT statement inside it is never executed.

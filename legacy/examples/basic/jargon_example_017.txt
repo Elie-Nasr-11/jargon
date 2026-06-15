@@ -1,0 +1,16 @@
+Example 17
+
+Code:
+SET a (5)
+SET b (10 - 5)
+IF a is equal to b THEN
+    PRINT "Equal"
+ELSE
+    PRINT "Not Equal"
+END
+
+Expected Output:
+Expected output: Equal
+
+Explanation:
+Compares two numbers

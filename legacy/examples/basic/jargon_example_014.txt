@@ -1,0 +1,17 @@
+Example 14
+
+Code:
+ASK "Enter first number" as a
+ASK "Enter second number" as b
+
+IF int(a) is greater than int(b) THEN
+    PRINT a
+ELSE
+    PRINT b
+END
+
+Expected Output:
+Expected output: Larger of the two input numbers
+
+Explanation:
+Compares two numbers and prints the larger

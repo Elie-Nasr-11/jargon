@@ -1,0 +1,16 @@
+SET nums ([1, 6, 9, 12, 14, 18])
+SET selected ([])
+
+REPEAT_FOR_EACH x in nums
+    IF x is even AND (x % 3) is equal to 0 THEN
+        ADD x to selected
+    END
+END
+
+PRINT selected
+
+# Expected Output:
+# [6, 12, 18]
+
+# Explanation:
+# Filters numbers that are both even and divisible by 3 using a FOR_EACH loop.

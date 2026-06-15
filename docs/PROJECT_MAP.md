@@ -15,6 +15,14 @@ This is the clean Git repo that was pushed to GitHub. It originally contained:
 
 The interpreter is the hardened descendant of the late Colab/runtime versions.
 
+Current repo layout:
+
+- Platform lives at the repo root (`index.html`, `app.js`, `auth.js`, `editor/`, `mentor/`, `assets/`).
+- Supabase assets live under `supabase/`.
+- Render deployment is described by `render.yaml`.
+- The runtime engine lives under `engine/`.
+- The root `jargon_interpreter.py` is now only a compatibility import shim.
+
 ## Python Lineage
 
 `01-legacy-python`
@@ -41,6 +49,11 @@ These contain 131 `.txt` example files. They are mixed-format:
 
 `jargon_examples.py` now extracts runnable code from the common wrapper formats, and `tools/validate_examples.py` can run the full legacy corpus.
 
+Current repo imports:
+
+- Curated examples: `examples/`
+- Full corpus: `legacy/examples/`
+
 ## Web Runners
 
 `03-web-runners`
@@ -58,7 +71,7 @@ The web API contracts drifted over time:
 - ASK handling differs between versions.
 - One backend references `ask_state`, which is not present in the matching interpreter.
 
-The better rebuild should use one stable run result shape from `StructuredJargonInterpreter.run()`.
+The current rebuild uses one stable run result shape from `StructuredJargonInterpreter.run()` and `run_sandboxed()`. The Flask wrapper in `engine/app.py` also exposes `result = output` for existing `editor.js` compatibility.
 
 ## Mentor App
 
@@ -71,7 +84,7 @@ This is the richest teaching UI. It contains a long "Jargon Mentor" system promp
 - Jargon to Python bridge
 - Short, reflective teaching style
 
-The frontend and backend are useful conceptually, but should be rebuilt around the hardened interpreter and a modern API boundary.
+The legacy prompt has been surfaced at `mentor/system_prompt.md`. The current platform mentor pane lives at `mentor/mentor.js` and should be rebuilt around that prompt and the Supabase `chat` edge function.
 
 ## Curriculum And Docs
 
@@ -81,6 +94,12 @@ The frontend and backend are useful conceptually, but should be rebuilt around t
 - `Jargon.docx`: alternate/richer language-design notes for arrays, datasets, insert/remove/update operations, and structured data tasks.
 - `Jargon.pdf`: likely visual or scan-heavy; text extraction did not return useful content.
 - AI-teacher PDFs and Borges PDF: supporting/reference material, not core runtime assets.
+
+Current repo imports:
+
+- `docs/curriculum/modules_overview.md`
+- `docs/curriculum/jargon_data_operations.md`
+- `docs/curriculum/merged_curriculum.md`
 
 ## Branding
 
@@ -98,9 +117,9 @@ The old web UI commonly used blue `#0077cc`, magenta `#c42d88`, and greens such 
 
 The clean direction is:
 
-- Keep the hardened interpreter as the runtime core.
+- Keep the hardened interpreter in `engine/` as the runtime core.
 - Add a stable example/document loader around the old corpus.
 - Add a real language reference and test corpus.
-- Rebuild web/API surfaces around one result shape.
+- Continue platform work around Supabase + Render and one result shape.
 - Treat the mentor as a teaching layer, not as the runtime.
 - Keep branding assets separate from executable code.

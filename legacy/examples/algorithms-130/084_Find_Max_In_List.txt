@@ -1,0 +1,16 @@
+# Description:
+# Find the maximum number in a list.
+
+SET nums ([3, 7, 2, 9, 5])
+SET max (nums[0])
+SET i (1)
+REPEAT_UNTIL i reaches end of nums
+    IF nums[i] is greater than max THEN
+        SET max (nums[i])
+    END
+    SET i (i + 1)
+END
+PRINT max
+
+# Expected Output:
+# 9

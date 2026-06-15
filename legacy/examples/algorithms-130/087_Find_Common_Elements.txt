@@ -1,0 +1,17 @@
+# Description:
+# Find common elements between two lists.
+
+SET a ([1, 2, 3, 4])
+SET b ([3, 4, 5])
+SET common ([])
+SET i (0)
+REPEAT_UNTIL i reaches end of a
+    IF a[i] is in b THEN
+        ADD a[i] to common
+    END
+    SET i (i + 1)
+END
+PRINT common
+
+# Expected Output:
+# [3, 4]

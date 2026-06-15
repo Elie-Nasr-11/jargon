@@ -1,0 +1,11 @@
+Algorithm 36: Search in List
+SET fruits (["apple", "banana", "mango"])
+IF "banana" is in fruits THEN
+    PRINT "Found"
+END
+
+Expected Output:
+Found
+
+Explanation:
+Checks if "banana" is in the list and prints a message if true.

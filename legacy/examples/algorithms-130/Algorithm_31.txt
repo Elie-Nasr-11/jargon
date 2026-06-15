@@ -1,0 +1,16 @@
+Algorithm 31: Collect Odd Numbers
+SET i (1)
+SET odds ([])
+REPEAT_UNTIL i is greater than 9
+    IF i is odd THEN
+        ADD i to odds
+    END
+    SET i (i + 1)
+END
+PRINT odds
+
+Expected Output:
+[1, 3, 5, 7, 9]
+
+Explanation:
+This algorithm iterates from 1 to 9 and collects all odd numbers into a list called odds. It then prints the resulting list.

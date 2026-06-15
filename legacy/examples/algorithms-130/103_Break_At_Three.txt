@@ -1,0 +1,19 @@
+Jargon Code:
+SET i (0)
+REPEAT 10 times
+    IF i is equal to 3 THEN
+        PRINT "Breaking at 3"
+        BREAK
+    END
+    PRINT i
+    SET i (i + 1)
+END
+
+Expected Output:
+0
+1
+2
+Breaking at 3
+
+Explanation:
+The loop prints numbers from 0 and stops when i equals 3. It prints a message and breaks the loop.

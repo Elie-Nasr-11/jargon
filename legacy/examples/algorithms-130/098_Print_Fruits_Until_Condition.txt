@@ -1,0 +1,14 @@
+SET fruits (["apple", "banana", "cherry", "durian"])
+REPEAT_FOR_EACH fruit in fruits
+    PRINT fruit
+    IF fruit is equal to "cherry" THEN
+        PRINT "Yum!"
+        BREAK
+    END
+END
+
+# Output:
+# apple
+# banana
+# cherry
+# Yum!

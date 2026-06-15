@@ -1,0 +1,15 @@
+Example 19
+
+Code:
+ASK "Enter your grade" as grade
+IF grade is greater than or equal to 50 THEN
+    PRINT "Passed"
+ELSE
+    PRINT "Failed"
+END
+
+Expected Output:
+Expected output: Passed or Failed
+
+Explanation:
+Determines if grade passes threshold

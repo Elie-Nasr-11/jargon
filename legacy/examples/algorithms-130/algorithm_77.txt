@@ -1,0 +1,11 @@
+# Algorithm 77: Print numbers until a specific value and break
+# Uses REPEAT_FOR_EACH loop and breaks at value 9
+# Expected Output: 3, 6, 9
+
+SET nums ([3, 6, 9, 12])
+REPEAT_FOR_EACH n in nums
+    PRINT n
+    IF n is equal to 9 THEN
+        BREAK
+    END
+END

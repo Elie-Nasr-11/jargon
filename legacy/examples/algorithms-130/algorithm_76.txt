@@ -1,0 +1,13 @@
+# Algorithm 76: Collect even numbers up to 5
+# Repeats 5 times and adds even numbers to the result list
+# Expected Output: [2, 4]
+
+SET result ([])
+SET i (1)
+REPEAT 5 times
+    IF i is even THEN
+        ADD i to result
+    END
+    SET i (i + 1)
+END
+PRINT result

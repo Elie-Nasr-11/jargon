@@ -1,0 +1,19 @@
+Algorithm 129: Filter Values Between Bounds
+SET numbers ([5, 12, 20, 7, 14, 3])
+SET filtered ([])
+SET i (0)
+
+REPEAT_UNTIL i reaches end of numbers
+    IF numbers[i] is greater than 5 AND numbers[i] is less than 15 THEN
+        ADD numbers[i] to filtered
+    END
+    SET i (i + 1)
+END
+
+PRINT filtered
+
+Expected Output:
+[12, 7, 14]
+
+Explanation:
+Adds only values in range (5, 15) to a new list.

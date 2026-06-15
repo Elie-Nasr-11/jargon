@@ -1,0 +1,27 @@
+Example 12
+
+Code:
+ASK "Enter a word" as text
+SET freq ([])
+SET i (0)
+
+REPEAT_UNTIL i reaches end of text
+    SET char (text[i])
+    SET count (0)
+    SET j (0)
+    REPEAT_UNTIL j reaches end of text
+        IF text[j] is equal to char THEN
+            SET count (count + 1)
+        END
+        SET j (j + 1)
+    END
+    PRINT char
+    PRINT count
+    SET i (i + 1)
+END
+
+Expected Output:
+Expected output: For input 'hello', prints h 1 e 1 l 2 l 2 o 1
+
+Explanation:
+Counts how many times each character appears in the word

@@ -1,0 +1,13 @@
+Algorithm 35: Simple IF/ELSE Condition
+SET x (3)
+IF x is equal to 5 THEN
+    PRINT "Match"
+ELSE
+    PRINT "No match"
+END
+
+Expected Output:
+No match
+
+Explanation:
+Basic conditional branching based on equality.

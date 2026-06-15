@@ -1,0 +1,11 @@
+Title: Marks List Modification
+Jargon Code:
+SET marks ([10, 20, 30])
+SET marks[1] (99)
+PRINT marks
+
+Expected Output:
+[10, 99, 30]
+
+Explanation:
+This example demonstrates how to modify a specific index of a list using SET.

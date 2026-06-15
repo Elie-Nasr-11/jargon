@@ -1,0 +1,32 @@
+Algorithm 122: Breadth-First Search (BFS)
+SET graph ([[0, 1, 0, 0, 0], [1, 0, 1, 1, 0], [0, 1, 0, 0, 1], [0, 1, 0, 0, 1], [0, 0, 1, 1, 0]])
+
+SET visited ([False, False, False, False, False])
+SET result ([])
+SET queue ([0])
+SET visited[0] (True)
+
+REPEAT_UNTIL queue is equal to []
+    SET node (queue[0])
+    REMOVE node from queue
+    ADD node to result
+
+    SET i (0)
+    REPEAT_UNTIL i is equal to 5
+        IF graph[node][i] is equal to 1 THEN
+            IF visited[i] is equal to False THEN
+                ADD i to queue
+                SET visited[i] (True)
+            END
+        END
+        SET i (i + 1)
+    END
+END
+
+PRINT result
+
+Expected Output:
+[0, 1, 2, 3, 4]
+
+Explanation:
+Performs BFS traversal from node 0. Uses queue-based logic and REPEAT_UNTIL loop.

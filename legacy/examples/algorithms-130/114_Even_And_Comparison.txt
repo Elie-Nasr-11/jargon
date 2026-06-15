@@ -1,0 +1,14 @@
+Title: Even and Comparison
+Jargon Code:
+SET n (4)
+IF n is even AND n is greater than 2 THEN
+    PRINT "Qualified"
+ELSE
+    PRINT "Not Qualified"
+END
+
+Expected Output:
+Qualified
+
+Explanation:
+Demonstrates multiple conditions using AND, including the "is even" condition.

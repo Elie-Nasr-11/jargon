@@ -1,0 +1,18 @@
+Example 16
+
+Code:
+SET i (0)
+REPEAT 5 times
+    IF i is even THEN
+        PRINT i
+    ELSE
+        PRINT "odd"
+    END
+    SET i (i + 1)
+END
+
+Expected Output:
+Expected output: 0, 'odd', 2, 'odd', 4
+
+Explanation:
+Prints number if even, otherwise 'odd'
