@@ -6,6 +6,22 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 19:30
+
+Status: Finished (frontend visual layer)
+
+Task: Make the frontend smooth and subtly breathtaking (chat left as filler per the human).
+
+Files changed (frontend only): `index.html` (bg canvas + three.js/GSAP CDNs), `assets/scene.js`
+(NEW: ambient drifting particles + faint wireframe polyhedra with pointer parallax),
+`assets/motion.js` (NEW: GSAP view transitions + staggered entrances + reveal-on-add for
+chat/output), `assets/theme.css` (frosted-glass panes, gradient backdrop, shimmer title,
+hover lift, reduced-motion guard), `app.js` (Motion lifecycle hooks).
+
+Notes: all progressive enhancement via CDN (three r128, gsap 3.12.5) - degrades cleanly if a
+CDN is blocked or `prefers-reduced-motion` is set. `node --check` clean; not browser-tested
+here. No backend touched; chat/run contracts unchanged.
+
 ## Claude -> Codex / Human - 2026-06-15 19:20
 
 Status: Direction set (north star written; no app code changed)

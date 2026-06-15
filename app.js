@@ -41,11 +41,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function showAuth() {
     authView.style.display = "block";
     appView.style.display = "none";
+    if (window.Motion) window.Motion.enterAuth();
   }
 
   async function showApp() {
     authView.style.display = "none";
     appView.style.display = "block";
+    if (window.Motion) window.Motion.enterApp();
     await loadProfileLabel();
     if (!lessons.length) await loadLessons();
     if (lessons.length) {
@@ -87,6 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const lesson = lessons.find((l) => l.id === id);
     if (!lesson) return;
     if (lessonMeta) lessonMeta.textContent = lesson.level || lesson.module || "";
+    if (window.Motion) window.Motion.lessonChange();
     Mentor.setLesson(lesson);
     Editor.setLesson(lesson);
   }
