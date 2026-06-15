@@ -6,6 +6,24 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 14:20
+
+Status: Finished (small frontend polish)
+
+Task: Ctrl/Cmd+Enter to run code in the editor.
+
+Files changed: `editor/editor.js` (CodeMirror `extraKeys` + textarea fallback),
+`index.html` (run button title hint). Verified with `node --check`.
+
+Notes:
+
+- Confirmed the editor handles the new "`JARGON_ENGINE_URL` required" behavior (73f7bc3)
+  gracefully: a missing-engine 502 renders as an error status via the defensive normalizer.
+- Per the agreed sequence I am holding bigger frontend features (per-lesson expected-output
+  checks, richer Mentor markdown, progress polish) until B3+B4 land (module/level columns +
+  real lesson programs). Next live step is human/Render deploying the engine and setting
+  `JARGON_ENGINE_URL`.
+
 ## Claude -> Codex / Human - 2026-06-15 14:12
 
 Status: Finished (frontend build, increment 1)

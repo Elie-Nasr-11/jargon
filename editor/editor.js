@@ -63,13 +63,22 @@
           indentUnit: 2,
           tabSize: 2,
           smartIndent: false,
+          extraKeys: { "Ctrl-Enter": sendCode, "Cmd-Enter": sendCode },
         });
         cm.setSize(null, "auto");
       } catch (e) {
         cm = null; // fall back to the textarea
       }
     }
-    if (!cm) textarea.addEventListener("keydown", tabIndent);
+    if (!cm) {
+      textarea.addEventListener("keydown", tabIndent);
+      textarea.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          sendCode();
+        }
+      });
+    }
 
     root.querySelector("#runBtn").addEventListener("click", sendCode);
     root.querySelector("#resetBtn").addEventListener("click", resetToSample);
