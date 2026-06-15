@@ -23,6 +23,22 @@ Reason:
 
 - Matches the human's stated product vision; see `docs/VISION.md` for the full architecture.
 
+## 2026-06-15: Learning Session Runtime Comes Before More Chat Polish
+
+Decision:
+
+- The next backend spine is a durable learning-session runtime, not a looser Mentor prompt.
+- AI-led lessons use course-flow stages: intro, teach, practice, assessment, review, and complete.
+- Student responses are typed as text, code, multiple choice, or file.
+- The chat edge function adds a typed JSON response envelope while preserving the legacy `{ messages } -> { reply }` path.
+- The primary learner audience is school children.
+
+Reason:
+
+- Jargon is meant to teach logical thought through structured course conversations.
+- Claude's frontend needs a stable contract for stages, answer modes, retries, rescue paths, and completion.
+- Keeping legacy chat compatibility lets the current UI continue working while the richer experience is built.
+
 ## 2026-06-15: Seed A 10-Lesson V1 Spine
 
 Decision:

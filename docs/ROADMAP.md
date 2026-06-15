@@ -31,12 +31,14 @@ Status: Started by Claude branch.
 - Make ASK interactions feel intentional and clear.
 - Keep the UI quiet, focused, and classroom-friendly.
 
-## Phase 4: Jargon Mentor
+## Phase 4: Learning Session Runtime + Mentor
 
-Status: Platform pane exists; prompt extracted for rebuild.
+Status: Started as a repo-only backend pass.
 
-- Rebuild the mentor as a teaching layer, not the runtime.
+- Rebuild the mentor as a structured course-session layer, not an open-ended chat box.
 - Separate AI coaching from code execution.
+- Add durable sessions, turns, attempts, activity seeds, and mastery evidence.
+- Return typed chat envelopes with stage, response mode, next action, assessment, and guardrail fields.
 - Add lesson modes from the curriculum: Processes, Coding, Prompting.
 - Keep prompts and examples versioned in the repo.
 - Bridge natural speech -> pseudocode -> Jargon -> Python.

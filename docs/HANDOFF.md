@@ -90,6 +90,45 @@ Still gating a fully live app: engine deploy + `JARGON_ENGINE_URL` (run), `chat`
 
 Status: Finished
 
+Task: Add Learning Session Runtime v1, repo-only.
+
+Summary:
+
+- Added `supabase/migrations/0003_learning_session_runtime.sql`.
+- New runtime tables: `lesson_activities`, `learning_sessions`, `learning_turns`, `lesson_attempts`, and `student_mastery`.
+- Enabled RLS on all new tables and added explicit Data API grants for `anon`/`authenticated`/`service_role` where needed.
+- Seeded one executable code activity for each of the 10 v1 lessons, with rubric JSON, skill keys, and expected output.
+- Updated `supabase/functions/chat/index.ts` to preserve legacy `{ messages } -> { reply }` while adding typed `{ lesson_id, session_id?, answer? }` course-session requests.
+- New typed chat response includes `status`, `reply`, `session_id`, `lesson_id`, `stage`, `response_mode`, `choices`, `exercise`, `assessment`, `next_action`, and `guardrail`.
+- Rewrote `mentor/system_prompt.md` around school-child course flow, guardrails, answer modes, retry/rescue, and natural speech -> baby Jargon -> Jargon -> Python bridge.
+- Recorded decisions/open questions/roadmap updates for session runtime, deferred file uploads, deferred Python execution, and deferred model routing.
+- No live Supabase or Render changes were made.
+
+Claude-facing contract:
+
+- Existing frontend can keep calling `chat` with `{messages}` and reading `{reply}`.
+- New frontend flow can call `chat` with `{lesson_id, session_id?, answer?}` and render the typed envelope.
+- File mode exists in the contract but should not be surfaced as an upload UI yet.
+- Python bridge is explanatory only until a separate sandbox is designed.
+
+Tests run:
+
+- `python3 -m unittest discover -s tests -q` -> 53 tests passed.
+- `python3 tools/validate_examples.py examples legacy/examples` -> 136 files passed.
+- `PYTHONPYCACHEPREFIX=/private/tmp/jargon-pycache python3 -m py_compile jargon_interpreter.py engine/jargon_interpreter.py jargon_examples.py tools/validate_examples.py tests/test_jargon_interpreter.py tests/test_lesson_spine_migration.py tests/test_learning_session_runtime_migration.py tests/test_supabase_run_function.py tests/test_supabase_chat_function.py engine/app.py` -> passed.
+- `git diff --check` -> passed.
+- `deno check supabase/functions/chat/index.ts` -> unavailable locally (`deno` not installed).
+
+Live follow-up:
+
+- Apply `0002_lesson_spine.sql` first if not already live, then apply `0003_learning_session_runtime.sql`.
+- Redeploy the `chat` edge function after the migration is applied.
+- Run one legacy chat smoke and one typed session smoke against a signed-in user.
+
+## Codex -> Claude / Human - 2026-06-15
+
+Status: Finished
+
 Task: Add the v1 lesson spine migration.
 
 Summary:
