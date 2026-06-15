@@ -21,10 +21,14 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentUser = null;
 
   Auth.init(client);
+  const runnerEngine =
+    typeof window.makeRunnerEngine === "function" ? window.makeRunnerEngine(client) : window.RunnerEngineMock;
   LessonRunner.init({
     root: document.getElementById("runner-root"),
     client,
     getUser: () => currentUser,
+    engine: runnerEngine,
+    fallback: window.RunnerEngineMock,
   });
 
   client.auth.onAuthStateChange((_event, session) => {

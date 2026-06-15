@@ -106,7 +106,7 @@
     };
   }
 
-  window.RunnerEngine = {
+  window.RunnerEngineMock = {
     start: function (lesson) {
       state = { lesson: lesson, steps: buildSteps(lesson), index: 0, grades: [] };
       return delay(turnFor(0, null), 350);

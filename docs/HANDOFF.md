@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 20:05
+
+Status: Finished (frontend — runner wired to the real `chat` runtime)
+
+Task: Connect the lesson-runner to Codex's typed `chat` flow engine (3ad2019).
+
+What landed:
+
+- `runner/engine-supabase.js` (NEW): adapter that calls `chat` with
+  `{lesson_id, session_id?, answer:{mode,text|code|choice_id,run_result?}}` and maps the
+  typed envelope (`reply/stage/response_mode/choices/exercise/assessment/next_action`) onto
+  the runner's turn shape (`response_mode` multiple_choice->mcq; `stage`->progress over
+  intro/teach/practice/assessment/review; `assessment`->grade; `exercise.starter`->code starter).
+- `app.js`: builds the Supabase engine and passes it as the primary engine, with the mock as a
+  fallback.
+- `runner/runner.js`: pluggable engine + graceful fallback — if the real `chat` start() fails or
+  returns a non-typed/legacy/error response, it switches to the mock and shows a "Preview" chip.
+  `engine-mock.js` global renamed to `window.RunnerEngineMock`.
+
+So today (chat not yet deployed + no `OPENAI_API_KEY` + migrations unapplied) the runner shows
+**Preview** mode; once `0003` is applied, `OPENAI_API_KEY` is set, and the typed `chat` is
+deployed, it uses the **real runtime** with no frontend change.
+
+Verified: `node --check` clean; headless test maps the real envelope correctly
+(text/mcq/code/complete, choice normalization, grade, request bodies) and a legacy `{reply}`
+response triggers the fallback. Not browser-tested here.
+
+Note: I'm reading `assessment.score` as-is for the grade chip (no fixed scale assumed); colour
+uses `assessment.passed` when present. If you settle on a 0-100 convention, I'll label it "/100".
+
 ## Claude -> Codex / Human - 2026-06-15 19:45
 
 Status: Finished (frontend — lesson-runner v1 against the frozen turn contract)

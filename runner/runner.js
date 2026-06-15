@@ -2,30 +2,31 @@
 //
 // Renders the guided conversation that IS the lesson: AI turns + the right input
 // affordance per turn (text / multiple-choice / code / file), a progress bar,
-// grading, and a completion card. Talks to window.RunnerEngine (currently the mock;
-// later a wrapper around the `chat` flow-engine edge function). Exposes
+// grading, and a completion card. Drives a pluggable engine passed to init (the
+// Supabase `chat` adapter, with the mock engine as a preview fallback). Exposes
 // window.LessonRunner.{ init(opts), start(lesson) }.
 (function () {
   "use strict";
 
   var client, getUser, root;
-  var lessonEl, levelEl, fillEl, progLabel, transcript, dock;
+  var lessonEl, levelEl, modeEl, fillEl, progLabel, transcript, dock;
   var currentLesson = null;
   var busy = false;
-
-  function engine() {
-    return window.RunnerEngine;
-  }
+  var primaryEngine, fallbackEngine, activeEngine;
 
   function init(opts) {
     client = opts.client;
     getUser = opts.getUser;
     root = opts.root;
+    primaryEngine = opts.engine || window.RunnerEngineMock;
+    fallbackEngine = opts.fallback || window.RunnerEngineMock;
+    activeEngine = primaryEngine;
     if (!root) return;
     root.innerHTML =
       '<div class="runner-head">' +
       '  <div class="runner-title"><span id="runner-lesson"></span>' +
-      '  <span id="runner-level" class="level-chip"></span></div>' +
+      '  <span id="runner-level" class="level-chip"></span>' +
+      '  <span id="runner-mode" class="mode-chip"></span></div>' +
       '  <div class="progress"><div id="progress-fill" class="progress-fill"></div></div>' +
       '  <div id="progress-label" class="progress-label"></div>' +
       "</div>" +
@@ -33,6 +34,7 @@
       '<div id="runner-dock" class="dock"></div>';
     lessonEl = root.querySelector("#runner-lesson");
     levelEl = root.querySelector("#runner-level");
+    modeEl = root.querySelector("#runner-mode");
     fillEl = root.querySelector("#progress-fill");
     progLabel = root.querySelector("#progress-label");
     transcript = root.querySelector("#runner-transcript");
@@ -40,18 +42,31 @@
   }
 
   async function start(lesson) {
-    if (!root || !engine()) return;
+    if (!root) return;
     currentLesson = lesson;
     busy = false;
+    activeEngine = primaryEngine;
+    if (modeEl) modeEl.textContent = "";
     lessonEl.textContent = lesson.title || "Lesson";
     levelEl.textContent = "";
     transcript.innerHTML = "";
     dock.innerHTML = "";
     setProgress({ index: 0, total: 1 });
     try {
-      render(await engine().start(lesson));
+      render(await activeEngine.start(lesson));
     } catch (e) {
-      bubble("ai", "Couldn't start the lesson. Try again.", "Jargon Mentor");
+      // Backend not live yet — fall back to the local preview flow.
+      if (fallbackEngine && fallbackEngine !== activeEngine) {
+        activeEngine = fallbackEngine;
+        if (modeEl) modeEl.textContent = "Preview";
+        try {
+          render(await activeEngine.start(lesson));
+          return;
+        } catch (e2) {
+          /* fall through to the error bubble */
+        }
+      }
+      bubble("ai", "Couldn't start the lesson — try again.", "Jargon Mentor");
     }
   }
 
@@ -102,10 +117,11 @@
 
   function gradeChip(g) {
     if (!g) return "";
-    var cls = g.score >= 80 ? "pass" : g.score >= 50 ? "partial" : "fail";
-    return (
-      '<span class="grade-chip ' + cls + '">' + g.score + " / 100 — " + esc(g.feedback || "") + "</span><br>"
-    );
+    var cls =
+      g.passed === true ? "pass" : g.passed === false ? "fail" : g.score >= 80 ? "pass" : g.score >= 50 ? "partial" : "fail";
+    var scoreTxt = typeof g.score === "number" ? g.score + " — " : "";
+    var text = g.feedback || (g.passed ? "Correct" : "Keep going");
+    return '<span class="grade-chip ' + cls + '">' + scoreTxt + esc(text) + "</span><br>";
   }
 
   // ---- rendering --------------------------------------------------------
@@ -232,7 +248,7 @@
     transcript.appendChild(thinking);
     transcript.scrollTop = transcript.scrollHeight;
     try {
-      var turn = await engine().submit(answer);
+      var turn = await activeEngine.submit(answer);
       thinking.remove();
       render(turn);
     } catch (e) {
