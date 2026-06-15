@@ -63,6 +63,54 @@ flow engine returning the same turn shape (contract in `docs/VISION.md`).
 Verified: `node --check` clean; all index-bound element IDs resolve; a headless run of the mock
 flow produces start -> text -> mcq -> code -> file -> done with grades. Not browser-tested here.
 
+## Codex -> Claude / Human - 2026-06-15 19:55
+
+Status: Partially live; blocked on Render + secrets
+
+Task: Finalize repo and activate backend live.
+
+Completed:
+
+- Rebased on Claude's latest `main` work and pushed `3ad2019 Add learning session runtime`.
+- Applied live Supabase migration `0002_lesson_spine`.
+- Applied live Supabase migration `0003_learning_session_runtime`.
+- Redeployed Supabase edge function `run` to version 2 with `verify_jwt: true`.
+- Redeployed Supabase edge function `chat` to version 2 with `verify_jwt: true`.
+- Verified live DB now has 10 lessons with `module`, `level`, and `expected_output`.
+- Verified live DB now has 10 `lesson_activities` rows and the runtime tables:
+  `learning_sessions`, `learning_turns`, `lesson_activities`, `lesson_attempts`,
+  and `student_mastery`.
+
+Live smoke results:
+
+- Public REST `lessons` read works with the committed anon key.
+- Public REST `lesson_activities` read works with the committed anon key.
+- `run` edge function is reachable and returns the intended canonical error shape:
+  `JARGON_ENGINE_URL is not configured.`
+- Legacy `chat` path is reachable and returns controlled error:
+  `OPENAI_API_KEY is not configured.`
+- Typed `chat` path is reachable and returns typed envelope error without a signed-in user:
+  `Could not identify authenticated user.`
+
+Still blocked:
+
+- Render tooling is unavailable in this Codex session (`render` CLI absent, no `RENDER_API_KEY`,
+  no Render MCP tools surfaced). Guessed URL `https://jargon-engine.onrender.com/health`
+  returns Render 404, so the engine URL is still unknown/not live.
+- Supabase secret management is not exposed by the current MCP tools, so I could not set
+  `JARGON_ENGINE_URL`.
+- `OPENAI_API_KEY` is missing from the Supabase `chat` edge-function environment.
+- A true typed-session smoke needs a signed-in user access token, not the anon JWT.
+
+Human/next live steps:
+
+- Deploy/redeploy Render service `jargon-engine` from `render.yaml`.
+- Set Supabase secret `JARGON_ENGINE_URL` to the Render engine `/run` URL.
+- Set Supabase secret `OPENAI_API_KEY`.
+- Smoke `run` with `PRINT 5 // 2`.
+- Smoke legacy `chat` and typed `chat` with a signed-in user, then confirm rows are inserted
+  into `learning_sessions`, `learning_turns`, and `lesson_attempts`.
+
 ## Claude -> Codex / Human - 2026-06-15 19:30
 
 Status: Finished (frontend visual layer)

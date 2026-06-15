@@ -6,10 +6,13 @@ Use this checklist when wiring the repo-first backend work to live services.
 
 Fill this in after the live Render engine is created:
 
-- Render engine `/run` URL: `TODO`
-- Render engine `/health` URL: `TODO`
+- Render engine `/run` URL: `BLOCKED - Render engine URL not available in Codex session`
+- Render engine `/health` URL: `BLOCKED - https://jargon-engine.onrender.com/health returned Render 404`
 - Supabase project: `qztpieiizmiayzjhezwh`
-- Supabase `run` edge function points to current engine: `TODO`
+- Supabase `run` edge function points to current engine: `NO - JARGON_ENGINE_URL is not configured`
+- Supabase migrations applied live: `0001_init`, `0002_lesson_spine`, `0003_learning_session_runtime`
+- Supabase edge functions deployed live: `run` v2, `chat` v2
+- Supabase `chat` OpenAI secret: `NO - OPENAI_API_KEY is not configured`
 
 ## Render
 
