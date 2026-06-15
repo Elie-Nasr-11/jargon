@@ -4,7 +4,7 @@
   "use strict";
 
   let client;
-  let emailEl, passEl, nameEl, gradeEl, msgEl;
+  let emailEl, passEl, nameEl, gradeEl, msgEl, submitEl;
   let signupMode = false;
 
   function init(supabaseClient) {
@@ -15,6 +15,7 @@
     nameEl = document.getElementById("auth-name");
     gradeEl = document.getElementById("auth-grade");
     msgEl = document.getElementById("auth-message");
+    submitEl = document.getElementById("auth-submit");
 
     document.getElementById("auth-form").addEventListener("submit", submit);
     document.getElementById("auth-toggle").addEventListener("click", toggleMode);
@@ -48,7 +49,9 @@
       return;
     }
 
+    msgEl.classList.remove("error");
     msgEl.textContent = "Working...";
+    submitEl.disabled = true;
     try {
       if (signupMode) {
         const { error } = await client.auth.signUp({
@@ -57,16 +60,19 @@
           options: { data: { name: nameEl.value.trim(), grade: gradeEl.value.trim() } },
         });
         if (error) throw error;
+        setMode(false);
         msgEl.textContent =
           "Account created. If email confirmation is enabled, confirm via the link, then sign in.";
-        setMode(false);
       } else {
         const { error } = await client.auth.signInWithPassword({ email, password });
         if (error) throw error;
         // Success: app.js reacts to the auth state change.
       }
     } catch (err) {
+      msgEl.classList.add("error");
       msgEl.textContent = err.message || "Authentication failed.";
+    } finally {
+      submitEl.disabled = false;
     }
   }
 

@@ -24,9 +24,17 @@
     inputField.addEventListener("keydown", tabIndent);
   }
 
+  function lessonContext(lesson) {
+    const meta = [];
+    if (lesson.module) meta.push(`Module: ${lesson.module}`);
+    if (lesson.level) meta.push(`Level: ${lesson.level}`);
+    const header = `Current lesson: ${lesson.title}${meta.length ? " (" + meta.join(", ") + ")" : ""}.`;
+    return `${header}\n\n${lesson.tutor_prompt || ""}`;
+  }
+
   async function setLesson(lesson) {
     currentLesson = lesson;
-    chatHistory = [{ role: "system", content: lesson.tutor_prompt }];
+    chatHistory = [{ role: "system", content: lessonContext(lesson) }];
     chatContainer.innerHTML = "";
 
     const saved = await loadSaved(lesson.id);

@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const appView = document.getElementById("app-view");
   const select = document.getElementById("lessonSelector");
   const userLabel = document.getElementById("user-label");
+  const lessonMeta = document.getElementById("lesson-meta");
 
   let lessons = [];
   let currentUser = null;
@@ -76,7 +77,8 @@ document.addEventListener("DOMContentLoaded", () => {
     lessons.forEach((l) => {
       const opt = document.createElement("option");
       opt.value = l.id;
-      opt.textContent = `Lesson ${l.position}: ${l.title}`;
+      const base = l.module ? `${l.module}: ${l.title}` : `Lesson ${l.position}: ${l.title}`;
+      opt.textContent = l.level ? `${base} — ${l.level}` : base;
       select.appendChild(opt);
     });
   }
@@ -84,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function applyLesson(id) {
     const lesson = lessons.find((l) => l.id === id);
     if (!lesson) return;
+    if (lessonMeta) lessonMeta.textContent = lesson.level || lesson.module || "";
     Mentor.setLesson(lesson);
     Editor.setLesson(lesson);
   }

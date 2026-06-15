@@ -1,39 +1,57 @@
 /* Jargon — shared design system for the auth gate, Mentor, and Interpreter. */
 :root {
-  --bg: #ffffff;
+  --bg: #f6f8fb;
+  --surface: #ffffff;
   --text: #0077cc;
+  --ink: #1f2a37;
+  --muted: #5b6b7b;
   --accent: #c42d88;
   --green: #27c147;
-  --green-hover: #4caf50;
-  --green-light: #bddbb7;
+  --green-hover: #1ea63b;
+  --green-light: #e3f6e6;
+  --red: #d23f3f;
+  --red-light: #fbe8e8;
+  --amber: #c87f00;
+  --amber-light: #fbf1dd;
+  --border: #e3e8ef;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(16, 30, 54, 0.06), 0 6px 18px rgba(16, 30, 54, 0.05);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html, body {
   margin: 0;
   font-family: 'Poppins', sans-serif;
   background: var(--bg);
-  color: var(--text);
+  color: var(--ink);
   font-size: 16px;
-  line-height: 1.4;
+  line-height: 1.45;
   overflow-x: hidden;
 }
 
 .container {
-  width: 90%;
-  max-width: 1200px;
+  width: 92%;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 40px 0 120px;
+  padding: 28px 0 96px;
 }
 
 /* ---------- Header ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding: 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
 .app-header h1 {
-  font-weight: 500;
-  margin: 0 0 0.5rem;
+  font-weight: 600;
+  margin: 0;
   color: var(--accent);
+  letter-spacing: -0.01em;
 }
 
 .header-row {
@@ -50,75 +68,84 @@ html, body {
   gap: 12px;
   font-weight: 300;
   font-size: 14px;
+  color: var(--muted);
 }
 
-.app-header label {
-  display: block;
-  margin-top: 1rem;
-  font-weight: 300;
+.lesson-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
+
+.lesson-bar label {
+  font-weight: 300;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+#lesson-meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  background: #fbeaf3;
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+#lesson-meta:empty { display: none; }
 
 select#lessonSelector {
   font-family: 'Poppins', sans-serif;
   font-size: 14px;
-  padding: 10px;
-  margin-top: 0.5rem;
-  border: 2px solid var(--accent);
-  color: var(--text);
-  background-color: white;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--ink);
+  background-color: var(--surface);
   outline: none;
-  width: 100%;
-  max-width: 320px;
+  min-width: 240px;
+  max-width: 360px;
 }
-
-select#lessonSelector:focus {
-  border-color: var(--green);
-}
+select#lessonSelector:focus { border-color: var(--accent); }
 
 /* ---------- Auth card ---------- */
 .auth-card {
-  max-width: 360px;
-  margin-top: 32px;
+  max-width: 380px;
+  margin: 8vh auto 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px;
 }
 
-.auth-card h2 {
-  font-weight: 500;
-  color: var(--accent);
-  margin: 0 0 1rem;
-}
+.auth-card h2 { font-weight: 600; color: var(--accent); margin: 0 0 1rem; }
 
-.auth-card form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+.auth-card form { display: flex; flex-direction: column; gap: 12px; }
 
 .auth-card input {
   padding: 12px;
   font-size: 14px;
   font-family: 'Source Code Pro', monospace;
-  border: 2px solid var(--accent);
-  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
   outline: none;
   background: #fff;
 }
+.auth-card input:focus { border-color: var(--accent); }
 
-.auth-card input:focus {
-  border-color: var(--green);
-}
-
-.auth-card #signup-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+.auth-card #signup-fields { display: flex; flex-direction: column; gap: 12px; }
 
 .auth-card a {
   display: inline-block;
   margin-top: 16px;
   color: var(--accent);
   font-size: 13px;
+  text-decoration: none;
 }
+.auth-card a:hover { text-decoration: underline; }
 
 .auth-message {
   margin-top: 12px;
@@ -126,239 +153,240 @@ select#lessonSelector:focus {
   color: var(--green-hover);
   min-height: 1.2em;
 }
+.auth-message.error { color: var(--red); }
 
 /* ---------- Split layout ---------- */
 .split {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 32px;
-  margin-top: 32px;
+  gap: 24px;
+  margin-top: 24px;
 }
 
-@media (max-width: 860px) {
-  .split {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 900px) {
+  .split { grid-template-columns: 1fr; }
+}
+
+.pane {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
 }
 
 .pane h2 {
-  font-weight: 500;
-  font-size: 1rem;
+  font-weight: 600;
+  font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--accent);
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.85rem;
 }
 
 /* ---------- Mentor (chat) ---------- */
 #chat-container {
   font-family: 'Poppins', sans-serif;
   font-weight: 300;
-  height: 520px;
+  height: 480px;
   overflow-y: auto;
-  background: #ffffff;
-  padding: 1em;
-  border: 2px solid transparent;
+  background: #fbfcfe;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   transition: border 0.3s ease;
   white-space: pre-wrap;
   font-size: 14.5px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
+#chat-container.flash { border-color: var(--green); }
 
-#chat-container.flash {
-  border: 2px solid var(--green);
-}
+.user, .assistant { margin: 0.6em 0; }
+.user { color: var(--accent); font-weight: 600; }
+.assistant { color: var(--text); font-weight: 600; }
+.user > div, .assistant > div { color: var(--ink); }
+.older { opacity: 0.65; }
 
-.user {
-  color: var(--accent);
-  margin: 0.5em 0;
-  font-weight: bold;
-}
-
-.assistant {
-  color: var(--text);
-  margin: 0.5em 0;
-  font-weight: bold;
-}
-
-.older {
-  font-size: 0.85em;
-  opacity: 0.8;
-}
-
-#chat-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1em;
-  margin-top: 24px;
-}
+#chat-form { display: flex; gap: 12px; margin-top: 16px; align-items: flex-end; }
 
 #chat-form textarea {
-  padding: 1em;
+  flex: 1;
+  padding: 12px;
   font-family: 'Source Code Pro', monospace;
   font-size: 14px;
-  color: var(--green);
+  color: var(--ink);
   outline: none;
   resize: none;
   overflow-y: auto;
-  min-height: 20px;
+  min-height: 44px;
   max-height: 130px;
   line-height: 1.5;
-  border: 2px solid transparent;
-  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
   transition: border 0.3s ease;
 }
-
-#chat-form textarea::placeholder {
-  color: var(--green);
-}
-
-#chat-form textarea.flash-border {
-  border: 2px solid var(--green) !important;
-}
+#chat-form textarea::placeholder { color: var(--muted); }
+#chat-form textarea.flash-border { border-color: var(--green) !important; }
 
 /* ---------- Interpreter (editor) ---------- */
-#inputCode, #output {
-  width: 100%;
-  font-size: 13px;
-  font-family: 'Source Code Pro', monospace;
-  background: #ffffff;
-  border: 2px solid transparent;
-  transition: border 0.3s, background-color 0.3s;
+.editor-host {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 #inputCode {
-  min-height: 200px;
-  max-height: calc(1.5em * 30 + 20px);
-  padding: 10px;
-  overflow: auto;
-  resize: none;
-  color: var(--text);
-}
-
-#inputCode::placeholder {
-  color: var(--green-hover);
-}
-
-#inputCode:focus, #inputCode:hover {
+  width: 100%;
+  font-size: 13px;
+  font-family: 'Source Code Pro', monospace;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 220px;
+  padding: 12px;
+  resize: vertical;
+  color: var(--ink);
   outline: none;
-  border-color: var(--green-hover);
 }
+
+/* CodeMirror 5 skin (loaded only if the CDN is reachable) */
+.CodeMirror {
+  height: auto;
+  min-height: 220px;
+  max-height: 460px;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.CodeMirror-gutters { background: #f3f6fa; border-right: 1px solid var(--border); }
+.cm-keyword { color: var(--accent); font-weight: 600; }
+.cm-operator { color: var(--text); }
+.cm-string { color: var(--green-hover); }
+.cm-number { color: #b8860b; }
+.cm-comment { color: var(--muted); font-style: italic; }
+.cm-atom { color: var(--text); }
+
+/* Run status + output */
+.run-bar { display: flex; align-items: center; gap: 10px; margin: 14px 0 8px; min-height: 26px; }
+
+.status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.status-badge:empty { display: none; }
+.status-badge.ok { background: var(--green-light); color: var(--green-hover); }
+.status-badge.error { background: var(--red-light); color: var(--red); }
+.status-badge.waiting { background: var(--amber-light); color: var(--amber); }
+.status-badge.limit { background: var(--amber-light); color: var(--amber); }
 
 #output {
   min-height: 2em;
-  max-height: calc(1.5em * 10 + 24px);
-  padding: 24px;
+  max-height: calc(1.5em * 12 + 24px);
+  padding: 14px 16px;
   overflow: auto;
   white-space: pre-wrap;
-  color: var(--green);
-  position: relative;
-  margin-top: 8px;
+  background: #0f1b2d;
+  color: #d7e3f4;
+  border-radius: 8px;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 13px;
 }
-
-#output:hover {
-  border-color: var(--green-hover);
-}
-
-#output .response-line {
-  color: var(--green);
-}
-
-.flash {
-  background-color: var(--green-light) !important;
-}
-
-.highlight {
-  animation: flash-green 0.5s;
-}
+#output:empty { display: none; }
+#output .response-line { white-space: pre-wrap; }
+#output.highlight { animation: flash-green 0.4s; }
 
 @keyframes flash-green {
-  from { background-color: var(--green-light); }
-  to { background-color: white; }
+  from { box-shadow: 0 0 0 2px var(--green); }
+  to { box-shadow: none; }
 }
+
+#errors {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--red-light);
+  color: var(--red);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+}
+#errors:empty { display: none; }
+.limits-note { color: var(--amber); }
 
 #askField {
   display: none;
-  margin-top: 20px;
+  margin-top: 14px;
   gap: 12px;
   align-items: center;
 }
-
+#askField.active { display: flex; }
 #askField input {
   flex: 1;
   font-size: 13px;
   padding: 10px;
   font-family: 'Source Code Pro', monospace;
-  border: 2px solid var(--accent);
-  color: var(--accent);
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  color: var(--ink);
+  outline: none;
 }
 
 /* ---------- Buttons ---------- */
-.button-row {
-  display: flex;
-  gap: 24px;
-  margin: 24px 0;
-  flex-wrap: wrap;
-}
+.button-row { display: flex; gap: 12px; margin: 14px 0 0; flex-wrap: wrap; }
 
 button {
-  padding: 12px 28px;
-  border: none;
-  border-bottom: 2px solid var(--accent);
-  background: transparent;
-  color: var(--accent);
-  font-weight: bold;
+  padding: 10px 20px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
   font-family: 'Poppins', sans-serif;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: filter 0.15s ease, background 0.15s ease;
 }
+button:hover { filter: brightness(1.05); }
+button:disabled { opacity: 0.5; cursor: default; }
 
-button:hover {
-  background: var(--accent);
-  color: white;
-}
+button.secondary { background: transparent; color: var(--accent); }
+button.secondary:hover { background: #fbeaf3; }
 
-#chat-form button {
-  width: 100px;
-  align-self: flex-start;
-}
+#runBtn { background: var(--green); border-color: var(--green); }
+#runBtn:hover { background: var(--green-hover); }
 
-#logout-btn {
-  padding: 8px 18px;
-}
+#chat-form button { align-self: stretch; }
+#logout-btn { padding: 7px 14px; background: transparent; color: var(--muted); border-color: var(--border); }
+#logout-btn:hover { color: var(--accent); border-color: var(--accent); }
 
-/* ---------- Inline code & blocks ---------- */
+/* ---------- Inline code & blocks (Mentor markdown) ---------- */
 code {
   font-family: 'Source Code Pro', monospace;
-  font-size: 13px;
-  background: transparent;
-  padding: 2px 4px;
-  color: var(--green);
+  font-size: 12.5px;
+  background: #eef2f7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--accent);
 }
-
 pre {
   font-family: 'Source Code Pro', monospace;
-  font-size: 13px;
-  background: transparent;
-  padding: 10px;
-  border: 2px solid var(--green);
+  font-size: 12.5px;
+  background: #0f1b2d;
+  color: #d7e3f4;
+  padding: 12px;
+  border-radius: 8px;
   overflow-x: auto;
-  color: var(--green);
-  margin: 12px 0 8px;
+  margin: 10px 0 6px;
   white-space: pre-wrap;
 }
-
-.copy-button {
-  margin-bottom: 20px;
-}
+pre code { background: transparent; color: inherit; padding: 0; }
+.copy-button { margin: 0 0 16px; padding: 5px 12px; font-size: 11px; }
 
 /* ---------- Scrollbar ---------- */
-::-webkit-scrollbar {
-  width: 6px;
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--text);
-}
+::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+::-webkit-scrollbar-thumb { background-color: #c4d0de; border-radius: 8px; }
