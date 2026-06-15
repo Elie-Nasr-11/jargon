@@ -2,6 +2,19 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-15: `run` Requires `JARGON_ENGINE_URL`
+
+Decision:
+
+- The Supabase `run` edge function requires the `JARGON_ENGINE_URL` secret.
+- It must return a canonical error-shaped response when the secret is missing.
+- It must not silently fall back to an old or test engine URL.
+
+Reason:
+
+- Running the wrong interpreter is worse than a clear configuration error.
+- The front-end can already display canonical runtime errors.
+
 ## 2026-06-15: Support Full-Line `//` Comments
 
 Decision:

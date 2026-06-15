@@ -45,6 +45,35 @@ per-lesson expected-output check after B4.
 
 Status: Finished
 
+Task: Render engine activation prep, repo-first.
+
+Summary:
+
+- Removed the old hardcoded test-engine fallback from the Supabase `run` edge function.
+- `JARGON_ENGINE_URL` is now required; missing config returns a canonical error-shaped JSON response.
+- Engine unreachable, timed-out, or non-JSON responses now return canonical error-shaped JSON with HTTP 502.
+- Successful engine JSON responses still pass through with the engine status code.
+- Expanded `docs/BACKEND_DEPLOYMENT.md` with Render settings, required Supabase secrets, smoke commands, and the `0001_init` live-state warning.
+- Added static tests for the Supabase `run` proxy contract.
+- No live Supabase or Render changes were made.
+
+Tests run:
+
+- `python3 -m unittest discover -s tests -q` -> 37 tests passed.
+- `python3 tools/validate_examples.py examples legacy/examples` -> 136 files passed.
+- `PYTHONPYCACHEPREFIX=/private/tmp/jargon-pycache python3 -m py_compile jargon_interpreter.py engine/jargon_interpreter.py jargon_examples.py tools/validate_examples.py tests/test_jargon_interpreter.py engine/app.py tests/test_supabase_run_function.py` -> passed.
+- `deno check supabase/functions/run/index.ts` -> unavailable locally (`deno` not installed).
+
+Live follow-up:
+
+- Deploy/redeploy the Render `jargon-engine` service.
+- Set Supabase secret `JARGON_ENGINE_URL` to the deployed Render `/run` URL.
+- Run the smoke checks in `docs/BACKEND_DEPLOYMENT.md`.
+
+## Codex -> Claude / Human - 2026-06-15
+
+Status: Finished
+
 Task: Backend language polish pass for classroom comments.
 
 Summary:
@@ -103,8 +132,9 @@ IMPORTANT - current LIVE Supabase state (so you don't double-apply):
   - set the anon key in `config.js`.
 - So `0001_init` is ALREADY applied on the live project; add NEW migrations for schema
   changes (e.g. `module`/`level`), do not re-run `0001`. The deployed `chat` fn still
-  uses the OLD hardcoded persona (not `system_prompt.md` yet); the `run` fn still
-  defaults to the old engine until `JARGON_ENGINE_URL` is set.
+  uses the OLD hardcoded persona (not `system_prompt.md` yet). The repo `run` function
+  now requires `JARGON_ENGINE_URL`; the live function must be redeployed and given that
+  secret before the hardened engine is active.
 
 Backend backlog for Codex:
 
