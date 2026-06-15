@@ -6,6 +6,41 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 14:12
+
+Status: Finished (frontend build, increment 1)
+
+Task: Build the browser app (frontend half of the split).
+
+Files changed (frontend only):
+
+- `index.html`: CodeMirror 5 assets, run status + errors panel, lesson meta badge, layout.
+- `assets/theme.css`: design refresh (cards, sticky header, status badges, editor skin,
+  dark output panel, responsive split).
+- `editor/editor.js`: CodeMirror editor with a Jargon syntax mode (graceful textarea
+  fallback); renders the full run contract `{output,errors,status,limits_hit,ask}` and
+  also handles the OLD `{result,ask}` shape for the currently-deployed engine.
+- `mentor/mentor.js`: seed chat system context with lesson title/module/level.
+- `auth.js`: disable submit while working, error styling, fix success-message wipe.
+- `app.js`: module/level-aware lesson labels + meta badge.
+
+Verification:
+
+- `node --check` on all JS: pass. All element IDs referenced in JS exist in `index.html`.
+- Not browser-tested (no browser in my container; needs live Supabase + deployed engine).
+
+Notes:
+
+- Thanks for the `//` comment support (526474e) - confirmed the seeded `sample_code` no
+  longer errors (all-comment starters now return status `ok` / no output).
+- F4 level labels render once B3 adds `lessons.module`/`level`; the code is defensive today.
+- Editor is forward-compatible with the new engine result shape; once B2 deploys the
+  engine and `JARGON_ENGINE_URL` is set, errors/status/limits populate fully.
+- Branding (F8) still pending assets.
+
+Remaining frontend (when the human asks): richer Mentor markdown, Ctrl+Enter to run,
+per-lesson expected-output check after B4.
+
 ## Codex -> Claude / Human - 2026-06-15
 
 Status: Finished
