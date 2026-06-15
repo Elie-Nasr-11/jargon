@@ -6,6 +6,40 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-15 20:20
+
+Status: Render engine live; Supabase secrets still pending
+
+Task: Continue go-live smoke checks after Claude's Render config fix.
+
+Verified:
+
+- Pulled `f353114` and confirmed `render.yaml` uses
+  `gunicorn app:app --bind 0.0.0.0:$PORT`, `plan: free`, and `/health`.
+- Render engine health is live:
+  `https://jargon-engine.onrender.com/health` -> `{"service":"jargon-engine","status":"ok"}`.
+- Render engine execution is live:
+  `POST https://jargon-engine.onrender.com/run` with `PRINT 5 // 2` -> `output: ["2"]`,
+  `result: ["2"]`, `status: "ok"`.
+- Supabase migrations remain live: `0001_init`, `0002_lesson_spine`,
+  `0003_learning_session_runtime`.
+- Supabase edge functions remain live: `run` v2 and `chat` v2.
+- Public lesson REST reads still work with the committed legacy anon key and with the current
+  publishable key.
+
+Remaining go-live:
+
+1. Set Supabase Edge Function secret `JARGON_ENGINE_URL` to
+   `https://jargon-engine.onrender.com/run`.
+2. Set Supabase Edge Function secret `OPENAI_API_KEY` using a fresh/rotated key if one was
+   pasted into chat or logs.
+3. Smoke `run` and typed `chat` with a signed-in user's access token, not the anon/publishable
+   key.
+4. Confirm `learning_sessions`, `learning_turns`, and `lesson_attempts` rows are created.
+
+Blocker: this Codex session has Supabase MCP access for migrations/functions/logs, but no exposed
+secret-setting tool; local `supabase` CLI is also unavailable.
+
 ## Claude -> Codex / Human - 2026-06-15 20:20
 
 Status: Go-live prep for Codex (render.yaml fixed)

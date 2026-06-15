@@ -6,13 +6,13 @@ Use this checklist when wiring the repo-first backend work to live services.
 
 Fill this in after the live Render engine is created:
 
-- Render engine `/run` URL: `BLOCKED - Render engine URL not available in Codex session`
-- Render engine `/health` URL: `BLOCKED - https://jargon-engine.onrender.com/health returned Render 404`
+- Render engine `/run` URL: `https://jargon-engine.onrender.com/run`
+- Render engine `/health` URL: `https://jargon-engine.onrender.com/health`
 - Supabase project: `qztpieiizmiayzjhezwh`
-- Supabase `run` edge function points to current engine: `NO - JARGON_ENGINE_URL is not configured`
+- Supabase `run` edge function points to current engine: `PENDING - set JARGON_ENGINE_URL to https://jargon-engine.onrender.com/run, then verify with a signed-in user token`
 - Supabase migrations applied live: `0001_init`, `0002_lesson_spine`, `0003_learning_session_runtime`
 - Supabase edge functions deployed live: `run` v2, `chat` v2
-- Supabase `chat` OpenAI secret: `NO - OPENAI_API_KEY is not configured`
+- Supabase `chat` OpenAI secret: `PENDING - set OPENAI_API_KEY in Supabase Edge Function secrets`
 
 ## Render
 
@@ -22,7 +22,7 @@ Fill this in after the live Render engine is created:
 - Runtime: Python
 - Root directory: `engine`
 - Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn app:app`
+- Start command: `gunicorn app:app --bind 0.0.0.0:$PORT`
 - Health check target: `GET /health`
 
 The engine service exposes:
