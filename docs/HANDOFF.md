@@ -6,6 +6,63 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 13:42
+
+Status: Planning (frontend/backend split agreed with the human; no app code changed)
+
+Decision: clean frontend/backend split.
+
+- Claude owns FRONTEND only: the browser app (`index.html`, `app.js`, `auth.js`,
+  `mentor/mentor.js`, `editor/editor.js`, `assets/theme.css`, `config.js`) plus all
+  client-side calls (supabase-js auth, `functions.invoke('chat'|'run')`, and
+  `from(...)` reads/writes). Claude does NOT deploy server code.
+- Codex owns BACKEND: the engine (`engine/*`), the FULL Supabase tier (edge
+  functions `chat` + `run`, DB schema/migrations/RLS, lessons + seed content, auth
+  settings), `mentor/system_prompt.md`, curriculum docs, examples, tests, and the
+  Render engine config + deployed engine URL.
+- Human owns: Render deploy + secrets (`OPENAI_API_KEY`, `JARGON_ENGINE_URL`).
+
+Frozen contract (both sides code to this):
+
+- run: `POST /run {code, answers, preset_answers?}` -> `{output[], result(=output),
+  errors[], status, ask, ask_var, memory, truncated, limits_hit}`.
+- chat: client `{messages:[{role,content}]}` -> `{reply}`; persona =
+  `mentor/system_prompt.md` + selected lesson `tutor_prompt` + level.
+- lesson object the UI reads: `{id, position, title, module, level, tutor_prompt,
+  sample_code}`. NOTE: `module` + `level` columns do not exist yet (see B3).
+- client tables: `lessons` (read), `profiles`/`chat_messages`/`code_submissions` (owner RLS).
+
+IMPORTANT - current LIVE Supabase state (so you don't double-apply):
+
+- Project `qztpieiizmiayzjhezwh` is ACTIVE. Claude already:
+  - applied migration `0001_init` (4 tables + RLS + signup trigger + 5 seeded lessons),
+  - deployed edge functions `chat` and `run` (verify_jwt: true),
+  - set the anon key in `config.js`.
+- So `0001_init` is ALREADY applied on the live project; add NEW migrations for schema
+  changes (e.g. `module`/`level`), do not re-run `0001`. The deployed `chat` fn still
+  uses the OLD hardcoded persona (not `system_prompt.md` yet); the `run` fn still
+  defaults to the old engine until `JARGON_ENGINE_URL` is set.
+
+Backend backlog for Codex:
+
+- B1 Engine/language: maintain interpreter+Flask+sandbox; resolve `//` comments when
+  un-deferred; consider `Jargon.docx` data ops.
+- B2 Stabilize `engine/app.py` (`/run`, `/health`) + render engine config; deploy the
+  engine, publish the URL here, and set the Supabase `run` fn's `JARGON_ENGINE_URL`
+  to it (or hand the secret to the human if not CLI-settable).
+- B3 Migration adding `module` + `level` columns to `lessons` (per `merged_curriculum.md`).
+- B4 Real per-lesson Jargon programs (`sample_code`) + `tutor_prompt` + level labels as
+  seed SQL (replaces the `//` placeholders that currently error).
+- B5 Finalize `mentor/system_prompt.md` incl. how lesson/level context is injected, and
+  update the deployed `chat` edge fn to use it.
+- B6 Map curated `examples/` to modules/lessons; keep `tests/` green.
+
+Deferred: `//` vs `#` comment syntax (affects B4 and a working demo).
+
+Claude status: holding on all frontend code until the human says go. Frontend backlog is
+ready (CodeMirror editor, error/status panel, ASK UX, level-labelled picker, Mentor chat
+wiring, auth UX, responsive).
+
 ## Claude -> Codex / Human - 2026-06-15 13:10
 
 Status: Finished (scoping pass; no code changed)
