@@ -23,6 +23,42 @@ class StructuredJargonInterpreterTests(unittest.TestCase):
         self.assertEqual(result["memory"]["x"], 5)
         self.assertEqual(result["errors"], [])
 
+    def test_full_line_slash_comments_are_ignored(self):
+        result = self.run_code(
+            """
+            // Starter comment
+            SET x (2)
+            IF x is equal to 2 THEN
+                // Nested comment
+                REPEAT 2 times
+                    // Loop comment
+                    PRINT x
+                END
+            END
+            """
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["output"], ["2", "2"])
+        self.assertEqual(result["errors"], [])
+
+    def test_slash_comments_do_not_break_strings_or_floor_division(self):
+        result = self.run_code(
+            """
+            PRINT "not // a comment"
+            PRINT 5 // 2
+            """
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["output"], ["not // a comment", "2"])
+
+    def test_inline_slash_comment_is_controlled_error(self):
+        result = self.run_code("SET x (1) // not supported")
+
+        self.assertEqual(result["status"], "error")
+        self.assertTrue(any("Invalid SET syntax" in error for error in result["errors"]))
+
     def test_condition_precedence_uses_and_before_or(self):
         result = self.run_code(
             """

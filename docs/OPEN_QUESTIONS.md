@@ -2,24 +2,6 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
-## Should Jargon support `//` comments in addition to `#`?
-
-Context:
-
-- The deployed lesson seed code currently uses `//` comments.
-- The interpreter currently treats `#` as comments and rejects `//` lines.
-- This is deferred until interpreter optimization after the current platform integration.
-
-Options:
-
-- Add `//` as a supported line/comment marker.
-- Update deployed lesson seed code to use `#`.
-- Support both for classroom friendliness.
-
-Current leaning:
-
-- Support both `#` and `//`, but do it in a focused interpreter pass with tests.
-
 ## Should curated examples be copied into Supabase lessons?
 
 Context:

@@ -2,6 +2,27 @@
 
 Jargon is intentionally small. The goal is readable structured logic, not full Python.
 
+## Comments
+
+Use `#` for inline comments outside strings:
+
+```jargon
+SET total (2 + 3) # explain the step
+```
+
+Use `//` only for full-line classroom comments:
+
+```jargon
+// Starter note for the lesson
+PRINT "Ready"
+```
+
+Inline `//` comments are not supported because `//` is floor division inside expressions:
+
+```jargon
+PRINT 5 // 2
+```
+
 ## Commands
 
 ### SET

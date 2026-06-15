@@ -110,6 +110,8 @@ python3 app.py
 
 It returns the full interpreter result dict plus a back-compatible `result` alias equal to `output`.
 
+Backend live-service wiring notes are in `docs/BACKEND_DEPLOYMENT.md`.
+
 ## Result Shape
 
 `run()` and `run_sandboxed()` return dictionaries with:

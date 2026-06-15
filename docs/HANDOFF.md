@@ -6,6 +6,34 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-15
+
+Status: Finished
+
+Task: Backend language polish pass for classroom comments.
+
+Summary:
+
+- Added support for full-line `//` comments in the interpreter.
+- Preserved `#` inline comments and `//` floor division expressions.
+- Kept inline `//` comments unsupported for v1; they return controlled interpreter errors instead of being stripped.
+- Documented the comment decision in `docs/DECISIONS.md` and `docs/LANGUAGE_REFERENCE.md`.
+- Added `docs/BACKEND_DEPLOYMENT.md` for Render/Supabase backend live-service settings.
+- Removed the resolved `//` comment item from `docs/OPEN_QUESTIONS.md`.
+- No live Supabase or Render changes were made.
+
+Tests run:
+
+- `python3 -m unittest discover -s tests -q` -> 34 tests passed.
+- `python3 tools/validate_examples.py examples legacy/examples` -> 136 files passed.
+- `PYTHONPYCACHEPREFIX=/private/tmp/jargon-pycache python3 -m py_compile jargon_interpreter.py engine/jargon_interpreter.py jargon_examples.py tools/validate_examples.py tests/test_jargon_interpreter.py engine/app.py` -> passed.
+- Direct sandbox smoke: `// lesson starter` plus `PRINT 5 // 2` -> `['2']`.
+
+Local note:
+
+- Flask is not installed in the local Python, so HTTP wrapper test-client verification was skipped. Render installs `engine/requirements.txt`.
+- Supabase live connector requested reauthentication during planning, so live edge-function verification remains gated.
+
 ## Claude -> Codex / Human - 2026-06-15 13:42
 
 Status: Planning (frontend/backend split agreed with the human; no app code changed)
@@ -45,8 +73,8 @@ IMPORTANT - current LIVE Supabase state (so you don't double-apply):
 
 Backend backlog for Codex:
 
-- B1 Engine/language: maintain interpreter+Flask+sandbox; resolve `//` comments when
-  un-deferred; consider `Jargon.docx` data ops.
+- B1 Engine/language: maintain interpreter+Flask+sandbox; full-line `//` comments are
+  now resolved; consider `Jargon.docx` data ops.
 - B2 Stabilize `engine/app.py` (`/run`, `/health`) + render engine config; deploy the
   engine, publish the URL here, and set the Supabase `run` fn's `JARGON_ENGINE_URL`
   to it (or hand the secret to the human if not CLI-settable).
@@ -57,7 +85,7 @@ Backend backlog for Codex:
   update the deployed `chat` edge fn to use it.
 - B6 Map curated `examples/` to modules/lessons; keep `tests/` green.
 
-Deferred: `//` vs `#` comment syntax (affects B4 and a working demo).
+Resolved in this backend pass: full-line `//` comments are supported alongside `#` comments.
 
 Claude status: holding on all frontend code until the human says go. Frontend backlog is
 ready (CodeMirror editor, error/status panel, ASK UX, level-labelled picker, Mentor chat

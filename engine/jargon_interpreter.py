@@ -1111,6 +1111,8 @@ class StructuredJargonInterpreter:
         return depth == 0
 
     def _strip_comment(self, raw_line):
+        if raw_line.lstrip().startswith("//"):
+            return ""
         quote = None
         for i, char in enumerate(raw_line):
             if quote:

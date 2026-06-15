@@ -2,6 +2,19 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-15: Support Full-Line `//` Comments
+
+Decision:
+
+- Jargon supports `#` inline comments outside strings.
+- Jargon also supports full-line `//` comments when the first non-whitespace characters are `//`.
+- Jargon does not support inline `//` comments in v1 because `//` remains floor division inside expressions.
+
+Reason:
+
+- The deployed lesson seed code uses full-line `//` starter comments.
+- Preserving `//` floor division avoids a breaking expression-language change.
+
 ## 2026-06-15: Backend Is Supabase + Render
 
 Decision:
