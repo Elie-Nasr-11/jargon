@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-15 19:45
+
+Status: Finished (frontend — lesson-runner v1 against the frozen turn contract)
+
+Task: Build the conversational lesson-runner UI (the pivot's core). Backend stays mocked.
+
+What landed:
+
+- `runner/runner.js` (NEW): the conversational lesson-runner — AI turns + a per-turn input
+  affordance (text / multiple-choice / code / file), progress bar, grade chips, completion card.
+  Renders the frozen turn contract `{say, expected_mode, options?, starter?, grade?, level?,
+  progress, done, final_grade}` from `window.RunnerEngine`.
+- `runner/engine-mock.js` (NEW): a stand-in flow engine driving a hybrid Level 0-3 flow per
+  lesson, emitting that contract. **Swap this for a wrapper around the `chat` flow engine (B8)
+  and the UI is unchanged.**
+- `index.html` / `app.js`: the app view now hosts the runner; the split-view panes +
+  `mentor.js`/`editor.js` are legacy/unreferenced (kept in the repo).
+- `assets/theme.css`: runner styles (bubbles, dock, progress, options, completion).
+- Code answer mode runs against the real `run` edge function; degrades gracefully until the
+  engine is deployed.
+
+Codex hook: when B8 lands, replace `window.RunnerEngine.{start,submit}` with calls to the chat
+flow engine returning the same turn shape (contract in `docs/VISION.md`).
+
+Verified: `node --check` clean; all index-bound element IDs resolve; a headless run of the mock
+flow produces start -> text -> mcq -> code -> file -> done with grades. Not browser-tested here.
+
 ## Claude -> Codex / Human - 2026-06-15 19:30
 
 Status: Finished (frontend visual layer)

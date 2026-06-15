@@ -1,5 +1,5 @@
-// App controller — creates the Supabase client, gates on auth, loads lessons from
-// the database, and wires the shared lesson picker to both panes.
+// App controller — creates the Supabase client, gates on auth, loads lessons, and
+// drives the conversational lesson-runner (the split-view Mentor/Interpreter is legacy).
 document.addEventListener("DOMContentLoaded", () => {
   const cfg = window.SUPABASE_CONFIG || {};
   if (!cfg.url || !cfg.anonKey || cfg.anonKey.indexOf("PASTE") === 0) {
@@ -21,8 +21,11 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentUser = null;
 
   Auth.init(client);
-  Mentor.init({ root: document.getElementById("mentor-pane"), client, getUser: () => currentUser });
-  Editor.init({ root: document.getElementById("editor-pane"), client, getUser: () => currentUser });
+  LessonRunner.init({
+    root: document.getElementById("runner-root"),
+    client,
+    getUser: () => currentUser,
+  });
 
   client.auth.onAuthStateChange((_event, session) => {
     const user = session ? session.user : null;
@@ -90,8 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!lesson) return;
     if (lessonMeta) lessonMeta.textContent = lesson.level || lesson.module || "";
     if (window.Motion) window.Motion.lessonChange();
-    Mentor.setLesson(lesson);
-    Editor.setLesson(lesson);
+    LessonRunner.start(lesson);
   }
 
   select.addEventListener("change", (e) => applyLesson(e.target.value));

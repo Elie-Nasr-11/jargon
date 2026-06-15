@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jargon</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;600&family=Source+Code+Pro&display=swap" rel="stylesheet" />
-  <!-- CodeMirror 5 (optional progressive enhancement for the code editor) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
   <link rel="stylesheet" href="assets/theme.css" />
 </head>
 <body>
@@ -50,55 +48,17 @@
       </div>
     </header>
 
-    <div class="split">
-      <!-- Mentor: AI tutor chat -->
-      <section id="mentor-pane" class="pane">
-        <h2>Mentor</h2>
-        <div id="chat-container"></div>
-        <form id="chat-form">
-          <textarea id="user-input" placeholder="Message the Mentor" rows="1"></textarea>
-          <button type="submit">Send</button>
-        </form>
-      </section>
-
-      <!-- Interpreter: Jargon code editor -->
-      <section id="editor-pane" class="pane">
-        <h2>Interpreter</h2>
-        <div class="editor-host">
-          <textarea id="inputCode" placeholder="Write Jargon code here..."></textarea>
-        </div>
-
-        <div class="button-row">
-          <button id="runBtn" type="button" title="Run (Ctrl/Cmd+Enter)">Run Code</button>
-          <button id="resetBtn" class="secondary" type="button">Reset</button>
-          <button id="copyInput" class="secondary" type="button">Copy Input</button>
-          <button id="copyOutput" class="secondary" type="button">Copy Output</button>
-        </div>
-
-        <div class="run-bar">
-          <span id="run-status" class="status-badge"></span>
-        </div>
-
-        <div id="output" aria-live="polite"></div>
-        <div id="errors" aria-live="polite"></div>
-        <div id="check-result" class="check" aria-live="polite"></div>
-
-        <div id="askField">
-          <input id="askInput" type="text" placeholder="" />
-          <button id="submitAnswer" type="button">Submit</button>
-        </div>
-      </section>
-    </div>
+    <!-- Conversational lesson-runner (the split-view Mentor/Interpreter is legacy) -->
+    <section class="pane runner-pane">
+      <div id="runner-root" class="runner"></div>
+    </section>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- CodeMirror 5 core + simple-mode addon (used if reachable; editor.js falls back to a plain textarea otherwise) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/mode/simple.min.js"></script>
   <script src="config.js"></script>
   <script src="auth.js"></script>
-  <script src="mentor/mentor.js"></script>
-  <script src="editor/editor.js"></script>
+  <script src="runner/engine-mock.js"></script>
+  <script src="runner/runner.js"></script>
   <script src="app.js"></script>
 
   <!-- Ambient visuals (progressive enhancement; the app works without them) -->

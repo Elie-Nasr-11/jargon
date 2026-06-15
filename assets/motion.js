@@ -60,23 +60,6 @@
     },
   };
   window.Motion = Motion;
-
-  // Reveal nodes as they're appended to the chat + output panels.
-  function observe(selector) {
-    var el = document.querySelector(selector);
-    if (!el || !on || typeof MutationObserver === "undefined") return;
-    var mo = new MutationObserver(function (mutations) {
-      mutations.forEach(function (m) {
-        Array.prototype.forEach.call(m.addedNodes, function (n) {
-          if (n.nodeType === 1) Motion.reveal(n);
-        });
-      });
-    });
-    mo.observe(el, { childList: true });
-  }
-
-  document.addEventListener("DOMContentLoaded", function () {
-    observe("#chat-container");
-    observe("#output");
-  });
+  // The lesson-runner calls Motion.reveal() explicitly for new bubbles, so no
+  // global MutationObserver is needed here.
 })();
