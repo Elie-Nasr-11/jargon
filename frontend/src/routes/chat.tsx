@@ -546,7 +546,7 @@ function MessageRow({ msg, onUseCode }: { msg: Msg; onUseCode: (code: ChatCodeBl
     return (
       <div ref={ref} className="flex justify-end">
         <div className="flex max-w-[85%] flex-col items-end gap-2">
-          <div className="whitespace-pre-wrap rounded-2xl border border-border bg-foreground/10 px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground">
+          <div className="whitespace-pre-wrap rounded-2xl border border-border/60 bg-foreground/5 px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground/85">
             {text}
           </div>
           {code && (
