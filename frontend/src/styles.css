@@ -47,6 +47,7 @@
   --code-foreground: #1f2026;
   --code-muted: #777984;
   --code-selection: #5266d829;
+  --loading-dot-color: #000000;
   --jargon-syntax-command: #5266d8;
   --jargon-syntax-condition: #c4498b;
   --jargon-syntax-comment: #777984;
@@ -79,6 +80,7 @@
   --code-foreground: #e6e6ea;
   --code-muted: #8a8a90;
   --code-selection: #ffffff20;
+  --loading-dot-color: #ffffff;
   --jargon-syntax-command: #8fa4ef;
   --jargon-syntax-condition: #f585bb;
   --jargon-syntax-comment: #8a8a90;
@@ -222,7 +224,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: var(--code-foreground);
+  color: var(--loading-dot-color);
 }
 .run-bounce-dot {
   width: 6px;
