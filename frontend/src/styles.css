@@ -222,12 +222,13 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  color: var(--code-foreground);
 }
 .run-bounce-dot {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #ffffff;
+  background: currentColor;
   display: inline-block;
   animation: run-bounce-dot 0.72s infinite ease-in-out;
 }
