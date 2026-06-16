@@ -178,12 +178,12 @@ function parseRunMessage(text: string): { text: string; code: ChatCodeBlock } | 
 
 const jargonTokenClass: Record<JargonTokenKind, string> = {
   plain: "",
-  command: "font-semibold text-[#8fa4ef]",
-  condition: "font-semibold text-[#f585bb]",
-  comment: "italic text-muted-foreground",
-  string: "text-[#8ad0a8]",
-  number: "text-[#f0a868]",
-  bracket: "text-muted-foreground",
+  command: "font-semibold text-[var(--jargon-syntax-command)]",
+  condition: "font-semibold text-[var(--jargon-syntax-condition)]",
+  comment: "italic text-[var(--jargon-syntax-comment)]",
+  string: "text-[var(--jargon-syntax-string)]",
+  number: "text-[var(--jargon-syntax-number)]",
+  bracket: "text-[var(--jargon-syntax-bracket)]",
 };
 
 async function copyToClipboard(text: string) {

@@ -141,22 +141,46 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   };
 
   const applyMonacoTheme = (monaco: typeof import("monaco-editor")) => {
+    const isDark = document.documentElement.classList.contains("dark");
     const bg = toHex(readVar("--surface", "#0b0b0d"), "#0b0b0d");
     const fg = toHex(readVar("--foreground", "#e6e6ea"), "#e6e6ea");
     const muted = toHex(readVar("--muted-foreground", "#8a8a90"), "#8a8a90");
     const accent = toHex(readVar("--accent", "#7c5cff"), "#7c5cff");
-    const isDark = document.documentElement.classList.contains("dark");
+    const command = toHex(
+      readVar("--jargon-syntax-command", isDark ? "#8fa4ef" : "#5266d8"),
+      isDark ? "#8fa4ef" : "#5266d8",
+    );
+    const condition = toHex(
+      readVar("--jargon-syntax-condition", isDark ? "#f585bb" : "#c4498b"),
+      isDark ? "#f585bb" : "#c4498b",
+    );
+    const comment = toHex(
+      readVar("--jargon-syntax-comment", isDark ? "#8a8a90" : "#777984"),
+      isDark ? "#8a8a90" : "#777984",
+    );
+    const string = toHex(
+      readVar("--jargon-syntax-string", isDark ? "#8ad0a8" : "#25845a"),
+      isDark ? "#8ad0a8" : "#25845a",
+    );
+    const number = toHex(
+      readVar("--jargon-syntax-number", isDark ? "#f0a868" : "#b86b00"),
+      isDark ? "#f0a868" : "#b86b00",
+    );
+    const bracket = toHex(
+      readVar("--jargon-syntax-bracket", isDark ? "#8a8a90" : "#777984"),
+      isDark ? "#8a8a90" : "#777984",
+    );
     monaco.editor.defineTheme(JARGON_DARK_THEME, {
       base: "vs-dark",
       inherit: true,
       rules: [
-        { token: "comment", foreground: muted.slice(1), fontStyle: "italic" },
+        { token: "comment", foreground: comment.slice(1), fontStyle: "italic" },
         { token: "keyword", foreground: accent.slice(1) },
-        { token: "jargon-command", foreground: "8fa4ef", fontStyle: "bold" },
-        { token: "jargon-condition", foreground: "f585bb", fontStyle: "bold" },
-        { token: "string", foreground: "8ad0a8" },
-        { token: "number", foreground: "f0a868" },
-        { token: "delimiter.bracket", foreground: muted.slice(1) },
+        { token: "jargon-command", foreground: command.slice(1), fontStyle: "bold" },
+        { token: "jargon-condition", foreground: condition.slice(1), fontStyle: "bold" },
+        { token: "string", foreground: string.slice(1) },
+        { token: "number", foreground: number.slice(1) },
+        { token: "delimiter.bracket", foreground: bracket.slice(1) },
       ],
       colors: {
         "editor.background": bg,
@@ -171,13 +195,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       base: "vs",
       inherit: true,
       rules: [
-        { token: "comment", foreground: muted.slice(1), fontStyle: "italic" },
+        { token: "comment", foreground: comment.slice(1), fontStyle: "italic" },
         { token: "keyword", foreground: accent.slice(1) },
-        { token: "jargon-command", foreground: "5266d8", fontStyle: "bold" },
-        { token: "jargon-condition", foreground: "c4498b", fontStyle: "bold" },
-        { token: "string", foreground: "25845a" },
-        { token: "number", foreground: "b86b00" },
-        { token: "delimiter.bracket", foreground: muted.slice(1) },
+        { token: "jargon-command", foreground: command.slice(1), fontStyle: "bold" },
+        { token: "jargon-condition", foreground: condition.slice(1), fontStyle: "bold" },
+        { token: "string", foreground: string.slice(1) },
+        { token: "number", foreground: number.slice(1) },
+        { token: "delimiter.bracket", foreground: bracket.slice(1) },
       ],
       colors: {
         "editor.background": bg,

@@ -41,6 +41,14 @@
   --grad-3: #f585bb; /* pink */
   --grad-4: #8fa4ef; /* periwinkle / purple */
   --grad-5: #72b8f5; /* blue */
+
+  /* Jargon syntax colors */
+  --jargon-syntax-command: #5266d8;
+  --jargon-syntax-condition: #c4498b;
+  --jargon-syntax-comment: #777984;
+  --jargon-syntax-string: #25845a;
+  --jargon-syntax-number: #b86b00;
+  --jargon-syntax-bracket: #777984;
 }
 
 /* Dark mode driven exclusively by the .dark class on <html>
@@ -63,6 +71,12 @@
   --ink-45: rgba(245, 245, 247, 0.45);
   --ink-30: rgba(245, 245, 247, 0.3);
   --ink-16: rgba(245, 245, 247, 0.16);
+  --jargon-syntax-command: #8fa4ef;
+  --jargon-syntax-condition: #f585bb;
+  --jargon-syntax-comment: #8a8a90;
+  --jargon-syntax-string: #8ad0a8;
+  --jargon-syntax-number: #f0a868;
+  --jargon-syntax-bracket: #8a8a90;
 }
 
 @font-face {
