@@ -9,158 +9,187 @@
   <link rel="stylesheet" href="assets/theme.css" />
 </head>
 <body>
-  <div id="auth-view" class="auth-screen" style="display:none;">
-    <section class="auth-shell" aria-labelledby="auth-title">
-      <div class="auth-copy">
-        <p class="auth-kicker">Jargon</p>
-        <h1 id="auth-title">Sign in</h1>
-        <p class="auth-subtitle">Use the lesson runtime and test the experience.</p>
+  <div id="scene-root" class="scene-root" aria-hidden="true">
+    <canvas id="bg-canvas"></canvas>
+    <div class="scene-vignette"></div>
+    <div class="scene-grain"></div>
+  </div>
+
+  <div class="page-shell">
+    <div id="auth-view" class="view auth-view" style="display:none;">
+      <section class="stage auth-stage">
+        <div class="stage-header stage-header-auth">
+          <span class="stage-mark">Jargon</span>
+          <span class="stage-status">Focused Learning Studio</span>
+        </div>
+
+        <div class="auth-stage-body">
+          <div class="auth-copy">
+            <p class="auth-kicker">Welcome back</p>
+            <h1 id="auth-title">Sign in</h1>
+            <p class="auth-subtitle">A calm space to think, structure, and solve.</p>
+          </div>
+
+          <form id="auth-form" class="auth-card">
+            <label for="auth-email">Email</label>
+            <input id="auth-email" type="email" placeholder="name@example.com" autocomplete="email" />
+            <label for="auth-password">Password</label>
+            <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password" />
+            <div id="signup-fields" class="signup-fields" style="display:none;">
+              <label for="auth-name">Name</label>
+              <input id="auth-name" type="text" placeholder="Name" autocomplete="name" />
+              <label for="auth-grade">Level</label>
+              <input id="auth-grade" type="text" placeholder="Grade / level" />
+            </div>
+            <button id="auth-submit" type="submit">Sign in</button>
+            <a id="auth-toggle" class="auth-toggle" href="#">New here? Create an account</a>
+            <p id="auth-message" class="auth-message"></p>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <div id="app-view" class="view app-view" style="display:none;">
+      <section class="stage studio-stage">
+        <header class="stage-header studio-header">
+          <div class="studio-brand">
+            <span class="app-name">Jargon</span>
+            <span id="current-lesson-label" class="current-lesson-label"></span>
+          </div>
+
+          <nav class="studio-nav" aria-label="Workspace menus">
+            <button id="nav-lessons" type="button" class="nav-button utility-button" aria-expanded="false">Lessons</button>
+            <button id="nav-progress" type="button" class="nav-button utility-button" aria-expanded="false">Progress</button>
+            <button id="nav-mentor" type="button" class="nav-button utility-button" aria-expanded="false">Mentor</button>
+          </nav>
+
+          <div class="studio-account">
+            <span id="user-label" class="user-label"></span>
+            <button id="logout-btn" type="button" class="nav-button account-button">Sign out</button>
+          </div>
+        </header>
+
+        <main class="studio-body">
+          <div id="runner-root" class="runner"></div>
+        </main>
+      </section>
+    </div>
+
+    <div id="panel-backdrop" class="panel-backdrop" hidden></div>
+
+    <section id="panel-lessons" class="overlay-panel" hidden aria-labelledby="lessons-title">
+      <div class="overlay-head">
+        <div>
+          <p class="detail-label">Course utility</p>
+          <h2 id="lessons-title">Lessons</h2>
+        </div>
+        <button type="button" class="close-button" data-close-panel>Done</button>
       </div>
-      <form id="auth-form" class="auth-form">
-        <label for="auth-email">Email</label>
-        <input id="auth-email" type="email" placeholder="name@example.com" autocomplete="email" />
-        <label for="auth-password">Password</label>
-        <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password" />
-        <div id="signup-fields" class="signup-fields" style="display:none;">
-          <label for="auth-name">Name</label>
-          <input id="auth-name" type="text" placeholder="Name" autocomplete="name" />
-          <label for="auth-grade">Level</label>
-          <input id="auth-grade" type="text" placeholder="Grade / level" />
+      <div class="overlay-body">
+        <label for="lesson-select">Current lesson</label>
+        <select id="lesson-select"></select>
+        <div class="detail-grid">
+          <div>
+            <span class="detail-label">Title</span>
+            <strong id="lesson-title-value">-</strong>
+          </div>
+          <div>
+            <span class="detail-label">Module</span>
+            <strong id="lesson-module-value">-</strong>
+          </div>
+          <div>
+            <span class="detail-label">Level</span>
+            <strong id="lesson-level-value">-</strong>
+          </div>
         </div>
-        <div class="auth-actions">
-          <button id="auth-submit" type="submit">Sign in</button>
-          <a id="auth-toggle" href="#">New here? Create an account</a>
+      </div>
+    </section>
+
+    <section id="panel-progress" class="overlay-panel" hidden aria-labelledby="progress-title">
+      <div class="overlay-head">
+        <div>
+          <p class="detail-label">Course utility</p>
+          <h2 id="progress-title">Progress</h2>
         </div>
-      </form>
-      <p id="auth-message" class="auth-message"></p>
+        <button type="button" class="close-button" data-close-panel>Done</button>
+      </div>
+      <div class="overlay-body">
+        <div class="detail-grid">
+          <div>
+            <span class="detail-label">Lesson</span>
+            <strong id="progress-lesson">-</strong>
+          </div>
+          <div>
+            <span class="detail-label">Stage</span>
+            <strong id="progress-stage">-</strong>
+          </div>
+          <div>
+            <span class="detail-label">Step</span>
+            <strong id="progress-step">-</strong>
+          </div>
+          <div>
+            <span class="detail-label">Score</span>
+            <strong id="progress-score">-</strong>
+          </div>
+          <div>
+            <span class="detail-label">Mode</span>
+            <strong id="progress-mode">-</strong>
+          </div>
+          <div>
+            <span class="detail-label">Status</span>
+            <strong id="progress-status">Live</strong>
+          </div>
+        </div>
+        <div class="detail-block">
+          <span class="detail-label">Latest mentor feedback</span>
+          <p id="progress-feedback">No activity yet.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-mentor" class="overlay-panel" hidden aria-labelledby="mentor-title">
+      <div class="overlay-head">
+        <div>
+          <p class="detail-label">Course utility</p>
+          <h2 id="mentor-title">Mentor</h2>
+        </div>
+        <button type="button" class="close-button" data-close-panel>Done</button>
+      </div>
+      <div class="overlay-body">
+        <div class="field-grid">
+          <label for="mentor-pace">Pace</label>
+          <select id="mentor-pace">
+            <option value="brief">brief</option>
+            <option value="balanced">balanced</option>
+            <option value="guided">guided</option>
+          </select>
+        </div>
+        <div class="field-grid">
+          <label for="mentor-tone">Tone</label>
+          <select id="mentor-tone">
+            <option value="neutral">neutral</option>
+            <option value="encouraging">encouraging</option>
+          </select>
+        </div>
+        <div class="field-grid">
+          <label for="mentor-hint-level">Hint level</label>
+          <select id="mentor-hint-level">
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+        </div>
+        <p id="mentor-summary" class="mentor-summary">Applies on the next mentor turn.</p>
+      </div>
     </section>
   </div>
 
-  <div id="app-view" class="app-shell" style="display:none;">
-    <header class="topbar">
-      <div class="topbar-left">
-        <span class="app-name">Jargon</span>
-        <span id="current-lesson-label" class="current-lesson-label"></span>
-      </div>
-
-      <nav class="topbar-nav" aria-label="Workspace menus">
-        <button id="nav-lessons" type="button" class="nav-button" aria-expanded="false">Lessons</button>
-        <button id="nav-progress" type="button" class="nav-button" aria-expanded="false">Progress</button>
-        <button id="nav-mentor" type="button" class="nav-button" aria-expanded="false">Mentor</button>
-      </nav>
-
-      <div class="topbar-right">
-        <span id="user-label" class="user-label"></span>
-        <button id="logout-btn" type="button" class="nav-button">Sign out</button>
-      </div>
-    </header>
-
-    <main class="workspace">
-      <div id="runner-root" class="runner"></div>
-    </main>
-  </div>
-
-  <div id="panel-backdrop" class="panel-backdrop" hidden></div>
-
-  <section id="panel-lessons" class="overlay-panel" hidden aria-labelledby="lessons-title">
-    <div class="overlay-head">
-      <h2 id="lessons-title">Lessons</h2>
-      <button type="button" class="close-button" data-close-panel>Close</button>
-    </div>
-    <div class="overlay-body">
-      <label for="lesson-select">Current lesson</label>
-      <select id="lesson-select"></select>
-      <div class="detail-grid">
-        <div>
-          <span class="detail-label">Title</span>
-          <strong id="lesson-title-value">-</strong>
-        </div>
-        <div>
-          <span class="detail-label">Module</span>
-          <strong id="lesson-module-value">-</strong>
-        </div>
-        <div>
-          <span class="detail-label">Level</span>
-          <strong id="lesson-level-value">-</strong>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="panel-progress" class="overlay-panel" hidden aria-labelledby="progress-title">
-    <div class="overlay-head">
-      <h2 id="progress-title">Progress</h2>
-      <button type="button" class="close-button" data-close-panel>Close</button>
-    </div>
-    <div class="overlay-body">
-      <div class="detail-grid">
-        <div>
-          <span class="detail-label">Lesson</span>
-          <strong id="progress-lesson">-</strong>
-        </div>
-        <div>
-          <span class="detail-label">Stage</span>
-          <strong id="progress-stage">-</strong>
-        </div>
-        <div>
-          <span class="detail-label">Step</span>
-          <strong id="progress-step">-</strong>
-        </div>
-        <div>
-          <span class="detail-label">Score</span>
-          <strong id="progress-score">-</strong>
-        </div>
-        <div>
-          <span class="detail-label">Mode</span>
-          <strong id="progress-mode">-</strong>
-        </div>
-        <div>
-          <span class="detail-label">Status</span>
-          <strong id="progress-status">Live</strong>
-        </div>
-      </div>
-      <div class="detail-block">
-        <span class="detail-label">Latest mentor feedback</span>
-        <p id="progress-feedback">No activity yet.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="panel-mentor" class="overlay-panel" hidden aria-labelledby="mentor-title">
-    <div class="overlay-head">
-      <h2 id="mentor-title">Mentor</h2>
-      <button type="button" class="close-button" data-close-panel>Close</button>
-    </div>
-    <div class="overlay-body">
-      <div class="field-grid">
-        <label for="mentor-pace">Pace</label>
-        <select id="mentor-pace">
-          <option value="brief">brief</option>
-          <option value="balanced">balanced</option>
-          <option value="guided">guided</option>
-        </select>
-      </div>
-      <div class="field-grid">
-        <label for="mentor-tone">Tone</label>
-        <select id="mentor-tone">
-          <option value="neutral">neutral</option>
-          <option value="encouraging">encouraging</option>
-        </select>
-      </div>
-      <div class="field-grid">
-        <label for="mentor-hint-level">Hint level</label>
-        <select id="mentor-hint-level">
-          <option value="low">low</option>
-          <option value="medium">medium</option>
-          <option value="high">high</option>
-        </select>
-      </div>
-      <p id="mentor-summary" class="mentor-summary">Applies on the next mentor turn.</p>
-    </div>
-  </section>
-
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
   <script src="config.js"></script>
+  <script src="assets/scene.js"></script>
+  <script src="assets/motion.js"></script>
   <script src="auth.js"></script>
   <script src="runner/engine-mock.js"></script>
   <script src="runner/engine-supabase.js"></script>

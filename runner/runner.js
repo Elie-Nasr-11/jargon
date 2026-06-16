@@ -1,9 +1,9 @@
-// Conversational lesson-runner UI for the flat test shell.
+// Conversational lesson-runner UI for the focused cinematic shell.
 (function () {
   "use strict";
 
   var client, root, onStateChange;
-  var lessonEl, levelEl, modeEl, fillEl, progLabel, transcript, dock;
+  var shellEl, lessonEl, levelEl, modeEl, fillEl, progLabel, transcript, dock;
   var currentLesson = null;
   var busy = false;
   var primaryEngine, fallbackEngine, activeEngine;
@@ -19,19 +19,27 @@
 
     root.innerHTML =
       '<div class="runner-shell">' +
-      '  <div class="runner-meta">' +
+      '  <section class="runner-meta">' +
+      '    <div class="runner-meta-top">' +
+      '      <div class="runner-meta-copy">' +
+      '        <span class="runner-kicker">Current lesson</span>' +
+      '        <span id="runner-lesson" class="runner-lesson"></span>' +
+      "      </div>" +
+      '      <div class="runner-state">' +
+      '        <span id="runner-level" class="runner-chip"></span>' +
+      '        <span id="runner-mode" class="runner-chip"></span>' +
+      "      </div>" +
+      "    </div>" +
       '    <div class="runner-meta-row">' +
-      '      <span id="runner-lesson" class="runner-lesson"></span>' +
-      '      <span id="runner-level" class="runner-chip"></span>' +
-      '      <span id="runner-mode" class="runner-chip"></span>' +
       '      <span id="progress-label" class="runner-progress-label"></span>' +
       "    </div>" +
       '    <div class="progress"><div id="progress-fill" class="progress-fill"></div></div>' +
-      "  </div>" +
-      '  <div id="runner-transcript" class="transcript" aria-live="polite"></div>' +
-      '  <div id="runner-dock" class="dock"></div>' +
+      "  </section>" +
+      '  <section id="runner-transcript" class="transcript" aria-live="polite" data-compact="true"></section>' +
+      '  <section id="runner-dock" class="dock"></section>' +
       "</div>";
 
+    shellEl = root.querySelector(".runner-shell");
     lessonEl = root.querySelector("#runner-lesson");
     levelEl = root.querySelector("#runner-level");
     modeEl = root.querySelector("#runner-mode");
@@ -52,12 +60,15 @@
     transcript.innerHTML = "";
     dock.innerHTML = "";
     dock.dataset.mode = "";
+    shellEl.dataset.mode = "";
     root.__lastRunResult = null;
+    syncTranscriptDensity();
     setProgress({ index: 0, total: 1 });
     bubble("ai", "Syncing lesson…", "Jargon Mentor");
 
     try {
       transcript.innerHTML = "";
+      syncTranscriptDensity();
       render(await activeEngine.start(lesson));
     } catch (_err) {
       if (fallbackEngine && fallbackEngine !== activeEngine) {
@@ -94,11 +105,15 @@
   }
 
   function setProgress(progress) {
-    var total = progress.total || 1;
-    var current = Math.min(progress.index + 1, total);
-    var pct = Math.round((Math.max(progress.index, 0) / total) * 100);
+    var total = Math.max(progress.total || 1, 1);
+    var current = Math.min(Math.max(progress.index + 1, 1), total);
+    var pct = Math.round((current / total) * 100);
     fillEl.style.width = pct + "%";
     progLabel.textContent = progress.index >= total ? "Complete" : "Step " + current + " of " + total;
+  }
+
+  function syncTranscriptDensity() {
+    transcript.dataset.compact = transcript.children.length <= 2 ? "true" : "false";
   }
 
   function bubble(kind, html, who) {
@@ -112,7 +127,9 @@
     body.innerHTML = html;
     wrapper.appendChild(body);
     transcript.appendChild(wrapper);
+    syncTranscriptDensity();
     transcript.scrollTop = transcript.scrollHeight;
+    window.Motion?.reveal(wrapper);
     return wrapper;
   }
 
@@ -143,11 +160,12 @@
     dock.innerHTML = "";
     var mode = turn.expected_mode;
     dock.dataset.mode = mode || "";
+    shellEl.dataset.mode = mode || "";
     root.__lastRunResult = null;
 
     if (mode === "text") {
       var text = el("textarea");
-      text.rows = 2;
+      text.rows = 3;
       text.placeholder = "Type your answer";
       text.addEventListener("keydown", function (event) {
         if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -159,6 +177,7 @@
       textRow.appendChild(btn("Send", function () { submitText(text.value); }));
       dock.appendChild(text);
       dock.appendChild(textRow);
+      window.Motion?.dockMode(dock);
       return;
     }
 
@@ -168,6 +187,7 @@
         options.appendChild(btn(option.label, function () { chooseOption(option); }, "option-btn"));
       });
       dock.appendChild(options);
+      window.Motion?.dockMode(dock);
       return;
     }
 
@@ -197,6 +217,7 @@
       dock.appendChild(code);
       dock.appendChild(codeRow);
       dock.appendChild(output);
+      window.Motion?.dockMode(dock);
       return;
     }
 
@@ -207,13 +228,14 @@
       fileRow.appendChild(file);
       fileRow.appendChild(btn("Submit", function () { submitFile(file); }));
       dock.appendChild(fileRow);
-      return;
+      window.Motion?.dockMode(dock);
     }
   }
 
   function renderCompletion(turn) {
     dock.innerHTML = "";
     dock.dataset.mode = "done";
+    shellEl.dataset.mode = "done";
     var completion = el("div", "completion");
     var score = el("div", "score");
     score.textContent = turn.final_grade != null ? String(turn.final_grade) : "—";
@@ -225,6 +247,7 @@
     row.appendChild(btn("Retry lesson", function () { start(currentLesson); }));
     completion.appendChild(row);
     dock.appendChild(completion);
+    window.Motion?.dockMode(dock);
   }
 
   function submitText(value) {
@@ -267,9 +290,11 @@
     try {
       var turn = await activeEngine.submit(answer);
       thinking.remove();
+      syncTranscriptDensity();
       render(turn);
     } catch (_err) {
       thinking.remove();
+      syncTranscriptDensity();
       busy = false;
       bubble("ai", "Something went wrong. Try again.", "Jargon Mentor");
     }
@@ -287,6 +312,7 @@
       var errs = Array.isArray(data.errors) ? data.errors : [];
       var text = (lines.join("\n") + (errs.length ? "\n" + errs.join("\n") : "")).trim();
       out.textContent = text || "[no output]";
+      window.Motion?.pulseOutput(out);
     } catch (err) {
       out.textContent = "[engine not reachable] " + (err.message || err);
     }

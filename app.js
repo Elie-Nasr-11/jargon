@@ -1,5 +1,5 @@
-// App controller — auth gate, lesson loading, overlay menus, and mentor
-// preferences for the flat runtime shell.
+// App controller — auth gate, lesson loading, centered utility sheets, and
+// mentor preferences for the focused cinematic runtime shell.
 document.addEventListener("DOMContentLoaded", () => {
   const cfg = window.SUPABASE_CONFIG || {};
   if (!cfg.url || !cfg.anonKey || cfg.anonKey.indexOf("PASTE") === 0) {
@@ -19,6 +19,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const authView = document.getElementById("auth-view");
   const appView = document.getElementById("app-view");
+  const authStage = authView.querySelector(".auth-stage");
+  const appStage = appView.querySelector(".studio-stage");
   const select = document.getElementById("lesson-select");
   const userLabel = document.getElementById("user-label");
   const currentLessonLabel = document.getElementById("current-lesson-label");
@@ -53,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentLesson = null;
   let runnerState = null;
   let mentorPreferences = loadMentorPreferences();
+  let openPanelName = null;
 
   Auth.init(client);
   hydrateMentorControls();
@@ -104,14 +107,17 @@ document.addEventListener("DOMContentLoaded", () => {
   mentorHintLevel.addEventListener("change", saveMentorPreferencesFromUi);
 
   function showAuth() {
-    closePanels();
+    closePanels(true);
     authView.style.display = "flex";
     appView.style.display = "none";
+    window.SceneField?.setMode("auth");
+    window.requestAnimationFrame(() => window.Motion?.enterAuth(authStage));
   }
 
   async function showApp() {
     authView.style.display = "none";
-    appView.style.display = "grid";
+    appView.style.display = "flex";
+    window.SceneField?.setMode("app");
     await loadProfileLabel();
     if (!lessons.length) await loadLessons();
     if (lessons.length) {
@@ -122,6 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
       select.value = nextLesson;
       applyLesson(nextLesson);
     }
+    window.requestAnimationFrame(() => window.Motion?.enterApp(appStage));
   }
 
   async function loadProfileLabel() {
@@ -199,20 +206,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function togglePanel(name) {
     if (!panels[name]) return;
-    const shouldOpen = panels[name].hidden;
-    closePanels();
-    if (!shouldOpen) return;
+    if (openPanelName === name) {
+      closePanels();
+      return;
+    }
+    closePanels(true);
     panels[name].hidden = false;
     backdrop.hidden = false;
     navButtons[name].setAttribute("aria-expanded", "true");
+    openPanelName = name;
+    window.Motion?.openSheet(panels[name]);
   }
 
-  function closePanels() {
-    Object.keys(panels).forEach((name) => {
-      panels[name].hidden = true;
+  function closePanels(immediate) {
+    const visibleName = openPanelName;
+    openPanelName = null;
+    Object.keys(navButtons).forEach((name) => {
       navButtons[name].setAttribute("aria-expanded", "false");
     });
     backdrop.hidden = true;
+    Object.keys(panels).forEach((name) => {
+      const panel = panels[name];
+      if (panel.hidden) return;
+      if (immediate || name !== visibleName) {
+        panel.hidden = true;
+        return;
+      }
+      window.Motion?.closeSheet(panel, () => {
+        panel.hidden = true;
+      });
+    });
   }
 
   function loadMentorPreferences() {
