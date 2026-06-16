@@ -42,7 +42,11 @@
   --grad-4: #8fa4ef; /* periwinkle / purple */
   --grad-5: #72b8f5; /* blue */
 
-  /* Jargon syntax colors */
+  /* code palettes */
+  --code-background: #eef0f6;
+  --code-foreground: #1f2026;
+  --code-muted: #777984;
+  --code-selection: #5266d829;
   --jargon-syntax-command: #5266d8;
   --jargon-syntax-condition: #c4498b;
   --jargon-syntax-comment: #777984;
@@ -71,6 +75,10 @@
   --ink-45: rgba(245, 245, 247, 0.45);
   --ink-30: rgba(245, 245, 247, 0.3);
   --ink-16: rgba(245, 245, 247, 0.16);
+  --code-background: #161619;
+  --code-foreground: #e6e6ea;
+  --code-muted: #8a8a90;
+  --code-selection: #ffffff20;
   --jargon-syntax-command: #8fa4ef;
   --jargon-syntax-condition: #f585bb;
   --jargon-syntax-comment: #8a8a90;

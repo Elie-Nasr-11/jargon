@@ -142,10 +142,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   const applyMonacoTheme = (monaco: typeof import("monaco-editor")) => {
     const isDark = document.documentElement.classList.contains("dark");
-    const bg = toHex(readVar("--surface", "#0b0b0d"), "#0b0b0d");
-    const fg = toHex(readVar("--foreground", "#e6e6ea"), "#e6e6ea");
-    const muted = toHex(readVar("--muted-foreground", "#8a8a90"), "#8a8a90");
-    const accent = toHex(readVar("--accent", "#7c5cff"), "#7c5cff");
+    const bg = toHex(
+      readVar("--code-background", isDark ? "#161619" : "#eef0f6"),
+      isDark ? "#161619" : "#eef0f6",
+    );
+    const fg = toHex(
+      readVar("--code-foreground", isDark ? "#e6e6ea" : "#1f2026"),
+      isDark ? "#e6e6ea" : "#1f2026",
+    );
+    const muted = toHex(
+      readVar("--code-muted", isDark ? "#8a8a90" : "#777984"),
+      isDark ? "#8a8a90" : "#777984",
+    );
+    const selection = readVar("--code-selection", isDark ? "#ffffff20" : "#5266d829");
     const command = toHex(
       readVar("--jargon-syntax-command", isDark ? "#8fa4ef" : "#5266d8"),
       isDark ? "#8fa4ef" : "#5266d8",
@@ -175,7 +184,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       inherit: true,
       rules: [
         { token: "comment", foreground: comment.slice(1), fontStyle: "italic" },
-        { token: "keyword", foreground: accent.slice(1) },
+        { token: "keyword", foreground: command.slice(1) },
         { token: "jargon-command", foreground: command.slice(1), fontStyle: "bold" },
         { token: "jargon-condition", foreground: condition.slice(1), fontStyle: "bold" },
         { token: "string", foreground: string.slice(1) },
@@ -187,8 +196,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         "editor.foreground": fg,
         "editorLineNumber.foreground": muted,
         "editorCursor.foreground": fg,
-        "editor.selectionBackground": "#ffffff20",
-        "editor.inactiveSelectionBackground": "#ffffff14",
+        "editor.selectionBackground": selection,
+        "editor.inactiveSelectionBackground": selection,
       },
     });
     monaco.editor.defineTheme(JARGON_LIGHT_THEME, {
@@ -196,7 +205,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       inherit: true,
       rules: [
         { token: "comment", foreground: comment.slice(1), fontStyle: "italic" },
-        { token: "keyword", foreground: accent.slice(1) },
+        { token: "keyword", foreground: command.slice(1) },
         { token: "jargon-command", foreground: command.slice(1), fontStyle: "bold" },
         { token: "jargon-condition", foreground: condition.slice(1), fontStyle: "bold" },
         { token: "string", foreground: string.slice(1) },
@@ -208,6 +217,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         "editor.foreground": fg,
         "editorLineNumber.foreground": muted,
         "editorCursor.foreground": fg,
+        "editor.selectionBackground": selection,
+        "editor.inactiveSelectionBackground": selection,
       },
     });
     monaco.editor.setTheme(isDark ? JARGON_DARK_THEME : JARGON_LIGHT_THEME);
@@ -219,7 +230,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     applyMonacoTheme(monaco);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (monacoRef.current) applyMonacoTheme(monacoRef.current);
   }, [resolved]);
 

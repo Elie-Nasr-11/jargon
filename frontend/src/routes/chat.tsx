@@ -582,7 +582,7 @@ function MessageRow({ msg, onUseCode }: { msg: Msg; onUseCode: (code: ChatCodeBl
             {msg.ok ? "Output" : "Error"} \u00B7 {languageLabel(msg.lang)}
           </div>
           <pre
-            className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-border bg-muted/60 px-4 py-3 text-[12.5px] leading-relaxed text-foreground"
+            className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-border bg-[var(--code-background)] px-4 py-3 text-[12.5px] leading-relaxed text-[var(--code-foreground)]"
             style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
           >
             {msg.output}
@@ -670,7 +670,7 @@ function HistoryCodePanel({
           </div>
         </div>
         <pre
-          className="max-h-[320px] overflow-auto whitespace-pre-wrap px-4 py-3 text-[12.5px] leading-relaxed text-foreground"
+          className="max-h-[320px] overflow-auto whitespace-pre-wrap bg-[var(--code-background)] px-4 py-3 text-[12.5px] leading-relaxed text-[var(--code-foreground)]"
           style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
         >
           {code.language === "jargon" ? (
