@@ -13,6 +13,12 @@ import gsap from "gsap";
 import { Code2, Send, Play, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
+import {
+  JARGON_COMMANDS,
+  JARGON_CONDITION_PHRASES,
+  JARGON_CONDITION_WORDS,
+  JARGON_LANGUAGE_ID,
+} from "@/lib/jargon-syntax";
 import { useTheme } from "@/lib/theme";
 
 const MonacoEditor = lazy(() =>
@@ -21,6 +27,38 @@ const MonacoEditor = lazy(() =>
 
 const JARGON_LIGHT_THEME = "jargon-light";
 const JARGON_DARK_THEME = "jargon-dark";
+
+function registerJargonLanguage(monaco: typeof import("monaco-editor")) {
+  if (!monaco.languages.getLanguages().some((language) => language.id === JARGON_LANGUAGE_ID)) {
+    monaco.languages.register({ id: JARGON_LANGUAGE_ID });
+  }
+
+  monaco.languages.setMonarchTokensProvider(JARGON_LANGUAGE_ID, {
+    ignoreCase: true,
+    tokenizer: {
+      root: [
+        [/^\s*\/\/.*$/, "comment"],
+        [/"([^"\\]|\\.)*$/, "string.invalid"],
+        [/'([^'\\]|\\.)*$/, "string.invalid"],
+        [/"([^"\\]|\\.)*"/, "string"],
+        [/'([^'\\]|\\.)*'/, "string"],
+        [/#.*$/, "comment"],
+        [
+          new RegExp(
+            `\\b(?:${JARGON_CONDITION_PHRASES.map((phrase) => phrase.replace(/\s+/g, "\\s+")).join(
+              "|",
+            )})\\b`,
+          ),
+          "jargon-condition",
+        ],
+        [new RegExp(`\\b(?:${JARGON_COMMANDS.join("|")})\\b`), "jargon-command"],
+        [new RegExp(`\\b(?:${JARGON_CONDITION_WORDS.join("|")})\\b`), "jargon-condition"],
+        [/\b\d+(?:\.\d+)?\b/, "number"],
+        [/[()[\]{}]/, "delimiter.bracket"],
+      ],
+    },
+  });
+}
 
 function readVar(name: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
@@ -114,8 +152,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       rules: [
         { token: "comment", foreground: muted.slice(1), fontStyle: "italic" },
         { token: "keyword", foreground: accent.slice(1) },
+        { token: "jargon-command", foreground: "8fa4ef", fontStyle: "bold" },
+        { token: "jargon-condition", foreground: "f585bb", fontStyle: "bold" },
         { token: "string", foreground: "8ad0a8" },
         { token: "number", foreground: "f0a868" },
+        { token: "delimiter.bracket", foreground: muted.slice(1) },
       ],
       colors: {
         "editor.background": bg,
@@ -132,6 +173,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       rules: [
         { token: "comment", foreground: muted.slice(1), fontStyle: "italic" },
         { token: "keyword", foreground: accent.slice(1) },
+        { token: "jargon-command", foreground: "5266d8", fontStyle: "bold" },
+        { token: "jargon-condition", foreground: "c4498b", fontStyle: "bold" },
+        { token: "string", foreground: "25845a" },
+        { token: "number", foreground: "b86b00" },
+        { token: "delimiter.bracket", foreground: muted.slice(1) },
       ],
       colors: {
         "editor.background": bg,
@@ -145,6 +191,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   const handleMonacoMount = (_editor: unknown, monaco: typeof import("monaco-editor")) => {
     monacoRef.current = monaco;
+    registerJargonLanguage(monaco);
     applyMonacoTheme(monaco);
   };
 
@@ -360,7 +407,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 >
                   <MonacoEditor
                     height="100%"
-                    language={lang === "jargon" ? "plaintext" : lang}
+                    language={lang === "jargon" ? JARGON_LANGUAGE_ID : lang}
                     value={code}
                     onChange={(v) => setCode(v ?? "")}
                     theme={resolved === "dark" ? JARGON_DARK_THEME : JARGON_LIGHT_THEME}

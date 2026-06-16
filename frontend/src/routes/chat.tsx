@@ -23,6 +23,7 @@ import {
   invokeTypedChat,
 } from "@/lib/api";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
+import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
 import type {
   JargonRunResponse,
   LearningSession,
@@ -174,6 +175,16 @@ function parseRunMessage(text: string): { text: string; code: ChatCodeBlock } | 
     },
   };
 }
+
+const jargonTokenClass: Record<JargonTokenKind, string> = {
+  plain: "",
+  command: "font-semibold text-[#8fa4ef]",
+  condition: "font-semibold text-[#f585bb]",
+  comment: "italic text-muted-foreground",
+  string: "text-[#8ad0a8]",
+  number: "text-[#f0a868]",
+  bracket: "text-muted-foreground",
+};
 
 async function copyToClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
@@ -662,10 +673,26 @@ function HistoryCodePanel({
           className="max-h-[320px] overflow-auto whitespace-pre-wrap px-4 py-3 text-[12.5px] leading-relaxed text-foreground"
           style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
         >
-          {code.source}
+          {code.language === "jargon" ? (
+            <HighlightedJargonCode source={code.source} />
+          ) : (
+            code.source
+          )}
         </pre>
       </div>
     </GradientCard>
+  );
+}
+
+function HighlightedJargonCode({ source }: { source: string }) {
+  return (
+    <>
+      {tokenizeJargon(source).map((token, index) => (
+        <span key={`${token.kind}-${index}`} className={jargonTokenClass[token.kind]}>
+          {token.text}
+        </span>
+      ))}
+    </>
   );
 }
 
