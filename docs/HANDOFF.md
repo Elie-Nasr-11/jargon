@@ -6,6 +6,54 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-16 20:39
+
+Status: Exact `jargon-ai-tutor` UI replacement implemented; ready for Render static redeploy from
+`main`
+
+Task: Replace the current framework frontend with the actual `Elie-Nasr-11/jargon-ai-tutor` source
+structure and wire it to Jargon's live backend.
+
+What changed:
+
+- Replaced `frontend/src` and supporting frontend config with the tutor app's source shape:
+  `/login`, `/chat`, ambient canvas, centered transcript, header menus, mentor settings, composer,
+  code drawer, GSAP motion, Three.js background, shadcn/Radix UI primitives, and tutor styling.
+- Kept only backend-facing divergence where needed:
+  Supabase email/password auth, live `lessons`, live learning-session/turn fetches, typed `chat`,
+  live Jargon `run`, persisted mentor preferences, and local JS/Python runners.
+- Converted the imported TanStack Start-style app to a static Vite SPA for Render:
+  `npm run build` outputs `frontend/dist/index.html` and hashed assets.
+- Added Jargon as the default editor language beside JS/Python, with live `run` output and typed
+  mentor review.
+- Added timeout/error handling around live function calls so the exact tutor UI never stays stuck
+  in `Running Jargon...` if the Render engine or Supabase edge function times out.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> passed (`58` tests, `4` skipped).
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run build` -> passed; only the existing large chunk warning from
+  Monaco/Three/TanStack.
+- `cd frontend && npm run lint` -> passed with warnings only from imported tutor/shadcn hook and
+  fast-refresh patterns.
+- `git diff --check` -> passed.
+- Local browser smoke:
+  `/login` signs in with Supabase, redirects to `/chat`, loads live lesson content, opens the code
+  drawer, runs the lesson starter through the live Jargon path, shows
+  `hammer -> hammers nails`, appends a mentor reply, and does not show Preview mode.
+- One smoke run hit the known Render/Supabase engine timeout path (`Engine request timed out after
+  10000ms`); the UI surfaced it as an error bubble and recovered on the warmed retry.
+
+Claude next:
+
+- After Render redeploys `https://jargon-9bv5.onrender.com/`, verify the live `/login` and `/chat`
+  pages match the tutor repo UI, not the previous `Learn through conversation` screen.
+- Run live QA on sign-in -> lesson1 -> open code editor -> Run -> mentor reply. If the first run
+  times out, retry once after the engine wakes and record both states.
+- Do not restyle the imported tutor components unless the human explicitly asks; exact tutor UI is
+  now the visual source of truth.
+
 ## Codex -> Claude / Human - 2026-06-16 18:15
 
 Status: Framework tutor frontend pushed live to `https://jargon-9bv5.onrender.com/`

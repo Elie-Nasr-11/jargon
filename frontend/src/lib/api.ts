@@ -21,6 +21,25 @@ function authHeaders(accessToken: string) {
   };
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = 30000,
+) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("The live runtime took too long to answer. Try again in a moment.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export async function getSession() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
@@ -153,7 +172,7 @@ export async function invokeTypedChat(input: {
   answer?: TypedChatAnswer;
   mentorPreferences: MentorPreferences;
 }) {
-  const response = await fetch(functionUrl("chat"), {
+  const response = await fetchWithTimeout(functionUrl("chat"), {
     method: "POST",
     headers: authHeaders(input.accessToken),
     body: JSON.stringify({
@@ -175,14 +194,18 @@ export async function invokeJargonRun(input: {
   code: string;
   answers: string[];
 }) {
-  const response = await fetch(functionUrl("run"), {
-    method: "POST",
-    headers: authHeaders(input.accessToken),
-    body: JSON.stringify({
-      code: input.code,
-      answers: input.answers,
-    }),
-  });
+  const response = await fetchWithTimeout(
+    functionUrl("run"),
+    {
+      method: "POST",
+      headers: authHeaders(input.accessToken),
+      body: JSON.stringify({
+        code: input.code,
+        answers: input.answers,
+      }),
+    },
+    20000,
+  );
   const data = (await response.json()) as JargonRunResponse;
   if (!response.ok) {
     throw new Error((data.errors && data.errors[0]) || "Jargon run failed.");

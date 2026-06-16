@@ -2,14 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Jargon</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
+    <meta
+      name="description"
+      content="Jargon is an ultra-minimal AI tutor. Chat, run code, learn."
     />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon-192.svg" type="image/svg+xml" />
+    <script>
+      (function () {
+        try {
+          var m = localStorage.getItem("jargon-theme") || "system";
+          var d =
+            m === "dark" ||
+            (m === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var r = document.documentElement;
+          if (d) r.classList.add("dark");
+          r.style.colorScheme = d ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
