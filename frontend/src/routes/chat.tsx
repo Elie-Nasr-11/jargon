@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
+import { AlertCircle, Check, Code2, Copy } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { HeaderMenus } from "@/components/HeaderMenus";
 import { SettingsMenu } from "@/components/SettingsMenu";
@@ -646,10 +647,12 @@ function HistoryCodePanel({
             <CopyAction text={code.source} label="Copy code" />
             <button
               type="button"
+              aria-label="Use in editor"
+              title="Use in editor"
               onClick={() => onUseCode(code)}
-              className="text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              Use in editor
+              <Code2 className="h-[14px] w-[14px]" strokeWidth={1.8} />
             </button>
           </div>
         </div>
@@ -682,9 +685,17 @@ function CopyAction({ text, label = "Copy" }: { text: string; label?: string }) 
     <button
       type="button"
       onClick={copy}
-      className="text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+      aria-label={status === "copied" ? "Copied" : status === "error" ? "Copy failed" : label}
+      title={status === "copied" ? "Copied" : status === "error" ? "Copy failed" : label}
+      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
-      {status === "copied" ? "Copied" : status === "error" ? "Copy failed" : label}
+      {status === "copied" ? (
+        <Check className="h-[14px] w-[14px]" strokeWidth={1.9} />
+      ) : status === "error" ? (
+        <AlertCircle className="h-[14px] w-[14px]" strokeWidth={1.9} />
+      ) : (
+        <Copy className="h-[14px] w-[14px]" strokeWidth={1.8} />
+      )}
     </button>
   );
 }

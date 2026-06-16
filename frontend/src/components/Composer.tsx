@@ -316,14 +316,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   <button
                     onClick={run}
                     disabled={running}
-                    className="flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-[12px] font-medium text-background transition-opacity disabled:opacity-50"
+                    className={`flex min-h-8 min-w-[58px] items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-opacity disabled:opacity-100 ${
+                      running ? "bg-transparent text-foreground" : "bg-foreground text-background"
+                    }`}
                   >
                     {running ? (
-                      <>
-                        <span className="shimmer-dot" />
-                        <span className="shimmer-dot" />
-                        <span className="shimmer-dot" />
-                      </>
+                      <span aria-label="Running" className="run-bounce-loader">
+                        <span className="run-bounce-dot" />
+                        <span className="run-bounce-dot" />
+                        <span className="run-bounce-dot" />
+                      </span>
                     ) : (
                       <>
                         <Play className="h-[12px] w-[12px]" strokeWidth={2} /> Run
