@@ -4,7 +4,7 @@ import gsap from "gsap";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { HeaderMenus } from "@/components/HeaderMenus";
 import { SettingsMenu } from "@/components/SettingsMenu";
-import { Composer, type ComposerLanguage } from "@/components/Composer";
+import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
 import {
   DEFAULT_MENTOR,
@@ -41,9 +41,11 @@ export const Route = createFileRoute("/chat")({
 
 type RuntimeRunResult = RunResult & { raw?: JargonRunResponse };
 
+type ChatCodeBlock = { language: ComposerLanguage; source: string };
+
 type Msg =
-  | { id: string; role: "user"; text: string }
-  | { id: string; role: "bot"; text: string; code?: { language: ComposerLanguage; source: string } }
+  | { id: string; role: "user"; text: string; code?: ChatCodeBlock }
+  | { id: string; role: "bot"; text: string; code?: ChatCodeBlock }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
   | { id: string; role: "thinking" };
 
@@ -121,6 +123,74 @@ function languageLabel(lang: ComposerLanguage) {
   return lang === "python" ? "Python" : "JavaScript";
 }
 
+function normalizeLanguage(language: string | undefined): ComposerLanguage {
+  const value = (language || "").trim().toLowerCase();
+  if (value === "python" || value === "py") return "python";
+  if (value === "javascript" || value === "js" || value === "typescript" || value === "ts") {
+    return "javascript";
+  }
+  return "jargon";
+}
+
+type MessageSegment = { kind: "text"; text: string } | { kind: "code"; code: ChatCodeBlock };
+
+function parseFencedBlocks(text: string): MessageSegment[] {
+  const segments: MessageSegment[] = [];
+  const fence = /```([a-zA-Z0-9_+-]*)[ \t]*\n([\s\S]*?)```/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = fence.exec(text))) {
+    if (match.index > cursor) {
+      segments.push({ kind: "text", text: text.slice(cursor, match.index) });
+    }
+    segments.push({
+      kind: "code",
+      code: {
+        language: normalizeLanguage(match[1]),
+        source: match[2].replace(/\n$/, ""),
+      },
+    });
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor < text.length) {
+    segments.push({ kind: "text", text: text.slice(cursor) });
+  }
+
+  return segments.length ? segments : [{ kind: "text", text }];
+}
+
+function parseRunMessage(text: string): { text: string; code: ChatCodeBlock } | null {
+  const match = text.match(/^Ran\s+(Jargon|Python|JavaScript):\n\n([\s\S]+)$/i);
+  if (!match) return null;
+  const language = normalizeLanguage(match[1]);
+  return {
+    text: `Ran ${languageLabel(language)}:`,
+    code: {
+      language,
+      source: match[2],
+    },
+  };
+}
+
+async function copyToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
 function ChatPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState<string | null>(null);
@@ -137,6 +207,7 @@ function ChatPage() {
   const [surfaceError, setSurfaceError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerWrapRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<ComposerHandle>(null);
 
   const currentLesson = useMemo(
     () => lessons.find((lesson) => lesson.id === lessonId) || null,
@@ -323,7 +394,8 @@ function ChatPage() {
     addMsg({
       id: uid(),
       role: "user",
-      text: `Ran ${languageLabel(lang)}:\n\n${code}`,
+      text: `Ran ${languageLabel(lang)}:`,
+      code: { language: lang, source: code },
     });
     addMsg({
       id: uid(),
@@ -365,6 +437,13 @@ function ChatPage() {
     } finally {
       setSending(false);
     }
+  };
+
+  const useCodeInEditor = (code: ChatCodeBlock) => {
+    composerRef.current?.loadCode({ code: code.source, language: code.language });
+    requestAnimationFrame(() => {
+      composerWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
   };
 
   if (!email || booting) {
@@ -412,7 +491,7 @@ function ChatPage() {
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
         <div ref={scrollRef} className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5">
           {msgs.map((m) => (
-            <MessageRow key={m.id} msg={m} />
+            <MessageRow key={m.id} msg={m} onUseCode={useCodeInEditor} />
           ))}
         </div>
         <div
@@ -420,6 +499,7 @@ function ChatPage() {
           className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
         >
           <Composer
+            ref={composerRef}
             key={lessonId}
             initialCode={starterCode}
             initialLanguage="jargon"
@@ -434,7 +514,7 @@ function ChatPage() {
   );
 }
 
-function MessageRow({ msg }: { msg: Msg }) {
+function MessageRow({ msg, onUseCode }: { msg: Msg; onUseCode: (code: ChatCodeBlock) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -446,10 +526,23 @@ function MessageRow({ msg }: { msg: Msg }) {
   }, []);
 
   if (msg.role === "user") {
+    const parsedRun = msg.code ? null : parseRunMessage(msg.text);
+    const code = msg.code || parsedRun?.code;
+    const text = parsedRun?.text || msg.text;
+    const copyText = code ? `${text}\n\n${code.source}` : msg.text;
+
     return (
       <div ref={ref} className="flex justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-foreground px-4 py-2.5 text-[14.5px] leading-relaxed text-background">
-          {msg.text}
+        <div className="flex max-w-[85%] flex-col items-end gap-2">
+          <div className="whitespace-pre-wrap rounded-2xl bg-foreground px-4 py-2.5 text-[14.5px] leading-relaxed text-background">
+            {text}
+          </div>
+          {code && (
+            <div className="w-full min-w-[min(420px,85vw)]">
+              <HistoryCodePanel code={code} onUseCode={onUseCode} />
+            </div>
+          )}
+          <CopyAction text={copyText} />
         </div>
       </div>
     );
@@ -480,6 +573,9 @@ function MessageRow({ msg }: { msg: Msg }) {
           >
             {msg.output}
           </pre>
+          <div className="mt-1.5">
+            <CopyAction text={msg.output} />
+          </div>
         </div>
       </div>
     );
@@ -488,28 +584,107 @@ function MessageRow({ msg }: { msg: Msg }) {
   return (
     <div ref={ref} className="flex">
       <div className="w-full max-w-[92%] space-y-3">
-        <div className="text-[15px] leading-relaxed text-foreground">{msg.text}</div>
-        {msg.code && (
-          <GradientCard>
-            <div className="overflow-hidden">
-              <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-                <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                  {languageLabel(msg.code.language)}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  open the \u2039/\u203A editor below to run
-                </span>
-              </div>
-              <pre
-                className="overflow-x-auto px-4 py-3 text-[12.5px] leading-relaxed text-foreground"
-                style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
-              >
-                {msg.code.source}
-              </pre>
-            </div>
-          </GradientCard>
-        )}
+        <MessageContent text={msg.text} onUseCode={onUseCode} />
+        <CopyAction text={msg.text} />
+        {msg.code && <HistoryCodePanel code={msg.code} onUseCode={onUseCode} />}
       </div>
     </div>
+  );
+}
+
+function MessageContent({
+  text,
+  onUseCode,
+}: {
+  text: string;
+  onUseCode: (code: ChatCodeBlock) => void;
+}) {
+  const segments = parseFencedBlocks(text);
+
+  return (
+    <div className="space-y-3">
+      {segments.map((segment, index) => {
+        if (segment.kind === "code") {
+          return (
+            <HistoryCodePanel
+              key={`${segment.kind}-${index}`}
+              code={segment.code}
+              onUseCode={onUseCode}
+            />
+          );
+        }
+
+        if (!segment.text.trim()) return null;
+        return (
+          <div
+            key={`${segment.kind}-${index}`}
+            className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground"
+          >
+            {segment.text}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HistoryCodePanel({
+  code,
+  onUseCode,
+}: {
+  code: ChatCodeBlock;
+  onUseCode: (code: ChatCodeBlock) => void;
+}) {
+  return (
+    <GradientCard>
+      <div className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+          <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+            {languageLabel(code.language)}
+          </span>
+          <div className="flex items-center gap-2">
+            <CopyAction text={code.source} label="Copy code" />
+            <button
+              type="button"
+              onClick={() => onUseCode(code)}
+              className="text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Use in editor
+            </button>
+          </div>
+        </div>
+        <pre
+          className="max-h-[320px] overflow-auto whitespace-pre-wrap px-4 py-3 text-[12.5px] leading-relaxed text-foreground"
+          style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+        >
+          {code.source}
+        </pre>
+      </div>
+    </GradientCard>
+  );
+}
+
+function CopyAction({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+
+  const copy = async () => {
+    try {
+      await copyToClipboard(text);
+      setStatus("copied");
+      window.setTimeout(() => setStatus("idle"), 1500);
+    } catch {
+      setStatus("error");
+      window.setTimeout(() => setStatus("idle"), 1500);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+    >
+      {status === "copied" ? "Copied" : status === "error" ? "Copy failed" : label}
+    </button>
   );
 }

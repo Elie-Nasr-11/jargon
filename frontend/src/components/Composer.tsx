@@ -1,7 +1,9 @@
 import {
   Suspense,
+  forwardRef,
   lazy,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useRef,
   useState,
@@ -30,21 +32,23 @@ type Mode = "text" | "code";
 export type ComposerLanguage = "jargon" | "javascript" | "python";
 type Lang = ComposerLanguage;
 
-export function Composer({
-  onSendText,
-  onSendCodeResult,
-  onRunCode,
-  initialCode,
-  initialLanguage = "jargon",
-  sending,
-}: {
+export type ComposerHandle = {
+  loadCode: (input: { code: string; language: ComposerLanguage }) => void;
+};
+
+type ComposerProps = {
   onSendText: (text: string) => void;
   onSendCodeResult: (code: string, lang: Lang, result: RunResult) => void;
   onRunCode?: (code: string, lang: Lang) => Promise<RunResult>;
   initialCode?: string;
   initialLanguage?: Lang;
   sending: boolean;
-}) {
+};
+
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
+  { onSendText, onSendCodeResult, onRunCode, initialCode, initialLanguage = "jargon", sending },
+  ref,
+) {
   const [mode, setMode] = useState<Mode>("text");
   const [text, setText] = useState("");
   const [lang, setLang] = useState<Lang>(initialLanguage);
@@ -221,6 +225,17 @@ export function Composer({
     setText("");
   };
 
+  useImperativeHandle(ref, () => ({
+    loadCode({ code, language }) {
+      setCode(code);
+      setLang(language);
+      setMode("code");
+      requestAnimationFrame(() => {
+        morphRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      });
+    },
+  }));
+
   const run = async () => {
     setRunning(true);
     try {
@@ -368,7 +383,7 @@ export function Composer({
       </GradientCard>
     </div>
   );
-}
+});
 
 function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => void }) {
   const langs: Lang[] = ["jargon", "javascript", "python"];
