@@ -17,7 +17,8 @@ The interpreter is the hardened descendant of the late Colab/runtime versions.
 
 Current repo layout:
 
-- Platform lives at the repo root (`index.html`, `app.js`, `auth.js`, `editor/`, `mentor/`, `assets/`).
+- The new student frontend lives in `frontend/`.
+- The previous static platform lives at the repo root (`index.html`, `app.js`, `auth.js`, `editor/`, `mentor/`, `assets/`) for historical/back-compat reference.
 - Supabase assets live under `supabase/`.
 - Render deployment is described by `render.yaml`.
 - The runtime engine lives under `engine/`.
@@ -71,7 +72,7 @@ The web API contracts drifted over time:
 - ASK handling differs between versions.
 - One backend references `ask_state`, which is not present in the matching interpreter.
 
-The current rebuild uses one stable run result shape from `StructuredJargonInterpreter.run()` and `run_sandboxed()`. The Flask wrapper in `engine/app.py` also exposes `result = output` for existing `editor.js` compatibility.
+The current rebuild uses one stable run result shape from `StructuredJargonInterpreter.run()` and `run_sandboxed()`. The Flask wrapper in `engine/app.py` also exposes `result = output` for existing editor compatibility.
 
 ## Mentor App
 
@@ -84,7 +85,7 @@ This is the richest teaching UI. It contains a long "Jargon Mentor" system promp
 - Jargon to Python bridge
 - Short, reflective teaching style
 
-The legacy prompt has been surfaced at `mentor/system_prompt.md`. The current platform mentor pane lives at `mentor/mentor.js` and should be rebuilt around that prompt and the Supabase `chat` edge function.
+The legacy prompt has been surfaced at `mentor/system_prompt.md`. The mentor should remain a teaching layer over the Supabase `chat` edge function, not the runtime itself.
 
 ## Curriculum And Docs
 
@@ -118,8 +119,9 @@ The old web UI commonly used blue `#0077cc`, magenta `#c42d88`, and greens such 
 The clean direction is:
 
 - Keep the hardened interpreter in `engine/` as the runtime core.
-- Add a stable example/document loader around the old corpus.
-- Add a real language reference and test corpus.
-- Continue platform work around Supabase + Render and one result shape.
+- Keep Supabase + Render as the live platform boundary.
+- Use `frontend/` as the canonical student app for the tutor experience.
+- Add stable example/document loading around the old corpus.
+- Keep one run result shape across direct engine calls and HTTP.
 - Treat the mentor as a teaching layer, not as the runtime.
 - Keep branding assets separate from executable code.

@@ -1,25 +1,19 @@
 # Jargon
 
-Jargon is a unified learning platform for structured thinking and pseudocode. It combines:
-
-- Mentor: a logic coach and Python bridge.
-- Interpreter: a deterministic runtime for the custom Jargon language.
-- Curriculum: Processes, Coding, and Prompting lessons with mixed-audience level labels.
-
-The platform uses Supabase for auth/data/edge functions and Render for hosting the static site plus the Python engine.
+Jargon is a learning platform for structured thinking and pseudocode. It combines a deterministic Jargon runtime, a Supabase-backed lesson/session system, and a tutor-style frontend that helps students move from everyday logical speech into Jargon and then toward Python.
 
 ## Architecture
 
 ```text
-Render Static Site -> front-end (HTML/CSS/JS)
+Render Static Site -> frontend/ React tutor app
         |
         | supabase-js
         v
 Supabase
   - Auth
-  - Postgres: lessons, profiles, chat_messages, code_submissions
+  - Postgres: lessons, profiles, learning sessions, turns, attempts
   - Edge Functions
-      - chat -> OpenAI gpt-4o
+      - chat -> structured mentor runtime
       - run  -> proxy to JARGON_ENGINE_URL
                     |
                     v
@@ -30,30 +24,22 @@ Supabase
 
 ```text
 jargon/
-  index.html
-  app.js
-  auth.js
-  config.js
-  assets/theme.css
-  mentor/
-    mentor.js
-    system_prompt.md
-  editor/editor.js
-  engine/
-    app.py
-    jargon_interpreter.py
-    requirements.txt
-  examples/
-  legacy/examples/
-  docs/
-  supabase/
-  tests/
-  tools/
+  frontend/              React/Vite tutor frontend
+  engine/                Flask wrapper and canonical interpreter
+  supabase/              migrations and edge functions
+  mentor/                mentor prompt assets
+  examples/              curated Jargon examples
+  legacy/examples/       imported full example corpus
+  docs/                  handoff, roadmap, language, deployment docs
+  tests/                 interpreter and contract tests
+  tools/                 example validation utilities
 ```
+
+The root `jargon_interpreter.py` is a compatibility import shim. The canonical engine lives in `engine/jargon_interpreter.py`.
 
 ## Working With Agents
 
-Codex and Claude Code coordinate through repo files. Start with:
+Codex and Claude coordinate through repo files. Start with:
 
 - `AGENTS.md`
 - `CLAUDE.md`
@@ -110,7 +96,28 @@ python3 app.py
 
 It returns the full interpreter result dict plus a back-compatible `result` alias equal to `output`.
 
-Backend live-service wiring notes are in `docs/BACKEND_DEPLOYMENT.md`.
+## Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Build:
+
+```bash
+cd frontend
+npm run build
+```
+
+Deploy the student app on Render as a static site with:
+
+- Build Command: `cd frontend && npm ci && npm run build`
+- Publish Directory: `frontend/dist`
+- SPA rewrite: `/*` to `/index.html`
+
+See `docs/FRONTEND_MONOREPO.md` for the frontend/runtime split.
 
 ## Result Shape
 
@@ -127,7 +134,7 @@ Backend live-service wiring notes are in `docs/BACKEND_DEPLOYMENT.md`.
 ## Examples
 
 - `examples/` contains curated examples for product/curriculum use.
-- `legacy/examples/` contains the full imported 131-file corpus.
+- `legacy/examples/` contains the full imported corpus.
 
 Older Jargon examples often include wrappers like `Code:`, `Jargon Code:`, `Expected Output:`, and `Explanation:`. Use `jargon_examples.py` to extract the runnable part:
 
