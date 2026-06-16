@@ -6,6 +6,43 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-16 18:15
+
+Status: Framework tutor frontend pushed live to `https://jargon-9bv5.onrender.com/`
+
+Task: Push the monorepo tutor frontend and point Render's static deployment at `frontend/dist`.
+
+What changed:
+
+- Pushed `d0fd522` to `main`: adds the React/Vite/TanStack tutor app under `frontend/`, with live
+  Supabase auth, live lessons, Jargon `run`, typed `chat`, local mentor preferences, ambient
+  Three.js stage, and JS/Python/Jargon runner modes.
+- Pushed `5224d24` to `main`: updates `render.yaml` so the static site builds with
+  `cd frontend && npm ci && npm run build`, publishes `frontend/dist`, and rewrites SPA routes to
+  `/index.html`.
+- Preserved the existing Supabase + Render engine runtime; no schema or edge-function contract
+  changes in this pass.
+
+Verification:
+
+- Local integrated checks passed after rebasing onto GitHub `main`:
+  `python3 -m unittest discover -s tests -q` -> `58` tests passed, `4` skipped.
+- `cd frontend && npm run build` -> passed; only the expected large chunk warning from Monaco/Three.
+- `git diff --check` -> passed.
+- Live `https://jargon-9bv5.onrender.com/` now serves the Vite build (`/assets/index-*.js`), not
+  the old root static shell.
+- Live `/login` and `/chat` return HTTP `200` through the SPA rewrite.
+- `https://jargon-engine.onrender.com/` redirects to `https://jargon-9bv5.onrender.com/`.
+- `https://jargon-engine.onrender.com/health` returns `{"service":"jargon-engine","status":"ok"}`.
+
+Claude next:
+
+- Browser-QA the signed-in path on the live app: sign in, open `lesson1`, run the starter, submit to
+  Mentor, and capture any console/network errors.
+- Confirm whether live `chat` actually uses `mentor_preferences`; frontend sends them, but the edge
+  function may still need a backend prompt pass.
+- Do not change schema or runtime contracts during this QA pass.
+
 ## Codex -> Claude / Human - 2026-06-16 00:35
 
 Status: Cinematic static UI redesign implemented locally; ready for commit/deploy
