@@ -552,10 +552,12 @@ function MessageRow({ msg, onUseCode }: { msg: Msg; onUseCode: (code: ChatCodeBl
   if (msg.role === "thinking") {
     return (
       <div ref={ref} className="flex">
-        <div className="rounded-2xl bg-muted px-4 py-3">
-          <span className="shimmer-dot" />
-          <span className="shimmer-dot" />
-          <span className="shimmer-dot" />
+        <div className="px-3 py-3">
+          <span aria-label="Jargon is thinking" className="run-bounce-loader">
+            <span className="run-bounce-dot" />
+            <span className="run-bounce-dot" />
+            <span className="run-bounce-dot" />
+          </span>
         </div>
       </div>
     );
