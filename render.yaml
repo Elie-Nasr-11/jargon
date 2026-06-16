@@ -1,13 +1,17 @@
-# Render Blueprint — static front-end + the Jargon engine service.
-# The Supabase URL + anon key live in config.js (committed), so the static site
-# needs no env vars. The engine is a small Flask service in engine/.
+# Render Blueprint — tutor front-end + the Jargon engine service.
+# The student app is the framework frontend in frontend/. The engine is a
+# small Flask service in engine/.
 services:
   - type: web
     name: jargon
     runtime: static
-    buildCommand: "echo 'no build step'"
-    staticPublishPath: .
+    buildCommand: "cd frontend && npm ci && npm run build"
+    staticPublishPath: frontend/dist
     pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
 
   - type: web
     name: jargon-engine
