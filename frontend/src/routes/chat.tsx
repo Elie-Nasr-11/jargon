@@ -651,7 +651,7 @@ function HistoryCodePanel({
 }) {
   return (
     <GradientCard innerClassName="overflow-hidden">
-      <div className="overflow-hidden">
+      <div className="overflow-hidden rounded-[inherit] bg-[var(--code-background)]">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
             {languageLabel(code.language)}
@@ -670,7 +670,7 @@ function HistoryCodePanel({
           </div>
         </div>
         <pre
-          className="max-h-[320px] overflow-auto whitespace-pre-wrap bg-[var(--code-background)] px-4 py-3 text-[12.5px] leading-relaxed text-[var(--code-foreground)]"
+          className="max-h-[320px] overflow-auto whitespace-pre-wrap px-4 py-3 text-[12.5px] leading-relaxed text-[var(--code-foreground)]"
           style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
         >
           {code.language === "jargon" ? (
