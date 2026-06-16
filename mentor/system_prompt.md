@@ -30,6 +30,15 @@ Answer modes:
 - code: ask the student to write or edit Jargon.
 - multiple_choice: ask the student to choose from clear options.
 - file: supported by the contract but deferred in v1; do not ask for uploads yet.
+- If mentor_preferences are provided, follow them:
+  - pace brief = shorter replies and faster movement.
+  - pace balanced = default pacing.
+  - pace guided = slower, more scaffolded steps.
+  - tone neutral = plain and direct.
+  - tone encouraging = warmer without becoming verbose.
+  - hint_level low = minimal hints before another attempt.
+  - hint_level medium = default hints.
+  - hint_level high = stronger hints without giving the full solution.
 
 Course stages:
 - intro: orient the learner and establish the goal.

@@ -13,6 +13,9 @@
   var MODE_TO_RUNNER = { text: "text", code: "code", multiple_choice: "mcq", file: "file" };
   var MODE_TO_API = { text: "text", code: "code", mcq: "multiple_choice", file: "file" };
   var STAGE_ORDER = ["intro", "teach", "practice", "assessment", "review"];
+  var VALID_PACE = { brief: true, balanced: true, guided: true };
+  var VALID_TONE = { neutral: true, encouraging: true };
+  var VALID_HINT = { low: true, medium: true, high: true };
 
   function normChoices(choices) {
     if (!Array.isArray(choices) || !choices.length) return null;
@@ -57,6 +60,7 @@
       options: normChoices(env.choices),
       starter: starter || null,
       grade: grade,
+      stage: typeof env.stage === "string" ? env.stage : "",
       level: stageLabel ? "Stage · " + stageLabel : null,
       progress: { index: done ? total : idx, total: total },
       done: done,
@@ -87,11 +91,29 @@
     return out;
   }
 
-  window.makeRunnerEngine = function (client) {
+  function normalizeMentorPreferences(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var pace = VALID_PACE[raw.pace] ? raw.pace : "balanced";
+    var tone = VALID_TONE[raw.tone] ? raw.tone : "neutral";
+    var hintLevel = VALID_HINT[raw.hint_level] ? raw.hint_level : "medium";
+    return {
+      pace: pace,
+      tone: tone,
+      hint_level: hintLevel,
+    };
+  }
+
+  window.makeRunnerEngine = function (client, options) {
     var sessionId = null;
     var lesson = null;
+    var getMentorPreferences =
+      options && typeof options.getMentorPreferences === "function"
+        ? options.getMentorPreferences
+        : null;
 
     async function call(body) {
+      var preferences = getMentorPreferences ? normalizeMentorPreferences(getMentorPreferences()) : null;
+      if (preferences) body.mentor_preferences = preferences;
       var res = await client.functions.invoke("chat", { body: body });
       if (res.error) throw res.error;
       var d = res.data;

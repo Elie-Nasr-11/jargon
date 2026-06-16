@@ -18,11 +18,16 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
         self.assertIn("return json({ reply:", self.source)
 
     def test_typed_request_contract_is_supported(self):
-        for field in ("lesson_id", "session_id", "answer"):
+        for field in ("lesson_id", "session_id", "answer", "mentor_preferences"):
             self.assertIn(field, self.source)
         for mode in ("text", "code", "multiple_choice", "file"):
             self.assertIn(mode, self.source)
         self.assertIn("async function handleTypedRequest", self.source)
+
+    def test_mentor_preferences_are_normalized_and_prompted(self):
+        self.assertIn("function normalizeMentorPreferences", self.source)
+        for value in ("brief", "balanced", "guided", "neutral", "encouraging", "low", "medium", "high"):
+            self.assertIn(value, self.source)
 
     def test_typed_response_envelope_contains_required_fields(self):
         helper = self.source[

@@ -1,45 +1,37 @@
-// Conversational lesson-runner UI.
-//
-// Renders the guided conversation that IS the lesson: AI turns + the right input
-// affordance per turn (text / multiple-choice / code / file), a progress bar,
-// grading, and a completion card. Drives a pluggable engine passed to init (the
-// Supabase `chat` adapter, with the mock engine as a preview fallback). Exposes
-// window.LessonRunner.{ init(opts), start(lesson) }.
+// Conversational lesson-runner UI for the flat test shell.
 (function () {
   "use strict";
 
-  var client, getUser, root;
-  var lessonEl, levelEl, modeEl, fillEl, progLabel, transcript, dock, workbenchLabel;
+  var client, root, onStateChange;
+  var lessonEl, levelEl, modeEl, fillEl, progLabel, transcript, dock;
   var currentLesson = null;
   var busy = false;
   var primaryEngine, fallbackEngine, activeEngine;
 
   function init(opts) {
     client = opts.client;
-    getUser = opts.getUser;
     root = opts.root;
+    onStateChange = typeof opts.onStateChange === "function" ? opts.onStateChange : null;
     primaryEngine = opts.engine || window.RunnerEngineMock;
     fallbackEngine = opts.fallback || window.RunnerEngineMock;
     activeEngine = primaryEngine;
     if (!root) return;
+
     root.innerHTML =
-      '<div class="runner-grid">' +
-      '  <section class="mentor-card">' +
-      '    <div class="runner-head">' +
-      '      <div class="mentor-identity"><span class="mentor-avatar"></span><span>Jargon Mentor</span></div>' +
-      '      <div class="runner-title"><span id="runner-lesson"></span>' +
-      '      <span id="runner-level" class="level-chip"></span>' +
-      '      <span id="runner-mode" class="mode-chip"></span></div>' +
-      '    </div>' +
+      '<div class="runner-shell">' +
+      '  <div class="runner-meta">' +
+      '    <div class="runner-meta-row">' +
+      '      <span id="runner-lesson" class="runner-lesson"></span>' +
+      '      <span id="runner-level" class="runner-chip"></span>' +
+      '      <span id="runner-mode" class="runner-chip"></span>' +
+      '      <span id="progress-label" class="runner-progress-label"></span>' +
+      "    </div>" +
       '    <div class="progress"><div id="progress-fill" class="progress-fill"></div></div>' +
-      '    <div id="progress-label" class="progress-label"></div>' +
-      '    <div id="runner-transcript" class="transcript" aria-live="polite"></div>' +
-      '  </section>' +
-      '  <section class="workbench-card">' +
-      '    <div class="workbench-head"><div><span id="workbench-label">Your answer</span><small>Practice space</small></div><span class="workbench-spark"></span></div>' +
-      '    <div id="runner-dock" class="dock"></div>' +
-      '  </section>' +
-      '</div>';
+      "  </div>" +
+      '  <div id="runner-transcript" class="transcript" aria-live="polite"></div>' +
+      '  <div id="runner-dock" class="dock"></div>' +
+      "</div>";
+
     lessonEl = root.querySelector("#runner-lesson");
     levelEl = root.querySelector("#runner-level");
     modeEl = root.querySelector("#runner-mode");
@@ -47,7 +39,6 @@
     progLabel = root.querySelector("#progress-label");
     transcript = root.querySelector("#runner-transcript");
     dock = root.querySelector("#runner-dock");
-    workbenchLabel = root.querySelector("#workbench-label");
   }
 
   async function start(lesson) {
@@ -55,98 +46,97 @@
     currentLesson = lesson;
     busy = false;
     activeEngine = primaryEngine;
-    if (modeEl) modeEl.textContent = "";
     lessonEl.textContent = lesson.title || "Lesson";
     levelEl.textContent = "";
+    modeEl.textContent = "";
     transcript.innerHTML = "";
     dock.innerHTML = "";
+    dock.dataset.mode = "";
     root.__lastRunResult = null;
     setProgress({ index: 0, total: 1 });
-    bubble("ai", "Syncing this lesson with Jargon Mentor…", "Jargon Mentor");
+    bubble("ai", "Syncing lesson…", "Jargon Mentor");
+
     try {
       transcript.innerHTML = "";
       render(await activeEngine.start(lesson));
-    } catch (e) {
-      // Backend not live yet — fall back to the local preview flow.
+    } catch (_err) {
       if (fallbackEngine && fallbackEngine !== activeEngine) {
         activeEngine = fallbackEngine;
-        if (modeEl) modeEl.textContent = "Preview";
+        modeEl.textContent = "Preview";
         try {
           render(await activeEngine.start(lesson));
           return;
-        } catch (e2) {
-          /* fall through to the error bubble */
+        } catch (_fallbackErr) {
+          /* fall through */
         }
       }
-      bubble("ai", "Couldn't start the lesson — try again.", "Jargon Mentor");
+      busy = false;
+      bubble("ai", "Lesson could not start.", "Jargon Mentor");
     }
   }
 
-  // ---- helpers ----------------------------------------------------------
   function el(tag, cls) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    return e;
-  }
-  function btn(label, fn, cls) {
-    var b = el("button", cls);
-    b.type = "button";
-    b.textContent = label;
-    b.addEventListener("click", fn);
-    return b;
-  }
-  function esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  }
-  function reveal(node) {
-    if (window.Motion) window.Motion.reveal(node);
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    return node;
   }
 
-  function setProgress(p) {
-    var total = p.total || 1;
-    var pct = Math.round((p.index / total) * 100);
-    if (fillEl) fillEl.style.width = pct + "%";
-    if (progLabel)
-      progLabel.textContent =
-        p.index >= total ? "Complete" : "Step " + Math.min(p.index + 1, total) + " of " + total;
+  function btn(label, fn, cls) {
+    var node = el("button", cls);
+    node.type = "button";
+    node.textContent = label;
+    node.addEventListener("click", fn);
+    return node;
+  }
+
+  function esc(text) {
+    return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function setProgress(progress) {
+    var total = progress.total || 1;
+    var current = Math.min(progress.index + 1, total);
+    var pct = Math.round((Math.max(progress.index, 0) / total) * 100);
+    fillEl.style.width = pct + "%";
+    progLabel.textContent = progress.index >= total ? "Complete" : "Step " + current + " of " + total;
   }
 
   function bubble(kind, html, who) {
-    var div = el("div", "bubble " + kind);
+    var wrapper = el("div", "bubble " + kind);
     if (who) {
-      var w = el("div", "who");
-      w.textContent = who;
-      div.appendChild(w);
+      var label = el("div", "who");
+      label.textContent = who;
+      wrapper.appendChild(label);
     }
-    var body = el("div");
+    var body = el("div", "bubble-body");
     body.innerHTML = html;
-    div.appendChild(body);
-    transcript.appendChild(div);
+    wrapper.appendChild(body);
+    transcript.appendChild(wrapper);
     transcript.scrollTop = transcript.scrollHeight;
-    reveal(div);
-    return div;
+    return wrapper;
   }
 
-  function gradeChip(g) {
-    if (!g) return "";
+  function gradeChip(grade) {
+    if (!grade) return "";
     var cls =
-      g.passed === true ? "pass" : g.passed === false ? "fail" : g.score >= 80 ? "pass" : g.score >= 50 ? "partial" : "fail";
-    var scoreTxt = typeof g.score === "number" ? g.score + " — " : "";
-    var text = g.feedback || (g.passed ? "Correct" : "Keep going");
-    return '<span class="grade-chip ' + cls + '">' + scoreTxt + esc(text) + "</span><br>";
+      grade.passed === true ? "pass" : grade.passed === false ? "fail" : grade.score >= 80 ? "pass" : grade.score >= 50 ? "partial" : "fail";
+    var score = typeof grade.score === "number" ? String(grade.score) : "";
+    var feedback = grade.feedback || "";
+    return '<span class="grade-chip ' + cls + '">' + esc([score, feedback].filter(Boolean).join(" / ")) + "</span>";
   }
 
-  // ---- rendering --------------------------------------------------------
   function render(turn) {
     busy = false;
-    if (turn.level && levelEl) levelEl.textContent = turn.level;
+    levelEl.textContent = turn.level || "";
+    if (!modeEl.textContent) modeEl.textContent = "";
     if (turn.progress) setProgress(turn.progress);
-    bubble("ai", gradeChip(turn.grade) + esc(turn.say), "Jargon Mentor");
+    bubble("ai", (gradeChip(turn.grade) ? gradeChip(turn.grade) + "<br>" : "") + esc(turn.say), "Jargon Mentor");
     if (turn.done) {
       renderCompletion(turn);
-      return;
+    } else {
+      renderDock(turn);
     }
-    renderDock(turn);
+    publishState(turn);
   }
 
   function renderDock(turn) {
@@ -154,102 +144,109 @@
     var mode = turn.expected_mode;
     dock.dataset.mode = mode || "";
     root.__lastRunResult = null;
-    if (workbenchLabel) {
-      workbenchLabel.textContent =
-        mode === "code" ? "Your Code" : mode === "mcq" ? "Choose" : mode === "file" ? "File" : "Your answer";
-    }
 
     if (mode === "text") {
-      var ta = el("textarea");
-      ta.placeholder = "Type your answer…";
-      ta.rows = 3;
-      ta.addEventListener("keydown", function (e) {
-        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-          e.preventDefault();
-          submitText(ta.value);
+      var text = el("textarea");
+      text.rows = 2;
+      text.placeholder = "Type your answer";
+      text.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          submitText(text.value);
         }
       });
-      var row = el("div", "dock-row");
-      row.appendChild(btn("Send", function () { submitText(ta.value); }));
-      dock.appendChild(ta);
-      dock.appendChild(row);
-    } else if (mode === "mcq") {
-      var wrap = el("div", "options");
-      (turn.options || []).forEach(function (o) {
-        wrap.appendChild(
-          btn(o.label, function () { chooseOption(o); }, "option-btn")
-        );
+      var textRow = el("div", "dock-row");
+      textRow.appendChild(btn("Send", function () { submitText(text.value); }));
+      dock.appendChild(text);
+      dock.appendChild(textRow);
+      return;
+    }
+
+    if (mode === "mcq") {
+      var options = el("div", "options");
+      (turn.options || []).forEach(function (option) {
+        options.appendChild(btn(option.label, function () { chooseOption(option); }, "option-btn"));
       });
-      dock.appendChild(wrap);
-    } else if (mode === "code") {
+      dock.appendChild(options);
+      return;
+    }
+
+    if (mode === "code") {
       var code = el("textarea", "code-input");
+      var output = el("div", "runner-output");
       code.value = turn.starter || "";
       code.spellcheck = false;
       code.addEventListener("input", function () {
         root.__lastRunResult = null;
       });
-      var out = el("div", "runner-output");
-      code.addEventListener("keydown", function (e) {
-        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-          e.preventDefault();
-          runCode(code.value, out);
-        } else if (e.key === "Tab") {
-          e.preventDefault();
-          var s = code.selectionStart;
-          var en = code.selectionEnd;
-          code.value = code.value.slice(0, s) + "  " + code.value.slice(en);
-          code.selectionStart = code.selectionEnd = s + 2;
+      code.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          runCode(code.value, output);
+        } else if (event.key === "Tab") {
+          event.preventDefault();
+          var start = code.selectionStart;
+          var end = code.selectionEnd;
+          code.value = code.value.slice(0, start) + "  " + code.value.slice(end);
+          code.selectionStart = code.selectionEnd = start + 2;
         }
       });
-      var row2 = el("div", "dock-row");
-      row2.appendChild(btn("Run", function () { runCode(code.value, out); }, "secondary"));
-      row2.appendChild(btn("Submit", function () { submitCode(code.value); }));
+      var codeRow = el("div", "dock-row");
+      codeRow.appendChild(btn("Run", function () { runCode(code.value, output); }, "secondary"));
+      codeRow.appendChild(btn("Submit", function () { submitCode(code.value); }));
       dock.appendChild(code);
-      dock.appendChild(row2);
-      dock.appendChild(out);
-    } else if (mode === "file") {
+      dock.appendChild(codeRow);
+      dock.appendChild(output);
+      return;
+    }
+
+    if (mode === "file") {
       var file = el("input");
       file.type = "file";
-      var row3 = el("div", "dock-row");
-      row3.appendChild(file);
-      row3.appendChild(btn("Submit", function () { submitFile(file); }));
-      dock.appendChild(row3);
+      var fileRow = el("div", "dock-row");
+      fileRow.appendChild(file);
+      fileRow.appendChild(btn("Submit", function () { submitFile(file); }));
+      dock.appendChild(fileRow);
+      return;
     }
-    reveal(dock);
   }
 
   function renderCompletion(turn) {
     dock.innerHTML = "";
-    var c = el("div", "completion");
-    c.innerHTML =
-      '<div class="score">' + (turn.final_grade != null ? turn.final_grade : "—") + " / 100</div>" +
-      "<p>Lesson complete.</p>";
+    dock.dataset.mode = "done";
+    var completion = el("div", "completion");
+    var score = el("div", "score");
+    score.textContent = turn.final_grade != null ? String(turn.final_grade) : "—";
+    completion.appendChild(score);
+    var text = el("p");
+    text.textContent = "Lesson complete.";
+    completion.appendChild(text);
     var row = el("div", "dock-row");
-    row.style.justifyContent = "center";
     row.appendChild(btn("Retry lesson", function () { start(currentLesson); }));
-    c.appendChild(row);
-    dock.appendChild(c);
-    reveal(c);
+    completion.appendChild(row);
+    dock.appendChild(completion);
   }
 
-  // ---- answer handlers --------------------------------------------------
-  function submitText(v) {
-    if (busy || !(v || "").trim()) return;
-    bubble("me", esc(v), "You");
-    next({ mode: "text", value: v });
+  function submitText(value) {
+    if (busy || !(value || "").trim()) return;
+    bubble("me", esc(value), "You");
+    next({ mode: "text", value: value });
   }
-  function chooseOption(o) {
+
+  function chooseOption(option) {
     if (busy) return;
-    bubble("me", esc(o.label), "You");
-    next({ mode: "mcq", value: o.id });
+    bubble("me", esc(option.label), "You");
+    next({ mode: "mcq", value: option.id });
   }
-  function submitCode(v) {
+
+  function submitCode(value) {
     if (busy) return;
     bubble("me", "<em>Submitted code</em>", "You");
-    var answer = { mode: "code", value: v };
+    var answer = { mode: "code", value: value };
     if (root.__lastRunResult) answer.run_result = root.__lastRunResult;
     next(answer);
   }
+
   function submitFile(input) {
     if (busy) return;
     var name = input.files && input.files[0] ? input.files[0].name : "(skipped)";
@@ -258,48 +255,62 @@
   }
 
   function lockDock() {
-    Array.prototype.forEach.call(dock.querySelectorAll("button, textarea, input"), function (x) {
-      x.disabled = true;
+    Array.prototype.forEach.call(dock.querySelectorAll("button, textarea, input"), function (node) {
+      node.disabled = true;
     });
   }
 
   async function next(answer) {
     busy = true;
     lockDock();
-    var thinking = el("div", "bubble ai");
-    thinking.innerHTML = '<div class="who">Jargon Mentor</div><div class="dots">…</div>';
-    transcript.appendChild(thinking);
-    transcript.scrollTop = transcript.scrollHeight;
+    var thinking = bubble("ai", '<span class="dots">…</span>', "Jargon Mentor");
     try {
       var turn = await activeEngine.submit(answer);
       thinking.remove();
       render(turn);
-    } catch (e) {
+    } catch (_err) {
       thinking.remove();
       busy = false;
-      bubble("ai", "Hmm, something went wrong — try that again.", "Jargon Mentor");
+      bubble("ai", "Something went wrong. Try again.", "Jargon Mentor");
     }
   }
 
-  // Code answer mode runs against the real `run` edge function. The engine isn't
-  // deployed yet, so failures render gracefully and don't block submitting.
   async function runCode(code, out) {
-    out.textContent = "Running…";
+    out.textContent = "Running...";
     try {
       var res = await client.functions.invoke("run", { body: { code: code, answers: [] } });
       if (res.error) throw res.error;
-      var d = res.data || {};
-      root.__lastRunResult = d;
-      var lines = d.output || d.result || [];
+      var data = res.data || {};
+      root.__lastRunResult = data;
+      var lines = data.output || data.result || [];
       if (!Array.isArray(lines)) lines = [lines];
-      var errs = Array.isArray(d.errors) ? d.errors : [];
+      var errs = Array.isArray(data.errors) ? data.errors : [];
       var text = (lines.join("\n") + (errs.length ? "\n" + errs.join("\n") : "")).trim();
       out.textContent = text || "[no output]";
-      if (window.Motion) window.Motion.pulseOutput(out);
     } catch (err) {
-      out.textContent = "[engine not reachable yet] " + (err.message || err);
-      if (window.Motion) window.Motion.pulseOutput(out);
+      out.textContent = "[engine not reachable] " + (err.message || err);
     }
+  }
+
+  function publishState(turn) {
+    if (!onStateChange) return;
+    onStateChange({
+      lessonId: currentLesson && currentLesson.id ? currentLesson.id : "",
+      lessonTitle: currentLesson && currentLesson.title ? currentLesson.title : "",
+      module: currentLesson && currentLesson.module ? currentLesson.module : "",
+      lessonLevel: currentLesson && currentLesson.level ? currentLesson.level : "",
+      stage: turn && turn.stage ? turn.stage : "",
+      stageLabel: levelEl.textContent || "",
+      progressLabel: progLabel.textContent || "",
+      progress: turn && turn.progress ? turn.progress : null,
+      grade: turn && turn.grade ? turn.grade : null,
+      feedback: turn && turn.grade && turn.grade.feedback ? turn.grade.feedback : turn && turn.say ? turn.say : "",
+      done: !!(turn && turn.done),
+      finalGrade: turn && turn.final_grade != null ? turn.final_grade : null,
+      preview: modeEl.textContent || "",
+      expectedMode: turn && turn.expected_mode ? turn.expected_mode : "",
+      reply: turn && turn.say ? turn.say : "",
+    });
   }
 
   window.LessonRunner = { init: init, start: start };

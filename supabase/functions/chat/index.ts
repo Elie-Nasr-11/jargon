@@ -13,6 +13,9 @@ const corsHeaders = {
 const STAGES = new Set(["intro", "teach", "practice", "assessment", "review", "complete"]);
 const RESPONSE_MODES = new Set(["text", "code", "multiple_choice", "file"]);
 const NEXT_ACTIONS = new Set(["reply", "run_code", "choose", "retry", "rescue", "continue", "complete"]);
+const PACE_OPTIONS = new Set(["brief", "balanced", "guided"]);
+const TONE_OPTIONS = new Set(["neutral", "encouraging"]);
+const HINT_LEVEL_OPTIONS = new Set(["low", "medium", "high"]);
 
 const SYSTEM_PROMPT = `You are the Jargon Mentor, a warm, curious, firm logic coach for school children.
 
@@ -30,6 +33,15 @@ Rules:
 - File mode exists in the contract but is deferred; do not ask students to upload files yet.
 - Prefer retry and rescue paths over failure language.
 - Do not use emojis.
+- If mentor_preferences are provided, follow them:
+  - pace brief = short replies and faster movement.
+  - pace balanced = default pacing.
+  - pace guided = slower, more scaffolded steps.
+  - tone neutral = plain and direct.
+  - tone encouraging = warmer without becoming verbose.
+  - hint_level low = minimal hints before another attempt.
+  - hint_level medium = default hints.
+  - hint_level high = stronger hints without giving the full solution.
 
 For typed course requests, return only valid JSON matching this shape:
 {
@@ -131,6 +143,17 @@ function answerContent(answer: Record<string, unknown> | null): string {
   if (answer.mode === "multiple_choice") return String(answer.choice_id || "");
   if (answer.mode === "file") return "[file answer placeholder]";
   return String(answer.text || "");
+}
+
+function normalizeMentorPreferences(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const prefs = raw as Record<string, unknown>;
+  const pace = PACE_OPTIONS.has(String(prefs.pace)) ? String(prefs.pace) : "balanced";
+  const tone = TONE_OPTIONS.has(String(prefs.tone)) ? String(prefs.tone) : "neutral";
+  const hintLevel = HINT_LEVEL_OPTIONS.has(String(prefs.hint_level))
+    ? String(prefs.hint_level)
+    : "medium";
+  return { pace, tone, hint_level: hintLevel };
 }
 
 function restConfig(req: Request): SupabaseConfig {
@@ -294,6 +317,7 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
   const sessionId = String(session.id);
   const currentStage = typeof session.stage === "string" ? session.stage : "intro";
   const answer = normalizeAnswer(body.answer);
+  const mentorPreferences = normalizeMentorPreferences(body.mentor_preferences);
   const content = answerContent(answer);
 
   try {
@@ -325,6 +349,7 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
             retry_count: session.retry_count || 0,
             rescue_count: session.rescue_count || 0,
           },
+          mentor_preferences: mentorPreferences,
           latest_answer: answer,
           required_fields: [
             "status",
