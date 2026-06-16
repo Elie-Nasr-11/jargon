@@ -650,7 +650,7 @@ function HistoryCodePanel({
   onUseCode: (code: ChatCodeBlock) => void;
 }) {
   return (
-    <GradientCard>
+    <GradientCard innerClassName="overflow-hidden">
       <div className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
