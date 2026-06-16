@@ -5,7 +5,7 @@ services:
   - type: web
     name: jargon
     runtime: static
-    buildCommand: "npm ci && npm run build"
+    buildCommand: "cd frontend && npm install --no-audit --no-fund && npm run build"
     staticPublishPath: frontend/dist
     pullRequestPreviewsEnabled: false
     routes:
