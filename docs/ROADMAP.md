@@ -33,7 +33,7 @@ Status: Started by Claude branch.
 
 ## Phase 4: Learning Session Runtime + Mentor
 
-Status: Started as a repo-only backend pass.
+Status: Superseded by the chat-first LMS foundation.
 
 - Rebuild the mentor as a structured course-session layer, not an open-ended chat box.
 - Separate AI coaching from code execution.
@@ -43,7 +43,29 @@ Status: Started as a repo-only backend pass.
 - Keep prompts and examples versioned in the repo.
 - Bridge natural speech -> pseudocode -> Jargon -> Python.
 
-## Phase 5: Curriculum And Package
+## Phase 5: Chat-LMS Foundation
+
+Status: Started.
+
+- Define the product contract in `docs/PRODUCT_ARCHITECTURE.md`.
+- Add multi-role identity: organizations, memberships, classes, class memberships, and platform admins.
+- Add reusable RLS helper functions for teacher/class/org/platform permissions.
+- Add curriculum hierarchy: subjects, courses, versions, units, lessons, milestones, and activities.
+- Add learning records: quizzes, assignments, submissions, evidence, teacher notes, Mentor recommendations, grade overrides, and audit events.
+- Keep the student chat as the primary classroom surface.
+
+## Phase 6: Teacher-Led Class Workflow
+
+Status: Next after schema verification.
+
+- Let a teacher create or join a class.
+- Let a student join that class.
+- Let the teacher assign a Jargon Foundations lesson.
+- Upgrade the Mentor orchestrator to read class, assignment, milestone, evidence, and teacher-note context.
+- Add a teacher dashboard for classes, rosters, progress, chat logs, quiz scores, assignments, recommendations, and intervention flags.
+- Add tests for teacher RLS and UI filtering.
+
+## Phase 7: Curriculum And Package
 
 Status: Curriculum archive imported; curation remains.
 

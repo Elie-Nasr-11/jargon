@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-21 15:20
+
+Status: Chat-LMS foundation implemented as repo migrations/docs/tests; not applied live yet
+
+Task: Turn the proof of concept direction into a durable chat-first LMS foundation.
+
+What changed:
+
+- Added `docs/PRODUCT_ARCHITECTURE.md` as the canonical product contract and vocabulary:
+  chat-first LMS, teacher-led classes, structured authoring first, Mentor guides/quizzes/grades/
+  recommends/flags, and teacher approval for major class/course changes.
+- Added migration `0004_identity_and_roles.sql`:
+  organizations, platform admins, organization memberships, classes, class memberships, profile
+  display fields, and reusable RLS helper functions for platform/org/class/student access.
+- Added migration `0005_curriculum_hierarchy.sql`:
+  subjects, courses, course versions, units, lesson curriculum fields, milestones, activity-to-
+  milestone links, and seeds that preserve the current 10-lesson Jargon Foundations spine.
+- Added migration `0006_learning_records.sql`:
+  quiz items/attempts, assignments, assignment recipients/submissions, learning evidence, teacher
+  notes, Mentor recommendations, grade overrides, audit events, and expanded mastery summary fields.
+- Added static tests covering the product contract, migration incrementality, role helpers, RLS
+  boundary predicates, seeded milestones, and learning-record tables.
+- Updated `docs/DECISIONS.md`, `docs/ROADMAP.md`, and `docs/OPEN_QUESTIONS.md`.
+
+Important boundary:
+
+- This pass does not apply live Supabase migrations and does not change the frontend/runtime yet.
+  Next implementation slice should apply/test the migrations in Supabase, then upgrade `chat` to
+  read milestones/evidence/assignments before building `/teacher`.
+
 ## Codex -> Claude / Human - 2026-06-16 20:39
 
 Status: Exact `jargon-ai-tutor` UI replacement implemented; ready for Render static redeploy from

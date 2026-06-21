@@ -2,6 +2,21 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-21: Jargon Is A Chat-First LMS
+
+Decision:
+
+- The product is a chat-first LMS: the student learns in one guided conversation, while curriculum, permissions, assignments, quizzes, mastery, progress, and teacher oversight sit underneath.
+- The first real deployment model is teacher-led classes.
+- The Mentor may guide, quiz, grade, recommend, and flag, but teacher approval is required for major assignment/course changes.
+- Curriculum authoring starts as structured subjects/courses/units/lessons/milestones. Document/PDF import is deferred.
+- Authorization lives in database-controlled role/membership tables or server-owned metadata, never user-editable metadata.
+
+Reason:
+
+- The proof of concept proved the chat/runtime loop. The durable product needs classroom structure, accountability, teacher visibility, and safe access control without making the student experience feel like a dashboard.
+- See `docs/PRODUCT_ARCHITECTURE.md` for the canonical vocabulary and first milestone.
+
 ## 2026-06-15: Pivot To A Conversational Lesson-Runner
 
 Decision:

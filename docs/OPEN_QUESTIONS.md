@@ -2,6 +2,32 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
+## How should document/PDF curriculum import work?
+
+Current decision so far:
+
+- Structured authoring comes first: subjects, courses, course versions, units, lessons, milestones, and activities.
+- Document/PDF import is deferred until the structured model is stable.
+
+Deferred options:
+
+- Import a syllabus and generate draft course/unit/lesson/milestone records for teacher review.
+- Import lesson materials as supporting context only, without auto-creating curriculum.
+- Keep document import platform-admin-only until teacher authoring is safe.
+
+## How should graphs and math visuals work?
+
+Current decision so far:
+
+- Chat, code, multiple choice, and future file modes are the core answer modes.
+- Graph/math visuals are deferred until quizzes, evidence, and milestones are stable.
+
+Deferred options:
+
+- Add generated graph payloads to the typed chat envelope.
+- Add a deterministic graph-rendering activity type.
+- Restrict visual generation to teacher-authored lessons first.
+
 ## How should file answers work?
 
 Current decision so far:
