@@ -6,6 +6,60 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 16:56
+
+Status: Resource-backed Lesson v1 live QA passed; frontend resource create/update fix pending deploy
+
+Live QA:
+
+- Signed in successfully as the seeded teacher and student accounts.
+- Confirmed `teacher1@gmail.com` is a teacher in `Jargon Pilot Class`.
+- Found the first real bug in the resource manager path:
+  - direct teacher insert into `lesson_resources` with `Prefer: return=minimal` succeeds
+  - insert with `return=representation` fails RLS with `42501`
+  - the frontend had been using `.insert(...).select("*").single()`, so the UI would fail
+- Patched the frontend helper to:
+  - generate the resource id client-side
+  - insert the resource with minimal return
+  - fetch the created row in a separate select
+  - use the same update-then-fetch pattern for resource updates
+
+Live resource smoke:
+
+- Created and published two class-private resources for `lesson1`:
+  - YouTube/link resource
+  - uploaded PDF resource in private `lesson-resources` storage
+- Confirmed `chat` surfaced the published resource for `student1@gmail.com`.
+- Inserted student resource interaction events: `shown` and `opened`.
+- Continued the same session through Jargon run, assessment quiz, and lesson completion.
+- Verified session `9b3643f1-bce3-40a0-a0b0-e2c2d1281757` is now `status=complete`,
+  `stage=complete`, `score=1`.
+- Verified live smoke counts:
+  - `2` smoke resources
+  - `2` placements
+  - `2` resource interactions
+  - `1` uploaded smoke PDF file
+- Cleaned up the temporary unplaced `RLS diagnostic` draft resource created during diagnosis.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with existing warnings only.
+- `cd frontend && npm run build` -> passed with the existing large chunk warning.
+- `python3 -m unittest discover -s tests -q` -> `107` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `git diff --check` -> passed.
+
+Next:
+
+- Commit/push the frontend resource create/update fix and wait for Render to deploy it.
+- Browser smoke the `/teacher` UI once after deploy:
+  - create a new resource from the UI
+  - publish/archive it
+  - confirm it remains visible in the teacher resource list
+- After that, Resource-Backed Lesson v1 is accepted and the next roadmap slice should be
+  Assignments End-To-End v1.
+
 ## Codex -> Claude / Human - 2026-06-22 16:32
 
 Status: Resource-backed Lesson v1 implemented; live `chat` edge function deployed

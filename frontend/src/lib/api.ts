@@ -486,6 +486,7 @@ export async function createLessonResource(input: {
   let fileSize: number | null = null;
   let resourceType = input.resourceType;
   const metadata: Record<string, unknown> = {};
+  const resourceId = uniqueId();
 
   if (input.sourceType === "upload") {
     if (!input.file) throw new Error("Choose a file to upload.");
@@ -510,31 +511,35 @@ export async function createLessonResource(input: {
     if (uploadError) throw uploadError;
   }
 
-  const { data: resource, error: resourceError } = await supabase
-    .from("lesson_resources")
-    .insert({
-      organization_id: input.organizationId,
-      class_id: input.classId,
-      lesson_id: input.lessonId,
-      created_by: input.teacherId,
-      title: input.title.trim(),
-      description: input.description.trim(),
-      resource_type: resourceType,
-      source_type: input.sourceType,
-      storage_bucket: input.sourceType === "upload" ? "lesson-resources" : null,
-      storage_path: storagePath,
-      external_url: input.sourceType === "external_url" ? input.externalUrl?.trim() : null,
-      mime_type: mimeType,
-      file_size_bytes: fileSize,
-      teacher_notes: input.teacherNotes.trim(),
-      student_instructions: input.studentInstructions.trim(),
-      status: input.status,
-      visibility: input.visibility,
-      metadata,
-    })
-    .select("*")
-    .single();
+  const { error: resourceError } = await supabase.from("lesson_resources").insert({
+    id: resourceId,
+    organization_id: input.organizationId,
+    class_id: input.classId,
+    lesson_id: input.lessonId,
+    created_by: input.teacherId,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    resource_type: resourceType,
+    source_type: input.sourceType,
+    storage_bucket: input.sourceType === "upload" ? "lesson-resources" : null,
+    storage_path: storagePath,
+    external_url: input.sourceType === "external_url" ? input.externalUrl?.trim() : null,
+    mime_type: mimeType,
+    file_size_bytes: fileSize,
+    teacher_notes: input.teacherNotes.trim(),
+    student_instructions: input.studentInstructions.trim(),
+    status: input.status,
+    visibility: input.visibility,
+    metadata,
+  });
   if (resourceError) throw resourceError;
+
+  const { data: resource, error: fetchError } = await supabase
+    .from("lesson_resources")
+    .select("*")
+    .eq("id", resourceId)
+    .single();
+  if (fetchError) throw fetchError;
 
   const created = resource as LessonResource;
   const { error: placementError } = await supabase.from("lesson_resource_placements").insert({
@@ -559,13 +564,16 @@ export async function updateLessonResource(
     >
   >,
 ) {
-  const { data, error } = await supabase
-    .from("lesson_resources")
-    .update(patch)
-    .eq("id", resourceId)
-    .select("*")
-    .single();
+  const { error } = await supabase.from("lesson_resources").update(patch).eq("id", resourceId);
   if (error) throw error;
+
+  const { data, error: fetchError } = await supabase
+    .from("lesson_resources")
+    .select("*")
+    .eq("id", resourceId)
+    .single();
+  if (fetchError) throw fetchError;
+
   return data as LessonResource;
 }
 
