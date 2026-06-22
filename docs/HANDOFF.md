@@ -6,6 +6,55 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 22:01
+
+Status: Voice v1 live acceptance passed; Phase 7 is next
+
+Live acceptance notes:
+
+- GitHub `main` commit: `af98766` (`Polish voice dictation fallback`).
+- Render static app is serving the updated Voice v1 bundle at
+  `https://jargon-9bv5.onrender.com/chat`.
+- Supabase `chat` remains active as version 8, JWT required.
+- Render engine reliability gate still passes:
+  - `/health` returns `{"service":"jargon-engine","status":"ok"}`;
+  - direct `/run` with `PRINT 5 // 2` returns `output: ["2"]`.
+
+Voice acceptance result:
+
+- Student login smoke passed with `student2@gmail.com`.
+- Student `/chat` shows mic control and read-aloud/replay controls.
+- In the browser automation environment, mic access is blocked; the UI now degrades cleanly with:
+  `Microphone access was blocked. Allow the mic in your browser settings, then try again.`
+- Dictated-answer data path was live-smoked through the typed `chat` API:
+  - `learning_turns.payload.input_modality = "dictated"`;
+  - `lesson_attempts.input_modality = "dictated"`;
+  - `transcript_confidence = null` is accepted and preserved.
+- Student chat displays the submitted dictated answer with a `Dictated` chip.
+- Mentor read-aloud button and replay button are present and clickable without console errors.
+- `voice_interaction_events` records student UI events:
+  `dictation_started`, `read_aloud_started`, and `read_aloud_finished`.
+- Teacher dashboard smoke passed with `teacher1@gmail.com`:
+  - active `s2` session transcript shows `Dictated`;
+  - corresponding lesson attempt summary shows `Dictated - ungraded - score n/a`.
+- Raw student audio is still not stored.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> `114` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with existing `11` warnings only.
+- `cd frontend && npm run build` -> passed with existing large chunk warning.
+- `git diff --check` -> passed.
+
+Roadmap status:
+
+- Voice v1 is accepted.
+- Next build slice: Phase 7 Multi-Subject Chat-LMS.
+- Recommended Phase 7 target: one non-coding, non-computer-science lesson path using
+  text, MCQ, teacher resource, mastery evidence, and teacher visibility.
+
 ## Codex -> Claude / Human - 2026-06-22 21:42
 
 Status: Reliability gate passed; Voice v1 implemented and deployed to `chat`

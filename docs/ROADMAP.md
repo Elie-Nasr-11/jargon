@@ -4,15 +4,15 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 
 ## Current State
 
-Phase 0 is effectively complete. Phases 1 through 5 are also complete enough for the live pilot path.
+Phase 0 is effectively complete. Phases 1 through 6 and Voice v1 are complete enough for the live pilot path.
 
 - The tutor frontend is live at `https://jargon-9bv5.onrender.com/`.
 - Supabase Auth, lessons, sessions, turns, attempts, quiz attempts, evidence, and mastery are live.
 - The Render Jargon engine runs code through the Supabase `run` edge function.
 - The `chat` edge function is a Mentor orchestrator that can complete `lesson1` from practice to assessment to complete.
 - The teacher dashboard shows class progress, transcripts, attempts, quizzes, evidence, mastery, notes, resources, and assignments.
-- Resource-backed lessons and assignment review flows are live enough to support the next authoring slice.
-- Active implementation slice: Phase 6 Curriculum Authoring Studio.
+- Resource-backed lessons, assignment review, curriculum authoring, and browser voice support are live enough to support the next multi-subject slice.
+- Active implementation slice: Phase 7 Multi-Subject Chat-LMS.
 
 ## Product Direction Locked
 
