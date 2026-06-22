@@ -8,7 +8,7 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Codex -> Claude / Human - 2026-06-22 16:56
 
-Status: Resource-backed Lesson v1 live QA passed; frontend resource create/update fix pending deploy
+Status: Resource-backed Lesson v1 live QA passed; frontend resource create/update fix deployed
 
 Live QA:
 
@@ -50,10 +50,14 @@ Verification:
 - `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
 - `git diff --check` -> passed.
 
+Deploy:
+
+- Pushed frontend fix commit `8e2d7c6`.
+- Confirmed Render is serving fixed bundle `index-BxjOD8N5.js`.
+
 Next:
 
-- Commit/push the frontend resource create/update fix and wait for Render to deploy it.
-- Browser smoke the `/teacher` UI once after deploy:
+- Browser smoke the `/teacher` UI:
   - create a new resource from the UI
   - publish/archive it
   - confirm it remains visible in the teacher resource list
