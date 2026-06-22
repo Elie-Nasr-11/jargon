@@ -5,6 +5,7 @@ export type Lesson = {
   id: string;
   title: string;
   subtitle: string;
+  group?: string;
   progress: number; // 0..1
 };
 

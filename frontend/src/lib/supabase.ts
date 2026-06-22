@@ -15,6 +15,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export function functionUrl(slug: "chat" | "run" | "admin-seed") {
+export function functionUrl(slug: "chat" | "run" | "admin-seed" | "curriculum-admin") {
   return `${supabaseUrl}/functions/v1/${slug}`;
 }

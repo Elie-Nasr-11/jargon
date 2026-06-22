@@ -377,6 +377,12 @@ function TeacherPage() {
               Refresh
             </button>
             <Link
+              to="/teacher/curriculum"
+              className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+            >
+              Curriculum
+            </Link>
+            <Link
               to="/chat"
               className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
             >

@@ -8,6 +8,15 @@ import type {
   AssignmentSubmission,
   AssignmentSubmissionFile,
   AssignmentSubmissionStatus,
+  CurriculumAdminResponse,
+  CurriculumAuthoringData,
+  CurriculumBlueprint,
+  CurriculumCourse,
+  CurriculumCourseVersion,
+  CurriculumMilestone,
+  CurriculumQuizItem,
+  CurriculumSubject,
+  CurriculumUnit,
   JargonRunResponse,
   LearningSession,
   LearningTurn,
@@ -194,11 +203,11 @@ export async function upsertProfile(user: User, name: string, grade: string) {
   if (error) throw error;
 }
 
-export async function fetchLessons() {
-  const { data, error } = await supabase
-    .from("lessons")
-    .select("*")
-    .order("position", { ascending: true });
+export async function fetchLessons(options: { includeDrafts?: boolean } = {}) {
+  let query = supabase.from("lessons").select("*").order("position", { ascending: true });
+  if (!options.includeDrafts) query = query.eq("publication_status", "published");
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []) as Lesson[];
 }
@@ -279,6 +288,89 @@ export async function invokeAdminSeed(input: {
   return data;
 }
 
+export async function fetchCurriculumAuthoringData(
+  userId: string,
+): Promise<CurriculumAuthoringData> {
+  const classes = await fetchTeacherClasses(userId);
+  const lessons = await fetchLessons({ includeDrafts: true });
+  const [
+    subjectsResult,
+    coursesResult,
+    courseVersionsResult,
+    unitsResult,
+    milestonesResult,
+    activitiesResult,
+    quizzesResult,
+    resourcesResult,
+  ] = await Promise.all([
+    supabase.from("subjects").select("*").order("title", { ascending: true }),
+    supabase.from("courses").select("*").order("title", { ascending: true }),
+    supabase.from("course_versions").select("*").order("updated_at", { ascending: false }),
+    supabase.from("units").select("*").order("position", { ascending: true }),
+    supabase.from("milestones").select("*").order("position", { ascending: true }),
+    supabase.from("lesson_activities").select("*").order("position", { ascending: true }),
+    supabase.from("quiz_items").select("*").order("position", { ascending: true }),
+    supabase
+      .from("lesson_resources")
+      .select("*")
+      .neq("status", "archived")
+      .order("updated_at", { ascending: false })
+      .limit(300),
+  ]);
+
+  for (const result of [
+    subjectsResult,
+    coursesResult,
+    courseVersionsResult,
+    unitsResult,
+    milestonesResult,
+    activitiesResult,
+    quizzesResult,
+    resourcesResult,
+  ]) {
+    if (result.error) throw result.error;
+  }
+
+  return {
+    classes,
+    subjects: (subjectsResult.data || []) as CurriculumSubject[],
+    courses: (coursesResult.data || []) as CurriculumCourse[],
+    courseVersions: (courseVersionsResult.data || []) as CurriculumCourseVersion[],
+    units: (unitsResult.data || []) as CurriculumUnit[],
+    lessons,
+    milestones: (milestonesResult.data || []) as CurriculumMilestone[],
+    activities: (activitiesResult.data || []) as LessonActivity[],
+    quizzes: (quizzesResult.data || []) as CurriculumQuizItem[],
+    resources: (resourcesResult.data || []) as LessonResource[],
+  };
+}
+
+export async function invokeCurriculumAdmin(input: {
+  accessToken: string;
+  action: "save_lesson_blueprint" | "publish_lesson" | "archive_lesson";
+  organizationId: string;
+  classId?: string | null;
+  lessonId?: string | null;
+  blueprint?: CurriculumBlueprint;
+}) {
+  const response = await fetchWithTimeout(functionUrl("curriculum-admin"), {
+    method: "POST",
+    headers: authHeaders(input.accessToken),
+    body: JSON.stringify({
+      action: input.action,
+      organization_id: input.organizationId,
+      class_id: input.classId || undefined,
+      lesson_id: input.lessonId || undefined,
+      blueprint: input.blueprint,
+    }),
+  });
+  const data = (await response.json()) as CurriculumAdminResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Curriculum update failed.");
+  }
+  return data;
+}
+
 export async function fetchTeacherClasses(userId: string) {
   const { data: memberships, error: membershipsError } = await supabase
     .from("class_memberships")
@@ -311,7 +403,7 @@ export async function fetchTeacherClasses(userId: string) {
 export async function fetchTeacherDashboard(userId: string): Promise<TeacherDashboardData> {
   const classes = await fetchTeacherClasses(userId);
   const classIds = uniqueStrings(classes.map((item) => item.id));
-  const lessons = await fetchLessons();
+  const lessons = await fetchLessons({ includeDrafts: true });
 
   if (!classIds.length) {
     return {

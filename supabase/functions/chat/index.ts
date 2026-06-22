@@ -693,7 +693,7 @@ async function loadContext(
 }> {
   const lesson = await loadFirst(
     config,
-    `lessons?id=eq.${encodeURIComponent(lessonId)}&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id`,
+    `lessons?id=eq.${encodeURIComponent(lessonId)}&publication_status=eq.published&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id`,
   );
 
   let activity: DbRow | null = null;

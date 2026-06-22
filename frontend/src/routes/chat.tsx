@@ -118,6 +118,7 @@ function mapLessons(
     id: lesson.id,
     title: lesson.title,
     subtitle: lessonSubtitle(lesson),
+    group: lesson.module || "Lessons",
     progress:
       lesson.id === activeLessonId && learningSession
         ? (stageProgress[learningSession.stage] ?? 0)

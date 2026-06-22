@@ -347,8 +347,9 @@ function LessonsPanel({
     const list = listRef.current;
     const ind = indicatorRef.current;
     if (!list || !ind) return;
-    const idx = lessons.findIndex((l) => l.id === activeId);
-    const row = list.children[idx + 1] as HTMLElement | undefined;
+    const row = Array.from(list.querySelectorAll<HTMLElement>("[data-lesson-id]")).find(
+      (item) => item.dataset.lessonId === activeId,
+    );
     if (!row) return;
     const props = {
       y: row.offsetTop + 6,
@@ -376,33 +377,50 @@ function LessonsPanel({
             willChange: "transform, height",
           }}
         />
-        {lessons.map((l) => {
-          const active = l.id === activeId;
-          return (
-            <button
-              key={l.id}
-              type="button"
-              onClick={() => onSelect(l.id)}
-              className="group relative flex w-full items-start gap-3 rounded-md py-3 pl-5 pr-1 text-left transition-colors hover:bg-muted/60 sm:py-2"
-            >
-              <span className="flex-1">
-                <span
-                  className={`block text-[14.5px] font-medium tracking-tight transition-colors ${
-                    active ? "text-foreground" : "text-foreground/85"
-                  }`}
+        {groupLessons(lessons).map((group) => (
+          <div key={group.name} className="mt-2 first:mt-0">
+            <div className="pb-1 pl-5 text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
+              {group.name}
+            </div>
+            {group.items.map((l) => {
+              const active = l.id === activeId;
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  data-lesson-id={l.id}
+                  onClick={() => onSelect(l.id)}
+                  className="group relative flex w-full items-start gap-3 rounded-md py-3 pl-5 pr-1 text-left transition-colors hover:bg-muted/60 sm:py-2"
                 >
-                  {l.title}
-                </span>
-                <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted-foreground">
-                  {l.subtitle}
-                </span>
-              </span>
-            </button>
-          );
-        })}
+                  <span className="flex-1">
+                    <span
+                      className={`block text-[14.5px] font-medium tracking-tight transition-colors ${
+                        active ? "text-foreground" : "text-foreground/85"
+                      }`}
+                    >
+                      {l.title}
+                    </span>
+                    <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted-foreground">
+                      {l.subtitle}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
+}
+
+function groupLessons(lessons: Lesson[]) {
+  const groups = new Map<string, Lesson[]>();
+  for (const lesson of lessons) {
+    const key = lesson.group || lesson.subtitle.split(" · ")[0] || "Lessons";
+    groups.set(key, [...(groups.get(key) || []), lesson]);
+  }
+  return Array.from(groups.entries()).map(([name, items]) => ({ name, items }));
 }
 
 function ProgressPanel({ activeId, lessons }: { activeId: string; lessons: Lesson[] }) {

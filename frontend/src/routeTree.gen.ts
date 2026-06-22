@@ -13,6 +13,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as TeacherRouteImport } from './routes/teacher'
+import { Route as TeacherCurriculumRouteImport } from './routes/teacher.curriculum'
 import { Route as IndexRouteImport } from './routes/index'
 
 const AdminRoute = AdminRouteImport.update({
@@ -35,6 +36,11 @@ const TeacherRoute = TeacherRouteImport.update({
   path: '/teacher',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TeacherCurriculumRoute = TeacherCurriculumRouteImport.update({
+  id: '/teacher/curriculum',
+  path: '/teacher/curriculum',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
+  '/teacher/curriculum': typeof TeacherCurriculumRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
+  '/teacher/curriculum': typeof TeacherCurriculumRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,14 @@ export interface FileRoutesById {
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
+  '/teacher/curriculum': typeof TeacherCurriculumRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/chat' | '/login' | '/teacher'
+  fullPaths: '/' | '/admin' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/chat' | '/login' | '/teacher'
-  id: '__root__' | '/' | '/admin' | '/chat' | '/login' | '/teacher'
+  to: '/' | '/admin' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum'
+  id: '__root__' | '/' | '/admin' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +86,7 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRoute
   LoginRoute: typeof LoginRoute
   TeacherRoute: typeof TeacherRoute
+  TeacherCurriculumRoute: typeof TeacherCurriculumRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -109,6 +119,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeacherRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/teacher/curriculum': {
+      id: '/teacher/curriculum'
+      path: '/teacher/curriculum'
+      fullPath: '/teacher/curriculum'
+      preLoaderRoute: typeof TeacherCurriculumRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -125,6 +142,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRoute,
   LoginRoute: LoginRoute,
   TeacherRoute: TeacherRoute,
+  TeacherCurriculumRoute: TeacherCurriculumRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -6,6 +6,46 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 18:30
+
+Status: Curriculum Authoring Studio v1 implemented locally; ready for deploy/live smoke
+
+Context:
+
+- Human confirmed the assignment workflow works flawlessly, so Phase 5 is accepted.
+- Next roadmap slice is Phase 6: structured curriculum authoring.
+
+Repo changes:
+
+- Added `supabase/functions/curriculum-admin` as the privileged curriculum write path.
+  - Requires a signed-in user.
+  - Verifies platform admin, org admin, org teacher, or class teacher scope.
+  - Uses `SUPABASE_SERVICE_ROLE_KEY` only inside the Edge Function.
+  - Supports `save_lesson_blueprint`, `publish_lesson`, and `archive_lesson`.
+  - Writes existing curriculum tables: subjects, courses, course versions, units, lessons,
+    milestones, lesson activities, quiz items, completion rules, and resource placements.
+- Added `/teacher/curriculum`.
+  - Teacher class scope selector.
+  - Subject/course/unit/lesson tree.
+  - Lesson blueprint editor for non-coding or coding lessons.
+  - Milestone, activity, MCQ quiz, rubric notes, resource attachment, and preview panel.
+  - Save draft, publish, and archive actions.
+- Student/runtime integration:
+  - Student lesson fetch now hides draft/archived lessons.
+  - Teacher dashboard still loads drafts with `includeDrafts`.
+  - Chat edge function rejects non-published lessons.
+  - Student lesson menu groups by lesson module/unit label.
+
+Next live smoke after deploy:
+
+1. Sign in as `teacher1@gmail.com`.
+2. Open `/teacher/curriculum`.
+3. Create a small non-coding “computer science before coding” lesson.
+4. Add one milestone, one discussion activity, one MCQ quiz, and one resource.
+5. Save draft, publish it, then confirm it appears in `/chat`.
+6. Assign it from `/teacher`.
+7. Sign in as a student, complete it through chat, and confirm teacher evidence appears.
+
 ## Codex -> Claude / Human - 2026-06-22 17:15
 
 Status: Assignments End-To-End v1 implemented locally; ready for deploy/live smoke

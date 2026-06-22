@@ -7,6 +7,11 @@ export type Lesson = {
   module: string;
   level: string;
   expected_output: string | null;
+  unit_id?: string | null;
+  author_user_id?: string | null;
+  publication_status?: "draft" | "published" | "archived";
+  curriculum_metadata?: Record<string, unknown>;
+  milestone_id?: string | null;
 };
 
 export type LessonActivity = {
@@ -24,6 +29,142 @@ export type LessonActivity = {
   rubric: Record<string, unknown>;
   skill_keys: string[];
   pass_score: number;
+};
+
+export type CurriculumStatus = "draft" | "published" | "archived";
+
+export type CurriculumSubject = {
+  id: string;
+  organization_id: string | null;
+  title: string;
+  description: string;
+  status: CurriculumStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CurriculumCourse = {
+  id: string;
+  subject_id: string;
+  organization_id: string | null;
+  title: string;
+  description: string;
+  status: CurriculumStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CurriculumCourseVersion = {
+  id: string;
+  course_id: string;
+  version_label: string;
+  status: CurriculumStatus;
+  is_current: boolean;
+  content_schema_version: number;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CurriculumUnit = {
+  id: string;
+  course_version_id: string;
+  position: number;
+  title: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CurriculumMilestone = {
+  id: string;
+  lesson_id: string;
+  position: number;
+  title: string;
+  objective: string;
+  level: string;
+  skill_keys: string[];
+  expected_evidence: Record<string, unknown>;
+  completion_rules: Record<string, unknown>;
+  allowed_response_modes: Array<"text" | "code" | "multiple_choice" | "file">;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CurriculumQuizItem = {
+  id: string;
+  lesson_id: string;
+  milestone_id: string | null;
+  activity_id: string | null;
+  position: number;
+  prompt: string;
+  question_type: "multiple_choice" | "text" | "code";
+  choices: Array<{ id: string; text: string }>;
+  correct_choice_ids: string[];
+  rubric: Record<string, unknown>;
+  skill_keys: string[];
+  status: CurriculumStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CurriculumAuthoringData = {
+  classes: TeacherClassSummary[];
+  subjects: CurriculumSubject[];
+  courses: CurriculumCourse[];
+  courseVersions: CurriculumCourseVersion[];
+  units: CurriculumUnit[];
+  lessons: Lesson[];
+  milestones: CurriculumMilestone[];
+  activities: LessonActivity[];
+  quizzes: CurriculumQuizItem[];
+  resources: LessonResource[];
+};
+
+export type CurriculumBlueprint = {
+  subject: { id?: string; title: string; description?: string };
+  course: { id?: string; title: string; description?: string };
+  unit: { id?: string; title: string; position: number };
+  lesson: {
+    id?: string;
+    title: string;
+    level: string;
+    type: "discussion" | "code" | "reflection" | "multiple_choice" | "file";
+    tutor_prompt: string;
+    sample_code?: string;
+  };
+  milestone: {
+    title: string;
+    objective: string;
+    skill_keys: string[];
+    allowed_response_modes: Array<"text" | "code" | "multiple_choice" | "file">;
+  };
+  activity: {
+    title: string;
+    stage: "intro" | "teach" | "practice" | "assessment" | "review";
+    prompt: string;
+    response_mode: "text" | "code" | "multiple_choice" | "file";
+    starter_code?: string;
+    expected_output?: string;
+    rubric?: Record<string, unknown>;
+  };
+  quiz?: {
+    prompt: string;
+    choices: Array<{ id: string; text: string }>;
+    correct_choice_ids: string[];
+  };
+  resource_ids?: string[];
+};
+
+export type CurriculumAdminResponse = {
+  status: "ok" | "error";
+  lesson_id?: string;
+  subject_id?: string;
+  course_id?: string;
+  unit_id?: string;
+  error?: string;
 };
 
 export type LessonResourceType =
