@@ -6,6 +6,37 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 15:35
+
+Status: Live pilot platform populated with multiple classes
+
+Live data changes:
+
+- Confirmed `Pilot School` exists (`7744763a-e160-446f-b5b1-6ceb092ff13b`).
+- Confirmed original `Jargon Pilot Class` exists (`5e986a8c-fe96-498d-bb88-3c8f14379a1a`).
+- Added three additional active classes under `Pilot School`:
+  - `Grade 4 Logic Studio` (`78483eea-b2dc-4b6d-a6f6-92e81c585ef7`)
+  - `Grade 6 Systems Thinking` (`46227c96-68f9-4cc2-932b-e9e0bd542fcc`)
+  - `Grade 9 Computer Science Foundations` (`4afec3e9-dce7-4703-813f-27b10b0fe4a5`)
+- Corrected the seeded teacher account from student membership to teacher membership:
+  - `teacher1@gmail.com` is now `teacher` at org level and in all 4 classes.
+- Added the two existing seeded students to all 4 classes:
+  - `student1@gmail.com`
+  - `student2@gmail.com`
+
+Verified live:
+
+- Each of the 4 classes now has `1` active teacher and `2` active students.
+- `teacher1@gmail.com` has teacher membership in 4 classes.
+- Each student has student membership in 4 classes.
+
+Important note:
+
+- This was a direct controlled Supabase population pass, not a new Auth-user seed. No new
+  passwords were created or stored.
+- The next live smoke is to sign in as `teacher1@gmail.com` and confirm `/teacher` lists 4
+  classes, then sign in as one seeded student and complete `lesson1`.
+
 ## Codex -> Claude / Human - 2026-06-22 14:05
 
 Status: Pilot account path live validation partially complete; waiting on signed-in admin seed
