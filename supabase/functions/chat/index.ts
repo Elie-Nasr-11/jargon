@@ -495,7 +495,7 @@ async function loadContext(
 }> {
   const lesson = await loadFirst(
     config,
-    `lessons?id=eq.${encodeURIComponent(lessonId)}&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id,milestone_id`,
+    `lessons?id=eq.${encodeURIComponent(lessonId)}&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id`,
   );
 
   let activity: DbRow | null = null;
@@ -514,8 +514,6 @@ async function loadContext(
 
   const milestoneId = typeof activity?.milestone_id === "string"
     ? activity.milestone_id
-    : typeof lesson?.milestone_id === "string"
-    ? lesson.milestone_id
     : "";
   const milestone = milestoneId
     ? await loadFirst(config, `milestones?id=eq.${encodeURIComponent(milestoneId)}&select=*`)
