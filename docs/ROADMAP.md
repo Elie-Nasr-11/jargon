@@ -12,6 +12,16 @@ Phase 0 is effectively complete.
 - The `chat` edge function is a Mentor orchestrator that can complete `lesson1` from practice to assessment to complete.
 - The live system writes the records needed for the first teacher dashboard.
 
+## Product Direction Locked
+
+- Jargon is a private-tutor-feeling chat-first LMS for grades 3/4-12 first, extensible to other audiences later.
+- The platform should teach any structured subject, not only coding.
+- Student navigation should support Subject -> Chapter -> Lesson.
+- Teacher-approved curriculum, resources, and rubrics are the source of truth.
+- Skill mastery is the primary adaptation signal.
+- The database groundwork must include tenants, pages/surfaces, roles, access, file/media types, environment modes, audit, and cost tracking from V1.
+- The demo bar is a complete classroom-ready platform slice, not another proof of concept.
+
 ## Phase 1: Stabilize The Live Vertical Slice
 
 Goal: make the current student lesson path boringly reliable.
@@ -20,6 +30,7 @@ Goal: make the current student lesson path boringly reliable.
 - Add runtime observability for edge-function errors, completions, failed run/chat calls, model latency, and model cost.
 - Add a repeatable internal QA checklist for signed-in lesson completion.
 - Keep `/chat` as the student surface.
+- Make lesson completion clear, then continue in review mode for deeper understanding and quiz prep.
 
 Exit criteria: a signed-in student completes `lesson1` three times in a row, and each completion writes session, turns, attempts, quiz attempt, evidence, and mastery records.
 
@@ -31,6 +42,8 @@ Goal: prove Jargon is an LMS, not just a tutor.
 - Show classes, rosters, active lessons, recent activity, and intervention flags.
 - Show per-student transcript, attempts, quizzes, evidence, mastery, and teacher notes.
 - Let teachers add notes, assign a Jargon Foundations lesson, review Mentor recommendations, and override grades with reasons.
+- Prioritize gradebook, intervention alerts, and transcript heatmap.
+- Support live teacher watching with a viewer icon and teacher comments/tips in chat.
 
 Exit criteria: a teacher inspects one student's completed `lesson1` session, sees transcript + score + evidence, and leaves a note.
 
@@ -41,8 +54,10 @@ Goal: teachers attach learning media to lessons, and Mentor surfaces it inside c
 - Add first-class lesson resources for video, audio, PDF, flipbook, YouTube, image, link, and document resources.
 - Store uploaded media in a private Supabase Storage bucket named `lesson-resources`.
 - Keep default visibility `class_private`.
+- Resources are private by default and publishable by toggle.
+- Resources can attach at any level: subject, chapter/unit, lesson, milestone, activity, quiz, or assignment.
 - Use signed URLs for uploaded resources.
-- Render media as chat resource cards, not a separate LMS page.
+- Render media as chat resource cards with open buttons; PDFs open in a popup/viewer or download/open action.
 - V1 uses teacher-authored descriptions/instructions/transcripts; automatic extraction comes later.
 
 Exit criteria: a teacher uploads a PDF or video to `lesson1`, publishes it, and Mentor can show it in student chat.
@@ -66,7 +81,7 @@ Goal: teachers and Mentor recommendations can create work students complete insi
 - Add teacher assignment builder.
 - Link assignments to lessons, milestones, resources, and rubrics.
 - Show assignments inside student chat/progress.
-- Support student text/code submissions first; file submissions later.
+- Support student text/code/file submissions, with most file submissions likely in lesson/LMS assignment windows.
 - Let teachers grade, return, and override with audit records.
 
 Exit criteria: teacher assigns a resource-backed assignment, student submits, teacher grades, and feedback/evidence update.
@@ -78,7 +93,8 @@ Goal: move from seeded lessons to teacher-authored structured curriculum.
 - Add `/teacher/curriculum`.
 - Author subjects, courses, versions, units, lessons, milestones, activities, quizzes, rubrics, and resources.
 - Preview as student.
-- Publish course versions.
+- Publish course versions while keeping teacher/admin edits possible through history and audit.
+- Support discussion lessons.
 - Keep document import secondary until structured authoring is solid.
 
 Exit criteria: teacher creates a small non-coding lesson with a resource and quiz, assigns it to a class, and a student completes it through chat.
@@ -88,6 +104,7 @@ Exit criteria: teacher creates a small non-coding lesson with a resource and qui
 Goal: prove Jargon can teach beyond coding.
 
 - Add one non-coding curriculum: logic foundations, basic math reasoning, writing structure, or science process skills.
+- First non-coding test can be computer science before coding is introduced.
 - Use text, multiple choice, media resources, milestones, and evidence.
 - No Jargon code dependency.
 
@@ -101,6 +118,7 @@ Goal: support real schools/classes.
 - Let org admins manage organizations, teachers, students, classes, roles, and audit.
 - Let platform admins manage all tenants, global content, feature flags, and support/debug workflows.
 - Keep authorization DB/RLS-enforced.
+- Multiple organizations and org admins are V1 requirements.
 
 Exit criteria: two organizations can exist side by side, and RLS prevents cross-org reads.
 
@@ -130,7 +148,8 @@ Exit criteria: teacher can answer why a student is weak on a skill and see linke
 Goal: make the product economically viable.
 
 - Add model routing by turn type.
-- Track token/cost per session and organization.
+- Track token/cost per student, user, session, class, and organization.
+- Run a cost-to-quality spike before locking model routing.
 - Add rate limits, abuse limits, timeout handling, background jobs, and runner scaling.
 
 Exit criteria: platform reports cost per active student/session and routes expensive work intentionally.

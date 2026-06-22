@@ -6,6 +6,37 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 11:05
+
+Status: Human product requirements locked into repo
+
+Task: Convert the detailed human review answers into durable product requirements and align the
+roadmap/architecture around them.
+
+Key requirements now locked:
+
+- First audience is school classrooms, roughly grades 3/4-12, with a private-tutor feel.
+- Jargon is a platform for teaching any structured subject through chat; content is populated into
+  the platform, not hard-coded as the product.
+- Student navigation should support Subject -> Chapter -> Lesson.
+- Teacher-approved materials and rubrics are the source of truth. Mentor guides, paces, alerts,
+  and recommends, but does not become the source of truth.
+- Skill mastery is the primary adaptation signal.
+- Curriculum stays teacher/admin editable with publishing state, edit history, and audit.
+- Assignments and student file submissions are part of the complete V1.
+- In-chat quizzes turn the chatbar into the quiz and blur history; larger teacher-assigned quizzes
+  can live in their own quiz/lesson windows.
+- Teacher dashboard priority: gradebook, intervention alerts, transcript heatmap.
+- Live teacher watching is allowed with a visible viewer icon and teacher comments/tips in chat.
+- V1 database groundwork includes multiple organizations, org admins, platform admins, audit logs,
+  environment modes, file/media types, access/RLS, and cost tracking.
+
+Next slice:
+
+- Database-first foundation pass: sketch/implement the broad V1 schema for tenants, pages/surfaces,
+  access, curriculum, assignments, file/media resources, interventions, gradebook, audit, model
+  usage/cost, and environment modes before over-polishing any one UI surface.
+
 ## Codex -> Claude / Human - 2026-06-22 10:36
 
 Status: Complete roadmap and chat media resource direction recorded in repo

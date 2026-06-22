@@ -12,6 +12,25 @@ Jargon is a chat-first LMS built around three durable pillars:
 
 The current live system has crossed the proof-of-concept bridge: a signed-in student can run `lesson1`, move from practice to assessment to complete, and write sessions, turns, attempts, quiz attempts, evidence, and mastery. The roadmap starts from that live vertical slice.
 
+The product target is broader than one curriculum: teach any structured subject through a private-tutor-style chat interface for grades 3/4-12 first, with room to serve other audiences later. Students should browse school-like structure as Subject -> Chapter -> Lesson, while the database can still use `unit` internally.
+
+## Database Groundwork Spine
+
+The next foundation work must sketch and implement the full database structure broadly enough for the complete V1 demo. This groundwork cuts across all phases:
+
+- tenants/organizations
+- teacher, student, org admin, and platform admin access
+- classes and memberships
+- subject/chapter/lesson curriculum hierarchy
+- milestones, activities, rubrics, quizzes, assignments, submissions, and gradebook
+- teacher notes, interventions, live comments, and live viewer state
+- lesson resources, file/media types, storage visibility, resource interactions, and signed access
+- sessions, turns, attempts, evidence, mastery, completion, and review mode
+- audit logs from day one
+- model/cost usage per student, user, session, class, and organization
+- environment modes, feature flags, and deployment/runtime settings
+- DB/RLS helper policies for every private learner and tenant path
+
 ## Phase 1: Stabilize The Live Vertical Slice
 
 Goal: make the existing student lesson path reliable enough to support teacher and admin surfaces.
@@ -21,6 +40,8 @@ Goal: make the existing student lesson path reliable enough to support teacher a
 - Add runtime observability for edge-function errors, session completions, failed run/chat calls, model latency, and model cost.
 - Add an internal QA checklist: sign in, open `lesson1`, run code, answer quiz, complete lesson, verify database records.
 - Update docs so Phase 0 is marked complete and the live system of record is Supabase + Render.
+- Make lesson completion explicit. After completion, keep the chat available in review mode for deeper understanding and quiz prep.
+- Keep Mentor strict about lesson focus while honoring student/class settings for tone, pace, directness, and hint level.
 
 Acceptance: a signed-in student can complete `lesson1` three times in a row without manual intervention, and every run writes the expected records.
 
@@ -34,6 +55,11 @@ Goal: prove Jargon is an LMS, not just a tutor.
 - Student detail shows transcript, current lesson status, attempts, quiz results, evidence, mastery by skill key, and teacher notes.
 - Transcript viewer shows mentor/student turns, code runs, quiz answers, and assessment/result cards.
 - Teacher actions include private note, student-visible note, assign Jargon Foundations lesson, review Mentor recommendations, and override grade with reason.
+- Teacher dashboard priority is gradebook first, intervention alerts second, and transcript heatmap third.
+- Teachers can inspect full chat logs for students in their classes.
+- Teachers can edit Mentor behavior per class.
+- Live teacher watching is allowed: when a teacher is watching, the student sees a viewer icon in chat.
+- Teachers can send live comments or tips into chat to steer a conversation.
 - Use existing tables first: `classes`, `class_memberships`, `learning_sessions`, `learning_turns`, `lesson_attempts`, `quiz_attempts`, `learning_evidence`, `student_mastery`, `teacher_notes`, `grade_overrides`, and `mentor_recommendations`.
 
 Acceptance: a teacher can inspect one student's completed `lesson1` session, see transcript + score + evidence, and leave a note.
@@ -47,6 +73,8 @@ Add a first-class resource model:
 - `lesson_resources`: stores resource metadata, ownership, placement hints, storage/external URL fields, teacher notes, student instructions, optional transcript text, status, visibility, and timestamps.
 - `lesson_resource_placements`: connects resources to lessons, milestones, activities, assignments, or quiz items with position, display mode, and show-before-stage metadata.
 - `resource_interactions`: records student views, plays, opens, downloads, completion percentage, and timestamps.
+
+Resources can attach at any level: subject, course, chapter/unit, lesson, milestone, activity, quiz, or assignment.
 
 Resource types:
 
@@ -63,17 +91,19 @@ Storage decisions:
 
 - Use a private Supabase Storage bucket named `lesson-resources`.
 - Default visibility is `class_private`.
+- Resources are private by default and publishable by toggle.
 - Teachers, org admins, and platform admins can upload resources for classes/content they manage.
 - Students can read only resources attached to lessons/classes they are allowed to access.
 - Use signed URLs for uploaded files.
 - Do not expose uploaded classroom media as public URLs by default.
+- Uploaded classroom resources may contain PII, so privacy and RLS are product requirements, not cleanup work.
 
 Media behavior in chat:
 
 - Video upload renders as an inline player in a chat resource card.
 - Audio upload renders as an inline audio player.
-- PDF upload renders in an embedded viewer or modal with page navigation where browser support allows.
-- Flipbook v1 uses an uploaded PDF with page-flip presentation if feasible, otherwise the PDF viewer fallback.
+- PDF upload renders as a file/resource card with an open button. Opening uses a popup viewer where browser support allows or a download/open action where needed.
+- Flipbook v1 can just use PDFs. A page-flip presentation is optional later.
 - External flipbook links embed only from allowlisted providers.
 - YouTube stores `external_url`, validates `youtube.com` / `youtu.be`, renders with a privacy-conscious embed, and is never downloaded or rehosted.
 - Link/document resources render as cards with title, description, and open action.
@@ -81,6 +111,7 @@ Media behavior in chat:
 Mentor behavior:
 
 - V1 can reference teacher-provided `title`, `description`, `student_instructions`, and optional `transcript_text`.
+- Mentor references only teacher-approved materials or reviewed extracted text.
 - V1 does not automatically extract video/audio/PDF text.
 - Extraction and transcription are later roadmap work.
 
@@ -119,6 +150,7 @@ Orchestrator changes:
 - Write `resource_interactions` when the frontend reports view/play/open events.
 - Let resources contribute evidence only when paired with a quiz, reflection, code task, or teacher rubric.
 - Prevent Mentor from claiming a student watched/read a resource unless interaction records exist.
+- Teacher-approved resource descriptions/instructions/transcripts are Mentor context; raw unreviewed media is not.
 
 Frontend changes:
 
@@ -135,7 +167,8 @@ Goal: teachers and Mentor recommendations can create work that students complete
 
 - Teacher creates assignments with title, instructions, lesson/milestone/resource links, due date, recipients, and rubric.
 - Student sees assignments inside chat and the progress drawer.
-- Student submits text, code, later file answers, or resource-linked responses.
+- Student submits text, code, files, or resource-linked responses depending on assignment type.
+- File submissions usually live in the lesson/LMS assignment window, not necessarily inside the chat composer.
 - Teacher grades and returns submissions.
 - Mentor can recommend assignments, but teacher approval is required before class-level assignment.
 - Add `/teacher` assignment builder, student assignment drawer, assignment status cards, submission review panel, and grade override/audit trail.
@@ -148,7 +181,7 @@ Goal: move from seeded lessons to teacher-authored structured curriculum.
 
 Build `/teacher/curriculum`:
 
-- Create subject, course, course version, units, lessons, milestones, and activities.
+- Create subject, course, course version, chapters/units, lessons, milestones, and activities.
 - Attach resources.
 - Create quizzes.
 - Add rubrics.
@@ -160,7 +193,8 @@ Authoring rules:
 - Structured authoring comes first.
 - PDF/document import remains secondary.
 - AI may help draft lesson content, but teacher reviews before publish.
-- Course versions are immutable once assigned to active classes unless explicitly cloned.
+- Curriculum is editable by teachers/admins with publishing state, edit history, and audit trails. Avoid hard immutability as the main safety model.
+- Discussion lessons are a first-class lesson type.
 
 Acceptance: a teacher creates a small non-coding lesson with a video/PDF resource and quiz, assigns it to a class, and a student completes it through chat.
 
@@ -170,6 +204,7 @@ Goal: prove Jargon can teach beyond coding.
 
 Add one non-coding curriculum, preferably one of:
 
+- Computer science before coding is introduced
 - Logic foundations
 - Basic math reasoning
 - Writing structure
@@ -193,6 +228,8 @@ Goal: support real schools/classes.
 - Org admins can create/manage organization, invite teachers, invite/import students, create classes, assign teachers to classes, manage roles, disable users, view org-level usage, and view audit events.
 - Platform admins can manage all organizations, global content, access, feature flags, and platform audit/debug workflows.
 - Authorization remains DB/RLS-enforced, not frontend-only.
+- V1 includes multiple organizations.
+- Teacher accounts are the primary classroom account-management route for V1.
 
 Acceptance: two organizations can exist side by side, and RLS prevents cross-org reads.
 
@@ -262,7 +299,9 @@ Goal: make the product economically and operationally viable.
 - Add model routing by turn type.
 - Use a cheaper model for routine guidance and stronger model for grading/rescue/authoring.
 - Add prompt caching where supported.
-- Track token/cost per session and organization.
+- Track token/cost per student, user, session, class, and organization.
+- Treat quality as the initial priority while running a deliberate cost-to-quality spike.
+- Keep dynamic billing as a later business/modeling track.
 - Add rate limits, abuse limits, edge-function timeout handling, background jobs for heavy media processing, and a better Render/runner scaling plan.
 
 Acceptance: platform reports cost per active student/session and can route expensive work intentionally.
@@ -283,6 +322,7 @@ Add later:
 - data export
 - retention/delete workflows
 - parent/student reports
+- parent accounts are deferred but should remain possible
 
 Acceptance: one school-style roster can be imported, classes created, and grades exported.
 
@@ -346,6 +386,6 @@ Teacher upload flow:
 - Lesson resources are private by default and served through Supabase Storage RLS/signed URLs.
 - YouTube is treated as an external embed, not uploaded or rehosted.
 - V1 media is rendered and teacher-described; automatic extraction/transcription comes later.
-- Student file answers remain deferred until teacher resource upload/access is proven.
+- Student file submissions are required for the complete V1, but their exact chat-vs-lesson-window UX can be phased.
 - Student experience remains chat-first; resources appear inside the conversation rather than a separate LMS content page.
 - Current Supabase + Render architecture remains the base until scale/cost evidence says otherwise.

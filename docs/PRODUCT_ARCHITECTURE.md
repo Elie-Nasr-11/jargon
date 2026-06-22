@@ -8,14 +8,22 @@ Jargon is a chat-first LMS. The student learns inside one guided conversation. T
 
 The chat is not a loose chatbot. It is the classroom runtime. Each Mentor turn is grounded in the current course, lesson, milestone, student evidence, active assignments, teacher notes, and allowed answer modes.
 
+The experience should feel most like a private tutor for school students, starting around grades 3/4 through 12. The platform should eventually teach any structured subject, but V1 decisions optimize for real teacher-led classrooms.
+
 ## Locked V1 Direction
 
 - First real deployment model: teacher-led classes.
 - Primary student interface: guided lesson chat.
 - Primary teacher interface: class oversight, assignments, progress, chat review, evidence, and intervention.
-- Mentor authority: guide, quiz, grade, recommend, and flag. Teachers approve major assignment/course changes.
+- Student navigation: lessons should be browseable and organized as Subject -> Chapter -> Lesson. The database can continue using `unit`, but the product must support the Chapter label where it matches school language.
+- Mentor authority: guide, quiz, grade, recommend, and flag. In practice, grading authority is limited to deterministic checks and teacher-approved rubrics; Mentor can also alert. Teachers approve major assignment/course changes and remain the source of truth for material and rubrics.
+- Mentor style: private-tutor feel, strict lesson focus, and adjustable tone/pace/directness based on student and class settings.
 - Curriculum input: structured authoring first. Document/PDF import is deferred.
+- Curriculum editability: teacher/admin editable with publishing state, history, and audit. Do not rely on hard immutability as the main safety model.
 - Teacher-uploaded lesson resources are first-class curriculum support: videos, audio, PDFs, flipbooks, YouTube links, images, links, and documents can be attached to lessons, milestones, activities, assignments, or quizzes.
+- Assignments and student file submissions are required for the complete V1 platform, even if the chat runtime only activates them in later slices.
+- Multiple organizations, org admins, platform admins, audit logs, and DB/RLS-enforced access control are V1 groundwork.
+- LLM calls should receive anonymized student data where possible; user-facing personalization can resolve safe placeholders such as `%firstname%`.
 - Current Supabase + Render architecture remains the deployment base.
 
 ## Canonical Terms
@@ -49,6 +57,8 @@ A structured learning sequence within a subject. Courses can be global platform 
 
 A course section that groups related lessons.
 
+Student-facing UI may label this layer as Chapter when that better matches school terminology.
+
 ### Lesson
 
 A teachable conversation arc. A lesson has objectives, level, sample/starter code when relevant, milestones, and activities. The learner experiences it through chat.
@@ -64,6 +74,8 @@ The smallest authored checkpoint in a lesson. Activities can be discussion, code
 ### Lesson Resource
 
 A teacher, org, or platform-authored learning resource attached to curriculum. Resources can be uploaded media or external links. Supported roadmap types are video, audio, PDF, flipbook, YouTube, image, link, and document. Resources are private by default and appear inside the chat lesson flow.
+
+Resources can attach at any curriculum level. Uploaded resources may contain PII, so they require private-by-default storage, signed access, and teacher/admin publishing controls.
 
 ### Turn
 
@@ -85,9 +97,13 @@ A per-student, per-skill summary derived from evidence. Mastery tracks attempts,
 
 Teacher-created or Mentor-recommended work assigned to students or a class. Mentor recommendations require teacher approval before becoming authoritative class work.
 
+Student submissions can include files. Those file submissions usually live in lesson/LMS windows rather than the chat composer itself.
+
 ### Quiz
 
 A structured checkpoint that can appear in the chat as a popup or inline choice. Quiz attempts are recorded and can produce evidence, grades, and mastery updates.
+
+In-chat quizzes transform the active composer/chatbar into the quiz surface and blur the chat history. Larger teacher-assigned lesson quizzes can live in their own quiz page or lesson window.
 
 ### Recommendation
 
@@ -118,9 +134,22 @@ A record that a student was shown, opened, played, paused, completed, or downloa
 - Lesson resources are surfaced one at a time inside the chat flow.
 - Mentor can reference teacher-authored resource descriptions/instructions/transcripts, but automatic extraction/transcription is a later phase.
 - Mentor may not claim resource completion unless resource interaction records exist.
-- File uploads remain disabled until storage, RLS, and limits are designed.
+- Chatbar file uploads remain disabled until storage, RLS, and limits are designed. Assignment-window file submissions are required for the complete V1.
 - Python is a teaching bridge in v1, not a trusted backend execution path.
 - Major assignment or course changes become teacher-review recommendations.
+- Skill mastery is the primary adaptation signal.
+- Teacher-approved material and teacher rubrics are the source of truth. Mentor mediates pace and support along that track.
+- Mentor should alert a teacher when a student really needs help.
+- Mentor should not claim personal details in model context; use anonymized fields and safe placeholders such as `%firstname%` for personalization.
+
+## Teacher Runtime Rules
+
+- Teachers can inspect full student chat logs for their assigned classes.
+- Teachers can edit Mentor behavior per class.
+- Teachers can add notes, grade submissions, override grades with reason, review recommendations, and assign content.
+- Teacher dashboard priority is gradebook first, intervention alerts second, and transcript heatmap third.
+- Live teacher watching is allowed. Students should see a viewer icon when a teacher is actively watching.
+- Teachers can send live comments or tips into a student chat to steer the conversation.
 
 ## First Real Milestone
 
@@ -148,7 +177,7 @@ The second complete product milestone adds lesson resources:
 ## Deferred Capabilities
 
 - Document/PDF curriculum import that automatically creates draft curriculum.
-- Real file answer uploads.
+- Chatbar file answer uploads.
 - Backend Python sandboxing.
 - Graph/math visual generation.
 - Autonomous Mentor-created assignments without teacher approval.

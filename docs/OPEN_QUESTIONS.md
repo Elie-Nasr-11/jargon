@@ -2,6 +2,62 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
+## What is the exact live teacher intervention UX?
+
+Current decision so far:
+
+- Live teacher watching is allowed.
+- Students should see a viewer icon when a teacher is actively watching.
+- Teachers may send live comments or tips into chat to steer a conversation.
+
+Deferred details:
+
+- Whether teacher comments appear as normal transcript messages, side comments, or pinned tips.
+- Whether teachers can pause a Mentor flow.
+- Whether live teacher comments create evidence, notes, audit events, or all three.
+
+## How should student file submissions work?
+
+Current decision so far:
+
+- Student file submissions are required for the complete V1.
+- Most assignment file submissions likely live in lesson/LMS assignment windows, not directly inside the chat composer.
+- Teacher-uploaded lesson resources are a separate feature track.
+
+Deferred details:
+
+- Exact storage bucket layout, file size/type limits, malware scanning, and RLS policies.
+- Whether some file submissions are allowed from the chatbar for mini tasks.
+- How returned files and teacher annotations appear to students.
+
+## What is the model/cost/billing strategy?
+
+Current decision so far:
+
+- OpenAI is acceptable for V1.
+- Model routing by task is allowed.
+- Product quality is the initial priority, but cost-to-quality must be measured.
+- Track cost per student/user/session/class/organization.
+
+Deferred details:
+
+- Which models handle routine guidance, grading, rescue, authoring, and summarization.
+- How to expose cost per student/user and dynamic billing later.
+- What usage limits apply to schools/classes during pilots.
+
+## When should parent accounts exist?
+
+Current decision so far:
+
+- Parent accounts are possible later.
+- V1 focuses on students, teachers, org admins, and platform admins.
+
+Deferred options:
+
+- Read-only parent reports.
+- Parent messaging/notifications.
+- Parent consent/account linking workflows.
+
 ## How should automated media extraction and transcription run?
 
 Current decision so far:
@@ -49,14 +105,14 @@ Deferred options:
 Current decision so far:
 
 - The typed chat contract includes `response_mode: "file"` for future compatibility.
-- v1 does not ask students to upload files.
+- Student file submissions are required for complete V1, mainly through assignment/lesson windows.
 - Teacher-uploaded lesson resources are a separate, decided feature track and should not be blocked by student file answers.
 
 Deferred options:
 
 - Add a Supabase Storage bucket with per-user RLS and file size/type limits.
-- Restrict file answers to teacher/admin workflows first.
-- Keep file answers out of the learner UI until classroom needs are clearer.
+- Restrict chatbar file answers until assignment-window submissions are safe.
+- Decide whether small in-chat file responses are useful after classroom testing.
 
 ## How should Python execution work?
 

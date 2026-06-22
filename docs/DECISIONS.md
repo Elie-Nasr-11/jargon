@@ -2,6 +2,33 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-22: Product Requirements From Human Review
+
+Decision:
+
+- First audience is school classrooms, roughly grades 3/4-12, while keeping the platform extensible.
+- The student experience should feel most like a private tutor.
+- Jargon should teach any structured subject through chat, not only coding.
+- Student navigation should support Subject -> Chapter -> Lesson.
+- Teacher-approved material and teacher rubrics are the source of truth.
+- Mentor is strict about the lesson path, adapts to student/class settings, mediates pace, alerts teachers, and recommends assignments/interventions without becoming the source of truth.
+- Skill mastery is the primary adaptation signal.
+- Curriculum remains teacher/admin editable with publish state, edit history, and audit; hard immutability is not the main safety model.
+- Assignments and student file submissions are required for the complete V1.
+- In-chat quizzes transform the chatbar into the quiz and blur history; larger teacher-assigned quizzes can live in dedicated quiz/lesson windows.
+- Teacher dashboard priority is gradebook, then intervention alerts, then transcript heatmap.
+- Live teacher watching is allowed with a visible student-side viewer icon and optional teacher comments/tips in chat.
+- V1 requires multiple organizations, org admins, platform admins, audit logs, and DB/RLS-enforced access.
+- Learning records are stored indefinitely by default unless a later retention policy changes that.
+- LLM calls should use anonymized student data where possible; safe placeholders such as `%firstname%` can be rendered for the student outside the model.
+- The next foundation priority is the full database structure: tenants, roles, access, pages, curriculum, resources/files, environment modes, audit, and cost tracking.
+- The demo bar is a complete classroom-ready platform slice for a real school test run.
+
+Reason:
+
+- The product is not a content pack or coding toy. It is a platform that gets populated with curriculum.
+- Capturing these requirements prevents future implementation drift toward either a simple chatbot or a traditional dashboard-first LMS.
+
 ## 2026-06-22: Lesson Resources Are First-Class Chat Media
 
 Decision:
