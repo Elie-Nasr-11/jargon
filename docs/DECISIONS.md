@@ -2,6 +2,38 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-22: Lesson Resources Are First-Class Chat Media
+
+Decision:
+
+- Teacher-uploaded lesson resources are first-class curriculum support, not the same thing as student file answers.
+- Supported roadmap resource types are video, audio, PDF, flipbook, YouTube, image, link, and document.
+- Uploaded lesson resources are private by default and should use a private Supabase Storage bucket named `lesson-resources`.
+- Default visibility is `class_private`.
+- Uploaded resources are served through RLS/signed access.
+- YouTube is stored as an external URL, rendered as an embed, and never downloaded or rehosted.
+- V1 media is rendered and teacher-described; automatic extraction/transcription comes later.
+- Lesson resources should appear inside the chat lesson flow, not as a separate LMS content page.
+
+Reason:
+
+- The product goal is to teach through chat while letting teachers bring real lesson materials.
+- Private-by-default media is safer for classroom/student resources.
+- Keeping media display separate from automatic extraction lets the product ship useful teacher uploads before building heavier processing jobs.
+
+## 2026-06-22: Complete Roadmap Starts From The Live Vertical Slice
+
+Decision:
+
+- The proof-of-concept bridge is considered crossed: the live app can sign in, run `lesson1`, move through practice -> assessment -> complete, and write session/turn/attempt/quiz/evidence/mastery records.
+- The next implementation track is teacher dashboard + media foundation.
+- `docs/COMPLETE_ROADMAP.md` is the detailed roadmap; `docs/ROADMAP.md` is the compact current-state summary.
+
+Reason:
+
+- Teacher surfaces need trustworthy runtime records, which now exist.
+- Lesson media should be designed alongside teacher workflows so uploads immediately support classroom teaching.
+
 ## 2026-06-21: Jargon Is A Chat-First LMS
 
 Decision:

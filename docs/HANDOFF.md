@@ -6,6 +6,44 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 10:36
+
+Status: Complete roadmap and chat media resource direction recorded in repo
+
+Task: Turn the complete product roadmap into canonical docs, including teacher-uploaded lesson
+resources for videos, audio, PDFs, flipbooks, YouTube, images, links, and documents.
+
+What changed:
+
+- Added `docs/COMPLETE_ROADMAP.md` as the detailed 12-phase roadmap from live vertical-slice
+  stabilization through teacher dashboard, lesson resources, resource-aware Mentor, assignments,
+  authoring, multi-subject curriculum, admin, media processing, analytics, scale, and integrations.
+- Replaced `docs/ROADMAP.md` with a compact current-state summary that marks Phase 0 effectively
+  complete and identifies the next track as teacher dashboard + media foundation.
+- Updated `docs/PRODUCT_ARCHITECTURE.md` with canonical `Lesson Resource` and
+  `Resource Interaction` terms, resource-aware data flow, and Mentor rules for media.
+- Updated `docs/DECISIONS.md` to lock private-by-default teacher lesson resources, the
+  `lesson-resources` bucket direction, YouTube-as-external-embed behavior, and deferred automatic
+  extraction/transcription.
+- Updated `docs/OPEN_QUESTIONS.md` to separate teacher lesson resources from deferred student file
+  answers and add the open question for automated media extraction/transcription.
+- Added `tests/test_complete_roadmap.py` to guard the roadmap phases, resource types, typed chat
+  resource interface, private media defaults, and resource/file-answer distinction.
+
+Verification:
+
+- `python3 -m unittest tests/test_complete_roadmap.py -q` -> `6` tests passed.
+- `python3 -m unittest discover -s tests -q` -> `81` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `git diff --check` -> passed.
+
+Next slice:
+
+- Implement Teacher Dashboard v1 and the media foundation together:
+  teacher class/student views first, then `lesson_resources`, private storage/RLS, resource cards,
+  and resource interactions.
+
 ## Codex -> Claude / Human - 2026-06-22 10:12
 
 Status: Mentor Orchestrator v1 live-smoked end-to-end

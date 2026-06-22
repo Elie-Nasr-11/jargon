@@ -15,6 +15,7 @@ The chat is not a loose chatbot. It is the classroom runtime. Each Mentor turn i
 - Primary teacher interface: class oversight, assignments, progress, chat review, evidence, and intervention.
 - Mentor authority: guide, quiz, grade, recommend, and flag. Teachers approve major assignment/course changes.
 - Curriculum input: structured authoring first. Document/PDF import is deferred.
+- Teacher-uploaded lesson resources are first-class curriculum support: videos, audio, PDFs, flipbooks, YouTube links, images, links, and documents can be attached to lessons, milestones, activities, assignments, or quizzes.
 - Current Supabase + Render architecture remains the deployment base.
 
 ## Canonical Terms
@@ -60,6 +61,10 @@ A specific target inside a lesson. Milestones define what the student should und
 
 The smallest authored checkpoint in a lesson. Activities can be discussion, code, multiple choice, reflection, or file. Activities attach to milestones.
 
+### Lesson Resource
+
+A teacher, org, or platform-authored learning resource attached to curriculum. Resources can be uploaded media or external links. Supported roadmap types are video, audio, PDF, flipbook, YouTube, image, link, and document. Resources are private by default and appear inside the chat lesson flow.
+
 ### Turn
 
 One message or structured event in a learning session. Turns can come from the student, Mentor, or system.
@@ -88,16 +93,21 @@ A structured checkpoint that can appear in the chat as a popup or inline choice.
 
 A Mentor-generated suggestion, such as retry, rescue, intervention, or assignment. Recommendations are records for teacher review unless the action is explicitly safe for the Mentor to apply.
 
+### Resource Interaction
+
+A record that a student was shown, opened, played, paused, completed, or downloaded a lesson resource. Mentor may not claim a student watched or read a resource unless these interaction records support it.
+
 ## Core Data Flow
 
 1. A teacher creates or joins a class.
 2. Students join the class.
 3. A teacher assigns a course, unit, lesson, or specific assignment.
-4. A student opens the chat lesson.
-5. The runtime loads the student profile, class context, session, lesson, milestone, recent turns, assignments, mastery, and notes.
-6. The Mentor returns structured output: reply, next action, expected answer mode, quiz/exercise payload, grade/evidence when applicable, and guardrail state.
-7. The orchestrator persists turns, attempts, quiz attempts, assignment updates, evidence, recommendations, and mastery summaries.
-8. The teacher dashboard reads the records and shows what happened, why it matters, and where intervention is needed.
+4. A teacher may attach lesson resources, such as videos, audio, PDFs, flipbooks, YouTube links, images, links, or documents.
+5. A student opens the chat lesson.
+6. The runtime loads the student profile, class context, session, lesson, milestone, resources, recent turns, assignments, mastery, and notes.
+7. The Mentor returns structured output: reply, next action, expected answer mode, resource payloads, quiz/exercise payload, grade/evidence when applicable, and guardrail state.
+8. The orchestrator persists turns, attempts, quiz attempts, resource interactions, assignment updates, evidence, recommendations, and mastery summaries.
+9. The teacher dashboard reads the records and shows what happened, why it matters, and where intervention is needed.
 
 ## Mentor Runtime Rules
 
@@ -105,6 +115,9 @@ A Mentor-generated suggestion, such as retry, rescue, intervention, or assignmen
 - No full solution before a clear student attempt.
 - Redirect drift back to the current milestone.
 - Code execution is deterministic and comes from the runtime, not Mentor imagination.
+- Lesson resources are surfaced one at a time inside the chat flow.
+- Mentor can reference teacher-authored resource descriptions/instructions/transcripts, but automatic extraction/transcription is a later phase.
+- Mentor may not claim resource completion unless resource interaction records exist.
 - File uploads remain disabled until storage, RLS, and limits are designed.
 - Python is a teaching bridge in v1, not a trusted backend execution path.
 - Major assignment or course changes become teacher-review recommendations.
@@ -123,10 +136,20 @@ The first complete product milestone is:
 - Teacher can inspect transcript, score, assignment/progress, and evidence.
 - RLS blocks unauthorized cross-student, cross-class, and cross-organization access.
 
+The second complete product milestone adds lesson resources:
+
+- Teacher uploads or links a lesson resource.
+- Resource is private by default and scoped to the class/content the teacher manages.
+- Mentor surfaces the resource in chat at the right lesson moment.
+- Student interacts with the resource.
+- Platform records the interaction.
+- Teacher can see resource engagement alongside transcript, attempts, quiz score, and evidence.
+
 ## Deferred Capabilities
 
-- Document/PDF curriculum import.
+- Document/PDF curriculum import that automatically creates draft curriculum.
 - Real file answer uploads.
 - Backend Python sandboxing.
 - Graph/math visual generation.
 - Autonomous Mentor-created assignments without teacher approval.
+- Automatic media extraction/transcription and embeddings.

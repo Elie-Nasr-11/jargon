@@ -1,75 +1,144 @@
 # Roadmap
 
-## Phase 1: Runtime Foundation
+Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full detailed plan.
 
-Status: Complete for the current platform pass.
+## Current State
 
-- Harden interpreter against malformed/hostile code.
-- Add subprocess sandbox.
-- Preserve backward-compatible result shape.
-- Add test coverage for abuse cases.
-- Add example loader for legacy lesson files.
-- Validate the legacy example corpus.
-- Move runtime into `engine/`.
-- Add Flask `/run` and `/health` wrapper for Render.
+Phase 0 is effectively complete.
 
-## Phase 2: Supabase + Render Integration
+- The tutor frontend is live at `https://jargon-9bv5.onrender.com/`.
+- Supabase Auth, lessons, sessions, turns, attempts, quiz attempts, evidence, and mastery are live.
+- The Render Jargon engine runs code through the Supabase `run` edge function.
+- The `chat` edge function is a Mentor orchestrator that can complete `lesson1` from practice to assessment to complete.
+- The live system writes the records needed for the first teacher dashboard.
 
-Status: Next.
+## Phase 1: Stabilize The Live Vertical Slice
 
-- Point Supabase `JARGON_ENGINE_URL` to the Render `jargon-engine` service.
-- Keep the root platform wired to Supabase Auth, lessons, chat, and code submissions.
-- Preserve `result = output` for existing `editor.js`.
-- Add deployment smoke tests or documented manual checks.
+Goal: make the current student lesson path boringly reliable.
 
-## Phase 3: Web Runner Polish
+- Harden the Mentor orchestrator around current lesson flow.
+- Add runtime observability for edge-function errors, completions, failed run/chat calls, model latency, and model cost.
+- Add a repeatable internal QA checklist for signed-in lesson completion.
+- Keep `/chat` as the student surface.
 
-Status: Started by Claude branch.
+Exit criteria: a signed-in student completes `lesson1` three times in a row, and each completion writes session, turns, attempts, quiz attempt, evidence, and mastery records.
 
-- Replace placeholder lesson sample code with curated examples.
-- Show memory, status, errors, and pending ASK prompts.
-- Make ASK interactions feel intentional and clear.
-- Keep the UI quiet, focused, and classroom-friendly.
+## Phase 2: Teacher Dashboard v1
 
-## Phase 4: Learning Session Runtime + Mentor
+Goal: prove Jargon is an LMS, not just a tutor.
 
-Status: Superseded by the chat-first LMS foundation.
+- Add `/teacher`.
+- Show classes, rosters, active lessons, recent activity, and intervention flags.
+- Show per-student transcript, attempts, quizzes, evidence, mastery, and teacher notes.
+- Let teachers add notes, assign a Jargon Foundations lesson, review Mentor recommendations, and override grades with reasons.
 
-- Rebuild the mentor as a structured course-session layer, not an open-ended chat box.
-- Separate AI coaching from code execution.
-- Add durable sessions, turns, attempts, activity seeds, and mastery evidence.
-- Return typed chat envelopes with stage, response mode, next action, assessment, and guardrail fields.
-- Add lesson modes from the curriculum: Processes, Coding, Prompting.
-- Keep prompts and examples versioned in the repo.
-- Bridge natural speech -> pseudocode -> Jargon -> Python.
+Exit criteria: a teacher inspects one student's completed `lesson1` session, sees transcript + score + evidence, and leaves a note.
 
-## Phase 5: Chat-LMS Foundation
+## Phase 3: Lesson Resources And Chat Media
 
-Status: Started.
+Goal: teachers attach learning media to lessons, and Mentor surfaces it inside chat.
 
-- Define the product contract in `docs/PRODUCT_ARCHITECTURE.md`.
-- Add multi-role identity: organizations, memberships, classes, class memberships, and platform admins.
-- Add reusable RLS helper functions for teacher/class/org/platform permissions.
-- Add curriculum hierarchy: subjects, courses, versions, units, lessons, milestones, and activities.
-- Add learning records: quizzes, assignments, submissions, evidence, teacher notes, Mentor recommendations, grade overrides, and audit events.
-- Keep the student chat as the primary classroom surface.
+- Add first-class lesson resources for video, audio, PDF, flipbook, YouTube, image, link, and document resources.
+- Store uploaded media in a private Supabase Storage bucket named `lesson-resources`.
+- Keep default visibility `class_private`.
+- Use signed URLs for uploaded resources.
+- Render media as chat resource cards, not a separate LMS page.
+- V1 uses teacher-authored descriptions/instructions/transcripts; automatic extraction comes later.
 
-## Phase 6: Teacher-Led Class Workflow
+Exit criteria: a teacher uploads a PDF or video to `lesson1`, publishes it, and Mentor can show it in student chat.
 
-Status: Next after schema verification.
+## Phase 4: Resource-Aware Mentor Orchestrator
 
-- Let a teacher create or join a class.
-- Let a student join that class.
-- Let the teacher assign a Jargon Foundations lesson.
-- Upgrade the Mentor orchestrator to read class, assignment, milestone, evidence, and teacher-note context.
-- Add a teacher dashboard for classes, rosters, progress, chat logs, quiz scores, assignments, recommendations, and intervention flags.
-- Add tests for teacher RLS and UI filtering.
+Goal: media becomes part of the lesson flow.
 
-## Phase 7: Curriculum And Package
+- Add optional `resources?: LessonChatResource[]` to the typed chat envelope.
+- Load resources attached to the current lesson/milestone/activity.
+- Surface one resource at a time before explanation, during practice, before quiz, as rescue support, or as review.
+- Record resource interactions such as shown, opened, played, paused, completed, and downloaded.
+- Do not let Mentor claim resource completion unless interaction records exist.
 
-Status: Curriculum archive imported; curation remains.
+Exit criteria: Mentor asks a student to open a teacher resource, the student interacts with it, and the system records the interaction.
 
-- Curate examples into levels/modules.
-- Add expected-output tests for selected canonical examples.
-- Package docs for teachers/students.
-- Decide how much of the full corpus appears in the learner UI.
+## Phase 5: Assignments End-To-End
+
+Goal: teachers and Mentor recommendations can create work students complete inside chat.
+
+- Add teacher assignment builder.
+- Link assignments to lessons, milestones, resources, and rubrics.
+- Show assignments inside student chat/progress.
+- Support student text/code submissions first; file submissions later.
+- Let teachers grade, return, and override with audit records.
+
+Exit criteria: teacher assigns a resource-backed assignment, student submits, teacher grades, and feedback/evidence update.
+
+## Phase 6: Curriculum Authoring Studio
+
+Goal: move from seeded lessons to teacher-authored structured curriculum.
+
+- Add `/teacher/curriculum`.
+- Author subjects, courses, versions, units, lessons, milestones, activities, quizzes, rubrics, and resources.
+- Preview as student.
+- Publish course versions.
+- Keep document import secondary until structured authoring is solid.
+
+Exit criteria: teacher creates a small non-coding lesson with a resource and quiz, assigns it to a class, and a student completes it through chat.
+
+## Phase 7: Multi-Subject Chat-LMS
+
+Goal: prove Jargon can teach beyond coding.
+
+- Add one non-coding curriculum: logic foundations, basic math reasoning, writing structure, or science process skills.
+- Use text, multiple choice, media resources, milestones, and evidence.
+- No Jargon code dependency.
+
+Exit criteria: student completes one non-coding lesson with media, quiz, evidence, and teacher-visible progress.
+
+## Phase 8: Admin And Organization Management
+
+Goal: support real schools/classes.
+
+- Add `/admin`.
+- Let org admins manage organizations, teachers, students, classes, roles, and audit.
+- Let platform admins manage all tenants, global content, feature flags, and support/debug workflows.
+- Keep authorization DB/RLS-enforced.
+
+Exit criteria: two organizations can exist side by side, and RLS prevents cross-org reads.
+
+## Phase 9: Media Processing And AI Context Extraction
+
+Goal: make uploaded resources deeply useful to Mentor.
+
+- Add PDF text extraction and page thumbnails.
+- Add audio/video transcription.
+- Add YouTube transcript import where available and permitted.
+- Store reviewed chunks for Mentor retrieval.
+- Let teachers approve extracted text before Mentor relies on it.
+
+Exit criteria: teacher uploads a PDF, extraction creates reviewed chunks, and Mentor references specific pages during chat.
+
+## Phase 10: Analytics, Mastery, And Adaptation
+
+Goal: personalization becomes explainable.
+
+- Add dashboards for mastery, attempts, quiz trends, code-run success, resource engagement, common errors, rescue/retry frequency, assignments, and teacher interventions.
+- Let Mentor adapt pace, hint level, rescue choice, resource recommendation, quiz timing, and assignment recommendation.
+
+Exit criteria: teacher can answer why a student is weak on a skill and see linked evidence.
+
+## Phase 11: Scale, Cost, And Model Routing
+
+Goal: make the product economically viable.
+
+- Add model routing by turn type.
+- Track token/cost per session and organization.
+- Add rate limits, abuse limits, timeout handling, background jobs, and runner scaling.
+
+Exit criteria: platform reports cost per active student/session and routes expensive work intentionally.
+
+## Phase 12: Integrations And School Readiness
+
+Goal: fit into real school workflows.
+
+- Add Google/Microsoft SSO, Clever/ClassLink, CSV roster import, LTI 1.3, Google Classroom, Canvas, grade passback, exports, retention/delete workflows, and parent/student reports.
+
+Exit criteria: one school-style roster can be imported, classes created, and grades exported.

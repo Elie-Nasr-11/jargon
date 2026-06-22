@@ -2,12 +2,28 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
+## How should automated media extraction and transcription run?
+
+Current decision so far:
+
+- Teacher-uploaded lesson resources are first-class chat media.
+- V1 renders resources and uses teacher-authored descriptions, instructions, and optional transcripts.
+- Automatic PDF/audio/video extraction is deferred until resource upload/display works.
+
+Deferred options:
+
+- Supabase Edge Function starts lightweight processing jobs and stores metadata.
+- Dedicated Render worker handles heavier PDF/video/audio jobs.
+- Use a third-party transcription/extraction service for media processing.
+- Keep extraction platform-admin-only until teacher workflows are safe.
+
 ## How should document/PDF curriculum import work?
 
 Current decision so far:
 
 - Structured authoring comes first: subjects, courses, course versions, units, lessons, milestones, and activities.
-- Document/PDF import is deferred until the structured model is stable.
+- Teacher-uploaded PDFs can be lesson resources before PDF import becomes curriculum generation.
+- Document/PDF import that auto-creates draft curriculum is deferred until the structured model is stable.
 
 Deferred options:
 
@@ -34,6 +50,7 @@ Current decision so far:
 
 - The typed chat contract includes `response_mode: "file"` for future compatibility.
 - v1 does not ask students to upload files.
+- Teacher-uploaded lesson resources are a separate, decided feature track and should not be blocked by student file answers.
 
 Deferred options:
 
