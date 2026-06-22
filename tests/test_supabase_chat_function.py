@@ -130,6 +130,19 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.source)
 
+    def test_voice_metadata_is_normalized_and_persisted(self):
+        for fragment in (
+            "input_modality",
+            "transcript_confidence",
+            '"dictated"',
+            '"audio_session"',
+            "Number.isFinite(raw.transcript_confidence)",
+            "input_modality: answer.input_modality || \"typed\"",
+            "payload: answer",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
+
 
 if __name__ == "__main__":
     unittest.main()

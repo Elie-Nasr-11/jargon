@@ -259,6 +259,27 @@ export type ResourceInteractionEvent = {
   progress_percent?: number;
 };
 
+export type ChatInputModality = "typed" | "dictated" | "audio_session";
+
+export type VoiceInteractionEventType =
+  | "dictation_started"
+  | "dictation_transcribed"
+  | "dictation_submitted"
+  | "read_aloud_started"
+  | "read_aloud_finished";
+
+export type VoiceInteractionEvent = {
+  session_id?: string | null;
+  lesson_id?: string | null;
+  turn_id?: string | null;
+  event_type: VoiceInteractionEventType;
+  input_modality?: Exclude<ChatInputModality, "typed"> | null;
+  transcript?: string | null;
+  transcript_confidence?: number | null;
+  duration_seconds?: number | null;
+  payload?: Record<string, unknown>;
+};
+
 export type LearningSession = {
   id: string;
   user_id: string;
@@ -300,6 +321,8 @@ export type LessonAttempt = {
   score: number | null;
   passed: boolean | null;
   feedback: string | null;
+  input_modality?: ChatInputModality | null;
+  transcript_confidence?: number | null;
   created_at: string;
 };
 
@@ -454,6 +477,8 @@ export type TypedChatAnswer = {
   code?: string;
   choice_id?: string;
   run_result?: Record<string, unknown> | null;
+  input_modality?: ChatInputModality;
+  transcript_confidence?: number | null;
 };
 
 export type TypedChatEnvelope = {

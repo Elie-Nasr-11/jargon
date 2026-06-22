@@ -10,7 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import gsap from "gsap";
-import { Code2, Send, Play, X } from "lucide-react";
+import { Code2, Mic, MicOff, Send, Play, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import {
@@ -19,7 +19,9 @@ import {
   JARGON_CONDITION_WORDS,
   JARGON_LANGUAGE_ID,
 } from "@/lib/jargon-syntax";
+import type { VoiceSettings } from "@/lib/jargon-store";
 import { useTheme } from "@/lib/theme";
+import type { ChatInputModality, VoiceInteractionEvent } from "@/lib/types";
 
 const MonacoEditor = lazy(() =>
   import("@monaco-editor/react").then((m) => ({ default: m.default })),
@@ -70,21 +72,81 @@ type Mode = "text" | "code";
 export type ComposerLanguage = "jargon" | "javascript" | "python";
 type Lang = ComposerLanguage;
 
+type SendTextOptions = {
+  inputModality?: ChatInputModality;
+  transcriptConfidence?: number | null;
+};
+
+type SpeechAlternativeLike = {
+  transcript: string;
+  confidence?: number;
+};
+
+type SpeechResultLike = {
+  isFinal: boolean;
+  0: SpeechAlternativeLike;
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<SpeechResultLike>;
+};
+
+type SpeechRecognitionErrorEventLike = {
+  error?: string;
+  message?: string;
+};
+
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+function speechRecognitionConstructor(): SpeechRecognitionConstructor | null {
+  if (typeof window === "undefined") return null;
+  const host = window as typeof window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return host.SpeechRecognition || host.webkitSpeechRecognition || null;
+}
+
 export type ComposerHandle = {
   loadCode: (input: { code: string; language: ComposerLanguage }) => void;
 };
 
 type ComposerProps = {
-  onSendText: (text: string) => void;
+  onSendText: (text: string, options?: SendTextOptions) => void;
   onSendCodeResult: (code: string, lang: Lang, result: RunResult) => void;
   onRunCode?: (code: string, lang: Lang) => Promise<RunResult>;
+  voice?: VoiceSettings;
+  onVoiceEvent?: (event: VoiceInteractionEvent) => void | Promise<void>;
   initialCode?: string;
   initialLanguage?: Lang;
   sending: boolean;
 };
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
-  { onSendText, onSendCodeResult, onRunCode, initialCode, initialLanguage = "jargon", sending },
+  {
+    onSendText,
+    onSendCodeResult,
+    onRunCode,
+    voice,
+    onVoiceEvent,
+    initialCode,
+    initialLanguage = "jargon",
+    sending,
+  },
   ref,
 ) {
   const [mode, setMode] = useState<Mode>("text");
@@ -101,6 +163,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const codePanelRef = useRef<HTMLDivElement>(null);
   const { resolved } = useTheme();
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const dictationBaseRef = useRef("");
+  const dictationStartedAtRef = useRef<number | null>(null);
+  const [dictating, setDictating] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const [dictationConfidence, setDictationConfidence] = useState<number | null>(null);
 
   const MIN_EDITOR_H = 150;
   const DEFAULT_EDITOR_H = 260;
@@ -119,6 +188,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const onResize = () => setVh(window.innerHeight);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    setVoiceSupported(Boolean(speechRecognitionConstructor()));
+    return () => {
+      recognitionRef.current?.abort();
+      recognitionRef.current = null;
+    };
   }, []);
 
   // Re-clamp when viewport changes so the panel never exceeds 65vh.
@@ -300,11 +377,112 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     setDragging(true);
   };
 
+  const emitVoiceEvent = (event: VoiceInteractionEvent) => {
+    void onVoiceEvent?.(event);
+  };
+
+  const toggleDictation = () => {
+    if (dictating) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    if (voice?.dictationEnabled === false) {
+      setVoiceError("Dictation is turned off in settings.");
+      return;
+    }
+
+    const Ctor = speechRecognitionConstructor();
+    if (!Ctor) {
+      setVoiceError("Dictation is not available in this browser.");
+      setVoiceSupported(false);
+      return;
+    }
+
+    const recognition = new Ctor();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+    dictationBaseRef.current = text.trim();
+    dictationStartedAtRef.current = Date.now();
+    setVoiceError("");
+    setDictationConfidence(null);
+
+    recognition.onresult = (event) => {
+      let spoken = "";
+      let finalTranscript = "";
+      let confidence: number | null = null;
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        const alternative = result?.[0];
+        if (!alternative?.transcript) continue;
+        spoken += alternative.transcript;
+        if (result.isFinal) {
+          finalTranscript += alternative.transcript;
+          if (
+            typeof alternative.confidence === "number" &&
+            Number.isFinite(alternative.confidence)
+          ) {
+            confidence = Math.max(0, Math.min(1, alternative.confidence));
+          }
+        }
+      }
+      const nextText = [dictationBaseRef.current, spoken.trim()].filter(Boolean).join(" ");
+      setText(nextText);
+      if (confidence !== null) setDictationConfidence(confidence);
+      if (finalTranscript.trim()) {
+        emitVoiceEvent({
+          event_type: "dictation_transcribed",
+          input_modality: "dictated",
+          transcript: finalTranscript.trim(),
+          transcript_confidence: confidence,
+        });
+      }
+    };
+    recognition.onerror = (event) => {
+      setVoiceError(event.message || event.error || "Dictation stopped.");
+      setDictating(false);
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setDictating(false);
+    };
+
+    try {
+      recognition.start();
+      setDictating(true);
+      emitVoiceEvent({ event_type: "dictation_started", input_modality: "dictated" });
+    } catch (error) {
+      recognitionRef.current = null;
+      setDictating(false);
+      setVoiceError((error as Error).message || "Dictation could not start.");
+    }
+  };
+
   const send = () => {
     const t = text.trim();
     if (!t || sending) return;
-    onSendText(t);
+    const isDictated = dictationConfidence !== null;
+    onSendText(t, {
+      inputModality: isDictated ? "dictated" : "typed",
+      transcriptConfidence: isDictated ? dictationConfidence : null,
+    });
+    if (isDictated) {
+      emitVoiceEvent({
+        event_type: "dictation_submitted",
+        input_modality: "dictated",
+        transcript: t,
+        transcript_confidence: dictationConfidence,
+        duration_seconds: dictationStartedAtRef.current
+          ? Math.max(0, Math.round((Date.now() - dictationStartedAtRef.current) / 1000))
+          : null,
+      });
+    }
     setText("");
+    setDictationConfidence(null);
+    setVoiceError("");
   };
 
   useImperativeHandle(ref, () => ({
@@ -342,35 +520,74 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       <GradientCard>
         <div ref={morphRef} className="overflow-hidden px-4 py-3">
           {mode === "text" ? (
-            <div ref={textPanelRef} className="flex items-end gap-2">
-              <button
-                aria-label="Open code editor"
-                onClick={() => setMode("code")}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <Code2 className="h-[16px] w-[16px]" strokeWidth={1.5} />
-              </button>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
+            <div ref={textPanelRef} className="space-y-2">
+              <div className="flex items-end gap-2">
+                <button
+                  aria-label="Open code editor"
+                  onClick={() => setMode("code")}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <Code2 className="h-[16px] w-[16px]" strokeWidth={1.5} />
+                </button>
+                <textarea
+                  value={text}
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    if (!e.target.value.trim()) setDictationConfidence(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  rows={1}
+                  placeholder={"Ask anything\u2026 try \u201Cshow me a for loop\u201D"}
+                  className="max-h-[160px] min-h-[28px] flex-1 resize-none bg-transparent py-1 text-[14.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+                />
+                <button
+                  type="button"
+                  onClick={toggleDictation}
+                  disabled={sending || voice?.dictationEnabled === false || !voiceSupported}
+                  aria-label={dictating ? "Stop dictation" : "Start dictation"}
+                  title={
+                    voice?.dictationEnabled === false
+                      ? "Dictation is off in settings"
+                      : voiceSupported
+                        ? dictating
+                          ? "Stop dictation"
+                          : "Dictate answer"
+                        : "Dictation is not available in this browser"
                   }
-                }}
-                rows={1}
-                placeholder={"Ask anything\u2026 try \u201Cshow me a for loop\u201D"}
-                className="max-h-[160px] min-h-[28px] flex-1 resize-none bg-transparent py-1 text-[14.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
-              />
-              <button
-                onClick={send}
-                disabled={sending || !text.trim()}
-                aria-label="Send"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
-              >
-                <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
-              </button>
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+                    dictating
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {dictating ? (
+                    <MicOff className="h-[15px] w-[15px]" strokeWidth={1.8} />
+                  ) : (
+                    <Mic className="h-[15px] w-[15px]" strokeWidth={1.8} />
+                  )}
+                </button>
+                <button
+                  onClick={send}
+                  disabled={sending || !text.trim()}
+                  aria-label="Send"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
+                >
+                  <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
+                </button>
+              </div>
+              {dictating || voiceError || dictationConfidence !== null ? (
+                <div className="px-10 text-[11.5px] text-muted-foreground">
+                  {dictating
+                    ? "Listening... your words will stay editable before sending."
+                    : voiceError ||
+                      (dictationConfidence !== null ? "Dictated answer ready to edit." : "")}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div ref={codePanelRef}>

@@ -37,6 +37,7 @@ import type {
   AssignmentStatus,
   AssignmentSubmission,
   AssignmentSubmissionFile,
+  ChatInputModality,
   LearningSession,
   Lesson,
   LessonResource,
@@ -2148,24 +2149,32 @@ function StudentDetail({
 
             {turns.length ? (
               <div className="max-h-[440px] space-y-3 overflow-auto pr-1">
-                {turns.map((turn) => (
-                  <div
-                    key={turn.id}
-                    className="rounded-3xl border border-border bg-background/45 p-4"
-                  >
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                        {turn.role} - {turn.stage}
-                      </span>
-                      <span className="text-[11.5px] text-muted-foreground">
-                        {formatDateTime(turn.created_at)}
-                      </span>
+                {turns.map((turn) => {
+                  const modality = inputModalityFromPayload(turn.payload);
+                  return (
+                    <div
+                      key={turn.id}
+                      className="rounded-3xl border border-border bg-background/45 p-4"
+                    >
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <span className="flex flex-wrap items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                          {turn.role} - {turn.stage}
+                          {modality === "dictated" ? (
+                            <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] tracking-[0.08em] text-muted-foreground">
+                              Dictated
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="text-[11.5px] text-muted-foreground">
+                          {formatDateTime(turn.created_at)}
+                        </span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
+                        {turn.content || "[Empty turn]"}
+                      </p>
                     </div>
-                    <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-                      {turn.content || "[Empty turn]"}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <EmptyInline
@@ -2276,7 +2285,9 @@ function StudentDetail({
                 items={attempts.slice(0, 8).map((item) => ({
                   id: item.id,
                   title: `${lessonName(lessonsById, item.lesson_id)} - ${item.answer_mode}`,
-                  meta: `${formatPass(item.passed)} - score ${formatScore(item.score)}`,
+                  meta: `${item.input_modality === "dictated" ? "Dictated - " : ""}${formatPass(
+                    item.passed,
+                  )} - score ${formatScore(item.score)}`,
                   body:
                     item.feedback || item.answer_text || item.answer_code || "No feedback text.",
                 }))}
@@ -2724,6 +2735,15 @@ function lessonName(lessonsById: Map<string, Lesson>, lessonId: string | null | 
 function lessonTitle(lessons: Lesson[], lessonId: string | null | undefined) {
   if (!lessonId) return "No lesson";
   return lessons.find((lesson) => lesson.id === lessonId)?.title || lessonId;
+}
+
+function inputModalityFromPayload(
+  payload: Record<string, unknown> | null | undefined,
+): ChatInputModality | null {
+  const modality = payload?.input_modality;
+  return modality === "typed" || modality === "dictated" || modality === "audio_session"
+    ? modality
+    : null;
 }
 
 function statusLabel(session: LearningSession) {

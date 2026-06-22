@@ -10,8 +10,11 @@ import {
   ExternalLink,
   FileText,
   Paperclip,
+  Pause,
   Play,
+  RotateCcw,
   Send,
+  Volume2,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { HeaderMenus } from "@/components/HeaderMenus";
@@ -20,9 +23,11 @@ import { Composer, type ComposerHandle, type ComposerLanguage } from "@/componen
 import { GradientCard } from "@/components/GradientCard";
 import {
   DEFAULT_MENTOR,
+  DEFAULT_VOICE,
   store,
   type Lesson as MenuLesson,
   type MentorConfig,
+  type VoiceSettings,
 } from "@/lib/jargon-store";
 import {
   fetchLearningTurns,
@@ -35,12 +40,14 @@ import {
   invokeJargonRun,
   invokeTypedChat,
   recordResourceInteraction,
+  recordVoiceInteraction,
   submitAssignment,
 } from "@/lib/api";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
 import type {
   JargonRunResponse,
+  ChatInputModality,
   LearningSession,
   LearningTurn,
   Lesson,
@@ -49,6 +56,7 @@ import type {
   MentorPreferences,
   StudentAssignmentBundle,
   TypedChatEnvelope,
+  VoiceInteractionEvent,
 } from "@/lib/types";
 
 export const Route = createFileRoute("/chat")({
@@ -64,7 +72,14 @@ type ChatCodeBlock = { language: ComposerLanguage; source: string };
 type ChatChoice = { id?: string; label?: string; text?: string; value?: string };
 
 type Msg =
-  | { id: string; role: "user"; text: string; code?: ChatCodeBlock }
+  | {
+      id: string;
+      role: "user";
+      text: string;
+      code?: ChatCodeBlock;
+      inputModality?: ChatInputModality;
+      transcriptConfidence?: number | null;
+    }
   | {
       id: string;
       role: "bot";
@@ -128,7 +143,21 @@ function mapLessons(
 
 function turnToMessage(turn: LearningTurn): Msg | null {
   if (turn.role === "student") {
-    return { id: turn.id, role: "user", text: turn.content };
+    const modality =
+      typeof turn.payload?.input_modality === "string"
+        ? (turn.payload.input_modality as ChatInputModality)
+        : undefined;
+    const confidence =
+      typeof turn.payload?.transcript_confidence === "number"
+        ? turn.payload.transcript_confidence
+        : null;
+    return {
+      id: turn.id,
+      role: "user",
+      text: turn.content,
+      inputModality: modality,
+      transcriptConfidence: confidence,
+    };
   }
   if (turn.role === "mentor" || turn.role === "system") {
     const payload = turn.payload || {};
@@ -258,6 +287,7 @@ function ChatPage() {
   const [lessonId, setLessonId] = useState<string>("lesson1");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [mentor, setMentor] = useState<MentorConfig>(DEFAULT_MENTOR);
+  const [voice, setVoice] = useState<VoiceSettings>(DEFAULT_VOICE);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [sending, setSending] = useState(false);
   const [booting, setBooting] = useState(true);
@@ -376,12 +406,14 @@ function ChatPage() {
           liveLessons[0]?.id ||
           "lesson1";
         const savedMentor = store.getMentor();
+        const savedVoice = store.getVoice();
         setAccessToken(session.access_token);
         setEmail(session.user.email || "");
         setLessons(liveLessons);
         setAssignments(liveAssignments);
         setLessonId(selected);
         setMentor(savedMentor);
+        setVoice(savedVoice);
         await loadLesson(selected, session.access_token, savedMentor);
       } catch (error) {
         if (!alive) return;
@@ -407,15 +439,29 @@ function ChatPage() {
     store.setMentor(next);
   };
 
+  const updateVoice = (next: VoiceSettings) => {
+    setVoice(next);
+    store.setVoice(next);
+  };
+
   const addMsg = (m: Msg) => setMsgs((prev) => [...prev, m]);
 
   const replaceThinking = (thinkingId: string, message: Msg) => {
     setMsgs((previous) => previous.filter((m) => m.id !== thinkingId).concat(message));
   };
 
-  const sendUser = async (text: string) => {
+  const sendUser = async (
+    text: string,
+    options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
+  ) => {
     if (!accessToken) return;
-    addMsg({ id: uid(), role: "user", text });
+    addMsg({
+      id: uid(),
+      role: "user",
+      text,
+      inputModality: options?.inputModality,
+      transcriptConfidence: options?.transcriptConfidence ?? null,
+    });
     setSending(true);
     const thinkingId = uid();
     setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
@@ -424,7 +470,12 @@ function ChatPage() {
         accessToken,
         lessonId,
         sessionId,
-        answer: { mode: "text", text },
+        answer: {
+          mode: "text",
+          text,
+          input_modality: options?.inputModality || "typed",
+          transcript_confidence: options?.transcriptConfidence ?? null,
+        },
         mentorPreferences: mentorToPreferences(mentor),
       });
       setSessionId(envelope.session_id);
@@ -604,6 +655,21 @@ function ChatPage() {
     [lessonId, sessionId],
   );
 
+  const handleVoiceEvent = useCallback(
+    async (event: VoiceInteractionEvent) => {
+      try {
+        await recordVoiceInteraction({
+          session_id: sessionId,
+          lesson_id: lessonId,
+          ...event,
+        });
+      } catch {
+        // Voice telemetry should never block the lesson conversation.
+      }
+    },
+    [lessonId, sessionId],
+  );
+
   if (!email || booting) {
     return (
       <div
@@ -641,7 +707,7 @@ function ChatPage() {
               mentor={mentor}
               onMentorChange={updateMentor}
             />
-            <SettingsMenu email={email} />
+            <SettingsMenu email={email} voice={voice} onVoiceChange={updateVoice} />
           </div>
         </div>
       </header>
@@ -655,6 +721,8 @@ function ChatPage() {
               onUseCode={useCodeInEditor}
               onChooseChoice={sendChoice}
               onResourceEvent={handleResourceEvent}
+              voice={voice}
+              onVoiceEvent={handleVoiceEvent}
             />
           ))}
         </div>
@@ -675,6 +743,8 @@ function ChatPage() {
             onSendText={sendUser}
             onRunCode={runCode}
             onSendCodeResult={sendCodeResult}
+            voice={voice}
+            onVoiceEvent={handleVoiceEvent}
             sending={sending}
           />
         </div>
@@ -903,6 +973,8 @@ function MessageRow({
   onUseCode,
   onChooseChoice,
   onResourceEvent,
+  voice,
+  onVoiceEvent,
 }: {
   msg: Msg;
   onUseCode: (code: ChatCodeBlock) => void;
@@ -912,6 +984,8 @@ function MessageRow({
     eventType: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded",
     progress?: { progress_seconds?: number; progress_percent?: number },
   ) => Promise<void>;
+  voice: VoiceSettings;
+  onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -935,6 +1009,11 @@ function MessageRow({
           <div className="whitespace-pre-wrap rounded-2xl border border-border/60 bg-foreground/5 px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground/85">
             {text}
           </div>
+          {msg.inputModality === "dictated" ? (
+            <span className="rounded-full border border-border/70 px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              Dictated
+            </span>
+          ) : null}
           {code && (
             <div className="w-full min-w-[min(420px,85vw)]">
               <HistoryCodePanel code={code} onUseCode={onUseCode} />
@@ -1010,10 +1089,110 @@ function MessageRow({
             ))}
           </div>
         ) : null}
-        <CopyAction text={msg.text} />
+        <div className="flex flex-wrap items-center gap-2">
+          <CopyAction text={msg.text} />
+          <ReadAloudAction text={msg.text} voice={voice} onVoiceEvent={onVoiceEvent} />
+        </div>
         {msg.code && <HistoryCodePanel code={msg.code} onUseCode={onUseCode} />}
       </div>
     </div>
+  );
+}
+
+function ReadAloudAction({
+  text,
+  voice,
+  onVoiceEvent,
+}: {
+  text: string;
+  voice: VoiceSettings;
+  onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
+}) {
+  const [speaking, setSpeaking] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const startedAtRef = useRef<number | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const supported = typeof window !== "undefined" && "speechSynthesis" in window;
+
+  useEffect(() => {
+    return () => {
+      if (utteranceRef.current && supported) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [supported]);
+
+  if (!voice.readAloudEnabled || !supported || !text.trim()) return null;
+
+  const finish = () => {
+    setSpeaking(false);
+    setPaused(false);
+    void onVoiceEvent({
+      event_type: "read_aloud_finished",
+      duration_seconds: startedAtRef.current
+        ? Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000))
+        : null,
+    });
+    utteranceRef.current = null;
+    startedAtRef.current = null;
+  };
+
+  const play = () => {
+    if (speaking && paused) {
+      window.speechSynthesis.resume();
+      setPaused(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = voice.readAloudRate;
+    utterance.onend = finish;
+    utterance.onerror = finish;
+    utteranceRef.current = utterance;
+    startedAtRef.current = Date.now();
+    setSpeaking(true);
+    setPaused(false);
+    void onVoiceEvent({ event_type: "read_aloud_started" });
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const pause = () => {
+    window.speechSynthesis.pause();
+    setPaused(true);
+  };
+
+  const replay = () => {
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
+    setPaused(false);
+    requestAnimationFrame(play);
+  };
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-border/70 px-1.5 py-1">
+      <button
+        type="button"
+        onClick={speaking && !paused ? pause : play}
+        aria-label={speaking && !paused ? "Pause read aloud" : "Read mentor message aloud"}
+        title={speaking && !paused ? "Pause" : "Read aloud"}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        {speaking && !paused ? (
+          <Pause className="h-3.5 w-3.5" strokeWidth={1.8} />
+        ) : (
+          <Volume2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={replay}
+        aria-label="Replay mentor message"
+        title="Replay"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </button>
+    </span>
   );
 }
 

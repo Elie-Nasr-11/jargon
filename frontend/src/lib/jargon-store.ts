@@ -30,9 +30,22 @@ export const DEFAULT_MENTOR: MentorConfig = {
   difficulty: "Standard",
 };
 
+export type VoiceSettings = {
+  dictationEnabled: boolean;
+  readAloudEnabled: boolean;
+  readAloudRate: 0.85 | 1 | 1.2;
+};
+
+export const DEFAULT_VOICE: VoiceSettings = {
+  dictationEnabled: true,
+  readAloudEnabled: true,
+  readAloudRate: 1,
+};
+
 const KEYS = {
   lesson: "jargon_lesson",
   mentor: "jargon_mentor",
+  voice: "jargon_voice",
 } as const;
 
 function read<T>(k: string, fallback: T): T {
@@ -56,4 +69,6 @@ export const store = {
   setLessonId: (id: string) => write(KEYS.lesson, id),
   getMentor: () => read<MentorConfig>(KEYS.mentor, DEFAULT_MENTOR),
   setMentor: (m: MentorConfig) => write(KEYS.mentor, m),
+  getVoice: () => ({ ...DEFAULT_VOICE, ...read<Partial<VoiceSettings>>(KEYS.voice, {}) }),
+  setVoice: (v: VoiceSettings) => write(KEYS.voice, v),
 };

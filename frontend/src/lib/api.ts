@@ -43,6 +43,7 @@ import type {
   StudentAssignmentBundle,
   TypedChatAnswer,
   TypedChatEnvelope,
+  VoiceInteractionEvent,
 } from "@/lib/types";
 
 function authHeaders(accessToken: string) {
@@ -780,6 +781,29 @@ export async function recordResourceInteraction(event: ResourceInteractionEvent)
     event_type: event.event_type,
     progress_seconds: event.progress_seconds ?? null,
     progress_percent: event.progress_percent ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function recordVoiceInteraction(event: VoiceInteractionEvent) {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user) throw new Error("You need to sign in to record voice usage.");
+
+  const { error } = await supabase.from("voice_interaction_events").insert({
+    user_id: user.id,
+    session_id: event.session_id || null,
+    lesson_id: event.lesson_id || null,
+    turn_id: event.turn_id || null,
+    event_type: event.event_type,
+    input_modality: event.input_modality || null,
+    transcript: event.transcript || null,
+    transcript_confidence: event.transcript_confidence ?? null,
+    duration_seconds: event.duration_seconds ?? null,
+    payload: event.payload || {},
   });
   if (error) throw error;
 }

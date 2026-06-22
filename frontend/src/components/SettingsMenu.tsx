@@ -1,12 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import { BookOpen, GraduationCap, LogOut, Moon, Settings, Shield, Sun } from "lucide-react";
+import {
+  BookOpen,
+  GraduationCap,
+  LogOut,
+  Mic,
+  Moon,
+  Settings,
+  Shield,
+  Sun,
+  Volume2,
+} from "lucide-react";
 import { GradientCard } from "./GradientCard";
+import type { VoiceSettings } from "@/lib/jargon-store";
 import { useTheme } from "@/lib/theme";
 import { signOut } from "@/lib/api";
 
-export function SettingsMenu({ email }: { email: string }) {
+export function SettingsMenu({
+  email,
+  voice,
+  onVoiceChange,
+}: {
+  email: string;
+  voice?: VoiceSettings;
+  onVoiceChange?: (voice: VoiceSettings) => void;
+}) {
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -71,7 +90,7 @@ export function SettingsMenu({ email }: { email: string }) {
         <div
           ref={panelRef}
           className="absolute right-0 top-[calc(100%+10px)]"
-          style={{ width: "min(280px, calc(100vw - 16px))" }}
+          style={{ width: "min(320px, calc(100vw - 16px))" }}
         >
           <GradientCard>
             <div className="p-4">
@@ -102,6 +121,71 @@ export function SettingsMenu({ email }: { email: string }) {
                   {resolved === "dark" ? "Dark" : "Light"}
                 </span>
               </button>
+              {voice && onVoiceChange ? (
+                <>
+                  <div className="my-2 h-px bg-border" />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onVoiceChange({ ...voice, dictationEnabled: !voice.dictationEnabled })
+                    }
+                    className="flex w-full items-center justify-between gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Mic className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                      Dictation
+                    </span>
+                    <span className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground">
+                      {voice.dictationEnabled ? "On" : "Off"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onVoiceChange({ ...voice, readAloudEnabled: !voice.readAloudEnabled })
+                    }
+                    className="flex w-full items-center justify-between gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Volume2 className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                      Read aloud
+                    </span>
+                    <span className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground">
+                      {voice.readAloudEnabled ? "On" : "Off"}
+                    </span>
+                  </button>
+                  <div className="px-2 pb-2 pt-1">
+                    <div className="mb-2 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      Reading speed
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { label: "Slow", value: 0.85 },
+                        { label: "Normal", value: 1 },
+                        { label: "Fast", value: 1.2 },
+                      ].map((option) => (
+                        <button
+                          key={option.label}
+                          type="button"
+                          onClick={() =>
+                            onVoiceChange({
+                              ...voice,
+                              readAloudRate: option.value as VoiceSettings["readAloudRate"],
+                            })
+                          }
+                          className={`rounded-full border px-2 py-1.5 text-[11.5px] transition-colors ${
+                            voice.readAloudRate === option.value
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {

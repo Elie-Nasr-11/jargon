@@ -233,6 +233,16 @@ function normalizeAnswer(answer: unknown): DbRow | null {
     return null;
   const raw = answer as DbRow;
   const mode = responseMode(raw.mode, "text");
+  const inputModality = ["typed", "dictated", "audio_session"].includes(
+    String(raw.input_modality),
+  )
+    ? String(raw.input_modality)
+    : "typed";
+  const transcriptConfidence =
+    typeof raw.transcript_confidence === "number" &&
+    Number.isFinite(raw.transcript_confidence)
+      ? Math.max(0, Math.min(1, raw.transcript_confidence))
+      : null;
   return {
     mode,
     text: typeof raw.text === "string" ? raw.text : "",
@@ -242,6 +252,8 @@ function normalizeAnswer(answer: unknown): DbRow | null {
       raw.run_result && typeof raw.run_result === "object"
         ? raw.run_result
         : null,
+    input_modality: inputModality,
+    transcript_confidence: transcriptConfidence,
   };
 }
 
@@ -1189,6 +1201,11 @@ async function handleTypedRequest(
         passed:
           typeof assessment?.passed === "boolean" ? assessment.passed : null,
         feedback: assessment?.feedback || envelope.reply,
+        input_modality: answer.input_modality || "typed",
+        transcript_confidence:
+          typeof answer.transcript_confidence === "number"
+            ? answer.transcript_confidence
+            : null,
       });
 
       if (answer.mode === "multiple_choice" && context.quiz) {
