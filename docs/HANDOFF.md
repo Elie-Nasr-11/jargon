@@ -6,6 +6,67 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 10:12
+
+Status: Mentor Orchestrator v1 live-smoked end-to-end
+
+Task: Upgrade Supabase `chat` from a typed reply endpoint into a deterministic lesson-flow
+orchestrator that writes reliable LMS records for teacher dashboards.
+
+What changed:
+
+- Pushed `e74313f` to `main`: `supabase/functions/chat/index.ts` now loads lesson/activity/
+  milestone/quiz/turn/attempt/mastery context, preserves legacy `{ messages } -> { reply }`,
+  keeps the typed envelope shape, and deterministically writes `learning_turns`,
+  `lesson_attempts`, `quiz_attempts`, `learning_evidence`, `student_mastery`, and
+  `mentor_recommendations`.
+- Pushed `e74313f` frontend companion change: `/chat` can render typed `choices` from mentor
+  messages and submit multiple-choice answers through the existing typed chat contract.
+- Pushed `4bf2ac4`: removed the stale `lessons.milestone_id` select from the repo version of
+  `chat`; milestones are loaded from `lesson_activities.milestone_id` or `milestones.lesson_id`.
+- Added migration `0008_lessons_primary_milestone_pointer.sql` and applied it live as a safe
+  compatibility bridge for the already-active `chat` v5 runtime. It adds optional
+  `lessons.milestone_id`, backfills each lesson's first milestone, and indexes it.
+
+Live state:
+
+- Supabase edge functions: `chat` version `5` active with JWT verification; `run` version `4`
+  active with JWT verification.
+- Live migration applied through the Supabase connector:
+  `lessons_primary_milestone_pointer`.
+- Shell `supabase functions deploy` was not usable because the CLI required a local
+  `SUPABASE_ACCESS_TOKEN`; the authorized Supabase connector was used for the live DB bridge.
+
+Verification:
+
+- Local checks:
+  `python3 -m unittest tests/test_supabase_chat_function.py -q` -> `10` tests passed.
+  TypeScript check for `supabase/functions/chat/index.ts` using a local Deno shim -> passed.
+  `git diff --check` -> passed before the live compatibility migration.
+- Earlier full checks for the orchestrator commit:
+  `python3 -m unittest discover -s tests -q` -> `75` tests passed, `4` skipped.
+  `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+  `cd frontend && npx tsc --noEmit` -> passed.
+  `cd frontend && npm run build` -> passed with only the existing large chunk warning.
+- Live signed-in smoke against `https://jargon-9bv5.onrender.com`:
+  `lesson1` started at `practice` with `next_action=run_code`.
+  Render engine `/run` returned `output=["hammer -> hammers nails"]`, `status=ok`.
+  Code answer moved to `assessment`, `response_mode=multiple_choice`, choices `a/b/c`,
+  assessment `{score: 1, passed: true}`.
+  Choice answer moved to `complete`, `next_action=complete`.
+  Persisted records for session `d21e31c4-b348-4ff1-be88-48830edadd96`:
+  session status `complete`, `5` turns, `2` lesson attempts, `2` learning evidence rows,
+  and `1` quiz attempt.
+
+Notes:
+
+- The clean repo function no longer depends on `lessons.milestone_id`, but the live compatibility
+  column is harmless and useful as an optional primary-milestone pointer.
+- `deno check` is still unavailable locally; the edge function was syntax-checked with TypeScript
+  plus a local `Deno` shim.
+- Next slice: teacher dashboard v1 can now rely on completed sessions, turns, attempts, quiz
+  attempts, evidence, and mastery summaries existing for real lesson runs.
+
 ## Codex -> Claude / Human - 2026-06-22 09:10
 
 Status: Chat-LMS foundation live on Supabase; current student app still stable
