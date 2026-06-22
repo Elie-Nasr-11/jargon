@@ -6,6 +6,93 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 09:10
+
+Status: Chat-LMS foundation live on Supabase; current student app still stable
+
+Task: Commit/push the foundation schema, apply it live without replaying old migrations, and verify
+that the existing runtime remains intact.
+
+What changed:
+
+- Pushed `bc3d4c0` to `main`: product architecture doc, migrations `0004`-`0006`, and static
+  migration tests for identity/roles, curriculum hierarchy, learning records, quizzes,
+  assignments, evidence, mastery, recommendations, and audit.
+- Pushed `011393b` to `main`: migration `0007_foundation_security_followup.sql`, which explicitly
+  removes anon direct grants from private learner/classroom tables and anon execute from RLS helper
+  functions.
+- Applied live Supabase migrations manually/narrowly through the Supabase connector:
+  `0004_identity_and_roles`, `0005_curriculum_hierarchy`, `0006_learning_records`, and
+  `0007_foundation_security_followup`.
+- Did not run `supabase db push` and did not replay `0001`-`0003`.
+
+Live migration history now includes:
+
+- `20260615121402` `0001_init`
+- `20260615193928` `0002_lesson_spine`
+- `20260615194136` `0003_learning_session_runtime`
+- `20260621204251` `0004_identity_and_roles`
+- `20260621204844` `0005_curriculum_hierarchy`
+- `20260622055247` `0006_learning_records`
+- `20260622060446` `0007_foundation_security_followup`
+
+Verification:
+
+- Local checks before live apply:
+  `python3 -m unittest discover -s tests -q` -> `72` tests passed, `4` skipped.
+  `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+  `cd frontend && npx tsc --noEmit` -> passed.
+  `cd frontend && npm run build` -> passed with only the existing large chunk warning.
+  `git diff --check` -> passed.
+- Live seed counts:
+  `subjects=1`, `courses=1`, `course_versions=1`, `units=2`, `milestones=10`,
+  `quiz_items=2`, `lessons=10`, `lesson_activities=10`.
+- Live grant checks:
+  anon has no direct table grants on private foundation tables:
+  organizations/classes/memberships, profiles, chat/code records, sessions/turns/attempts/mastery,
+  quiz attempts, assignments/submissions, learning evidence, teacher notes, recommendations,
+  grade overrides, and audit events.
+- Live helper-function ACLs:
+  `handle_new_user` is service-role only; RLS helper functions are callable by `authenticated` and
+  `service_role`, not anon.
+- Live host smoke:
+  `https://jargon-9bv5.onrender.com/login` returns HTTP `200` and serves the Vite tutor bundle.
+  `https://jargon-engine.onrender.com/health` returns `{"service":"jargon-engine","status":"ok"}`.
+  Direct engine `/run` with `PRINT 5 // 2` returns `output: ["2"]`, `status: ok`.
+  Supabase edge functions `chat` and `run` are active at version `4` with JWT verification enabled.
+
+Advisor notes left intentionally unresolved in this foundation pass:
+
+- Security advisor still warns that public curriculum tables are visible to anon in GraphQL
+  (`subjects`, `courses`, `course_versions`, `units`, `lessons`, `lesson_activities`,
+  `milestones`, `quiz_items`). This matches the current public-read curriculum contract; revisit if
+  we decide all curriculum should require sign-in.
+- Security advisor still warns that authenticated users can discover/query many public-schema
+  tables through GraphQL. RLS still controls rows, but the cleaner future hardening pass is to move
+  private LMS tables/helpers out of the exposed public schema or narrow grants once the teacher UI
+  access paths are fixed.
+- Security advisor still warns that authenticated users can execute `SECURITY DEFINER` RLS helper
+  functions. They remain callable because current policies depend on them. Future hardening should
+  move helpers to a private schema or refactor policy helpers.
+- Auth leaked-password protection is disabled in Supabase Auth settings; enable in dashboard before
+  broader student onboarding.
+- Performance advisor reports expected foundation-stage items: unindexed foreign keys, unused new
+  indexes, and multiple permissive policies. These should be addressed once the teacher/runtime
+  access patterns settle.
+
+Not completed in this pass:
+
+- I did not perform the signed-in browser smoke path because this run did not have an active browser
+  user session/token. Current app/runtime contracts were left unchanged, and the public app + engine
+  smokes are healthy. Claude or the human should run:
+  sign in -> `/chat` -> select `lesson1` -> run starter -> submit to Mentor.
+
+Next implementation slice:
+
+- Upgrade `chat` from typed reply into a milestone/evidence-aware flow engine that reads the new
+  schema and writes quiz attempts/evidence/recommendations.
+- Then build the first teacher route around classes, roster, transcript, assignments, and evidence.
+
 ## Codex -> Claude / Human - 2026-06-21 15:20
 
 Status: Chat-LMS foundation implemented as repo migrations/docs/tests; not applied live yet
