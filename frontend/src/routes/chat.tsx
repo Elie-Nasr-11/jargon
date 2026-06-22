@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import { AlertCircle, Check, Code2, Copy, ExternalLink, FileText, Play } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  ClipboardList,
+  Code2,
+  Copy,
+  ExternalLink,
+  FileText,
+  Paperclip,
+  Play,
+  Send,
+} from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { HeaderMenus } from "@/components/HeaderMenus";
 import { SettingsMenu } from "@/components/SettingsMenu";
@@ -15,6 +26,7 @@ import {
 } from "@/lib/jargon-store";
 import {
   fetchLearningTurns,
+  fetchStudentAssignments,
   fetchLatestLearningSession,
   fetchLessonActivities,
   fetchLessons,
@@ -23,6 +35,7 @@ import {
   invokeJargonRun,
   invokeTypedChat,
   recordResourceInteraction,
+  submitAssignment,
 } from "@/lib/api";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
@@ -34,6 +47,7 @@ import type {
   LessonActivity,
   LessonChatResource,
   MentorPreferences,
+  StudentAssignmentBundle,
   TypedChatEnvelope,
 } from "@/lib/types";
 
@@ -247,6 +261,12 @@ function ChatPage() {
   const [sending, setSending] = useState(false);
   const [booting, setBooting] = useState(true);
   const [surfaceError, setSurfaceError] = useState("");
+  const [assignments, setAssignments] = useState<StudentAssignmentBundle>({
+    assignments: [],
+    recipients: [],
+    submissions: [],
+    files: [],
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerWrapRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<ComposerHandle>(null);
@@ -345,7 +365,10 @@ function ChatPage() {
           navigate({ to: "/login", replace: true });
           return;
         }
-        const [liveLessons] = await Promise.all([fetchLessons()]);
+        const [liveLessons, liveAssignments] = await Promise.all([
+          fetchLessons(),
+          fetchStudentAssignments(),
+        ]);
         if (!alive) return;
         const selected =
           liveLessons.find((lesson) => lesson.id === store.getLessonId())?.id ||
@@ -355,6 +378,7 @@ function ChatPage() {
         setAccessToken(session.access_token);
         setEmail(session.user.email || "");
         setLessons(liveLessons);
+        setAssignments(liveAssignments);
         setLessonId(selected);
         setMentor(savedMentor);
         await loadLesson(selected, session.access_token, savedMentor);
@@ -517,6 +541,40 @@ function ChatPage() {
     }
   };
 
+  const submitStudentAssignment = async (input: {
+    assignmentId: string;
+    content: string;
+    code: string;
+    files: File[];
+  }) => {
+    const submitted = await submitAssignment({
+      assignmentId: input.assignmentId,
+      content: input.content,
+      code: input.code,
+      files: input.files,
+    });
+    setAssignments((current) => ({
+      assignments: current.assignments,
+      recipients: current.recipients.map((recipient) =>
+        recipient.id === submitted.recipient.id ? submitted.recipient : recipient,
+      ),
+      submissions: [
+        submitted.submission,
+        ...current.submissions.filter((submission) => submission.id !== submitted.submission.id),
+      ],
+      files: [
+        ...submitted.files,
+        ...current.files.filter((file) => file.submission_id !== submitted.submission.id),
+      ],
+    }));
+    const assignment = assignments.assignments.find((item) => item.id === input.assignmentId);
+    addMsg({
+      id: uid(),
+      role: "user",
+      text: `Submitted assignment: ${assignment?.title || "Assignment"}`,
+    });
+  };
+
   const useCodeInEditor = (code: ChatCodeBlock) => {
     composerRef.current?.loadCode({ code: code.source, language: code.language });
     requestAnimationFrame(() => {
@@ -603,6 +661,11 @@ function ChatPage() {
           ref={composerWrapRef}
           className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
         >
+          <AssignmentDock
+            lessonId={lessonId}
+            bundle={assignments}
+            onSubmitAssignment={submitStudentAssignment}
+          />
           <Composer
             ref={composerRef}
             key={lessonId}
@@ -615,6 +678,221 @@ function ChatPage() {
           />
         </div>
       </main>
+    </div>
+  );
+}
+
+function AssignmentDock({
+  lessonId,
+  bundle,
+  onSubmitAssignment,
+}: {
+  lessonId: string;
+  bundle: StudentAssignmentBundle;
+  onSubmitAssignment: (input: {
+    assignmentId: string;
+    content: string;
+    code: string;
+    files: File[];
+  }) => Promise<void>;
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<
+    Record<
+      string,
+      { content: string; code: string; files: File[]; saving: boolean; message: string }
+    >
+  >({});
+  const visibleAssignments = bundle.assignments
+    .filter((assignment) => assignment.status === "assigned" && assignment.lesson_id === lessonId)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+
+  if (!visibleAssignments.length) return null;
+
+  const getDraft = (assignmentId: string) =>
+    drafts[assignmentId] || { content: "", code: "", files: [], saving: false, message: "" };
+
+  const setDraft = (
+    assignmentId: string,
+    patch: Partial<{
+      content: string;
+      code: string;
+      files: File[];
+      saving: boolean;
+      message: string;
+    }>,
+  ) => {
+    setDrafts((current) => ({
+      ...current,
+      [assignmentId]: {
+        content: current[assignmentId]?.content || "",
+        code: current[assignmentId]?.code || "",
+        files: current[assignmentId]?.files || [],
+        saving: current[assignmentId]?.saving || false,
+        message: current[assignmentId]?.message || "",
+        ...patch,
+      },
+    }));
+  };
+
+  const submit = async (assignmentId: string) => {
+    const draft = getDraft(assignmentId);
+    if (!draft.content.trim() && !draft.code.trim() && !draft.files.length) {
+      setDraft(assignmentId, { message: "Add text, code, or a file before submitting." });
+      return;
+    }
+    setDraft(assignmentId, { saving: true, message: "" });
+    try {
+      await onSubmitAssignment({
+        assignmentId,
+        content: draft.content,
+        code: draft.code,
+        files: draft.files,
+      });
+      setDraft(assignmentId, {
+        content: "",
+        code: "",
+        files: [],
+        saving: false,
+        message: "Submitted.",
+      });
+    } catch (error) {
+      setDraft(assignmentId, {
+        saving: false,
+        message: (error as Error).message || "Could not submit assignment.",
+      });
+    }
+  };
+
+  return (
+    <div className="mb-3 space-y-2">
+      {visibleAssignments.map((assignment) => {
+        const recipient = bundle.recipients.find((item) => item.assignment_id === assignment.id);
+        const submissions = bundle.submissions.filter(
+          (submission) => submission.assignment_id === assignment.id,
+        );
+        const latestSubmission = submissions[0] || null;
+        const submissionFiles = latestSubmission
+          ? bundle.files.filter((file) => file.submission_id === latestSubmission.id)
+          : [];
+        const draft = getDraft(assignment.id);
+        const expanded = expandedId === assignment.id;
+        return (
+          <GradientCard key={assignment.id} innerClassName="overflow-hidden">
+            <div className="bg-background/70 p-3">
+              <button
+                type="button"
+                onClick={() => setExpandedId(expanded ? null : assignment.id)}
+                className="flex w-full items-start justify-between gap-3 text-left"
+              >
+                <span className="min-w-0">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                    <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    Assignment · {recipient?.status || "assigned"}
+                  </span>
+                  <span className="mt-1 block text-[13.5px] font-medium text-foreground">
+                    {assignment.title}
+                  </span>
+                  {assignment.due_at ? (
+                    <span className="mt-1 block text-[11.5px] text-muted-foreground">
+                      Due {formatChatDateTime(assignment.due_at)}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground">
+                  {expanded ? "Close" : "Open"}
+                </span>
+              </button>
+
+              {expanded ? (
+                <div className="mt-3 border-t border-border pt-3">
+                  <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                    {assignment.instructions || "Submit your work when ready."}
+                  </p>
+
+                  {latestSubmission ? (
+                    <div className="mt-3 rounded-2xl border border-border bg-background/45 p-3">
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                        Latest submission · {latestSubmission.status}
+                      </div>
+                      {latestSubmission.feedback ? (
+                        <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground">
+                          {latestSubmission.feedback}
+                        </p>
+                      ) : (
+                        <p className="text-[12.5px] text-muted-foreground">
+                          Waiting for teacher feedback.
+                        </p>
+                      )}
+                      <div className="mt-2 text-[11.5px] text-muted-foreground">
+                        Score:{" "}
+                        {latestSubmission.score === null
+                          ? "not graded"
+                          : formatChatScore(latestSubmission.score)}
+                      </div>
+                      {submissionFiles.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {submissionFiles.map((file) => (
+                            <span
+                              key={file.id}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground"
+                            >
+                              <Paperclip className="h-3 w-3" strokeWidth={1.7} />
+                              {file.original_filename}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 grid gap-2">
+                    <textarea
+                      value={draft.content}
+                      onChange={(event) => setDraft(assignment.id, { content: event.target.value })}
+                      placeholder="Write your answer..."
+                      className="min-h-[74px] rounded-2xl border border-border bg-background/65 px-3 py-2 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                    <textarea
+                      value={draft.code}
+                      onChange={(event) => setDraft(assignment.id, { code: event.target.value })}
+                      placeholder="Optional code..."
+                      className="min-h-[88px] rounded-2xl border border-border bg-[var(--code-background)] px-3 py-2 text-[12.5px] leading-relaxed text-[var(--code-foreground)] outline-none placeholder:text-muted-foreground"
+                      style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                    />
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(event) =>
+                        setDraft(assignment.id, {
+                          files: Array.from(event.target.files || []),
+                        })
+                      }
+                      className="rounded-2xl border border-border bg-background/65 px-3 py-2 text-[12.5px] text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[11.5px] text-muted-foreground">
+                        {draft.files.length
+                          ? `${draft.files.length} file${draft.files.length === 1 ? "" : "s"} ready`
+                          : draft.message}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void submit(assignment.id)}
+                        disabled={draft.saving}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                      >
+                        <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
+                        {draft.saving ? "Submitting..." : "Submit"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </GradientCard>
+        );
+      })}
     </div>
   );
 }
@@ -893,6 +1171,21 @@ function youtubeEmbedUrl(rawUrl: string) {
   } catch {
     return "";
   }
+}
+
+function formatChatScore(score: number | null | undefined) {
+  if (score === null || score === undefined) return "not graded";
+  if (score <= 1) return `${Math.round(score * 100)}%`;
+  return `${Math.round(score)}%`;
+}
+
+function formatChatDateTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function MessageContent({

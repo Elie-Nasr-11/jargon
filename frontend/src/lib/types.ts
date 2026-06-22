@@ -224,6 +224,77 @@ export type TeacherNote = {
   updated_at: string;
 };
 
+export type AssignmentStatus = "recommended" | "draft" | "assigned" | "archived";
+export type AssignmentRecipientStatus =
+  | "assigned"
+  | "started"
+  | "submitted"
+  | "returned"
+  | "complete";
+export type AssignmentSubmissionStatus = "submitted" | "returned" | "accepted";
+export type AssignmentSubmissionFileStatus = "submitted" | "returned" | "accepted" | "removed";
+
+export type Assignment = {
+  id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  course_id: string | null;
+  lesson_id: string | null;
+  milestone_id: string | null;
+  title: string;
+  instructions: string;
+  assigned_by: string | null;
+  source: "teacher" | "mentor_recommendation" | "system";
+  status: AssignmentStatus;
+  requires_teacher_approval: boolean;
+  due_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AssignmentRecipient = {
+  id: string;
+  assignment_id: string;
+  user_id: string;
+  status: AssignmentRecipientStatus;
+  score: number | null;
+  feedback: string | null;
+  assigned_at: string;
+  completed_at: string | null;
+  updated_at: string;
+};
+
+export type AssignmentSubmission = {
+  id: string;
+  assignment_id: string;
+  user_id: string;
+  content: string | null;
+  code: string | null;
+  file_path: string | null;
+  run_result: Record<string, unknown> | null;
+  score: number | null;
+  feedback: string | null;
+  status: AssignmentSubmissionStatus;
+  created_at: string;
+  updated_at: string;
+  submitted_at?: string | null;
+};
+
+export type AssignmentSubmissionFile = {
+  id: string;
+  assignment_id: string;
+  submission_id: string | null;
+  user_id: string;
+  storage_bucket: string;
+  storage_path: string;
+  original_filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  status: AssignmentSubmissionFileStatus;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Profile = {
   id: string;
   name: string | null;
@@ -359,4 +430,15 @@ export type TeacherDashboardData = {
   mastery: StudentMastery[];
   notes: TeacherNote[];
   resources: LessonResource[];
+  assignments: Assignment[];
+  assignmentRecipients: AssignmentRecipient[];
+  assignmentSubmissions: AssignmentSubmission[];
+  assignmentSubmissionFiles: AssignmentSubmissionFile[];
+};
+
+export type StudentAssignmentBundle = {
+  assignments: Assignment[];
+  recipients: AssignmentRecipient[];
+  submissions: AssignmentSubmission[];
+  files: AssignmentSubmissionFile[];
 };

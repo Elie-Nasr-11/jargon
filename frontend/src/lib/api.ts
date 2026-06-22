@@ -1,6 +1,13 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { functionUrl, supabase, supabaseAnonKey } from "@/lib/supabase";
 import type {
+  Assignment,
+  AssignmentRecipient,
+  AssignmentRecipientStatus,
+  AssignmentStatus,
+  AssignmentSubmission,
+  AssignmentSubmissionFile,
+  AssignmentSubmissionStatus,
   JargonRunResponse,
   LearningSession,
   LearningTurn,
@@ -24,6 +31,7 @@ import type {
   TeacherDashboardData,
   TeacherNote,
   ResourceInteractionEvent,
+  StudentAssignmentBundle,
   TypedChatAnswer,
   TypedChatEnvelope,
 } from "@/lib/types";
@@ -84,6 +92,21 @@ function storagePathForResource(input: {
     safePathSegment(input.organizationId),
     safePathSegment(input.classId),
     safePathSegment(input.lessonId),
+    `${uniqueId()}-${name}`,
+  ].join("/");
+}
+
+function storagePathForSubmission(input: {
+  assignmentId: string;
+  userId: string;
+  submissionId: string;
+  fileName: string;
+}) {
+  const name = safePathSegment(input.fileName) || "submission";
+  return [
+    safePathSegment(input.assignmentId),
+    safePathSegment(input.userId),
+    safePathSegment(input.submissionId),
     `${uniqueId()}-${name}`,
   ].join("/");
 }
@@ -304,6 +327,10 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
       mastery: [],
       notes: [],
       resources: [],
+      assignments: [],
+      assignmentRecipients: [],
+      assignmentSubmissions: [],
+      assignmentSubmissionFiles: [],
     };
   }
 
@@ -334,6 +361,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     masteryResult,
     notesResult,
     resourcesResult,
+    assignmentsResult,
   ] = await Promise.all([
     profileIds.length
       ? supabase.from("profiles").select("id,name,grade").in("id", profileIds)
@@ -389,6 +417,14 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .order("created_at", { ascending: false })
           .limit(200)
       : Promise.resolve({ data: [], error: null }),
+    classIds.length
+      ? supabase
+          .from("assignments")
+          .select("*")
+          .in("class_id", classIds)
+          .order("updated_at", { ascending: false })
+          .limit(250)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   for (const result of [
@@ -400,21 +436,62 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     masteryResult,
     notesResult,
     resourcesResult,
+    assignmentsResult,
   ]) {
     if (result.error) throw result.error;
   }
 
   const sessions = (sessionsResult.data || []) as LearningSession[];
+  const assignments = (assignmentsResult.data || []) as Assignment[];
+  const assignmentIds = uniqueStrings(assignments.map((assignment) => assignment.id));
   const sessionIds = uniqueStrings(sessions.map((session) => session.id));
-  const { data: turnRows, error: turnsError } = sessionIds.length
-    ? await supabase
-        .from("learning_turns")
-        .select("*")
-        .in("session_id", sessionIds)
-        .order("created_at", { ascending: true })
-        .limit(600)
-    : { data: [], error: null };
+  const [
+    { data: turnRows, error: turnsError },
+    assignmentRecipientsResult,
+    assignmentSubmissionsResult,
+    assignmentFilesResult,
+  ] = await Promise.all([
+    sessionIds.length
+      ? supabase
+          .from("learning_turns")
+          .select("*")
+          .in("session_id", sessionIds)
+          .order("created_at", { ascending: true })
+          .limit(600)
+      : Promise.resolve({ data: [], error: null }),
+    assignmentIds.length
+      ? supabase
+          .from("assignment_recipients")
+          .select("*")
+          .in("assignment_id", assignmentIds)
+          .order("updated_at", { ascending: false })
+          .limit(600)
+      : Promise.resolve({ data: [], error: null }),
+    assignmentIds.length
+      ? supabase
+          .from("assignment_submissions")
+          .select("*")
+          .in("assignment_id", assignmentIds)
+          .order("updated_at", { ascending: false })
+          .limit(600)
+      : Promise.resolve({ data: [], error: null }),
+    assignmentIds.length
+      ? supabase
+          .from("assignment_submission_files")
+          .select("*")
+          .in("assignment_id", assignmentIds)
+          .order("created_at", { ascending: false })
+          .limit(600)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
   if (turnsError) throw turnsError;
+  for (const result of [
+    assignmentRecipientsResult,
+    assignmentSubmissionsResult,
+    assignmentFilesResult,
+  ]) {
+    if (result.error) throw result.error;
+  }
 
   return {
     classes,
@@ -429,6 +506,10 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     mastery: (masteryResult.data || []) as StudentMastery[],
     notes: (notesResult.data || []) as TeacherNote[],
     resources: (resourcesResult.data || []) as LessonResource[],
+    assignments,
+    assignmentRecipients: (assignmentRecipientsResult.data || []) as AssignmentRecipient[],
+    assignmentSubmissions: (assignmentSubmissionsResult.data || []) as AssignmentSubmission[],
+    assignmentSubmissionFiles: (assignmentFilesResult.data || []) as AssignmentSubmissionFile[],
   };
 }
 
@@ -609,6 +690,328 @@ export async function recordResourceInteraction(event: ResourceInteractionEvent)
     progress_percent: event.progress_percent ?? null,
   });
   if (error) throw error;
+}
+
+export async function createAssignment(input: {
+  teacherId: string;
+  organizationId: string;
+  classId: string;
+  lessonId: string;
+  title: string;
+  instructions: string;
+  dueAt?: string | null;
+  status: Extract<AssignmentStatus, "draft" | "assigned">;
+  recipientIds: string[];
+  resourceIds: string[];
+}) {
+  const assignmentId = uniqueId();
+  const recipientIds = uniqueStrings(input.recipientIds);
+  if (!recipientIds.length) throw new Error("Choose at least one student.");
+
+  const { error: assignmentError } = await supabase.from("assignments").insert({
+    id: assignmentId,
+    organization_id: input.organizationId,
+    class_id: input.classId,
+    lesson_id: input.lessonId,
+    title: input.title.trim(),
+    instructions: input.instructions.trim(),
+    assigned_by: input.teacherId,
+    source: "teacher",
+    status: input.status,
+    requires_teacher_approval: false,
+    due_at: input.dueAt || null,
+  });
+  if (assignmentError) throw assignmentError;
+
+  const { error: recipientsError } = await supabase.from("assignment_recipients").insert(
+    recipientIds.map((userId) => ({
+      assignment_id: assignmentId,
+      user_id: userId,
+      status: "assigned" satisfies AssignmentRecipientStatus,
+    })),
+  );
+  if (recipientsError) throw recipientsError;
+
+  if (input.resourceIds.length) {
+    const { error: resourcesError } = await supabase
+      .from("lesson_resources")
+      .update({ assignment_id: assignmentId })
+      .in("id", input.resourceIds);
+    if (resourcesError) throw resourcesError;
+  }
+
+  const [
+    { data: assignment, error: assignmentFetchError },
+    { data: recipients, error: recipientsFetchError },
+  ] = await Promise.all([
+    supabase.from("assignments").select("*").eq("id", assignmentId).single(),
+    supabase.from("assignment_recipients").select("*").eq("assignment_id", assignmentId),
+  ]);
+  if (assignmentFetchError) throw assignmentFetchError;
+  if (recipientsFetchError) throw recipientsFetchError;
+
+  return {
+    assignment: assignment as Assignment,
+    recipients: (recipients || []) as AssignmentRecipient[],
+  };
+}
+
+export async function updateAssignmentStatus(assignmentId: string, status: AssignmentStatus) {
+  const { error } = await supabase
+    .from("assignments")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", assignmentId);
+  if (error) throw error;
+
+  const { data, error: fetchError } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("id", assignmentId)
+    .single();
+  if (fetchError) throw fetchError;
+  return data as Assignment;
+}
+
+export async function fetchStudentAssignments(): Promise<StudentAssignmentBundle> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user) throw new Error("Sign in to view assignments.");
+
+  const { data: recipients, error: recipientsError } = await supabase
+    .from("assignment_recipients")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+  if (recipientsError) throw recipientsError;
+
+  const assignmentIds = uniqueStrings(
+    ((recipients || []) as AssignmentRecipient[]).map((recipient) => recipient.assignment_id),
+  );
+  if (!assignmentIds.length) {
+    return { assignments: [], recipients: [], submissions: [], files: [] };
+  }
+
+  const [assignmentsResult, submissionsResult, filesResult] = await Promise.all([
+    supabase
+      .from("assignments")
+      .select("*")
+      .in("id", assignmentIds)
+      .neq("status", "archived")
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("assignment_submissions")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("assignment_id", assignmentIds)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("assignment_submission_files")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("assignment_id", assignmentIds)
+      .order("created_at", { ascending: false }),
+  ]);
+  for (const result of [assignmentsResult, submissionsResult, filesResult]) {
+    if (result.error) throw result.error;
+  }
+
+  return {
+    assignments: (assignmentsResult.data || []) as Assignment[],
+    recipients: (recipients || []) as AssignmentRecipient[],
+    submissions: (submissionsResult.data || []) as AssignmentSubmission[],
+    files: (filesResult.data || []) as AssignmentSubmissionFile[],
+  };
+}
+
+export async function submitAssignment(input: {
+  assignmentId: string;
+  content: string;
+  code: string;
+  runResult?: Record<string, unknown> | null;
+  files: File[];
+}) {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user) throw new Error("Sign in to submit assignments.");
+
+  const submissionId = uniqueId();
+  const now = new Date().toISOString();
+  const { error: submissionError } = await supabase.from("assignment_submissions").insert({
+    id: submissionId,
+    assignment_id: input.assignmentId,
+    user_id: user.id,
+    content: input.content.trim() || null,
+    code: input.code.trim() || null,
+    run_result: input.runResult || null,
+    status: "submitted" satisfies AssignmentSubmissionStatus,
+    submitted_at: now,
+  });
+  if (submissionError) throw submissionError;
+
+  const createdFiles: AssignmentSubmissionFile[] = [];
+  for (const file of input.files) {
+    const storagePath = storagePathForSubmission({
+      assignmentId: input.assignmentId,
+      userId: user.id,
+      submissionId,
+      fileName: file.name,
+    });
+    const { error: uploadError } = await supabase.storage
+      .from("student-submissions")
+      .upload(storagePath, file, {
+        cacheControl: "3600",
+        contentType: file.type || undefined,
+        upsert: false,
+      });
+    if (uploadError) throw uploadError;
+
+    const fileId = uniqueId();
+    const { error: fileError } = await supabase.from("assignment_submission_files").insert({
+      id: fileId,
+      assignment_id: input.assignmentId,
+      submission_id: submissionId,
+      user_id: user.id,
+      storage_bucket: "student-submissions",
+      storage_path: storagePath,
+      original_filename: file.name,
+      mime_type: file.type || null,
+      file_size_bytes: file.size,
+      status: "submitted",
+    });
+    if (fileError) throw fileError;
+
+    const { data: fileRow, error: fileFetchError } = await supabase
+      .from("assignment_submission_files")
+      .select("*")
+      .eq("id", fileId)
+      .single();
+    if (fileFetchError) throw fileFetchError;
+    createdFiles.push(fileRow as AssignmentSubmissionFile);
+  }
+
+  const { error: recipientError } = await supabase
+    .from("assignment_recipients")
+    .update({ status: "submitted", updated_at: now })
+    .eq("assignment_id", input.assignmentId)
+    .eq("user_id", user.id);
+  if (recipientError) throw recipientError;
+
+  const [
+    { data: submission, error: submissionFetchError },
+    { data: recipient, error: recipientFetchError },
+  ] = await Promise.all([
+    supabase.from("assignment_submissions").select("*").eq("id", submissionId).single(),
+    supabase
+      .from("assignment_recipients")
+      .select("*")
+      .eq("assignment_id", input.assignmentId)
+      .eq("user_id", user.id)
+      .single(),
+  ]);
+  if (submissionFetchError) throw submissionFetchError;
+  if (recipientFetchError) throw recipientFetchError;
+
+  return {
+    submission: submission as AssignmentSubmission,
+    recipient: recipient as AssignmentRecipient,
+    files: createdFiles,
+  };
+}
+
+export async function gradeAssignmentSubmission(input: {
+  teacherId: string;
+  assignment: Assignment;
+  submission: AssignmentSubmission;
+  scorePercent: number;
+  feedback: string;
+  decision: "accepted" | "returned";
+}) {
+  const normalizedScore = Math.max(0, Math.min(100, input.scorePercent)) / 100;
+  const now = new Date().toISOString();
+  const recipientStatus =
+    input.decision === "accepted"
+      ? ("complete" satisfies AssignmentRecipientStatus)
+      : ("returned" satisfies AssignmentRecipientStatus);
+
+  const { error: submissionError } = await supabase
+    .from("assignment_submissions")
+    .update({
+      score: normalizedScore,
+      feedback: input.feedback.trim(),
+      status: input.decision,
+      updated_at: now,
+    })
+    .eq("id", input.submission.id);
+  if (submissionError) throw submissionError;
+
+  const { error: recipientError } = await supabase
+    .from("assignment_recipients")
+    .update({
+      score: normalizedScore,
+      feedback: input.feedback.trim(),
+      status: recipientStatus,
+      completed_at: input.decision === "accepted" ? now : null,
+      updated_at: now,
+    })
+    .eq("assignment_id", input.assignment.id)
+    .eq("user_id", input.submission.user_id);
+  if (recipientError) throw recipientError;
+
+  const { error: evidenceError } = await supabase.from("learning_evidence").insert({
+    user_id: input.submission.user_id,
+    lesson_id: input.assignment.lesson_id,
+    milestone_id: input.assignment.milestone_id,
+    source_type: "assignment",
+    source_ref: {
+      assignment_id: input.assignment.id,
+      submission_id: input.submission.id,
+      decision: input.decision,
+    },
+    skill_keys: [],
+    score: normalizedScore,
+    confidence: input.decision === "accepted" ? 0.85 : 0.55,
+    rubric_result: {
+      teacher_feedback: input.feedback.trim(),
+      status: input.decision,
+    },
+    notes: input.feedback.trim() || "Assignment reviewed by teacher.",
+    created_by: input.teacherId,
+  });
+  if (evidenceError) throw evidenceError;
+
+  const [
+    { data: submission, error: submissionFetchError },
+    { data: recipient, error: recipientFetchError },
+  ] = await Promise.all([
+    supabase.from("assignment_submissions").select("*").eq("id", input.submission.id).single(),
+    supabase
+      .from("assignment_recipients")
+      .select("*")
+      .eq("assignment_id", input.assignment.id)
+      .eq("user_id", input.submission.user_id)
+      .single(),
+  ]);
+  if (submissionFetchError) throw submissionFetchError;
+  if (recipientFetchError) throw recipientFetchError;
+
+  return {
+    submission: submission as AssignmentSubmission,
+    recipient: recipient as AssignmentRecipient,
+  };
+}
+
+export async function getSubmissionFileSignedUrl(file: AssignmentSubmissionFile) {
+  const { data, error } = await supabase.storage
+    .from(file.storage_bucket || "student-submissions")
+    .createSignedUrl(file.storage_path, 60 * 30);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 export async function invokeTypedChat(input: {

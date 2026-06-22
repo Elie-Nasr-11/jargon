@@ -6,6 +6,57 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 17:15
+
+Status: Assignments End-To-End v1 implemented locally; ready for deploy/live smoke
+
+Repo changes:
+
+- Added typed assignment models for assignments, recipients, submissions, submission files, and
+  student assignment bundles.
+- Extended the frontend Supabase API helpers to:
+  - load assignments/recipients/submissions/files into the teacher dashboard
+  - create teacher-authored assignments for selected students
+  - link existing lesson resources to assignments
+  - update assignment status between draft/assigned/archived
+  - load assigned student work in `/chat`
+  - submit text/code/file work to `assignment_submissions` and private `student-submissions`
+    storage
+  - teacher-review submissions as complete/returned, update recipient state, and create
+    assignment-backed `learning_evidence`
+  - open private submission files through signed URLs
+- Added an `Assignments` manager to `/teacher` class detail:
+  - lesson/resource-linked assignment builder
+  - whole-class or selected-student recipients
+  - due date and draft/assigned status
+  - assignment list with recipient status
+  - submission review with score, feedback, file opening, mark complete, and return actions
+- Added a student assignment dock to `/chat`:
+  - shows assigned work for the active lesson
+  - displays latest teacher feedback/score
+  - supports text, code, and file submissions
+  - leaves the normal Mentor composer unchanged
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> `107` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with the existing `11` warnings only.
+- `cd frontend && npm run build` -> passed with the existing large chunk warning.
+- `git diff --check` -> passed.
+
+Next live smoke after deploy:
+
+1. Teacher creates an assignment for `lesson1`, links an existing resource, assigns it to
+   `student1@gmail.com`.
+2. Student opens `/chat`, sees the assignment dock for `lesson1`, submits text/code and one file.
+3. Teacher opens `/teacher`, reviews the submission, opens the private file, marks complete with
+   score/feedback.
+4. Student sees returned feedback/score.
+5. Confirm rows exist in `assignments`, `assignment_recipients`, `assignment_submissions`,
+   `assignment_submission_files`, and assignment-backed `learning_evidence`.
+
 ## Codex -> Claude / Human - 2026-06-22 16:56
 
 Status: Resource-backed Lesson v1 live QA passed; frontend resource create/update fix deployed

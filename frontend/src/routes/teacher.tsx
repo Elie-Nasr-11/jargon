@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
+  Archive,
   BookOpen,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ClipboardList,
@@ -10,20 +12,31 @@ import {
   GraduationCap,
   MessageSquare,
   NotebookText,
+  Paperclip,
+  Send,
   UsersRound,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import {
+  createAssignment,
   createLessonResource,
   createTeacherNote,
   fetchTeacherDashboard,
+  getSubmissionFileSignedUrl,
+  gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
   getSession,
+  updateAssignmentStatus,
   updateLessonResource,
 } from "@/lib/api";
 import type {
+  Assignment,
+  AssignmentRecipient,
+  AssignmentStatus,
+  AssignmentSubmission,
+  AssignmentSubmissionFile,
   LearningSession,
   Lesson,
   LessonResource,
@@ -67,6 +80,7 @@ function TeacherPage() {
     useState<TeacherNote["visibility"]>("teacher_private");
   const [savingNote, setSavingNote] = useState(false);
   const [savingResource, setSavingResource] = useState(false);
+  const [savingAssignment, setSavingAssignment] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -230,6 +244,96 @@ function TeacherPage() {
     }
   };
 
+  const saveAssignment = async (input: AssignmentFormValues) => {
+    if (!teacherId) return;
+    setSavingAssignment(true);
+    try {
+      const created = await createAssignment({
+        teacherId,
+        organizationId: input.organizationId,
+        classId: input.classId,
+        lessonId: input.lessonId,
+        title: input.title,
+        instructions: input.instructions,
+        dueAt: input.dueAt || null,
+        status: input.status,
+        recipientIds: input.recipientIds,
+        resourceIds: input.resourceIds,
+      });
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              assignments: [created.assignment, ...current.assignments],
+              assignmentRecipients: [
+                ...created.recipients,
+                ...current.assignmentRecipients.filter(
+                  (recipient) => recipient.assignment_id !== created.assignment.id,
+                ),
+              ],
+              resources: current.resources.map((resource) =>
+                input.resourceIds.includes(resource.id)
+                  ? { ...resource, assignment_id: created.assignment.id }
+                  : resource,
+              ),
+            }
+          : current,
+      );
+    } catch (error) {
+      setMessage((error as Error).message || "Could not create assignment.");
+      throw error;
+    } finally {
+      setSavingAssignment(false);
+    }
+  };
+
+  const setAssignmentStatus = async (assignmentId: string, status: AssignmentStatus) => {
+    try {
+      const updated = await updateAssignmentStatus(assignmentId, status);
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              assignments: current.assignments.map((assignment) =>
+                assignment.id === updated.id ? updated : assignment,
+              ),
+            }
+          : current,
+      );
+    } catch (error) {
+      setMessage((error as Error).message || "Could not update assignment.");
+    }
+  };
+
+  const reviewSubmission = async (input: {
+    assignment: Assignment;
+    submission: AssignmentSubmission;
+    scorePercent: number;
+    feedback: string;
+    decision: "accepted" | "returned";
+  }) => {
+    if (!teacherId) return;
+    try {
+      const reviewed = await gradeAssignmentSubmission({ teacherId, ...input });
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              assignmentSubmissions: current.assignmentSubmissions.map((submission) =>
+                submission.id === reviewed.submission.id ? reviewed.submission : submission,
+              ),
+              assignmentRecipients: current.assignmentRecipients.map((recipient) =>
+                recipient.id === reviewed.recipient.id ? reviewed.recipient : recipient,
+              ),
+            }
+          : current,
+      );
+    } catch (error) {
+      setMessage((error as Error).message || "Could not review submission.");
+      throw error;
+    }
+  };
+
   return (
     <div
       className="relative flex min-h-screen flex-col overflow-hidden"
@@ -346,13 +450,25 @@ function TeacherPage() {
                     resources={dashboard.resources.filter(
                       (resource) => resource.class_id === selectedClass.id,
                     )}
+                    assignments={dashboard.assignments.filter(
+                      (assignment) => assignment.class_id === selectedClass.id,
+                    )}
+                    assignmentRecipients={dashboard.assignmentRecipients}
+                    assignmentSubmissions={dashboard.assignmentSubmissions}
+                    assignmentSubmissionFiles={dashboard.assignmentSubmissionFiles}
                     studentIds={classStudents}
                     selectedLessonId={selectedGradebookLessonId}
                     selectedStudentId={selectedStudentId}
                     onSelectLesson={setSelectedGradebookLessonId}
                     onSelectStudent={setSelectedStudentId}
                     savingResource={savingResource}
+                    savingAssignment={savingAssignment}
                     onSaveResource={saveResource}
+                    onSaveAssignment={saveAssignment}
+                    onSetAssignmentStatus={(assignmentId, status) =>
+                      void setAssignmentStatus(assignmentId, status)
+                    }
+                    onReviewSubmission={reviewSubmission}
                     onUpdateResource={(resource) =>
                       setDashboard((current) =>
                         current
@@ -459,13 +575,21 @@ function ClassDetail({
   lessons,
   lessonsById,
   resources,
+  assignments,
+  assignmentRecipients,
+  assignmentSubmissions,
+  assignmentSubmissionFiles,
   studentIds,
   selectedLessonId,
   selectedStudentId,
   onSelectLesson,
   onSelectStudent,
   savingResource,
+  savingAssignment,
   onSaveResource,
+  onSaveAssignment,
+  onSetAssignmentStatus,
+  onReviewSubmission,
   onUpdateResource,
 }: {
   item: TeacherClassSummary;
@@ -475,13 +599,27 @@ function ClassDetail({
   lessons: Lesson[];
   lessonsById: Map<string, Lesson>;
   resources: LessonResource[];
+  assignments: Assignment[];
+  assignmentRecipients: AssignmentRecipient[];
+  assignmentSubmissions: AssignmentSubmission[];
+  assignmentSubmissionFiles: AssignmentSubmissionFile[];
   studentIds: string[];
   selectedLessonId: string;
   selectedStudentId: string | null;
   onSelectLesson: (lessonId: string) => void;
   onSelectStudent: (studentId: string) => void;
   savingResource: boolean;
+  savingAssignment: boolean;
   onSaveResource: (input: ResourceFormValues) => Promise<void>;
+  onSaveAssignment: (input: AssignmentFormValues) => Promise<void>;
+  onSetAssignmentStatus: (assignmentId: string, status: AssignmentStatus) => void;
+  onReviewSubmission: (input: {
+    assignment: Assignment;
+    submission: AssignmentSubmission;
+    scorePercent: number;
+    feedback: string;
+    decision: "accepted" | "returned";
+  }) => Promise<void>;
   onUpdateResource: (resource: LessonResource) => void;
 }) {
   return (
@@ -524,6 +662,22 @@ function ClassDetail({
           saving={savingResource}
           onSaveResource={onSaveResource}
           onUpdateResource={onUpdateResource}
+        />
+
+        <AssignmentManager
+          classSummary={item}
+          lessons={lessons}
+          resources={resources}
+          assignments={assignments}
+          recipients={assignmentRecipients}
+          submissions={assignmentSubmissions}
+          files={assignmentSubmissionFiles}
+          studentIds={studentIds}
+          profilesById={profilesById}
+          saving={savingAssignment}
+          onSaveAssignment={onSaveAssignment}
+          onSetAssignmentStatus={onSetAssignmentStatus}
+          onReviewSubmission={onReviewSubmission}
         />
 
         <div className="mt-5 grid gap-3">
@@ -1024,6 +1178,605 @@ function ResourceManager({
           ) : (
             <div className="rounded-2xl border border-border bg-background/35 p-5 text-[13px] text-muted-foreground">
               No lesson resources yet. Add a draft, then publish it when students should see it.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type AssignmentFormValues = {
+  organizationId: string;
+  classId: string;
+  lessonId: string;
+  title: string;
+  instructions: string;
+  dueAt: string;
+  status: Extract<AssignmentStatus, "draft" | "assigned">;
+  recipientIds: string[];
+  resourceIds: string[];
+};
+
+function defaultAssignmentForm(
+  classSummary: TeacherClassSummary,
+  lessons: Lesson[],
+  studentIds: string[],
+): AssignmentFormValues {
+  return {
+    organizationId: classSummary.organization_id,
+    classId: classSummary.id,
+    lessonId: lessons[0]?.id || "lesson1",
+    title: "",
+    instructions: "",
+    dueAt: "",
+    status: "assigned",
+    recipientIds: studentIds,
+    resourceIds: [],
+  };
+}
+
+function AssignmentManager({
+  classSummary,
+  lessons,
+  resources,
+  assignments,
+  recipients,
+  submissions,
+  files,
+  studentIds,
+  profilesById,
+  saving,
+  onSaveAssignment,
+  onSetAssignmentStatus,
+  onReviewSubmission,
+}: {
+  classSummary: TeacherClassSummary;
+  lessons: Lesson[];
+  resources: LessonResource[];
+  assignments: Assignment[];
+  recipients: AssignmentRecipient[];
+  submissions: AssignmentSubmission[];
+  files: AssignmentSubmissionFile[];
+  studentIds: string[];
+  profilesById: Map<string, Profile>;
+  saving: boolean;
+  onSaveAssignment: (input: AssignmentFormValues) => Promise<void>;
+  onSetAssignmentStatus: (assignmentId: string, status: AssignmentStatus) => void;
+  onReviewSubmission: (input: {
+    assignment: Assignment;
+    submission: AssignmentSubmission;
+    scorePercent: number;
+    feedback: string;
+    decision: "accepted" | "returned";
+  }) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<AssignmentFormValues>(() =>
+    defaultAssignmentForm(classSummary, lessons, studentIds),
+  );
+  const [assignmentMessage, setAssignmentMessage] = useState("");
+  const [reviewDrafts, setReviewDrafts] = useState<
+    Record<string, { score: string; feedback: string; saving: boolean }>
+  >({});
+  const resourcesForLesson = resources.filter(
+    (resource) => resource.lesson_id === draft.lessonId && resource.status !== "archived",
+  );
+
+  useEffect(() => {
+    setDraft(defaultAssignmentForm(classSummary, lessons, studentIds));
+    setAssignmentMessage("");
+    setReviewDrafts({});
+  }, [classSummary, lessons, studentIds]);
+
+  const setField = <K extends keyof AssignmentFormValues>(
+    key: K,
+    value: AssignmentFormValues[K],
+  ) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const toggleRecipient = (studentId: string) => {
+    setDraft((current) => {
+      const exists = current.recipientIds.includes(studentId);
+      return {
+        ...current,
+        recipientIds: exists
+          ? current.recipientIds.filter((id) => id !== studentId)
+          : [...current.recipientIds, studentId],
+      };
+    });
+  };
+
+  const toggleResource = (resourceId: string) => {
+    setDraft((current) => {
+      const exists = current.resourceIds.includes(resourceId);
+      return {
+        ...current,
+        resourceIds: exists
+          ? current.resourceIds.filter((id) => id !== resourceId)
+          : [...current.resourceIds, resourceId],
+      };
+    });
+  };
+
+  const submit = async () => {
+    try {
+      const title = draft.title.trim();
+      const instructions = draft.instructions.trim();
+      if (!title) throw new Error("Add an assignment title.");
+      if (!instructions) throw new Error("Add student instructions.");
+      if (!draft.lessonId) throw new Error("Choose a lesson.");
+      if (!draft.recipientIds.length) throw new Error("Choose at least one student.");
+
+      await onSaveAssignment({
+        ...draft,
+        title,
+        instructions,
+        dueAt: draft.dueAt ? new Date(draft.dueAt).toISOString() : "",
+      });
+      setAssignmentMessage(
+        draft.status === "assigned"
+          ? "Assignment created and assigned."
+          : "Draft assignment saved.",
+      );
+      setDraft(defaultAssignmentForm(classSummary, lessons, studentIds));
+    } catch (error) {
+      setAssignmentMessage((error as Error).message || "Could not create assignment.");
+    }
+  };
+
+  const openFile = async (file: AssignmentSubmissionFile) => {
+    try {
+      const url = await getSubmissionFileSignedUrl(file);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setAssignmentMessage((error as Error).message || "Could not open submission file.");
+    }
+  };
+
+  const updateReviewDraft = (
+    submissionId: string,
+    patch: Partial<{ score: string; feedback: string; saving: boolean }>,
+  ) => {
+    setReviewDrafts((current) => ({
+      ...current,
+      [submissionId]: {
+        score: current[submissionId]?.score || "",
+        feedback: current[submissionId]?.feedback || "",
+        saving: current[submissionId]?.saving || false,
+        ...patch,
+      },
+    }));
+  };
+
+  const review = async (
+    assignment: Assignment,
+    submission: AssignmentSubmission,
+    decision: "accepted" | "returned",
+  ) => {
+    const draft = reviewDrafts[submission.id] || { score: "", feedback: "", saving: false };
+    const score = Number(draft.score);
+    if (!Number.isFinite(score) || score < 0 || score > 100) {
+      setAssignmentMessage("Enter a score from 0 to 100 before returning a review.");
+      return;
+    }
+    updateReviewDraft(submission.id, { saving: true });
+    try {
+      await onReviewSubmission({
+        assignment,
+        submission,
+        scorePercent: score,
+        feedback: draft.feedback.trim(),
+        decision,
+      });
+      setAssignmentMessage(
+        decision === "accepted" ? "Submission marked complete." : "Submission returned.",
+      );
+    } catch (error) {
+      setAssignmentMessage((error as Error).message || "Could not review submission.");
+    } finally {
+      updateReviewDraft(submission.id, { saving: false });
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-[15px] font-medium text-foreground">Assignments</h3>
+          <p className="text-[12.5px] text-muted-foreground">
+            Create class work, collect submissions, and return teacher-reviewed feedback.
+          </p>
+        </div>
+        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
+          {assignments.length} assignment{assignments.length === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-2xl border border-border bg-background/35 p-4">
+          <div className="text-[13px] font-medium text-foreground">Create assignment</div>
+          <div className="mt-3 grid gap-3">
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Lesson
+              <select
+                value={draft.lessonId}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    lessonId: event.target.value,
+                    resourceIds: [],
+                  }))
+                }
+                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+              >
+                {lessons.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    {lesson.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Title
+              <input
+                value={draft.title}
+                onChange={(event) => setField("title", event.target.value)}
+                placeholder="Purpose reflection"
+                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Instructions
+              <textarea
+                value={draft.instructions}
+                onChange={(event) => setField("instructions", event.target.value)}
+                placeholder="Use the resource and explain what the tool is for in your own words."
+                className="min-h-[86px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Due date
+                <input
+                  type="datetime-local"
+                  value={draft.dueAt}
+                  onChange={(event) => setField("dueAt", event.target.value)}
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                />
+              </label>
+
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Status
+                <select
+                  value={draft.status}
+                  onChange={(event) =>
+                    setField(
+                      "status",
+                      event.target.value as Extract<AssignmentStatus, "draft" | "assigned">,
+                    )
+                  }
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                >
+                  <option value="assigned">Assigned</option>
+                  <option value="draft">Draft</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-background/40 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Recipients
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setField(
+                      "recipientIds",
+                      draft.recipientIds.length === studentIds.length ? [] : studentIds,
+                    )
+                  }
+                  className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {draft.recipientIds.length === studentIds.length ? "Clear" : "All students"}
+                </button>
+              </div>
+              <div className="grid gap-2">
+                {studentIds.map((studentId) => {
+                  const profile = profilesById.get(studentId) || null;
+                  return (
+                    <label
+                      key={studentId}
+                      className="flex items-center gap-2 text-[12.5px] text-foreground"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={draft.recipientIds.includes(studentId)}
+                        onChange={() => toggleRecipient(studentId)}
+                        className="h-4 w-4 accent-foreground"
+                      />
+                      {displayName(profile, studentId)}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-background/40 p-3">
+              <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Optional resources
+              </div>
+              {resourcesForLesson.length ? (
+                <div className="grid gap-2">
+                  {resourcesForLesson.map((resource) => (
+                    <label
+                      key={resource.id}
+                      className="flex items-center gap-2 text-[12.5px] text-foreground"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={draft.resourceIds.includes(resource.id)}
+                        onChange={() => toggleResource(resource.id)}
+                        className="h-4 w-4 accent-foreground"
+                      />
+                      <span className="min-w-0 truncate">
+                        {resource.title} · {resource.status}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[12.5px] text-muted-foreground">
+                  No resources are attached to this lesson yet.
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={saving}
+              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
+              {saving ? "Saving..." : draft.status === "assigned" ? "Assign work" : "Save draft"}
+            </button>
+            {assignmentMessage ? (
+              <div className="text-[12px] leading-relaxed text-muted-foreground">
+                {assignmentMessage}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid content-start gap-3">
+          {assignments.length ? (
+            assignments.map((assignment) => {
+              const assignmentRecipients = recipients.filter(
+                (recipient) => recipient.assignment_id === assignment.id,
+              );
+              const assignmentSubmissions = submissions.filter(
+                (submission) => submission.assignment_id === assignment.id,
+              );
+              const linkedResources = resources.filter(
+                (resource) => resource.assignment_id === assignment.id,
+              );
+              return (
+                <div
+                  key={assignment.id}
+                  className="rounded-2xl border border-border bg-background/35 p-4"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-medium text-foreground">
+                          {assignment.title}
+                        </span>
+                        <AssignmentStatusChip status={assignment.status} />
+                      </div>
+                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        {lessonTitle(lessons, assignment.lesson_id)} · {assignmentRecipients.length}{" "}
+                        recipients · {assignmentSubmissions.length} submissions
+                      </div>
+                      {assignment.due_at ? (
+                        <div className="mt-1 text-[11.5px] text-muted-foreground">
+                          Due {formatDateTime(assignment.due_at)}
+                        </div>
+                      ) : null}
+                      <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                        {assignment.instructions || "No instructions."}
+                      </p>
+                      {linkedResources.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {linkedResources.map((resource) => (
+                            <span
+                              key={resource.id}
+                              className="inline-flex items-center gap-1 rounded-full border border-border bg-background/45 px-2.5 py-1 text-[11.5px] text-muted-foreground"
+                            >
+                              <Paperclip className="h-3 w-3" strokeWidth={1.7} />
+                              {resource.title}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onSetAssignmentStatus(assignment.id, "assigned")}
+                        disabled={assignment.status === "assigned"}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                      >
+                        <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
+                        Assign
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSetAssignmentStatus(assignment.id, "draft")}
+                        disabled={assignment.status === "draft"}
+                        className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                      >
+                        Draft
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSetAssignmentStatus(assignment.id, "archived")}
+                        disabled={assignment.status === "archived"}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                      >
+                        <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
+                        Archive
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2">
+                    {assignmentRecipients.map((recipient) => {
+                      const profile = profilesById.get(recipient.user_id) || null;
+                      return (
+                        <div
+                          key={recipient.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-background/35 px-3 py-2"
+                        >
+                          <div className="text-[12.5px] text-foreground">
+                            {displayName(profile, recipient.user_id)}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <AssignmentRecipientChip status={recipient.status} />
+                            <span className="text-[11.5px] text-muted-foreground">
+                              {recipient.score === null ? "ungraded" : formatScore(recipient.score)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 grid gap-3">
+                    {assignmentSubmissions.length ? (
+                      assignmentSubmissions.map((submission) => {
+                        const profile = profilesById.get(submission.user_id) || null;
+                        const submissionFiles = files.filter(
+                          (file) => file.submission_id === submission.id,
+                        );
+                        const draft = reviewDrafts[submission.id] || {
+                          score:
+                            submission.score === null || submission.score === undefined
+                              ? ""
+                              : String(Math.round(submission.score * 100)),
+                          feedback: submission.feedback || "",
+                          saving: false,
+                        };
+                        return (
+                          <div
+                            key={submission.id}
+                            className="rounded-2xl border border-border bg-background/45 p-3"
+                          >
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <div className="text-[12.5px] font-medium text-foreground">
+                                  {displayName(profile, submission.user_id)}
+                                </div>
+                                <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                                  {submission.status} · {formatDateTime(submission.created_at)}
+                                </div>
+                              </div>
+                              <span className="text-[11.5px] text-muted-foreground">
+                                {submission.score === null
+                                  ? "not graded"
+                                  : formatScore(submission.score)}
+                              </span>
+                            </div>
+                            {submission.content ? (
+                              <p className="whitespace-pre-wrap rounded-2xl border border-border bg-background/45 p-3 text-[12.5px] leading-relaxed text-foreground">
+                                {submission.content}
+                              </p>
+                            ) : null}
+                            {submission.code ? (
+                              <pre
+                                className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-2xl border border-border bg-[var(--code-background)] p-3 text-[12px] leading-relaxed text-[var(--code-foreground)]"
+                                style={{
+                                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                                }}
+                              >
+                                {submission.code}
+                              </pre>
+                            ) : null}
+                            {submissionFiles.length ? (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {submissionFiles.map((file) => (
+                                  <button
+                                    type="button"
+                                    key={file.id}
+                                    onClick={() => void openFile(file)}
+                                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                                  >
+                                    <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
+                                    {file.original_filename}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                            <div className="mt-3 grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={draft.score}
+                                onChange={(event) =>
+                                  updateReviewDraft(submission.id, { score: event.target.value })
+                                }
+                                placeholder="Score"
+                                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                              />
+                              <input
+                                value={draft.feedback}
+                                onChange={(event) =>
+                                  updateReviewDraft(submission.id, {
+                                    feedback: event.target.value,
+                                  })
+                                }
+                                placeholder="Feedback for the student"
+                                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                              />
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void review(assignment, submission, "accepted")}
+                                disabled={draft.saving}
+                                className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                              >
+                                Mark complete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void review(assignment, submission, "returned")}
+                                disabled={draft.saving}
+                                className="rounded-full border border-amber-500/35 px-3 py-1.5 text-[11.5px] text-amber-500 transition-colors hover:bg-amber-500/10 disabled:opacity-45"
+                              >
+                                Return
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-2xl border border-border bg-background/35 p-4 text-[12.5px] text-muted-foreground">
+                        No submissions yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-2xl border border-border bg-background/35 p-5 text-[13px] text-muted-foreground">
+              No assignments yet. Create one for a lesson when students need to submit work.
             </div>
           )}
         </div>
@@ -1641,6 +2394,38 @@ function ResourceStatusChip({ status }: { status: LessonResourceStatus }) {
       : status === "archived"
         ? "border-border bg-background/45 text-muted-foreground"
         : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+      {status}
+    </span>
+  );
+}
+
+function AssignmentStatusChip({ status }: { status: AssignmentStatus }) {
+  const classes =
+    status === "assigned"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      : status === "archived"
+        ? "border-border bg-background/45 text-muted-foreground"
+        : status === "recommended"
+          ? "border-blue-500/35 bg-blue-500/10 text-blue-500"
+          : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+      {status.replace("_", " ")}
+    </span>
+  );
+}
+
+function AssignmentRecipientChip({ status }: { status: AssignmentRecipient["status"] }) {
+  const classes =
+    status === "complete"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      : status === "submitted"
+        ? "border-blue-500/35 bg-blue-500/10 text-blue-500"
+        : status === "returned"
+          ? "border-amber-500/35 bg-amber-500/10 text-amber-500"
+          : "border-border bg-background/45 text-muted-foreground";
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
       {status}
