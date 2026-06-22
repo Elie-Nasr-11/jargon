@@ -6,6 +6,37 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 11:55
+
+Status: Full platform foundation migration added repo-only
+
+Task: Start implementing the full platform build plan by landing the next additive database
+foundation after `0008`, without changing the current live student app behavior.
+
+What changed:
+
+- Added `supabase/migrations/0009_full_platform_foundation.sql`.
+- Added schema surfaces for admin-seeded account batches/entries, environment modes, feature flags,
+  org/class/student settings, lesson completion rules, rubric templates, lesson resources,
+  resource placements/interactions, assignment submission files, intervention alerts, live session
+  viewers, teacher live comments, transcript heatmap events, voice interaction events, runtime
+  events, model usage events, and speech usage events.
+- Added private storage bucket setup for `lesson-resources` and `student-submissions`, with
+  storage-object RLS policies tied to resource/submission records.
+- Added typed answer modality columns to `lesson_attempts` and `quiz_attempts`.
+- Preserved the privacy decision: no raw student audio storage by default.
+- Added `tests/test_full_platform_foundation_migration.py` to guard additive-only migration shape,
+  RLS, no anon access, storage policy presence, resource/media schema, voice metadata, live
+  intervention, and runtime/cost logging.
+
+Important:
+
+- This is repo-only. It has not been applied to live Supabase.
+- Before live apply, run Supabase advisors/security checks and review the storage policies against
+  the current Supabase Storage schema.
+- Current student `/chat` and `/run` behavior should remain unchanged until live migration and UI/API
+  activation work begins.
+
 ## Codex -> Claude / Human - 2026-06-22 11:24
 
 Status: Voice interaction added to product plan
