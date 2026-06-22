@@ -6,6 +6,64 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 12:15
+
+Status: Live foundation schema activated and verified
+
+Task: Safely apply the repo-only full platform foundation schema to live Supabase without replaying
+old migrations or changing current student app behavior.
+
+What changed live:
+
+- Confirmed live migration history already had `0001` through `0008`.
+- Applied `0009_full_platform_foundation` to project `qztpieiizmiayzjhezwh` using the Supabase
+  migration API, not `db push`.
+- Added and applied follow-up migration `0010_resource_helper_anon_revoke` after Supabase advisor
+  showed explicit anon EXECUTE grants on the new resource helper functions.
+- Verified `anon` can no longer execute `public.can_manage_lesson_resource(uuid)` or
+  `public.can_view_lesson_resource(uuid)`, while `authenticated` can still execute them for RLS.
+
+Verified live:
+
+- New tables exist, including `lesson_resources`, `resource_interactions`,
+  `voice_interaction_events`, `runtime_events`, `model_usage_events`,
+  `admin_account_seed_batches`, and `admin_account_seed_entries`.
+- New buckets exist and are private:
+  - `lesson-resources`, `public=false`, 100 MB limit.
+  - `student-submissions`, `public=false`, 50 MB limit.
+- Checked private foundation tables have RLS enabled and no anon table grants.
+- Storage policies landed for lesson resource files and student submission files.
+- `https://jargon-engine.onrender.com/health` returned `{"service":"jargon-engine","status":"ok"}`.
+- Direct engine `POST /run` with `PRINT 5 // 2` returned `output: ["2"]`.
+- Supabase edge `POST /functions/v1/run` with the public anon key returned HTTP 200 and
+  `output: ["2"]`.
+- `https://jargon-9bv5.onrender.com/login` and `/chat` returned HTTP 200.
+- Typed `chat` with only the anon key returned controlled JSON error
+  `Could not identify authenticated user`; follow-up improvement is to return HTTP 401/403 instead
+  of HTTP 500 for unauthenticated typed chat.
+
+Checks run:
+
+- `python3 -m unittest discover -s tests -q` -> 96 passed, 4 skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> 136 ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run build` -> passed with the existing Vite large chunk warning.
+- `git diff --check` -> passed.
+
+Advisor notes:
+
+- Supabase advisors still report GraphQL exposure warnings for publicly readable curriculum tables
+  and authenticated table visibility warnings. These are not new private-table RLS failures, but
+  should be addressed in a dedicated security-hardening pass before the classroom pilot.
+- Performance advisor reports unindexed foreign keys and multiple permissive policy warnings across
+  the broader foundation. Treat this as the next database-hardening queue, not as a blocker to this
+  additive activation.
+
+Next product slice:
+
+- Build `/admin` account/class seeding against the now-live foundation:
+  organization, class, teacher, student, memberships, and a minimal teacher class shell.
+
 ## Codex -> Claude / Human - 2026-06-22 11:55
 
 Status: Full platform foundation migration added repo-only
