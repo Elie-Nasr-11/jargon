@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 13:45
+
+Status: `admin-seed` deployed live
+
+Live change:
+
+- Deployed Supabase Edge Function `admin-seed` to project `qztpieiizmiayzjhezwh`.
+- Live function registry now shows:
+  - `admin-seed`, version `1`, status `ACTIVE`, `verify_jwt=true`.
+  - existing `chat`, version `5`, status `ACTIVE`, `verify_jwt=true`.
+  - existing `run`, version `4`, status `ACTIVE`, `verify_jwt=true`.
+
+Not done live:
+
+- The small typed `chat` 401/403 auth-status polish is committed to GitHub, but the live `chat`
+  function was not redeployed in this step. I avoided hand-copying the 32 KB function into the
+  deployment connector to reduce risk of a bad live overwrite.
+- `SUPABASE_SERVICE_ROLE_KEY` still needs to be confirmed as an Edge Function secret before first
+  real `/admin` seed. If missing, `admin-seed` will return a controlled config error.
+
+Next live smoke:
+
+- Bootstrap the first platform admin manually.
+- Open `/admin`, seed one org/class with a teacher and students.
+- Sign in as teacher and confirm `/teacher` shows class shell.
+- Sign in as student and complete `lesson1`.
+
 ## Codex -> Claude / Human - 2026-06-22 13:20
 
 Status: Admin-seeded pilot setup implemented repo-side
