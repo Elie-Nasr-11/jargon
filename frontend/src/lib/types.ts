@@ -133,3 +133,51 @@ export type JargonExecutionResult = {
 };
 
 export type CodeExecutionResult = LocalRunResult | JargonExecutionResult;
+
+export type PilotRole = "student" | "teacher";
+
+export type AdminSeedUser = {
+  email: string;
+  name: string;
+  role: PilotRole;
+  grade?: string;
+  password?: string;
+};
+
+export type AdminSeedResult = {
+  email: string;
+  role: PilotRole;
+  status: "created" | "reused" | "failed" | "skipped";
+  user_id?: string;
+  error?: string;
+};
+
+export type AdminSeedResponse = {
+  status: "ok" | "error";
+  batch_id?: string;
+  organization_id?: string;
+  class_id?: string;
+  results: AdminSeedResult[];
+  error?: string;
+};
+
+export type TeacherClassSummary = {
+  id: string;
+  name: string;
+  status: string;
+  organization_id: string;
+  organizations?:
+    | {
+        name: string | null;
+        slug: string | null;
+      }
+    | Array<{
+        name: string | null;
+        slug: string | null;
+      }>
+    | null;
+  class_memberships?: Array<{
+    role: "student" | "teacher";
+    status: string;
+  }>;
+};

@@ -146,6 +146,12 @@ function typedError(message: string, status = 500, context: Partial<Envelope> = 
   );
 }
 
+function typedAuthStatus(message: string): number {
+  if (message.includes("Authentication is required") || message.includes("authenticated")) return 401;
+  if (message.includes("identify authenticated user") || message.includes("JWT")) return 403;
+  return 500;
+}
+
 function isLegacyRequest(body: Record<string, unknown>): boolean {
   return Array.isArray(body.messages) && !body.lesson_id && !body.session_id && !body.answer;
 }
@@ -692,7 +698,8 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
     session = await loadOrCreateSession(config, String(user.id), lessonId, body.session_id);
     context = await loadContext(config, String(user.id), lessonId, session);
   } catch (err) {
-    return typedError(errorMessage(err), 500, { lesson_id: lessonId });
+    const message = errorMessage(err);
+    return typedError(message, typedAuthStatus(message), { lesson_id: lessonId });
   }
 
   const userId = String(user.id);

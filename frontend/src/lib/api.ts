@@ -7,8 +7,11 @@ import type {
   Lesson,
   LessonActivity,
   LessonAttempt,
+  AdminSeedResponse,
+  AdminSeedUser,
   MentorPreferences,
   Profile,
+  TeacherClassSummary,
   TypedChatAnswer,
   TypedChatEnvelope,
 } from "@/lib/types";
@@ -94,6 +97,16 @@ export async function fetchProfile(userId: string) {
   return (data as Profile | null) || null;
 }
 
+export async function isPlatformAdmin(userId: string) {
+  const { data, error } = await supabase
+    .from("platform_admins")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
 export async function upsertProfile(user: User, name: string, grade: string) {
   const payload = {
     id: user.id,
@@ -163,6 +176,60 @@ export async function fetchLessonAttempts(sessionId: string) {
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data || []) as LessonAttempt[];
+}
+
+export async function invokeAdminSeed(input: {
+  accessToken: string;
+  organization: { id?: string; name: string; slug: string };
+  class: { id?: string; name: string };
+  defaultPassword?: string;
+  users: AdminSeedUser[];
+}) {
+  const response = await fetchWithTimeout(functionUrl("admin-seed"), {
+    method: "POST",
+    headers: authHeaders(input.accessToken),
+    body: JSON.stringify({
+      action: "seed_roster",
+      organization: input.organization,
+      class: input.class,
+      default_password: input.defaultPassword || undefined,
+      users: input.users,
+    }),
+  });
+  const data = (await response.json()) as AdminSeedResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Pilot roster seed failed.");
+  }
+  return data;
+}
+
+export async function fetchTeacherClasses(userId: string) {
+  const { data: memberships, error: membershipsError } = await supabase
+    .from("class_memberships")
+    .select("class_id")
+    .eq("user_id", userId)
+    .eq("role", "teacher")
+    .eq("status", "active");
+  if (membershipsError) throw membershipsError;
+
+  const classIds = Array.from(
+    new Set(
+      ((memberships || []) as Array<{ class_id: string | null }>)
+        .map((membership) => membership.class_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  if (!classIds.length) return [];
+
+  const { data, error } = await supabase
+    .from("classes")
+    .select(
+      "id,name,status,organization_id,organizations(name,slug),class_memberships(role,status)",
+    )
+    .in("id", classIds)
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data || []) as TeacherClassSummary[];
 }
 
 export async function invokeTypedChat(input: {

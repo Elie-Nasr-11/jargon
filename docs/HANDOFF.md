@@ -6,6 +6,58 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 13:20
+
+Status: Admin-seeded pilot setup implemented repo-side
+
+Task: Add the first platform-admin-only operations slice for seeding classroom pilot accounts,
+organizations, classes, profiles, and memberships.
+
+What changed:
+
+- Added `supabase/functions/admin-seed/index.ts`.
+  - Requires a signed-in JWT.
+  - Verifies the caller has a row in `public.platform_admins`.
+  - Uses `SUPABASE_SERVICE_ROLE_KEY` only inside the Edge Function.
+  - Supports `seed_roster`, `list_seed_batches`, and `upsert_org_class`.
+  - Creates or reuses Supabase Auth users by email.
+  - Upserts `profiles`, `organization_memberships`, `class_memberships`,
+    `admin_account_seed_batches`, and `admin_account_seed_entries`.
+  - Does not store plaintext temporary passwords in Jargon tables.
+- Added `/admin` to the React app.
+  - Platform-admin guarded.
+  - Organization/class form, roster paste/table, role/grade/password fields, seed action, and
+    per-row result table.
+- Added `/teacher` shell.
+  - Signed-in teachers can see assigned live classes and roster counts.
+  - This is intentionally not the full dashboard yet.
+- Added `docs/ADMIN_SEEDED_PILOT.md` with the one-time platform-admin bootstrap SQL and pilot
+  seed flow.
+- Added static tests in `tests/test_admin_seed_pilot.py`.
+- Polished typed `chat` unauthenticated errors so typed requests now use 401/403 classification
+  instead of always returning 500.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> 105 passed, 4 skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> 136 ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run build` -> passed with the existing Vite large chunk warning.
+- `cd frontend && npm run lint` -> passed with 11 pre-existing warnings in existing components.
+- `git diff --check` -> passed.
+- `deno check supabase/functions/admin-seed/index.ts` was not run because `deno` is not installed
+  in this local environment.
+
+Live next steps:
+
+- Deploy Supabase Edge Function `admin-seed`.
+- Redeploy Supabase Edge Function `chat` for the 401/403 typed-auth polish.
+- Ensure `SUPABASE_SERVICE_ROLE_KEY` is set for Edge Functions.
+- Bootstrap the first platform admin manually:
+  `insert into public.platform_admins (user_id) values ('<signed-in-auth-user-id>') on conflict do nothing;`
+- Sign into `/admin`, seed one org/class with a teacher and students, then confirm `/teacher`
+  shows the class shell and students can still complete `lesson1`.
+
 ## Codex -> Claude / Human - 2026-06-22 12:15
 
 Status: Live foundation schema activated and verified

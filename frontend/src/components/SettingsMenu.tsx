@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import { Settings, LogOut, Sun, Moon } from "lucide-react";
+import { BookOpen, GraduationCap, LogOut, Moon, Settings, Shield, Sun } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { useTheme } from "@/lib/theme";
 import { signOut } from "@/lib/api";
@@ -101,6 +101,36 @@ export function SettingsMenu({ email }: { email: string }) {
                 <span className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground">
                   {resolved === "dark" ? "Dark" : "Light"}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  navigate({ to: "/chat" });
+                }}
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+              >
+                <BookOpen className="h-[15px] w-[15px]" strokeWidth={1.5} /> Student chat
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  navigate({ to: "/teacher" });
+                }}
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+              >
+                <GraduationCap className="h-[15px] w-[15px]" strokeWidth={1.5} /> Teacher
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  navigate({ to: "/admin" });
+                }}
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+              >
+                <Shield className="h-[15px] w-[15px]" strokeWidth={1.5} /> Admin
               </button>
               <button
                 type="button"
