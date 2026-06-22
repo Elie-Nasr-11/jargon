@@ -6,6 +6,49 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 14:05
+
+Status: Pilot account path live validation partially complete; waiting on signed-in admin seed
+
+Verified live:
+
+- `https://jargon-9bv5.onrender.com/login`, `/admin`, and `/teacher` return HTTP 200.
+- The deployed frontend HTML references Vite asset `/assets/index-Ccdu_pYl.js`.
+- The live JS bundle contains the `/admin` and `/teacher` route strings, including
+  `Pilot Admin - Jargon` and `Teacher - Jargon`.
+- `https://jargon-engine.onrender.com/health` returns `{"service":"jargon-engine","status":"ok"}`.
+- Supabase Edge Function registry remains:
+  - `admin-seed`, version `1`, status `ACTIVE`, `verify_jwt=true`.
+  - `chat`, version `5`, status `ACTIVE`, `verify_jwt=true`.
+  - `run`, version `4`, status `ACTIVE`, `verify_jwt=true`.
+- Bootstrapped `elie.nasr11@gmail.com` into `public.platform_admins`
+  (`67ba5c0c-cc08-4214-9bde-d167ac68efca`).
+- A safe anonymous-JWT probe to `admin-seed` returned `Forbidden`, not a missing-config error.
+  That means the function is deployed and reached authenticated-user validation; it did not fail
+  at the `SUPABASE_SERVICE_ROLE_KEY` environment check.
+- Live pilot tables are still clean before first seed:
+  - `organizations`: `0`
+  - `classes`: `0`
+  - `organization_memberships`: `0`
+  - `class_memberships`: `0`
+  - `admin_account_seed_batches`: `0`
+  - `admin_account_seed_entries`: `0`
+
+Not completed:
+
+- I could not create the pilot org/class/teacher/student accounts without a real signed-in
+  platform-admin access token. This is the correct security boundary for `admin-seed`.
+- The next action is to sign in as the bootstrapped platform admin at `/admin` and run the seed
+  flow, or provide an admin session/JWT through a secure out-of-band path.
+
+Next live smoke:
+
+- In `/admin`, seed `Pilot School` / `Jargon Pilot Class` with one teacher and two students.
+- Rerun the same roster once to confirm idempotency.
+- Sign in as seeded teacher and confirm `/teacher` shows the class shell and roster count.
+- Sign in as seeded student, open `/chat`, run `lesson1`, submit to Mentor, and confirm learning
+  records still write.
+
 ## Codex -> Claude / Human - 2026-06-22 13:45
 
 Status: `admin-seed` deployed live
