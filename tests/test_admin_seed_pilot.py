@@ -114,10 +114,14 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
                 self.assertIn(table, self.api)
         for phrase in (
             "ClassDetail",
+            "LessonProgress",
             "StudentDetail",
             "Transcript",
             "Teacher notes",
             "Mastery",
+            "Completed:",
+            "No completed lessons yet",
+            "Choose a session to inspect the transcript.",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.teacher_route)

@@ -121,7 +121,9 @@ function TeacherPage() {
       return;
     }
     if (studentSessions.length && !studentSessions.some((item) => item.id === selectedSessionId)) {
-      setSelectedSessionId(studentSessions[0].id);
+      const preferred =
+        studentSessions.find((session) => session.status === "complete") || studentSessions[0];
+      setSelectedSessionId(preferred.id);
     }
     if (!studentSessions.length) setSelectedSessionId(null);
   }, [selectedSessionId, selectedStudentId, studentSessions]);
@@ -269,6 +271,7 @@ function TeacherPage() {
                     stats={classStats}
                     dashboard={dashboard}
                     profilesById={model.profilesById}
+                    lessons={dashboard.lessons}
                     lessonsById={model.lessonsById}
                     studentIds={classStudents}
                     selectedStudentId={selectedStudentId}
@@ -364,6 +367,7 @@ function ClassDetail({
   stats,
   dashboard,
   profilesById,
+  lessons,
   lessonsById,
   studentIds,
   selectedStudentId,
@@ -373,6 +377,7 @@ function ClassDetail({
   stats: ClassSummary;
   dashboard: TeacherDashboardData;
   profilesById: Map<string, Profile>;
+  lessons: Lesson[];
   lessonsById: Map<string, Lesson>;
   studentIds: string[];
   selectedStudentId: string | null;
@@ -404,6 +409,11 @@ function ClassDetail({
             studentIds.map((studentId) => {
               const profile = profilesById.get(studentId) || null;
               const latest = latestSessionFor(dashboard.sessions, studentId);
+              const completedLessons = completedLessonNamesFor(
+                dashboard.sessions,
+                studentId,
+                lessonsById,
+              );
               const masteryCount = dashboard.mastery.filter(
                 (item) => item.user_id === studentId,
               ).length;
@@ -426,6 +436,11 @@ function ClassDetail({
                       <div className="mt-1 text-[12px] text-muted-foreground">
                         {profile?.grade || "Grade not set"} - {masteryCount} mastery skills
                       </div>
+                      <div className="mt-2 text-[12px] text-muted-foreground">
+                        {completedLessons.length
+                          ? `Completed: ${completedLessons.join(", ")}`
+                          : "No completed lessons yet"}
+                      </div>
                     </div>
                     <div className="text-left text-[12px] text-muted-foreground sm:text-right">
                       <div>{latest ? statusLabel(latest) : "No session yet"}</div>
@@ -445,8 +460,88 @@ function ClassDetail({
             </div>
           )}
         </div>
+
+        <LessonProgress
+          lessons={lessons}
+          studentIds={studentIds}
+          dashboard={dashboard}
+          profilesById={profilesById}
+        />
       </div>
     </GradientCard>
+  );
+}
+
+function LessonProgress({
+  lessons,
+  studentIds,
+  dashboard,
+  profilesById,
+}: {
+  lessons: Lesson[];
+  studentIds: string[];
+  dashboard: TeacherDashboardData;
+  profilesById: Map<string, Profile>;
+}) {
+  return (
+    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-[15px] font-medium text-foreground">Lesson Progress</h3>
+          <p className="text-[12.5px] text-muted-foreground">
+            Completed lessons stay visible even when a student starts a newer lesson.
+          </p>
+        </div>
+        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
+          {lessons.length} lessons
+        </div>
+      </div>
+
+      {studentIds.length ? (
+        <div className="overflow-x-auto pb-1">
+          <div className="grid min-w-[760px] gap-2">
+            {studentIds.map((studentId) => {
+              const profile = profilesById.get(studentId) || null;
+              return (
+                <div
+                  key={studentId}
+                  className="grid grid-cols-[180px_minmax(0,1fr)] gap-3 rounded-2xl border border-border bg-background/35 p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {displayName(profile, studentId)}
+                    </div>
+                    <div className="mt-1 text-[11.5px] text-muted-foreground">
+                      {profile?.grade || "Grade not set"}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {lessons.map((lesson) => {
+                      const status = lessonProgressStatus(dashboard.sessions, studentId, lesson.id);
+                      return (
+                        <span
+                          key={`${studentId}-${lesson.id}`}
+                          className={`rounded-full border px-2.5 py-1 text-[11.5px] ${lessonStatusClass(
+                            status,
+                          )}`}
+                          title={`${lesson.title}: ${status}`}
+                        >
+                          {lesson.title} · {status}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-border bg-background/35 p-4 text-[12.5px] text-muted-foreground">
+          No students are assigned to this class yet.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -493,6 +588,8 @@ function StudentDetail({
   const evidence = dashboard.evidence.filter((item) => item.user_id === studentId);
   const mastery = dashboard.mastery.filter((item) => item.user_id === studentId);
   const notes = dashboard.notes.filter((item) => item.student_id === studentId);
+  const activeSessions = sessions.filter((session) => session.status !== "complete");
+  const completedSessions = sessions.filter((session) => session.status === "complete");
 
   return (
     <GradientCard>
@@ -529,21 +626,21 @@ function StudentDetail({
         <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
           <Panel title="Transcript" icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}>
             {sessions.length ? (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {sessions.map((session) => (
-                  <button
-                    type="button"
-                    key={session.id}
-                    onClick={() => onSelectSession(session.id)}
-                    className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
-                      selectedSessionId === session.id
-                        ? "border-foreground/25 bg-background text-foreground"
-                        : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    {lessonName(lessonsById, session.lesson_id)} - {session.status}
-                  </button>
-                ))}
+              <div className="mb-3 grid gap-3">
+                <SessionChipGroup
+                  label="Active"
+                  sessions={activeSessions}
+                  lessonsById={lessonsById}
+                  selectedSessionId={selectedSessionId}
+                  onSelectSession={onSelectSession}
+                />
+                <SessionChipGroup
+                  label="Completed"
+                  sessions={completedSessions}
+                  lessonsById={lessonsById}
+                  selectedSessionId={selectedSessionId}
+                  onSelectSession={onSelectSession}
+                />
               </div>
             ) : null}
 
@@ -570,8 +667,14 @@ function StudentDetail({
               </div>
             ) : (
               <EmptyInline
-                title="No transcript yet"
-                body="The transcript will appear after this student starts or completes a lesson."
+                title={
+                  sessions.length && !selectedSession ? "Choose a session" : "No transcript yet"
+                }
+                body={
+                  sessions.length && !selectedSession
+                    ? "Choose a session to inspect the transcript."
+                    : "The transcript will appear after this student starts or completes a lesson."
+                }
               />
             )}
           </Panel>
@@ -733,6 +836,50 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SessionChipGroup({
+  label,
+  sessions,
+  lessonsById,
+  selectedSessionId,
+  onSelectSession,
+}: {
+  label: "Active" | "Completed";
+  sessions: LearningSession[];
+  lessonsById: Map<string, Lesson>;
+  selectedSessionId: string | null;
+  onSelectSession: (sessionId: string | null) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
+      </div>
+      {sessions.length ? (
+        <div className="flex flex-wrap gap-2">
+          {sessions.map((session) => (
+            <button
+              type="button"
+              key={session.id}
+              onClick={() => onSelectSession(session.id)}
+              className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
+                selectedSessionId === session.id
+                  ? "border-foreground/25 bg-background text-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {lessonName(lessonsById, session.lesson_id)} · {session.status}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="text-[12px] text-muted-foreground">
+          {label === "Completed" ? "No completed lessons yet" : "No active lessons"}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border bg-background/45 px-3 py-2">
@@ -859,6 +1006,54 @@ function latestSessionFor(sessions: LearningSession[], studentId: string) {
   return sessions
     .filter((session) => session.user_id === studentId)
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+}
+
+function completedLessonNamesFor(
+  sessions: LearningSession[],
+  studentId: string,
+  lessonsById: Map<string, Lesson>,
+) {
+  return unique(
+    sessions
+      .filter((session) => session.user_id === studentId && session.status === "complete")
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .map((session) => lessonName(lessonsById, session.lesson_id)),
+  );
+}
+
+type LessonProgressStatus = "Not started" | "Active" | "Retry" | "Complete";
+
+function lessonProgressStatus(
+  sessions: LearningSession[],
+  studentId: string,
+  lessonId: string,
+): LessonProgressStatus {
+  const lessonSessions = sessions.filter(
+    (session) => session.user_id === studentId && session.lesson_id === lessonId,
+  );
+  if (lessonSessions.some((session) => session.status === "complete")) return "Complete";
+  if (lessonSessions.some((session) => session.status === "needs_retry")) return "Retry";
+  if (
+    lessonSessions.some(
+      (session) => session.status === "active" || session.status === "needs_rescue",
+    )
+  ) {
+    return "Active";
+  }
+  return "Not started";
+}
+
+function lessonStatusClass(status: LessonProgressStatus) {
+  if (status === "Complete") {
+    return "border-emerald-500/35 bg-emerald-500/10 text-emerald-500";
+  }
+  if (status === "Active") {
+    return "border-blue-500/35 bg-blue-500/10 text-blue-500";
+  }
+  if (status === "Retry") {
+    return "border-amber-500/35 bg-amber-500/10 text-amber-500";
+  }
+  return "border-border bg-background/45 text-muted-foreground";
 }
 
 function displayName(profile: Profile | null | undefined, userId: string) {
