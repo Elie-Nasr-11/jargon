@@ -6,6 +6,52 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 21:42
+
+Status: Reliability gate passed; Voice v1 implemented and deployed to `chat`
+
+Reliability gate:
+
+- `https://jargon-engine.onrender.com/health` returned
+  `{"service":"jargon-engine","status":"ok"}` quickly.
+- Direct engine `/run` smoke with `PRINT 5 // 2` returned `output: ["2"]`,
+  `status: "ok"`.
+- No Render engine code/config change was needed in this pass.
+
+Voice v1 changes:
+
+- GitHub `main` commit: `7be7233` (`Add student voice controls`).
+- Supabase `chat` redeployed active as version 8, JWT required, pinned to commit `7be7233`.
+- Student `/chat` composer now supports browser dictation where available:
+  dictated text lands in the editable textbox before submit.
+- Dictated text is sent through the existing typed chat contract with
+  `input_modality: "dictated"` and optional `transcript_confidence`.
+- Mentor messages now have read-aloud controls with play/pause/replay and slow/normal/fast
+  speed settings.
+- Voice preferences are local student settings: dictation on/off, read-aloud on/off,
+  read speed.
+- Teacher transcript and attempt summaries show a `Dictated` marker when a student submits
+  dictated text.
+- Voice telemetry writes lightweight `voice_interaction_events`; raw student audio is not
+  stored.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> `114` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with existing `11` warnings only.
+- `cd frontend && npm run build` -> passed with existing large chunk warning.
+- `git diff --check` -> passed.
+
+Next QA:
+
+- Wait for Render static deploy of `7be7233`.
+- Browser-smoke `/chat` as a student:
+  mic button appears or degrades cleanly, dictated text can be edited/submitted,
+  Mentor read-aloud works where `speechSynthesis` is available.
+- Verify a teacher sees `Dictated` on the corresponding turn/attempt.
+
 ## Codex -> Claude / Human - 2026-06-22 20:00
 
 Status: Curriculum Authoring Studio v1 live acceptance passed
