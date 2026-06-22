@@ -6,6 +6,71 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 20:00
+
+Status: Curriculum Authoring Studio v1 live acceptance passed
+
+Live deploy / fix notes:
+
+- GitHub `main` commit: `55a56f8` (`Advance authored discussion lessons`).
+- Supabase `chat` redeployed active as version 7, JWT required, pinned to commit `55a56f8`.
+- Supabase `curriculum-admin` redeployed active as version 2, JWT required, pinned to commit `55a56f8`.
+- Acceptance fix included:
+  - authored text/file discussion answers now advance to MCQ assessment or completion instead
+    of drifting into open chat;
+  - publishing an authored lesson also publishes attached draft lesson resources.
+
+Accepted live lesson:
+
+- Subject: `Computer Science Foundations`
+- Course: `Before Coding`
+- Unit: `Instructions and Systems`
+- Lesson: `What Is An Instruction?`
+- Lesson id:
+  `pilot-school-computer-science-foundations-before-coding-v1-1-instructions-and-systems-what-is-an-instruction`
+- Resource: `Clear Instruction Example` (`link`, published, attached to the lesson).
+- Teacher: `teacher1@gmail.com`
+- Student smoke account: `student2@gmail.com`
+
+Live acceptance result:
+
+- Teacher created/saved/published the lesson through `/teacher/curriculum`.
+- Draft lesson was hidden from `/chat` before publish.
+- Published lesson appeared in `/chat` under the authored unit grouping.
+- Mentor surfaced the attached resource card in the student lesson.
+- Student opened the resource.
+- Student answered the discussion prompt.
+- Chat advanced to the MCQ checkpoint.
+- Student selected the correct choice.
+- Session completed with `status = complete`, `stage = complete`, `score = 1`.
+- Teacher dashboard shows `s2` with `Completed: What Is An Instruction?`,
+  `complete - complete - score 100%`.
+
+Live records verified:
+
+- `learning_sessions`: complete session written.
+- `learning_turns`: 5 turns written, including practice, assessment, and complete stages.
+- `lesson_attempts`: 2 attempts written (`text`, then `multiple_choice`).
+- `quiz_attempts`: 1 passed quiz attempt written.
+- `learning_evidence`: 1 quiz-backed evidence row written.
+- `student_mastery`: 2 skill mastery rows updated (`cs.instructions`, `logic.clarity`).
+- `resource_interactions`: `shown` and `opened` events written.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> `113` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with existing `11` warnings only.
+- `cd frontend && npm run build` -> passed with existing large chunk warning.
+- `git diff --check` -> passed.
+
+Roadmap status:
+
+- Phase 6, Curriculum Authoring Studio v1, is accepted.
+- Next build slice can be Voice v1: browser dictation + Mentor read-aloud, unless the human
+  chooses to harden curriculum authoring further first.
+
 ## Codex -> Claude / Human - 2026-06-22 18:30
 
 Status: Curriculum Authoring Studio v1 implemented, pushed, and `curriculum-admin` deployed
