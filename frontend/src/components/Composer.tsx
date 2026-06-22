@@ -121,6 +121,24 @@ function speechRecognitionConstructor(): SpeechRecognitionConstructor | null {
   return host.SpeechRecognition || host.webkitSpeechRecognition || null;
 }
 
+function friendlySpeechError(error: string | undefined) {
+  switch (error) {
+    case "not-allowed":
+    case "service-not-allowed":
+      return "Microphone access was blocked. Allow the mic in your browser settings, then try again.";
+    case "no-speech":
+      return "I did not catch anything. Try again when you're ready.";
+    case "audio-capture":
+      return "No microphone was found for dictation.";
+    case "network":
+      return "Dictation could not reach the browser speech service.";
+    case "aborted":
+      return "Dictation stopped.";
+    default:
+      return "Dictation stopped.";
+  }
+}
+
 export type ComposerHandle = {
   loadCode: (input: { code: string; language: ComposerLanguage }) => void;
 };
@@ -169,6 +187,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [dictating, setDictating] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const [dictationUsed, setDictationUsed] = useState(false);
   const [dictationConfidence, setDictationConfidence] = useState<number | null>(null);
 
   const MIN_EDITOR_H = 150;
@@ -408,6 +427,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     dictationBaseRef.current = text.trim();
     dictationStartedAtRef.current = Date.now();
     setVoiceError("");
+    setDictationUsed(false);
     setDictationConfidence(null);
 
     recognition.onresult = (event) => {
@@ -431,6 +451,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       }
       const nextText = [dictationBaseRef.current, spoken.trim()].filter(Boolean).join(" ");
       setText(nextText);
+      if (spoken.trim()) setDictationUsed(true);
       if (confidence !== null) setDictationConfidence(confidence);
       if (finalTranscript.trim()) {
         emitVoiceEvent({
@@ -442,7 +463,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       }
     };
     recognition.onerror = (event) => {
-      setVoiceError(event.message || event.error || "Dictation stopped.");
+      setVoiceError(event.message || friendlySpeechError(event.error));
       setDictating(false);
     };
     recognition.onend = () => {
@@ -464,7 +485,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const send = () => {
     const t = text.trim();
     if (!t || sending) return;
-    const isDictated = dictationConfidence !== null;
+    const isDictated = dictationUsed;
     onSendText(t, {
       inputModality: isDictated ? "dictated" : "typed",
       transcriptConfidence: isDictated ? dictationConfidence : null,
@@ -481,6 +502,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       });
     }
     setText("");
+    setDictationUsed(false);
     setDictationConfidence(null);
     setVoiceError("");
   };
@@ -533,7 +555,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   value={text}
                   onChange={(e) => {
                     setText(e.target.value);
-                    if (!e.target.value.trim()) setDictationConfidence(null);
+                    if (!e.target.value.trim()) {
+                      setDictationUsed(false);
+                      setDictationConfidence(null);
+                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
