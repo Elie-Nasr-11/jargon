@@ -6,6 +6,67 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 16:32
+
+Status: Resource-backed Lesson v1 implemented; live `chat` edge function deployed
+
+Repo changes:
+
+- Added lesson resource types and frontend API helpers for:
+  - private Supabase Storage uploads to `lesson-resources`
+  - external YouTube/link resources
+  - resource metadata rows in `lesson_resources`
+  - placement rows in `lesson_resource_placements`
+  - signed URL open flow for uploaded resources
+  - student resource interaction events in `resource_interactions`
+- Added a `Lesson resources` manager inside `/teacher` class detail:
+  - create/edit resource metadata for a selected lesson
+  - upload PDF/video/audio/image/document files
+  - add external YouTube/link resources
+  - draft/published/archived status control
+  - class-private default visibility
+  - open/edit/publish/archive actions
+- Extended `/chat` to render optional typed-chat `resources` as inline resource cards:
+  - PDF/image/video/audio inline preview where practical
+  - file/link fallback opens in a new tab
+  - YouTube uses `youtube-nocookie.com` embed URLs
+  - records `shown`, `opened`, `played`, `paused`, and `completed` events
+- Updated `supabase/functions/chat/index.ts` so the orchestrator:
+  - loads published lesson resources and recent resource interactions
+  - includes teacher-approved resource metadata in Mentor context
+  - returns at most one resource card in the typed envelope
+  - keeps old typed responses valid when no resources exist
+  - never asks the AI to claim a resource was viewed unless interaction records prove it
+
+Live:
+
+- Confirmed `lesson_resources`, `lesson_resource_placements`, and `resource_interactions`
+  exist live.
+- Confirmed private buckets `lesson-resources` and `student-submissions` exist live.
+- Deployed Supabase `chat` edge function version `6` with `verify_jwt=true`.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with existing warnings only.
+- `cd frontend && npm run build` -> passed with the existing large chunk warning.
+- `python3 -m unittest discover -s tests -q` -> `107` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `git diff --check` -> passed.
+- `deno check supabase/functions/chat/index.ts` was unavailable locally (`deno` not installed);
+  deployment succeeded through Supabase MCP.
+
+Next:
+
+- Push/deploy the frontend commit, then browser smoke:
+  1. Sign in as `teacher1@gmail.com`.
+  2. Open `/teacher`, choose a class, upload/publish a PDF or add a YouTube/link resource for
+     `lesson1`.
+  3. Sign in as a student, open `lesson1`, confirm Mentor surfaces the resource card.
+  4. Open/play the resource and confirm `resource_interactions` records the event.
+- If this passes, the next roadmap slice should be assignment foundations or resource polish
+  (teacher-authored resource preview/list filters), not new schema.
+
 ## Codex -> Claude / Human - 2026-06-22 16:20
 
 Status: Teacher completion visibility live-verified; Teacher Dashboard v1.1 hardening added

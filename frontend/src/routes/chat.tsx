@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import { AlertCircle, Check, Code2, Copy } from "lucide-react";
+import { AlertCircle, Check, Code2, Copy, ExternalLink, FileText, Play } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { HeaderMenus } from "@/components/HeaderMenus";
 import { SettingsMenu } from "@/components/SettingsMenu";
@@ -18,9 +18,11 @@ import {
   fetchLatestLearningSession,
   fetchLessonActivities,
   fetchLessons,
+  getLessonResourceSignedUrl,
   getSession,
   invokeJargonRun,
   invokeTypedChat,
+  recordResourceInteraction,
 } from "@/lib/api";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
@@ -30,6 +32,7 @@ import type {
   LearningTurn,
   Lesson,
   LessonActivity,
+  LessonChatResource,
   MentorPreferences,
   TypedChatEnvelope,
 } from "@/lib/types";
@@ -48,7 +51,14 @@ type ChatChoice = { id?: string; label?: string; text?: string; value?: string }
 
 type Msg =
   | { id: string; role: "user"; text: string; code?: ChatCodeBlock }
-  | { id: string; role: "bot"; text: string; code?: ChatCodeBlock; choices?: ChatChoice[] }
+  | {
+      id: string;
+      role: "bot";
+      text: string;
+      code?: ChatCodeBlock;
+      choices?: ChatChoice[];
+      resources?: LessonChatResource[];
+    }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
   | { id: string; role: "thinking" };
 
@@ -108,7 +118,10 @@ function turnToMessage(turn: LearningTurn): Msg | null {
   if (turn.role === "mentor" || turn.role === "system") {
     const payload = turn.payload || {};
     const choices = Array.isArray(payload.choices) ? (payload.choices as ChatChoice[]) : undefined;
-    return { id: turn.id, role: "bot", text: turn.content, choices };
+    const resources = Array.isArray(payload.resources)
+      ? (payload.resources as LessonChatResource[])
+      : undefined;
+    return { id: turn.id, role: "bot", text: turn.content, choices, resources };
   }
   return null;
 }
@@ -119,6 +132,7 @@ function envelopeMessage(envelope: TypedChatEnvelope): Msg {
     role: "bot",
     text: envelope.reply || "I'm ready.",
     choices: envelope.choices?.length ? envelope.choices : undefined,
+    resources: envelope.resources?.length ? envelope.resources : undefined,
   };
 }
 
@@ -510,6 +524,27 @@ function ChatPage() {
     });
   };
 
+  const handleResourceEvent = useCallback(
+    async (
+      resource: LessonChatResource,
+      eventType: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded",
+      progress?: { progress_seconds?: number; progress_percent?: number },
+    ) => {
+      try {
+        await recordResourceInteraction({
+          resource_id: resource.id,
+          session_id: sessionId,
+          lesson_id: lessonId,
+          event_type: eventType,
+          ...progress,
+        });
+      } catch {
+        // Resource interaction telemetry should never block the lesson conversation.
+      }
+    },
+    [lessonId, sessionId],
+  );
+
   if (!email || booting) {
     return (
       <div
@@ -560,6 +595,7 @@ function ChatPage() {
               msg={m}
               onUseCode={useCodeInEditor}
               onChooseChoice={sendChoice}
+              onResourceEvent={handleResourceEvent}
             />
           ))}
         </div>
@@ -587,10 +623,16 @@ function MessageRow({
   msg,
   onUseCode,
   onChooseChoice,
+  onResourceEvent,
 }: {
   msg: Msg;
   onUseCode: (code: ChatCodeBlock) => void;
   onChooseChoice: (choice: ChatChoice) => void;
+  onResourceEvent: (
+    resource: LessonChatResource,
+    eventType: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded",
+    progress?: { progress_seconds?: number; progress_percent?: number },
+  ) => Promise<void>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -678,11 +720,179 @@ function MessageRow({
             ))}
           </div>
         ) : null}
+        {msg.resources?.length ? (
+          <div className="space-y-2">
+            {msg.resources.map((resource) => (
+              <ResourceCard
+                key={resource.id}
+                resource={resource}
+                onResourceEvent={onResourceEvent}
+              />
+            ))}
+          </div>
+        ) : null}
         <CopyAction text={msg.text} />
         {msg.code && <HistoryCodePanel code={msg.code} onUseCode={onUseCode} />}
       </div>
     </div>
   );
+}
+
+function ResourceCard({
+  resource,
+  onResourceEvent,
+}: {
+  resource: LessonChatResource;
+  onResourceEvent: (
+    resource: LessonChatResource,
+    eventType: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded",
+    progress?: { progress_seconds?: number; progress_percent?: number },
+  ) => Promise<void>;
+}) {
+  const [openedUrl, setOpenedUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void onResourceEvent(resource, "shown");
+  }, [onResourceEvent, resource]);
+
+  const mediaProgress = (element: HTMLMediaElement) => ({
+    progress_seconds: Math.round(element.currentTime || 0),
+    progress_percent:
+      element.duration && Number.isFinite(element.duration)
+        ? Math.min(100, Math.round((element.currentTime / element.duration) * 100))
+        : undefined,
+  });
+
+  const openResource = async () => {
+    setBusy(true);
+    try {
+      const url =
+        resource.resource_type === "youtube"
+          ? youtubeEmbedUrl(resource.external_url || "") || resource.external_url || ""
+          : await getLessonResourceSignedUrl(resource);
+      if (!url) throw new Error("Resource URL is missing.");
+      await onResourceEvent(resource, "opened");
+
+      if (shouldRenderInline(resource)) {
+        setOpenedUrl(url);
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      // The visible button state is enough for V1; the mentor flow should keep moving.
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <GradientCard innerClassName="overflow-hidden">
+      <div className="bg-background/55 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" strokeWidth={1.6} />
+              {resource.resource_type}
+            </div>
+            <h3 className="text-[14px] font-medium text-foreground">{resource.title}</h3>
+            {resource.student_instructions ? (
+              <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                {resource.student_instructions}
+              </p>
+            ) : resource.description ? (
+              <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                {resource.description}
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => void openResource()}
+            disabled={busy}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            {shouldRenderInline(resource) ? (
+              <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
+            ) : (
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
+            )}
+            {busy ? "Opening..." : shouldRenderInline(resource) ? "Open" : "Open"}
+          </button>
+        </div>
+
+        {openedUrl ? (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-[var(--code-background)]">
+            {resource.resource_type === "youtube" || resource.resource_type === "pdf" ? (
+              <iframe
+                title={resource.title}
+                src={openedUrl}
+                className="h-[320px] w-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            ) : resource.resource_type === "video" ? (
+              <video
+                src={openedUrl}
+                className="max-h-[360px] w-full"
+                controls
+                onPlay={(event) =>
+                  void onResourceEvent(resource, "played", mediaProgress(event.currentTarget))
+                }
+                onPause={(event) =>
+                  void onResourceEvent(resource, "paused", mediaProgress(event.currentTarget))
+                }
+                onEnded={(event) =>
+                  void onResourceEvent(resource, "completed", mediaProgress(event.currentTarget))
+                }
+              />
+            ) : resource.resource_type === "audio" ? (
+              <audio
+                src={openedUrl}
+                className="w-full p-3"
+                controls
+                onPlay={(event) =>
+                  void onResourceEvent(resource, "played", mediaProgress(event.currentTarget))
+                }
+                onPause={(event) =>
+                  void onResourceEvent(resource, "paused", mediaProgress(event.currentTarget))
+                }
+                onEnded={(event) =>
+                  void onResourceEvent(resource, "completed", mediaProgress(event.currentTarget))
+                }
+              />
+            ) : resource.resource_type === "image" ? (
+              <img
+                src={openedUrl}
+                alt={resource.title}
+                className="max-h-[360px] w-full object-contain"
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </GradientCard>
+  );
+}
+
+function shouldRenderInline(resource: LessonChatResource) {
+  return ["youtube", "pdf", "video", "audio", "image"].includes(resource.resource_type);
+}
+
+function youtubeEmbedUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const host = url.hostname.replace(/^www\./, "");
+    const id =
+      host === "youtu.be"
+        ? url.pathname.slice(1)
+        : host === "youtube.com"
+          ? url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop()
+          : "";
+    return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : "";
+  } catch {
+    return "";
+  }
 }
 
 function MessageContent({

@@ -110,8 +110,20 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             'insertRow(config, "mentor_recommendations"',
             'insertRow(config, "student_mastery"',
             "student_mastery?user_id=eq.",
-            "patchRows(config, `learning_sessions?",
             "graded_by: \"system\"",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
+        self.assertRegex(self.source, r"patchRows\(\s*config,\s*`learning_sessions\?")
+
+    def test_resources_are_loaded_and_returned_in_typed_envelope(self):
+        for fragment in (
+            "resources?: LessonChatResource[]",
+            "lesson_resources?lesson_id=eq.",
+            "resource_interactions?user_id=eq.",
+            "lesson_resources: context.resources.map",
+            "resource_interactions: context.resourceInteractions",
+            "resourcesForResponse(context.resources, answer)",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.source)

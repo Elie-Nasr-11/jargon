@@ -5,13 +5,29 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const STAGES = new Set(["intro", "teach", "practice", "assessment", "review", "complete"]);
+const STAGES = new Set([
+  "intro",
+  "teach",
+  "practice",
+  "assessment",
+  "review",
+  "complete",
+]);
 const RESPONSE_MODES = new Set(["text", "code", "multiple_choice", "file"]);
-const NEXT_ACTIONS = new Set(["reply", "run_code", "choose", "retry", "rescue", "continue", "complete"]);
+const NEXT_ACTIONS = new Set([
+  "reply",
+  "run_code",
+  "choose",
+  "retry",
+  "rescue",
+  "continue",
+  "complete",
+]);
 const PACE_OPTIONS = new Set(["brief", "balanced", "guided"]);
 const TONE_OPTIONS = new Set(["neutral", "encouraging"]);
 const HINT_LEVEL_OPTIONS = new Set(["low", "medium", "high"]);
@@ -47,9 +63,22 @@ For typed course requests, return only valid JSON matching this shape:
   "guardrail": { "redirected": false, "reason": null }
 }`;
 
-type Stage = "intro" | "teach" | "practice" | "assessment" | "review" | "complete";
+type Stage =
+  | "intro"
+  | "teach"
+  | "practice"
+  | "assessment"
+  | "review"
+  | "complete";
 type ResponseMode = "text" | "code" | "multiple_choice" | "file";
-type NextAction = "reply" | "run_code" | "choose" | "retry" | "rescue" | "continue" | "complete";
+type NextAction =
+  | "reply"
+  | "run_code"
+  | "choose"
+  | "retry"
+  | "rescue"
+  | "continue"
+  | "complete";
 
 type Envelope = {
   status: "ok" | "error";
@@ -61,8 +90,23 @@ type Envelope = {
   choices: unknown[];
   exercise: unknown | null;
   assessment: unknown | null;
+  resources?: LessonChatResource[];
   next_action: NextAction;
   guardrail: { redirected: boolean; reason: string | null };
+};
+
+type LessonChatResource = {
+  id: string;
+  title: string;
+  description?: string;
+  resource_type: string;
+  display_mode: "inline" | "modal" | "card";
+  source_type: "upload" | "external_url";
+  storage_bucket?: string | null;
+  storage_path?: string | null;
+  external_url?: string | null;
+  thumbnail_url?: string | null;
+  student_instructions?: string;
 };
 
 type SupabaseConfig = {
@@ -101,39 +145,54 @@ function errorMessage(err: unknown): string {
 
 function stage(value: unknown, fallback: Stage = "intro"): Stage {
   const candidate = String(value || "");
-  return STAGES.has(candidate) ? candidate as Stage : fallback;
+  return STAGES.has(candidate) ? (candidate as Stage) : fallback;
 }
 
-function responseMode(value: unknown, fallback: ResponseMode = "text"): ResponseMode {
+function responseMode(
+  value: unknown,
+  fallback: ResponseMode = "text",
+): ResponseMode {
   const candidate = String(value || "");
-  return RESPONSE_MODES.has(candidate) ? candidate as ResponseMode : fallback;
+  return RESPONSE_MODES.has(candidate) ? (candidate as ResponseMode) : fallback;
 }
 
-function nextAction(value: unknown, fallback: NextAction = "reply"): NextAction {
+function nextAction(
+  value: unknown,
+  fallback: NextAction = "reply",
+): NextAction {
   const candidate = String(value || "");
-  return NEXT_ACTIONS.has(candidate) ? candidate as NextAction : fallback;
+  return NEXT_ACTIONS.has(candidate) ? (candidate as NextAction) : fallback;
 }
 
 function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
   return {
     status: partial.status === "error" ? "error" : "ok",
     reply: typeof partial.reply === "string" ? partial.reply : "",
-    session_id: typeof partial.session_id === "string" ? partial.session_id : null,
+    session_id:
+      typeof partial.session_id === "string" ? partial.session_id : null,
     lesson_id: typeof partial.lesson_id === "string" ? partial.lesson_id : null,
     stage: stage(partial.stage),
     response_mode: responseMode(partial.response_mode),
     choices: Array.isArray(partial.choices) ? partial.choices : [],
     exercise: partial.exercise ?? null,
     assessment: partial.assessment ?? null,
+    resources: Array.isArray(partial.resources) ? partial.resources : [],
     next_action: nextAction(partial.next_action),
     guardrail: {
       redirected: partial.guardrail?.redirected === true,
-      reason: typeof partial.guardrail?.reason === "string" ? partial.guardrail.reason : null,
+      reason:
+        typeof partial.guardrail?.reason === "string"
+          ? partial.guardrail.reason
+          : null,
     },
   };
 }
 
-function typedError(message: string, status = 500, context: Partial<Envelope> = {}): Response {
+function typedError(
+  message: string,
+  status = 500,
+  context: Partial<Envelope> = {},
+): Response {
   return json(
     makeEnvelope({
       ...context,
@@ -147,17 +206,31 @@ function typedError(message: string, status = 500, context: Partial<Envelope> = 
 }
 
 function typedAuthStatus(message: string): number {
-  if (message.includes("Authentication is required") || message.includes("authenticated")) return 401;
-  if (message.includes("identify authenticated user") || message.includes("JWT")) return 403;
+  if (
+    message.includes("Authentication is required") ||
+    message.includes("authenticated")
+  )
+    return 401;
+  if (
+    message.includes("identify authenticated user") ||
+    message.includes("JWT")
+  )
+    return 403;
   return 500;
 }
 
 function isLegacyRequest(body: Record<string, unknown>): boolean {
-  return Array.isArray(body.messages) && !body.lesson_id && !body.session_id && !body.answer;
+  return (
+    Array.isArray(body.messages) &&
+    !body.lesson_id &&
+    !body.session_id &&
+    !body.answer
+  );
 }
 
 function normalizeAnswer(answer: unknown): DbRow | null {
-  if (!answer || typeof answer !== "object" || Array.isArray(answer)) return null;
+  if (!answer || typeof answer !== "object" || Array.isArray(answer))
+    return null;
   const raw = answer as DbRow;
   const mode = responseMode(raw.mode, "text");
   return {
@@ -165,7 +238,10 @@ function normalizeAnswer(answer: unknown): DbRow | null {
     text: typeof raw.text === "string" ? raw.text : "",
     code: typeof raw.code === "string" ? raw.code : "",
     choice_id: typeof raw.choice_id === "string" ? raw.choice_id : "",
-    run_result: raw.run_result && typeof raw.run_result === "object" ? raw.run_result : null,
+    run_result:
+      raw.run_result && typeof raw.run_result === "object"
+        ? raw.run_result
+        : null,
   };
 }
 
@@ -177,11 +253,17 @@ function answerContent(answer: DbRow | null): string {
   return String(answer.text || "");
 }
 
-function normalizeMentorPreferences(raw: unknown): Record<string, string> | null {
+function normalizeMentorPreferences(
+  raw: unknown,
+): Record<string, string> | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const prefs = raw as DbRow;
-  const pace = PACE_OPTIONS.has(String(prefs.pace)) ? String(prefs.pace) : "balanced";
-  const tone = TONE_OPTIONS.has(String(prefs.tone)) ? String(prefs.tone) : "neutral";
+  const pace = PACE_OPTIONS.has(String(prefs.pace))
+    ? String(prefs.pace)
+    : "balanced";
+  const tone = TONE_OPTIONS.has(String(prefs.tone))
+    ? String(prefs.tone)
+    : "neutral";
   const hintLevel = HINT_LEVEL_OPTIONS.has(String(prefs.hint_level))
     ? String(prefs.hint_level)
     : "medium";
@@ -192,24 +274,34 @@ function restConfig(req: Request): SupabaseConfig {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const authorization = req.headers.get("Authorization") || "";
-  if (!url || !anonKey) throw new Error("SUPABASE_URL or SUPABASE_ANON_KEY is not configured.");
+  if (!url || !anonKey)
+    throw new Error("SUPABASE_URL or SUPABASE_ANON_KEY is not configured.");
   if (!authorization) throw new Error("Authentication is required.");
   return { url, anonKey, authorization };
 }
 
-async function supabaseFetch(config: SupabaseConfig, path: string, init: RequestInit = {}): Promise<unknown> {
+async function supabaseFetch(
+  config: SupabaseConfig,
+  path: string,
+  init: RequestInit = {},
+): Promise<unknown> {
   const headers = new Headers(init.headers || {});
   headers.set("apikey", config.anonKey);
   headers.set("Authorization", config.authorization);
-  if (!headers.has("Content-Type") && init.body) headers.set("Content-Type", "application/json");
+  if (!headers.has("Content-Type") && init.body)
+    headers.set("Content-Type", "application/json");
 
-  const res = await fetch(`${config.url}/rest/v1/${path}`, { ...init, headers });
+  const res = await fetch(`${config.url}/rest/v1/${path}`, {
+    ...init,
+    headers,
+  });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    const message = data && typeof data === "object" && "message" in data
-      ? String((data as DbRow).message)
-      : res.statusText;
+    const message =
+      data && typeof data === "object" && "message" in data
+        ? String((data as DbRow).message)
+        : res.statusText;
     throw new Error(message);
   }
   return data;
@@ -223,11 +315,16 @@ async function fetchCurrentUser(config: SupabaseConfig): Promise<DbRow> {
     },
   });
   const data = await res.json();
-  if (!res.ok || !data?.id) throw new Error("Could not identify authenticated user.");
+  if (!res.ok || !data?.id)
+    throw new Error("Could not identify authenticated user.");
   return data;
 }
 
-async function insertRow(config: SupabaseConfig, table: string, row: DbRow): Promise<DbRow> {
+async function insertRow(
+  config: SupabaseConfig,
+  table: string,
+  row: DbRow,
+): Promise<DbRow> {
   const data = await supabaseFetch(config, table, {
     method: "POST",
     headers: { Prefer: "return=representation" },
@@ -239,7 +336,11 @@ async function insertRow(config: SupabaseConfig, table: string, row: DbRow): Pro
   return data[0] as DbRow;
 }
 
-async function patchRows(config: SupabaseConfig, path: string, row: DbRow): Promise<void> {
+async function patchRows(
+  config: SupabaseConfig,
+  path: string,
+  row: DbRow,
+): Promise<void> {
   await supabaseFetch(config, path, {
     method: "PATCH",
     headers: { Prefer: "return=minimal" },
@@ -247,15 +348,24 @@ async function patchRows(config: SupabaseConfig, path: string, row: DbRow): Prom
   });
 }
 
-async function loadFirst(config: SupabaseConfig, path: string): Promise<DbRow | null> {
+async function loadFirst(
+  config: SupabaseConfig,
+  path: string,
+): Promise<DbRow | null> {
   const data = await supabaseFetch(config, path);
-  if (!Array.isArray(data) || !data[0] || typeof data[0] !== "object") return null;
+  if (!Array.isArray(data) || !data[0] || typeof data[0] !== "object")
+    return null;
   return data[0] as DbRow;
 }
 
-async function loadMany(config: SupabaseConfig, path: string): Promise<DbRow[]> {
+async function loadMany(
+  config: SupabaseConfig,
+  path: string,
+): Promise<DbRow[]> {
   const data = await supabaseFetch(config, path);
-  return Array.isArray(data) ? data.filter((row) => row && typeof row === "object") as DbRow[] : [];
+  return Array.isArray(data)
+    ? (data.filter((row) => row && typeof row === "object") as DbRow[])
+    : [];
 }
 
 async function loadOrCreateSession(
@@ -281,7 +391,10 @@ async function loadOrCreateSession(
   });
 }
 
-async function callOpenAI(messages: unknown[], jsonMode: boolean): Promise<string> {
+async function callOpenAI(
+  messages: unknown[],
+  jsonMode: boolean,
+): Promise<string> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
 
@@ -307,7 +420,9 @@ async function callOpenAI(messages: unknown[], jsonMode: boolean): Promise<strin
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item) => typeof item === "string") as string[] : [];
+  return Array.isArray(value)
+    ? (value.filter((item) => typeof item === "string") as string[])
+    : [];
 }
 
 function numberOrNull(value: unknown): number | null {
@@ -325,7 +440,11 @@ function uniqueStrings(values: string[]): string[] {
 function outputLines(runResult: unknown): string[] {
   if (!runResult || typeof runResult !== "object") return [];
   const raw = runResult as DbRow;
-  const direct = Array.isArray(raw.output) ? raw.output : Array.isArray(raw.result) ? raw.result : null;
+  const direct = Array.isArray(raw.output)
+    ? raw.output
+    : Array.isArray(raw.result)
+      ? raw.result
+      : null;
   if (direct) return direct.map((item) => String(item));
   if (typeof raw.output === "string") return raw.output.split(/\r?\n/);
   return [];
@@ -339,14 +458,22 @@ function runHasErrors(runResult: unknown): boolean {
   return Array.isArray(raw.errors) && raw.errors.length > 0;
 }
 
-function expectedOutputFor(lesson: DbRow | null, activity: DbRow | null): string {
-  return String(activity?.expected_output || lesson?.expected_output || "").trim();
+function expectedOutputFor(
+  lesson: DbRow | null,
+  activity: DbRow | null,
+): string {
+  return String(
+    activity?.expected_output || lesson?.expected_output || "",
+  ).trim();
 }
 
 function passThreshold(activity: DbRow | null, quiz: DbRow | null): number {
   const activityThreshold = numberOrNull(activity?.pass_score);
   if (activityThreshold !== null) return activityThreshold;
-  const rubric = quiz?.rubric && typeof quiz.rubric === "object" ? quiz.rubric as DbRow : null;
+  const rubric =
+    quiz?.rubric && typeof quiz.rubric === "object"
+      ? (quiz.rubric as DbRow)
+      : null;
   return numberOrNull(rubric?.pass_threshold) ?? 1;
 }
 
@@ -370,8 +497,8 @@ function assessAnswer(
       feedback: passed
         ? "The code ran and produced the expected result."
         : expected
-        ? `Run the code again and aim for output that includes: ${expected}`
-        : "The code did not run cleanly yet. Try one small fix.",
+          ? `Run the code again and aim for output that includes: ${expected}`
+          : "The code did not run cleanly yet. Try one small fix.",
       source: "orchestrator",
     };
   }
@@ -396,7 +523,8 @@ function parsedAssessment(value: unknown): Assessment | null {
   const raw = value as DbRow;
   const score = numberOrNull(raw.score);
   const passed = boolOrNull(raw.passed);
-  if (score === null && passed === null && typeof raw.feedback !== "string") return null;
+  if (score === null && passed === null && typeof raw.feedback !== "string")
+    return null;
   return {
     score: score ?? undefined,
     passed: passed ?? undefined,
@@ -405,7 +533,10 @@ function parsedAssessment(value: unknown): Assessment | null {
   };
 }
 
-function mergeAssessment(orchestrator: Assessment | null, mentor: Assessment | null): Assessment | null {
+function mergeAssessment(
+  orchestrator: Assessment | null,
+  mentor: Assessment | null,
+): Assessment | null {
   if (!orchestrator && !mentor) return null;
   if (!orchestrator) return mentor;
   if (!mentor) return orchestrator;
@@ -425,17 +556,25 @@ function flowFor(
   assessment: Assessment | null,
 ): FlowDecision {
   const activityMode = responseMode(activity?.response_mode, "code");
-  const quizChoices = Array.isArray(quiz?.choices) ? quiz.choices as unknown[] : [];
+  const quizChoices = Array.isArray(quiz?.choices)
+    ? (quiz.choices as unknown[])
+    : [];
   const retryCount = Number(session.retry_count || 0);
   const rescueCount = Number(session.rescue_count || 0);
-  const weakAction: NextAction = retryCount > 0 || rescueCount > 0 ? "rescue" : "retry";
+  const weakAction: NextAction =
+    retryCount > 0 || rescueCount > 0 ? "rescue" : "retry";
 
   if (!answer) {
     const mode = activityMode;
     return {
       stage: currentStage === "intro" ? "practice" : currentStage,
       responseMode: mode,
-      nextAction: mode === "code" ? "run_code" : mode === "multiple_choice" ? "choose" : "reply",
+      nextAction:
+        mode === "code"
+          ? "run_code"
+          : mode === "multiple_choice"
+            ? "choose"
+            : "reply",
       choices: mode === "multiple_choice" ? quizChoices : [],
     };
   }
@@ -443,21 +582,51 @@ function flowFor(
   if (answer.mode === "code") {
     if (assessment?.passed === true) {
       return quiz
-        ? { stage: "assessment", responseMode: "multiple_choice", nextAction: "choose", choices: quizChoices }
-        : { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
+        ? {
+            stage: "assessment",
+            responseMode: "multiple_choice",
+            nextAction: "choose",
+            choices: quizChoices,
+          }
+        : {
+            stage: "complete",
+            responseMode: "text",
+            nextAction: "complete",
+            choices: [],
+          };
     }
-    return { stage: "practice", responseMode: "code", nextAction: weakAction, choices: [] };
+    return {
+      stage: "practice",
+      responseMode: "code",
+      nextAction: weakAction,
+      choices: [],
+    };
   }
 
   if (answer.mode === "multiple_choice") {
     if (assessment?.passed === true) {
-      return { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
+      return {
+        stage: "complete",
+        responseMode: "text",
+        nextAction: "complete",
+        choices: [],
+      };
     }
-    return { stage: "review", responseMode: "multiple_choice", nextAction: weakAction, choices: quizChoices };
+    return {
+      stage: "review",
+      responseMode: "multiple_choice",
+      nextAction: weakAction,
+      choices: quizChoices,
+    };
   }
 
   if (assessment?.passed === true && currentStage === "review") {
-    return { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
+    return {
+      stage: "complete",
+      responseMode: "text",
+      nextAction: "complete",
+      choices: [],
+    };
   }
 
   return {
@@ -468,16 +637,37 @@ function flowFor(
   };
 }
 
-function fallbackReply(flow: FlowDecision, assessment: Assessment | null, activity: DbRow | null, quiz: DbRow | null): string {
-  if (flow.nextAction === "complete") return "Nice work. This lesson is complete.";
-  if (flow.nextAction === "choose") return String(quiz?.prompt || "Choose the answer that best matches what you just practiced.");
-  if (flow.nextAction === "retry") return assessment?.feedback || "Try one more time. Focus on the current step.";
-  if (flow.nextAction === "rescue") return "Let's rescue this together. Say what part feels stuck, or try the smallest next change.";
-  if (flow.nextAction === "run_code") return String(activity?.prompt || "Run the starter code and tell me what it does.");
+function fallbackReply(
+  flow: FlowDecision,
+  assessment: Assessment | null,
+  activity: DbRow | null,
+  quiz: DbRow | null,
+): string {
+  if (flow.nextAction === "complete")
+    return "Nice work. This lesson is complete.";
+  if (flow.nextAction === "choose")
+    return String(
+      quiz?.prompt ||
+        "Choose the answer that best matches what you just practiced.",
+    );
+  if (flow.nextAction === "retry")
+    return (
+      assessment?.feedback || "Try one more time. Focus on the current step."
+    );
+  if (flow.nextAction === "rescue")
+    return "Let's rescue this together. Say what part feels stuck, or try the smallest next change.";
+  if (flow.nextAction === "run_code")
+    return String(
+      activity?.prompt || "Run the starter code and tell me what it does.",
+    );
   return String(activity?.prompt || "Tell me your next thought.");
 }
 
-function skillKeysFor(activity: DbRow | null, milestone: DbRow | null, quiz: DbRow | null): string[] {
+function skillKeysFor(
+  activity: DbRow | null,
+  milestone: DbRow | null,
+  quiz: DbRow | null,
+): string[] {
   return uniqueStrings([
     ...stringArray(activity?.skill_keys),
     ...stringArray(milestone?.skill_keys),
@@ -498,6 +688,8 @@ async function loadContext(
   recentTurns: DbRow[];
   recentAttempts: DbRow[];
   mastery: DbRow[];
+  resources: DbRow[];
+  resourceInteractions: DbRow[];
 }> {
   const lesson = await loadFirst(
     config,
@@ -505,7 +697,10 @@ async function loadContext(
   );
 
   let activity: DbRow | null = null;
-  if (typeof session.current_activity_id === "string" && session.current_activity_id) {
+  if (
+    typeof session.current_activity_id === "string" &&
+    session.current_activity_id
+  ) {
     activity = await loadFirst(
       config,
       `lesson_activities?id=eq.${encodeURIComponent(session.current_activity_id)}&lesson_id=eq.${encodeURIComponent(lessonId)}&select=*`,
@@ -518,31 +713,39 @@ async function loadContext(
     );
   }
 
-  const milestoneId = typeof activity?.milestone_id === "string"
-    ? activity.milestone_id
-    : "";
+  const milestoneId =
+    typeof activity?.milestone_id === "string" ? activity.milestone_id : "";
   const milestone = milestoneId
-    ? await loadFirst(config, `milestones?id=eq.${encodeURIComponent(milestoneId)}&select=*`)
-    : await loadFirst(
-      config,
-      `milestones?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
-    );
-
-  const quiz = activity?.id
     ? await loadFirst(
-      config,
-      `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=eq.${encodeURIComponent(String(activity.id))}&status=eq.published&order=position.asc&limit=1&select=*`,
-    ) ??
-      await loadFirst(
         config,
-        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=position.asc&limit=1&select=*`,
+        `milestones?id=eq.${encodeURIComponent(milestoneId)}&select=*`,
       )
     : await loadFirst(
-      config,
-      `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=position.asc&limit=1&select=*`,
-    );
+        config,
+        `milestones?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
+      );
 
-  const [recentTurns, recentAttempts, mastery] = await Promise.all([
+  const quiz = activity?.id
+    ? ((await loadFirst(
+        config,
+        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=eq.${encodeURIComponent(String(activity.id))}&status=eq.published&order=position.asc&limit=1&select=*`,
+      )) ??
+      (await loadFirst(
+        config,
+        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=position.asc&limit=1&select=*`,
+      )))
+    : await loadFirst(
+        config,
+        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=position.asc&limit=1&select=*`,
+      );
+
+  const [
+    recentTurns,
+    recentAttempts,
+    mastery,
+    resources,
+    resourceInteractions,
+  ] = await Promise.all([
     loadMany(
       config,
       `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=8&select=role,stage,response_mode,content,payload,created_at`,
@@ -555,9 +758,70 @@ async function loadContext(
       config,
       `student_mastery?user_id=eq.${encodeURIComponent(userId)}&select=*`,
     ),
+    loadMany(
+      config,
+      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=5&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,transcript_text,metadata`,
+    ),
+    loadMany(
+      config,
+      `resource_interactions?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&order=created_at.desc&limit=20&select=resource_id,event_type,progress_seconds,progress_percent,created_at`,
+    ),
   ]);
 
-  return { lesson, activity, milestone, quiz, recentTurns, recentAttempts, mastery };
+  return {
+    lesson,
+    activity,
+    milestone,
+    quiz,
+    recentTurns,
+    recentAttempts,
+    mastery,
+    resources,
+    resourceInteractions,
+  };
+}
+
+function resourceForEnvelope(resource: DbRow): LessonChatResource {
+  const sourceType =
+    resource.source_type === "external_url" ? "external_url" : "upload";
+  const displayMode = ["inline", "modal", "card"].includes(
+    String(resource.display_mode),
+  )
+    ? (String(resource.display_mode) as "inline" | "modal" | "card")
+    : "card";
+  return {
+    id: String(resource.id),
+    title: String(resource.title || "Lesson resource"),
+    description:
+      typeof resource.description === "string" ? resource.description : "",
+    resource_type: String(resource.resource_type || "document"),
+    display_mode: displayMode,
+    source_type: sourceType,
+    storage_bucket:
+      typeof resource.storage_bucket === "string"
+        ? resource.storage_bucket
+        : null,
+    storage_path:
+      typeof resource.storage_path === "string" ? resource.storage_path : null,
+    external_url:
+      typeof resource.external_url === "string" ? resource.external_url : null,
+    thumbnail_url:
+      typeof resource.thumbnail_path === "string"
+        ? resource.thumbnail_path
+        : null,
+    student_instructions:
+      typeof resource.student_instructions === "string"
+        ? resource.student_instructions
+        : "",
+  };
+}
+
+function resourcesForResponse(
+  resources: DbRow[],
+  answer: DbRow | null,
+): LessonChatResource[] {
+  if (answer || resources.length === 0) return [];
+  return [resourceForEnvelope(resources[0])];
 }
 
 async function writeEvidenceAndMastery(
@@ -571,9 +835,20 @@ async function writeEvidenceAndMastery(
   skills: string[],
   milestone: DbRow | null,
 ): Promise<void> {
-  if (!answer || !assessment || typeof assessment.score !== "number" || skills.length === 0) return;
+  if (
+    !answer ||
+    !assessment ||
+    typeof assessment.score !== "number" ||
+    skills.length === 0
+  )
+    return;
 
-  const sourceType = answer.mode === "code" ? "code_run" : answer.mode === "multiple_choice" ? "quiz" : "chat_turn";
+  const sourceType =
+    answer.mode === "code"
+      ? "code_run"
+      : answer.mode === "multiple_choice"
+        ? "quiz"
+        : "chat_turn";
   await insertRow(config, "learning_evidence", {
     user_id: userId,
     lesson_id: lessonId,
@@ -602,8 +877,19 @@ async function writeEvidenceAndMastery(
     const oldScore = Number(current?.score || 0);
     const nextEvidenceCount = evidenceCount + 1;
     const nextAttemptCount = attemptCount + 1;
-    const nextScore = Math.max(0, Math.min(1, ((oldScore * evidenceCount) + assessment.score) / nextEvidenceCount));
-    const level = nextScore >= 0.85 ? "secure" : nextScore >= 0.55 ? "developing" : "emerging";
+    const nextScore = Math.max(
+      0,
+      Math.min(
+        1,
+        (oldScore * evidenceCount + assessment.score) / nextEvidenceCount,
+      ),
+    );
+    const level =
+      nextScore >= 0.85
+        ? "secure"
+        : nextScore >= 0.55
+          ? "developing"
+          : "emerging";
     const payload = {
       user_id: userId,
       skill_key: skill,
@@ -638,15 +924,21 @@ async function maybeWriteRecommendation(
   milestone: DbRow | null,
   envelope: Envelope,
 ): Promise<void> {
-  if (envelope.next_action !== "retry" && envelope.next_action !== "rescue") return;
+  if (envelope.next_action !== "retry" && envelope.next_action !== "rescue")
+    return;
   await insertRow(config, "mentor_recommendations", {
     user_id: userId,
     session_id: sessionId,
     lesson_id: lessonId,
     milestone_id: typeof milestone?.id === "string" ? milestone.id : null,
     recommendation_type: envelope.next_action,
-    title: envelope.next_action === "rescue" ? "Rescue support recommended" : "Retry recommended",
-    rationale: envelope.reply || "The learner needs another pass on the current milestone.",
+    title:
+      envelope.next_action === "rescue"
+        ? "Rescue support recommended"
+        : "Retry recommended",
+    rationale:
+      envelope.reply ||
+      "The learner needs another pass on the current milestone.",
     payload: {
       stage: envelope.stage,
       response_mode: envelope.response_mode,
@@ -658,22 +950,27 @@ async function maybeWriteRecommendation(
 }
 
 function sessionStatus(flow: FlowDecision): string {
-  if (flow.stage === "complete" || flow.nextAction === "complete") return "complete";
+  if (flow.stage === "complete" || flow.nextAction === "complete")
+    return "complete";
   if (flow.nextAction === "retry") return "needs_retry";
   if (flow.nextAction === "rescue") return "needs_rescue";
   return "active";
 }
 
-async function handleLegacyRequest(body: Record<string, unknown>): Promise<Response> {
+async function handleLegacyRequest(
+  body: Record<string, unknown>,
+): Promise<Response> {
   const chatHistory = Array.isArray(body.messages) ? [...body.messages] : [];
   const hasPersona = chatHistory.some(
     (m) =>
-      m && typeof m === "object" &&
+      m &&
+      typeof m === "object" &&
       (m as DbRow).role === "system" &&
       typeof (m as DbRow).content === "string" &&
       String((m as DbRow).content).includes("You are the Jargon Mentor"),
   );
-  if (!hasPersona) chatHistory.unshift({ role: "system", content: SYSTEM_PROMPT });
+  if (!hasPersona)
+    chatHistory.unshift({ role: "system", content: SYSTEM_PROMPT });
 
   try {
     const reply = await callOpenAI(chatHistory, false);
@@ -683,7 +980,10 @@ async function handleLegacyRequest(body: Record<string, unknown>): Promise<Respo
   }
 }
 
-async function handleTypedRequest(req: Request, body: Record<string, unknown>): Promise<Response> {
+async function handleTypedRequest(
+  req: Request,
+  body: Record<string, unknown>,
+): Promise<Response> {
   const lessonId = typeof body.lesson_id === "string" ? body.lesson_id : "";
   if (!lessonId) return typedError("lesson_id is required.", 400);
 
@@ -695,11 +995,18 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
   try {
     config = restConfig(req);
     user = await fetchCurrentUser(config);
-    session = await loadOrCreateSession(config, String(user.id), lessonId, body.session_id);
+    session = await loadOrCreateSession(
+      config,
+      String(user.id),
+      lessonId,
+      body.session_id,
+    );
     context = await loadContext(config, String(user.id), lessonId, session);
   } catch (err) {
     const message = errorMessage(err);
-    return typedError(message, typedAuthStatus(message), { lesson_id: lessonId });
+    return typedError(message, typedAuthStatus(message), {
+      lesson_id: lessonId,
+    });
   }
 
   const userId = String(user.id);
@@ -708,8 +1015,17 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
   const answer = normalizeAnswer(body.answer);
   const content = answerContent(answer);
   const mentorPreferences = normalizeMentorPreferences(body.mentor_preferences);
-  const skillKeys = skillKeysFor(context.activity, context.milestone, context.quiz);
-  const orchestratorAssessment = assessAnswer(answer, context.lesson, context.activity, context.quiz);
+  const skillKeys = skillKeysFor(
+    context.activity,
+    context.milestone,
+    context.quiz,
+  );
+  const orchestratorAssessment = assessAnswer(
+    answer,
+    context.lesson,
+    context.activity,
+    context.quiz,
+  );
 
   try {
     if (answer && content) {
@@ -725,14 +1041,21 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
       });
     }
 
-    const draftFlow = flowFor(currentStage, session, context.activity, context.quiz, answer, orchestratorAssessment);
+    const draftFlow = flowFor(
+      currentStage,
+      session,
+      context.activity,
+      context.quiz,
+      answer,
+      orchestratorAssessment,
+    );
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
         content: JSON.stringify({
           instruction:
-            "Return only the typed JSON envelope. The orchestrator owns records and final stage/action; you own concise student-facing wording.",
+            "Return only the typed JSON envelope. The orchestrator owns records, final stage/action, and resource cards; you own concise student-facing wording. If lesson_resources are present, invite the student to open one. Do not claim a resource was viewed unless resource_interactions proves it.",
           lesson: context.lesson,
           activity: context.activity,
           milestone: context.milestone,
@@ -740,6 +1063,15 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
           recent_turns: context.recentTurns,
           recent_attempts: context.recentAttempts,
           mastery_summary: context.mastery,
+          lesson_resources: context.resources.map((resource) => ({
+            id: resource.id,
+            title: resource.title,
+            description: resource.description,
+            resource_type: resource.resource_type,
+            student_instructions: resource.student_instructions,
+            transcript_text: resource.transcript_text,
+          })),
+          resource_interactions: context.resourceInteractions,
           session: {
             id: sessionId,
             stage: currentStage,
@@ -780,8 +1112,18 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
       });
     }
 
-    const assessment = mergeAssessment(orchestratorAssessment, parsedAssessment(parsed.assessment));
-    const finalFlow = flowFor(currentStage, session, context.activity, context.quiz, answer, assessment);
+    const assessment = mergeAssessment(
+      orchestratorAssessment,
+      parsedAssessment(parsed.assessment),
+    );
+    const finalFlow = flowFor(
+      currentStage,
+      session,
+      context.activity,
+      context.quiz,
+      answer,
+      assessment,
+    );
     const envelope = makeEnvelope({
       ...(parsed as Partial<Envelope>),
       session_id: sessionId,
@@ -790,10 +1132,17 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
       response_mode: finalFlow.responseMode,
       choices: finalFlow.choices,
       assessment,
+      resources: resourcesForResponse(context.resources, answer),
       next_action: finalFlow.nextAction,
-      reply: typeof parsed.reply === "string" && parsed.reply.trim()
-        ? parsed.reply
-        : fallbackReply(finalFlow, assessment, context.activity, context.quiz),
+      reply:
+        typeof parsed.reply === "string" && parsed.reply.trim()
+          ? parsed.reply
+          : fallbackReply(
+              finalFlow,
+              assessment,
+              context.activity,
+              context.quiz,
+            ),
     });
 
     await insertRow(config, "learning_turns", {
@@ -811,7 +1160,8 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
     if (answer) {
       attempt = await insertRow(config, "lesson_attempts", {
         session_id: sessionId,
-        activity_id: typeof context.activity?.id === "string" ? context.activity.id : null,
+        activity_id:
+          typeof context.activity?.id === "string" ? context.activity.id : null,
         user_id: userId,
         lesson_id: lessonId,
         answer_mode: answer.mode,
@@ -820,7 +1170,8 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
         choice_id: answer.mode === "multiple_choice" ? answer.choice_id : null,
         run_result: answer.run_result || null,
         score: typeof assessment?.score === "number" ? assessment.score : null,
-        passed: typeof assessment?.passed === "boolean" ? assessment.passed : null,
+        passed:
+          typeof assessment?.passed === "boolean" ? assessment.passed : null,
         feedback: assessment?.feedback || envelope.reply,
       });
 
@@ -832,8 +1183,10 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
           lesson_id: lessonId,
           answer_mode: answer.mode,
           choice_id: answer.choice_id || null,
-          score: typeof assessment?.score === "number" ? assessment.score : null,
-          passed: typeof assessment?.passed === "boolean" ? assessment.passed : null,
+          score:
+            typeof assessment?.score === "number" ? assessment.score : null,
+          passed:
+            typeof assessment?.passed === "boolean" ? assessment.passed : null,
           feedback: assessment?.feedback || envelope.reply,
           graded_by: "system",
         });
@@ -850,22 +1203,35 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
         skillKeys,
         context.milestone,
       );
-      await maybeWriteRecommendation(config, userId, lessonId, sessionId, context.milestone, envelope);
+      await maybeWriteRecommendation(
+        config,
+        userId,
+        lessonId,
+        sessionId,
+        context.milestone,
+        envelope,
+      );
     }
 
     const retryIncrement = envelope.next_action === "retry" ? 1 : 0;
     const rescueIncrement = envelope.next_action === "rescue" ? 1 : 0;
-    await patchRows(config, `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`, {
-      current_activity_id: typeof context.activity?.id === "string" ? context.activity.id : null,
-      stage: envelope.stage,
-      status: sessionStatus(finalFlow),
-      score: typeof assessment?.score === "number"
-        ? Math.max(Number(session.score || 0), assessment.score)
-        : Number(session.score || 0),
-      retry_count: Number(session.retry_count || 0) + retryIncrement,
-      rescue_count: Number(session.rescue_count || 0) + rescueIncrement,
-      updated_at: new Date().toISOString(),
-    });
+    await patchRows(
+      config,
+      `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`,
+      {
+        current_activity_id:
+          typeof context.activity?.id === "string" ? context.activity.id : null,
+        stage: envelope.stage,
+        status: sessionStatus(finalFlow),
+        score:
+          typeof assessment?.score === "number"
+            ? Math.max(Number(session.score || 0), assessment.score)
+            : Number(session.score || 0),
+        retry_count: Number(session.retry_count || 0) + retryIncrement,
+        rescue_count: Number(session.rescue_count || 0) + rescueIncrement,
+        updated_at: new Date().toISOString(),
+      },
+    );
 
     return json(envelope);
   } catch (err) {
@@ -878,7 +1244,8 @@ async function handleTypedRequest(req: Request, body: Record<string, unknown>): 
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   try {
     const body = await req.json();

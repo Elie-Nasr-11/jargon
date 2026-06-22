@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ClipboardList,
+  ExternalLink,
   FileText,
   GraduationCap,
   MessageSquare,
@@ -14,10 +15,23 @@ import {
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
-import { createTeacherNote, fetchTeacherDashboard, getSession } from "@/lib/api";
+import {
+  createLessonResource,
+  createTeacherNote,
+  fetchTeacherDashboard,
+  getLessonResourceSignedUrl,
+  getSession,
+  updateLessonResource,
+} from "@/lib/api";
 import type {
   LearningSession,
   Lesson,
+  LessonResource,
+  LessonResourceDisplayMode,
+  LessonResourceSource,
+  LessonResourceStatus,
+  LessonResourceType,
+  LessonResourceVisibility,
   Profile,
   TeacherClassSummary,
   TeacherDashboardData,
@@ -52,6 +66,7 @@ function TeacherPage() {
   const [noteVisibility, setNoteVisibility] =
     useState<TeacherNote["visibility"]>("teacher_private");
   const [savingNote, setSavingNote] = useState(false);
+  const [savingResource, setSavingResource] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -158,6 +173,60 @@ function TeacherPage() {
       setMessage((error as Error).message || "Could not save teacher note.");
     } finally {
       setSavingNote(false);
+    }
+  };
+
+  const saveResource = async (input: ResourceFormValues) => {
+    if (!teacherId || !dashboard) return;
+    setSavingResource(true);
+    try {
+      if (input.resourceId) {
+        const updated = await updateLessonResource(input.resourceId, {
+          title: input.title,
+          description: input.description,
+          student_instructions: input.studentInstructions,
+          teacher_notes: input.teacherNotes,
+          status: input.status,
+          visibility: input.visibility,
+        });
+        setDashboard((current) =>
+          current
+            ? {
+                ...current,
+                resources: current.resources.map((resource) =>
+                  resource.id === updated.id ? updated : resource,
+                ),
+              }
+            : current,
+        );
+        return;
+      }
+
+      const created = await createLessonResource({
+        teacherId,
+        organizationId: input.organizationId,
+        classId: input.classId,
+        lessonId: input.lessonId,
+        title: input.title,
+        description: input.description,
+        studentInstructions: input.studentInstructions,
+        teacherNotes: input.teacherNotes,
+        resourceType: input.resourceType,
+        sourceType: input.sourceType,
+        status: input.status,
+        visibility: input.visibility,
+        displayMode: input.displayMode,
+        externalUrl: input.externalUrl,
+        file: input.file,
+      });
+      setDashboard((current) =>
+        current ? { ...current, resources: [created, ...current.resources] } : current,
+      );
+    } catch (error) {
+      setMessage((error as Error).message || "Could not save lesson resource.");
+      throw error;
+    } finally {
+      setSavingResource(false);
     }
   };
 
@@ -274,11 +343,28 @@ function TeacherPage() {
                     profilesById={model.profilesById}
                     lessons={dashboard.lessons}
                     lessonsById={model.lessonsById}
+                    resources={dashboard.resources.filter(
+                      (resource) => resource.class_id === selectedClass.id,
+                    )}
                     studentIds={classStudents}
                     selectedLessonId={selectedGradebookLessonId}
                     selectedStudentId={selectedStudentId}
                     onSelectLesson={setSelectedGradebookLessonId}
                     onSelectStudent={setSelectedStudentId}
+                    savingResource={savingResource}
+                    onSaveResource={saveResource}
+                    onUpdateResource={(resource) =>
+                      setDashboard((current) =>
+                        current
+                          ? {
+                              ...current,
+                              resources: current.resources.map((item) =>
+                                item.id === resource.id ? resource : item,
+                              ),
+                            }
+                          : current,
+                      )
+                    }
                   />
                 ) : (
                   <EmptyPanel
@@ -372,11 +458,15 @@ function ClassDetail({
   profilesById,
   lessons,
   lessonsById,
+  resources,
   studentIds,
   selectedLessonId,
   selectedStudentId,
   onSelectLesson,
   onSelectStudent,
+  savingResource,
+  onSaveResource,
+  onUpdateResource,
 }: {
   item: TeacherClassSummary;
   stats: ClassSummary;
@@ -384,11 +474,15 @@ function ClassDetail({
   profilesById: Map<string, Profile>;
   lessons: Lesson[];
   lessonsById: Map<string, Lesson>;
+  resources: LessonResource[];
   studentIds: string[];
   selectedLessonId: string;
   selectedStudentId: string | null;
   onSelectLesson: (lessonId: string) => void;
   onSelectStudent: (studentId: string) => void;
+  savingResource: boolean;
+  onSaveResource: (input: ResourceFormValues) => Promise<void>;
+  onUpdateResource: (resource: LessonResource) => void;
 }) {
   return (
     <GradientCard>
@@ -421,6 +515,15 @@ function ClassDetail({
           selectedStudentId={selectedStudentId}
           onSelectLesson={onSelectLesson}
           onSelectStudent={onSelectStudent}
+        />
+
+        <ResourceManager
+          classSummary={item}
+          lessons={lessons}
+          resources={resources}
+          saving={savingResource}
+          onSaveResource={onSaveResource}
+          onUpdateResource={onUpdateResource}
         />
 
         <div className="mt-5 grid gap-3">
@@ -488,6 +591,444 @@ function ClassDetail({
         />
       </div>
     </GradientCard>
+  );
+}
+
+type ResourceFormValues = {
+  resourceId?: string;
+  organizationId: string;
+  classId: string;
+  lessonId: string;
+  title: string;
+  description: string;
+  studentInstructions: string;
+  teacherNotes: string;
+  resourceType: LessonResourceType;
+  sourceType: LessonResourceSource;
+  status: LessonResourceStatus;
+  visibility: LessonResourceVisibility;
+  displayMode: LessonResourceDisplayMode;
+  externalUrl?: string;
+  file?: File | null;
+};
+
+function defaultResourceForm(
+  classSummary: TeacherClassSummary,
+  lessons: Lesson[],
+): ResourceFormValues {
+  return {
+    organizationId: classSummary.organization_id,
+    classId: classSummary.id,
+    lessonId: lessons[0]?.id || "lesson1",
+    title: "",
+    description: "",
+    studentInstructions: "",
+    teacherNotes: "",
+    resourceType: "pdf",
+    sourceType: "upload",
+    status: "draft",
+    visibility: "class_private",
+    displayMode: "card",
+    externalUrl: "",
+    file: null,
+  };
+}
+
+function ResourceManager({
+  classSummary,
+  lessons,
+  resources,
+  saving,
+  onSaveResource,
+  onUpdateResource,
+}: {
+  classSummary: TeacherClassSummary;
+  lessons: Lesson[];
+  resources: LessonResource[];
+  saving: boolean;
+  onSaveResource: (input: ResourceFormValues) => Promise<void>;
+  onUpdateResource: (resource: LessonResource) => void;
+}) {
+  const [draft, setDraft] = useState<ResourceFormValues>(() =>
+    defaultResourceForm(classSummary, lessons),
+  );
+  const [resourceMessage, setResourceMessage] = useState("");
+  const [openingId, setOpeningId] = useState("");
+
+  useEffect(() => {
+    setDraft(defaultResourceForm(classSummary, lessons));
+    setResourceMessage("");
+  }, [classSummary, lessons]);
+
+  const setField = <K extends keyof ResourceFormValues>(key: K, value: ResourceFormValues[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const editResource = (resource: LessonResource) => {
+    setDraft({
+      resourceId: resource.id,
+      organizationId: resource.organization_id || classSummary.organization_id,
+      classId: resource.class_id || classSummary.id,
+      lessonId: resource.lesson_id || lessons[0]?.id || "lesson1",
+      title: resource.title,
+      description: resource.description || "",
+      studentInstructions: resource.student_instructions || "",
+      teacherNotes: resource.teacher_notes || "",
+      resourceType: resource.resource_type,
+      sourceType: resource.source_type,
+      status: resource.status,
+      visibility: resource.visibility,
+      displayMode: "card",
+      externalUrl: resource.external_url || "",
+      file: null,
+    });
+    setResourceMessage("Editing resource metadata. File/source cannot be replaced in v1.");
+  };
+
+  const cancelEdit = () => {
+    setDraft(defaultResourceForm(classSummary, lessons));
+    setResourceMessage("");
+  };
+
+  const submit = async () => {
+    try {
+      const title = draft.title.trim();
+      const externalUrl = draft.externalUrl?.trim() || "";
+      if (!title) throw new Error("Add a resource title.");
+      if (!draft.lessonId) throw new Error("Choose a lesson.");
+      if (draft.sourceType === "upload" && !draft.resourceId && !draft.file) {
+        throw new Error("Choose a file to upload.");
+      }
+      if (draft.sourceType === "external_url") {
+        const parsed = new URL(externalUrl);
+        if (
+          draft.resourceType === "youtube" &&
+          !["youtube.com", "www.youtube.com", "youtu.be"].includes(parsed.hostname)
+        ) {
+          throw new Error("YouTube resources must use youtube.com or youtu.be.");
+        }
+      }
+
+      await onSaveResource({
+        ...draft,
+        title,
+        description: draft.description.trim(),
+        studentInstructions: draft.studentInstructions.trim(),
+        teacherNotes: draft.teacherNotes.trim(),
+        externalUrl,
+      });
+      setResourceMessage(draft.resourceId ? "Resource metadata saved." : "Resource created.");
+      setDraft(defaultResourceForm(classSummary, lessons));
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not save resource.");
+    }
+  };
+
+  const setStatus = async (resource: LessonResource, status: LessonResourceStatus) => {
+    try {
+      const updated = await updateLessonResource(resource.id, { status });
+      onUpdateResource(updated);
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not update resource status.");
+    }
+  };
+
+  const openResource = async (resource: LessonResource) => {
+    try {
+      setOpeningId(resource.id);
+      const url = await getLessonResourceSignedUrl(resource);
+      if (!url) throw new Error("This resource does not have an openable URL.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not open resource.");
+    } finally {
+      setOpeningId("");
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-[15px] font-medium text-foreground">Lesson resources</h3>
+          <p className="text-[12.5px] text-muted-foreground">
+            Attach teacher-approved files and links. Drafts stay hidden from students.
+          </p>
+        </div>
+        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
+          {resources.length} resource{resources.length === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-2xl border border-border bg-background/35 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-[13px] font-medium text-foreground">
+              {draft.resourceId ? "Edit resource" : "Add resource"}
+            </div>
+            {draft.resourceId ? (
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="rounded-full border border-border px-3 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                Cancel edit
+              </button>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Lesson
+              <select
+                value={draft.lessonId}
+                onChange={(event) => setField("lessonId", event.target.value)}
+                disabled={Boolean(draft.resourceId)}
+                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+              >
+                {lessons.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    {lesson.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Title
+              <input
+                value={draft.title}
+                onChange={(event) => setField("title", event.target.value)}
+                placeholder="Purpose explainer PDF"
+                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Source
+                <select
+                  value={draft.sourceType}
+                  onChange={(event) => {
+                    const next = event.target.value as LessonResourceSource;
+                    setDraft((current) => ({
+                      ...current,
+                      sourceType: next,
+                      resourceType: next === "external_url" ? "link" : "pdf",
+                      file: null,
+                    }));
+                  }}
+                  disabled={Boolean(draft.resourceId)}
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                >
+                  <option value="upload">Upload</option>
+                  <option value="external_url">External URL</option>
+                </select>
+              </label>
+
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Type
+                <select
+                  value={draft.resourceType}
+                  onChange={(event) =>
+                    setField("resourceType", event.target.value as LessonResourceType)
+                  }
+                  disabled={draft.sourceType === "upload" || Boolean(draft.resourceId)}
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                >
+                  <option value="pdf">PDF</option>
+                  <option value="video">Video</option>
+                  <option value="audio">Audio</option>
+                  <option value="image">Image</option>
+                  <option value="document">Document</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="link">Link</option>
+                </select>
+              </label>
+            </div>
+
+            {draft.sourceType === "upload" && !draft.resourceId ? (
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                File
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,image/*,audio/*,video/*"
+                  onChange={(event) => setField("file", event.target.files?.[0] || null)}
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
+                />
+              </label>
+            ) : null}
+
+            {draft.sourceType === "external_url" ? (
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                External URL
+                <input
+                  value={draft.externalUrl || ""}
+                  onChange={(event) => setField("externalUrl", event.target.value)}
+                  placeholder="https://youtube.com/watch?v=..."
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </label>
+            ) : null}
+
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Student instructions
+              <textarea
+                value={draft.studentInstructions}
+                onChange={(event) => setField("studentInstructions", event.target.value)}
+                placeholder="Open this before the checkpoint and look for the input/process/output idea."
+                className="min-h-[72px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Description
+              <textarea
+                value={draft.description}
+                onChange={(event) => setField("description", event.target.value)}
+                placeholder="Short student-facing summary."
+                className="min-h-[66px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Teacher notes
+              <textarea
+                value={draft.teacherNotes}
+                onChange={(event) => setField("teacherNotes", event.target.value)}
+                placeholder="Private classroom context for teachers."
+                className="min-h-[66px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Status
+                <select
+                  value={draft.status}
+                  onChange={(event) =>
+                    setField("status", event.target.value as LessonResourceStatus)
+                  }
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Visibility
+                <select
+                  value={draft.visibility}
+                  onChange={(event) =>
+                    setField("visibility", event.target.value as LessonResourceVisibility)
+                  }
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                >
+                  <option value="class_private">Class private</option>
+                  <option value="org_private">Organization private</option>
+                  <option value="public">Public metadata</option>
+                </select>
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={saving}
+              className="mt-1 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "Saving..." : draft.resourceId ? "Save resource" : "Create resource"}
+            </button>
+            {resourceMessage ? (
+              <div className="text-[12px] leading-relaxed text-muted-foreground">
+                {resourceMessage}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid content-start gap-2">
+          {resources.length ? (
+            resources.map((resource) => (
+              <div
+                key={resource.id}
+                className="rounded-2xl border border-border bg-background/35 p-4"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[13px] font-medium text-foreground">
+                        {resource.title}
+                      </span>
+                      <ResourceStatusChip status={resource.status} />
+                    </div>
+                    <div className="mt-1 text-[11.5px] text-muted-foreground">
+                      {resource.resource_type} ·{" "}
+                      {resource.source_type === "upload" ? "private file" : "external link"} ·{" "}
+                      {lessonTitle(lessons, resource.lesson_id)}
+                    </div>
+                    {resource.student_instructions ? (
+                      <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
+                        {resource.student_instructions}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => editResource(resource)}
+                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void openResource(resource)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.6} />
+                      {openingId === resource.id ? "Opening..." : "Open"}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void setStatus(resource, "draft")}
+                    disabled={resource.status === "draft"}
+                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                  >
+                    Draft
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void setStatus(resource, "published")}
+                    disabled={resource.status === "published"}
+                    className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                  >
+                    Publish
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void setStatus(resource, "archived")}
+                    disabled={resource.status === "archived"}
+                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                  >
+                    Archive
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-border bg-background/35 p-5 text-[13px] text-muted-foreground">
+              No lesson resources yet. Add a draft, then publish it when students should see it.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1093,6 +1634,20 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ResourceStatusChip({ status }: { status: LessonResourceStatus }) {
+  const classes =
+    status === "published"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      : status === "archived"
+        ? "border-border bg-background/45 text-muted-foreground"
+        : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+      {status}
+    </span>
+  );
+}
+
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
     <div className="rounded-3xl border border-border bg-background/35 p-4">
@@ -1373,6 +1928,11 @@ function organizationName(summary: TeacherClassSummary) {
 function lessonName(lessonsById: Map<string, Lesson>, lessonId: string | null | undefined) {
   if (!lessonId) return "No lesson";
   return lessonsById.get(lessonId)?.title || lessonId;
+}
+
+function lessonTitle(lessons: Lesson[], lessonId: string | null | undefined) {
+  if (!lessonId) return "No lesson";
+  return lessons.find((lesson) => lesson.id === lessonId)?.title || lessonId;
 }
 
 function statusLabel(session: LearningSession) {

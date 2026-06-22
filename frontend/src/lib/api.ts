@@ -7,6 +7,11 @@ import type {
   Lesson,
   LessonActivity,
   LessonAttempt,
+  LessonResource,
+  LessonResourceDisplayMode,
+  LessonResourceStatus,
+  LessonResourceType,
+  LessonResourceVisibility,
   LearningEvidence,
   AdminSeedResponse,
   AdminSeedUser,
@@ -18,6 +23,7 @@ import type {
   TeacherClassMembership,
   TeacherDashboardData,
   TeacherNote,
+  ResourceInteractionEvent,
   TypedChatAnswer,
   TypedChatEnvelope,
 } from "@/lib/types";
@@ -51,6 +57,43 @@ async function fetchWithTimeout(
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
+}
+
+function safePathSegment(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function uniqueId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function storagePathForResource(input: {
+  organizationId: string;
+  classId: string;
+  lessonId: string;
+  fileName: string;
+}) {
+  const name = safePathSegment(input.fileName) || "resource";
+  return [
+    safePathSegment(input.organizationId),
+    safePathSegment(input.classId),
+    safePathSegment(input.lessonId),
+    `${uniqueId()}-${name}`,
+  ].join("/");
+}
+
+function resourceTypeFromFile(file: File): LessonResourceType {
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("audio/")) return "audio";
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) return "pdf";
+  return "document";
 }
 
 export async function getSession() {
@@ -260,6 +303,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
       evidence: [],
       mastery: [],
       notes: [],
+      resources: [],
     };
   }
 
@@ -289,6 +333,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     evidenceResult,
     masteryResult,
     notesResult,
+    resourcesResult,
   ] = await Promise.all([
     profileIds.length
       ? supabase.from("profiles").select("id,name,grade").in("id", profileIds)
@@ -336,6 +381,14 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .order("created_at", { ascending: false })
           .limit(200)
       : Promise.resolve({ data: [], error: null }),
+    classIds.length
+      ? supabase
+          .from("lesson_resources")
+          .select("*")
+          .in("class_id", classIds)
+          .order("created_at", { ascending: false })
+          .limit(200)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   for (const result of [
@@ -346,6 +399,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     evidenceResult,
     masteryResult,
     notesResult,
+    resourcesResult,
   ]) {
     if (result.error) throw result.error;
   }
@@ -374,6 +428,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     evidence: (evidenceResult.data || []) as LearningEvidence[],
     mastery: (masteryResult.data || []) as StudentMastery[],
     notes: (notesResult.data || []) as TeacherNote[],
+    resources: (resourcesResult.data || []) as LessonResource[],
   };
 }
 
@@ -397,6 +452,155 @@ export async function createTeacherNote(input: {
     .single();
   if (error) throw error;
   return data as TeacherNote;
+}
+
+export async function fetchLessonResources(lessonId: string) {
+  const { data, error } = await supabase
+    .from("lesson_resources")
+    .select("*")
+    .eq("lesson_id", lessonId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as LessonResource[];
+}
+
+export async function createLessonResource(input: {
+  teacherId: string;
+  organizationId: string;
+  classId: string;
+  lessonId: string;
+  title: string;
+  description: string;
+  studentInstructions: string;
+  teacherNotes: string;
+  resourceType: LessonResourceType;
+  sourceType: "upload" | "external_url";
+  status: LessonResourceStatus;
+  visibility: LessonResourceVisibility;
+  displayMode: LessonResourceDisplayMode;
+  externalUrl?: string;
+  file?: File | null;
+}) {
+  let storagePath: string | null = null;
+  let mimeType: string | null = null;
+  let fileSize: number | null = null;
+  let resourceType = input.resourceType;
+  const metadata: Record<string, unknown> = {};
+
+  if (input.sourceType === "upload") {
+    if (!input.file) throw new Error("Choose a file to upload.");
+    resourceType = resourceTypeFromFile(input.file);
+    storagePath = storagePathForResource({
+      organizationId: input.organizationId,
+      classId: input.classId,
+      lessonId: input.lessonId,
+      fileName: input.file.name,
+    });
+    mimeType = input.file.type || null;
+    fileSize = input.file.size;
+    metadata.original_filename = input.file.name;
+
+    const { error: uploadError } = await supabase.storage
+      .from("lesson-resources")
+      .upload(storagePath, input.file, {
+        cacheControl: "3600",
+        contentType: input.file.type || undefined,
+        upsert: false,
+      });
+    if (uploadError) throw uploadError;
+  }
+
+  const { data: resource, error: resourceError } = await supabase
+    .from("lesson_resources")
+    .insert({
+      organization_id: input.organizationId,
+      class_id: input.classId,
+      lesson_id: input.lessonId,
+      created_by: input.teacherId,
+      title: input.title.trim(),
+      description: input.description.trim(),
+      resource_type: resourceType,
+      source_type: input.sourceType,
+      storage_bucket: input.sourceType === "upload" ? "lesson-resources" : null,
+      storage_path: storagePath,
+      external_url: input.sourceType === "external_url" ? input.externalUrl?.trim() : null,
+      mime_type: mimeType,
+      file_size_bytes: fileSize,
+      teacher_notes: input.teacherNotes.trim(),
+      student_instructions: input.studentInstructions.trim(),
+      status: input.status,
+      visibility: input.visibility,
+      metadata,
+    })
+    .select("*")
+    .single();
+  if (resourceError) throw resourceError;
+
+  const created = resource as LessonResource;
+  const { error: placementError } = await supabase.from("lesson_resource_placements").insert({
+    resource_id: created.id,
+    organization_id: input.organizationId,
+    class_id: input.classId,
+    lesson_id: input.lessonId,
+    display_mode: input.displayMode,
+    position: 0,
+  });
+  if (placementError) throw placementError;
+
+  return created;
+}
+
+export async function updateLessonResource(
+  resourceId: string,
+  patch: Partial<
+    Pick<
+      LessonResource,
+      "title" | "description" | "student_instructions" | "teacher_notes" | "status" | "visibility"
+    >
+  >,
+) {
+  const { data, error } = await supabase
+    .from("lesson_resources")
+    .update(patch)
+    .eq("id", resourceId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as LessonResource;
+}
+
+export async function getLessonResourceSignedUrl(resource: {
+  source_type: "upload" | "external_url";
+  storage_bucket?: string | null;
+  storage_path?: string | null;
+  external_url?: string | null;
+}) {
+  if (resource.source_type === "external_url") return resource.external_url || "";
+  if (!resource.storage_path) throw new Error("This resource has no storage path.");
+  const { data, error } = await supabase.storage
+    .from(resource.storage_bucket || "lesson-resources")
+    .createSignedUrl(resource.storage_path, 60 * 30);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function recordResourceInteraction(event: ResourceInteractionEvent) {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user) throw new Error("You need to sign in to record resource progress.");
+  const { error } = await supabase.from("resource_interactions").insert({
+    resource_id: event.resource_id,
+    user_id: user.id,
+    session_id: event.session_id || null,
+    lesson_id: event.lesson_id || null,
+    event_type: event.event_type,
+    progress_seconds: event.progress_seconds ?? null,
+    progress_percent: event.progress_percent ?? null,
+  });
+  if (error) throw error;
 }
 
 export async function invokeTypedChat(input: {

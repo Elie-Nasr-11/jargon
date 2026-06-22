@@ -26,6 +26,98 @@ export type LessonActivity = {
   pass_score: number;
 };
 
+export type LessonResourceType =
+  | "video"
+  | "audio"
+  | "pdf"
+  | "flipbook"
+  | "youtube"
+  | "image"
+  | "link"
+  | "document";
+
+export type LessonResourceSource = "upload" | "external_url";
+export type LessonResourceStatus = "draft" | "published" | "archived";
+export type LessonResourceVisibility = "class_private" | "org_private" | "public";
+export type LessonResourceDisplayMode = "inline" | "modal" | "card";
+
+export type LessonResource = {
+  id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  course_id: string | null;
+  course_version_id: string | null;
+  unit_id: string | null;
+  lesson_id: string | null;
+  milestone_id: string | null;
+  activity_id: string | null;
+  assignment_id: string | null;
+  created_by: string | null;
+  title: string;
+  description: string;
+  resource_type: LessonResourceType;
+  source_type: LessonResourceSource;
+  storage_bucket: string | null;
+  storage_path: string | null;
+  external_url: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  duration_seconds: number | null;
+  page_count: number | null;
+  thumbnail_path: string | null;
+  teacher_notes: string;
+  student_instructions: string;
+  transcript_text: string | null;
+  status: LessonResourceStatus;
+  visibility: LessonResourceVisibility;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LessonResourcePlacement = {
+  id: string;
+  resource_id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  course_id: string | null;
+  course_version_id: string | null;
+  unit_id: string | null;
+  lesson_id: string | null;
+  milestone_id: string | null;
+  activity_id: string | null;
+  assignment_id: string | null;
+  quiz_item_id: string | null;
+  position: number;
+  display_mode: LessonResourceDisplayMode;
+  show_before_stage: LearningSession["stage"] | null;
+  created_at: string;
+};
+
+export type LessonChatResource = {
+  id: string;
+  title: string;
+  description?: string;
+  resource_type: LessonResourceType;
+  display_mode: LessonResourceDisplayMode;
+  source_type: LessonResourceSource;
+  storage_bucket?: string | null;
+  storage_path?: string | null;
+  signed_url?: string;
+  external_url?: string | null;
+  thumbnail_url?: string | null;
+  student_instructions?: string;
+};
+
+export type ResourceInteractionEvent = {
+  resource_id: string;
+  session_id?: string | null;
+  lesson_id?: string | null;
+  event_type: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded";
+  progress_seconds?: number;
+  progress_percent?: number;
+};
+
 export type LearningSession = {
   id: string;
   user_id: string;
@@ -162,6 +254,7 @@ export type TypedChatEnvelope = {
   choices: Array<{ id?: string; label?: string; text?: string; value?: string }>;
   exercise: Record<string, unknown> | null;
   assessment: Record<string, unknown> | null;
+  resources?: LessonChatResource[];
   next_action: "reply" | "run_code" | "choose" | "retry" | "rescue" | "continue" | "complete";
   guardrail: {
     redirected: boolean;
@@ -265,4 +358,5 @@ export type TeacherDashboardData = {
   evidence: LearningEvidence[];
   mastery: StudentMastery[];
   notes: TeacherNote[];
+  resources: LessonResource[];
 };
