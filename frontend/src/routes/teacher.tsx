@@ -46,6 +46,7 @@ function TeacherPage() {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedGradebookLessonId, setSelectedGradebookLessonId] = useState("all");
   const [message, setMessage] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [noteVisibility, setNoteVisibility] =
@@ -274,7 +275,9 @@ function TeacherPage() {
                     lessons={dashboard.lessons}
                     lessonsById={model.lessonsById}
                     studentIds={classStudents}
+                    selectedLessonId={selectedGradebookLessonId}
                     selectedStudentId={selectedStudentId}
+                    onSelectLesson={setSelectedGradebookLessonId}
                     onSelectStudent={setSelectedStudentId}
                   />
                 ) : (
@@ -370,7 +373,9 @@ function ClassDetail({
   lessons,
   lessonsById,
   studentIds,
+  selectedLessonId,
   selectedStudentId,
+  onSelectLesson,
   onSelectStudent,
 }: {
   item: TeacherClassSummary;
@@ -380,7 +385,9 @@ function ClassDetail({
   lessons: Lesson[];
   lessonsById: Map<string, Lesson>;
   studentIds: string[];
+  selectedLessonId: string;
   selectedStudentId: string | null;
+  onSelectLesson: (lessonId: string) => void;
   onSelectStudent: (studentId: string) => void;
 }) {
   return (
@@ -403,6 +410,18 @@ function ClassDetail({
             <MiniMetric label="Evidence" value={String(stats.evidence)} />
           </div>
         </div>
+
+        <GradebookTable
+          lessons={lessons}
+          lessonsById={lessonsById}
+          studentIds={studentIds}
+          dashboard={dashboard}
+          profilesById={profilesById}
+          selectedLessonId={selectedLessonId}
+          selectedStudentId={selectedStudentId}
+          onSelectLesson={onSelectLesson}
+          onSelectStudent={onSelectStudent}
+        />
 
         <div className="mt-5 grid gap-3">
           {studentIds.length ? (
@@ -469,6 +488,154 @@ function ClassDetail({
         />
       </div>
     </GradientCard>
+  );
+}
+
+function GradebookTable({
+  lessons,
+  lessonsById,
+  studentIds,
+  dashboard,
+  profilesById,
+  selectedLessonId,
+  selectedStudentId,
+  onSelectLesson,
+  onSelectStudent,
+}: {
+  lessons: Lesson[];
+  lessonsById: Map<string, Lesson>;
+  studentIds: string[];
+  dashboard: TeacherDashboardData;
+  profilesById: Map<string, Profile>;
+  selectedLessonId: string;
+  selectedStudentId: string | null;
+  onSelectLesson: (lessonId: string) => void;
+  onSelectStudent: (studentId: string) => void;
+}) {
+  const rows = studentIds.map((studentId) =>
+    gradebookRowForStudent(dashboard, studentId, selectedLessonId, lessons, lessonsById),
+  );
+
+  return (
+    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-[15px] font-medium text-foreground">Gradebook</h3>
+          <p className="text-[12.5px] text-muted-foreground">
+            Scan completion, scores, attempts, quizzes, evidence, and attention signals.
+          </p>
+        </div>
+        <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+          Lesson filter
+          <select
+            value={selectedLessonId}
+            onChange={(event) => onSelectLesson(event.target.value)}
+            className="min-w-[220px] rounded-full border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+          >
+            <option value="all">All lessons</option>
+            {lessons.map((lesson) => (
+              <option key={lesson.id} value={lesson.id}>
+                {lesson.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {rows.length ? (
+        <div className="overflow-x-auto pb-1">
+          <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
+            <thead className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <tr>
+                <th className="px-3 py-1 font-medium">Student</th>
+                <th className="px-3 py-1 font-medium">Lesson status</th>
+                <th className="px-3 py-1 font-medium">Score</th>
+                <th className="px-3 py-1 font-medium">Attempts</th>
+                <th className="px-3 py-1 font-medium">Quiz</th>
+                <th className="px-3 py-1 font-medium">Evidence</th>
+                <th className="px-3 py-1 font-medium">Mastery</th>
+                <th className="px-3 py-1 font-medium">Last activity</th>
+                <th className="px-3 py-1 font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const profile = profilesById.get(row.studentId) || null;
+                return (
+                  <tr
+                    key={row.studentId}
+                    className={`rounded-2xl border border-border bg-background/35 ${
+                      selectedStudentId === row.studentId
+                        ? "outline outline-1 outline-foreground/20"
+                        : ""
+                    }`}
+                  >
+                    <td className="rounded-l-2xl border-y border-l border-border px-3 py-3">
+                      <div className="text-[13px] font-medium text-foreground">
+                        {displayName(profile, row.studentId)}
+                      </div>
+                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        {profile?.grade || "Grade not set"}
+                      </div>
+                    </td>
+                    <td className="border-y border-border px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11.5px] ${row.statusClass}`}
+                        >
+                          {row.statusLabel}
+                        </span>
+                        {row.needsAttention ? (
+                          <span className="rounded-full border border-amber-500/35 bg-amber-500/10 px-2.5 py-1 text-[11.5px] text-amber-500">
+                            Needs attention
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        {row.lessonDetail}
+                      </div>
+                    </td>
+                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-foreground">
+                      {row.scoreLabel}
+                    </td>
+                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      {row.attempts}
+                    </td>
+                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      {row.quizAttempts}
+                    </td>
+                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      {row.evidence}
+                    </td>
+                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      {row.mastery}
+                    </td>
+                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      {row.latestSession
+                        ? formatDateTime(row.latestSession.updated_at)
+                        : "No activity"}
+                    </td>
+                    <td className="rounded-r-2xl border-y border-r border-border px-3 py-3">
+                      <button
+                        type="button"
+                        onClick={() => onSelectStudent(row.studentId)}
+                        className="rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted"
+                      >
+                        Inspect
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-border bg-background/35 p-4 text-[12.5px] text-muted-foreground">
+          Add students to this class to populate the gradebook.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -583,9 +750,18 @@ function StudentDetail({
   const turns = selectedSession
     ? dashboard.turns.filter((turn) => turn.session_id === selectedSession.id)
     : [];
-  const attempts = dashboard.attempts.filter((item) => item.user_id === studentId);
-  const quizAttempts = dashboard.quizAttempts.filter((item) => item.user_id === studentId);
-  const evidence = dashboard.evidence.filter((item) => item.user_id === studentId);
+  const attempts = dashboard.attempts.filter(
+    (item) =>
+      item.user_id === studentId && (!selectedSession || item.session_id === selectedSession.id),
+  );
+  const quizAttempts = dashboard.quizAttempts.filter(
+    (item) =>
+      item.user_id === studentId && (!selectedSession || item.session_id === selectedSession.id),
+  );
+  const evidence = dashboard.evidence.filter(
+    (item) =>
+      item.user_id === studentId && (!selectedSession || item.session_id === selectedSession.id),
+  );
   const mastery = dashboard.mastery.filter((item) => item.user_id === studentId);
   const notes = dashboard.notes.filter((item) => item.student_id === studentId);
   const activeSessions = sessions.filter((session) => session.status !== "complete");
@@ -622,6 +798,32 @@ function StudentDetail({
             <MiniMetric label="Evidence" value={String(stats.evidence)} />
           </div>
         </div>
+
+        {selectedSession ? (
+          <div className="mt-4 rounded-3xl border border-border bg-background/35 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Selected session
+                </div>
+                <div className="mt-1 text-[15px] font-medium text-foreground">
+                  {lessonName(lessonsById, selectedSession.lesson_id)}
+                </div>
+                <div className="mt-1 text-[12.5px] text-muted-foreground">
+                  {statusLabel(selectedSession)} - updated{" "}
+                  {formatDateTime(selectedSession.updated_at)}
+                </div>
+              </div>
+              <span
+                className={`w-fit rounded-full border px-3 py-1.5 text-[12px] ${lessonStatusClass(
+                  sessionProgressStatus(selectedSession),
+                )}`}
+              >
+                {sessionProgressStatus(selectedSession)}
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
           <Panel title="Transcript" icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}>
@@ -961,6 +1163,20 @@ type StudentSummary = {
   evidence: number;
 };
 
+type GradebookRow = {
+  studentId: string;
+  statusLabel: string;
+  statusClass: string;
+  lessonDetail: string;
+  scoreLabel: string;
+  attempts: number;
+  quizAttempts: number;
+  evidence: number;
+  mastery: number;
+  latestSession: LearningSession | null;
+  needsAttention: boolean;
+};
+
 function summarizeClass(dashboard: TeacherDashboardData, classId: string): ClassSummary {
   const studentIds = new Set(
     dashboard.memberships
@@ -987,6 +1203,87 @@ function summarizeClass(dashboard: TeacherDashboardData, classId: string): Class
     attempts: dashboard.attempts.filter((item) => studentIds.has(item.user_id)).length,
     quizAttempts: dashboard.quizAttempts.filter((item) => studentIds.has(item.user_id)).length,
     evidence: dashboard.evidence.filter((item) => studentIds.has(item.user_id)).length,
+  };
+}
+
+function gradebookRowForStudent(
+  dashboard: TeacherDashboardData,
+  studentId: string,
+  selectedLessonId: string,
+  lessons: Lesson[],
+  lessonsById: Map<string, Lesson>,
+): GradebookRow {
+  const selectedLesson = selectedLessonId === "all" ? null : selectedLessonId;
+  const sessions = dashboard.sessions
+    .filter(
+      (session) =>
+        session.user_id === studentId && (!selectedLesson || session.lesson_id === selectedLesson),
+    )
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const latestSession = sessions[0] || null;
+  const completedSessions = sessions.filter((session) => session.status === "complete");
+  const attempts = dashboard.attempts.filter(
+    (item) => item.user_id === studentId && (!selectedLesson || item.lesson_id === selectedLesson),
+  );
+  const quizAttempts = dashboard.quizAttempts.filter(
+    (item) => item.user_id === studentId && (!selectedLesson || item.lesson_id === selectedLesson),
+  );
+  const evidence = dashboard.evidence.filter(
+    (item) => item.user_id === studentId && (!selectedLesson || item.lesson_id === selectedLesson),
+  );
+  const mastery = dashboard.mastery.filter((item) => item.user_id === studentId);
+  const failedSignals =
+    attempts.some((item) => item.passed === false) ||
+    quizAttempts.some((item) => item.passed === false) ||
+    sessions.some(
+      (session) => session.status === "needs_retry" || session.status === "needs_rescue",
+    );
+
+  if (selectedLesson) {
+    const progress = lessonProgressStatus(dashboard.sessions, studentId, selectedLesson);
+    return {
+      studentId,
+      statusLabel: progress,
+      statusClass: lessonStatusClass(progress),
+      lessonDetail: lessonName(lessonsById, selectedLesson),
+      scoreLabel: latestSession ? formatScore(latestSession.score) : "n/a",
+      attempts: attempts.length,
+      quizAttempts: quizAttempts.length,
+      evidence: evidence.length,
+      mastery: mastery.length,
+      latestSession,
+      needsAttention: progress === "Retry" || failedSignals,
+    };
+  }
+
+  const completedLessonNames = completedLessonNamesFor(dashboard.sessions, studentId, lessonsById);
+  const completedCount = completedLessonNames.length;
+  const totalLessons = lessons.length;
+  const activeCount = sessions.filter((session) => session.status !== "complete").length;
+  const averageCompleteScore = completedSessions.length
+    ? completedSessions.reduce((sum, session) => sum + Number(session.score || 0), 0) /
+      completedSessions.length
+    : null;
+
+  return {
+    studentId,
+    statusLabel: `${completedCount}/${totalLessons} complete`,
+    statusClass:
+      completedCount > 0
+        ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+        : "border-border bg-background/45 text-muted-foreground",
+    lessonDetail: activeCount
+      ? `${activeCount} active lesson${activeCount === 1 ? "" : "s"}`
+      : completedCount
+        ? completedLessonNames.join(", ")
+        : "No lessons started",
+    scoreLabel: averageCompleteScore === null ? "n/a" : `${formatScore(averageCompleteScore)} avg`,
+    attempts: attempts.length,
+    quizAttempts: quizAttempts.length,
+    evidence: evidence.length,
+    mastery: mastery.length,
+    latestSession,
+    needsAttention: failedSignals,
   };
 }
 
@@ -1022,6 +1319,12 @@ function completedLessonNamesFor(
 }
 
 type LessonProgressStatus = "Not started" | "Active" | "Retry" | "Complete";
+
+function sessionProgressStatus(session: LearningSession): LessonProgressStatus {
+  if (session.status === "complete") return "Complete";
+  if (session.status === "needs_retry") return "Retry";
+  return "Active";
+}
 
 function lessonProgressStatus(
   sessions: LearningSession[],

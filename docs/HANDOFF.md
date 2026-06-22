@@ -6,6 +6,55 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 16:20
+
+Status: Teacher completion visibility live-verified; Teacher Dashboard v1.1 hardening added
+
+Live QA:
+
+- Confirmed `https://jargon-9bv5.onrender.com/teacher` serves the deployed Vite bundle
+  `index-2tCoPF2o.js`, and that bundle contains the `Lesson Progress` completion-visibility fix.
+- Confirmed live Supabase still has `teacher1@gmail.com` assigned as teacher to all 4 pilot
+  classes.
+- Confirmed live Supabase has `student1@gmail.com` in the exact mixed state that caused the UI
+  confusion:
+  - `lesson1` / `Purpose`: `status=complete`, `stage=complete`, `score=1`
+  - `lesson2` / `Systems & Signals`: active newer session
+  - `lesson3` / `Signal Processing`: active session
+- Confirmed teacher-shaped RLS read as `teacher1@gmail.com` can see student1 runtime records:
+  `3` sessions, `1` completed Purpose session, `11` turns, `4` attempts, `1` quiz attempt,
+  `3` evidence rows, and `3` mastery rows.
+
+Repo changes:
+
+- Added a gradebook-first section to `/teacher` class detail:
+  - all-lessons summary by student
+  - lesson filter
+  - score, attempts, quiz attempts, evidence, mastery, latest activity
+  - simple `Needs attention` chip from failed attempts/quizzes or retry/rescue sessions
+  - direct `Inspect` action per student
+- Kept the previous roster and `Lesson Progress` matrix.
+- Improved student detail so transcript, lesson attempts, quiz attempts, and evidence follow the
+  selected session instead of mixing records from later active lessons into the completed Purpose
+  inspection view.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with existing warnings only.
+- `cd frontend && npm run build` -> passed with the existing large chunk warning.
+- `python3 -m unittest discover -s tests -q` -> `106` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `git diff --check` -> passed.
+
+Next:
+
+- Push/deploy this dashboard hardening.
+- Browser smoke as `teacher1@gmail.com`: confirm the gradebook shows `student1` with `1/10 complete`
+  and the Purpose session is inspectable without the newer lesson2 active session hiding it.
+- After this passes, the next product slice should be assignment/resource foundations, not more
+  teacher visibility plumbing.
+
 ## Codex -> Claude / Human - 2026-06-22 15:43
 
 Status: Teacher Dashboard v1 built; live RLS blocker fixed
