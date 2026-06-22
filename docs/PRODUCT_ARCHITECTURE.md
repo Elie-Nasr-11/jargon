@@ -18,6 +18,7 @@ The experience should feel most like a private tutor for school students, starti
 - Student navigation: lessons should be browseable and organized as Subject -> Chapter -> Lesson. The database can continue using `unit`, but the product must support the Chapter label where it matches school language.
 - Mentor authority: guide, quiz, grade, recommend, and flag. In practice, grading authority is limited to deterministic checks and teacher-approved rubrics; Mentor can also alert. Teachers approve major assignment/course changes and remain the source of truth for material and rubrics.
 - Mentor style: private-tutor feel, strict lesson focus, and adjustable tone/pace/directness based on student and class settings.
+- Voice interaction: dictation, Mentor read-aloud, and future audio session mode are first-class access paths into the same lesson runtime.
 - Curriculum input: structured authoring first. Document/PDF import is deferred.
 - Curriculum editability: teacher/admin editable with publishing state, history, and audit. Do not rely on hard immutability as the main safety model.
 - Teacher-uploaded lesson resources are first-class curriculum support: videos, audio, PDFs, flipbooks, YouTube links, images, links, and documents can be attached to lessons, milestones, activities, assignments, or quizzes.
@@ -71,6 +72,8 @@ A specific target inside a lesson. Milestones define what the student should und
 
 The smallest authored checkpoint in a lesson. Activities can be discussion, code, multiple choice, reflection, or file. Activities attach to milestones.
 
+Activities can allow or disallow voice input independently of their answer mode.
+
 ### Lesson Resource
 
 A teacher, org, or platform-authored learning resource attached to curriculum. Resources can be uploaded media or external links. Supported roadmap types are video, audio, PDF, flipbook, YouTube, image, link, and document. Resources are private by default and appear inside the chat lesson flow.
@@ -84,6 +87,8 @@ One message or structured event in a learning session. Turns can come from the s
 ### Attempt
 
 A student response to a lesson activity. Attempts capture answer mode, response content/code/choice, run result, score, pass/fail, and feedback.
+
+Attempts should also capture input modality when available, such as typed, dictated, or audio session.
 
 ### Evidence
 
@@ -113,6 +118,10 @@ A Mentor-generated suggestion, such as retry, rescue, intervention, or assignmen
 
 A record that a student was shown, opened, played, paused, completed, or downloaded a lesson resource. Mentor may not claim a student watched or read a resource unless these interaction records support it.
 
+### Voice Interaction
+
+A student or Mentor speech event inside the chat runtime. V1 should record transcripts and modality metadata, not raw audio by default.
+
 ## Core Data Flow
 
 1. A teacher creates or joins a class.
@@ -122,8 +131,9 @@ A record that a student was shown, opened, played, paused, completed, or downloa
 5. A student opens the chat lesson.
 6. The runtime loads the student profile, class context, session, lesson, milestone, resources, recent turns, assignments, mastery, and notes.
 7. The Mentor returns structured output: reply, next action, expected answer mode, resource payloads, quiz/exercise payload, grade/evidence when applicable, and guardrail state.
-8. The orchestrator persists turns, attempts, quiz attempts, resource interactions, assignment updates, evidence, recommendations, and mastery summaries.
-9. The teacher dashboard reads the records and shows what happened, why it matters, and where intervention is needed.
+8. The frontend may capture dictation or read Mentor text aloud, but the orchestrator still receives text plus modality metadata.
+9. The orchestrator persists turns, attempts, quiz attempts, resource interactions, voice metadata, assignment updates, evidence, recommendations, and mastery summaries.
+10. The teacher dashboard reads the records and shows what happened, why it matters, and where intervention is needed.
 
 ## Mentor Runtime Rules
 
@@ -141,11 +151,14 @@ A record that a student was shown, opened, played, paused, completed, or downloa
 - Teacher-approved material and teacher rubrics are the source of truth. Mentor mediates pace and support along that track.
 - Mentor should alert a teacher when a student really needs help.
 - Mentor should not claim personal details in model context; use anonymized fields and safe placeholders such as `%firstname%` for personalization.
+- Voice does not bypass guardrails. Dictated answers, read-aloud turns, and audio session mode follow the same lesson goals, quiz rules, evidence model, and teacher settings.
+- Raw student audio is not stored by default.
 
 ## Teacher Runtime Rules
 
 - Teachers can inspect full student chat logs for their assigned classes.
 - Teachers can edit Mentor behavior per class.
+- Teachers can enable/disable dictation, read-aloud, audio session mode, and voice during quizzes per class or activity.
 - Teachers can add notes, grade submissions, override grades with reason, review recommendations, and assign content.
 - Teacher dashboard priority is gradebook first, intervention alerts second, and transcript heatmap third.
 - Live teacher watching is allowed. Students should see a viewer icon when a teacher is actively watching.
@@ -182,3 +195,4 @@ The second complete product milestone adds lesson resources:
 - Graph/math visual generation.
 - Autonomous Mentor-created assignments without teacher approval.
 - Automatic media extraction/transcription and embeddings.
+- Backend speech services for cross-browser speech-to-text/text-to-speech beyond browser APIs.

@@ -10,6 +10,7 @@ DECISIONS = ROOT / "docs" / "DECISIONS.md"
 PRODUCT_ARCHITECTURE = ROOT / "docs" / "PRODUCT_ARCHITECTURE.md"
 OPEN_QUESTIONS = ROOT / "docs" / "OPEN_QUESTIONS.md"
 PRODUCT_REQUIREMENTS = ROOT / "docs" / "PRODUCT_REQUIREMENTS.md"
+VOICE_INTERACTION = ROOT / "docs" / "VOICE_INTERACTION_PLAN.md"
 
 
 class CompleteRoadmapTests(unittest.TestCase):
@@ -21,6 +22,7 @@ class CompleteRoadmapTests(unittest.TestCase):
         cls.architecture = PRODUCT_ARCHITECTURE.read_text(encoding="utf-8")
         cls.open_questions = OPEN_QUESTIONS.read_text(encoding="utf-8")
         cls.requirements = PRODUCT_REQUIREMENTS.read_text(encoding="utf-8")
+        cls.voice = VOICE_INTERACTION.read_text(encoding="utf-8")
 
     def test_complete_roadmap_has_twelve_numbered_phases(self):
         phases = re.findall(r"(?m)^## Phase (\d+):", self.complete)
@@ -122,6 +124,30 @@ class CompleteRoadmapTests(unittest.TestCase):
 
         self.assertIn("Student file submissions are required for complete V1", self.open_questions)
         self.assertIn("Parent accounts are possible later", self.open_questions)
+
+    def test_voice_interaction_is_first_class_but_privacy_preserving(self):
+        for phrase in (
+            "Dictation Mode",
+            "Read-Aloud Mode",
+            "Audio Session Mode",
+            "Do not store raw student audio by default",
+            "input_modality?: \"typed\" | \"dictated\" | \"audio_session\"",
+            "Voice must not become a separate product path",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.voice)
+
+        for phrase in (
+            "Voice interaction is a first-class path",
+            "Raw student audio is not stored by default",
+            "voice preferences, dictation metadata, audio session events",
+            "type VoiceInteractionEvent",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.complete + self.roadmap)
+
+        self.assertIn("Voice interaction is separate from teacher-uploaded audio resources", self.decisions)
+        self.assertIn("backend speech services", self.open_questions)
 
 
 if __name__ == "__main__":

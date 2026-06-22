@@ -18,9 +18,22 @@ The demo target is a complete classroom-ready demo for a real school test run, n
 - The database may keep the canonical `unit` term internally, but student-facing navigation should support the Chapter label.
 - Lessons have a clear beginning and a clear end.
 - After lesson completion, the student can keep chatting in review mode for deeper understanding, question answering, and quiz prep.
+- Students should be able to use text by default, dictate answers by voice, hear Mentor replies read aloud, and eventually move through suitable lesson conversations in audio session mode.
 - Tone, playfulness, directness, hint level, and pacing should be driven by student settings and teacher/class settings.
 - The Mentor should be strict about staying on the lesson path. Off-topic drift should be redirected.
 - Adaptation is primarily based on skill mastery, not vibes.
+
+## Voice Interaction
+
+- Voice is a first-class interaction mode, not a separate product path.
+- Dictation lets students speak an answer, inspect the transcript, edit it if needed, and submit the transcript.
+- Read-aloud lets students hear Mentor replies while keeping all text visible.
+- Audio session mode should eventually let students proceed through discussion-style lessons by listening and speaking.
+- Voice must follow the same lesson stages, guardrails, rubrics, quiz rules, evidence records, and teacher visibility as typed chat.
+- Raw student audio should not be stored by default.
+- Store transcripts, input modality, timestamps, optional transcription confidence, and audit events.
+- Teachers can allow/disable dictation, read-aloud, audio session mode, and voice during quizzes per class/activity.
+- The composer should still work fully by typing when speech support is unavailable.
 
 ## Mentor Authority
 
@@ -62,6 +75,7 @@ The demo target is a complete classroom-ready demo for a real school test run, n
 
 - In-chat mini assessments should give immediate feedback.
 - In-chat mini quizzes should transform the chat bar into the quiz surface and blur the chat history while the quiz is active.
+- Voice can be allowed during quizzes only when the teacher/rubric permits it.
 - Larger lesson quizzes assigned by a teacher can live on their own page or lesson window.
 - Teacher-assigned quizzes should be reviewed by the teacher unless answers are objective, such as MCQ or another absolute check.
 - Quiz timing can be both Mentor-triggered and authored/scheduled, adjustable by teacher.
@@ -82,6 +96,7 @@ The demo target is a complete classroom-ready demo for a real school test run, n
 
 - Teacher dashboard priorities: gradebook first, intervention alerts second, transcript heatmap third.
 - Teachers need full chat logs for their students.
+- Teachers should see whether an answer was typed, dictated, spoken in audio session mode, code, file, or multiple choice.
 - Teachers can edit Mentor behavior per class.
 - Teachers can inspect evidence behind grades/mastery.
 - Teachers can add notes, review recommendations, grade submissions, override grades with reason, and assign material.
@@ -108,6 +123,7 @@ The demo target is a complete classroom-ready demo for a real school test run, n
 - Audit logs are required from day one.
 - Teacher-uploaded resources may contain PII.
 - LLM calls should always receive anonymized student data where possible.
+- LLM calls should receive voice transcripts rather than raw identifiable audio unless a later approved speech-to-speech mode requires otherwise.
 - Personalized placeholders should be resolved on the frontend or in a controlled server layer. Example: Mentor can produce `Hey %firstname%, how is it going?`, and the chat UI can render `Hey Elie, how is it going?`.
 - OpenAI is acceptable for v1.
 - Model routing by task is allowed, but the cost-to-quality ratio needs a deliberate spike before locking model strategy.
@@ -141,6 +157,7 @@ The next platform work should sketch and implement the full database structure b
 - quizzes/quiz attempts
 - assignments/submissions/gradebook
 - teacher notes/interventions/live comments
+- voice preferences/dictation metadata/audio-session events
 - resources/files/media types/storage visibility
 - resource interactions
 - sessions/turns/attempts/evidence/mastery

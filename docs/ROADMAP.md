@@ -19,6 +19,7 @@ Phase 0 is effectively complete.
 - Student navigation should support Subject -> Chapter -> Lesson.
 - Teacher-approved curriculum, resources, and rubrics are the source of truth.
 - Skill mastery is the primary adaptation signal.
+- Voice interaction is a first-class path: dictation, Mentor read-aloud, and future audio session mode.
 - The database groundwork must include tenants, pages/surfaces, roles, access, file/media types, environment modes, audit, and cost tracking from V1.
 - The demo bar is a complete classroom-ready platform slice, not another proof of concept.
 
@@ -31,6 +32,7 @@ Goal: make the current student lesson path boringly reliable.
 - Add a repeatable internal QA checklist for signed-in lesson completion.
 - Keep `/chat` as the student surface.
 - Make lesson completion clear, then continue in review mode for deeper understanding and quiz prep.
+- Prepare the composer for dictation and Mentor read-aloud without changing the baseline typed flow.
 
 Exit criteria: a signed-in student completes `lesson1` three times in a row, and each completion writes session, turns, attempts, quiz attempt, evidence, and mastery records.
 
@@ -44,6 +46,7 @@ Goal: prove Jargon is an LMS, not just a tutor.
 - Let teachers add notes, assign a Jargon Foundations lesson, review Mentor recommendations, and override grades with reasons.
 - Prioritize gradebook, intervention alerts, and transcript heatmap.
 - Support live teacher watching with a viewer icon and teacher comments/tips in chat.
+- Let teachers configure voice permissions per class/activity.
 
 Exit criteria: a teacher inspects one student's completed `lesson1` session, sees transcript + score + evidence, and leaves a note.
 
@@ -73,6 +76,18 @@ Goal: media becomes part of the lesson flow.
 - Do not let Mentor claim resource completion unless interaction records exist.
 
 Exit criteria: Mentor asks a student to open a teacher resource, the student interacts with it, and the system records the interaction.
+
+## Cross-Cutting: Voice Interaction
+
+Goal: students can dictate answers and hear Mentor replies while the same lesson runtime records transcripts, modality, evidence, and teacher visibility.
+
+- Dictation: speech to editable transcript in the composer.
+- Read-aloud: Mentor replies can be played, paused, replayed, and sped up/slowed down.
+- Audio session mode later: discussion lessons can run mainly by listening and speaking.
+- Do not store raw student audio by default.
+- Store input modality, transcript, optional confidence, timestamps, and audit events.
+
+Exit criteria: a student dictates an answer, edits/submits it, hears Mentor read-aloud, and the teacher can see it was dictated.
 
 ## Phase 5: Assignments End-To-End
 

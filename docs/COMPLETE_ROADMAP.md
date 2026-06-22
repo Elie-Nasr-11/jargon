@@ -25,11 +25,34 @@ The next foundation work must sketch and implement the full database structure b
 - milestones, activities, rubrics, quizzes, assignments, submissions, and gradebook
 - teacher notes, interventions, live comments, and live viewer state
 - lesson resources, file/media types, storage visibility, resource interactions, and signed access
+- voice preferences, dictation metadata, audio session events, and speech usage/cost tracking
 - sessions, turns, attempts, evidence, mastery, completion, and review mode
 - audit logs from day one
 - model/cost usage per student, user, session, class, and organization
 - environment modes, feature flags, and deployment/runtime settings
 - DB/RLS helper policies for every private learner and tenant path
+
+## Cross-Cutting Track: Voice Interaction
+
+Goal: let students use the chat by speaking and listening while preserving the same lesson runtime.
+
+- Dictation mode: student speaks, transcript appears in the composer, student edits if needed, then submits.
+- Read-aloud mode: Mentor replies can be played, paused, replayed, and slowed down or sped up.
+- Audio session mode: for suitable discussion lessons, Mentor speaks a short turn, student responds by voice, transcript is confirmed, then the normal typed chat envelope advances the lesson.
+- Voice is another input/output modality for the same Mentor orchestrator, not a separate curriculum path.
+- Raw student audio is not stored by default.
+- Store transcript text, input modality, optional confidence score, timestamps, and audit events.
+- Teachers can enable/disable dictation, read-aloud, audio session mode, and voice during quizzes per class/activity.
+- If browser speech support is unavailable, the app remains fully usable by typing.
+
+Suggested first slice:
+
+- Frontend dictation using browser speech recognition where available.
+- Frontend read-aloud using browser speech synthesis.
+- Extend typed chat answers with optional `input_modality`, initially `typed`, `dictated`, or `audio_session`.
+- Persist modality metadata in turns/attempt payloads.
+
+Acceptance: a student can dictate a text answer, confirm/edit the transcript, submit it, hear Mentor read-aloud, and teachers can see that the answer was dictated.
 
 ## Phase 1: Stabilize The Live Vertical Slice
 
@@ -42,6 +65,7 @@ Goal: make the existing student lesson path reliable enough to support teacher a
 - Update docs so Phase 0 is marked complete and the live system of record is Supabase + Render.
 - Make lesson completion explicit. After completion, keep the chat available in review mode for deeper understanding and quiz prep.
 - Keep Mentor strict about lesson focus while honoring student/class settings for tone, pace, directness, and hint level.
+- Keep text chat as the baseline while preparing the composer for dictation and read-aloud controls.
 
 Acceptance: a signed-in student can complete `lesson1` three times in a row without manual intervention, and every run writes the expected records.
 
@@ -58,6 +82,7 @@ Goal: prove Jargon is an LMS, not just a tutor.
 - Teacher dashboard priority is gradebook first, intervention alerts second, and transcript heatmap third.
 - Teachers can inspect full chat logs for students in their classes.
 - Teachers can edit Mentor behavior per class.
+- Teachers can configure voice permissions per class/activity: dictation, read-aloud, audio session mode, and voice during quizzes.
 - Live teacher watching is allowed: when a teacher is watching, the student sees a viewer icon in chat.
 - Teachers can send live comments or tips into chat to steer a conversation.
 - Use existing tables first: `classes`, `class_memberships`, `learning_sessions`, `learning_turns`, `lesson_attempts`, `quiz_attempts`, `learning_evidence`, `student_mastery`, `teacher_notes`, `grade_overrides`, and `mentor_recommendations`.
@@ -350,6 +375,15 @@ Add optional resources:
 resources?: LessonChatResource[];
 ```
 
+Add optional answer modality metadata:
+
+```ts
+answer?: {
+  input_modality?: "typed" | "dictated" | "audio_session";
+  transcript_confidence?: number;
+};
+```
+
 Add resource interaction event:
 
 ```ts
@@ -360,6 +394,25 @@ type ResourceInteractionEvent = {
   event_type: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded";
   progress_seconds?: number;
   progress_percent?: number;
+};
+```
+
+Add voice interaction event:
+
+```ts
+type VoiceInteractionEvent = {
+  session_id?: string;
+  lesson_id?: string;
+  turn_id?: string;
+  event_type:
+    | "dictation_started"
+    | "dictation_transcribed"
+    | "dictation_submitted"
+    | "read_aloud_started"
+    | "read_aloud_finished";
+  input_modality?: "dictated" | "audio_session";
+  transcript_confidence?: number;
+  duration_seconds?: number;
 };
 ```
 
@@ -374,6 +427,7 @@ Teacher upload flow:
 ## Test Plan
 
 - Student runtime: complete `lesson1`, complete resource-backed lesson, complete quiz, retry/rescue path, and resource interaction records.
+- Voice runtime: dictate an answer, edit the transcript, submit it, play Mentor read-aloud, and verify turn/attempt modality metadata.
 - Teacher dashboard: teacher sees own class, cannot see another class, sees transcript/evidence/attempts, creates note, and uploads resource.
 - Storage/RLS: unauthenticated cannot read private media, assigned student can read class resource, other students cannot, teacher can upload to own class/course, and teacher cannot upload to another org.
 - Media rendering: video upload plays, audio upload plays, PDF opens, YouTube embeds, flipbook/PDF fallback works, and expired signed URL refreshes.
@@ -389,3 +443,4 @@ Teacher upload flow:
 - Student file submissions are required for the complete V1, but their exact chat-vs-lesson-window UX can be phased.
 - Student experience remains chat-first; resources appear inside the conversation rather than a separate LMS content page.
 - Current Supabase + Render architecture remains the base until scale/cost evidence says otherwise.
+- Voice interaction is part of the chat runtime; teacher-uploaded audio resources remain a separate media-resource feature.

@@ -2,6 +2,23 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
+## How should backend speech services work after the browser demo slice?
+
+Current decision so far:
+
+- Voice interaction is first-class: dictation, Mentor read-aloud, and future audio session mode.
+- Browser speech recognition/synthesis can power the first demo slice if it degrades gracefully.
+- Raw student audio is not stored by default.
+- The grading/evidence artifact is the transcript plus modality metadata.
+
+Deferred details:
+
+- Which speech-to-text/text-to-speech provider and model should be used for reliable cross-browser support.
+- Whether any org/class can opt into raw audio storage, and under what retention/consent policy.
+- How to handle accents, multiple languages, noisy classrooms, and headphone/classroom modes.
+- How to track speech cost per student/session/class/organization.
+- Whether audio session mode should ever send raw audio to an LLM, or always transcribe first.
+
 ## What is the exact live teacher intervention UX?
 
 Current decision so far:

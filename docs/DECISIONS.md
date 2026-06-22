@@ -2,6 +2,24 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-22: Voice Interaction Is First-Class
+
+Decision:
+
+- Students should be able to use dictation for chat answers and hear Mentor replies through read-aloud.
+- Future audio session mode should let suitable lessons run by listening and speaking while preserving the same lesson stages, guardrails, rubrics, evidence, and teacher visibility.
+- Voice interaction is separate from teacher-uploaded audio resources.
+- Dictation submits a transcript, not raw audio, in the first implementation.
+- Raw student audio is not stored by default.
+- Store transcript text, input modality, optional confidence, timestamps, and audit events.
+- Teachers can enable or disable dictation, read-aloud, audio session mode, and voice during quizzes per class/activity.
+- Browser speech APIs are acceptable for a first demo slice if they degrade gracefully; backend speech services can come later after cost/privacy review.
+
+Reason:
+
+- Voice makes the product feel more like a private tutor and supports younger students or students who struggle with typing.
+- Keeping transcripts as the grading/evidence artifact preserves teacher review, privacy, and LMS consistency.
+
 ## 2026-06-22: Product Requirements From Human Review
 
 Decision:

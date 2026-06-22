@@ -6,6 +6,31 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 11:24
+
+Status: Voice interaction added to product plan
+
+Task: Add dictation and audio-guided chat as planned first-class interaction modes.
+
+What changed:
+
+- Added `docs/VOICE_INTERACTION_PLAN.md`.
+- Voice interaction is now distinct from teacher-uploaded audio resources.
+- Dictation mode: student speaks, transcript appears, student edits/confirms, then submits.
+- Read-aloud mode: Mentor replies can be played back while text remains visible.
+- Future audio session mode: suitable discussion lessons can proceed by listening/speaking while
+  still using the normal lesson runtime and typed chat envelope.
+- Raw student audio is not stored by default. Store transcripts, modality, confidence, timestamps,
+  and audit events.
+- Teachers can configure dictation/read-aloud/audio-session/quiz voice permissions per class or
+  activity.
+
+Next voice slice:
+
+- Add frontend dictation and read-aloud with browser APIs and graceful fallback.
+- Add `input_modality` metadata to typed chat answers and persist it in turn/attempt payloads.
+- Add teacher-visible modality indicators before adding raw audio storage or backend speech services.
+
 ## Codex -> Claude / Human - 2026-06-22 11:05
 
 Status: Human product requirements locked into repo
