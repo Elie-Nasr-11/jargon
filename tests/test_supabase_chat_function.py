@@ -60,10 +60,17 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             "learning_turns",
             "lesson_attempts",
             "lesson_activities",
+            "quiz_items",
+            "quiz_attempts",
+            "learning_evidence",
+            "student_mastery",
+            "mentor_recommendations",
         ):
             self.assertIn(table, self.source)
         self.assertIn("fetchCurrentUser", self.source)
         self.assertIn("loadOrCreateSession", self.source)
+        self.assertIn("writeEvidenceAndMastery", self.source)
+        self.assertIn("maybeWriteRecommendation", self.source)
 
     def test_guardrails_and_course_flow_are_explicit_in_prompt(self):
         self.assertIn("structured course conversation", self.source)
@@ -71,6 +78,43 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
         self.assertIn("guardrail", self.source)
         for action in ("retry", "rescue", "complete"):
             self.assertIn(action, self.source)
+
+    def test_orchestrator_loads_lesson_context_before_prompting(self):
+        self.assertIn("async function loadContext", self.source)
+        for fragment in (
+            "milestones?id=eq",
+            "quiz_items?lesson_id=eq",
+            "recent_turns",
+            "recent_attempts",
+            "mastery_summary",
+            "orchestrator_flow",
+            "deterministic_assessment",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
+
+    def test_deterministic_flow_owns_state_and_completion(self):
+        self.assertIn("function flowFor", self.source)
+        self.assertIn("function sessionStatus", self.source)
+        self.assertIn('stage: "complete"', self.source)
+        self.assertIn('nextAction: "complete"', self.source)
+        self.assertIn('nextAction: "choose"', self.source)
+        self.assertIn('responseMode: "multiple_choice"', self.source)
+        self.assertIn("retry_count", self.source)
+        self.assertIn("rescue_count", self.source)
+
+    def test_structured_records_are_written_by_orchestrator(self):
+        for fragment in (
+            'insertRow(config, "quiz_attempts"',
+            'insertRow(config, "learning_evidence"',
+            'insertRow(config, "mentor_recommendations"',
+            'insertRow(config, "student_mastery"',
+            "student_mastery?user_id=eq.",
+            "patchRows(config, `learning_sessions?",
+            "graded_by: \"system\"",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
 
 
 if __name__ == "__main__":

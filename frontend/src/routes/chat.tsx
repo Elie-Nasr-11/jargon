@@ -44,10 +44,11 @@ export const Route = createFileRoute("/chat")({
 type RuntimeRunResult = RunResult & { raw?: JargonRunResponse };
 
 type ChatCodeBlock = { language: ComposerLanguage; source: string };
+type ChatChoice = { id?: string; label?: string; text?: string; value?: string };
 
 type Msg =
   | { id: string; role: "user"; text: string; code?: ChatCodeBlock }
-  | { id: string; role: "bot"; text: string; code?: ChatCodeBlock }
+  | { id: string; role: "bot"; text: string; code?: ChatCodeBlock; choices?: ChatChoice[] }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
   | { id: string; role: "thinking" };
 
@@ -105,13 +106,20 @@ function turnToMessage(turn: LearningTurn): Msg | null {
     return { id: turn.id, role: "user", text: turn.content };
   }
   if (turn.role === "mentor" || turn.role === "system") {
-    return { id: turn.id, role: "bot", text: turn.content };
+    const payload = turn.payload || {};
+    const choices = Array.isArray(payload.choices) ? (payload.choices as ChatChoice[]) : undefined;
+    return { id: turn.id, role: "bot", text: turn.content, choices };
   }
   return null;
 }
 
 function envelopeMessage(envelope: TypedChatEnvelope): Msg {
-  return { id: uid(), role: "bot", text: envelope.reply || "I'm ready." };
+  return {
+    id: uid(),
+    role: "bot",
+    text: envelope.reply || "I'm ready.",
+    choices: envelope.choices?.length ? envelope.choices : undefined,
+  };
 }
 
 function formatRunOutput(result: JargonRunResponse) {
@@ -123,6 +131,14 @@ function formatRunOutput(result: JargonRunResponse) {
 function languageLabel(lang: ComposerLanguage) {
   if (lang === "jargon") return "Jargon";
   return lang === "python" ? "Python" : "JavaScript";
+}
+
+function choiceLabel(choice: ChatChoice) {
+  return choice.text || choice.label || choice.value || choice.id || "Choice";
+}
+
+function choiceValue(choice: ChatChoice) {
+  return choice.id || choice.value || choice.label || choice.text || "";
 }
 
 function normalizeLanguage(language: string | undefined): ComposerLanguage {
@@ -390,6 +406,42 @@ function ChatPage() {
     }
   };
 
+  const sendChoice = async (choice: ChatChoice) => {
+    if (!accessToken) return;
+    const selected = choiceLabel(choice);
+    const selectedValue = choiceValue(choice);
+    if (!selectedValue) return;
+
+    addMsg({ id: uid(), role: "user", text: `Selected: ${selected}` });
+    setSending(true);
+    const thinkingId = uid();
+    setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
+    try {
+      const envelope = await invokeTypedChat({
+        accessToken,
+        lessonId,
+        sessionId,
+        answer: { mode: "multiple_choice", choice_id: selectedValue },
+        mentorPreferences: mentorToPreferences(mentor),
+      });
+      setSessionId(envelope.session_id);
+      setLearningSession((previous) =>
+        previous
+          ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
+          : previous,
+      );
+      replaceThinking(thinkingId, envelopeMessage(envelope));
+    } catch (error) {
+      replaceThinking(thinkingId, {
+        id: uid(),
+        role: "bot",
+        text: (error as Error).message || "The mentor could not check that answer.",
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
   const runCode = async (code: string, lang: ComposerLanguage): Promise<RuntimeRunResult> => {
     if (lang === "python") return runPython(code);
     if (lang === "javascript") return runJavaScript(code);
@@ -503,7 +555,12 @@ function ChatPage() {
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
         <div ref={scrollRef} className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5">
           {msgs.map((m) => (
-            <MessageRow key={m.id} msg={m} onUseCode={useCodeInEditor} />
+            <MessageRow
+              key={m.id}
+              msg={m}
+              onUseCode={useCodeInEditor}
+              onChooseChoice={sendChoice}
+            />
           ))}
         </div>
         <div
@@ -526,7 +583,15 @@ function ChatPage() {
   );
 }
 
-function MessageRow({ msg, onUseCode }: { msg: Msg; onUseCode: (code: ChatCodeBlock) => void }) {
+function MessageRow({
+  msg,
+  onUseCode,
+  onChooseChoice,
+}: {
+  msg: Msg;
+  onUseCode: (code: ChatCodeBlock) => void;
+  onChooseChoice: (choice: ChatChoice) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -599,6 +664,20 @@ function MessageRow({ msg, onUseCode }: { msg: Msg; onUseCode: (code: ChatCodeBl
     <div ref={ref} className="flex">
       <div className="w-full max-w-[92%] space-y-3">
         <MessageContent text={msg.text} onUseCode={onUseCode} />
+        {msg.choices?.length ? (
+          <div className="flex flex-wrap gap-2">
+            {msg.choices.map((choice, index) => (
+              <button
+                key={`${choiceValue(choice)}-${index}`}
+                type="button"
+                onClick={() => onChooseChoice(choice)}
+                className="rounded-full border border-border bg-background/70 px-3 py-1.5 text-[13px] text-foreground transition-colors hover:bg-muted"
+              >
+                {choiceLabel(choice)}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <CopyAction text={msg.text} />
         {msg.code && <HistoryCodePanel code={msg.code} onUseCode={onUseCode} />}
       </div>
