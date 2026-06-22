@@ -62,10 +62,16 @@ Not completed:
   pilot password, confirm `/teacher` shows the 4 classes, then complete `lesson1` as a seeded
   student and re-open `/teacher` to confirm the transcript/attempt/evidence panels populate.
 
+Pushed:
+
+- Dashboard/RLS repo commit: `46f5964` (`Build teacher dashboard v1`).
+- GitHub `main` now contains the dashboard implementation and `0011` migration file.
+
 Next action:
 
-- Commit/push this dashboard + RLS follow-up, let Render deploy the frontend, then run the
-  credential-backed live smoke.
+- Let Render deploy the frontend, then run the credential-backed live smoke:
+  sign in as `teacher1@gmail.com`, confirm `/teacher` shows 4 classes, sign in as a seeded
+  student, complete `lesson1`, then re-open `/teacher` to confirm learning panels populate.
 
 ## Codex -> Claude / Human - 2026-06-22 15:35
 
