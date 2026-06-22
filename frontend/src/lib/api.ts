@@ -7,11 +7,17 @@ import type {
   Lesson,
   LessonActivity,
   LessonAttempt,
+  LearningEvidence,
   AdminSeedResponse,
   AdminSeedUser,
   MentorPreferences,
   Profile,
+  QuizAttempt,
+  StudentMastery,
   TeacherClassSummary,
+  TeacherClassMembership,
+  TeacherDashboardData,
+  TeacherNote,
   TypedChatAnswer,
   TypedChatEnvelope,
 } from "@/lib/types";
@@ -41,6 +47,10 @@ async function fetchWithTimeout(
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
 }
 
 export async function getSession() {
@@ -230,6 +240,163 @@ export async function fetchTeacherClasses(userId: string) {
     .order("name", { ascending: true });
   if (error) throw error;
   return (data || []) as TeacherClassSummary[];
+}
+
+export async function fetchTeacherDashboard(userId: string): Promise<TeacherDashboardData> {
+  const classes = await fetchTeacherClasses(userId);
+  const classIds = uniqueStrings(classes.map((item) => item.id));
+  const lessons = await fetchLessons();
+
+  if (!classIds.length) {
+    return {
+      classes,
+      memberships: [],
+      profiles: [],
+      lessons,
+      sessions: [],
+      turns: [],
+      attempts: [],
+      quizAttempts: [],
+      evidence: [],
+      mastery: [],
+      notes: [],
+    };
+  }
+
+  const { data: membershipRows, error: membershipError } = await supabase
+    .from("class_memberships")
+    .select("id,class_id,user_id,role,status,created_at")
+    .in("class_id", classIds)
+    .eq("status", "active");
+  if (membershipError) throw membershipError;
+
+  const memberships = (membershipRows || []) as TeacherClassMembership[];
+  const studentIds = uniqueStrings(
+    memberships
+      .filter((membership) => membership.role === "student")
+      .map((membership) => membership.user_id),
+  );
+  const profileIds = uniqueStrings([
+    ...memberships.map((membership) => membership.user_id),
+    userId,
+  ]);
+
+  const [
+    profilesResult,
+    sessionsResult,
+    attemptsResult,
+    quizAttemptsResult,
+    evidenceResult,
+    masteryResult,
+    notesResult,
+  ] = await Promise.all([
+    profileIds.length
+      ? supabase.from("profiles").select("id,name,grade").in("id", profileIds)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("learning_sessions")
+          .select("*")
+          .in("user_id", studentIds)
+          .order("updated_at", { ascending: false })
+          .limit(200)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("lesson_attempts")
+          .select("*")
+          .in("user_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(300)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("quiz_attempts")
+          .select("*")
+          .in("user_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(300)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("learning_evidence")
+          .select("*")
+          .in("user_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(400)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase.from("student_mastery").select("*").in("user_id", studentIds)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("teacher_notes")
+          .select("*")
+          .in("student_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(200)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  for (const result of [
+    profilesResult,
+    sessionsResult,
+    attemptsResult,
+    quizAttemptsResult,
+    evidenceResult,
+    masteryResult,
+    notesResult,
+  ]) {
+    if (result.error) throw result.error;
+  }
+
+  const sessions = (sessionsResult.data || []) as LearningSession[];
+  const sessionIds = uniqueStrings(sessions.map((session) => session.id));
+  const { data: turnRows, error: turnsError } = sessionIds.length
+    ? await supabase
+        .from("learning_turns")
+        .select("*")
+        .in("session_id", sessionIds)
+        .order("created_at", { ascending: true })
+        .limit(600)
+    : { data: [], error: null };
+  if (turnsError) throw turnsError;
+
+  return {
+    classes,
+    memberships,
+    profiles: (profilesResult.data || []) as Profile[],
+    lessons,
+    sessions,
+    turns: (turnRows || []) as LearningTurn[],
+    attempts: (attemptsResult.data || []) as LessonAttempt[],
+    quizAttempts: (quizAttemptsResult.data || []) as QuizAttempt[],
+    evidence: (evidenceResult.data || []) as LearningEvidence[],
+    mastery: (masteryResult.data || []) as StudentMastery[],
+    notes: (notesResult.data || []) as TeacherNote[],
+  };
+}
+
+export async function createTeacherNote(input: {
+  teacherId: string;
+  studentId: string;
+  classId: string;
+  note: string;
+  visibility: TeacherNote["visibility"];
+}) {
+  const { data, error } = await supabase
+    .from("teacher_notes")
+    .insert({
+      teacher_id: input.teacherId,
+      student_id: input.studentId,
+      class_id: input.classId,
+      note: input.note,
+      visibility: input.visibility,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as TeacherNote;
 }
 
 export async function invokeTypedChat(input: {

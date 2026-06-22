@@ -70,6 +70,68 @@ export type LessonAttempt = {
   created_at: string;
 };
 
+export type QuizAttempt = {
+  id: string;
+  quiz_item_id: string;
+  session_id: string | null;
+  user_id: string;
+  lesson_id: string;
+  answer_mode: "text" | "code" | "multiple_choice" | "file";
+  answer_text: string | null;
+  answer_code: string | null;
+  choice_id: string | null;
+  run_result: Record<string, unknown> | null;
+  score: number | null;
+  passed: boolean | null;
+  feedback: string | null;
+  graded_by: "mentor" | "teacher" | "system";
+  created_at: string;
+};
+
+export type LearningEvidence = {
+  id: string;
+  user_id: string;
+  lesson_id: string | null;
+  milestone_id: string | null;
+  session_id: string | null;
+  source_type: "chat_turn" | "code_run" | "quiz" | "file" | "teacher_note" | "assignment";
+  source_ref: Record<string, unknown>;
+  skill_keys: string[];
+  score: number | null;
+  confidence: number | null;
+  rubric_result: Record<string, unknown>;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type StudentMastery = {
+  user_id: string;
+  skill_key: string;
+  level: string;
+  evidence_count: number;
+  score: number;
+  attempt_count: number;
+  latest_score: number | null;
+  confidence: number | null;
+  common_error_patterns: unknown[];
+  last_practiced_at: string | null;
+  last_seen_at: string;
+  updated_at: string;
+};
+
+export type TeacherNote = {
+  id: string;
+  student_id: string;
+  teacher_id: string;
+  class_id: string | null;
+  lesson_id: string | null;
+  note: string;
+  visibility: "teacher_private" | "student_visible";
+  created_at: string;
+  updated_at: string;
+};
+
 export type Profile = {
   id: string;
   name: string | null;
@@ -180,4 +242,27 @@ export type TeacherClassSummary = {
     role: "student" | "teacher";
     status: string;
   }>;
+};
+
+export type TeacherClassMembership = {
+  id: string;
+  class_id: string;
+  user_id: string;
+  role: "student" | "teacher";
+  status: string;
+  created_at: string;
+};
+
+export type TeacherDashboardData = {
+  classes: TeacherClassSummary[];
+  memberships: TeacherClassMembership[];
+  profiles: Profile[];
+  lessons: Lesson[];
+  sessions: LearningSession[];
+  turns: LearningTurn[];
+  attempts: LessonAttempt[];
+  quizAttempts: QuizAttempt[];
+  evidence: LearningEvidence[];
+  mastery: StudentMastery[];
+  notes: TeacherNote[];
 };

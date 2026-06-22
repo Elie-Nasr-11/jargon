@@ -6,6 +6,67 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-22 15:43
+
+Status: Teacher Dashboard v1 built; live RLS blocker fixed
+
+Live smoke / correction:
+
+- Confirmed through live Supabase that `teacher1@gmail.com` is assigned to all 4 `Pilot School`
+  classes, and each class has `1` active teacher and `2` active students.
+- Confirmed `student1@gmail.com` and `student2@gmail.com` currently have no lesson runtime
+  records yet: `learning_sessions = 0`, `learning_turns = 0`, `lesson_attempts = 0`,
+  `quiz_attempts = 0`, `learning_evidence = 0`, `student_mastery = 0`.
+- Found a schema drift/RLS blocker before building the UI: `learning_sessions`,
+  `learning_turns`, and `lesson_attempts` still only allowed owner reads from the original
+  runtime migration. Teacher dashboards would have shown blank transcript/session/attempt data.
+- Added and applied live `0011_teacher_runtime_read_policies.sql`, granting authenticated
+  teachers/admins `SELECT` only on those runtime tables via `public.can_view_student(user_id)`.
+  No teacher write policy was added.
+- Verified live policies now exist for:
+  - `Teachers can view managed learning sessions`
+  - `Teachers can view managed learning turns`
+  - `Teachers can view managed lesson attempts`
+
+Repo changes:
+
+- Expanded `/teacher` from a class shell into Teacher Dashboard v1:
+  - teacher home metrics
+  - class list and class detail
+  - roster with latest session status
+  - student detail
+  - transcript viewer
+  - lesson attempts
+  - quiz attempts
+  - learning evidence
+  - student mastery
+  - teacher notes create/list
+- Added frontend adapters/types for teacher dashboard data using existing live tables:
+  `classes`, `class_memberships`, `profiles`, `lessons`, `learning_sessions`,
+  `learning_turns`, `lesson_attempts`, `quiz_attempts`, `learning_evidence`,
+  `student_mastery`, and `teacher_notes`.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> 106 passing, 4 skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> 136 files ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with existing warnings only.
+- `cd frontend && npm run build` -> passed.
+- `git diff --check` -> passed.
+
+Not completed:
+
+- Browser sign-in smoke as `teacher1@gmail.com` / `student1@gmail.com` is still pending because
+  this session does not have the seeded temporary password. Next QA should sign in with the known
+  pilot password, confirm `/teacher` shows the 4 classes, then complete `lesson1` as a seeded
+  student and re-open `/teacher` to confirm the transcript/attempt/evidence panels populate.
+
+Next action:
+
+- Commit/push this dashboard + RLS follow-up, let Render deploy the frontend, then run the
+  credential-backed live smoke.
+
 ## Codex -> Claude / Human - 2026-06-22 15:35
 
 Status: Live pilot platform populated with multiple classes

@@ -9,6 +9,7 @@ API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
 ADMIN_ROUTE = ROOT / "frontend" / "src" / "routes" / "admin.tsx"
 TEACHER_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.tsx"
+TEACHER_RLS = ROOT / "supabase" / "migrations" / "0011_teacher_runtime_read_policies.sql"
 DOC = ROOT / "docs" / "ADMIN_SEEDED_PILOT.md"
 
 
@@ -21,6 +22,7 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
         cls.route_tree = ROUTE_TREE.read_text(encoding="utf-8")
         cls.admin_route = ADMIN_ROUTE.read_text(encoding="utf-8")
         cls.teacher_route = TEACHER_ROUTE.read_text(encoding="utf-8")
+        cls.teacher_rls = TEACHER_RLS.read_text(encoding="utf-8")
         cls.doc = DOC.read_text(encoding="utf-8")
 
     def test_admin_seed_requires_auth_and_platform_admin(self):
@@ -93,11 +95,41 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
         self.assertNotIn("/auth/v1/admin/users", self.api)
         self.assertIn("invokeAdminSeed", self.admin_route)
 
-    def test_teacher_shell_reads_membership_scoped_classes(self):
+    def test_teacher_dashboard_reads_membership_scoped_classes_and_records(self):
         self.assertIn("fetchTeacherClasses", self.api)
+        self.assertIn("fetchTeacherDashboard", self.api)
+        self.assertIn("createTeacherNote", self.api)
         self.assertIn('eq("role", "teacher")', self.api)
         self.assertIn("class_memberships(role,status)", self.api)
-        self.assertIn("rosterCount", self.teacher_route)
+        for table in (
+            "learning_sessions",
+            "learning_turns",
+            "lesson_attempts",
+            "quiz_attempts",
+            "learning_evidence",
+            "student_mastery",
+            "teacher_notes",
+        ):
+            with self.subTest(table=table):
+                self.assertIn(table, self.api)
+        for phrase in (
+            "ClassDetail",
+            "StudentDetail",
+            "Transcript",
+            "Teacher notes",
+            "Mastery",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.teacher_route)
+
+    def test_teacher_dashboard_runtime_rls_is_read_only(self):
+        for table in ("learning_sessions", "learning_turns", "lesson_attempts"):
+            with self.subTest(table=table):
+                self.assertIn(f"on public.{table} for select", self.teacher_rls)
+                self.assertIn("using (public.can_view_student(user_id))", self.teacher_rls)
+        self.assertNotIn("for update", self.teacher_rls.lower())
+        self.assertNotIn("for insert", self.teacher_rls.lower())
+        self.assertNotIn("for delete", self.teacher_rls.lower())
 
     def test_typed_chat_auth_errors_are_no_longer_generic_500(self):
         self.assertIn("function typedAuthStatus", self.chat)
