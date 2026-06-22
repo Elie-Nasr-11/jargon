@@ -93,6 +93,9 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         self.assertIn('eq("publication_status", "published")', self.api)
         self.assertIn("includeDrafts: true", self.api)
         self.assertIn("publication_status=eq.published", self.chat)
+        self.assertIn("lesson_resources?lesson_id=eq.", self.function)
+        self.assertIn("status=eq.draft", self.function)
+        self.assertIn('status: "published"', self.function)
 
     def test_student_lesson_menu_groups_curriculum_labels(self):
         self.assertIn("groupLessons", self.header_menus)

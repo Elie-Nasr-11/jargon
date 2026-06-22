@@ -619,6 +619,10 @@ async function publishLesson(config: Config, actorId: string, body: DbRow): Prom
     status: "published",
     updated_at: now,
   });
+  await patchRows(config, `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.draft`, {
+    status: "published",
+    updated_at: now,
+  });
 
   return json({
     status: "ok",

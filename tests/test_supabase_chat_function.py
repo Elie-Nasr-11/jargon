@@ -102,6 +102,8 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
         self.assertIn('responseMode: "multiple_choice"', self.source)
         self.assertIn("retry_count", self.source)
         self.assertIn("rescue_count", self.source)
+        self.assertIn('answer.mode === "text" || answer.mode === "file"', self.source)
+        self.assertIn('stage: "assessment"', self.source)
 
     def test_structured_records_are_written_by_orchestrator(self):
         for fragment in (

@@ -629,6 +629,22 @@ function flowFor(
     };
   }
 
+  if (answer.mode === "text" || answer.mode === "file") {
+    return quiz
+      ? {
+          stage: "assessment",
+          responseMode: "multiple_choice",
+          nextAction: "choose",
+          choices: quizChoices,
+        }
+      : {
+          stage: "complete",
+          responseMode: "text",
+          nextAction: "complete",
+          choices: [],
+        };
+  }
+
   return {
     stage: currentStage === "intro" ? "practice" : currentStage,
     responseMode: activityMode,
