@@ -8,12 +8,14 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Codex -> Claude / Human - 2026-06-22 18:30
 
-Status: Curriculum Authoring Studio v1 implemented locally; ready for deploy/live smoke
+Status: Curriculum Authoring Studio v1 implemented, pushed, and `curriculum-admin` deployed
 
 Context:
 
 - Human confirmed the assignment workflow works flawlessly, so Phase 5 is accepted.
 - Next roadmap slice is Phase 6: structured curriculum authoring.
+- GitHub `main` commit: `4d082ee`.
+- Supabase project `qztpieiizmiayzjhezwh`: `curriculum-admin` deployed active, version 1, JWT required.
 
 Repo changes:
 
@@ -33,8 +35,18 @@ Repo changes:
 - Student/runtime integration:
   - Student lesson fetch now hides draft/archived lessons.
   - Teacher dashboard still loads drafts with `includeDrafts`.
-  - Chat edge function rejects non-published lessons.
+  - Repo `chat` edge function now rejects non-published lessons; deploy `chat` when doing the live smoke if server-side draft enforcement is required beyond the frontend picker.
   - Student lesson menu groups by lesson module/unit label.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` -> `113` tests passed, `4` skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> `136` ok.
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with the existing `11` warnings only.
+- `cd frontend && npm run build` -> passed with the existing large chunk warning.
+- `git diff --check` -> passed.
+- `deno check supabase/functions/curriculum-admin/index.ts` -> unavailable locally (`deno` command not found).
 
 Next live smoke after deploy:
 
