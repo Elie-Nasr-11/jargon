@@ -8,6 +8,7 @@ PRODUCT_ARCHITECTURE = ROOT / "docs" / "PRODUCT_ARCHITECTURE.md"
 IDENTITY = ROOT / "supabase" / "migrations" / "0004_identity_and_roles.sql"
 CURRICULUM = ROOT / "supabase" / "migrations" / "0005_curriculum_hierarchy.sql"
 RECORDS = ROOT / "supabase" / "migrations" / "0006_learning_records.sql"
+SECURITY_FOLLOWUP = ROOT / "supabase" / "migrations" / "0007_foundation_security_followup.sql"
 
 LESSON_IDS = (
     "lesson1",
@@ -30,9 +31,11 @@ class ChatLmsBuildoutMigrationTests(unittest.TestCase):
         cls.identity = IDENTITY.read_text(encoding="utf-8")
         cls.curriculum = CURRICULUM.read_text(encoding="utf-8")
         cls.records = RECORDS.read_text(encoding="utf-8")
+        cls.security_followup = SECURITY_FOLLOWUP.read_text(encoding="utf-8")
         cls.identity_lower = cls.identity.lower()
         cls.curriculum_lower = cls.curriculum.lower()
         cls.records_lower = cls.records.lower()
+        cls.security_followup_lower = cls.security_followup.lower()
 
     def test_product_architecture_locks_chat_first_lms_contract(self):
         for phrase in (
@@ -217,6 +220,54 @@ class ChatLmsBuildoutMigrationTests(unittest.TestCase):
         self.assertIn("question_type", self.records_lower)
         self.assertIn("'multiple_choice'", self.records)
         self.assertIn("correct_choice_ids", self.records_lower)
+
+    def test_security_followup_revokes_anon_private_foundation_tables(self):
+        for table in (
+            "organizations",
+            "platform_admins",
+            "organization_memberships",
+            "classes",
+            "class_memberships",
+            "profiles",
+            "chat_messages",
+            "code_submissions",
+            "learning_sessions",
+            "learning_turns",
+            "lesson_attempts",
+            "student_mastery",
+            "quiz_attempts",
+            "assignments",
+            "assignment_recipients",
+            "assignment_submissions",
+            "learning_evidence",
+            "teacher_notes",
+            "mentor_recommendations",
+            "grade_overrides",
+            "audit_events",
+        ):
+            with self.subTest(table=table):
+                self.assertIn(
+                    f"revoke all privileges on table public.{table} from anon",
+                    self.security_followup_lower,
+                )
+
+    def test_security_followup_removes_anon_helper_function_execute(self):
+        for function_signature in (
+            "is_platform_admin()",
+            "is_org_member(uuid)",
+            "is_org_admin(uuid)",
+            "is_org_teacher(uuid)",
+            "is_class_member(uuid)",
+            "is_class_teacher(uuid)",
+            "can_view_student(uuid)",
+            "is_assignment_recipient(uuid)",
+            "can_manage_assignment(uuid)",
+        ):
+            with self.subTest(function=function_signature):
+                self.assertIn(
+                    f"revoke execute on function public.{function_signature} from anon",
+                    self.security_followup_lower,
+                )
 
 
 if __name__ == "__main__":
