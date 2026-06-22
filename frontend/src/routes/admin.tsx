@@ -19,6 +19,8 @@ export const Route = createFileRoute("/admin")({
 
 type RosterRow = AdminSeedUser & { rowId: string };
 
+const MIN_TEMP_PASSWORD_LENGTH = 6;
+
 const blankRow = (): RosterRow => ({
   rowId: Math.random().toString(36).slice(2),
   email: "",
@@ -132,6 +134,7 @@ function AdminPage() {
     () =>
       rows
         .map((row) => ({
+          rowId: row.rowId,
           email: row.email.trim().toLowerCase(),
           name: row.name.trim(),
           role: row.role,
@@ -141,6 +144,69 @@ function AdminPage() {
         .filter((row) => row.email || row.name),
     [rows],
   );
+
+  const defaultPasswordValue = defaultPassword.trim();
+  const hasDefaultPassword = defaultPasswordValue.length >= MIN_TEMP_PASSWORD_LENGTH;
+  const hasShortDefaultPassword =
+    defaultPasswordValue.length > 0 && defaultPasswordValue.length < MIN_TEMP_PASSWORD_LENGTH;
+
+  const emailErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    validRows.forEach((row) => {
+      if (!row.email) errors[row.rowId] = "Email required.";
+      else if (!row.email.includes("@")) errors[row.rowId] = "Use a valid email.";
+    });
+    return errors;
+  }, [validRows]);
+
+  const nameErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    validRows.forEach((row) => {
+      if (!row.name) errors[row.rowId] = "Name required.";
+    });
+    return errors;
+  }, [validRows]);
+
+  const passwordErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    validRows.forEach((row) => {
+      if (row.password && row.password.length < MIN_TEMP_PASSWORD_LENGTH) {
+        errors[row.rowId] = "Use 6+ characters.";
+      } else if (!row.password && !hasDefaultPassword) {
+        errors[row.rowId] = "Set a default or add an override.";
+      }
+    });
+    return errors;
+  }, [hasDefaultPassword, validRows]);
+
+  const formErrors = useMemo(() => {
+    const errors: string[] = [];
+    if (!orgName.trim()) errors.push("Organization name is required.");
+    if (!className.trim()) errors.push("Class name is required.");
+    if (!validRows.length) errors.push("Add at least one teacher or student.");
+    if (hasShortDefaultPassword) {
+      errors.push(
+        `Default temporary password must be at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`,
+      );
+    }
+    if (Object.keys(emailErrors).length || Object.keys(nameErrors).length) {
+      errors.push("Every roster row needs a valid email and name.");
+    }
+    if (Object.keys(passwordErrors).length) {
+      errors.push("Every roster row needs a temporary password of at least 6 characters.");
+    }
+    return errors;
+  }, [
+    className,
+    emailErrors,
+    hasShortDefaultPassword,
+    nameErrors,
+    orgName,
+    passwordErrors,
+    validRows.length,
+  ]);
+
+  const canSeed = !submitting && formErrors.length === 0;
 
   const updateRow = (rowId: string, patch: Partial<RosterRow>) => {
     setRows((current) => current.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)));
@@ -164,6 +230,10 @@ function AdminPage() {
 
   const seedRoster = async () => {
     if (submitting || !token) return;
+    if (formErrors.length) {
+      setMessage(formErrors[0]);
+      return;
+    }
     setSubmitting(true);
     setMessage("");
     setResults([]);
@@ -182,11 +252,15 @@ function AdminPage() {
         },
         class: { name: className.trim() },
         defaultPassword: defaultPassword.trim(),
-        users: validRows,
+        users: validRows.map(({ rowId: _rowId, ...row }) => row),
       });
       setResults(response.results);
       setBatchId(response.batch_id || "");
-      setMessage("Pilot roster seed finished.");
+      setMessage(
+        response.results.some((result) => result.status === "failed")
+          ? "Pilot roster seed finished with errors."
+          : "Pilot roster seed finished.",
+      );
     } catch (error) {
       setMessage((error as Error).message || "Could not seed the pilot roster.");
     } finally {
@@ -275,8 +349,17 @@ function AdminPage() {
                   value={defaultPassword}
                   onChange={(event) => setDefaultPassword(event.target.value)}
                   placeholder="Optional if every row has a password"
-                  className="jargon-input"
+                  className={`jargon-input ${hasShortDefaultPassword ? "border-red-500/60" : ""}`}
                 />
+                <p
+                  className={`mt-1.5 text-[12px] ${
+                    hasShortDefaultPassword ? "text-red-500" : "text-muted-foreground"
+                  }`}
+                >
+                  {hasShortDefaultPassword
+                    ? `Use at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`
+                    : "Required unless every row has a password override."}
+                </p>
               </Field>
               <div className="rounded-2xl border border-border bg-muted/30 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
                 Bootstrap note: the first platform admin is still created manually in Supabase by
@@ -334,7 +417,8 @@ function AdminPage() {
               <button
                 type="button"
                 onClick={seedRoster}
-                disabled={submitting}
+                disabled={!canSeed}
+                title={formErrors[0] || "Seed classroom"}
                 className="rounded-full bg-foreground px-5 py-2.5 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
               >
                 {submitting ? "Seeding..." : "Seed classroom"}
@@ -368,18 +452,34 @@ function AdminPage() {
                         </select>
                       </td>
                       <td className="py-2 pr-3">
-                        <input
-                          value={row.email}
-                          onChange={(event) => updateRow(row.rowId, { email: event.target.value })}
-                          className="jargon-input min-w-[220px]"
-                        />
+                        <div className="space-y-1">
+                          <input
+                            value={row.email}
+                            onChange={(event) =>
+                              updateRow(row.rowId, { email: event.target.value })
+                            }
+                            className={`jargon-input min-w-[220px] ${
+                              emailErrors[row.rowId] ? "border-red-500/60" : ""
+                            }`}
+                          />
+                          {emailErrors[row.rowId] ? (
+                            <div className="text-[11px] text-red-500">{emailErrors[row.rowId]}</div>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="py-2 pr-3">
-                        <input
-                          value={row.name}
-                          onChange={(event) => updateRow(row.rowId, { name: event.target.value })}
-                          className="jargon-input min-w-[180px]"
-                        />
+                        <div className="space-y-1">
+                          <input
+                            value={row.name}
+                            onChange={(event) => updateRow(row.rowId, { name: event.target.value })}
+                            className={`jargon-input min-w-[180px] ${
+                              nameErrors[row.rowId] ? "border-red-500/60" : ""
+                            }`}
+                          />
+                          {nameErrors[row.rowId] ? (
+                            <div className="text-[11px] text-red-500">{nameErrors[row.rowId]}</div>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="py-2 pr-3">
                         <input
@@ -389,14 +489,23 @@ function AdminPage() {
                         />
                       </td>
                       <td className="py-2 pr-3">
-                        <input
-                          type="password"
-                          value={row.password || ""}
-                          onChange={(event) =>
-                            updateRow(row.rowId, { password: event.target.value })
-                          }
-                          className="jargon-input min-w-[180px]"
-                        />
+                        <div className="space-y-1">
+                          <input
+                            type="password"
+                            value={row.password || ""}
+                            onChange={(event) =>
+                              updateRow(row.rowId, { password: event.target.value })
+                            }
+                            className={`jargon-input min-w-[180px] ${
+                              passwordErrors[row.rowId] ? "border-red-500/60" : ""
+                            }`}
+                          />
+                          {passwordErrors[row.rowId] ? (
+                            <div className="text-[11px] text-red-500">
+                              {passwordErrors[row.rowId]}
+                            </div>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="py-2 text-right">
                         <button
