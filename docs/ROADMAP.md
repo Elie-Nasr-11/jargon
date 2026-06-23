@@ -28,8 +28,12 @@ Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete en
 - Cost/Model Dashboard v1 is implemented repo-side: `/admin` now has AI/runtime operations metrics,
   model/task/class breakdowns, platform-admin estimated cost visibility, and org-admin scoped
   usage/reliability without dollar totals.
-- Next step after deploy/live smoke: decide between media extraction/transcription or external
-  school integrations. Voice v2 remains deferred.
+- Google Classroom roster import v1 is implemented repo-side as the first Phase 12
+  integration spike: OAuth connection, read-only course list, roster preview, email-based
+  mapping to existing Jargon users, class import, and sync-run logging.
+- Next step after deploy/live smoke: apply the Google Classroom migration, deploy the
+  `google-classroom` Edge Function, set Google OAuth secrets, and run a real course/roster import.
+  Voice v2 remains deferred.
 
 ## Product Direction Locked
 
@@ -207,6 +211,10 @@ Exit criteria: platform reports cost per active student/session and routes expen
 
 Goal: fit into real school workflows.
 
-- Add Google/Microsoft SSO, Clever/ClassLink, CSV roster import, LTI 1.3, Google Classroom, Canvas, grade passback, exports, retention/delete workflows, and parent/student reports.
+- Status: Google Classroom roster import v1 is implemented repo-side as the first integration
+  spike. It connects a teacher/org-admin Google Classroom account with read-only scopes, imports
+  courses as Jargon classes, maps existing users by email, and records sync runs. Assignment and
+  grade export are intentionally deferred.
+- Add Google/Microsoft SSO, Clever/ClassLink, CSV roster import, LTI 1.3, Canvas, grade passback, exports, retention/delete workflows, and parent/student reports.
 
 Exit criteria: one school-style roster can be imported, classes created, and grades exported.

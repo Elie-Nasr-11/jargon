@@ -339,13 +339,17 @@ Acceptance: platform reports cost per active student/session and can route expen
 
 Goal: fit into real school workflows.
 
+Status: Google Classroom roster import v1 is implemented repo-side as the first integration
+spike. It is read-only: connect via teacher/org-admin OAuth, list courses, preview rosters,
+import a course as a Jargon class, map existing users by email, and record sync runs. Google
+assignment creation and grade passback remain deferred until roster import is accepted live.
+
 Add later:
 
 - Google/Microsoft SSO
 - Clever/ClassLink
 - CSV roster import
 - LTI 1.3
-- Google Classroom
 - Canvas
 - grade passback
 - data export

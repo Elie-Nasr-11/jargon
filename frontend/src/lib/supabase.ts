@@ -23,7 +23,8 @@ export function functionUrl(
     | "admin-ops"
     | "curriculum-admin"
     | "voice-session"
-    | "resource-processing",
+    | "resource-processing"
+    | "google-classroom",
 ) {
   return `${supabaseUrl}/functions/v1/${slug}`;
 }

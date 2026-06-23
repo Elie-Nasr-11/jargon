@@ -19,6 +19,10 @@ import type {
   CurriculumSubject,
   CurriculumUnit,
   JargonRunResponse,
+  GoogleClassroomCourse,
+  GoogleClassroomIntegrationState,
+  GoogleClassroomPerson,
+  GoogleClassroomResponse,
   InterventionAlert,
   LearningSession,
   LearningTurn,
@@ -471,6 +475,146 @@ export async function exportClassSnapshot(accessToken: string, classId: string) 
     throw new Error("Class snapshot export response was missing data.");
   }
   return data.data.export;
+}
+
+export async function invokeGoogleClassroom(input: {
+  accessToken: string;
+  action:
+    | "start_oauth"
+    | "oauth_callback"
+    | "list_courses"
+    | "preview_roster"
+    | "import_course"
+    | "list_mappings"
+    | "disconnect";
+  organizationId?: string | null;
+  connectionId?: string | null;
+  googleCourseId?: string | null;
+  classId?: string | null;
+  code?: string | null;
+  state?: string | null;
+}) {
+  const response = await fetchWithTimeout(functionUrl("google-classroom"), {
+    method: "POST",
+    headers: authHeaders(input.accessToken),
+    body: JSON.stringify({
+      action: input.action,
+      organization_id: input.organizationId || undefined,
+      connection_id: input.connectionId || undefined,
+      google_course_id: input.googleCourseId || undefined,
+      class_id: input.classId || undefined,
+      code: input.code || undefined,
+      state: input.state || undefined,
+    }),
+  });
+  const data = (await response.json()) as GoogleClassroomResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Google Classroom operation failed.");
+  }
+  return data;
+}
+
+export async function startGoogleClassroomOAuth(accessToken: string, organizationId: string) {
+  const data = await invokeGoogleClassroom({
+    accessToken,
+    action: "start_oauth",
+    organizationId,
+  });
+  const authUrl = data.data?.auth_url;
+  if (!authUrl) throw new Error("Google Classroom OAuth response was missing a URL.");
+  return authUrl;
+}
+
+export async function completeGoogleClassroomOAuth(
+  accessToken: string,
+  code: string,
+  state: string,
+) {
+  const data = await invokeGoogleClassroom({
+    accessToken,
+    action: "oauth_callback",
+    code,
+    state,
+  });
+  if (!data.data?.connection) {
+    throw new Error("Google Classroom OAuth response was missing the connection.");
+  }
+  return data.data.connection;
+}
+
+export async function fetchGoogleClassroomMappings(
+  accessToken: string,
+  organizationId?: string | null,
+): Promise<GoogleClassroomIntegrationState> {
+  const data = await invokeGoogleClassroom({
+    accessToken,
+    action: "list_mappings",
+    organizationId,
+  });
+  return {
+    connections: data.data?.connections || [],
+    course_mappings: data.data?.course_mappings || [],
+    user_mappings: data.data?.user_mappings || [],
+    sync_runs: data.data?.sync_runs || [],
+  };
+}
+
+export async function fetchGoogleClassroomCourses(
+  accessToken: string,
+  connectionId: string,
+): Promise<GoogleClassroomCourse[]> {
+  const data = await invokeGoogleClassroom({
+    accessToken,
+    action: "list_courses",
+    connectionId,
+  });
+  return data.data?.courses || [];
+}
+
+export async function previewGoogleClassroomRoster(
+  accessToken: string,
+  connectionId: string,
+  googleCourseId: string,
+): Promise<{
+  course: GoogleClassroomCourse | null;
+  teachers: GoogleClassroomPerson[];
+  students: GoogleClassroomPerson[];
+}> {
+  const data = await invokeGoogleClassroom({
+    accessToken,
+    action: "preview_roster",
+    connectionId,
+    googleCourseId,
+  });
+  return {
+    course: data.data?.course || null,
+    teachers: data.data?.teachers || [],
+    students: data.data?.students || [],
+  };
+}
+
+export async function importGoogleClassroomCourse(input: {
+  accessToken: string;
+  connectionId: string;
+  googleCourseId: string;
+  classId?: string | null;
+}) {
+  const data = await invokeGoogleClassroom({
+    accessToken: input.accessToken,
+    action: "import_course",
+    connectionId: input.connectionId,
+    googleCourseId: input.googleCourseId,
+    classId: input.classId,
+  });
+  return data.data;
+}
+
+export async function disconnectGoogleClassroom(accessToken: string, connectionId: string) {
+  await invokeGoogleClassroom({
+    accessToken,
+    action: "disconnect",
+    connectionId,
+  });
 }
 
 export async function fetchCurriculumAuthoringData(

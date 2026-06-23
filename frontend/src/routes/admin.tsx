@@ -5,10 +5,12 @@ import {
   AlertCircle,
   Archive,
   BarChart3,
+  BookOpen,
   CheckCircle2,
   ClipboardList,
   Download,
   DollarSign,
+  ExternalLink,
   KeyRound,
   Plus,
   RefreshCw,
@@ -23,10 +25,17 @@ import {
   exportClassSnapshot,
   fetchAdminScope,
   fetchCostModelDashboard,
+  fetchGoogleClassroomCourses,
+  fetchGoogleClassroomMappings,
   fetchPilotReadiness,
   getSession,
+  importGoogleClassroomCourse,
   invokeAdminOps,
   invokeAdminSeed,
+  previewGoogleClassroomRoster,
+  startGoogleClassroomOAuth,
+  completeGoogleClassroomOAuth,
+  disconnectGoogleClassroom,
 } from "@/lib/api";
 import type {
   AdminActorAccess,
@@ -37,6 +46,9 @@ import type {
   ClassReadiness,
   CostModelDashboard,
   CostModelMetric,
+  GoogleClassroomCourse,
+  GoogleClassroomIntegrationState,
+  GoogleClassroomPerson,
   PilotReadiness,
   PilotRole,
   ReadinessStatus,
@@ -229,6 +241,18 @@ function AdminPage() {
   const [costDashboard, setCostDashboard] = useState<CostModelDashboard | null>(null);
   const [costLoading, setCostLoading] = useState(false);
   const [costMessage, setCostMessage] = useState("");
+  const [classroom, setClassroom] = useState<GoogleClassroomIntegrationState | null>(null);
+  const [classroomLoading, setClassroomLoading] = useState(false);
+  const [classroomMessage, setClassroomMessage] = useState("");
+  const [selectedConnectionId, setSelectedConnectionId] = useState("");
+  const [classroomCourses, setClassroomCourses] = useState<GoogleClassroomCourse[]>([]);
+  const [selectedGoogleCourseId, setSelectedGoogleCourseId] = useState("");
+  const [rosterPreview, setRosterPreview] = useState<{
+    course: GoogleClassroomCourse | null;
+    teachers: GoogleClassroomPerson[];
+    students: GoogleClassroomPerson[];
+  } | null>(null);
+  const [oauthHandled, setOauthHandled] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -264,6 +288,36 @@ function AdminPage() {
     // Later updates are explicit via Refresh ops or operation responses.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
+
+  useEffect(() => {
+    if (!token || !authorized || oauthHandled) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    if (!code || !state) return;
+    setOauthHandled(true);
+    setClassroomLoading(true);
+    setClassroomMessage("Finishing Google Classroom connection...");
+    completeGoogleClassroomOAuth(token, code, state)
+      .then((connection) => {
+        setClassroomMessage(`Connected Google Classroom as ${connection.google_email}.`);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return refreshGoogleClassroomMappings(token, connection.organization_id, true);
+      })
+      .catch((error) => {
+        setClassroomMessage((error as Error).message || "Could not finish Google connection.");
+      })
+      .finally(() => setClassroomLoading(false));
+    // OAuth callback should run only once for the current URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorized, oauthHandled, token]);
+
+  useEffect(() => {
+    if (!token || !authorized || !selectedOrgId) return;
+    void refreshGoogleClassroomMappings(token, selectedOrgId, true);
+    // Classroom mappings refresh explicitly when the selected organization changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorized, selectedOrgId, token]);
 
   const refreshScope = async (accessToken = token) => {
     if (!accessToken) return false;
@@ -331,6 +385,42 @@ function AdminPage() {
       return false;
     } finally {
       setCostLoading(false);
+    }
+  };
+
+  const refreshGoogleClassroomMappings = async (
+    accessToken = token,
+    organizationId = selectedOrgId,
+    silent = false,
+  ) => {
+    if (!accessToken || !organizationId) return false;
+    setClassroomLoading(true);
+    if (!silent) setClassroomMessage("");
+    try {
+      const data = await fetchGoogleClassroomMappings(accessToken, organizationId);
+      setClassroom(data);
+      const activeConnections = data.connections.filter(
+        (connection) =>
+          connection.organization_id === organizationId && connection.status === "active",
+      );
+      const nextConnection =
+        selectedConnectionId &&
+        activeConnections.some((connection) => connection.id === selectedConnectionId)
+          ? selectedConnectionId
+          : activeConnections[0]?.id || "";
+      setSelectedConnectionId(nextConnection);
+      if (!activeConnections.length) {
+        setClassroomCourses([]);
+        setSelectedGoogleCourseId("");
+        setRosterPreview(null);
+      }
+      if (!silent) setClassroomMessage("Google Classroom mappings refreshed.");
+      return true;
+    } catch (error) {
+      setClassroomMessage((error as Error).message || "Could not load Google Classroom data.");
+      return false;
+    } finally {
+      setClassroomLoading(false);
     }
   };
 
@@ -473,6 +563,33 @@ function AdminPage() {
     };
   }, [readiness]);
   const costVisible = costDashboard?.visibility === "full_cost";
+  const activeClassroomConnections = useMemo(
+    () =>
+      (classroom?.connections || []).filter(
+        (connection) =>
+          connection.organization_id === selectedOrgId && connection.status === "active",
+      ),
+    [classroom, selectedOrgId],
+  );
+  const selectedClassroomConnection = useMemo(
+    () =>
+      activeClassroomConnections.find((connection) => connection.id === selectedConnectionId) ||
+      null,
+    [activeClassroomConnections, selectedConnectionId],
+  );
+  const selectedGoogleCourse = useMemo(
+    () => classroomCourses.find((course) => course.id === selectedGoogleCourseId) || null,
+    [classroomCourses, selectedGoogleCourseId],
+  );
+  const selectedCourseMapping = useMemo(
+    () =>
+      (classroom?.course_mappings || []).find(
+        (mapping) =>
+          mapping.organization_id === selectedOrgId &&
+          mapping.google_course_id === selectedGoogleCourseId,
+      ) || null,
+    [classroom, selectedGoogleCourseId, selectedOrgId],
+  );
 
   const copyLoginInstructions = async (item: ClassReadiness | null) => {
     if (!item) {
@@ -513,6 +630,125 @@ function AdminPage() {
       setReadinessMessage((error as Error).message || "Could not export class snapshot.");
     } finally {
       setReadinessLoading(false);
+    }
+  };
+
+  const connectGoogleClassroom = async () => {
+    if (!token || !selectedOrgId) {
+      setClassroomMessage("Choose an organization before connecting Google Classroom.");
+      return;
+    }
+    setClassroomLoading(true);
+    setClassroomMessage("");
+    try {
+      const authUrl = await startGoogleClassroomOAuth(token, selectedOrgId);
+      window.location.href = authUrl;
+    } catch (error) {
+      setClassroomMessage((error as Error).message || "Could not start Google Classroom OAuth.");
+      setClassroomLoading(false);
+    }
+  };
+
+  const loadGoogleCourses = async () => {
+    if (!token || !selectedConnectionId) {
+      setClassroomMessage("Connect Google Classroom first.");
+      return;
+    }
+    setClassroomLoading(true);
+    setClassroomMessage("");
+    try {
+      const courses = await fetchGoogleClassroomCourses(token, selectedConnectionId);
+      setClassroomCourses(courses);
+      setSelectedGoogleCourseId((current) =>
+        current && courses.some((course) => course.id === current) ? current : courses[0]?.id || "",
+      );
+      setRosterPreview(null);
+      setClassroomMessage(
+        `Loaded ${courses.length} Google Classroom course${courses.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setClassroomMessage((error as Error).message || "Could not load Google Classroom courses.");
+    } finally {
+      setClassroomLoading(false);
+    }
+  };
+
+  const previewGoogleRoster = async () => {
+    if (!token || !selectedConnectionId || !selectedGoogleCourseId) {
+      setClassroomMessage("Choose a Google course first.");
+      return;
+    }
+    setClassroomLoading(true);
+    setClassroomMessage("");
+    try {
+      const preview = await previewGoogleClassroomRoster(
+        token,
+        selectedConnectionId,
+        selectedGoogleCourseId,
+      );
+      setRosterPreview(preview);
+      const people = preview.teachers.length + preview.students.length;
+      const matched = [...preview.teachers, ...preview.students].filter(
+        (person) => person.matched,
+      ).length;
+      setClassroomMessage(
+        `Previewed ${people} roster rows. ${matched} already match Jargon users.`,
+      );
+    } catch (error) {
+      setClassroomMessage((error as Error).message || "Could not preview Google roster.");
+    } finally {
+      setClassroomLoading(false);
+    }
+  };
+
+  const importGoogleCourse = async () => {
+    if (!token || !selectedConnectionId || !selectedGoogleCourseId) {
+      setClassroomMessage("Choose a Google course first.");
+      return;
+    }
+    setClassroomLoading(true);
+    setClassroomMessage("");
+    try {
+      const data = await importGoogleClassroomCourse({
+        accessToken: token,
+        connectionId: selectedConnectionId,
+        googleCourseId: selectedGoogleCourseId,
+      });
+      await Promise.all([
+        refreshScope(token),
+        refreshReadiness(token, true),
+        refreshGoogleClassroomMappings(token, selectedOrgId, true),
+      ]);
+      const counts = data?.counts || {};
+      const missing = typeof counts.missing === "number" ? counts.missing : 0;
+      setClassroomMessage(
+        missing
+          ? `Imported course with ${missing} unmapped roster row${missing === 1 ? "" : "s"}. Seed missing accounts, then import again.`
+          : "Imported Google Classroom course into Jargon.",
+      );
+    } catch (error) {
+      setClassroomMessage((error as Error).message || "Could not import Google Classroom course.");
+    } finally {
+      setClassroomLoading(false);
+    }
+  };
+
+  const disconnectSelectedGoogleClassroom = async () => {
+    if (!token || !selectedConnectionId) return;
+    setClassroomLoading(true);
+    setClassroomMessage("");
+    try {
+      await disconnectGoogleClassroom(token, selectedConnectionId);
+      setSelectedConnectionId("");
+      setClassroomCourses([]);
+      setSelectedGoogleCourseId("");
+      setRosterPreview(null);
+      await refreshGoogleClassroomMappings(token, selectedOrgId, true);
+      setClassroomMessage("Google Classroom connection disconnected.");
+    } catch (error) {
+      setClassroomMessage((error as Error).message || "Could not disconnect Google Classroom.");
+    } finally {
+      setClassroomLoading(false);
     }
   };
 
@@ -1076,6 +1312,249 @@ function AdminPage() {
                       No open intervention alerts in scope.
                     </div>
                   ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </GradientCard>
+
+        <GradientCard>
+          <div className="space-y-5 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  Google Classroom
+                </div>
+                <h2 className="text-[18px] font-medium text-foreground">
+                  Course and roster import
+                </h2>
+                <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                  Connect a teacher or org-admin Google Classroom account, preview courses and
+                  rosters, then import matched users into Jargon classes. This is read-only:
+                  assignments, grades, and mastery stay authoritative in Jargon.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void refreshGoogleClassroomMappings()}
+                  disabled={classroomLoading || !selectedOrgId}
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${classroomLoading ? "animate-spin" : ""}`}
+                    strokeWidth={1.6}
+                  />
+                  Refresh Classroom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void connectGoogleClassroom()}
+                  disabled={classroomLoading || !selectedOrgId}
+                  className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                >
+                  <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
+                  Connect Google
+                </button>
+              </div>
+            </div>
+
+            {classroomMessage ? (
+              <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                {classroomMessage}
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <h3 className="text-[14px] font-medium text-foreground">Connection</h3>
+                  <div className="mt-3 space-y-3">
+                    <Field label="Google account">
+                      <select
+                        value={selectedConnectionId}
+                        onChange={(event) => {
+                          setSelectedConnectionId(event.target.value);
+                          setClassroomCourses([]);
+                          setSelectedGoogleCourseId("");
+                          setRosterPreview(null);
+                        }}
+                        className="jargon-input"
+                      >
+                        <option value="">
+                          {activeClassroomConnections.length
+                            ? "Choose a Google Classroom connection"
+                            : "No active Google connection"}
+                        </option>
+                        {activeClassroomConnections.map((connection) => (
+                          <option key={connection.id} value={connection.id}>
+                            {connection.google_email}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {selectedClassroomConnection ? (
+                      <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                        <div className="font-medium text-foreground">
+                          {selectedClassroomConnection.google_name ||
+                            selectedClassroomConnection.google_email}
+                        </div>
+                        <div className="mt-1">
+                          Last refreshed {formatDate(selectedClassroomConnection.last_refreshed_at)}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void disconnectSelectedGoogleClassroom()}
+                          disabled={classroomLoading}
+                          className="mt-3 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                        Connect Google Classroom with read-only course, roster, and profile-email
+                        scopes. Google secrets and refresh tokens are never sent to the browser.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
+                    <button
+                      type="button"
+                      onClick={() => void loadGoogleCourses()}
+                      disabled={!selectedConnectionId || classroomLoading}
+                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                    >
+                      Load courses
+                    </button>
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    <Field label="Google course">
+                      <select
+                        value={selectedGoogleCourseId}
+                        onChange={(event) => {
+                          setSelectedGoogleCourseId(event.target.value);
+                          setRosterPreview(null);
+                        }}
+                        className="jargon-input"
+                      >
+                        <option value="">
+                          {classroomCourses.length ? "Choose a course" : "Load courses first"}
+                        </option>
+                        {classroomCourses.map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.name}
+                            {course.section ? ` - ${course.section}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {selectedGoogleCourse ? (
+                      <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                        <div className="font-medium text-foreground">
+                          {selectedGoogleCourse.name}
+                        </div>
+                        <div className="mt-1">
+                          {selectedGoogleCourse.section || "No section"} ·{" "}
+                          {selectedGoogleCourse.course_state || "unknown state"}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void previewGoogleRoster()}
+                        disabled={!selectedGoogleCourseId || classroomLoading}
+                        className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                      >
+                        Preview roster
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void importGoogleCourse()}
+                        disabled={!selectedGoogleCourseId || classroomLoading}
+                        className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                      >
+                        Import into Jargon
+                      </button>
+                    </div>
+                    {selectedCourseMapping ? (
+                      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-[12px] text-emerald-500">
+                        Mapped to Jargon class{" "}
+                        {scope?.classes.find((item) => item.id === selectedCourseMapping.class_id)
+                          ?.name ||
+                          selectedCourseMapping.class_id ||
+                          "unknown"}{" "}
+                        · last sync {formatDate(selectedCourseMapping.last_synced_at)}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <h3 className="text-[14px] font-medium text-foreground">Roster preview</h3>
+                  {rosterPreview ? (
+                    <div className="mt-3 space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        <MiniStat label="Teachers" value={String(rosterPreview.teachers.length)} />
+                        <MiniStat label="Students" value={String(rosterPreview.students.length)} />
+                        <MiniStat
+                          label="Matched"
+                          value={String(
+                            [...rosterPreview.teachers, ...rosterPreview.students].filter(
+                              (person) => person.matched,
+                            ).length,
+                          )}
+                        />
+                        <MiniStat
+                          label="Missing"
+                          value={String(
+                            [...rosterPreview.teachers, ...rosterPreview.students].filter(
+                              (person) => !person.matched,
+                            ).length,
+                          )}
+                        />
+                      </div>
+                      <RosterPreviewTable title="Teachers" people={rosterPreview.teachers} />
+                      <RosterPreviewTable title="Students" people={rosterPreview.students} />
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                      Preview before importing. Existing Jargon users are matched by email. Missing
+                      users are not created here; seed them through the existing roster tools and
+                      import again.
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <h3 className="text-[14px] font-medium text-foreground">
+                    Recent Classroom syncs
+                  </h3>
+                  <div className="mt-3 space-y-2">
+                    {(classroom?.sync_runs || []).slice(0, 6).map((run) => (
+                      <div key={run.id} className="border-b border-border/55 pb-2 text-[12px]">
+                        <div className="text-foreground">
+                          {run.action.replaceAll("_", " ")} · {run.status}
+                        </div>
+                        <div className="mt-0.5 text-muted-foreground">
+                          {formatDate(run.started_at)} · {JSON.stringify(run.counts)}
+                        </div>
+                      </div>
+                    ))}
+                    {!classroom?.sync_runs.length ? (
+                      <div className="text-[12px] text-muted-foreground">
+                        No Classroom sync runs yet.
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1947,6 +2426,67 @@ function Stat({ label, value }: { label: string; value: number }) {
       <div className="text-[24px] font-semibold leading-none text-foreground">{value}</div>
       <div className="mt-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
         {label}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-background/50 px-3 py-2">
+      <div className="text-[18px] font-semibold leading-none text-foreground">{value}</div>
+      <div className="mt-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function RosterPreviewTable({ title, people }: { title: string; people: GoogleClassroomPerson[] }) {
+  return (
+    <div>
+      <h4 className="text-[12.5px] font-medium text-foreground">{title}</h4>
+      <div className="mt-2 max-h-[200px] overflow-auto rounded-2xl border border-border/70 bg-background/45">
+        <table className="min-w-[560px] w-full border-collapse text-left text-[12px]">
+          <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+            <tr>
+              <th className="py-2 pl-3 pr-3 font-medium">Name</th>
+              <th className="py-2 pr-3 font-medium">Email</th>
+              <th className="py-2 pr-3 font-medium">Jargon user</th>
+            </tr>
+          </thead>
+          <tbody>
+            {people.map((person) => (
+              <tr
+                key={`${person.role}-${person.google_user_id}-${person.email}`}
+                className="border-b border-border/55"
+              >
+                <td className="py-2 pl-3 pr-3 text-foreground">
+                  {person.display_name || "Unnamed"}
+                </td>
+                <td className="py-2 pr-3 text-muted-foreground">{person.email || "No email"}</td>
+                <td className="py-2 pr-3">
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] ${
+                      person.matched
+                        ? "border-emerald-500/35 text-emerald-500"
+                        : "border-amber-500/35 text-amber-500"
+                    }`}
+                  >
+                    {person.matched ? "matched" : "needs seed"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {!people.length ? (
+              <tr>
+                <td className="py-4 pl-3 text-muted-foreground" colSpan={3}>
+                  No roster rows returned.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
       </div>
     </div>
   );

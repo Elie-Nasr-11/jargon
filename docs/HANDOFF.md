@@ -6,6 +6,64 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 21:06
+
+Status: Google Classroom roster-import spike implemented repo-side; live activation pending Google OAuth secrets
+
+What changed:
+
+- Added Google Classroom integration schema:
+  - `google_classroom_connections`;
+  - `google_classroom_course_mappings`;
+  - `google_classroom_user_mappings`;
+  - `google_classroom_sync_runs`.
+- Added JWT-protected Supabase Edge Function `google-classroom`.
+- Added `/admin` Google Classroom panel:
+  - connect Google Classroom;
+  - load courses;
+  - preview teacher/student rosters;
+  - import a course into a Jargon class;
+  - map existing users by email;
+  - disconnect a connection;
+  - view recent sync runs.
+- Kept v1 intentionally narrow:
+  - read-only course/roster/profile scopes only;
+  - no Google assignment creation;
+  - no grade passback;
+  - no Google-driven account creation;
+  - Jargon remains source of truth for learning records.
+- Added `docs/GOOGLE_CLASSROOM_INTEGRATION.md` and static integration tests.
+
+Verification:
+
+- Local checks passed:
+  - `cd frontend && npx tsc --noEmit`;
+  - `cd frontend && npm run lint` with the existing 11 warnings;
+  - `cd frontend && npm run build`;
+  - `python3 -m unittest discover -s tests -q`;
+  - `python3 tools/validate_examples.py examples legacy/examples`;
+  - `git diff --check`.
+- Official Google docs reviewed for resource model, OAuth flow, and narrow Classroom scopes:
+  - Classroom REST reference;
+  - Classroom auth scopes;
+  - Google OAuth web server flow.
+
+Live activation still needed:
+
+- Apply `supabase/migrations/0014_google_classroom_integration.sql`.
+- Deploy Supabase Edge Function `google-classroom` with JWT verification enabled.
+- Set Edge Function secrets:
+  - `GOOGLE_CLASSROOM_CLIENT_ID`;
+  - `GOOGLE_CLASSROOM_CLIENT_SECRET`;
+  - `GOOGLE_CLASSROOM_REDIRECT_URI` (the admin callback URL);
+  - `GOOGLE_TOKEN_ENCRYPTION_KEY`.
+- Browser smoke:
+  - teacher/org-admin connects Google Classroom;
+  - courses load;
+  - roster preview marks matched vs needs-seed users;
+  - import creates/maps one Jargon class;
+  - teacher sees imported class in `/teacher`.
+
 ## Codex -> Claude / Human - 2026-06-23 20:36
 
 Status: Media Processing / Mentor Context v1 implemented, pushed, migrated, deployed, and API-smoked
