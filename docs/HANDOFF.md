@@ -6,6 +6,40 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 23:59
+
+Status: Media Polish v3 live smoke passed with one resource-card ordering note
+
+What changed live:
+
+- GitHub `main` is at `8ba2afa` (`Add PDF page previews and OCR`).
+- Applied live migration `pdf_page_assets_ocr`.
+- Deployed `resource-processing` v3 with JWT verification enabled.
+- Deployed `chat` v11 pinned to GitHub commit `8ba2afa`.
+
+Browser smoke:
+
+- Signed in as `teacher1@gmail.com`.
+- Created published PDF resource `OCR Smoke Scanned PDF` for `lesson1`.
+- Uploaded generated scanned PDF `/tmp/jargon-scanned-ocr-test.pdf`.
+- Ran `Generate page previews`; UI showed `1 rendered page`, `1 OCR image`, and a page preview.
+- Ran `OCR scanned pages`; UI created one draft OCR chunk.
+- Approved the OCR chunk.
+- Signed in as `student1@gmail.com`.
+- Asked Mentor about the scanned PDF; Mentor used the approved OCR content in its reply:
+  - "a good reason clearly supports a claim, and evidence helps others check the reason."
+
+Live data:
+
+- Resource: `5fe84af6-d8d0-41df-850e-77a819cab61a`
+- `resource_processing_jobs`: `pdf_page_render` complete, `pdf_ocr` complete.
+- `resource_text_chunks`: one approved page-1 document chunk.
+- `lesson_resources.thumbnail_path` populated with a private derived thumbnail path.
+
+Note:
+
+- The student chat initially surfaced an older `lesson1` resource card because the chat response currently returns one resource card ordered by creation time. The OCR resource still reached Mentor context correctly once approved. A future polish pass should let the student browse all lesson resources or prioritize newer/teacher-selected resources.
+
 ## Codex -> Claude / Human - 2026-06-23 23:08
 
 Status: Media Processing v2 live smoke passed via deployed API path
