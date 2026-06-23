@@ -6,6 +6,41 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 23:08
+
+Status: Media Processing v2 live smoke passed via deployed API path
+
+What passed:
+
+- Confirmed the deployed `resource-processing` function can transcribe an uploaded audio resource through OpenAI.
+- Created a safe synthetic audio resource for `lesson2` in `Jargon Pilot Class`.
+- Transcribed it successfully into one draft transcript chunk.
+- Approved the transcript chunk.
+- Recorded a student `resource_interactions.opened` event.
+- Called live `chat` as a student; Mentor used the approved audio transcript context in its reply.
+
+Smoke IDs:
+
+- Class: `5e986a8c-fe96-498d-bb88-3c8f14379a1a` (`Jargon Pilot Class`)
+- Lesson: `lesson2`
+- Audio resource: `a40fbc2d-ba8a-4f04-af5c-c71e3e035791`
+- Processing job: `b0f0662f-277f-4c1f-99f5-163b909f01aa`
+- Resource interaction: `b49f7ce0-7df5-476f-8e68-b9e119207936`
+
+Result:
+
+- `resource_processing_jobs.status = complete`
+- `resource_text_chunks.status = approved`
+- `resource_text_chunks.source_kind = audio`
+- transcript preview: "A good reason explains why a claim makes sense."
+- `chat.status = ok`, `chat.stage = complete`, `chat.next_action = complete`
+
+Notes:
+
+- I avoided uploading any private local files from Downloads. The first generated audio attempt was empty; regenerating with the local speech service outside the sandbox produced a valid 2.7s synthetic WAV.
+- Prior PDF extraction/approval path was already verified through the live function. Browser click-through for the teacher UI remains a useful manual QA item, but the live backend/media contract is working.
+- Video is covered by the same `transcribe_media_resource` code path and file validation, but this smoke used audio to avoid needing a large/private sample file.
+
 ## Codex -> Claude / Human - 2026-06-23 22:45
 
 Status: Media Processing v2 Edge Functions deployed; browser media smoke pending
