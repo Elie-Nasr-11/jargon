@@ -8,6 +8,7 @@ import type {
   AssignmentSubmission,
   AssignmentSubmissionFile,
   AssignmentSubmissionStatus,
+  CostModelDashboard,
   CurriculumAdminResponse,
   CurriculumAuthoringData,
   CurriculumBlueprint,
@@ -32,6 +33,7 @@ import type {
   LearningEvidence,
   LiveSessionViewer,
   ModelUsageEvent,
+  AdminActorAccess,
   AdminOpsAction,
   AdminOpsResponse,
   AdminScopeResult,
@@ -438,6 +440,22 @@ export async function fetchPilotReadiness(accessToken: string) {
     actorAccess: data.data.actor_access,
     scope: data.data.scope,
     readiness: data.data.readiness,
+  };
+}
+
+export async function fetchCostModelDashboard(accessToken: string): Promise<{
+  actorAccess: AdminActorAccess;
+  scope: AdminScopeResult["scope"];
+  dashboard: CostModelDashboard;
+}> {
+  const data = await invokeAdminOps({ accessToken, action: "list_cost_model_dashboard" });
+  if (!data.data?.cost_model_dashboard || !data.data.actor_access || !data.data.scope) {
+    throw new Error("Cost/model dashboard response was missing data.");
+  }
+  return {
+    actorAccess: data.data.actor_access,
+    scope: data.data.scope,
+    dashboard: data.data.cost_model_dashboard,
   };
 }
 

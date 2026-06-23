@@ -408,6 +408,21 @@ export type ModelUsageEvent = {
   created_at: string;
 };
 
+export type SpeechUsageEvent = {
+  id: string;
+  user_id: string | null;
+  organization_id: string | null;
+  class_id: string | null;
+  session_id: string | null;
+  provider: string;
+  task_type: "speech_to_text" | "text_to_speech";
+  duration_seconds: number;
+  character_count: number;
+  estimated_cost_usd: number | null;
+  status: "ok" | "error";
+  created_at: string | null;
+};
+
 export type LearningSession = {
   id: string;
   user_id: string;
@@ -834,9 +849,72 @@ export type ClassSnapshotExport = {
   body: string;
 };
 
+export type CostModelVisibility = "full_cost" | "scoped_usage";
+
+export type CostModelMetric = {
+  key: string;
+  label: string;
+  organization_id?: string | null;
+  class_id?: string | null;
+  user_id?: string | null;
+  model?: string | null;
+  task_type?: string | null;
+  model_event_count: number;
+  runtime_event_count: number;
+  speech_event_count: number;
+  session_count: number;
+  completion_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  cached_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number | null;
+  latency_count: number;
+  latency_total_ms: number;
+  average_latency_ms: number | null;
+  error_count: number;
+  error_rate: number | null;
+};
+
+export type CostModelDashboard = {
+  generated_at: string;
+  visibility: CostModelVisibility;
+  totals: CostModelMetric;
+  by_organization: CostModelMetric[];
+  by_class: CostModelMetric[];
+  by_student: CostModelMetric[];
+  by_model: CostModelMetric[];
+  by_task_type: CostModelMetric[];
+  by_lesson: CostModelMetric[];
+  recent_model_events: Array<
+    Pick<
+      ModelUsageEvent,
+      | "id"
+      | "user_id"
+      | "organization_id"
+      | "class_id"
+      | "session_id"
+      | "lesson_id"
+      | "provider"
+      | "model"
+      | "task_type"
+      | "input_tokens"
+      | "output_tokens"
+      | "cached_tokens"
+      | "estimated_cost_usd"
+      | "latency_ms"
+      | "status"
+      | "created_at"
+    >
+  >;
+  recent_runtime_errors: RuntimeEvent[];
+  recent_speech_events: SpeechUsageEvent[];
+};
+
 export type AdminOpsAction =
   | "list_admin_scope"
   | "list_pilot_readiness"
+  | "list_cost_model_dashboard"
   | "export_class_snapshot"
   | "create_class"
   | "update_class"
@@ -851,6 +929,7 @@ export type AdminOpsResponse = {
     actor_access?: AdminActorAccess;
     scope?: AdminScope;
     readiness?: PilotReadiness;
+    cost_model_dashboard?: CostModelDashboard;
     export?: ClassSnapshotExport;
     class?: AdminClass | null;
     membership?: OrganizationMembership | TeacherClassMembership | null;

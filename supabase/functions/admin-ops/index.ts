@@ -38,6 +38,31 @@ type ReadinessChecklistItem = {
   status: "ok" | "missing" | "attention";
 };
 
+type CostMetric = {
+  key: string;
+  label: string;
+  organization_id?: string | null;
+  class_id?: string | null;
+  user_id?: string | null;
+  model?: string | null;
+  task_type?: string | null;
+  model_event_count: number;
+  runtime_event_count: number;
+  speech_event_count: number;
+  session_count: number;
+  completion_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  cached_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number | null;
+  latency_count: number;
+  latency_total_ms: number;
+  average_latency_ms: number | null;
+  error_count: number;
+  error_rate: number | null;
+};
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -81,6 +106,15 @@ function numericDate(value: unknown): number {
   if (typeof value !== "string" || !value) return 0;
   const time = Date.parse(value);
   return Number.isFinite(time) ? time : 0;
+}
+
+function numberValue(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function normalizeEmail(value: unknown): string {
@@ -246,6 +280,65 @@ function worstStatus(statuses: ReadinessStatus[]): ReadinessStatus {
   if (statuses.includes("needs_attention")) return "needs_attention";
   if (statuses.includes("needs_setup")) return "needs_setup";
   return "ready";
+}
+
+function emptyCostMetric(input: {
+  key: string;
+  label: string;
+  organizationId?: string | null;
+  classId?: string | null;
+  userId?: string | null;
+  model?: string | null;
+  taskType?: string | null;
+}): CostMetric {
+  return {
+    key: input.key,
+    label: input.label,
+    organization_id: input.organizationId || null,
+    class_id: input.classId || null,
+    user_id: input.userId || null,
+    model: input.model || null,
+    task_type: input.taskType || null,
+    model_event_count: 0,
+    runtime_event_count: 0,
+    speech_event_count: 0,
+    session_count: 0,
+    completion_count: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    cached_tokens: 0,
+    total_tokens: 0,
+    estimated_cost_usd: 0,
+    latency_count: 0,
+    latency_total_ms: 0,
+    average_latency_ms: null,
+    error_count: 0,
+    error_rate: null,
+  };
+}
+
+function finishCostMetric(metric: CostMetric, showCost: boolean): CostMetric {
+  const totalEvents =
+    metric.model_event_count + metric.runtime_event_count + metric.speech_event_count;
+  return {
+    ...metric,
+    total_tokens: metric.input_tokens + metric.output_tokens + metric.cached_tokens,
+    estimated_cost_usd: showCost ? metric.estimated_cost_usd || 0 : null,
+    average_latency_ms: metric.latency_count
+      ? Math.round(metric.latency_total_ms / metric.latency_count)
+      : null,
+    error_rate: totalEvents ? metric.error_count / totalEvents : null,
+  };
+}
+
+function sortedMetrics(metrics: Map<string, CostMetric>, showCost: boolean): CostMetric[] {
+  return Array.from(metrics.values())
+    .map((metric) => finishCostMetric(metric, showCost))
+    .sort((a, b) => {
+      const aCost = a.estimated_cost_usd || 0;
+      const bCost = b.estimated_cost_usd || 0;
+      return bCost - aCost || b.total_tokens - a.total_tokens || b.error_count - a.error_count;
+    });
 }
 
 function hasOrganizationAccess(
@@ -1012,6 +1105,357 @@ async function handleExportClassSnapshot(
   });
 }
 
+async function selectScopedTelemetryRows(
+  config: Config,
+  table: string,
+  select: string,
+  access: ActorAccess,
+  organizationIds: string[],
+  classIds: string[],
+  userIds: string[],
+  limit = 1500,
+): Promise<DbRow[]> {
+  if (access.level === "platform_admin") {
+    return selectRows(
+      config,
+      `${table}?select=${select}&order=created_at.desc&limit=${limit}`,
+    );
+  }
+  const queries: Promise<DbRow[]>[] = [];
+  if (organizationIds.length) {
+    queries.push(
+      selectRows(
+        config,
+        `${table}?${inFilter("organization_id", organizationIds)}&select=${select}&order=created_at.desc&limit=${limit}`,
+      ),
+    );
+  }
+  if (classIds.length) {
+    queries.push(
+      selectRows(
+        config,
+        `${table}?${inFilter("class_id", classIds)}&select=${select}&order=created_at.desc&limit=${limit}`,
+      ),
+    );
+  }
+  if (userIds.length) {
+    queries.push(
+      selectRows(
+        config,
+        `${table}?${inFilter("user_id", userIds)}&select=${select}&order=created_at.desc&limit=${limit}`,
+      ),
+    );
+  }
+  const results = await Promise.all(queries);
+  const seen = new Map<string, DbRow>();
+  for (const row of results.flat()) {
+    const id = cleanId(row.id);
+    if (id) seen.set(id, row);
+  }
+  return Array.from(seen.values()).sort(
+    (a, b) => numericDate(b.created_at) - numericDate(a.created_at),
+  );
+}
+
+async function buildCostModelDashboard(
+  config: Config,
+  access: ActorAccess,
+): Promise<{ scope: DbRow; dashboard: DbRow }> {
+  const scope = await loadAdminScope(config, access);
+  const organizations = Array.isArray(scope.organizations)
+    ? scope.organizations as DbRow[]
+    : [];
+  const classes = Array.isArray(scope.classes) ? scope.classes as DbRow[] : [];
+  const classMemberships = Array.isArray(scope.class_memberships)
+    ? scope.class_memberships as DbRow[]
+    : [];
+  const profiles = Array.isArray(scope.profiles) ? scope.profiles as DbRow[] : [];
+  const users = Array.isArray(scope.users) ? scope.users as DbRow[] : [];
+  const organizationIds = idsFrom(organizations, "id");
+  const classIds = idsFrom(classes, "id");
+  const userIds = idsFrom(classMemberships, "user_id");
+  const showCost = access.level === "platform_admin";
+
+  const [
+    modelEvents,
+    runtimeEvents,
+    speechEvents,
+    sessions,
+    lessons,
+  ] = await Promise.all([
+    selectScopedTelemetryRows(
+      config,
+      "model_usage_events",
+      "id,user_id,organization_id,class_id,session_id,lesson_id,provider,model,task_type,input_tokens,output_tokens,cached_tokens,estimated_cost_usd,latency_ms,status,created_at",
+      access,
+      organizationIds,
+      classIds,
+      userIds,
+    ),
+    selectScopedTelemetryRows(
+      config,
+      "runtime_events",
+      "id,user_id,organization_id,class_id,session_id,lesson_id,event_type,status,latency_ms,created_at",
+      access,
+      organizationIds,
+      classIds,
+      userIds,
+    ),
+    selectScopedTelemetryRows(
+      config,
+      "speech_usage_events",
+      "id,user_id,organization_id,class_id,session_id,provider,task_type,duration_seconds,character_count,estimated_cost_usd,status,created_at",
+      access,
+      organizationIds,
+      classIds,
+      userIds,
+    ),
+    access.level === "platform_admin"
+      ? selectRows(
+          config,
+          "learning_sessions?select=id,user_id,lesson_id,stage,status,score,created_at,updated_at&order=updated_at.desc&limit=1500",
+        )
+      : userIds.length
+        ? selectRows(
+            config,
+            `learning_sessions?${inFilter("user_id", userIds)}&select=id,user_id,lesson_id,stage,status,score,created_at,updated_at&order=updated_at.desc&limit=1500`,
+          )
+        : [],
+    selectRows(config, "lessons?select=id,title,module,level,publication_status&limit=1000"),
+  ]);
+
+  const orgById = new Map(organizations.map((row) => [cleanId(row.id), row]));
+  const classById = new Map(classes.map((row) => [cleanId(row.id), row]));
+  const profileById = new Map(profiles.map((row) => [cleanId(row.id), row]));
+  const userById = new Map(users.map((row) => [cleanId(row.id), row]));
+  const lessonById = new Map(lessons.map((row) => [cleanId(row.id), row]));
+  const classOrgById = new Map(
+    classes.map((row) => [cleanId(row.id), cleanId(row.organization_id)]),
+  );
+  const userClassById = new Map<string, string>();
+  for (const membership of classMemberships) {
+    if (cleanText(membership.status) !== "active") continue;
+    const userId = cleanId(membership.user_id);
+    const classId = cleanId(membership.class_id);
+    if (userId && classId && !userClassById.has(userId)) {
+      userClassById.set(userId, classId);
+    }
+  }
+
+  const resolveScope = (row: DbRow) => {
+    const userId = cleanId(row.user_id);
+    const classId = cleanId(row.class_id) || (userId ? userClassById.get(userId) || "" : "");
+    const organizationId = cleanId(row.organization_id) || (classId ? classOrgById.get(classId) || "" : "");
+    return { userId, classId, organizationId };
+  };
+
+  const total = emptyCostMetric({ key: "total", label: "All usage" });
+  const byOrganization = new Map<string, CostMetric>();
+  const byClass = new Map<string, CostMetric>();
+  const byStudent = new Map<string, CostMetric>();
+  const byModel = new Map<string, CostMetric>();
+  const byTaskType = new Map<string, CostMetric>();
+  const byLesson = new Map<string, CostMetric>();
+
+  const touch = (
+    map: Map<string, CostMetric>,
+    key: string,
+    input: Parameters<typeof emptyCostMetric>[0],
+  ) => {
+    const existing = map.get(key);
+    if (existing) return existing;
+    const metric = emptyCostMetric(input);
+    map.set(key, metric);
+    return metric;
+  };
+
+  const metricsForRow = (row: DbRow, model?: string, taskType?: string) => {
+    const { userId, classId, organizationId } = resolveScope(row);
+    const metrics = [total];
+    if (organizationId) {
+      const org = orgById.get(organizationId);
+      metrics.push(
+        touch(byOrganization, organizationId, {
+          key: organizationId,
+          label: cleanText(org?.name) || "Organization",
+          organizationId,
+        }),
+      );
+    }
+    if (classId) {
+      const classRow = classById.get(classId);
+      metrics.push(
+        touch(byClass, classId, {
+          key: classId,
+          label: cleanText(classRow?.name) || "Class",
+          organizationId,
+          classId,
+        }),
+      );
+    }
+    if (userId) {
+      const profile = profileById.get(userId);
+      const user = userById.get(userId);
+      metrics.push(
+        touch(byStudent, userId, {
+          key: userId,
+          label: cleanText(profile?.name) || normalizeEmail(user?.email) || "Student",
+          organizationId,
+          classId,
+          userId,
+        }),
+      );
+    }
+    if (model) {
+      metrics.push(
+        touch(byModel, model, {
+          key: model,
+          label: model,
+          model,
+        }),
+      );
+    }
+    if (taskType) {
+      metrics.push(
+        touch(byTaskType, taskType, {
+          key: taskType,
+          label: taskType.replaceAll("_", " "),
+          taskType,
+        }),
+      );
+    }
+    const lessonId = cleanId(row.lesson_id);
+    if (lessonId) {
+      const lesson = lessonById.get(lessonId);
+      metrics.push(
+        touch(byLesson, lessonId, {
+          key: lessonId,
+          label: cleanText(lesson?.title) || lessonId,
+          organizationId,
+          classId,
+        }),
+      );
+    }
+    return metrics;
+  };
+
+  const addLatency = (metric: CostMetric, value: unknown) => {
+    const latency = numberValue(value);
+    if (latency > 0) {
+      metric.latency_count += 1;
+      metric.latency_total_ms += latency;
+    }
+  };
+
+  for (const row of modelEvents) {
+    const model = cleanText(row.model, "unknown-model");
+    const taskType = cleanText(row.task_type, "unknown_task");
+    for (const metric of metricsForRow(row, model, taskType)) {
+      metric.model_event_count += 1;
+      metric.input_tokens += numberValue(row.input_tokens);
+      metric.output_tokens += numberValue(row.output_tokens);
+      metric.cached_tokens += numberValue(row.cached_tokens);
+      metric.estimated_cost_usd =
+        (metric.estimated_cost_usd || 0) + numberValue(row.estimated_cost_usd);
+      addLatency(metric, row.latency_ms);
+      if (cleanText(row.status) === "error") metric.error_count += 1;
+    }
+  }
+
+  for (const row of runtimeEvents) {
+    const taskType = cleanText(row.event_type, "runtime");
+    for (const metric of metricsForRow(row, undefined, taskType)) {
+      metric.runtime_event_count += 1;
+      addLatency(metric, row.latency_ms);
+      if (cleanText(row.status) === "error") metric.error_count += 1;
+    }
+  }
+
+  for (const row of speechEvents) {
+    const taskType = cleanText(row.task_type, "speech");
+    for (const metric of metricsForRow(row, cleanText(row.provider, "speech"), taskType)) {
+      metric.speech_event_count += 1;
+      metric.estimated_cost_usd =
+        (metric.estimated_cost_usd || 0) + numberValue(row.estimated_cost_usd);
+      if (cleanText(row.status) === "error") metric.error_count += 1;
+    }
+  }
+
+  for (const row of sessions) {
+    for (const metric of metricsForRow(row)) {
+      metric.session_count += 1;
+      if (cleanText(row.status) === "complete") metric.completion_count += 1;
+    }
+  }
+
+  const sanitizeModelEvent = (row: DbRow) => ({
+    id: row.id,
+    user_id: row.user_id || null,
+    organization_id: row.organization_id || null,
+    class_id: row.class_id || null,
+    session_id: row.session_id || null,
+    lesson_id: row.lesson_id || null,
+    provider: row.provider || "openai",
+    model: row.model || "unknown",
+    task_type: row.task_type || "mentor_turn",
+    input_tokens: numberValue(row.input_tokens),
+    output_tokens: numberValue(row.output_tokens),
+    cached_tokens: numberValue(row.cached_tokens),
+    estimated_cost_usd: showCost ? numberValue(row.estimated_cost_usd) : null,
+    latency_ms: row.latency_ms || null,
+    status: row.status || "ok",
+    created_at: row.created_at || null,
+  });
+
+  return {
+    scope,
+    dashboard: {
+      generated_at: new Date().toISOString(),
+      visibility: showCost ? "full_cost" : "scoped_usage",
+      totals: finishCostMetric(total, showCost),
+      by_organization: sortedMetrics(byOrganization, showCost),
+      by_class: sortedMetrics(byClass, showCost),
+      by_student: sortedMetrics(byStudent, showCost).slice(0, 40),
+      by_model: sortedMetrics(byModel, showCost),
+      by_task_type: sortedMetrics(byTaskType, showCost),
+      by_lesson: sortedMetrics(byLesson, showCost).slice(0, 40),
+      recent_model_events: modelEvents.slice(0, 30).map(sanitizeModelEvent),
+      recent_runtime_errors: runtimeEvents
+        .filter((row) => cleanText(row.status) === "error")
+        .slice(0, 30),
+      recent_speech_events: speechEvents.slice(0, 30).map((row) => ({
+        id: row.id,
+        user_id: row.user_id || null,
+        organization_id: row.organization_id || null,
+        class_id: row.class_id || null,
+        session_id: row.session_id || null,
+        provider: row.provider || "browser",
+        task_type: row.task_type || "speech",
+        duration_seconds: numberValue(row.duration_seconds),
+        character_count: numberValue(row.character_count),
+        estimated_cost_usd: showCost ? numberValue(row.estimated_cost_usd) : null,
+        status: row.status || "ok",
+        created_at: row.created_at || null,
+      })),
+    },
+  };
+}
+
+async function handleListCostModelDashboard(
+  config: Config,
+  access: ActorAccess,
+): Promise<Response> {
+  const data = await buildCostModelDashboard(config, access);
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      scope: data.scope,
+      cost_model_dashboard: data.dashboard,
+    },
+  });
+}
+
 async function handleCreateClass(
   config: Config,
   actorId: string,
@@ -1449,6 +1893,8 @@ Deno.serve(async (req: Request) => {
       return await handleListAdminScope(config, actorAccess);
     if (action === "list_pilot_readiness")
       return await handleListPilotReadiness(config, actorAccess);
+    if (action === "list_cost_model_dashboard")
+      return await handleListCostModelDashboard(config, actorAccess);
     if (action === "export_class_snapshot")
       return await handleExportClassSnapshot(config, actorAccess, record);
     if (action === "create_class")

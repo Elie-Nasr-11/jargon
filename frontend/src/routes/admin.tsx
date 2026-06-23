@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
+  Activity,
   AlertCircle,
   Archive,
+  BarChart3,
   CheckCircle2,
   ClipboardList,
   Download,
+  DollarSign,
   KeyRound,
   Plus,
   RefreshCw,
@@ -19,6 +22,7 @@ import { SettingsMenu } from "@/components/SettingsMenu";
 import {
   exportClassSnapshot,
   fetchAdminScope,
+  fetchCostModelDashboard,
   fetchPilotReadiness,
   getSession,
   invokeAdminOps,
@@ -31,6 +35,8 @@ import type {
   AdminSeedResult,
   AdminSeedUser,
   ClassReadiness,
+  CostModelDashboard,
+  CostModelMetric,
   PilotReadiness,
   PilotRole,
   ReadinessStatus,
@@ -145,6 +151,38 @@ function readinessTone(status: ReadinessStatus) {
   return "border-red-500/45 text-red-500";
 }
 
+function formatNumber(value: number | null | undefined) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value || 0);
+}
+
+function formatCompactNumber(value: number | null | undefined) {
+  return new Intl.NumberFormat(undefined, {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value || 0);
+}
+
+function formatUsd(value: number | null | undefined) {
+  if (value === null || value === undefined) return "Hidden";
+  if (value > 0 && value < 0.01) return "<$0.01";
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: value < 1 ? 4 : 2,
+  }).format(value);
+}
+
+function formatMs(value: number | null | undefined) {
+  if (!value) return "n/a";
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}s`;
+  return `${Math.round(value)}ms`;
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value === null || value === undefined) return "n/a";
+  return `${Math.round(value * 100)}%`;
+}
+
 function downloadTextFile(filename: string, body: string, contentType: string) {
   const blob = new Blob([body], { type: contentType });
   const url = URL.createObjectURL(blob);
@@ -188,6 +226,9 @@ function AdminPage() {
   const [readiness, setReadiness] = useState<PilotReadiness | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [readinessMessage, setReadinessMessage] = useState("");
+  const [costDashboard, setCostDashboard] = useState<CostModelDashboard | null>(null);
+  const [costLoading, setCostLoading] = useState(false);
+  const [costMessage, setCostMessage] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -199,7 +240,10 @@ function AdminPage() {
           return;
         }
         const allowed = await refreshScope(session.access_token);
-        if (allowed) void refreshReadiness(session.access_token, true);
+        if (allowed) {
+          void refreshReadiness(session.access_token, true);
+          void refreshCostDashboard(session.access_token, true);
+        }
         if (!alive) return;
         setEmail(session.user.email || "");
         setToken(session.access_token);
@@ -268,6 +312,25 @@ function AdminPage() {
       return false;
     } finally {
       setReadinessLoading(false);
+    }
+  };
+
+  const refreshCostDashboard = async (accessToken = token, silent = false) => {
+    if (!accessToken) return false;
+    setCostLoading(true);
+    if (!silent) setCostMessage("");
+    try {
+      const data = await fetchCostModelDashboard(accessToken);
+      setActorAccess(data.actorAccess);
+      setScope(data.scope);
+      setCostDashboard(data.dashboard);
+      if (!silent) setCostMessage("AI/runtime dashboard refreshed.");
+      return true;
+    } catch (error) {
+      setCostMessage((error as Error).message || "Could not load AI/runtime dashboard.");
+      return false;
+    } finally {
+      setCostLoading(false);
     }
   };
 
@@ -409,6 +472,7 @@ function AdminPage() {
       blocked: classes.filter((item) => item.status === "blocked").length,
     };
   }, [readiness]);
+  const costVisible = costDashboard?.visibility === "full_cost";
 
   const copyLoginInstructions = async (item: ClassReadiness | null) => {
     if (!item) {
@@ -1010,6 +1074,143 @@ function AdminPage() {
                   {!readiness?.open_alerts.length ? (
                     <div className="text-[12px] text-muted-foreground">
                       No open intervention alerts in scope.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </GradientCard>
+
+        <GradientCard>
+          <div className="space-y-5 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  <Activity className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  AI/runtime operations
+                </div>
+                <h2 className="text-[18px] font-medium text-foreground">
+                  Usage, reliability, and model load
+                </h2>
+                <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                  {costVisible
+                    ? "Platform admins see estimated model cost, tokens, latency, and failure signals across the pilot."
+                    : "Org admins see scoped usage and reliability. Dollar-cost totals stay platform-admin only."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void refreshCostDashboard()}
+                disabled={costLoading}
+                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${costLoading ? "animate-spin" : ""}`}
+                  strokeWidth={1.6}
+                />
+                Refresh metrics
+              </button>
+            </div>
+
+            {costMessage ? (
+              <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                {costMessage}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <MetricStat
+                icon={<DollarSign className="h-4 w-4" strokeWidth={1.6} />}
+                label="Estimated cost"
+                value={formatUsd(costDashboard?.totals.estimated_cost_usd)}
+              />
+              <MetricStat
+                icon={<BarChart3 className="h-4 w-4" strokeWidth={1.6} />}
+                label="Total tokens"
+                value={formatCompactNumber(costDashboard?.totals.total_tokens)}
+              />
+              <MetricStat
+                label="Model events"
+                value={formatNumber(costDashboard?.totals.model_event_count)}
+              />
+              <MetricStat
+                label="Avg latency"
+                value={formatMs(costDashboard?.totals.average_latency_ms)}
+              />
+              <MetricStat
+                label="Errors"
+                value={`${formatNumber(costDashboard?.totals.error_count)} · ${formatPercent(
+                  costDashboard?.totals.error_rate,
+                )}`}
+              />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <CostMetricTable
+                title="Model breakdown"
+                rows={costDashboard?.by_model || []}
+                showCost={costVisible}
+                empty="No model usage recorded yet."
+              />
+              <CostMetricTable
+                title="Task type breakdown"
+                rows={costDashboard?.by_task_type || []}
+                showCost={costVisible}
+                empty="No task usage recorded yet."
+              />
+            </div>
+
+            <CostMetricTable
+              title="Class operating load"
+              rows={costDashboard?.by_class || []}
+              showCost={costVisible}
+              empty="No class-scoped usage recorded yet."
+              wide
+            />
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                <h3 className="text-[14px] font-medium text-foreground">Recent model events</h3>
+                <div className="mt-3 space-y-2">
+                  {(costDashboard?.recent_model_events || []).slice(0, 6).map((event) => (
+                    <div key={event.id} className="border-b border-border/55 pb-2 text-[12px]">
+                      <div className="text-foreground">
+                        {event.model} · {event.task_type.replaceAll("_", " ")}
+                      </div>
+                      <div className="mt-0.5 text-muted-foreground">
+                        {formatCompactNumber(
+                          event.input_tokens + event.output_tokens + event.cached_tokens,
+                        )}{" "}
+                        tokens · {formatMs(event.latency_ms)} ·{" "}
+                        {formatUsd(event.estimated_cost_usd)}
+                      </div>
+                    </div>
+                  ))}
+                  {!costDashboard?.recent_model_events.length ? (
+                    <div className="text-[12px] text-muted-foreground">
+                      No model events recorded yet.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                <h3 className="text-[14px] font-medium text-foreground">Runtime errors</h3>
+                <div className="mt-3 space-y-2">
+                  {(costDashboard?.recent_runtime_errors || []).slice(0, 6).map((event) => (
+                    <div key={event.id} className="border-b border-border/55 pb-2 text-[12px]">
+                      <div className="text-foreground">
+                        {event.event_type} · {event.lesson_id || "no lesson"}
+                      </div>
+                      <div className="mt-0.5 text-muted-foreground">
+                        {event.session_id || "no session"} · {formatDate(event.created_at)}
+                      </div>
+                    </div>
+                  ))}
+                  {!costDashboard?.recent_runtime_errors.length ? (
+                    <div className="text-[12px] text-muted-foreground">
+                      No runtime errors in the current scope.
                     </div>
                   ) : null}
                 </div>
@@ -1746,6 +1947,103 @@ function Stat({ label, value }: { label: string; value: number }) {
       <div className="text-[24px] font-semibold leading-none text-foreground">{value}</div>
       <div className="mt-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
         {label}
+      </div>
+    </div>
+  );
+}
+
+function MetricStat({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/75 bg-background/45 p-4">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        {icon}
+        <span className="text-[10.5px] uppercase tracking-[0.1em]">{label}</span>
+      </div>
+      <div className="mt-2 text-[22px] font-semibold leading-none text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function CostMetricTable({
+  title,
+  rows,
+  showCost,
+  empty,
+  wide = false,
+}: {
+  title: string;
+  rows: CostModelMetric[];
+  showCost: boolean;
+  empty: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+      <h3 className="text-[14px] font-medium text-foreground">{title}</h3>
+      <div className="mt-3 overflow-x-auto">
+        <table
+          className={`${wide ? "min-w-[860px]" : "min-w-[620px]"} w-full border-collapse text-left text-[12px]`}
+        >
+          <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+            <tr>
+              <th className="py-2 pr-3 font-medium">Scope</th>
+              <th className="py-2 pr-3 font-medium">Model</th>
+              <th className="py-2 pr-3 font-medium">Tokens</th>
+              <th className="py-2 pr-3 font-medium">Events</th>
+              <th className="py-2 pr-3 font-medium">Latency</th>
+              <th className="py-2 font-medium">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, wide ? 12 : 8).map((row) => (
+              <tr key={row.key} className="border-b border-border/55">
+                <td className="py-2 pr-3">
+                  <div className="font-medium text-foreground">{row.label}</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    {row.completion_count} completions · {row.session_count} sessions
+                  </div>
+                </td>
+                <td className="py-2 pr-3 text-muted-foreground">
+                  {row.model || row.task_type?.replaceAll("_", " ") || "mixed"}
+                </td>
+                <td className="py-2 pr-3 text-muted-foreground">
+                  {formatCompactNumber(row.total_tokens)}
+                </td>
+                <td className="py-2 pr-3 text-muted-foreground">
+                  {formatNumber(
+                    row.model_event_count + row.runtime_event_count + row.speech_event_count,
+                  )}
+                  {row.error_count ? (
+                    <span className="ml-1 text-amber-500">
+                      ({row.error_count} error{row.error_count === 1 ? "" : "s"})
+                    </span>
+                  ) : null}
+                </td>
+                <td className="py-2 pr-3 text-muted-foreground">
+                  {formatMs(row.average_latency_ms)}
+                </td>
+                <td className="py-2 text-muted-foreground">
+                  {showCost ? formatUsd(row.estimated_cost_usd) : "Hidden"}
+                </td>
+              </tr>
+            ))}
+            {!rows.length ? (
+              <tr>
+                <td className="py-4 text-muted-foreground" colSpan={6}>
+                  {empty}
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
       </div>
     </div>
   );

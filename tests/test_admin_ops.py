@@ -46,6 +46,7 @@ class AdminOpsStaticTests(unittest.TestCase):
         for fragment in (
             '"list_admin_scope"',
             '"list_pilot_readiness"',
+            '"list_cost_model_dashboard"',
             '"export_class_snapshot"',
             '"create_class"',
             '"update_class"',
@@ -61,6 +62,11 @@ class AdminOpsStaticTests(unittest.TestCase):
             "admin.class_updated",
             "buildPilotReadiness",
             "handleExportClassSnapshot",
+            "buildCostModelDashboard",
+            "handleListCostModelDashboard",
+            "model_usage_events",
+            "speech_usage_events",
+            "runtime_events",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.function)
@@ -93,10 +99,12 @@ class AdminOpsStaticTests(unittest.TestCase):
         self.assertIn("invokeAdminOps", self.api)
         self.assertIn("fetchAdminScope", self.api)
         self.assertIn("fetchPilotReadiness", self.api)
+        self.assertIn("fetchCostModelDashboard", self.api)
         self.assertIn("exportClassSnapshot", self.api)
         self.assertIn("AdminActorAccess", self.types)
         self.assertIn("AdminScope", self.types)
         self.assertIn("PilotReadiness", self.types)
+        self.assertIn("CostModelDashboard", self.types)
         self.assertIn("ClassSnapshotExport", self.types)
 
     def test_snapshot_export_does_not_include_passwords(self):
@@ -114,6 +122,12 @@ class AdminOpsStaticTests(unittest.TestCase):
         for fragment in (
             "Operations dashboard",
             "Pilot Readiness",
+            "AI/runtime operations",
+            "Usage, reliability, and model load",
+            "Estimated cost",
+            "Model breakdown",
+            "Task type breakdown",
+            "Class operating load",
             "Classroom launch command center",
             "Roster/account health",
             "Export CSV",

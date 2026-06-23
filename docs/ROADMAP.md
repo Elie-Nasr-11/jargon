@@ -25,8 +25,11 @@ Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete en
 - School-readiness / Pilot Ops v1 is implemented repo-side: `/admin` now has Pilot Readiness,
   scoped class snapshot CSV export, roster/account health, support/error panels, and copyable
   password-free login instructions; `/teacher` has a compact class readiness strip.
-- Next implementation slice after deploy/live smoke: cost/model dashboards. Media extraction and
-  Voice v2 remain deferred.
+- Cost/Model Dashboard v1 is implemented repo-side: `/admin` now has AI/runtime operations metrics,
+  model/task/class breakdowns, platform-admin estimated cost visibility, and org-admin scoped
+  usage/reliability without dollar totals.
+- Next step after deploy/live smoke: decide between media extraction/transcription or external
+  school integrations. Voice v2 remains deferred.
 
 ## Product Direction Locked
 
@@ -188,6 +191,8 @@ Exit criteria: teacher can answer why a student is weak on a skill and see linke
 
 Goal: make the product economically viable.
 
+- Status: Cost/Model Dashboard v1 is implemented repo-side as the first ops view over
+  `model_usage_events`, `runtime_events`, `speech_usage_events`, and `learning_sessions`.
 - Add model routing by turn type.
 - Track token/cost per student, user, session, class, and organization.
 - Run a cost-to-quality spike before locking model routing.
