@@ -6,6 +6,68 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 22:20
+
+Status: Media Processing v2 implemented and pushed; DB migration live; Edge Function deploy blocked by missing local Supabase access token
+
+What changed:
+
+- Added migration `0015_media_transcription.sql`:
+  - expands `resource_processing_jobs.job_type` to include `audio_transcription` and `video_transcription`;
+  - adds transcript metadata to `resource_text_chunks`: `source_kind`, `start_seconds`, `end_seconds`, `confidence`;
+  - keeps anon access revoked.
+- Extended `resource-processing`:
+  - new `transcribe_media_resource` action for uploaded `audio`/`video`;
+  - validates OpenAI-supported file types: `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `wav`, `webm`;
+  - rejects files over 25 MB;
+  - uses `OPENAI_API_KEY` server-side only;
+  - saves transcript chunks as `draft` for teacher review.
+- Extended `/teacher` resource manager:
+  - uploaded PDFs still show `Extract PDF text`;
+  - uploaded audio/video now show `Transcribe audio` / `Transcribe video`;
+  - review UI labels audio/video chunks by timestamp instead of page.
+- Extended `chat` Mentor context:
+  - still loads only `approved` resource chunks;
+  - PDF/document chunks can be cited by title/page;
+  - audio/video chunks can be cited by title/time range.
+- Updated `docs/MEDIA_PROCESSING.md`, roadmap docs, and static media tests.
+
+Verification:
+
+- Commit: `a4ccbe5` (`Add audio video resource transcription`).
+- Pushed GitHub `main`: success.
+- Applied Supabase migration `media_transcription` to project `qztpieiizmiayzjhezwh`: success.
+- Local checks:
+  - `python3 -m unittest tests/test_media_processing.py -q` -> passed.
+  - `python3 -m unittest discover -s tests -q` -> 143 tests passed, 4 skipped.
+  - `python3 tools/validate_examples.py examples legacy/examples` -> 136 files passed.
+  - `cd frontend && npx tsc --noEmit` -> passed.
+  - `cd frontend && npm run lint` -> passed with existing warnings only.
+  - `cd frontend && npm run build` -> passed.
+  - `git diff --check` -> passed.
+
+Deploy blocker:
+
+- Local `supabase` CLI is not installed.
+- `npx supabase` works, but deploy failed because no `SUPABASE_ACCESS_TOKEN` is available:
+  `Access token not provided. Supply an access token by running supabase login or setting the SUPABASE_ACCESS_TOKEN environment variable.`
+
+Required next live step:
+
+```bash
+cd /Users/elias/Documents/Codex/2026-06-15/heres-the-jargon-interpreter-code-this/jargon-rebuild
+SUPABASE_ACCESS_TOKEN=<token> npx supabase functions deploy resource-processing --project-ref qztpieiizmiayzjhezwh
+SUPABASE_ACCESS_TOKEN=<token> npx supabase functions deploy chat --project-ref qztpieiizmiayzjhezwh
+```
+
+Then live-smoke:
+
+- Teacher uploads/transcribes a small audio/video file under 25 MB.
+- Draft transcript chunks appear in `/teacher`.
+- Teacher approves one chunk.
+- Student opens the lesson/resource in `/chat`.
+- Mentor references the approved transcript context with title/time range.
+
 ## Codex -> Claude / Human - 2026-06-23 21:23
 
 Status: Google Classroom OAuth acceptance attempted; blocked on missing Google OAuth secrets
