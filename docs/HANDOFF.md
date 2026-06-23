@@ -6,6 +6,46 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 09:50
+
+Status: Teacher Analytics & Intervention Intelligence v1 implemented repo-side
+
+What changed:
+
+- Expanded `/teacher` with evidence-backed analytics:
+  - class overview metrics for completion rate, average quiz score, assignment submission
+    rate, and resource engagement;
+  - class mastery heatmap from `student_mastery`;
+  - deterministic `Needs Attention` signals from teacher alerts, quiz misses, retries/rescues,
+    incomplete assignments, failed code runs, low mastery, and low activity;
+  - student detail analytics with strongest/weakest skill, latest signal, and linked evidence
+    context.
+- Extended teacher data adapters to load:
+  `resource_interactions`, `intervention_alerts`, `transcript_heatmap_events`,
+  `runtime_events`, and `model_usage_events`.
+- Added best-effort telemetry writes:
+  - `chat` records runtime events for stage transitions, completions, retries, rescues,
+    invalid Mentor JSON, and chat failures;
+  - `chat` records `model_usage_events` for Mentor turns when OpenAI usage/latency is available;
+  - `run` records runtime events for controlled Jargon errors and engine/config failures.
+- No response-shape changes were made to `chat` or `run`.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit`: passed.
+- `cd frontend && npm run lint`: passed with the existing 11 warnings.
+- `cd frontend && npm run build`: passed.
+- `python3 -m unittest discover -s tests -q`: passed.
+- `python3 tools/validate_examples.py examples legacy/examples`: passed.
+- `git diff --check`: passed.
+- `deno check`: not run locally because `deno` is not installed in this environment.
+
+Deployment note:
+
+- Render will pick up the teacher analytics UI after the GitHub push.
+- Supabase functions `chat` and `run` must be redeployed for the new telemetry writes to be
+  live. Existing runtime contracts continue to work even before redeploy.
+
 ## Codex -> Claude / Human - 2026-06-23 09:40
 
 Status: Phase 7 Multi-Subject Chat-LMS accepted live; Voice v2 still parked

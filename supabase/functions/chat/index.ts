@@ -117,6 +117,15 @@ type SupabaseConfig = {
 
 type DbRow = Record<string, unknown>;
 
+type OpenAIResult = {
+  content: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  latencyMs: number;
+};
+
 type Assessment = {
   score?: number;
   passed?: boolean;
@@ -360,6 +369,70 @@ async function patchRows(
   });
 }
 
+async function recordRuntimeEvent(
+  config: SupabaseConfig,
+  row: {
+    userId?: string | null;
+    sessionId?: string | null;
+    lessonId?: string | null;
+    eventType:
+      | "chat_failure"
+      | "run_failure"
+      | "stage_transition"
+      | "completion"
+      | "retry"
+      | "rescue"
+      | "controlled_error";
+    status?: "ok" | "error";
+    latencyMs?: number | null;
+    payload?: DbRow;
+  },
+): Promise<void> {
+  try {
+    await insertRow(config, "runtime_events", {
+      user_id: row.userId || null,
+      session_id: row.sessionId || null,
+      lesson_id: row.lessonId || null,
+      event_type: row.eventType,
+      status: row.status || "ok",
+      latency_ms: row.latencyMs ?? null,
+      payload: row.payload || {},
+    });
+  } catch {
+    // Observability must never block the lesson flow.
+  }
+}
+
+async function recordModelUsage(
+  config: SupabaseConfig,
+  userId: string,
+  sessionId: string,
+  lessonId: string,
+  usage: OpenAIResult,
+  taskType: "mentor_turn" | "grading" | "rescue" = "mentor_turn",
+  status: "ok" | "error" = "ok",
+): Promise<void> {
+  try {
+    await insertRow(config, "model_usage_events", {
+      user_id: userId,
+      session_id: sessionId,
+      lesson_id: lessonId,
+      provider: "openai",
+      model: usage.model,
+      task_type: taskType,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+      cached_tokens: usage.cachedTokens,
+      estimated_cost_usd: null,
+      latency_ms: usage.latencyMs,
+      status,
+      payload: {},
+    });
+  } catch {
+    // Best-effort cost/usage telemetry.
+  }
+}
+
 async function loadFirst(
   config: SupabaseConfig,
   path: string,
@@ -406,17 +479,19 @@ async function loadOrCreateSession(
 async function callOpenAI(
   messages: unknown[],
   jsonMode: boolean,
-): Promise<string> {
+): Promise<OpenAIResult> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
+  const model = "gpt-4o";
 
   const body: DbRow = {
-    model: "gpt-4o",
+    model,
     messages,
     temperature: 0.35,
   };
   if (jsonMode) body.response_format = { type: "json_object" };
 
+  const startedAt = Date.now();
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -428,7 +503,19 @@ async function callOpenAI(
 
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || res.statusText);
-  return data?.choices?.[0]?.message?.content || "";
+  const usage = data?.usage && typeof data.usage === "object" ? data.usage : {};
+  const promptDetails =
+    usage.prompt_tokens_details && typeof usage.prompt_tokens_details === "object"
+      ? usage.prompt_tokens_details
+      : {};
+  return {
+    content: data?.choices?.[0]?.message?.content || "",
+    model: typeof data?.model === "string" ? data.model : model,
+    inputTokens: Number(usage.prompt_tokens || 0),
+    outputTokens: Number(usage.completion_tokens || 0),
+    cachedTokens: Number(promptDetails.cached_tokens || 0),
+    latencyMs: Date.now() - startedAt,
+  };
 }
 
 function stringArray(value: unknown): string[] {
@@ -1002,7 +1089,7 @@ async function handleLegacyRequest(
 
   try {
     const reply = await callOpenAI(chatHistory, false);
-    return json({ reply: reply || "No response." });
+    return json({ reply: reply.content || "No response." });
   } catch (err) {
     return json({ reply: `Error: ${errorMessage(err)}` }, 500);
   }
@@ -1012,6 +1099,7 @@ async function handleTypedRequest(
   req: Request,
   body: Record<string, unknown>,
 ): Promise<Response> {
+  const requestStartedAt = Date.now();
   const lessonId = typeof body.lesson_id === "string" ? body.lesson_id : "";
   if (!lessonId) return typedError("lesson_id is required.", 400);
 
@@ -1128,11 +1216,29 @@ async function handleTypedRequest(
       },
     ];
 
-    const contentJson = await callOpenAI(messages, true);
+    const openAIResult = await callOpenAI(messages, true);
+    await recordModelUsage(
+      config,
+      userId,
+      sessionId,
+      lessonId,
+      openAIResult,
+      draftFlow.nextAction === "rescue" ? "rescue" : "mentor_turn",
+    );
+    const contentJson = openAIResult.content;
     let parsed: DbRow;
     try {
       parsed = JSON.parse(contentJson);
     } catch {
+      await recordRuntimeEvent(config, {
+        userId,
+        sessionId,
+        lessonId,
+        eventType: "chat_failure",
+        status: "error",
+        latencyMs: Date.now() - requestStartedAt,
+        payload: { reason: "invalid_mentor_json" },
+      });
       return typedError("Mentor returned invalid JSON.", 502, {
         session_id: sessionId,
         lesson_id: lessonId,
@@ -1248,6 +1354,7 @@ async function handleTypedRequest(
 
     const retryIncrement = envelope.next_action === "retry" ? 1 : 0;
     const rescueIncrement = envelope.next_action === "rescue" ? 1 : 0;
+    const nextStatus = sessionStatus(finalFlow);
     await patchRows(
       config,
       `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`,
@@ -1255,7 +1362,7 @@ async function handleTypedRequest(
         current_activity_id:
           typeof context.activity?.id === "string" ? context.activity.id : null,
         stage: envelope.stage,
-        status: sessionStatus(finalFlow),
+        status: nextStatus,
         score:
           typeof assessment?.score === "number"
             ? Math.max(Number(session.score || 0), assessment.score)
@@ -1266,8 +1373,47 @@ async function handleTypedRequest(
       },
     );
 
+    if (currentStage !== envelope.stage) {
+      await recordRuntimeEvent(config, {
+        userId,
+        sessionId,
+        lessonId,
+        eventType: "stage_transition",
+        latencyMs: Date.now() - requestStartedAt,
+        payload: { from_stage: currentStage, to_stage: envelope.stage, next_action: envelope.next_action },
+      });
+    }
+    if (envelope.next_action === "complete" || nextStatus === "complete") {
+      await recordRuntimeEvent(config, {
+        userId,
+        sessionId,
+        lessonId,
+        eventType: "completion",
+        latencyMs: Date.now() - requestStartedAt,
+        payload: { stage: envelope.stage, score: assessment?.score ?? null },
+      });
+    } else if (envelope.next_action === "retry" || envelope.next_action === "rescue") {
+      await recordRuntimeEvent(config, {
+        userId,
+        sessionId,
+        lessonId,
+        eventType: envelope.next_action,
+        latencyMs: Date.now() - requestStartedAt,
+        payload: { stage: envelope.stage, assessment },
+      });
+    }
+
     return json(envelope);
   } catch (err) {
+    await recordRuntimeEvent(config, {
+      userId,
+      sessionId,
+      lessonId,
+      eventType: "chat_failure",
+      status: "error",
+      latencyMs: Date.now() - requestStartedAt,
+      payload: { message: errorMessage(err) },
+    });
     return typedError(errorMessage(err), 500, {
       session_id: sessionId,
       lesson_id: lessonId,

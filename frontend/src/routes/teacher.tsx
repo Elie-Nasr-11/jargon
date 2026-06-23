@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   Archive,
+  AlertTriangle,
+  BarChart3,
   BookOpen,
   Check,
   CheckCircle2,
@@ -14,6 +16,7 @@ import {
   NotebookText,
   Paperclip,
   Send,
+  TrendingUp,
   UsersRound,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
@@ -38,6 +41,7 @@ import type {
   AssignmentSubmission,
   AssignmentSubmissionFile,
   ChatInputModality,
+  InterventionAlert,
   LearningSession,
   Lesson,
   LessonResource,
@@ -47,6 +51,7 @@ import type {
   LessonResourceType,
   LessonResourceVisibility,
   Profile,
+  StudentMastery,
   TeacherClassSummary,
   TeacherDashboardData,
   TeacherNote,
@@ -649,6 +654,13 @@ function ClassDetail({
             <MiniMetric label="Evidence" value={String(stats.evidence)} />
           </div>
         </div>
+
+        <ClassAnalyticsPanel
+          dashboard={dashboard}
+          studentIds={studentIds}
+          lessonsById={lessonsById}
+          onSelectStudent={onSelectStudent}
+        />
 
         <GradebookTable
           lessons={lessons}
@@ -1792,6 +1804,152 @@ function AssignmentManager({
   );
 }
 
+function ClassAnalyticsPanel({
+  dashboard,
+  studentIds,
+  lessonsById,
+  onSelectStudent,
+}: {
+  dashboard: TeacherDashboardData;
+  studentIds: string[];
+  lessonsById: Map<string, Lesson>;
+  onSelectStudent: (studentId: string) => void;
+}) {
+  const analytics = classAnalyticsFor(dashboard, studentIds);
+  const signals = riskSignalsForClass(dashboard, studentIds, lessonsById);
+  const masteryRows = masteryRowsForClass(dashboard, studentIds);
+  const profilesById = new Map(dashboard.profiles.map((profile) => [profile.id, profile]));
+
+  return (
+    <div className="mt-6 grid gap-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <AnalyticsMetric
+          label="Completion rate"
+          value={formatPercent(analytics.completionRate)}
+          detail={`${analytics.completedSessions}/${analytics.startedSessions} started sessions complete`}
+        />
+        <AnalyticsMetric
+          label="Average quiz score"
+          value={formatPercent(analytics.averageQuizScore)}
+          detail={`${analytics.quizAttempts} quiz attempt${analytics.quizAttempts === 1 ? "" : "s"}`}
+        />
+        <AnalyticsMetric
+          label="Assignment submissions"
+          value={formatPercent(analytics.assignmentSubmissionRate)}
+          detail={`${analytics.submittedAssignments}/${analytics.assignedAssignments} assigned work items submitted`}
+        />
+        <AnalyticsMetric
+          label="Resource engagement"
+          value={formatPercent(analytics.resourceEngagementRate)}
+          detail={`${analytics.resourceOpened} opened / ${analytics.resourceShown} shown`}
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <Panel title="Mastery heatmap" icon={<TrendingUp className="h-4 w-4" strokeWidth={1.6} />}>
+          {masteryRows.length ? (
+            <div className="grid gap-2">
+              {masteryRows.map((row) => (
+                <div
+                  key={row.skill}
+                  className="rounded-2xl border border-border bg-background/45 p-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[13px] font-medium text-foreground">{row.skill}</div>
+                    <div className="text-[12px] text-muted-foreground">
+                      {row.students} student{row.students === 1 ? "" : "s"} - {row.evidence}{" "}
+                      evidence
+                    </div>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full ${masteryBarClass(row.averageScore)}`}
+                      style={{ width: `${Math.max(4, Math.round(row.averageScore * 100))}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11.5px] text-muted-foreground">
+                    <span>Avg {formatPercent(row.averageScore)}</span>
+                    <span>{row.secure} secure</span>
+                    <span>{row.developing} developing</span>
+                    <span>{row.emerging} emerging</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyInline
+              title="No mastery yet"
+              body="Mastery signals appear after assessed student work."
+            />
+          )}
+        </Panel>
+
+        <Panel
+          title="Needs Attention"
+          icon={<AlertTriangle className="h-4 w-4" strokeWidth={1.6} />}
+        >
+          {signals.length ? (
+            <div className="space-y-2">
+              {signals.slice(0, 8).map((signal) => {
+                const profile = profilesById.get(signal.studentId) || null;
+                return (
+                  <button
+                    key={`${signal.studentId}-${signal.kind}-${signal.sourceId}`}
+                    type="button"
+                    onClick={() => onSelectStudent(signal.studentId)}
+                    className="w-full rounded-2xl border border-border bg-background/45 p-3 text-left transition-colors hover:bg-muted"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-medium text-foreground">
+                        {displayName(profile, signal.studentId)}
+                      </span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10.5px] ${severityClass(
+                          signal.severity,
+                        )}`}
+                      >
+                        {signal.severity}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[12.5px] text-foreground">{signal.title}</div>
+                    <div className="mt-1 text-[11.5px] text-muted-foreground">{signal.detail}</div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyInline
+              title="No deterministic alerts"
+              body="Risk signals appear only from real attempts, quiz misses, mastery, assignments, or teacher alerts."
+            />
+          )}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-3xl border border-border bg-background/30 p-4">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+        <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.6} />
+        {label}
+      </div>
+      <div className="mt-2 font-serif text-[28px] leading-none text-foreground">{value}</div>
+      <div className="mt-2 text-[12px] text-muted-foreground">{detail}</div>
+    </div>
+  );
+}
+
 function GradebookTable({
   lessons,
   lessonsById,
@@ -2126,6 +2284,12 @@ function StudentDetail({
           </div>
         ) : null}
 
+        <StudentAnalyticsPanel
+          dashboard={dashboard}
+          studentId={studentId}
+          lessonsById={lessonsById}
+        />
+
         <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
           <Panel title="Transcript" icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}>
             {sessions.length ? (
@@ -2338,6 +2502,79 @@ function StudentDetail({
   );
 }
 
+function StudentAnalyticsPanel({
+  dashboard,
+  studentId,
+  lessonsById,
+}: {
+  dashboard: TeacherDashboardData;
+  studentId: string;
+  lessonsById: Map<string, Lesson>;
+}) {
+  const analytics = studentAnalyticsFor(dashboard, studentId);
+  const signals = riskSignalsForClass(dashboard, [studentId], lessonsById);
+  const strongest = dashboard.mastery
+    .filter((item) => item.user_id === studentId)
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))[0];
+  const weakest = dashboard.mastery
+    .filter((item) => item.user_id === studentId)
+    .sort((a, b) => Number(a.score || 0) - Number(b.score || 0))[0];
+
+  return (
+    <div className="mt-5 rounded-3xl border border-border bg-background/30 p-4">
+      <div className="mb-3 flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+        <BarChart3 className="h-4 w-4" strokeWidth={1.6} />
+        Student analytics
+      </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <MiniMetric label="Completion" value={formatPercent(analytics.completionRate)} />
+        <MiniMetric label="Quiz avg" value={formatPercent(analytics.averageQuizScore)} />
+        <MiniMetric label="Resources" value={String(analytics.resourceOpened)} />
+        <MiniMetric label="Alerts" value={String(signals.length)} />
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        <div className="rounded-2xl border border-border bg-background/45 p-3">
+          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            Strongest skill
+          </div>
+          <div className="mt-1 text-[13px] text-foreground">
+            {strongest ? strongest.skill_key : "No mastery yet"}
+          </div>
+          <div className="mt-1 text-[12px] text-muted-foreground">
+            {strongest
+              ? `${formatPercent(strongest.score)} · ${strongest.evidence_count} evidence`
+              : "Complete assessed work to populate this."}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border bg-background/45 p-3">
+          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            Weakest skill
+          </div>
+          <div className="mt-1 text-[13px] text-foreground">
+            {weakest ? weakest.skill_key : "No mastery yet"}
+          </div>
+          <div className="mt-1 text-[12px] text-muted-foreground">
+            {weakest
+              ? `${formatPercent(weakest.score)} · ${weakest.evidence_count} evidence`
+              : "No weak signal recorded."}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border bg-background/45 p-3">
+          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            Latest signal
+          </div>
+          <div className="mt-1 text-[13px] text-foreground">
+            {signals[0]?.title || "No attention signal"}
+          </div>
+          <div className="mt-1 text-[12px] text-muted-foreground">
+            {signals[0]?.detail || "Signals are derived from records, not AI guesses."}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <GradientCard>
@@ -2534,6 +2771,280 @@ type GradebookRow = {
   needsAttention: boolean;
 };
 
+type ClassAnalytics = {
+  startedSessions: number;
+  completedSessions: number;
+  completionRate: number | null;
+  quizAttempts: number;
+  averageQuizScore: number | null;
+  assignedAssignments: number;
+  submittedAssignments: number;
+  assignmentSubmissionRate: number | null;
+  resourceShown: number;
+  resourceOpened: number;
+  resourceEngagementRate: number | null;
+};
+
+type StudentAnalytics = {
+  completionRate: number | null;
+  averageQuizScore: number | null;
+  resourceOpened: number;
+};
+
+type MasteryHeatmapRow = {
+  skill: string;
+  averageScore: number;
+  students: number;
+  evidence: number;
+  secure: number;
+  developing: number;
+  emerging: number;
+};
+
+type RiskSignal = {
+  studentId: string;
+  kind:
+    | "intervention"
+    | "quiz_miss"
+    | "failed_attempt"
+    | "retry"
+    | "low_mastery"
+    | "assignment"
+    | "no_activity";
+  title: string;
+  detail: string;
+  severity: "low" | "medium" | "high";
+  sourceId: string;
+};
+
+function classAnalyticsFor(dashboard: TeacherDashboardData, studentIds: string[]): ClassAnalytics {
+  const students = new Set(studentIds);
+  const sessions = dashboard.sessions.filter((session) => students.has(session.user_id));
+  const completedSessions = sessions.filter((session) => session.status === "complete");
+  const quizAttempts = dashboard.quizAttempts.filter((attempt) => students.has(attempt.user_id));
+  const scoredQuizAttempts = quizAttempts.filter((attempt) => typeof attempt.score === "number");
+  const recipients = dashboard.assignmentRecipients.filter((recipient) =>
+    students.has(recipient.user_id),
+  );
+  const submittedAssignments = recipients.filter((recipient) => {
+    const hasSubmission = dashboard.assignmentSubmissions.some(
+      (submission) =>
+        submission.assignment_id === recipient.assignment_id &&
+        submission.user_id === recipient.user_id,
+    );
+    return hasSubmission || recipient.status === "submitted" || recipient.status === "complete";
+  });
+  const resourceInteractions = dashboard.resourceInteractions.filter((interaction) =>
+    students.has(interaction.user_id),
+  );
+  const shown = resourceInteractions.filter((interaction) => interaction.event_type === "shown");
+  const opened = resourceInteractions.filter((interaction) =>
+    ["opened", "played", "completed", "downloaded"].includes(interaction.event_type),
+  );
+
+  return {
+    startedSessions: sessions.length,
+    completedSessions: completedSessions.length,
+    completionRate: ratio(completedSessions.length, sessions.length),
+    quizAttempts: quizAttempts.length,
+    averageQuizScore: scoredQuizAttempts.length
+      ? scoredQuizAttempts.reduce((sum, attempt) => sum + Number(attempt.score || 0), 0) /
+        scoredQuizAttempts.length
+      : null,
+    assignedAssignments: recipients.length,
+    submittedAssignments: submittedAssignments.length,
+    assignmentSubmissionRate: ratio(submittedAssignments.length, recipients.length),
+    resourceShown: shown.length,
+    resourceOpened: opened.length,
+    resourceEngagementRate: ratio(opened.length, shown.length),
+  };
+}
+
+function studentAnalyticsFor(dashboard: TeacherDashboardData, studentId: string): StudentAnalytics {
+  const sessions = dashboard.sessions.filter((session) => session.user_id === studentId);
+  const completed = sessions.filter((session) => session.status === "complete");
+  const quizAttempts = dashboard.quizAttempts.filter((attempt) => attempt.user_id === studentId);
+  const scoredQuizAttempts = quizAttempts.filter((attempt) => typeof attempt.score === "number");
+  const resourceOpened = dashboard.resourceInteractions.filter(
+    (interaction) =>
+      interaction.user_id === studentId &&
+      ["opened", "played", "completed", "downloaded"].includes(interaction.event_type),
+  ).length;
+
+  return {
+    completionRate: ratio(completed.length, sessions.length),
+    averageQuizScore: scoredQuizAttempts.length
+      ? scoredQuizAttempts.reduce((sum, attempt) => sum + Number(attempt.score || 0), 0) /
+        scoredQuizAttempts.length
+      : null,
+    resourceOpened,
+  };
+}
+
+function masteryRowsForClass(
+  dashboard: TeacherDashboardData,
+  studentIds: string[],
+): MasteryHeatmapRow[] {
+  const students = new Set(studentIds);
+  const bySkill = new Map<string, StudentMastery[]>();
+  dashboard.mastery
+    .filter((item) => students.has(item.user_id))
+    .forEach((item) => {
+      const rows = bySkill.get(item.skill_key) || [];
+      rows.push(item);
+      bySkill.set(item.skill_key, rows);
+    });
+
+  return Array.from(bySkill.entries())
+    .map(([skill, rows]) => {
+      const averageScore = rows.reduce((sum, row) => sum + Number(row.score || 0), 0) / rows.length;
+      return {
+        skill,
+        averageScore,
+        students: rows.length,
+        evidence: rows.reduce((sum, row) => sum + Number(row.evidence_count || 0), 0),
+        secure: rows.filter((row) => Number(row.score || 0) >= 0.85).length,
+        developing: rows.filter((row) => {
+          const score = Number(row.score || 0);
+          return score >= 0.55 && score < 0.85;
+        }).length,
+        emerging: rows.filter((row) => Number(row.score || 0) < 0.55).length,
+      };
+    })
+    .sort((a, b) => a.averageScore - b.averageScore || b.evidence - a.evidence)
+    .slice(0, 8);
+}
+
+function riskSignalsForClass(
+  dashboard: TeacherDashboardData,
+  studentIds: string[],
+  lessonsById: Map<string, Lesson>,
+): RiskSignal[] {
+  const signals: RiskSignal[] = [];
+  const seen = new Set<string>();
+  const add = (signal: RiskSignal) => {
+    const key = `${signal.studentId}-${signal.kind}-${signal.sourceId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    signals.push(signal);
+  };
+
+  for (const studentId of studentIds) {
+    const sessions = dashboard.sessions.filter((session) => session.user_id === studentId);
+    if (!sessions.length) {
+      add({
+        studentId,
+        kind: "no_activity",
+        title: "No lesson activity yet",
+        detail: "Student has not started a tracked lesson.",
+        severity: "low",
+        sourceId: "no-session",
+      });
+    }
+
+    dashboard.interventionAlerts
+      .filter(
+        (alert) =>
+          alert.student_id === studentId &&
+          (alert.status === "open" || alert.status === "acknowledged"),
+      )
+      .forEach((alert) => add(interventionSignal(alert)));
+
+    sessions
+      .filter((session) => session.status === "needs_retry" || session.status === "needs_rescue")
+      .forEach((session) =>
+        add({
+          studentId,
+          kind: "retry",
+          title: session.status === "needs_rescue" ? "Rescue path active" : "Retry path active",
+          detail: `${lessonName(lessonsById, session.lesson_id)} is ${session.stage}.`,
+          severity: session.status === "needs_rescue" ? "high" : "medium",
+          sourceId: session.id,
+        }),
+      );
+
+    dashboard.quizAttempts
+      .filter((attempt) => attempt.user_id === studentId && attempt.passed === false)
+      .slice(0, 2)
+      .forEach((attempt) =>
+        add({
+          studentId,
+          kind: "quiz_miss",
+          title: "Quiz checkpoint missed",
+          detail: `${lessonName(lessonsById, attempt.lesson_id)} · score ${formatScore(
+            attempt.score,
+          )}`,
+          severity: "medium",
+          sourceId: attempt.id,
+        }),
+      );
+
+    dashboard.attempts
+      .filter((attempt) => attempt.user_id === studentId && attempt.passed === false)
+      .slice(0, 2)
+      .forEach((attempt) =>
+        add({
+          studentId,
+          kind: "failed_attempt",
+          title: "Lesson attempt did not pass",
+          detail: `${lessonName(lessonsById, attempt.lesson_id)} · ${attempt.answer_mode}`,
+          severity: attempt.answer_mode === "code" ? "medium" : "low",
+          sourceId: attempt.id,
+        }),
+      );
+
+    dashboard.mastery
+      .filter((item) => item.user_id === studentId && Number(item.score || 0) < 0.55)
+      .slice(0, 2)
+      .forEach((item) =>
+        add({
+          studentId,
+          kind: "low_mastery",
+          title: "Low skill mastery",
+          detail: `${item.skill_key} · ${formatPercent(Number(item.score || 0))}`,
+          severity: "medium",
+          sourceId: item.skill_key,
+        }),
+      );
+
+    dashboard.assignmentRecipients
+      .filter((recipient) => {
+        if (recipient.user_id !== studentId) return false;
+        if (recipient.status === "submitted" || recipient.status === "complete") return false;
+        return dashboard.assignments.some((assignment) => {
+          return assignment.id === recipient.assignment_id && assignment.status === "assigned";
+        });
+      })
+      .slice(0, 2)
+      .forEach((recipient) => {
+        const assignment = dashboard.assignments.find(
+          (item) => item.id === recipient.assignment_id,
+        );
+        add({
+          studentId,
+          kind: "assignment",
+          title: "Assigned work not submitted",
+          detail: assignment?.title || "Assignment is still open.",
+          severity: "low",
+          sourceId: recipient.id,
+        });
+      });
+  }
+
+  return signals.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+}
+
+function interventionSignal(alert: InterventionAlert): RiskSignal {
+  return {
+    studentId: alert.student_id,
+    kind: "intervention",
+    title: alert.title || "Teacher intervention alert",
+    detail: alert.detail || `${alert.alert_type} · ${alert.status}`,
+    severity: alert.severity || "medium",
+    sourceId: alert.id,
+  };
+}
+
 function summarizeClass(dashboard: TeacherDashboardData, classId: string): ClassSummary {
   const studentIds = new Set(
     dashboard.memberships
@@ -2716,6 +3227,24 @@ function lessonStatusClass(status: LessonProgressStatus) {
   return "border-border bg-background/45 text-muted-foreground";
 }
 
+function severityClass(severity: "low" | "medium" | "high") {
+  if (severity === "high") return "border-red-500/35 bg-red-500/10 text-red-500";
+  if (severity === "medium") return "border-amber-500/35 bg-amber-500/10 text-amber-500";
+  return "border-blue-500/35 bg-blue-500/10 text-blue-500";
+}
+
+function severityRank(severity: "low" | "medium" | "high") {
+  if (severity === "high") return 3;
+  if (severity === "medium") return 2;
+  return 1;
+}
+
+function masteryBarClass(score: number) {
+  if (score >= 0.85) return "bg-emerald-500";
+  if (score >= 0.55) return "bg-amber-500";
+  return "bg-red-500";
+}
+
 function displayName(profile: Profile | null | undefined, userId: string) {
   return profile?.name || `Student ${userId.slice(0, 8)}`;
 }
@@ -2760,6 +3289,16 @@ function formatScore(score: number | null | undefined) {
   if (score === null || score === undefined) return "n/a";
   if (score <= 1) return `${Math.round(score * 100)}%`;
   return `${Math.round(score)}%`;
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
+}
+
+function ratio(numerator: number, denominator: number) {
+  if (!denominator) return null;
+  return numerator / denominator;
 }
 
 function formatPass(value: boolean | null | undefined) {

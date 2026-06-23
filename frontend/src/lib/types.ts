@@ -263,6 +263,12 @@ export type ResourceInteractionEvent = {
   progress_percent?: number;
 };
 
+export type ResourceInteraction = ResourceInteractionEvent & {
+  id: string;
+  user_id: string;
+  created_at: string;
+};
+
 export type ChatInputModality = "typed" | "dictated" | "audio_session";
 
 export type VoiceInteractionEventType =
@@ -291,6 +297,89 @@ export type VoiceInteractionEvent = {
   transcript_confidence?: number | null;
   duration_seconds?: number | null;
   payload?: Record<string, unknown>;
+};
+
+export type InterventionAlert = {
+  id: string;
+  student_id: string;
+  class_id: string | null;
+  lesson_id: string | null;
+  session_id: string | null;
+  alert_type: string;
+  title: string;
+  detail: string | null;
+  severity: "low" | "medium" | "high";
+  status: "open" | "acknowledged" | "resolved" | "dismissed";
+  payload: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TranscriptHeatmapEvent = {
+  id: string;
+  session_id: string;
+  user_id: string;
+  lesson_id: string | null;
+  turn_id: string | null;
+  event_type:
+    | "confusion"
+    | "retry"
+    | "rescue"
+    | "quiz_miss"
+    | "failed_code_run"
+    | "low_confidence_dictation"
+    | "teacher_intervention";
+  intensity: number;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RuntimeEvent = {
+  id: string;
+  user_id: string | null;
+  organization_id: string | null;
+  class_id: string | null;
+  session_id: string | null;
+  lesson_id: string | null;
+  event_type:
+    | "chat_failure"
+    | "run_failure"
+    | "stage_transition"
+    | "completion"
+    | "retry"
+    | "rescue"
+    | "controlled_error";
+  status: "ok" | "error";
+  latency_ms: number | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ModelUsageEvent = {
+  id: string;
+  user_id: string | null;
+  organization_id: string | null;
+  class_id: string | null;
+  session_id: string | null;
+  lesson_id: string | null;
+  provider: string;
+  model: string;
+  task_type:
+    | "mentor_turn"
+    | "grading"
+    | "rescue"
+    | "authoring"
+    | "summarization"
+    | "speech_to_text"
+    | "text_to_speech";
+  input_tokens: number;
+  output_tokens: number;
+  cached_tokens: number;
+  estimated_cost_usd: number | null;
+  latency_ms: number | null;
+  status: "ok" | "error";
+  payload: Record<string, unknown>;
+  created_at: string;
 };
 
 export type LearningSession = {
@@ -609,6 +698,11 @@ export type TeacherDashboardData = {
   mastery: StudentMastery[];
   notes: TeacherNote[];
   resources: LessonResource[];
+  resourceInteractions: ResourceInteraction[];
+  interventionAlerts: InterventionAlert[];
+  heatmapEvents: TranscriptHeatmapEvent[];
+  runtimeEvents: RuntimeEvent[];
+  modelUsageEvents: ModelUsageEvent[];
   assignments: Assignment[];
   assignmentRecipients: AssignmentRecipient[];
   assignmentSubmissions: AssignmentSubmission[];

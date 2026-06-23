@@ -35,7 +35,8 @@ class SupabaseRunFunctionStaticTests(unittest.TestCase):
             self.assertIn(field, helper)
 
     def test_run_function_passes_engine_json_through(self):
-        self.assertIn("return json(JSON.parse(text), res.status);", self.source)
+        self.assertIn("const data = JSON.parse(text);", self.source)
+        self.assertIn("return json(data, res.status);", self.source)
         self.assertIn("Engine returned non-JSON response", self.source)
         self.assertIn("AbortController", self.source)
         self.assertIn("Engine request timed out", self.source)

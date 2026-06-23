@@ -14,7 +14,11 @@ Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete en
 - Resource-backed lessons, assignment review, curriculum authoring, and browser voice support are live enough to support the next multi-subject slice.
 - The first Phase 7 non-coding lesson path is live and accepted:
   `Logic Foundations -> Clear Thinking -> Claims, Reasons, Evidence -> What Makes a Good Reason?`.
-- Next implementation slice: choose based on demo priority after reviewing pilot needs.
+- Teacher Analytics & Intervention Intelligence v1 is implemented repo-side: class metrics,
+  mastery heatmaps, deterministic Needs Attention signals, student drilldowns, and lightweight
+  runtime/model telemetry hooks.
+- Next implementation slice after live QA: live teacher watching/comments, media processing, or
+  org-admin polish depending on the pilot demo priority.
 
 ## Product Direction Locked
 
@@ -160,6 +164,7 @@ Exit criteria: teacher uploads a PDF, extraction creates reviewed chunks, and Me
 
 Goal: personalization becomes explainable.
 
+- Status: v1 implemented repo-side for teacher-demo analytics; live QA/deploy remains.
 - Add dashboards for mastery, attempts, quiz trends, code-run success, resource engagement, common errors, rescue/retry frequency, assignments, and teacher interventions.
 - Let Mentor adapt pace, hint level, rescue choice, resource recommendation, quiz timing, and assignment recommendation.
 

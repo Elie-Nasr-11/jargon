@@ -18,6 +18,7 @@ import type {
   CurriculumSubject,
   CurriculumUnit,
   JargonRunResponse,
+  InterventionAlert,
   LearningSession,
   LearningTurn,
   Lesson,
@@ -29,16 +30,20 @@ import type {
   LessonResourceType,
   LessonResourceVisibility,
   LearningEvidence,
+  ModelUsageEvent,
   AdminSeedResponse,
   AdminSeedUser,
   MentorPreferences,
   Profile,
   QuizAttempt,
+  ResourceInteraction,
   StudentMastery,
   TeacherClassSummary,
   TeacherClassMembership,
   TeacherDashboardData,
   TeacherNote,
+  RuntimeEvent,
+  TranscriptHeatmapEvent,
   ResourceInteractionEvent,
   StudentAssignmentBundle,
   TypedChatAnswer,
@@ -479,6 +484,11 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
       mastery: [],
       notes: [],
       resources: [],
+      resourceInteractions: [],
+      interventionAlerts: [],
+      heatmapEvents: [],
+      runtimeEvents: [],
+      modelUsageEvents: [],
       assignments: [],
       assignmentRecipients: [],
       assignmentSubmissions: [],
@@ -513,6 +523,11 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     masteryResult,
     notesResult,
     resourcesResult,
+    resourceInteractionsResult,
+    interventionAlertsResult,
+    heatmapEventsResult,
+    runtimeEventsResult,
+    modelUsageEventsResult,
     assignmentsResult,
   ] = await Promise.all([
     profileIds.length
@@ -569,6 +584,46 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .order("created_at", { ascending: false })
           .limit(200)
       : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("resource_interactions")
+          .select("*")
+          .in("user_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("intervention_alerts")
+          .select("*")
+          .in("student_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(250)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("transcript_heatmap_events")
+          .select("*")
+          .in("user_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("runtime_events")
+          .select("*")
+          .in("user_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: [], error: null }),
+    studentIds.length
+      ? supabase
+          .from("model_usage_events")
+          .select("*")
+          .in("user_id", studentIds)
+          .order("created_at", { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: [], error: null }),
     classIds.length
       ? supabase
           .from("assignments")
@@ -588,6 +643,11 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     masteryResult,
     notesResult,
     resourcesResult,
+    resourceInteractionsResult,
+    interventionAlertsResult,
+    heatmapEventsResult,
+    runtimeEventsResult,
+    modelUsageEventsResult,
     assignmentsResult,
   ]) {
     if (result.error) throw result.error;
@@ -658,6 +718,11 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     mastery: (masteryResult.data || []) as StudentMastery[],
     notes: (notesResult.data || []) as TeacherNote[],
     resources: (resourcesResult.data || []) as LessonResource[],
+    resourceInteractions: (resourceInteractionsResult.data || []) as ResourceInteraction[],
+    interventionAlerts: (interventionAlertsResult.data || []) as InterventionAlert[],
+    heatmapEvents: (heatmapEventsResult.data || []) as TranscriptHeatmapEvent[],
+    runtimeEvents: (runtimeEventsResult.data || []) as RuntimeEvent[],
+    modelUsageEvents: (modelUsageEventsResult.data || []) as ModelUsageEvent[],
     assignments,
     assignmentRecipients: (assignmentRecipientsResult.data || []) as AssignmentRecipient[],
     assignmentSubmissions: (assignmentSubmissionsResult.data || []) as AssignmentSubmission[],
