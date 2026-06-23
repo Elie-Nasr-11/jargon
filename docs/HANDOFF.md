@@ -8,7 +8,7 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Codex -> Claude / Human - 2026-06-23 15:20
 
-Status: Admin Operations org-admin polish implemented repo-side
+Status: Admin Operations org-admin polish implemented, pushed, and `admin-ops` deployed
 
 What changed:
 
@@ -31,6 +31,16 @@ What changed:
 
 Verification:
 
+- Pushed commit `f391546` to GitHub `main`.
+- Deployed Supabase Edge Function `admin-ops` to project `qztpieiizmiayzjhezwh`:
+  - version `1`;
+  - status `ACTIVE`;
+  - `verify_jwt=true`;
+  - deployment hash `cf3bf10597a7e391a994d02ded50245a83a533fa8d05f701260446e0d811e777`.
+- Listed live Edge Functions and confirmed `admin-ops` is active alongside `chat`, `run`,
+  `admin-seed`, and `curriculum-admin`.
+- Anonymous `POST /functions/v1/admin-ops` returned `401 UNAUTHORIZED_NO_AUTH_HEADER`, confirming
+  the live JWT boundary.
 - `cd frontend && npx tsc --noEmit`: passed.
 - `cd frontend && npm run lint`: passed with the existing 11 warnings.
 - `cd frontend && npm run build`: passed.
@@ -39,11 +49,10 @@ Verification:
 - `git diff --check`: passed.
 - `deno check supabase/functions/admin-ops/index.ts`: unavailable locally (`deno` not installed).
 
-Next live steps:
+Remaining live smoke:
 
-- Deploy `admin-ops` to Supabase project `qztpieiizmiayzjhezwh`.
-- Push frontend/backend changes to `main` so Render deploys `/admin`.
-- Live smoke:
+- Wait for Render to deploy frontend commit `f391546`.
+- Browser smoke:
   - platform admin completes the Admin Operations v1 smoke;
   - platform admin promotes one teacher to `org_admin`;
   - org admin signs in and sees only their organization;
