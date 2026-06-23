@@ -1,5 +1,6 @@
-// Jargon platform admin operations.
-// Platform-admin only: uses service-role access for account, membership, and audit operations.
+// Jargon admin operations.
+// Platform admins have global access; org admins are scoped to their own organization.
+// Service-role access stays inside this Edge Function.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
@@ -19,6 +20,11 @@ type Config = {
 };
 
 type MembershipType = "organization" | "class";
+
+type ActorAccess = {
+  level: "platform_admin" | "org_admin";
+  organizationIds: string[];
+};
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -129,17 +135,132 @@ async function fetchCurrentUser(config: Config): Promise<DbRow> {
   return data as DbRow;
 }
 
-async function assertPlatformAdmin(
+async function fetchActorAccess(
   config: Config,
   userId: string,
-): Promise<void> {
-  const data = await serviceFetch(
+): Promise<ActorAccess> {
+  const platformData = await serviceFetch(
     config,
     `/rest/v1/platform_admins?user_id=eq.${encodeURIComponent(userId)}&select=user_id&limit=1`,
   );
-  if (!Array.isArray(data) || !data[0]) {
-    throw new Error("Platform admin access is required.");
+  if (Array.isArray(platformData) && platformData[0]) {
+    return { level: "platform_admin", organizationIds: [] };
   }
+
+  const orgData = await serviceFetch(
+    config,
+    `/rest/v1/organization_memberships?user_id=eq.${encodeURIComponent(userId)}&role=eq.org_admin&status=eq.active&select=organization_id`,
+  );
+  const organizationIds = Array.isArray(orgData)
+    ? orgData
+        .map((row) =>
+          row && typeof row === "object"
+            ? cleanId((row as DbRow).organization_id)
+            : "",
+        )
+        .filter(Boolean)
+    : [];
+  if (!organizationIds.length) throw new Error("Admin access is required.");
+  return {
+    level: "org_admin",
+    organizationIds: Array.from(new Set(organizationIds)),
+  };
+}
+
+function actorAccessPayload(access: ActorAccess): DbRow {
+  return {
+    level: access.level,
+    organization_ids: access.organizationIds,
+  };
+}
+
+function inFilter(column: string, values: string[]): string {
+  return `${column}=in.(${values.map((value) => encodeURIComponent(value)).join(",")})`;
+}
+
+function hasOrganizationAccess(
+  access: ActorAccess,
+  organizationId: string,
+): boolean {
+  return (
+    access.level === "platform_admin" ||
+    access.organizationIds.includes(organizationId)
+  );
+}
+
+function requireOrganizationAccess(
+  access: ActorAccess,
+  organizationId: string,
+): void {
+  if (!organizationId || !hasOrganizationAccess(access, organizationId)) {
+    throw new Error("Admin access for this organization is required.");
+  }
+}
+
+async function fetchClassOrganizationId(
+  config: Config,
+  classId: string,
+): Promise<string> {
+  const classRow = await selectFirst(
+    config,
+    `classes?id=eq.${encodeURIComponent(classId)}&select=id,organization_id`,
+  );
+  const organizationId = classRow ? cleanId(classRow.organization_id) : "";
+  if (!organizationId) throw new Error("Class not found.");
+  return organizationId;
+}
+
+async function requireMembershipAccess(
+  config: Config,
+  access: ActorAccess,
+  type: MembershipType,
+  membership: DbRow,
+  options: { allowOrgAdminOrgMembership?: boolean } = {},
+): Promise<{ organizationId: string | null; classId: string | null }> {
+  if (type === "organization") {
+    const organizationId = cleanId(membership.organization_id);
+    requireOrganizationAccess(access, organizationId);
+    if (
+      access.level !== "platform_admin" &&
+      cleanText(membership.role) === "org_admin" &&
+      !options.allowOrgAdminOrgMembership
+    ) {
+      throw new Error("Only platform admins may manage org-admin memberships.");
+    }
+    return { organizationId, classId: null };
+  }
+
+  const classId = cleanId(membership.class_id);
+  const organizationId = await fetchClassOrganizationId(config, classId);
+  requireOrganizationAccess(access, organizationId);
+  return { organizationId, classId };
+}
+
+async function fetchAccessibleOrgMembershipsForUser(
+  config: Config,
+  access: ActorAccess,
+  userId: string,
+): Promise<DbRow[]> {
+  const scopedFilter =
+    access.level === "platform_admin"
+      ? ""
+      : `&${inFilter("organization_id", access.organizationIds)}`;
+  return selectRows(
+    config,
+    `organization_memberships?user_id=eq.${encodeURIComponent(userId)}${scopedFilter}&select=*`,
+  );
+}
+
+async function scopeResponse(
+  config: Config,
+  access: ActorAccess,
+  extra: DbRow = {},
+): Promise<DbRow> {
+  return {
+    actor_access: actorAccessPayload(access),
+    scope: await loadAdminScope(config, access),
+    ...extra,
+  };
 }
 
 async function selectRows(config: Config, path: string): Promise<DbRow[]> {
@@ -259,49 +380,81 @@ async function listAllAuthUsers(config: Config): Promise<DbRow[]> {
   return users;
 }
 
-async function loadAdminScope(config: Config): Promise<DbRow> {
-  const [
-    organizations,
-    classes,
-    organizationMemberships,
-    classMemberships,
-    profiles,
-    seedBatches,
-    auditEvents,
-    authUsers,
-  ] = await Promise.all([
-    selectRows(
-      config,
-      "organizations?select=id,name,slug,organization_type,status,created_at,updated_at&order=name.asc",
-    ),
-    selectRows(
-      config,
-      "classes?select=id,organization_id,name,class_code,status,created_by,created_at,updated_at&order=name.asc",
-    ),
-    selectRows(
-      config,
-      "organization_memberships?select=id,organization_id,user_id,role,status,created_at,updated_at&order=created_at.desc",
-    ),
-    selectRows(
-      config,
-      "class_memberships?select=id,class_id,user_id,role,status,created_at,updated_at&order=created_at.desc",
-    ),
-    selectRows(config, "profiles?select=id,name,grade"),
-    selectRows(
-      config,
-      "admin_account_seed_batches?select=id,label,status,summary,created_at,updated_at,organization_id,class_id&order=created_at.desc&limit=30",
-    ),
-    selectRows(
-      config,
-      "audit_events?select=id,actor_id,organization_id,class_id,event_type,entity_type,entity_id,payload,created_at&order=created_at.desc&limit=100",
-    ),
-    listAllAuthUsers(config),
-  ]);
+async function loadAdminScope(
+  config: Config,
+  access: ActorAccess,
+): Promise<DbRow> {
+  const orgFilter =
+    access.level === "platform_admin"
+      ? ""
+      : `${inFilter("id", access.organizationIds)}&`;
+  const organizations = await selectRows(
+    config,
+    `organizations?${orgFilter}select=id,name,slug,organization_type,status,created_at,updated_at&order=name.asc`,
+  );
+  const organizationIds = organizations
+    .map((row) => cleanId(row.id))
+    .filter(Boolean);
+  if (access.level === "org_admin" && !organizationIds.length) {
+    return {
+      organizations: [],
+      classes: [],
+      organization_memberships: [],
+      class_memberships: [],
+      profiles: [],
+      seed_batches: [],
+      audit_events: [],
+      users: [],
+    };
+  }
+
+  const scopedOrgQuery =
+    access.level === "platform_admin"
+      ? ""
+      : `${inFilter("organization_id", organizationIds)}&`;
+  const [classes, organizationMemberships, seedBatches, auditEvents] =
+    await Promise.all([
+      selectRows(
+        config,
+        `classes?${scopedOrgQuery}select=id,organization_id,name,class_code,status,created_by,created_at,updated_at&order=name.asc`,
+      ),
+      selectRows(
+        config,
+        `organization_memberships?${scopedOrgQuery}select=id,organization_id,user_id,role,status,created_at,updated_at&order=created_at.desc`,
+      ),
+      selectRows(
+        config,
+        `admin_account_seed_batches?${scopedOrgQuery}select=id,label,status,summary,created_at,updated_at,organization_id,class_id&order=created_at.desc&limit=30`,
+      ),
+      selectRows(
+        config,
+        `audit_events?${scopedOrgQuery}select=id,actor_id,organization_id,class_id,event_type,entity_type,entity_id,payload,created_at&order=created_at.desc&limit=100`,
+      ),
+    ]);
+
+  const classIds = classes.map((row) => cleanId(row.id)).filter(Boolean);
+  const classMemberships = classIds.length
+    ? await selectRows(
+        config,
+        `class_memberships?${inFilter("class_id", classIds)}&select=id,class_id,user_id,role,status,created_at,updated_at&order=created_at.desc`,
+      )
+    : [];
 
   const memberIds = new Set<string>();
   for (const row of [...organizationMemberships, ...classMemberships]) {
     if (typeof row.user_id === "string") memberIds.add(row.user_id);
   }
+
+  const memberIdList = Array.from(memberIds);
+  const [profiles, authUsers] = await Promise.all([
+    memberIdList.length
+      ? selectRows(
+          config,
+          `profiles?${inFilter("id", memberIdList)}&select=id,name,grade`,
+        )
+      : [],
+    listAllAuthUsers(config),
+  ]);
 
   const users = authUsers
     .filter(
@@ -327,13 +480,17 @@ async function loadAdminScope(config: Config): Promise<DbRow> {
   };
 }
 
-async function handleListAdminScope(config: Config): Promise<Response> {
-  return json({ status: "ok", data: await loadAdminScope(config) });
+async function handleListAdminScope(
+  config: Config,
+  access: ActorAccess,
+): Promise<Response> {
+  return json({ status: "ok", data: await scopeResponse(config, access) });
 }
 
 async function handleCreateClass(
   config: Config,
   actorId: string,
+  access: ActorAccess,
   body: DbRow,
 ): Promise<Response> {
   const organizationId = cleanId(body.organization_id);
@@ -343,6 +500,7 @@ async function handleCreateClass(
       : {};
   const name = cleanText(payload.name || body.class_name);
   if (!organizationId) throw new Error("organization_id is required.");
+  requireOrganizationAccess(access, organizationId);
   if (!name) throw new Error("Class name is required.");
 
   const classRow = await insertRow(config, "classes", {
@@ -363,13 +521,14 @@ async function handleCreateClass(
 
   return json({
     status: "ok",
-    data: { class: classRow, scope: await loadAdminScope(config) },
+    data: await scopeResponse(config, access, { class: classRow }),
   });
 }
 
 async function handleUpdateClass(
   config: Config,
   actorId: string,
+  access: ActorAccess,
   body: DbRow,
 ): Promise<Response> {
   const classId = cleanId(body.class_id);
@@ -384,6 +543,7 @@ async function handleUpdateClass(
     `classes?id=eq.${encodeURIComponent(classId)}&select=*`,
   );
   if (!existing) throw new Error("Class not found.");
+  requireOrganizationAccess(access, cleanId(existing.organization_id));
 
   const patch: DbRow = { updated_at: new Date().toISOString() };
   const name = cleanText(payload.name);
@@ -417,13 +577,14 @@ async function handleUpdateClass(
 
   return json({
     status: "ok",
-    data: { class: updated[0] || null, scope: await loadAdminScope(config) },
+    data: await scopeResponse(config, access, { class: updated[0] || null }),
   });
 }
 
 async function handleResetPassword(
   config: Config,
   actorId: string,
+  access: ActorAccess,
   body: DbRow,
 ): Promise<Response> {
   const userId = cleanId(body.user_id);
@@ -433,6 +594,15 @@ async function handleResetPassword(
     throw new Error(
       "A temporary password of at least 6 characters is required.",
     );
+
+  const memberships = await fetchAccessibleOrgMembershipsForUser(
+    config,
+    access,
+    userId,
+  );
+  if (access.level !== "platform_admin" && !memberships.length) {
+    throw new Error("Admin access for this user is required.");
+  }
 
   await serviceFetch(
     config,
@@ -444,13 +614,15 @@ async function handleResetPassword(
   );
   await audit(config, {
     actorId,
+    organizationId:
+      memberships.length > 0 ? cleanId(memberships[0].organization_id) : null,
     eventType: "admin.password_reset",
     entityType: "auth_user",
     entityId: userId,
     payload: { password_supplied: true },
   });
 
-  return json({ status: "ok", data: { scope: await loadAdminScope(config) } });
+  return json({ status: "ok", data: await scopeResponse(config, access) });
 }
 
 function membershipTable(type: MembershipType): string {
@@ -520,12 +692,14 @@ async function auditMembership(
     patch: DbRow;
   },
 ) {
+  const classId =
+    input.type === "class" ? cleanId(input.membership.class_id) : null;
   const organizationId =
     input.type === "organization"
       ? cleanId(input.membership.organization_id)
-      : null;
-  const classId =
-    input.type === "class" ? cleanId(input.membership.class_id) : null;
+      : classId
+        ? await fetchClassOrganizationId(config, classId)
+        : null;
   await audit(config, {
     actorId: input.actorId,
     organizationId,
@@ -545,6 +719,7 @@ async function auditMembership(
 async function handleUpdateMembershipStatus(
   config: Config,
   actorId: string,
+  access: ActorAccess,
   body: DbRow,
 ): Promise<Response> {
   const payload =
@@ -558,6 +733,7 @@ async function handleUpdateMembershipStatus(
   if (!membershipId) throw new Error("membership_id is required.");
 
   const membership = await fetchMembership(config, type, membershipId);
+  await requireMembershipAccess(config, access, type, membership);
   const status = normalizeMembershipStatus(type, body.status || payload.status);
   const patch = { status, updated_at: new Date().toISOString() };
   const updated = await patchRows(
@@ -575,16 +751,16 @@ async function handleUpdateMembershipStatus(
 
   return json({
     status: "ok",
-    data: {
+    data: await scopeResponse(config, access, {
       membership: updated[0] || null,
-      scope: await loadAdminScope(config),
-    },
+    }),
   });
 }
 
 async function handleUpdateMembershipRole(
   config: Config,
   actorId: string,
+  access: ActorAccess,
   body: DbRow,
 ): Promise<Response> {
   const payload =
@@ -598,6 +774,13 @@ async function handleUpdateMembershipRole(
   if (!membershipId) throw new Error("membership_id is required.");
 
   const membership = await fetchMembership(config, type, membershipId);
+  if (type === "organization" && access.level !== "platform_admin") {
+    throw new Error("Only platform admins may change organization roles.");
+  }
+  await requireMembershipAccess(config, access, type, membership, {
+    allowOrgAdminOrgMembership:
+      type === "organization" && access.level === "platform_admin",
+  });
   const role = normalizeMembershipRole(type, body.role || payload.role);
   const patch = { role, updated_at: new Date().toISOString() };
   const updated = await patchRows(
@@ -615,16 +798,16 @@ async function handleUpdateMembershipRole(
 
   return json({
     status: "ok",
-    data: {
+    data: await scopeResponse(config, access, {
       membership: updated[0] || null,
-      scope: await loadAdminScope(config),
-    },
+    }),
   });
 }
 
 async function handleAddExistingUser(
   config: Config,
   actorId: string,
+  access: ActorAccess,
   body: DbRow,
 ): Promise<Response> {
   const organizationId = cleanId(body.organization_id);
@@ -638,19 +821,47 @@ async function handleAddExistingUser(
   if (!organizationId || !classId || !userId) {
     throw new Error("organization_id, class_id, and user_id are required.");
   }
+  requireOrganizationAccess(access, organizationId);
+  const classOrganizationId = await fetchClassOrganizationId(config, classId);
+  if (classOrganizationId !== organizationId) {
+    throw new Error("Class does not belong to the selected organization.");
+  }
 
-  const orgMembership = await upsertByConflict(
+  let orgMembership: DbRow | null = null;
+  const existingOrgMembership = await selectFirst(
     config,
-    "organization_memberships",
-    "organization_id,user_id",
-    {
-      organization_id: organizationId,
-      user_id: userId,
-      role,
-      status: "active",
-      updated_at: new Date().toISOString(),
-    },
+    `organization_memberships?organization_id=eq.${encodeURIComponent(organizationId)}&user_id=eq.${encodeURIComponent(userId)}&select=*`,
   );
+  if (access.level === "platform_admin") {
+    if (existingOrgMembership) {
+      const patched = await patchRows(
+        config,
+        `organization_memberships?id=eq.${encodeURIComponent(cleanId(existingOrgMembership.id))}`,
+        { status: "active", updated_at: new Date().toISOString() },
+      );
+      orgMembership = patched[0] || existingOrgMembership;
+    } else {
+      orgMembership = await upsertByConflict(
+        config,
+        "organization_memberships",
+        "organization_id,user_id",
+        {
+          organization_id: organizationId,
+          user_id: userId,
+          role,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        },
+      );
+    }
+  } else {
+    if (!existingOrgMembership || existingOrgMembership.status !== "active") {
+      throw new Error(
+        "Org admins may add only existing active organization users to classes.",
+      );
+    }
+    orgMembership = existingOrgMembership;
+  }
   const classMembership = await upsertByConflict(
     config,
     "class_memberships",
@@ -674,13 +885,13 @@ async function handleAddExistingUser(
     payload: {
       user_id: userId,
       role,
-      organization_membership_id: orgMembership.id || null,
+      organization_membership_id: orgMembership?.id || null,
     },
   });
 
   return json({
     status: "ok",
-    data: { membership: classMembership, scope: await loadAdminScope(config) },
+    data: await scopeResponse(config, access, { membership: classMembership }),
   });
 }
 
@@ -700,7 +911,7 @@ Deno.serve(async (req: Request) => {
   try {
     const actor = await fetchCurrentUser(config);
     const actorId = String(actor.id);
-    await assertPlatformAdmin(config, actorId);
+    const actorAccess = await fetchActorAccess(config, actorId);
 
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -710,28 +921,42 @@ Deno.serve(async (req: Request) => {
     const record = body as DbRow;
     const action = cleanText(record.action);
     if (action === "list_admin_scope")
-      return await handleListAdminScope(config);
+      return await handleListAdminScope(config, actorAccess);
     if (action === "create_class")
-      return await handleCreateClass(config, actorId, record);
+      return await handleCreateClass(config, actorId, actorAccess, record);
     if (action === "update_class")
-      return await handleUpdateClass(config, actorId, record);
+      return await handleUpdateClass(config, actorId, actorAccess, record);
     if (action === "reset_user_password")
-      return await handleResetPassword(config, actorId, record);
+      return await handleResetPassword(config, actorId, actorAccess, record);
     if (action === "update_membership_status") {
-      return await handleUpdateMembershipStatus(config, actorId, record);
+      return await handleUpdateMembershipStatus(
+        config,
+        actorId,
+        actorAccess,
+        record,
+      );
     }
     if (action === "update_membership_role")
-      return await handleUpdateMembershipRole(config, actorId, record);
+      return await handleUpdateMembershipRole(
+        config,
+        actorId,
+        actorAccess,
+        record,
+      );
     if (action === "add_existing_user_to_class")
-      return await handleAddExistingUser(config, actorId, record);
+      return await handleAddExistingUser(config, actorId, actorAccess, record);
     return errorResponse("Unsupported admin-ops action.", 400);
   } catch (error) {
     const message = errorMessage(error);
-    const status = message.includes("Platform admin")
-      ? 403
-      : message.includes("authenticated") || message.includes("Authentication")
-        ? 401
-        : 500;
+    const status =
+      message.includes("Admin access") ||
+      message.includes("platform admins") ||
+      message.includes("org-admin")
+        ? 403
+        : message.includes("authenticated") ||
+            message.includes("Authentication")
+          ? 401
+          : 500;
     return errorResponse(message, status);
   }
 });

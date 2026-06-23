@@ -14,14 +14,9 @@ import {
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
-import {
-  fetchAdminScope,
-  getSession,
-  invokeAdminOps,
-  invokeAdminSeed,
-  isPlatformAdmin,
-} from "@/lib/api";
+import { fetchAdminScope, getSession, invokeAdminOps, invokeAdminSeed } from "@/lib/api";
 import type {
+  AdminActorAccess,
   AdminClass,
   AdminScope,
   AdminSeedResult,
@@ -41,6 +36,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 type RosterRow = AdminSeedUser & { rowId: string };
+type OrganizationRole = "student" | "teacher" | "org_admin";
 
 const MIN_TEMP_PASSWORD_LENGTH = 6;
 
@@ -139,6 +135,7 @@ function AdminPage() {
   const [batchId, setBatchId] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [actorAccess, setActorAccess] = useState<AdminActorAccess | null>(null);
   const [scope, setScope] = useState<AdminScope | null>(null);
   const [scopeLoading, setScopeLoading] = useState(false);
   const [opsMessage, setOpsMessage] = useState("");
@@ -160,13 +157,12 @@ function AdminPage() {
           navigate({ to: "/login", replace: true });
           return;
         }
-        const allowed = await isPlatformAdmin(session.user.id);
+        const allowed = await refreshScope(session.access_token);
         if (!alive) return;
         setEmail(session.user.email || "");
         setToken(session.access_token);
         setAuthorized(allowed);
-        setMessage(allowed ? "" : "This area is available only to platform admins.");
-        if (allowed) void refreshScope(session.access_token);
+        setMessage(allowed ? "" : "This area is available only to admins.");
       } catch (error) {
         if (!alive) return;
         setMessage((error as Error).message || "Could not load admin access.");
@@ -184,17 +180,18 @@ function AdminPage() {
   }, [navigate]);
 
   const refreshScope = async (accessToken = token) => {
-    if (!accessToken) return;
+    if (!accessToken) return false;
     setScopeLoading(true);
     try {
       const data = await fetchAdminScope(accessToken);
-      setScope(data);
-      const firstOrg = data.organizations[0]?.id || "";
+      setActorAccess(data.actorAccess);
+      setScope(data.scope);
+      const firstOrg = data.scope.organizations[0]?.id || "";
       const nextOrg =
-        selectedOrgId && data.organizations.some((org) => org.id === selectedOrgId)
+        selectedOrgId && data.scope.organizations.some((org) => org.id === selectedOrgId)
           ? selectedOrgId
           : firstOrg;
-      const orgClasses = data.classes.filter((item) => item.organization_id === nextOrg);
+      const orgClasses = data.scope.classes.filter((item) => item.organization_id === nextOrg);
       const nextClass =
         selectedClassId && orgClasses.some((item) => item.id === selectedClassId)
           ? selectedClassId
@@ -202,10 +199,12 @@ function AdminPage() {
       setSelectedOrgId(nextOrg);
       setSelectedClassId(nextClass);
       if (!renameClassName && nextClass) {
-        setRenameClassName(data.classes.find((item) => item.id === nextClass)?.name || "");
+        setRenameClassName(data.scope.classes.find((item) => item.id === nextClass)?.name || "");
       }
+      return true;
     } catch (error) {
       setOpsMessage((error as Error).message || "Could not load admin operations.");
+      return false;
     } finally {
       setScopeLoading(false);
     }
@@ -288,6 +287,8 @@ function AdminPage() {
   ]);
 
   const canSeed = !submitting && formErrors.length === 0;
+  const isPlatformLevel = actorAccess?.level === "platform_admin";
+  const adminLevelLabel = isPlatformLevel ? "Platform admin" : "Org admin";
 
   const selectedOrg = useMemo(
     () => scope?.organizations.find((organization) => organization.id === selectedOrgId) || null,
@@ -350,6 +351,7 @@ function AdminPage() {
   };
 
   const applyScopeFromResponse = (response: Awaited<ReturnType<typeof invokeAdminOps>>) => {
+    if (response.data?.actor_access) setActorAccess(response.data.actor_access);
     if (response.data?.scope) setScope(response.data.scope);
   };
 
@@ -421,6 +423,22 @@ function AdminPage() {
         membershipId: membership.id,
         role,
         payload: { membership_type: "class" },
+      });
+      applyScopeFromResponse(response);
+    });
+  };
+
+  const updateOrganizationMembershipRole = async (
+    membership: AdminScope["organization_memberships"][number],
+    role: OrganizationRole,
+  ) => {
+    await runAdminOp(`org-role-${membership.id}`, "Organization role updated.", async () => {
+      const response = await invokeAdminOps({
+        accessToken: token,
+        action: "update_membership_role",
+        membershipId: membership.id,
+        role,
+        payload: { membership_type: "organization" },
       });
       applyScopeFromResponse(response);
     });
@@ -530,7 +548,7 @@ function AdminPage() {
 
   if (!authorized) {
     return (
-      <AdminShell email={email} message={message || "Platform admin access is required."}>
+      <AdminShell email={email} message={message || "Admin access is required."}>
         <Link
           to="/chat"
           className="mt-4 inline-flex text-[13px] text-muted-foreground hover:text-foreground"
@@ -547,15 +565,16 @@ function AdminPage() {
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
-              Platform admin
+              {adminLevelLabel}
             </div>
             <h1 className="font-serif mt-2 text-[38px] leading-tight tracking-tight text-foreground">
               Manage pilot classrooms.
             </h1>
             <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
-              Create and seed classes, manage memberships, reset temporary passwords, and inspect
-              account operations. Passwords are sent only to Supabase Auth and are not stored in
-              Jargon tables.
+              {isPlatformLevel
+                ? "Create and seed classes, manage memberships, reset temporary passwords, and inspect account operations."
+                : "Manage classes, memberships, and account support inside your organization."}{" "}
+              Passwords are sent only to Supabase Auth and are not stored in Jargon tables.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -586,7 +605,9 @@ function AdminPage() {
               <div>
                 <h2 className="text-[16px] font-medium text-foreground">Operations dashboard</h2>
                 <p className="mt-1 text-[12.5px] text-muted-foreground">
-                  Platform-admin tools for classroom setup, roster repair, and account support.
+                  {isPlatformLevel
+                    ? "Platform-admin tools for classroom setup, roster repair, and account support."
+                    : "Org-admin tools scoped to your own organization."}
                 </p>
               </div>
               {opsMessage ? (
@@ -817,7 +838,29 @@ function AdminPage() {
                                   <option value="teacher">teacher</option>
                                 </select>
                                 <div className="mt-1 text-[11px] text-muted-foreground">
-                                  Org: {orgMembership?.role || "none"}
+                                  {isPlatformLevel && orgMembership ? (
+                                    <label className="mt-2 block">
+                                      <span className="mb-1 block text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                                        Org role
+                                      </span>
+                                      <select
+                                        value={orgMembership.role}
+                                        onChange={(event) =>
+                                          void updateOrganizationMembershipRole(
+                                            orgMembership,
+                                            event.target.value as OrganizationRole,
+                                          )
+                                        }
+                                        className="jargon-input min-w-[132px]"
+                                      >
+                                        <option value="student">student</option>
+                                        <option value="teacher">teacher</option>
+                                        <option value="org_admin">org_admin</option>
+                                      </select>
+                                    </label>
+                                  ) : (
+                                    <>Org: {orgMembership?.role || "none"}</>
+                                  )}
                                 </div>
                               </td>
                               <td className="py-3 pr-3">
@@ -930,277 +973,298 @@ function AdminPage() {
           </div>
         </GradientCard>
 
-        <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
-          <GradientCard>
-            <div className="space-y-5 p-5">
-              <div>
-                <h2 className="text-[16px] font-medium text-foreground">Class setup</h2>
-                <p className="mt-1 text-[12.5px] text-muted-foreground">
-                  Use stable names for the real classroom pilot.
-                </p>
-              </div>
-              <Field label="Organization name">
-                <input
-                  value={orgName}
-                  onChange={(event) => {
-                    setOrgName(event.target.value);
-                    if (!orgSlug || orgSlug === slugify(orgName))
-                      setOrgSlug(slugify(event.target.value));
-                  }}
-                  className="jargon-input"
-                />
-              </Field>
-              <Field label="Organization slug">
-                <input
-                  value={orgSlug}
-                  onChange={(event) => setOrgSlug(event.target.value)}
-                  className="jargon-input"
-                />
-              </Field>
-              <Field label="Class name">
-                <input
-                  value={className}
-                  onChange={(event) => setClassName(event.target.value)}
-                  className="jargon-input"
-                />
-              </Field>
-              <Field label="Default temporary password">
-                <input
-                  type="password"
-                  value={defaultPassword}
-                  onChange={(event) => setDefaultPassword(event.target.value)}
-                  placeholder="Optional if every row has a password"
-                  className={`jargon-input ${hasShortDefaultPassword ? "border-red-500/60" : ""}`}
-                />
-                <p
-                  className={`mt-1.5 text-[12px] ${
-                    hasShortDefaultPassword ? "text-red-500" : "text-muted-foreground"
-                  }`}
-                >
-                  {hasShortDefaultPassword
-                    ? `Use at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`
-                    : "Required unless every row has a password override."}
-                </p>
-              </Field>
-              <div className="rounded-2xl border border-border bg-muted/30 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
-                Bootstrap note: the first platform admin is still created manually in Supabase by
-                inserting the signed-in admin user id into <code>public.platform_admins</code>.
-              </div>
-            </div>
-          </GradientCard>
-
-          <GradientCard>
-            <div className="space-y-4 p-5">
-              <div>
-                <h2 className="text-[16px] font-medium text-foreground">Roster paste</h2>
-                <p className="mt-1 text-[12.5px] text-muted-foreground">
-                  Paste CSV or tab-separated rows. Header fields can be email, name, role, grade,
-                  password.
-                </p>
-              </div>
-              <textarea
-                value={pasteText}
-                onChange={(event) => setPasteText(event.target.value)}
-                placeholder={
-                  "email,name,role,grade,password\nteacher@example.com,Teacher Name,teacher,,temporary123\nstudent@example.com,Student Name,student,Grade 4,temporary123"
-                }
-                className="min-h-[170px] w-full resize-y rounded-2xl border border-border bg-background/70 p-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
-              />
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={applyPaste}
-                  className="rounded-full bg-foreground px-4 py-2 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px]"
-                >
-                  Load pasted roster
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRows((current) => [...current, blankRow()])}
-                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-                >
-                  <Plus className="h-4 w-4" strokeWidth={1.6} /> Add row
-                </button>
-              </div>
-            </div>
-          </GradientCard>
-        </div>
-
-        <GradientCard>
-          <div className="p-5">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-[16px] font-medium text-foreground">Roster rows</h2>
-                <p className="mt-1 text-[12.5px] text-muted-foreground">
-                  {validRows.length} ready {validRows.length === 1 ? "account" : "accounts"}.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={seedRoster}
-                disabled={!canSeed}
-                title={formErrors[0] || "Seed classroom"}
-                className="rounded-full bg-foreground px-5 py-2.5 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                {submitting ? "Seeding..." : "Seed classroom"}
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-[820px] w-full border-collapse text-left text-[13px]">
-                <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                  <tr>
-                    <th className="py-2 pr-3 font-medium">Role</th>
-                    <th className="py-2 pr-3 font-medium">Email</th>
-                    <th className="py-2 pr-3 font-medium">Name</th>
-                    <th className="py-2 pr-3 font-medium">Grade</th>
-                    <th className="py-2 pr-3 font-medium">Password override</th>
-                    <th className="py-2 font-medium" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.rowId} className="border-b border-border/60">
-                      <td className="py-2 pr-3">
-                        <select
-                          value={row.role}
-                          onChange={(event) =>
-                            updateRow(row.rowId, { role: event.target.value as PilotRole })
-                          }
-                          className="jargon-input min-w-[110px]"
-                        >
-                          <option value="student">student</option>
-                          <option value="teacher">teacher</option>
-                        </select>
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="space-y-1">
-                          <input
-                            value={row.email}
-                            onChange={(event) =>
-                              updateRow(row.rowId, { email: event.target.value })
-                            }
-                            className={`jargon-input min-w-[220px] ${
-                              emailErrors[row.rowId] ? "border-red-500/60" : ""
-                            }`}
-                          />
-                          {emailErrors[row.rowId] ? (
-                            <div className="text-[11px] text-red-500">{emailErrors[row.rowId]}</div>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="space-y-1">
-                          <input
-                            value={row.name}
-                            onChange={(event) => updateRow(row.rowId, { name: event.target.value })}
-                            className={`jargon-input min-w-[180px] ${
-                              nameErrors[row.rowId] ? "border-red-500/60" : ""
-                            }`}
-                          />
-                          {nameErrors[row.rowId] ? (
-                            <div className="text-[11px] text-red-500">{nameErrors[row.rowId]}</div>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="py-2 pr-3">
-                        <input
-                          value={row.grade || ""}
-                          onChange={(event) => updateRow(row.rowId, { grade: event.target.value })}
-                          className="jargon-input min-w-[120px]"
-                        />
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="space-y-1">
-                          <input
-                            type="password"
-                            value={row.password || ""}
-                            onChange={(event) =>
-                              updateRow(row.rowId, { password: event.target.value })
-                            }
-                            className={`jargon-input min-w-[180px] ${
-                              passwordErrors[row.rowId] ? "border-red-500/60" : ""
-                            }`}
-                          />
-                          {passwordErrors[row.rowId] ? (
-                            <div className="text-[11px] text-red-500">
-                              {passwordErrors[row.rowId]}
-                            </div>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => removeRow(row.rowId)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          aria-label="Remove roster row"
-                        >
-                          <Trash2 className="h-4 w-4" strokeWidth={1.6} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </GradientCard>
-
-        {(message || results.length > 0) && (
-          <GradientCard>
-            <div className="space-y-4 p-5">
-              {message && (
-                <div className="flex items-start gap-2 text-[13px] text-muted-foreground">
-                  {results.some((result) => result.status === "failed") ? (
-                    <AlertCircle
-                      className="mt-0.5 h-4 w-4 shrink-0 text-red-500"
-                      strokeWidth={1.7}
+        {isPlatformLevel ? (
+          <>
+            <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
+              <GradientCard>
+                <div className="space-y-5 p-5">
+                  <div>
+                    <h2 className="text-[16px] font-medium text-foreground">Class setup</h2>
+                    <p className="mt-1 text-[12.5px] text-muted-foreground">
+                      Use stable names for the real classroom pilot.
+                    </p>
+                  </div>
+                  <Field label="Organization name">
+                    <input
+                      value={orgName}
+                      onChange={(event) => {
+                        setOrgName(event.target.value);
+                        if (!orgSlug || orgSlug === slugify(orgName))
+                          setOrgSlug(slugify(event.target.value));
+                      }}
+                      className="jargon-input"
                     />
-                  ) : (
-                    <CheckCircle2
-                      className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
-                      strokeWidth={1.7}
+                  </Field>
+                  <Field label="Organization slug">
+                    <input
+                      value={orgSlug}
+                      onChange={(event) => setOrgSlug(event.target.value)}
+                      className="jargon-input"
                     />
-                  )}
-                  <span>
-                    {message}
-                    {batchId ? (
-                      <span className="ml-2 text-muted-foreground/70">Batch {batchId}</span>
-                    ) : null}
-                  </span>
+                  </Field>
+                  <Field label="Class name">
+                    <input
+                      value={className}
+                      onChange={(event) => setClassName(event.target.value)}
+                      className="jargon-input"
+                    />
+                  </Field>
+                  <Field label="Default temporary password">
+                    <input
+                      type="password"
+                      value={defaultPassword}
+                      onChange={(event) => setDefaultPassword(event.target.value)}
+                      placeholder="Optional if every row has a password"
+                      className={`jargon-input ${hasShortDefaultPassword ? "border-red-500/60" : ""}`}
+                    />
+                    <p
+                      className={`mt-1.5 text-[12px] ${
+                        hasShortDefaultPassword ? "text-red-500" : "text-muted-foreground"
+                      }`}
+                    >
+                      {hasShortDefaultPassword
+                        ? `Use at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`
+                        : "Required unless every row has a password override."}
+                    </p>
+                  </Field>
+                  <div className="rounded-2xl border border-border bg-muted/30 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
+                    Bootstrap note: the first platform admin is still created manually in Supabase
+                    by inserting the signed-in admin user id into{" "}
+                    <code>public.platform_admins</code>.
+                  </div>
                 </div>
-              )}
-              {results.length > 0 && (
+              </GradientCard>
+
+              <GradientCard>
+                <div className="space-y-4 p-5">
+                  <div>
+                    <h2 className="text-[16px] font-medium text-foreground">Roster paste</h2>
+                    <p className="mt-1 text-[12.5px] text-muted-foreground">
+                      Paste CSV or tab-separated rows. Header fields can be email, name, role,
+                      grade, password.
+                    </p>
+                  </div>
+                  <textarea
+                    value={pasteText}
+                    onChange={(event) => setPasteText(event.target.value)}
+                    placeholder={
+                      "email,name,role,grade,password\nteacher@example.com,Teacher Name,teacher,,temporary123\nstudent@example.com,Student Name,student,Grade 4,temporary123"
+                    }
+                    className="min-h-[170px] w-full resize-y rounded-2xl border border-border bg-background/70 p-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={applyPaste}
+                      className="rounded-full bg-foreground px-4 py-2 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px]"
+                    >
+                      Load pasted roster
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRows((current) => [...current, blankRow()])}
+                      className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={1.6} /> Add row
+                    </button>
+                  </div>
+                </div>
+              </GradientCard>
+            </div>
+
+            <GradientCard>
+              <div className="p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-[16px] font-medium text-foreground">Roster rows</h2>
+                    <p className="mt-1 text-[12.5px] text-muted-foreground">
+                      {validRows.length} ready {validRows.length === 1 ? "account" : "accounts"}.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={seedRoster}
+                    disabled={!canSeed}
+                    title={formErrors[0] || "Seed classroom"}
+                    className="rounded-full bg-foreground px-5 py-2.5 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {submitting ? "Seeding..." : "Seed classroom"}
+                  </button>
+                </div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-[680px] w-full border-collapse text-left text-[13px]">
+                  <table className="min-w-[820px] w-full border-collapse text-left text-[13px]">
                     <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                       <tr>
-                        <th className="py-2 pr-3 font-medium">Status</th>
                         <th className="py-2 pr-3 font-medium">Role</th>
                         <th className="py-2 pr-3 font-medium">Email</th>
-                        <th className="py-2 font-medium">Detail</th>
+                        <th className="py-2 pr-3 font-medium">Name</th>
+                        <th className="py-2 pr-3 font-medium">Grade</th>
+                        <th className="py-2 pr-3 font-medium">Password override</th>
+                        <th className="py-2 font-medium" />
                       </tr>
                     </thead>
                     <tbody>
-                      {results.map((result) => (
-                        <tr
-                          key={`${result.email}-${result.role}`}
-                          className="border-b border-border/60"
-                        >
-                          <td className={`py-2 pr-3 font-medium ${resultTone(result.status)}`}>
-                            {result.status}
+                      {rows.map((row) => (
+                        <tr key={row.rowId} className="border-b border-border/60">
+                          <td className="py-2 pr-3">
+                            <select
+                              value={row.role}
+                              onChange={(event) =>
+                                updateRow(row.rowId, { role: event.target.value as PilotRole })
+                              }
+                              className="jargon-input min-w-[110px]"
+                            >
+                              <option value="student">student</option>
+                              <option value="teacher">teacher</option>
+                            </select>
                           </td>
-                          <td className="py-2 pr-3 text-muted-foreground">{result.role}</td>
-                          <td className="py-2 pr-3 text-foreground">{result.email}</td>
-                          <td className="py-2 text-muted-foreground">
-                            {result.error || result.user_id || ""}
+                          <td className="py-2 pr-3">
+                            <div className="space-y-1">
+                              <input
+                                value={row.email}
+                                onChange={(event) =>
+                                  updateRow(row.rowId, { email: event.target.value })
+                                }
+                                className={`jargon-input min-w-[220px] ${
+                                  emailErrors[row.rowId] ? "border-red-500/60" : ""
+                                }`}
+                              />
+                              {emailErrors[row.rowId] ? (
+                                <div className="text-[11px] text-red-500">
+                                  {emailErrors[row.rowId]}
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="py-2 pr-3">
+                            <div className="space-y-1">
+                              <input
+                                value={row.name}
+                                onChange={(event) =>
+                                  updateRow(row.rowId, { name: event.target.value })
+                                }
+                                className={`jargon-input min-w-[180px] ${
+                                  nameErrors[row.rowId] ? "border-red-500/60" : ""
+                                }`}
+                              />
+                              {nameErrors[row.rowId] ? (
+                                <div className="text-[11px] text-red-500">
+                                  {nameErrors[row.rowId]}
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="py-2 pr-3">
+                            <input
+                              value={row.grade || ""}
+                              onChange={(event) =>
+                                updateRow(row.rowId, { grade: event.target.value })
+                              }
+                              className="jargon-input min-w-[120px]"
+                            />
+                          </td>
+                          <td className="py-2 pr-3">
+                            <div className="space-y-1">
+                              <input
+                                type="password"
+                                value={row.password || ""}
+                                onChange={(event) =>
+                                  updateRow(row.rowId, { password: event.target.value })
+                                }
+                                className={`jargon-input min-w-[180px] ${
+                                  passwordErrors[row.rowId] ? "border-red-500/60" : ""
+                                }`}
+                              />
+                              {passwordErrors[row.rowId] ? (
+                                <div className="text-[11px] text-red-500">
+                                  {passwordErrors[row.rowId]}
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => removeRow(row.rowId)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              aria-label="Remove roster row"
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={1.6} />
+                            </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              )}
+              </div>
+            </GradientCard>
+
+            {(message || results.length > 0) && (
+              <GradientCard>
+                <div className="space-y-4 p-5">
+                  {message && (
+                    <div className="flex items-start gap-2 text-[13px] text-muted-foreground">
+                      {results.some((result) => result.status === "failed") ? (
+                        <AlertCircle
+                          className="mt-0.5 h-4 w-4 shrink-0 text-red-500"
+                          strokeWidth={1.7}
+                        />
+                      ) : (
+                        <CheckCircle2
+                          className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
+                          strokeWidth={1.7}
+                        />
+                      )}
+                      <span>
+                        {message}
+                        {batchId ? (
+                          <span className="ml-2 text-muted-foreground/70">Batch {batchId}</span>
+                        ) : null}
+                      </span>
+                    </div>
+                  )}
+                  {results.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[680px] w-full border-collapse text-left text-[13px]">
+                        <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <tr>
+                            <th className="py-2 pr-3 font-medium">Status</th>
+                            <th className="py-2 pr-3 font-medium">Role</th>
+                            <th className="py-2 pr-3 font-medium">Email</th>
+                            <th className="py-2 font-medium">Detail</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {results.map((result) => (
+                            <tr
+                              key={`${result.email}-${result.role}`}
+                              className="border-b border-border/60"
+                            >
+                              <td className={`py-2 pr-3 font-medium ${resultTone(result.status)}`}>
+                                {result.status}
+                              </td>
+                              <td className="py-2 pr-3 text-muted-foreground">{result.role}</td>
+                              <td className="py-2 pr-3 text-foreground">{result.email}</td>
+                              <td className="py-2 text-muted-foreground">
+                                {result.error || result.user_id || ""}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </GradientCard>
+            )}
+          </>
+        ) : (
+          <GradientCard>
+            <div className="p-5 text-[13px] leading-relaxed text-muted-foreground">
+              Bulk roster seeding stays platform-admin only for now. Org admins can create classes,
+              add existing organization users to classes, reset passwords, disable or reactivate
+              memberships, and change class roles inside their own organization.
             </div>
           </GradientCard>
         )}

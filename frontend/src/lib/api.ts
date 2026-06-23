@@ -34,7 +34,7 @@ import type {
   ModelUsageEvent,
   AdminOpsAction,
   AdminOpsResponse,
-  AdminScope,
+  AdminScopeResult,
   AdminSeedResponse,
   AdminSeedUser,
   MentorPreferences,
@@ -418,10 +418,15 @@ export async function invokeAdminOps(input: {
   return data;
 }
 
-export async function fetchAdminScope(accessToken: string): Promise<AdminScope> {
+export async function fetchAdminScope(accessToken: string): Promise<AdminScopeResult> {
   const data = await invokeAdminOps({ accessToken, action: "list_admin_scope" });
-  if (!data.data?.scope) throw new Error("Admin scope response was missing data.");
-  return data.data.scope;
+  if (!data.data?.scope || !data.data.actor_access) {
+    throw new Error("Admin scope response was missing data.");
+  }
+  return {
+    actorAccess: data.data.actor_access,
+    scope: data.data.scope,
+  };
 }
 
 export async function fetchCurriculumAuthoringData(

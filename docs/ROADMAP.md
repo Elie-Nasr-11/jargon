@@ -18,12 +18,12 @@ Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete en
   mastery heatmaps, deterministic Needs Attention signals, student drilldowns, and lightweight
   runtime/model telemetry hooks.
 - Live teacher watching/comments is implemented and data/realtime-smoked.
-- Admin Operations v1 is implemented repo-side: `/admin` can inspect orgs/classes/users,
-  create/update/archive classes, add existing users to classes, reset temporary passwords,
-  change class roles/statuses, and inspect recent seed/audit events through privileged
-  `admin-ops`.
-- Next implementation slice after live QA: deploy/smoke `admin-ops`, then choose media
-  processing, org-admin delegation polish, or school-readiness needs.
+- Admin Operations v1 and org-admin scoped operations are implemented repo-side: `/admin` can
+  inspect scoped org/class/user data, create/update/archive classes, add existing users to
+  classes, reset temporary passwords, change class roles/statuses, and inspect recent seed/audit
+  events through privileged `admin-ops`.
+- Next implementation slice after live QA: school-readiness, then cost/model dashboards. Media
+  extraction and Voice v2 remain deferred.
 
 ## Product Direction Locked
 
@@ -145,10 +145,11 @@ Exit criteria: student completes one non-coding lesson with media, quiz, evidenc
 
 Goal: support real schools/classes.
 
-- Status: Admin Operations v1 is implemented repo-side for platform-admin pilot operations;
+- Status: Admin Operations v1 plus org-admin scoped operations are implemented repo-side;
   live deployment/smoke remains.
 - Add `/admin`.
-- Let org admins manage organizations, teachers, students, classes, roles, and audit.
+- Let org admins manage their own organization scope: classes, existing org users, class roles,
+  class membership status, password resets, and org audit visibility.
 - Let platform admins manage all tenants, global content, feature flags, and support/debug workflows.
 - Keep authorization DB/RLS-enforced.
 - Multiple organizations and org admins are V1 requirements.

@@ -5,6 +5,8 @@ This is the first account-management path for the classroom pilot. It is intenti
 ## Boundary
 
 - Platform admins use `/admin` to create or reuse organizations, classes, teacher accounts, student accounts, profiles, and memberships.
+- Org admins can also use `/admin`, but only for scoped operations inside organizations where
+  they have an active `organization_memberships.role = org_admin` row.
 - The frontend never sees the Supabase service-role key.
 - The only privileged account-creation path is the `admin-seed` Edge Function.
 - The privileged account-operations path is the `admin-ops` Edge Function.
@@ -21,7 +23,9 @@ values ('<signed-in-auth-user-id>')
 on conflict (user_id) do nothing;
 ```
 
-After that, the platform admin can open `/admin` and seed the pilot classroom.
+After that, the platform admin can open `/admin` and seed the pilot classroom. Platform admins
+may later promote a teacher to org admin by changing the teacher's organization role to
+`org_admin` in `/admin`.
 
 ## Required Secret
 
@@ -48,7 +52,8 @@ The service-role key must stay in Supabase Edge Function secrets only.
 
 ## Operations Flow
 
-After the initial seed, platform admins can use `/admin` as the pilot operations console:
+After the initial seed, platform admins and org admins can use `/admin` as the pilot operations
+console:
 
 1. View organizations, classes, users, class memberships, seed batches, and audit events.
 2. Create a new class inside an existing organization.
@@ -57,6 +62,10 @@ After the initial seed, platform admins can use `/admin` as the pilot operations
 5. Change a class membership role between `student` and `teacher`.
 6. Disable or reactivate a class membership.
 7. Reset a temporary password through Supabase Auth.
+
+Platform admins have global scope and can grant/revoke `org_admin`. Org admins are restricted to
+their own organization, may add only existing active org users to classes, and cannot grant or
+revoke `org_admin`.
 
 Sensitive operations are written to `audit_events`. Temporary password values are never stored in Jargon tables.
 
@@ -84,7 +93,9 @@ student@example.com,Student Name,student,Grade 4,temporary123
 ## Security Expectations
 
 - Anonymous users are rejected.
-- Authenticated non-platform-admin users are rejected.
+- Authenticated users who are neither platform admins nor active org admins are rejected.
+- Org admins cannot read or operate outside their own organization.
+- Org admins cannot grant/revoke `org_admin`.
 - Account creation uses service-role access only inside the Edge Function.
 - Account operations use service-role access only inside `admin-ops`.
 - Normal frontend reads continue through Supabase RLS.
@@ -102,3 +113,6 @@ After deploy:
 6. Confirm rows exist in Auth, `profiles`, memberships, seed batch/entries, and learning records.
 7. Reset one student password in `/admin`, sign in with it, then confirm an `admin.password_reset` audit row exists.
 8. Disable and reactivate a class membership, then confirm the teacher roster updates after refresh.
+9. Promote one teacher to `org_admin`, sign in as that teacher, confirm `/admin` shows only their
+   organization, and repeat create-class/add-user/reset-password/member-status smoke inside that
+   scope.

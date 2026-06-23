@@ -754,6 +754,16 @@ export type AdminScope = {
   audit_events: AuditEvent[];
 };
 
+export type AdminActorAccess = {
+  level: "platform_admin" | "org_admin";
+  organization_ids: string[];
+};
+
+export type AdminScopeResult = {
+  actorAccess: AdminActorAccess;
+  scope: AdminScope;
+};
+
 export type AdminOpsAction =
   | "list_admin_scope"
   | "create_class"
@@ -766,6 +776,7 @@ export type AdminOpsAction =
 export type AdminOpsResponse = {
   status: "ok" | "error";
   data?: {
+    actor_access?: AdminActorAccess;
     scope?: AdminScope;
     class?: AdminClass | null;
     membership?: OrganizationMembership | TeacherClassMembership | null;

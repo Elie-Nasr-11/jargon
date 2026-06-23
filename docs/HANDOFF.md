@@ -6,6 +6,51 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 15:20
+
+Status: Admin Operations org-admin polish implemented repo-side
+
+What changed:
+
+- Extended `admin-ops` from platform-admin-only to scoped admin access:
+  - platform admins keep global access;
+  - active `organization_memberships.role = org_admin` users can manage only their own org scope.
+- Added server-side authorization checks for each privileged operation:
+  - org admins can create/update/archive classes inside their org;
+  - add existing active org users to org classes;
+  - reset passwords for users already in their org;
+  - disable/reactivate class memberships;
+  - change class roles between `student` and `teacher`;
+  - only platform admins may grant/revoke `org_admin` or manage other organizations.
+- Extended `admin-ops` responses with `actor_access` so `/admin` can display `Platform admin`
+  or `Org admin` and hide global-only controls.
+- Updated `/admin` so org admins can load the operations console while bulk roster seeding remains
+  platform-admin-only.
+- Kept service-role access inside Edge Functions only; no service-role material was added to the
+  frontend.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit`: passed.
+- `cd frontend && npm run lint`: passed with the existing 11 warnings.
+- `cd frontend && npm run build`: passed.
+- `python3 -m unittest discover -s tests -q`: passed.
+- `python3 tools/validate_examples.py examples legacy/examples`: passed.
+- `git diff --check`: passed.
+- `deno check supabase/functions/admin-ops/index.ts`: unavailable locally (`deno` not installed).
+
+Next live steps:
+
+- Deploy `admin-ops` to Supabase project `qztpieiizmiayzjhezwh`.
+- Push frontend/backend changes to `main` so Render deploys `/admin`.
+- Live smoke:
+  - platform admin completes the Admin Operations v1 smoke;
+  - platform admin promotes one teacher to `org_admin`;
+  - org admin signs in and sees only their organization;
+  - org admin creates a class, adds existing org users, resets one password, disables/reactivates
+    one class membership, and changes a class role;
+  - confirm audit rows for sensitive operations.
+
 ## Codex -> Claude / Human - 2026-06-23 12:30
 
 Status: Admin Operations v1 implemented repo-side
@@ -1332,7 +1377,7 @@ Verification:
   drawer, runs the lesson starter through the live Jargon path, shows
   `hammer -> hammers nails`, appends a mentor reply, and does not show Preview mode.
 - One smoke run hit the known Render/Supabase engine timeout path (`Engine request timed out after
-  10000ms`); the UI surfaced it as an error bubble and recovered on the warmed retry.
+10000ms`); the UI surfaced it as an error bubble and recovered on the warmed retry.
 
 Claude next:
 
@@ -1531,7 +1576,7 @@ Remaining go-live (Codex, you have local network + Supabase access):
    or connect the repo once in the Render dashboard for the GitHub link).
 2. Set Supabase secrets: `JARGON_ENGINE_URL` = the `jargon-engine` `/run` URL, and
    `OPENAI_API_KEY` (human provides) — via `supabase secrets set --project-ref
-   qztpieiizmiayzjhezwh` or the dashboard.
+qztpieiizmiayzjhezwh` or the dashboard.
 3. Smoke: `run` with `PRINT 5 // 2`; typed `chat` with a signed-in user.
 4. Report the `jargon` static URL here.
 
@@ -1579,7 +1624,7 @@ What landed:
 - `runner/runner.js` (NEW): the conversational lesson-runner — AI turns + a per-turn input
   affordance (text / multiple-choice / code / file), progress bar, grade chips, completion card.
   Renders the frozen turn contract `{say, expected_mode, options?, starter?, grade?, level?,
-  progress, done, final_grade}` from `window.RunnerEngine`.
+progress, done, final_grade}` from `window.RunnerEngine`.
 - `runner/engine-mock.js` (NEW): a stand-in flow engine driving a hybrid Level 0-3 flow per
   lesson, emitting that contract. **Swap this for a wrapper around the `chat` flow engine (B8)
   and the UI is unchanged.**
@@ -1669,7 +1714,7 @@ The human defined the real product. Full write-up: `docs/VISION.md` (+ decisions
 `docs/DECISIONS.md`). Summary:
 
 - Pivot from the split-view to a **stateful conversational lesson-runner** — a guided
-  conversation that *is* the class (begin/end, grades, retry, and multiple student answer
+  conversation that _is_ the class (begin/end, grades, retry, and multiple student answer
   modes: text / code / file / multiple-choice), with hard guardrails and per-student adaptation.
 - The `chat` edge function becomes a **flow engine** (load lesson+step+session+mastery ->
   build cached prompt -> structured-output + tool-use turn -> grade -> persist -> advance),
@@ -1921,11 +1966,11 @@ Decision: clean frontend/backend split.
 Frozen contract (both sides code to this):
 
 - run: `POST /run {code, answers, preset_answers?}` -> `{output[], result(=output),
-  errors[], status, ask, ask_var, memory, truncated, limits_hit}`.
+errors[], status, ask, ask_var, memory, truncated, limits_hit}`.
 - chat: client `{messages:[{role,content}]}` -> `{reply}`; persona =
   `mentor/system_prompt.md` + selected lesson `tutor_prompt` + level.
 - lesson object the UI reads: `{id, position, title, module, level, tutor_prompt,
-  sample_code}`. NOTE: `module` + `level` columns do not exist yet (see B3).
+sample_code}`. NOTE: `module` + `level` columns do not exist yet (see B3).
 - client tables: `lessons` (read), `profiles`/`chat_messages`/`code_submissions` (owner RLS).
 
 IMPORTANT - current LIVE Supabase state (so you don't double-apply):

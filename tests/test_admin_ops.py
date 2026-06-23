@@ -19,14 +19,16 @@ class AdminOpsStaticTests(unittest.TestCase):
         cls.types = TYPES.read_text(encoding="utf-8")
         cls.route = ADMIN_ROUTE.read_text(encoding="utf-8")
 
-    def test_admin_ops_is_platform_admin_service_role_only(self):
+    def test_admin_ops_is_scoped_admin_service_role_only(self):
         for fragment in (
             'Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")',
             'req.headers.get("Authorization")',
             "async function fetchCurrentUser",
-            "async function assertPlatformAdmin",
+            "async function fetchActorAccess",
             "platform_admins",
-            "Platform admin access is required.",
+            "org_admin",
+            "Admin access is required.",
+            "Admin access for this organization is required.",
             "Bearer ${config.serviceRoleKey}",
         ):
             with self.subTest(fragment=fragment):
@@ -59,6 +61,19 @@ class AdminOpsStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.function)
 
+    def test_org_admin_scope_is_enforced_server_side(self):
+        for fragment in (
+            'level: "org_admin"',
+            "actor_access",
+            "organization_ids",
+            "requireOrganizationAccess",
+            "fetchAccessibleOrgMembershipsForUser",
+            "Only platform admins may change organization roles.",
+            "Org admins may add only existing active organization users to classes.",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.function)
+
     def test_password_reset_does_not_persist_plaintext(self):
         self.assertIn("password_supplied", self.function)
         self.assertIn("/auth/v1/admin/users/${encodeURIComponent(userId)}", self.function)
@@ -73,16 +88,21 @@ class AdminOpsStaticTests(unittest.TestCase):
         self.assertIn('functionUrl("admin-ops")', self.api)
         self.assertIn("invokeAdminOps", self.api)
         self.assertIn("fetchAdminScope", self.api)
+        self.assertIn("AdminActorAccess", self.types)
         self.assertIn("AdminScope", self.types)
 
     def test_admin_route_contains_operations_dashboard(self):
         for fragment in (
             "Operations dashboard",
+            "Org admin",
+            "Platform admin",
             "Create class",
             "Class settings",
             "Add existing user",
             "Password reset",
             "Recent audit events",
+            "Organization role updated.",
+            "Bulk roster seeding stays platform-admin only",
             "update_membership_status",
             "reset_user_password",
         ):
