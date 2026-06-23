@@ -6,6 +6,66 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 20:36
+
+Status: Media Processing / Mentor Context v1 implemented, pushed, migrated, deployed, and API-smoked
+
+What changed:
+
+- Added PDF-first media processing schema:
+  - `resource_processing_jobs`;
+  - `resource_processing_errors`;
+  - `resource_text_chunks`.
+- Added JWT-protected Supabase Edge Function `resource-processing`.
+- Added teacher resource manager controls in `/teacher`:
+  - `Extract PDF text`;
+  - review/edit chunks;
+  - approve/reject/delete chunks.
+- Added browser-side PDF extraction through `pdfjs-dist`.
+- Updated `chat` so Mentor can load only `approved` resource chunks as bounded private context.
+- Added `docs/MEDIA_PROCESSING.md` and static tests.
+
+Verification:
+
+- Implementation commit: `72024ec` (`Add PDF resource processing`).
+- Pushed GitHub `main` through `72024ec`.
+- Applied Supabase migration `media_processing` to project `qztpieiizmiayzjhezwh`: success.
+- Deployed Supabase Edge Functions:
+  - `resource-processing` version `1`, status `ACTIVE`, `verify_jwt=true`,
+    deployment hash `30b9599769b0f35eb37c09c005107b0a54009c5747ca8f50d794df4c68311588`;
+  - `chat` version `9`, status `ACTIVE`, `verify_jwt=true`,
+    deployment hash `f97c8d440fd50bf74b02ac242b1c1dbc1099cc5c2d4f8ef1c39d9bc57d922708`.
+- Live DB check confirmed all new tables exist with RLS enabled and policies present.
+- Unauthenticated `POST /functions/v1/resource-processing` returned `401 UNAUTHORIZED_NO_AUTH_HEADER`.
+- Render live bundle at `https://jargon-9bv5.onrender.com/teacher` contains:
+  - `resource-processing`;
+  - `Extract PDF text`;
+  - PDF worker asset reference.
+- Credentialed API smoke using existing published PDF resource for `lesson1`:
+  - teacher saved one extracted draft chunk through `resource-processing`;
+  - teacher approved it;
+  - student REST/RLS read returned one approved chunk.
+- Local checks:
+  - `cd frontend && npx tsc --noEmit`: passed;
+  - `cd frontend && npm run lint`: passed with existing 11 warnings;
+  - `cd frontend && npm run build`: passed;
+  - `python3 -m unittest discover -s tests -q`: passed;
+  - `python3 tools/validate_examples.py examples legacy/examples`: passed;
+  - `git diff --check`: passed;
+  - `deno --version`: unavailable locally (`deno` not installed).
+
+Remaining browser smoke:
+
+- Teacher opens `/teacher`, uploads or opens a PDF resource, clicks `Extract PDF text`,
+  reviews and approves chunks through the UI.
+- Student opens the lesson/resource in `/chat` and confirms Mentor can naturally cite the
+  approved PDF title/page during the lesson.
+
+Next roadmap slice if browser smoke passes:
+
+- School integrations/readiness planning and first integration spike for Google Classroom,
+  Clever/ClassLink, or Canvas.
+
 ## Codex -> Claude / Human - 2026-06-23 16:35
 
 Status: Cost/Model Dashboard v1 implemented, pushed, deployed, and boundary-smoked
