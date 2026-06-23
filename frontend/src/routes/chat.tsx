@@ -32,7 +32,9 @@ import {
   type VoiceSettings,
 } from "@/lib/jargon-store";
 import {
+  fetchLiveSessionViewers,
   fetchLearningTurns,
+  fetchTeacherLiveComments,
   fetchStudentAssignments,
   fetchLatestLearningSession,
   fetchLessonActivities,
@@ -49,6 +51,7 @@ import {
 } from "@/lib/api";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
+import { supabase } from "@/lib/supabase";
 import type {
   JargonRunResponse,
   ChatInputModality,
@@ -57,8 +60,10 @@ import type {
   Lesson,
   LessonActivity,
   LessonChatResource,
+  LiveSessionViewer,
   MentorPreferences,
   StudentAssignmentBundle,
+  TeacherLiveComment,
   TypedChatEnvelope,
   VoiceInteractionEvent,
 } from "@/lib/types";
@@ -83,6 +88,7 @@ type Msg =
       code?: ChatCodeBlock;
       inputModality?: ChatInputModality;
       transcriptConfidence?: number | null;
+      createdAt?: string;
     }
   | {
       id: string;
@@ -91,7 +97,9 @@ type Msg =
       code?: ChatCodeBlock;
       choices?: ChatChoice[];
       resources?: LessonChatResource[];
+      createdAt?: string;
     }
+  | { id: string; role: "teacher"; text: string; createdAt?: string }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
   | { id: string; role: "thinking" };
 
@@ -164,6 +172,7 @@ function turnToMessage(turn: LearningTurn): Msg | null {
       text: turn.content,
       inputModality: modality,
       transcriptConfidence: confidence,
+      createdAt: turn.created_at,
     };
   }
   if (turn.role === "mentor" || turn.role === "system") {
@@ -172,9 +181,33 @@ function turnToMessage(turn: LearningTurn): Msg | null {
     const resources = Array.isArray(payload.resources)
       ? (payload.resources as LessonChatResource[])
       : undefined;
-    return { id: turn.id, role: "bot", text: turn.content, choices, resources };
+    return {
+      id: turn.id,
+      role: "bot",
+      text: turn.content,
+      choices,
+      resources,
+      createdAt: turn.created_at,
+    };
   }
   return null;
+}
+
+function liveCommentToMessage(comment: TeacherLiveComment): Msg {
+  return {
+    id: `teacher-live-${comment.id}`,
+    role: "teacher",
+    text: comment.content,
+    createdAt: comment.created_at,
+  };
+}
+
+function sortTimedMessages(messages: Msg[]) {
+  return [...messages].sort((a, b) => {
+    const aTime = "createdAt" in a && a.createdAt ? Date.parse(a.createdAt) : 0;
+    const bTime = "createdAt" in b && b.createdAt ? Date.parse(b.createdAt) : 0;
+    return aTime - bTime;
+  });
 }
 
 function envelopeMessage(envelope: TypedChatEnvelope): Msg {
@@ -184,6 +217,7 @@ function envelopeMessage(envelope: TypedChatEnvelope): Msg {
     text: envelope.reply || "I'm ready.",
     choices: envelope.choices?.length ? envelope.choices : undefined,
     resources: envelope.resources?.length ? envelope.resources : undefined,
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -299,6 +333,8 @@ function ChatPage() {
   const [sending, setSending] = useState(false);
   const [booting, setBooting] = useState(true);
   const [surfaceError, setSurfaceError] = useState("");
+  const [liveViewers, setLiveViewers] = useState<LiveSessionViewer[]>([]);
+  const [viewerClock, setViewerClock] = useState(() => Date.now());
   const [assignments, setAssignments] = useState<StudentAssignmentBundle>({
     assignments: [],
     recipients: [],
@@ -320,6 +356,16 @@ function ChatPage() {
   const menuLessons = useMemo(
     () => mapLessons(lessons, lessonId, learningSession),
     [lessons, lessonId, learningSession],
+  );
+  const activeLiveViewers = useMemo(
+    () =>
+      liveViewers.filter(
+        (viewer) =>
+          viewer.status === "active" &&
+          viewer.last_seen_at &&
+          viewerClock - Date.parse(viewer.last_seen_at) < 45_000,
+      ),
+    [liveViewers, viewerClock],
   );
 
   useEffect(() => {
@@ -344,6 +390,11 @@ function ChatPage() {
     scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [msgs.length]);
 
+  useEffect(() => {
+    const id = window.setInterval(() => setViewerClock(Date.now()), 10_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const loadLesson = async (
     nextLessonId: string,
     token: string,
@@ -362,8 +413,14 @@ function ChatPage() {
       setSessionId(latest?.id || null);
 
       if (latest) {
-        const turns = await fetchLearningTurns(latest.id);
-        const mapped = turns.map(turnToMessage).filter(Boolean) as Msg[];
+        const [turns, comments] = await Promise.all([
+          fetchLearningTurns(latest.id),
+          fetchTeacherLiveComments(latest.id),
+        ]);
+        const mapped = sortTimedMessages([
+          ...(turns.map(turnToMessage).filter(Boolean) as Msg[]),
+          ...comments.map(liveCommentToMessage),
+        ]);
         if (mapped.length) {
           setMsgs(mapped);
           return;
@@ -433,6 +490,73 @@ function ChatPage() {
       alive = false;
     };
   }, [navigate]);
+
+  useEffect(() => {
+    if (!sessionId) {
+      setLiveViewers([]);
+      return;
+    }
+
+    let active = true;
+    void fetchLiveSessionViewers(sessionId)
+      .then((viewers) => {
+        if (active) setLiveViewers(viewers);
+      })
+      .catch(() => {
+        if (active) setLiveViewers([]);
+      });
+
+    const upsertViewer = (viewer: LiveSessionViewer) => {
+      setLiveViewers((current) => {
+        const exists = current.some((item) => item.id === viewer.id);
+        return exists
+          ? current.map((item) => (item.id === viewer.id ? viewer : item))
+          : [viewer, ...current];
+      });
+      setViewerClock(Date.now());
+    };
+
+    const channel = supabase
+      .channel(`student-live-intervention-${sessionId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "live_session_viewers",
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          const viewer = payload.new as LiveSessionViewer | null;
+          if (viewer?.id) upsertViewer(viewer);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "teacher_live_comments",
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          const comment = payload.new as TeacherLiveComment | null;
+          if (!comment?.id || comment.visibility !== "student_visible") return;
+          const nextMessage = liveCommentToMessage(comment);
+          setMsgs((current) =>
+            current.some((message) => message.id === nextMessage.id)
+              ? current
+              : [...current, nextMessage],
+          );
+        },
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [sessionId]);
 
   const selectLesson = async (id: string) => {
     if (!accessToken) return;
@@ -729,6 +853,15 @@ function ChatPage() {
       </header>
 
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
+        {activeLiveViewers.length ? (
+          <div className="mb-3 flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/35 bg-blue-400/10 px-3 py-1.5 text-[12px] text-blue-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-300" />
+              Teacher viewing
+              {activeLiveViewers.length > 1 ? ` · ${activeLiveViewers.length}` : ""}
+            </div>
+          </div>
+        ) : null}
         <div ref={scrollRef} className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5">
           {msgs.map((m) => (
             <MessageRow
@@ -1382,6 +1515,22 @@ function MessageRow({
           <div className="mt-1.5">
             <CopyAction text={msg.output} />
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (msg.role === "teacher") {
+    return (
+      <div ref={ref} className="flex">
+        <div className="w-full max-w-[92%] space-y-2">
+          <div className="rounded-2xl border border-blue-400/35 bg-blue-400/10 px-4 py-3">
+            <div className="mb-1 text-[11px] uppercase tracking-[0.1em] text-blue-200">Teacher</div>
+            <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
+              {msg.text}
+            </p>
+          </div>
+          <CopyAction text={msg.text} />
         </div>
       </div>
     );

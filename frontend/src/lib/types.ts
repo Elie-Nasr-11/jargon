@@ -305,14 +305,40 @@ export type InterventionAlert = {
   class_id: string | null;
   lesson_id: string | null;
   session_id: string | null;
+  created_by: string | null;
   alert_type: string;
   title: string;
-  detail: string | null;
+  message: string;
   severity: "low" | "medium" | "high";
   status: "open" | "acknowledged" | "resolved" | "dismissed";
   payload: Record<string, unknown>;
+  resolved_by: string | null;
+  resolved_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type LiveSessionViewer = {
+  id: string;
+  session_id: string;
+  student_id: string;
+  teacher_id: string;
+  class_id: string | null;
+  status: "active" | "inactive";
+  last_seen_at: string;
+  created_at: string;
+};
+
+export type TeacherLiveComment = {
+  id: string;
+  session_id: string;
+  student_id: string;
+  teacher_id: string;
+  class_id: string | null;
+  content: string;
+  visibility: "student_visible" | "teacher_private";
+  turn_id: string | null;
+  created_at: string;
 };
 
 export type TranscriptHeatmapEvent = {
@@ -697,6 +723,7 @@ export type TeacherDashboardData = {
   evidence: LearningEvidence[];
   mastery: StudentMastery[];
   notes: TeacherNote[];
+  liveComments: TeacherLiveComment[];
   resources: LessonResource[];
   resourceInteractions: ResourceInteraction[];
   interventionAlerts: InterventionAlert[];

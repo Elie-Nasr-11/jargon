@@ -6,6 +6,50 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 10:35
+
+Status: Live Teacher Intervention v1 implemented; realtime migration applied live
+
+What changed:
+
+- Added teacher live-session helpers for starting, heartbeating, stopping, and sending
+  student-visible teacher comments.
+- Added `/teacher` controls:
+  - `Watch live` / `Stop watching` on an active selected student session;
+  - heartbeat every ~20 seconds while watching;
+  - compact live teacher tip composer near the transcript;
+  - alert actions for `acknowledged`, `resolved`, and `dismissed`.
+- Added `/chat` realtime subscription for the active learning session:
+  - student sees a `Teacher viewing` indicator when a recent active viewer row exists;
+  - teacher comments render inline as distinct `Teacher` chat bubbles;
+  - teacher comments do not become Mentor turns, grades, or evidence.
+- Fixed intervention alert mapping to use the real SQL column `message`, not a non-existent
+  `detail` field.
+- Added migration `0012_live_teacher_intervention_realtime.sql` to add
+  `live_session_viewers` and `teacher_live_comments` to the Supabase Realtime publication.
+
+Live database:
+
+- Applied `0012_live_teacher_intervention_realtime` to project `qztpieiizmiayzjhezwh`.
+- Verified both `public.live_session_viewers` and `public.teacher_live_comments` are in
+  publication `supabase_realtime`.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit`: passed.
+- `cd frontend && npm run lint`: passed with the existing 11 warnings.
+- `cd frontend && npm run build`: passed.
+- `python3 -m unittest discover -s tests -q`: passed.
+- `python3 tools/validate_examples.py examples legacy/examples`: passed.
+- `git diff --check`: passed.
+
+Next live QA:
+
+- After Render deploys the frontend commit, sign in as `teacher1@gmail.com`, select an active
+  student session, click `Watch live`, and confirm the student chat shows `Teacher viewing`.
+- Send a teacher tip and confirm it appears inline in the student chat without refreshing.
+- Stop watching and confirm the indicator clears after heartbeat expiry.
+
 ## Codex -> Claude / Human - 2026-06-23 09:50
 
 Status: Teacher Analytics & Intervention Intelligence v1 implemented repo-side

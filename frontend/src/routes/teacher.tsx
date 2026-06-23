@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   ClipboardList,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileText,
   GraduationCap,
@@ -31,7 +33,12 @@ import {
   gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
   getSession,
+  heartbeatLiveSessionViewer,
+  sendTeacherLiveComment,
+  startLiveSessionViewer,
+  stopLiveSessionViewer,
   updateAssignmentStatus,
+  updateInterventionAlertStatus,
   updateLessonResource,
 } from "@/lib/api";
 import type {
@@ -50,10 +57,12 @@ import type {
   LessonResourceStatus,
   LessonResourceType,
   LessonResourceVisibility,
+  LiveSessionViewer,
   Profile,
   StudentMastery,
   TeacherClassSummary,
   TeacherDashboardData,
+  TeacherLiveComment,
   TeacherNote,
 } from "@/lib/types";
 
@@ -87,6 +96,10 @@ function TeacherPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [savingResource, setSavingResource] = useState(false);
   const [savingAssignment, setSavingAssignment] = useState(false);
+  const [liveViewer, setLiveViewer] = useState<LiveSessionViewer | null>(null);
+  const [liveCommentDraft, setLiveCommentDraft] = useState("");
+  const [sendingLiveComment, setSendingLiveComment] = useState(false);
+  const [updatingAlertId, setUpdatingAlertId] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -168,6 +181,34 @@ function TeacherPage() {
     selectedSessionId && dashboard
       ? dashboard.sessions.find((session) => session.id === selectedSessionId) || null
       : null;
+  const liveViewerId = liveViewer?.id || null;
+
+  useEffect(() => {
+    if (!liveViewerId) return;
+    const interval = window.setInterval(() => {
+      void heartbeatLiveSessionViewer(liveViewerId)
+        .then((viewer) => setLiveViewer(viewer))
+        .catch(() => {
+          setMessage("Live watch heartbeat failed. Try starting watch again.");
+          setLiveViewer(null);
+        });
+    }, 20_000);
+    return () => window.clearInterval(interval);
+  }, [liveViewerId]);
+
+  useEffect(() => {
+    if (!liveViewerId) return;
+    return () => {
+      void stopLiveSessionViewer(liveViewerId).catch(() => undefined);
+    };
+  }, [liveViewerId]);
+
+  useEffect(() => {
+    if (liveViewer && liveViewer.session_id !== selectedSessionId) {
+      setLiveViewer(null);
+      setLiveCommentDraft("");
+    }
+  }, [liveViewer, selectedSessionId]);
 
   const classStats =
     dashboard && selectedClassId ? summarizeClass(dashboard, selectedClassId) : null;
@@ -340,6 +381,82 @@ function TeacherPage() {
     }
   };
 
+  const startWatchingSelectedSession = async () => {
+    if (!selectedSession || !selectedStudentId || !selectedClassId) return;
+    if (selectedSession.status === "complete") {
+      setMessage("Choose an active student session before watching live.");
+      return;
+    }
+    try {
+      const viewer = await startLiveSessionViewer({
+        sessionId: selectedSession.id,
+        studentId: selectedStudentId,
+        classId: selectedClassId,
+      });
+      setLiveViewer(viewer);
+      setMessage("");
+    } catch (error) {
+      setMessage((error as Error).message || "Could not start live watch.");
+    }
+  };
+
+  const stopWatchingSelectedSession = async () => {
+    if (!liveViewer) return;
+    try {
+      await stopLiveSessionViewer(liveViewer.id);
+      setLiveViewer(null);
+      setLiveCommentDraft("");
+    } catch (error) {
+      setMessage((error as Error).message || "Could not stop live watch.");
+    }
+  };
+
+  const sendLiveComment = async () => {
+    if (!selectedSession || !selectedStudentId || !selectedClassId || !liveCommentDraft.trim()) {
+      return;
+    }
+    setSendingLiveComment(true);
+    try {
+      const comment = await sendTeacherLiveComment({
+        sessionId: selectedSession.id,
+        studentId: selectedStudentId,
+        classId: selectedClassId,
+        lessonId: selectedSession.lesson_id,
+        content: liveCommentDraft.trim(),
+      });
+      setDashboard((current) =>
+        current ? { ...current, liveComments: [...current.liveComments, comment] } : current,
+      );
+      setLiveCommentDraft("");
+      setMessage("");
+    } catch (error) {
+      setMessage((error as Error).message || "Could not send live teacher comment.");
+    } finally {
+      setSendingLiveComment(false);
+    }
+  };
+
+  const updateAlertStatus = async (alertId: string, status: InterventionAlert["status"]) => {
+    setUpdatingAlertId(alertId);
+    try {
+      const updated = await updateInterventionAlertStatus(alertId, status);
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              interventionAlerts: current.interventionAlerts.map((alert) =>
+                alert.id === updated.id ? updated : alert,
+              ),
+            }
+          : current,
+      );
+    } catch (error) {
+      setMessage((error as Error).message || "Could not update intervention alert.");
+    } finally {
+      setUpdatingAlertId(null);
+    }
+  };
+
   return (
     <div
       className="relative flex min-h-screen flex-col overflow-hidden"
@@ -481,6 +598,10 @@ function TeacherPage() {
                       void setAssignmentStatus(assignmentId, status)
                     }
                     onReviewSubmission={reviewSubmission}
+                    updatingAlertId={updatingAlertId}
+                    onUpdateAlertStatus={(alertId, status) =>
+                      void updateAlertStatus(alertId, status)
+                    }
                     onUpdateResource={(resource) =>
                       setDashboard((current) =>
                         current
@@ -515,9 +636,16 @@ function TeacherPage() {
                     noteDraft={noteDraft}
                     noteVisibility={noteVisibility}
                     savingNote={savingNote}
+                    liveViewer={liveViewer}
+                    liveCommentDraft={liveCommentDraft}
+                    sendingLiveComment={sendingLiveComment}
                     onNoteChange={setNoteDraft}
                     onNoteVisibilityChange={setNoteVisibility}
                     onSaveNote={() => void saveNote()}
+                    onLiveCommentChange={setLiveCommentDraft}
+                    onStartWatching={() => void startWatchingSelectedSession()}
+                    onStopWatching={() => void stopWatchingSelectedSession()}
+                    onSendLiveComment={() => void sendLiveComment()}
                     onBack={() => {
                       setSelectedStudentId(null);
                       setSelectedSessionId(null);
@@ -602,6 +730,8 @@ function ClassDetail({
   onSaveAssignment,
   onSetAssignmentStatus,
   onReviewSubmission,
+  updatingAlertId,
+  onUpdateAlertStatus,
   onUpdateResource,
 }: {
   item: TeacherClassSummary;
@@ -632,6 +762,8 @@ function ClassDetail({
     feedback: string;
     decision: "accepted" | "returned";
   }) => Promise<void>;
+  updatingAlertId: string | null;
+  onUpdateAlertStatus: (alertId: string, status: InterventionAlert["status"]) => void;
   onUpdateResource: (resource: LessonResource) => void;
 }) {
   return (
@@ -660,6 +792,8 @@ function ClassDetail({
           studentIds={studentIds}
           lessonsById={lessonsById}
           onSelectStudent={onSelectStudent}
+          updatingAlertId={updatingAlertId}
+          onUpdateAlertStatus={onUpdateAlertStatus}
         />
 
         <GradebookTable
@@ -1809,11 +1943,15 @@ function ClassAnalyticsPanel({
   studentIds,
   lessonsById,
   onSelectStudent,
+  updatingAlertId,
+  onUpdateAlertStatus,
 }: {
   dashboard: TeacherDashboardData;
   studentIds: string[];
   lessonsById: Map<string, Lesson>;
   onSelectStudent: (studentId: string) => void;
+  updatingAlertId: string | null;
+  onUpdateAlertStatus: (alertId: string, status: InterventionAlert["status"]) => void;
 }) {
   const analytics = classAnalyticsFor(dashboard, studentIds);
   const signals = riskSignalsForClass(dashboard, studentIds, lessonsById);
@@ -1893,27 +2031,48 @@ function ClassAnalyticsPanel({
               {signals.slice(0, 8).map((signal) => {
                 const profile = profilesById.get(signal.studentId) || null;
                 return (
-                  <button
+                  <div
                     key={`${signal.studentId}-${signal.kind}-${signal.sourceId}`}
-                    type="button"
-                    onClick={() => onSelectStudent(signal.studentId)}
-                    className="w-full rounded-2xl border border-border bg-background/45 p-3 text-left transition-colors hover:bg-muted"
+                    className="rounded-2xl border border-border bg-background/45 p-3"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-medium text-foreground">
-                        {displayName(profile, signal.studentId)}
-                      </span>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10.5px] ${severityClass(
-                          signal.severity,
-                        )}`}
-                      >
-                        {signal.severity}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-[12.5px] text-foreground">{signal.title}</div>
-                    <div className="mt-1 text-[11.5px] text-muted-foreground">{signal.detail}</div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => onSelectStudent(signal.studentId)}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[13px] font-medium text-foreground">
+                          {displayName(profile, signal.studentId)}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10.5px] ${severityClass(
+                            signal.severity,
+                          )}`}
+                        >
+                          {signal.severity}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[12.5px] text-foreground">{signal.title}</div>
+                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        {signal.detail}
+                      </div>
+                    </button>
+                    {signal.kind === "intervention" ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(["acknowledged", "resolved", "dismissed"] as const).map((status) => (
+                          <button
+                            key={status}
+                            type="button"
+                            onClick={() => onUpdateAlertStatus(signal.sourceId, status)}
+                            disabled={updatingAlertId === signal.sourceId}
+                            className="rounded-full border border-border px-2.5 py-1 text-[11px] capitalize text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>
@@ -2184,9 +2343,16 @@ function StudentDetail({
   noteDraft,
   noteVisibility,
   savingNote,
+  liveViewer,
+  liveCommentDraft,
+  sendingLiveComment,
   onNoteChange,
   onNoteVisibilityChange,
   onSaveNote,
+  onLiveCommentChange,
+  onStartWatching,
+  onStopWatching,
+  onSendLiveComment,
   onBack,
 }: {
   studentId: string;
@@ -2201,9 +2367,16 @@ function StudentDetail({
   noteDraft: string;
   noteVisibility: TeacherNote["visibility"];
   savingNote: boolean;
+  liveViewer: LiveSessionViewer | null;
+  liveCommentDraft: string;
+  sendingLiveComment: boolean;
   onNoteChange: (value: string) => void;
   onNoteVisibilityChange: (value: TeacherNote["visibility"]) => void;
   onSaveNote: () => void;
+  onLiveCommentChange: (value: string) => void;
+  onStartWatching: () => void;
+  onStopWatching: () => void;
+  onSendLiveComment: () => void;
   onBack: () => void;
 }) {
   const turns = selectedSession
@@ -2223,8 +2396,31 @@ function StudentDetail({
   );
   const mastery = dashboard.mastery.filter((item) => item.user_id === studentId);
   const notes = dashboard.notes.filter((item) => item.student_id === studentId);
+  const liveComments = selectedSession
+    ? dashboard.liveComments.filter((comment) => comment.session_id === selectedSession.id)
+    : [];
+  const transcriptItems = [
+    ...turns.map((turn) => ({
+      id: `turn-${turn.id}`,
+      kind: "turn" as const,
+      createdAt: turn.created_at,
+      turn,
+    })),
+    ...liveComments.map((comment) => ({
+      id: `live-comment-${comment.id}`,
+      kind: "live_comment" as const,
+      createdAt: comment.created_at,
+      comment,
+    })),
+  ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const activeSessions = sessions.filter((session) => session.status !== "complete");
   const completedSessions = sessions.filter((session) => session.status === "complete");
+  const watchingSelectedSession =
+    Boolean(liveViewer) &&
+    Boolean(selectedSession) &&
+    liveViewer?.session_id === selectedSession?.id;
+  const canWatchSelectedSession =
+    Boolean(selectedSession) && selectedSession?.status !== "complete";
 
   return (
     <GradientCard>
@@ -2280,7 +2476,26 @@ function StudentDetail({
               >
                 {sessionProgressStatus(selectedSession)}
               </span>
+              <button
+                type="button"
+                onClick={watchingSelectedSession ? onStopWatching : onStartWatching}
+                disabled={!canWatchSelectedSession}
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {watchingSelectedSession ? (
+                  <EyeOff className="h-3.5 w-3.5" strokeWidth={1.7} />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" strokeWidth={1.7} />
+                )}
+                {watchingSelectedSession ? "Stop watching" : "Watch live"}
+              </button>
             </div>
+            {watchingSelectedSession ? (
+              <div className="mt-3 rounded-2xl border border-blue-400/35 bg-blue-400/10 px-3 py-2 text-[12px] text-blue-200">
+                You are watching live. The student will see a teacher-viewing indicator while your
+                heartbeat is active.
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -2311,18 +2526,80 @@ function StudentDetail({
               </div>
             ) : null}
 
-            {turns.length ? (
+            {selectedSession && canWatchSelectedSession ? (
+              <div className="mb-3 rounded-2xl border border-border bg-background/45 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[12px] font-medium text-foreground">Live teacher tip</div>
+                    <div className="text-[11.5px] text-muted-foreground">
+                      Visible in the student chat as a Teacher message.
+                    </div>
+                  </div>
+                  {watchingSelectedSession ? (
+                    <span className="rounded-full border border-blue-400/35 bg-blue-400/10 px-2.5 py-1 text-[11px] text-blue-200">
+                      Watching
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={liveCommentDraft}
+                    onChange={(event) => onLiveCommentChange(event.target.value)}
+                    disabled={!watchingSelectedSession}
+                    placeholder={
+                      watchingSelectedSession
+                        ? "Send a short tip to this student..."
+                        : "Start watching live before sending a tip."
+                    }
+                    className="min-w-0 flex-1 rounded-full border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-55"
+                  />
+                  <button
+                    type="button"
+                    onClick={onSendLiveComment}
+                    disabled={
+                      !watchingSelectedSession || !liveCommentDraft.trim() || sendingLiveComment
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-3 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    {sendingLiveComment ? "Sending..." : "Send"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {transcriptItems.length ? (
               <div className="max-h-[440px] space-y-3 overflow-auto pr-1">
-                {turns.map((turn) => {
-                  const modality = inputModalityFromPayload(turn.payload);
+                {transcriptItems.map((item) => {
+                  if (item.kind === "live_comment") {
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-3xl border border-blue-400/35 bg-blue-400/10 p-4"
+                      >
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[12px] uppercase tracking-[0.1em] text-blue-200">
+                            Teacher live
+                          </span>
+                          <span className="text-[11.5px] text-muted-foreground">
+                            {formatDateTime(item.comment.created_at)}
+                          </span>
+                        </div>
+                        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
+                          {item.comment.content}
+                        </p>
+                      </div>
+                    );
+                  }
+                  const modality = inputModalityFromPayload(item.turn.payload);
                   return (
                     <div
-                      key={turn.id}
+                      key={item.id}
                       className="rounded-3xl border border-border bg-background/45 p-4"
                     >
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <span className="flex flex-wrap items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                          {turn.role} - {turn.stage}
+                          {item.turn.role} - {item.turn.stage}
                           {modality === "dictated" || modality === "audio_session" ? (
                             <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] tracking-[0.08em] text-muted-foreground">
                               {modality === "audio_session" ? "Voice" : "Dictated"}
@@ -2330,11 +2607,11 @@ function StudentDetail({
                           ) : null}
                         </span>
                         <span className="text-[11.5px] text-muted-foreground">
-                          {formatDateTime(turn.created_at)}
+                          {formatDateTime(item.turn.created_at)}
                         </span>
                       </div>
                       <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-                        {turn.content || "[Empty turn]"}
+                        {item.turn.content || "[Empty turn]"}
                       </p>
                     </div>
                   );
@@ -3039,7 +3316,7 @@ function interventionSignal(alert: InterventionAlert): RiskSignal {
     studentId: alert.student_id,
     kind: "intervention",
     title: alert.title || "Teacher intervention alert",
-    detail: alert.detail || `${alert.alert_type} · ${alert.status}`,
+    detail: alert.message || `${alert.alert_type} · ${alert.status}`,
     severity: alert.severity || "medium",
     sourceId: alert.id,
   };

@@ -30,6 +30,7 @@ import type {
   LessonResourceType,
   LessonResourceVisibility,
   LearningEvidence,
+  LiveSessionViewer,
   ModelUsageEvent,
   AdminSeedResponse,
   AdminSeedUser,
@@ -48,6 +49,7 @@ import type {
   StudentAssignmentBundle,
   TypedChatAnswer,
   TypedChatEnvelope,
+  TeacherLiveComment,
   VoiceInteractionEvent,
 } from "@/lib/types";
 
@@ -318,6 +320,27 @@ export async function fetchLearningTurns(sessionId: string) {
   return (data || []) as LearningTurn[];
 }
 
+export async function fetchTeacherLiveComments(sessionId: string) {
+  const { data, error } = await supabase
+    .from("teacher_live_comments")
+    .select("*")
+    .eq("session_id", sessionId)
+    .eq("visibility", "student_visible")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []) as TeacherLiveComment[];
+}
+
+export async function fetchLiveSessionViewers(sessionId: string) {
+  const { data, error } = await supabase
+    .from("live_session_viewers")
+    .select("*")
+    .eq("session_id", sessionId)
+    .order("last_seen_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as LiveSessionViewer[];
+}
+
 export async function fetchLessonAttempts(sessionId: string) {
   const { data, error } = await supabase
     .from("lesson_attempts")
@@ -483,6 +506,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
       evidence: [],
       mastery: [],
       notes: [],
+      liveComments: [],
       resources: [],
       resourceInteractions: [],
       interventionAlerts: [],
@@ -659,6 +683,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
   const sessionIds = uniqueStrings(sessions.map((session) => session.id));
   const [
     { data: turnRows, error: turnsError },
+    liveCommentsResult,
     assignmentRecipientsResult,
     assignmentSubmissionsResult,
     assignmentFilesResult,
@@ -670,6 +695,14 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .in("session_id", sessionIds)
           .order("created_at", { ascending: true })
           .limit(600)
+      : Promise.resolve({ data: [], error: null }),
+    sessionIds.length
+      ? supabase
+          .from("teacher_live_comments")
+          .select("*")
+          .in("session_id", sessionIds)
+          .order("created_at", { ascending: true })
+          .limit(400)
       : Promise.resolve({ data: [], error: null }),
     assignmentIds.length
       ? supabase
@@ -698,6 +731,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
   ]);
   if (turnsError) throw turnsError;
   for (const result of [
+    liveCommentsResult,
     assignmentRecipientsResult,
     assignmentSubmissionsResult,
     assignmentFilesResult,
@@ -717,6 +751,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     evidence: (evidenceResult.data || []) as LearningEvidence[],
     mastery: (masteryResult.data || []) as StudentMastery[],
     notes: (notesResult.data || []) as TeacherNote[],
+    liveComments: (liveCommentsResult.data || []) as TeacherLiveComment[],
     resources: (resourcesResult.data || []) as LessonResource[],
     resourceInteractions: (resourceInteractionsResult.data || []) as ResourceInteraction[],
     interventionAlerts: (interventionAlertsResult.data || []) as InterventionAlert[],
@@ -750,6 +785,131 @@ export async function createTeacherNote(input: {
     .single();
   if (error) throw error;
   return data as TeacherNote;
+}
+
+async function currentUserId() {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (error) throw error;
+  if (!user) throw new Error("You need to sign in again.");
+  return user.id;
+}
+
+export async function startLiveSessionViewer(input: {
+  sessionId: string;
+  studentId: string;
+  classId: string;
+}) {
+  const teacherId = await currentUserId();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("live_session_viewers")
+    .upsert(
+      {
+        session_id: input.sessionId,
+        student_id: input.studentId,
+        teacher_id: teacherId,
+        class_id: input.classId,
+        status: "active",
+        last_seen_at: now,
+      },
+      { onConflict: "session_id,teacher_id" },
+    )
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as LiveSessionViewer;
+}
+
+export async function heartbeatLiveSessionViewer(viewerId: string) {
+  const { data, error } = await supabase
+    .from("live_session_viewers")
+    .update({ status: "active", last_seen_at: new Date().toISOString() })
+    .eq("id", viewerId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as LiveSessionViewer;
+}
+
+export async function stopLiveSessionViewer(viewerId: string) {
+  const { data, error } = await supabase
+    .from("live_session_viewers")
+    .update({ status: "inactive", last_seen_at: new Date().toISOString() })
+    .eq("id", viewerId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as LiveSessionViewer;
+}
+
+export async function sendTeacherLiveComment(input: {
+  sessionId: string;
+  studentId: string;
+  classId: string;
+  lessonId?: string | null;
+  content: string;
+}) {
+  const teacherId = await currentUserId();
+  const { data, error } = await supabase
+    .from("teacher_live_comments")
+    .insert({
+      session_id: input.sessionId,
+      student_id: input.studentId,
+      teacher_id: teacherId,
+      class_id: input.classId,
+      content: input.content.trim(),
+      visibility: "student_visible",
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  const comment = data as TeacherLiveComment;
+  const { error: heatmapError } = await supabase.from("transcript_heatmap_events").insert({
+    session_id: input.sessionId,
+    user_id: input.studentId,
+    lesson_id: input.lessonId || null,
+    event_type: "teacher_intervention",
+    intensity: 1,
+    payload: {
+      teacher_id: teacherId,
+      teacher_live_comment_id: comment.id,
+      content_preview: input.content.trim().slice(0, 160),
+    },
+  });
+  if (heatmapError) throw heatmapError;
+
+  return comment;
+}
+
+export async function updateInterventionAlertStatus(
+  alertId: string,
+  status: InterventionAlert["status"],
+) {
+  const userId = await currentUserId();
+  const patch: Partial<InterventionAlert> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+  if (status === "resolved" || status === "dismissed") {
+    patch.resolved_by = userId;
+    patch.resolved_at = new Date().toISOString();
+  } else if (status === "acknowledged") {
+    patch.resolved_by = null;
+    patch.resolved_at = null;
+  }
+
+  const { data, error } = await supabase
+    .from("intervention_alerts")
+    .update(patch)
+    .eq("id", alertId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as InterventionAlert;
 }
 
 export async function fetchLessonResources(lessonId: string) {
