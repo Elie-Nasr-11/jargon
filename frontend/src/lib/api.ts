@@ -1353,6 +1353,14 @@ export async function saveExtractedPdfChunks(
   return data.chunks || [];
 }
 
+export async function transcribeMediaResource(resourceId: string) {
+  const data = await invokeResourceProcessing({
+    action: "transcribe_media_resource",
+    resource_id: resourceId,
+  });
+  return data.chunks || [];
+}
+
 export async function saveResourceChunkEdits(
   resourceId: string,
   chunks: Array<Pick<ResourceTextChunk, "id" | "page_number" | "chunk_index" | "chunk_text">>,

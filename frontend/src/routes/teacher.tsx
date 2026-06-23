@@ -45,6 +45,7 @@ import {
   rejectResourceChunks,
   saveExtractedPdfChunks,
   saveResourceChunkEdits,
+  transcribeMediaResource,
   updateAssignmentStatus,
   updateInterventionAlertStatus,
   updateLessonResource,
@@ -988,6 +989,25 @@ function defaultResourceForm(
   };
 }
 
+function formatSeconds(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "";
+  const total = Math.max(0, Math.floor(value));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function chunkLocationLabel(chunk: ResourceTextChunk) {
+  if (chunk.source_kind === "audio" || chunk.source_kind === "video") {
+    const start = formatSeconds(chunk.start_seconds);
+    const end = formatSeconds(chunk.end_seconds);
+    if (start && end) return `${chunk.source_kind === "video" ? "Video" : "Audio"} ${start}-${end}`;
+    if (start) return `${chunk.source_kind === "video" ? "Video" : "Audio"} ${start}`;
+    return `${chunk.source_kind === "video" ? "Video" : "Audio"} transcript`;
+  }
+  return `Page ${chunk.page_number}`;
+}
+
 function ResourceManager({
   classSummary,
   lessons,
@@ -1154,6 +1174,30 @@ function ResourceManager({
       );
     } catch (error) {
       setResourceMessage((error as Error).message || "Could not extract PDF text.");
+    } finally {
+      setProcessingId("");
+    }
+  };
+
+  const transcribeResource = async (resource: LessonResource) => {
+    try {
+      setProcessingId(resource.id);
+      setResourceMessage("Transcribing uploaded media. This can take a little while...");
+      const saved = await transcribeMediaResource(resource.id);
+      setChunksByResource((current) => ({
+        ...current,
+        [resource.id]: saved,
+      }));
+      setChunkDrafts((current) => ({
+        ...current,
+        ...Object.fromEntries(saved.map((chunk) => [chunk.id, chunk.chunk_text])),
+      }));
+      setReviewingId(resource.id);
+      setResourceMessage(
+        `Created ${saved.length} draft transcript chunk${saved.length === 1 ? "" : "s"}. Review and approve before Mentor can use them.`,
+      );
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not transcribe media.");
     } finally {
       setProcessingId("");
     }
@@ -1437,6 +1481,9 @@ function ResourceManager({
               const rejectedCount = chunks.filter((chunk) => chunk.status === "rejected").length;
               const canExtractPdf =
                 resource.resource_type === "pdf" && resource.source_type === "upload";
+              const canTranscribeMedia =
+                (resource.resource_type === "audio" || resource.resource_type === "video") &&
+                resource.source_type === "upload";
               const reviewOpen = reviewingId === resource.id;
 
               return (
@@ -1533,6 +1580,21 @@ function ResourceManager({
                         {processingId === resource.id ? "Extracting..." : "Extract PDF text"}
                       </button>
                     ) : null}
+                    {canTranscribeMedia ? (
+                      <button
+                        type="button"
+                        onClick={() => void transcribeResource(resource)}
+                        disabled={processingId === resource.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/35 px-3 py-1.5 text-[11.5px] text-blue-500 transition-colors hover:bg-blue-500/10 disabled:opacity-45"
+                      >
+                        <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
+                        {processingId === resource.id
+                          ? "Transcribing..."
+                          : resource.resource_type === "video"
+                            ? "Transcribe video"
+                            : "Transcribe audio"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() =>
@@ -1553,7 +1615,7 @@ function ResourceManager({
                       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                         <div>
                           <div className="text-[12.5px] font-medium text-foreground">
-                            Extracted text review
+                            Extracted text / transcript review
                           </div>
                           <div className="text-[11.5px] text-muted-foreground">
                             Draft and rejected chunks are teacher-only. Mentor can use approved
@@ -1596,7 +1658,7 @@ function ResourceManager({
                             >
                               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
-                                  <span>Page {chunk.page_number}</span>
+                                  <span>{chunkLocationLabel(chunk)}</span>
                                   <span>Chunk {chunk.chunk_index + 1}</span>
                                   <ResourceChunkStatusChip status={chunk.status} />
                                 </div>
@@ -1651,7 +1713,8 @@ function ResourceManager({
                         </div>
                       ) : (
                         <div className="rounded-2xl border border-border bg-background/55 p-4 text-[12.5px] text-muted-foreground">
-                          No chunks yet. Extract text from an uploaded PDF to begin review.
+                          No chunks yet. Extract an uploaded PDF or transcribe uploaded audio/video
+                          to begin review.
                         </div>
                       )}
                     </div>

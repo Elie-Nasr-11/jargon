@@ -262,16 +262,17 @@ Acceptance: two organizations can exist side by side, and RLS prevents cross-org
 
 Goal: make uploaded resources deeply useful to Mentor.
 
-Status: PDF-first v1 is implemented repo-side. Uploaded PDFs can be extracted in the teacher
-browser, saved as draft chunks through a JWT-protected Edge Function, approved by teachers,
-and loaded by Mentor only after approval.
+Status: Media Processing v2 is implemented repo-side. Uploaded PDFs can be extracted in the
+teacher browser; uploaded audio/video can be transcribed server-side through OpenAI
+speech-to-text; all chunks are saved as draft chunks through a JWT-protected Edge Function,
+approved by teachers, and loaded by Mentor only after approval.
 
 Add processing jobs for teacher-uploaded resources:
 
 - PDF text extraction
 - PDF page thumbnails
-- Audio transcription
-- Video transcription
+- Audio transcription for uploaded files under 25 MB
+- Video transcription for uploaded files under 25 MB
 - YouTube transcript import where available and permitted
 - Generated summaries
 - Chunked searchable resource text
@@ -292,7 +293,7 @@ Mentor usage:
 - Do not over-rely on unreviewed extraction.
 - Let teachers mark extracted text as approved.
 
-Acceptance: teacher uploads a PDF, extraction creates reviewed chunks, and Mentor can reference specific pages during chat.
+Acceptance: teacher uploads a PDF or small audio/video file, processing creates reviewed chunks, and Mentor can reference approved pages or time ranges during chat.
 
 ## Phase 10: Analytics, Mastery, And Adaptation
 

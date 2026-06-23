@@ -173,16 +173,16 @@ Exit criteria: two organizations can exist side by side, and RLS prevents cross-
 
 Goal: make uploaded resources deeply useful to Mentor.
 
-- Status: PDF-first v1 implemented repo-side. Teachers can extract PDF text in-browser,
+- Status: Media Processing v2 implemented repo-side. Teachers can extract PDF text
+  in-browser, transcribe uploaded audio/video server-side through OpenAI speech-to-text,
   store draft chunks through `resource-processing`, review/edit/approve/reject/delete
   chunks, and `chat` can load approved chunks as bounded Mentor context.
-- Add PDF text extraction and page thumbnails.
-- Add audio/video transcription.
+- Add PDF page thumbnails.
 - Add YouTube transcript import where available and permitted.
 - Store reviewed chunks for Mentor retrieval.
 - Let teachers approve extracted text before Mentor relies on it.
 
-Exit criteria: teacher uploads a PDF, extraction creates reviewed chunks, and Mentor references specific pages during chat.
+Exit criteria: teacher uploads a PDF or small audio/video file, processing creates reviewed chunks, and Mentor references approved pages or time ranges during chat.
 
 ## Phase 10: Analytics, Mastery, And Adaptation
 

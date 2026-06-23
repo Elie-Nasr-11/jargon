@@ -1,6 +1,6 @@
-// PDF-first resource processing for teacher-reviewed Mentor context.
-// The browser extracts PDF text after authorized file access; this function
-// persists draft chunks and enforces teacher/org/platform authorization.
+// Resource processing for teacher-reviewed Mentor context.
+// PDF text is extracted in the teacher's browser; uploaded audio/video is
+// transcribed server-side with OpenAI. All chunks stay draft until approved.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
@@ -23,8 +23,44 @@ type ChunkInput = {
   page_number?: number;
   chunk_index?: number;
   chunk_text?: string;
+  source_kind?: string;
+  start_seconds?: number | string | null;
+  end_seconds?: number | string | null;
+  confidence?: number | string | null;
   metadata?: DbRow;
 };
+
+type ProcessingJobType =
+  | "pdf_text_extraction"
+  | "audio_transcription"
+  | "video_transcription";
+
+const MAX_CHUNKS = 500;
+const MAX_CHUNK_CHARS = 8000;
+const MAX_TRANSCRIPTION_BYTES = 25 * 1024 * 1024;
+const SUPPORTED_TRANSCRIPTION_EXTENSIONS = new Set([
+  "mp3",
+  "mp4",
+  "mpeg",
+  "mpga",
+  "m4a",
+  "wav",
+  "webm",
+]);
+const SUPPORTED_TRANSCRIPTION_MIME_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/x-m4a",
+  "audio/wav",
+  "audio/wave",
+  "audio/x-wav",
+  "audio/webm",
+  "video/mp4",
+  "video/mpeg",
+  "video/webm",
+]);
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -69,6 +105,17 @@ function numberValue(value: unknown, fallback = 0): number {
     if (Number.isFinite(parsed)) return parsed;
   }
   return fallback;
+}
+
+function optionalNumberValue(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = numberValue(value, Number.NaN);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function cleanSourceKind(value: unknown, fallback = "document"): string {
+  const clean = cleanText(value, fallback);
+  return ["document", "audio", "video", "manual"].includes(clean) ? clean : fallback;
 }
 
 function idFilter(ids: string[]): string {
@@ -136,7 +183,7 @@ async function requireManageableResource(
 
   const data = await supabaseFetch(
     config,
-    `lesson_resources?id=eq.${encodeURIComponent(resourceId)}&select=id,organization_id,class_id,lesson_id,title,resource_type,source_type,storage_bucket,storage_path,status,visibility`,
+    `lesson_resources?id=eq.${encodeURIComponent(resourceId)}&select=id,organization_id,class_id,lesson_id,title,resource_type,source_type,storage_bucket,storage_path,mime_type,file_size_bytes,status,visibility`,
   );
   if (!Array.isArray(data) || !data[0] || typeof data[0] !== "object") {
     throw new Error("Resource not found.");
@@ -149,13 +196,29 @@ function normalizeChunk(raw: ChunkInput, index: number): DbRow {
   const chunkIndex = Math.max(0, Math.floor(numberValue(raw.chunk_index, index)));
   const chunkText = cleanText(raw.chunk_text);
   if (!chunkText) throw new Error("Extracted chunks cannot be empty.");
-  if (chunkText.length > 8000) {
-    throw new Error("One extracted chunk is too large. Split the PDF text into smaller chunks.");
+  if (chunkText.length > MAX_CHUNK_CHARS) {
+    throw new Error("One extracted chunk is too large. Split the text into smaller chunks.");
+  }
+  const startSeconds = optionalNumberValue(raw.start_seconds);
+  const endSeconds = optionalNumberValue(raw.end_seconds);
+  const confidence = optionalNumberValue(raw.confidence);
+  if (startSeconds !== null && startSeconds < 0) {
+    throw new Error("Transcript start time cannot be negative.");
+  }
+  if (endSeconds !== null && startSeconds !== null && endSeconds < startSeconds) {
+    throw new Error("Transcript end time cannot be before the start time.");
+  }
+  if (confidence !== null && (confidence < 0 || confidence > 1)) {
+    throw new Error("Transcript confidence must be between 0 and 1.");
   }
   return {
     page_number: pageNumber,
     chunk_index: chunkIndex,
     chunk_text: chunkText,
+    source_kind: cleanSourceKind(raw.source_kind),
+    start_seconds: startSeconds,
+    end_seconds: endSeconds,
+    confidence,
     metadata:
       raw.metadata && typeof raw.metadata === "object" && !Array.isArray(raw.metadata)
         ? raw.metadata
@@ -191,9 +254,11 @@ async function extractPdfChunks(config: Config, body: DbRow, user: DbRow) {
 
   const rawChunks = Array.isArray(body.chunks) ? (body.chunks as ChunkInput[]) : [];
   if (!rawChunks.length) throw new Error("No PDF text chunks were provided.");
-  if (rawChunks.length > 500) throw new Error("Too many chunks. Keep extraction under 500 chunks.");
+  if (rawChunks.length > MAX_CHUNKS) throw new Error("Too many chunks. Keep extraction under 500 chunks.");
 
-  const chunks = rawChunks.map(normalizeChunk);
+  const chunks = rawChunks.map((chunk, index) =>
+    normalizeChunk({ ...chunk, source_kind: "document" }, index),
+  );
   const userId = String(user.id);
 
   const jobRows = await supabaseFetch(config, "resource_processing_jobs", {
@@ -251,6 +316,341 @@ async function extractPdfChunks(config: Config, body: DbRow, user: DbRow) {
     job_id: job.id,
     chunks: inserted,
   };
+}
+
+async function createProcessingJob(
+  config: Config,
+  resource: DbRow,
+  user: DbRow,
+  jobType: ProcessingJobType,
+  status: "processing" | "complete" | "failed",
+  metadata: DbRow = {},
+) {
+  const jobRows = await supabaseFetch(config, "resource_processing_jobs", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      resource_id: resource.id,
+      organization_id: resource.organization_id || null,
+      class_id: resource.class_id || null,
+      lesson_id: resource.lesson_id || null,
+      job_type: jobType,
+      status,
+      requested_by: user.id,
+      metadata,
+    }),
+  });
+  const job = Array.isArray(jobRows) ? (jobRows[0] as DbRow | undefined) : undefined;
+  if (!job?.id) throw new Error("Could not create processing job.");
+  return job;
+}
+
+async function updateProcessingJob(config: Config, jobId: string, patch: DbRow) {
+  await supabaseFetch(config, `resource_processing_jobs?id=eq.${encodeURIComponent(jobId)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      ...patch,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+}
+
+async function insertProcessingError(
+  config: Config,
+  resourceId: string,
+  jobId: string,
+  message: string,
+  payload: DbRow = {},
+) {
+  await supabaseFetch(config, "resource_processing_errors", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      job_id: jobId,
+      resource_id: resourceId,
+      severity: "error",
+      message,
+      payload,
+    }),
+  });
+}
+
+function resourceFileName(resource: DbRow): string {
+  const storagePath = cleanText(resource.storage_path);
+  const title = cleanText(resource.title, "media");
+  return storagePath.split("/").filter(Boolean).pop() || `${title}.media`;
+}
+
+function fileExtension(fileName: string): string {
+  const parts = fileName.toLowerCase().split(".");
+  return parts.length > 1 ? parts.pop() || "" : "";
+}
+
+function mimeTypeForExtension(extension: string, fallback: string): string {
+  if (fallback) return fallback;
+  if (extension === "mp4") return "video/mp4";
+  if (extension === "webm") return "video/webm";
+  if (extension === "wav") return "audio/wav";
+  if (extension === "m4a") return "audio/mp4";
+  return "audio/mpeg";
+}
+
+function assertSupportedMedia(resource: DbRow) {
+  const resourceType = cleanText(resource.resource_type);
+  if (!["audio", "video"].includes(resourceType)) {
+    throw new Error("Only uploaded audio and video resources can be transcribed.");
+  }
+  if (resource.source_type !== "upload") {
+    throw new Error("Only uploaded audio and video files can be transcribed.");
+  }
+  const fileName = resourceFileName(resource);
+  const extension = fileExtension(fileName);
+  const mimeType = cleanText(resource.mime_type).toLowerCase();
+  if (
+    !SUPPORTED_TRANSCRIPTION_EXTENSIONS.has(extension)
+    && !SUPPORTED_TRANSCRIPTION_MIME_TYPES.has(mimeType)
+  ) {
+    throw new Error(
+      "Unsupported transcription file type. Use mp3, mp4, mpeg, mpga, m4a, wav, or webm.",
+    );
+  }
+  const declaredSize = numberValue(resource.file_size_bytes, 0);
+  if (declaredSize > MAX_TRANSCRIPTION_BYTES) {
+    throw new Error("Audio/video transcription is limited to files under 25 MB in v1.");
+  }
+}
+
+function storageObjectUrl(config: Config, bucket: string, path: string): string {
+  const encodedBucket = encodeURIComponent(bucket);
+  const encodedPath = path
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+  return `${config.url}/storage/v1/object/${encodedBucket}/${encodedPath}`;
+}
+
+async function downloadResourceFile(config: Config, resource: DbRow) {
+  const bucket = cleanText(resource.storage_bucket, "lesson-resources");
+  const path = cleanText(resource.storage_path);
+  if (!path) throw new Error("This resource has no uploaded media file.");
+
+  const res = await fetch(storageObjectUrl(config, bucket, path), {
+    headers: {
+      apikey: config.anonKey,
+      Authorization: config.authorization,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Could not open the private media file (${res.status}).`);
+  }
+  const blob = await res.blob();
+  if (blob.size > MAX_TRANSCRIPTION_BYTES) {
+    throw new Error("Audio/video transcription is limited to files under 25 MB in v1.");
+  }
+  if (!blob.size) throw new Error("The uploaded media file is empty.");
+  return blob;
+}
+
+function requireOpenAiKey(): string {
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (!key) throw new Error("OPENAI_API_KEY is not configured for transcription.");
+  return key;
+}
+
+type OpenAiSegment = {
+  text?: unknown;
+  start?: unknown;
+  end?: unknown;
+  avg_logprob?: unknown;
+};
+
+function splitTranscriptText(text: string, sourceKind: "audio" | "video"): DbRow[] {
+  const clean = text.trim();
+  if (!clean) return [];
+  const rows: DbRow[] = [];
+  let cursor = 0;
+  let index = 0;
+  const maxLength = 3000;
+  while (cursor < clean.length) {
+    const next = clean.slice(cursor, cursor + maxLength);
+    const sentenceBreak = next.lastIndexOf(". ");
+    const cut =
+      cursor + next.length < clean.length && sentenceBreak > 500
+        ? sentenceBreak + 1
+        : next.length;
+    const chunkText = clean.slice(cursor, cursor + cut).trim();
+    if (chunkText) {
+      rows.push(
+        normalizeChunk(
+          {
+            page_number: 1,
+            chunk_index: index,
+            chunk_text: chunkText,
+            source_kind: sourceKind,
+            metadata: { generated_from: "openai_transcription_text" },
+          },
+          index,
+        ),
+      );
+      index += 1;
+    }
+    cursor += Math.max(cut, 1);
+  }
+  return rows;
+}
+
+function chunksFromTranscriptionResponse(response: DbRow, sourceKind: "audio" | "video") {
+  const rawSegments = Array.isArray(response.segments)
+    ? (response.segments as OpenAiSegment[])
+    : [];
+  const segmentChunks = rawSegments
+    .filter((segment) => cleanText(segment.text))
+    .map((segment, index) =>
+      normalizeChunk(
+        {
+          page_number: 1,
+          chunk_index: index,
+          chunk_text: cleanText(segment.text),
+          source_kind: sourceKind,
+          start_seconds: optionalNumberValue(segment.start),
+          end_seconds: optionalNumberValue(segment.end),
+          confidence: null,
+          metadata:
+            segment.avg_logprob === undefined || segment.avg_logprob === null
+              ? { generated_from: "openai_transcription_segment" }
+              : {
+                  generated_from: "openai_transcription_segment",
+                  avg_logprob: segment.avg_logprob,
+                },
+        },
+        index,
+      ),
+    );
+  if (segmentChunks.length) return segmentChunks;
+
+  return splitTranscriptText(cleanText(response.text), sourceKind);
+}
+
+async function transcribeWithOpenAi(
+  openAiKey: string,
+  resource: DbRow,
+  mediaBlob: Blob,
+): Promise<DbRow> {
+  const fileName = resourceFileName(resource);
+  const extension = fileExtension(fileName);
+  const mimeType = mimeTypeForExtension(extension, cleanText(resource.mime_type));
+  const form = new FormData();
+  form.append("model", "whisper-1");
+  form.append("response_format", "verbose_json");
+  form.append("timestamp_granularities[]", "segment");
+  form.append("file", new File([mediaBlob], fileName, { type: mimeType }));
+
+  const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openAiKey}`,
+    },
+    body: form,
+  });
+  const data = (await res.json().catch(() => null)) as DbRow | null;
+  if (!res.ok) {
+    const message =
+      data && typeof data === "object" && "error" in data
+        ? cleanText((data.error as DbRow)?.message, res.statusText)
+        : res.statusText;
+    throw new Error(`OpenAI transcription failed: ${message}`);
+  }
+  if (!data || typeof data !== "object") {
+    throw new Error("OpenAI transcription returned an invalid response.");
+  }
+  return data;
+}
+
+async function transcribeMediaResource(config: Config, body: DbRow, user: DbRow) {
+  const resourceId = cleanId(body.resource_id);
+  const resource = await requireManageableResource(config, resourceId);
+  assertSupportedMedia(resource);
+
+  const sourceKind = resource.resource_type === "video" ? "video" : "audio";
+  const jobType: ProcessingJobType =
+    sourceKind === "video" ? "video_transcription" : "audio_transcription";
+  const openAiKey = requireOpenAiKey();
+  const job = await createProcessingJob(config, resource, user, jobType, "processing", {
+    model: "whisper-1",
+    supported_limit_bytes: MAX_TRANSCRIPTION_BYTES,
+  });
+
+  try {
+    const mediaBlob = await downloadResourceFile(config, resource);
+    const transcription = await transcribeWithOpenAi(openAiKey, resource, mediaBlob);
+    const chunks = chunksFromTranscriptionResponse(transcription, sourceKind);
+    if (!chunks.length) {
+      throw new Error("No transcript text was found in this media file.");
+    }
+    if (chunks.length > MAX_CHUNKS) {
+      throw new Error("Too many transcript chunks. Use a shorter file for v1.");
+    }
+
+    await supabaseFetch(
+      config,
+      `resource_text_chunks?resource_id=eq.${encodeURIComponent(resourceId)}&status=eq.draft&source_kind=eq.${sourceKind}`,
+      {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
+      },
+    );
+
+    const insertRows = chunks.map((chunk) => ({
+      ...chunk,
+      resource_id: resourceId,
+      job_id: job.id,
+      organization_id: resource.organization_id || null,
+      class_id: resource.class_id || null,
+      lesson_id: resource.lesson_id || null,
+      status: "draft",
+      created_by: user.id,
+      updated_by: user.id,
+    }));
+    const inserted = await supabaseFetch(config, "resource_text_chunks", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(insertRows),
+    });
+
+    await updateProcessingJob(config, String(job.id), {
+      status: "complete",
+      completed_by: user.id,
+      chunk_count: chunks.length,
+      completed_at: new Date().toISOString(),
+      metadata: {
+        media_size_bytes: mediaBlob.size,
+        response_format: "verbose_json",
+        timestamp_granularity: "segment",
+      },
+    });
+
+    return {
+      status: "ok",
+      resource_id: resourceId,
+      job_id: job.id,
+      chunks: inserted,
+    };
+  } catch (error) {
+    const message = errorMessage(error);
+    await updateProcessingJob(config, String(job.id), {
+      status: "failed",
+      completed_by: user.id,
+      error_count: 1,
+      completed_at: new Date().toISOString(),
+    });
+    await insertProcessingError(config, resourceId, String(job.id), message, {
+      action: "transcribe_media_resource",
+      resource_type: resource.resource_type,
+    });
+    throw error;
+  }
 }
 
 async function saveChunkEdits(config: Config, body: DbRow, user: DbRow) {
@@ -353,6 +753,9 @@ Deno.serve(async (req) => {
     }
     if (action === "extract_pdf_chunks") {
       return json(await extractPdfChunks(config, body, user));
+    }
+    if (action === "transcribe_media_resource") {
+      return json(await transcribeMediaResource(config, body, user));
     }
     if (action === "save_chunk_edits") {
       return json(await saveChunkEdits(config, body, user));

@@ -895,7 +895,7 @@ async function loadContext(
   const resourceChunks = resourceIds.length
     ? await loadMany(
         config,
-        `resource_text_chunks?resource_id=${inFilter(resourceIds)}&status=eq.approved&order=page_number.asc,chunk_index.asc&limit=18&select=resource_id,page_number,chunk_index,chunk_text,status`,
+        `resource_text_chunks?resource_id=${inFilter(resourceIds)}&status=eq.approved&order=source_kind.asc,start_seconds.asc,page_number.asc,chunk_index.asc&limit=18&select=resource_id,page_number,chunk_index,chunk_text,status,source_kind,start_seconds,end_seconds`,
       )
     : [];
 
@@ -1188,7 +1188,7 @@ async function handleTypedRequest(
         role: "user",
         content: JSON.stringify({
           instruction:
-            "Return only the typed JSON envelope. The orchestrator owns records, final stage/action, and resource cards; you own concise student-facing wording. If lesson_resources are present, invite the student to open one. If approved_resource_chunks are present, you may use them as teacher-approved context and cite the resource title/page briefly. Do not claim a resource was viewed unless resource_interactions proves it.",
+            "Return only the typed JSON envelope. The orchestrator owns records, final stage/action, and resource cards; you own concise student-facing wording. If lesson_resources are present, invite the student to open one. If approved_resource_chunks are present, you may use them as teacher-approved context and cite PDF/document chunks by resource title/page and audio/video chunks by resource title/time range. Do not claim a resource was viewed unless resource_interactions proves it.",
           lesson: context.lesson,
           activity: context.activity,
           milestone: context.milestone,
@@ -1211,7 +1211,10 @@ async function handleTypedRequest(
             return {
               resource_id: chunk.resource_id,
               resource_title: resource?.title || "Lesson resource",
+              source_kind: chunk.source_kind || "document",
               page_number: chunk.page_number,
+              start_seconds: chunk.start_seconds,
+              end_seconds: chunk.end_seconds,
               chunk_index: chunk.chunk_index,
               chunk_text: String(chunk.chunk_text || "").slice(0, 1400),
             };

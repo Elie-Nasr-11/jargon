@@ -282,7 +282,7 @@ export type ResourceProcessingJob = {
   organization_id: string | null;
   class_id: string | null;
   lesson_id: string | null;
-  job_type: "pdf_text_extraction";
+  job_type: "pdf_text_extraction" | "audio_transcription" | "video_transcription";
   status: ResourceProcessingJobStatus;
   requested_by: string | null;
   completed_by: string | null;
@@ -306,6 +306,7 @@ export type ResourceProcessingError = {
 };
 
 export type ResourceTextChunkStatus = "draft" | "approved" | "rejected";
+export type ResourceTextChunkSourceKind = "document" | "audio" | "video" | "manual";
 
 export type ResourceTextChunk = {
   id: string;
@@ -317,6 +318,10 @@ export type ResourceTextChunk = {
   page_number: number;
   chunk_index: number;
   chunk_text: string;
+  source_kind: ResourceTextChunkSourceKind;
+  start_seconds: number | null;
+  end_seconds: number | null;
+  confidence: number | null;
   status: ResourceTextChunkStatus;
   created_by: string | null;
   updated_by: string | null;

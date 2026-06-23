@@ -4,6 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase" / "migrations" / "0013_media_processing.sql"
+TRANSCRIPTION_MIGRATION = ROOT / "supabase" / "migrations" / "0015_media_transcription.sql"
 FUNCTION = ROOT / "supabase" / "functions" / "resource-processing" / "index.ts"
 CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
@@ -18,6 +19,7 @@ class MediaProcessingStaticTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.migration = MIGRATION.read_text(encoding="utf-8")
+        cls.transcription_migration = TRANSCRIPTION_MIGRATION.read_text(encoding="utf-8")
         cls.function = FUNCTION.read_text(encoding="utf-8")
         cls.chat = CHAT_FUNCTION.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
@@ -46,6 +48,7 @@ class MediaProcessingStaticTests(unittest.TestCase):
     def test_resource_processing_function_is_jwt_scoped(self):
         for fragment in (
             '"extract_pdf_chunks"',
+            '"transcribe_media_resource"',
             '"save_chunk_edits"',
             '"approve_chunks"',
             '"reject_chunks"',
@@ -54,6 +57,7 @@ class MediaProcessingStaticTests(unittest.TestCase):
             "fetchCurrentUser",
             "rpc/can_manage_lesson_resource",
             "Only uploaded PDF resources can be extracted in v1.",
+            "Only uploaded audio and video resources can be transcribed.",
             "Resource management access is required.",
         ):
             with self.subTest(fragment=fragment):
@@ -65,6 +69,46 @@ class MediaProcessingStaticTests(unittest.TestCase):
             if path.suffix in {".ts", ".tsx"}
         )
         self.assertNotIn("SUPABASE_SERVICE_ROLE_KEY", frontend_source)
+        self.assertNotIn("OPENAI_API_KEY", frontend_source)
+
+    def test_media_transcription_migration_extends_chunks_safely(self):
+        for fragment in (
+            "audio_transcription",
+            "video_transcription",
+            "source_kind text not null default 'document'",
+            "start_seconds numeric",
+            "end_seconds numeric",
+            "confidence numeric",
+            "resource_text_chunks_source_kind_check",
+            "resource_text_chunks_time_range_check",
+            "resource_text_chunks_confidence_check",
+            "revoke all privileges on table public.resource_text_chunks from anon",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.transcription_migration)
+
+    def test_media_transcription_uses_server_side_openai_limits(self):
+        for fragment in (
+            "OPENAI_API_KEY",
+            "MAX_TRANSCRIPTION_BYTES = 25 * 1024 * 1024",
+            '"mp3"',
+            '"mp4"',
+            '"mpeg"',
+            '"mpga"',
+            '"m4a"',
+            '"wav"',
+            '"webm"',
+            "https://api.openai.com/v1/audio/transcriptions",
+            'form.append("model", "whisper-1")',
+            'form.append("response_format", "verbose_json")',
+            'form.append("timestamp_granularities[]", "segment")',
+            "status: \"draft\"",
+            "source_kind",
+            "start_seconds",
+            "end_seconds",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.function)
 
     def test_frontend_uses_pdfjs_and_resource_processing_edge_function(self):
         for fragment in (
@@ -73,6 +117,7 @@ class MediaProcessingStaticTests(unittest.TestCase):
             "ResourceTextChunk",
             "fetchResourceTextChunks",
             "saveExtractedPdfChunks",
+            "transcribeMediaResource",
             "approveResourceChunks",
             "rejectResourceChunks",
             "deleteResourceChunks",
@@ -93,13 +138,16 @@ class MediaProcessingStaticTests(unittest.TestCase):
     def test_teacher_resource_manager_supports_extract_review_approve(self):
         for fragment in (
             "Extract PDF text",
+            "Transcribe audio",
+            "Transcribe video",
             "Review text",
-            "Extracted text review",
+            "Extracted text / transcript review",
             "Approve drafts",
             "Draft and rejected chunks are teacher-only",
             "Mentor can use approved",
             "ResourceChunkStatusChip",
             "extractPdfTextChunksFromUrl",
+            "chunkLocationLabel",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.teacher)
@@ -111,7 +159,11 @@ class MediaProcessingStaticTests(unittest.TestCase):
             "approved_resource_chunks",
             "resource_title",
             "page_number",
+            "source_kind",
+            "start_seconds",
+            "end_seconds",
             "you may use them as teacher-approved context",
+            "audio/video chunks by resource title/time range",
             "Do not claim a resource was viewed unless resource_interactions proves it",
         ):
             with self.subTest(fragment=fragment):
