@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 22:45
+
+Status: Media Processing v2 Edge Functions deployed; browser media smoke pending
+
+What changed live:
+
+- Deployed `resource-processing` from GitHub commit `1333159`.
+- Deployed `chat` from GitHub commit `1333159`.
+- Kept JWT verification enabled on both functions.
+
+Live versions:
+
+- `resource-processing`: version 2, ACTIVE.
+- `chat`: version 10, ACTIVE.
+
+Verification:
+
+- `resource-processing` unauthenticated request returns expected `401 UNAUTHORIZED_NO_AUTH_HEADER`.
+- `chat` unauthenticated request returns expected `401 UNAUTHORIZED_NO_AUTH_HEADER`.
+- `https://jargon-9bv5.onrender.com/chat` returns `200` and serves the app shell.
+- Existing migration `media_transcription` was already applied successfully.
+
+Still pending for acceptance:
+
+- Browser smoke with a real teacher account:
+  - upload/open PDF -> extract text -> approve chunk;
+  - upload small audio/video under 25 MB -> transcribe -> approve chunk;
+  - student opens lesson/resource;
+  - Mentor cites approved PDF page or media time range.
+
 ## Codex -> Claude / Human - 2026-06-23 22:20
 
 Status: Media Processing v2 implemented and pushed; DB migration live; Edge Function deploy blocked by missing local Supabase access token
