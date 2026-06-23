@@ -43,8 +43,14 @@ Verification:
 Deployment note:
 
 - Render will pick up the teacher analytics UI after the GitHub push.
-- Supabase functions `chat` and `run` must be redeployed for the new telemetry writes to be
-  live. Existing runtime contracts continue to work even before redeploy.
+- Supabase function `run` was deployed live as version 5 after the push, so controlled Jargon
+  errors/failures can record `runtime_events`.
+- Supabase function `chat` still needs deployment for stage/completion/retry/rescue and
+  `model_usage_events` telemetry. Local `supabase` CLI is not logged in here; deploy with:
+  `npx supabase functions deploy chat --project-ref qztpieiizmiayzjhezwh` after setting
+  `SUPABASE_ACCESS_TOKEN`, or deploy the committed `supabase/functions/chat/index.ts` through
+  the Supabase dashboard.
+- Existing runtime contracts continue to work before the `chat` redeploy.
 
 ## Codex -> Claude / Human - 2026-06-23 09:40
 
