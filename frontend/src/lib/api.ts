@@ -210,7 +210,66 @@ export async function fetchLessons(options: { includeDrafts?: boolean } = {}) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data || []) as Lesson[];
+  const lessons = (data || []) as Lesson[];
+  const unitIds = uniqueStrings(lessons.map((lesson) => lesson.unit_id || null));
+  if (!unitIds.length) return lessons;
+
+  const { data: unitRows, error: unitsError } = await supabase
+    .from("units")
+    .select("id,title,course_version_id")
+    .in("id", unitIds);
+  if (unitsError) throw unitsError;
+  const units = ((unitRows || []) as CurriculumUnit[]).filter((unit) => unit.id);
+  const versionIds = uniqueStrings(units.map((unit) => unit.course_version_id));
+  if (!versionIds.length) return lessons;
+
+  const { data: versionRows, error: versionsError } = await supabase
+    .from("course_versions")
+    .select("id,course_id")
+    .in("id", versionIds);
+  if (versionsError) throw versionsError;
+  const versions = ((versionRows || []) as CurriculumCourseVersion[]).filter(
+    (version) => version.id,
+  );
+  const courseIds = uniqueStrings(versions.map((version) => version.course_id));
+  if (!courseIds.length) return lessons;
+
+  const { data: courseRows, error: coursesError } = await supabase
+    .from("courses")
+    .select("id,subject_id,title")
+    .in("id", courseIds);
+  if (coursesError) throw coursesError;
+  const courses = ((courseRows || []) as CurriculumCourse[]).filter((course) => course.id);
+  const subjectIds = uniqueStrings(courses.map((course) => course.subject_id));
+
+  const { data: subjectRows, error: subjectsError } = subjectIds.length
+    ? await supabase.from("subjects").select("id,title").in("id", subjectIds)
+    : { data: [], error: null };
+  if (subjectsError) throw subjectsError;
+
+  const unitById = new Map(units.map((unit) => [unit.id, unit]));
+  const versionById = new Map(versions.map((version) => [version.id, version]));
+  const courseById = new Map(courses.map((course) => [course.id, course]));
+  const subjectById = new Map(
+    ((subjectRows || []) as CurriculumSubject[]).map((subject) => [subject.id, subject]),
+  );
+
+  return lessons.map((lesson) => {
+    const unit = lesson.unit_id ? unitById.get(lesson.unit_id) || null : null;
+    const version = unit ? versionById.get(unit.course_version_id) || null : null;
+    const course = version ? courseById.get(version.course_id) || null : null;
+    const subject = course ? subjectById.get(course.subject_id) || null : null;
+    const curriculumGroup = [subject?.title, course?.title, unit?.title]
+      .filter(Boolean)
+      .join(" / ");
+    return {
+      ...lesson,
+      subject_title: subject?.title || null,
+      course_title: course?.title || null,
+      unit_title: unit?.title || null,
+      curriculum_group: curriculumGroup || null,
+    };
+  });
 }
 
 export async function fetchLessonActivities(lessonId: string) {

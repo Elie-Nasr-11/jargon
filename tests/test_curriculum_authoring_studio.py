@@ -100,7 +100,21 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
     def test_student_lesson_menu_groups_curriculum_labels(self):
         self.assertIn("groupLessons", self.header_menus)
         self.assertIn("data-lesson-id", self.header_menus)
-        self.assertIn("group: lesson.module", (ROOT / "frontend" / "src" / "routes" / "chat.tsx").read_text(encoding="utf-8"))
+        chat_route = (ROOT / "frontend" / "src" / "routes" / "chat.tsx").read_text(encoding="utf-8")
+        self.assertIn("lesson.curriculum_group", chat_route)
+        self.assertIn("lesson.subject_title", chat_route)
+
+    def test_default_authoring_blueprint_is_multisubject_logic_lesson(self):
+        for fragment in (
+            "Logic Foundations",
+            "Clear Thinking",
+            "Claims, Reasons, Evidence",
+            "What Makes a Good Reason?",
+            "logic.claims,logic.reasons,logic.evidence",
+            "Because daily reading gives your brain more practice with words and ideas.",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.route)
 
 
 if __name__ == "__main__":

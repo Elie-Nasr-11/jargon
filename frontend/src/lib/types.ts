@@ -12,6 +12,10 @@ export type Lesson = {
   publication_status?: "draft" | "published" | "archived";
   curriculum_metadata?: Record<string, unknown>;
   milestone_id?: string | null;
+  subject_title?: string | null;
+  course_title?: string | null;
+  unit_title?: string | null;
+  curriculum_group?: string | null;
 };
 
 export type LessonActivity = {

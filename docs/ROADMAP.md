@@ -4,7 +4,7 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 
 ## Current State
 
-Phase 0 is effectively complete. Phases 1 through 6 and Voice v1 are complete enough for the live pilot path. Voice v2 is in progress to replace browser-quality audio with OpenAI-backed realtime voice and cached Mentor playback.
+Phase 0 is effectively complete. Phases 1 through 6 and Voice v1 are complete enough for the live pilot path. Voice v2 is deferred until the OpenAI voice-processing boundary is explicitly approved. The active implementation slice is Phase 7: Multi-Subject Chat-LMS.
 
 - The tutor frontend is live at `https://jargon-9bv5.onrender.com/`.
 - Supabase Auth, lessons, sessions, turns, attempts, quiz attempts, evidence, and mastery are live.
@@ -12,7 +12,7 @@ Phase 0 is effectively complete. Phases 1 through 6 and Voice v1 are complete en
 - The `chat` edge function is a Mentor orchestrator that can complete `lesson1` from practice to assessment to complete.
 - The teacher dashboard shows class progress, transcripts, attempts, quizzes, evidence, mastery, notes, resources, and assignments.
 - Resource-backed lessons, assignment review, curriculum authoring, and browser voice support are live enough to support the next multi-subject slice.
-- Voice v2 adds OpenAI Realtime live sessions while preserving the existing Mentor orchestrator as the grading/session source of truth.
+- The curriculum studio now defaults to the first Phase 7 non-coding lesson path: `Logic Foundations -> Clear Thinking -> Claims, Reasons, Evidence -> What Makes a Good Reason?`.
 - Active implementation slice: Phase 7 Multi-Subject Chat-LMS.
 
 ## Product Direction Locked

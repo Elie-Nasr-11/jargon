@@ -125,7 +125,10 @@ function mentorToPreferences(mentor: MentorConfig): MentorPreferences {
 }
 
 function lessonSubtitle(lesson: Lesson) {
-  return [lesson.module, lesson.level].filter(Boolean).join(" · ") || lesson.tutor_prompt || "";
+  const path = [lesson.course_title, lesson.unit_title].filter(Boolean).join(" · ");
+  return (
+    [path || lesson.module, lesson.level].filter(Boolean).join(" · ") || lesson.tutor_prompt || ""
+  );
 }
 
 function mapLessons(
@@ -137,7 +140,7 @@ function mapLessons(
     id: lesson.id,
     title: lesson.title,
     subtitle: lessonSubtitle(lesson),
-    group: lesson.module || "Lessons",
+    group: lesson.curriculum_group || lesson.subject_title || lesson.module || "Lessons",
     progress:
       lesson.id === activeLessonId && learningSession
         ? (stageProgress[learningSession.stage] ?? 0)

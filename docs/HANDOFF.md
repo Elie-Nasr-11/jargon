@@ -6,6 +6,28 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 09:00
+
+Status: Phase 7 implementation started; Voice v2 parked
+
+What changed:
+
+- Deferred Voice v2 live activation. The `voice-session` endpoint is intentionally not deployed
+  until the OpenAI student voice/text processing boundary is explicitly approved.
+- Updated the student lesson menu data path so `/chat` can group authored lessons by the real
+  curriculum hierarchy instead of only the old `module` label.
+- Updated the curriculum studio default draft to the first multi-subject slice:
+  `Logic Foundations -> Clear Thinking -> Claims, Reasons, Evidence -> What Makes a Good Reason?`.
+- This lesson is discussion-first, has no Jargon/code dependency, and targets claim/reason/evidence
+  skill mastery.
+
+Next acceptance target:
+
+- Teacher saves and publishes the Logic Foundations lesson from `/teacher/curriculum`.
+- Student sees it grouped under the Logic curriculum path in `/chat`.
+- Student completes resource open, discussion answer, MCQ checkpoint, and lesson completion.
+- Teacher sees transcript, quiz attempt, evidence, and mastery for the non-code lesson.
+
 ## Codex -> Claude / Human - 2026-06-23 00:00
 
 Status: Voice v2 implemented locally; deploy/QA next
