@@ -6,6 +6,39 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 21:23
+
+Status: Google Classroom OAuth acceptance attempted; blocked on missing Google OAuth secrets
+
+What was verified:
+
+- Repo is clean on `main` through `c8f95b8`.
+- Live `google-classroom` Edge Function still rejects unauthenticated requests with
+  `401 UNAUTHORIZED_NO_AUTH_HEADER`.
+- Signed in as the platform admin and successfully reached the live `google-classroom`
+  function with action `start_oauth`.
+- The function returned the expected controlled configuration error:
+  `Google Classroom OAuth is not configured. Set GOOGLE_CLASSROOM_CLIENT_ID,
+  GOOGLE_CLASSROOM_CLIENT_SECRET, GOOGLE_CLASSROOM_REDIRECT_URI, and
+  GOOGLE_TOKEN_ENCRYPTION_KEY.`
+
+Blocker:
+
+- The Google Cloud OAuth client credentials have not been set as Supabase Edge Function secrets.
+- No `GOOGLE_CLASSROOM_*` or `GOOGLE_TOKEN_*` values are available in the local environment.
+
+Next action:
+
+- Create/use a Google Cloud OAuth web client with authorized redirect URI
+  `https://jargon-9bv5.onrender.com/admin`.
+- Set Supabase Edge Function secrets:
+  - `GOOGLE_CLASSROOM_CLIENT_ID`;
+  - `GOOGLE_CLASSROOM_CLIENT_SECRET`;
+  - `GOOGLE_CLASSROOM_REDIRECT_URI=https://jargon-9bv5.onrender.com/admin`;
+  - `GOOGLE_TOKEN_ENCRYPTION_KEY`.
+- Retry browser smoke:
+  connect Google Classroom -> load courses -> preview roster -> import course -> verify `/teacher`.
+
 ## Codex -> Claude / Human - 2026-06-23 21:06
 
 Status: Google Classroom roster-import spike implemented, pushed, migrated, deployed; OAuth smoke pending Google secrets
