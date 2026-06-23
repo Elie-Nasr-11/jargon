@@ -1,6 +1,6 @@
 # Voice Interaction Plan
 
-Status: planned first-class interaction mode for dictation and audio-guided chat.
+Status: Voice v1 accepted; Voice v2 upgrades audio quality with OpenAI-backed read-aloud and live voice sessions.
 
 ## Goal
 
@@ -39,9 +39,9 @@ The lesson becomes a guided listen-and-speak session:
 
 1. Mentor speaks a short turn.
 2. Student responds by voice.
-3. The transcript appears for confirmation.
-4. Student submits, retries dictation, or edits by typing.
-5. The normal typed chat envelope continues the lesson.
+3. The spoken answer is transcribed and auto-submitted as `input_modality: "audio_session"`.
+4. The normal typed chat envelope continues the lesson.
+5. Mentor speaks the approved orchestrator reply aloud.
 
 Rules:
 
@@ -132,15 +132,18 @@ Database groundwork:
   - `voice_preferences`
   - `speech_usage_events`
 
-## Future Backend Speech Services
+## Voice V2 Backend Speech Services
 
-Browser speech APIs are enough for a demo but not a full product guarantee. Later, add a backend speech layer:
+Browser speech APIs are enough for a demo but not a full product guarantee. Voice V2 adds a backend speech layer:
 
-- server-side speech-to-text for consistent browser support
-- text-to-speech with selected voices
+- OpenAI Realtime over WebRTC for live voice sessions
+- a `submit_voice_turn` bridge so the existing Supabase `chat` orchestrator remains the source of truth
+- text-to-speech with selected voices and private Mentor-audio caching
 - cost tracking per transcription/synthesis event
 - language/accent support
 - pronunciation/scoring capabilities if needed
+
+Raw student audio remains unstored by default.
 
 Model/provider choices should be verified against current pricing, latency, safety, and data-handling policies before implementation.
 

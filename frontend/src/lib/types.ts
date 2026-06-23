@@ -266,7 +266,16 @@ export type VoiceInteractionEventType =
   | "dictation_transcribed"
   | "dictation_submitted"
   | "read_aloud_started"
-  | "read_aloud_finished";
+  | "read_aloud_finished"
+  | "read_aloud_requested"
+  | "read_aloud_cached"
+  | "read_aloud_failed"
+  | "voice_session_started"
+  | "voice_session_ready"
+  | "voice_session_ended"
+  | "voice_session_failed"
+  | "voice_turn_submitted"
+  | "voice_tool_result";
 
 export type VoiceInteractionEvent = {
   session_id?: string | null;

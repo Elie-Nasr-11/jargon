@@ -6,6 +6,43 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 00:00
+
+Status: Voice v2 implemented locally; deploy/QA next
+
+What changed:
+
+- Added `0010_voice_realtime.sql` for OpenAI Realtime session records, private Mentor
+  audio cache records, expanded voice event types, and private `mentor-audio-cache`
+  storage bucket.
+- Added Supabase Edge Function `voice-session`:
+  - `realtime_session` bridges browser WebRTC SDP to OpenAI Realtime without exposing
+    `OPENAI_API_KEY`;
+  - `mentor_audio` generates OpenAI TTS audio and caches it privately behind signed URLs.
+- Updated `/chat`:
+  - new `Live voice` strip starts/stops realtime voice sessions;
+  - realtime tool calls submit spoken answers through the existing typed `chat` orchestrator
+    using `input_modality: "audio_session"`;
+  - existing Mentor read-aloud now prefers cached OpenAI audio and falls back to browser speech.
+- Updated student settings with live voice on/off and approved voice choices.
+- Updated teacher transcript/attempt labels so audio-session work appears as `Voice`, separate
+  from browser dictation.
+
+Important contract:
+
+- The Realtime model is not the source of truth for lesson state or grading. It must call
+  `submit_voice_turn`; the frontend calls the existing `chat` Edge Function; then the realtime
+  model speaks the returned Mentor reply.
+- Raw student audio is still not stored by default.
+
+Deployment needed:
+
+- Apply `supabase/migrations/0010_voice_realtime.sql` live.
+- Deploy Supabase Edge Function `voice-session`.
+- Confirm Edge Function secrets include `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `SUPABASE_URL`, and `SUPABASE_ANON_KEY`.
+- Redeploy Render frontend after push.
+
 ## Codex -> Claude / Human - 2026-06-22 22:01
 
 Status: Voice v1 live acceptance passed; Phase 7 is next

@@ -1154,6 +1154,81 @@ export async function invokeTypedChat(input: {
   return data;
 }
 
+export async function createRealtimeVoiceSession(input: {
+  accessToken: string;
+  sdp: string;
+  lessonId: string;
+  sessionId?: string | null;
+  voice: string;
+}) {
+  const response = await fetchWithTimeout(
+    functionUrl("voice-session"),
+    {
+      method: "POST",
+      headers: authHeaders(input.accessToken),
+      body: JSON.stringify({
+        action: "realtime_session",
+        sdp: input.sdp,
+        lesson_id: input.lessonId,
+        session_id: input.sessionId || null,
+        voice: input.voice,
+      }),
+    },
+    20000,
+  );
+  const data = (await response.json()) as {
+    status: "ok" | "error";
+    sdp?: string;
+    model?: string;
+    voice?: string;
+    error?: string;
+  };
+  if (!response.ok || data.status === "error" || !data.sdp) {
+    throw new Error(data.error || "Could not start live voice.");
+  }
+  return data;
+}
+
+export async function getMentorAudio(input: {
+  accessToken: string;
+  text: string;
+  lessonId: string;
+  sessionId?: string | null;
+  turnId?: string | null;
+  voice: string;
+  rate: number;
+}) {
+  const response = await fetchWithTimeout(
+    functionUrl("voice-session"),
+    {
+      method: "POST",
+      headers: authHeaders(input.accessToken),
+      body: JSON.stringify({
+        action: "mentor_audio",
+        text: input.text,
+        lesson_id: input.lessonId,
+        session_id: input.sessionId || null,
+        turn_id: input.turnId || null,
+        voice: input.voice,
+        rate: input.rate,
+      }),
+    },
+    30000,
+  );
+  const data = (await response.json()) as {
+    status: "ok" | "error";
+    audio_url?: string;
+    cache_hit?: boolean;
+    model?: string;
+    voice?: string;
+    error?: string;
+  };
+  if (!response.ok || data.status === "error" || !data.audio_url) {
+    throw new Error(data.error || "Could not prepare Mentor audio.");
+  }
+  return data;
+}
+
 export async function invokeJargonRun(input: {
   accessToken: string;
   code: string;

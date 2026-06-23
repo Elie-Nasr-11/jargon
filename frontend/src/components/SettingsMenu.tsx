@@ -154,6 +154,42 @@ export function SettingsMenu({
                       {voice.readAloudEnabled ? "On" : "Off"}
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onVoiceChange({ ...voice, realtimeEnabled: !voice.realtimeEnabled })
+                    }
+                    className="flex w-full items-center justify-between gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Mic className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                      Live voice
+                    </span>
+                    <span className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground">
+                      {voice.realtimeEnabled ? "On" : "Off"}
+                    </span>
+                  </button>
+                  <div className="px-2 pb-2 pt-1">
+                    <div className="mb-2 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      Mentor voice
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {(["marin", "cedar", "coral", "nova", "shimmer"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => onVoiceChange({ ...voice, voiceName: option })}
+                          className={`rounded-full border px-2 py-1.5 text-[11px] capitalize transition-colors ${
+                            voice.voiceName === option
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="px-2 pb-2 pt-1">
                     <div className="mb-2 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
                       Reading speed

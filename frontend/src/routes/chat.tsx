@@ -9,6 +9,8 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Mic,
+  MicOff,
   Paperclip,
   Pause,
   Play,
@@ -35,7 +37,9 @@ import {
   fetchLatestLearningSession,
   fetchLessonActivities,
   fetchLessons,
+  createRealtimeVoiceSession,
   getLessonResourceSignedUrl,
+  getMentorAudio,
   getSession,
   invokeJargonRun,
   invokeTypedChat,
@@ -450,11 +454,11 @@ function ChatPage() {
     setMsgs((previous) => previous.filter((m) => m.id !== thinkingId).concat(message));
   };
 
-  const sendUser = async (
+  const submitTextAnswer = async (
     text: string,
     options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
-  ) => {
-    if (!accessToken) return;
+  ): Promise<TypedChatEnvelope | null> => {
+    if (!accessToken) return null;
     addMsg({
       id: uid(),
       role: "user",
@@ -485,15 +489,24 @@ function ChatPage() {
           : previous,
       );
       replaceThinking(thinkingId, envelopeMessage(envelope));
+      return envelope;
     } catch (error) {
       replaceThinking(thinkingId, {
         id: uid(),
         role: "bot",
         text: (error as Error).message || "The mentor could not answer.",
       });
+      return null;
     } finally {
       setSending(false);
     }
+  };
+
+  const sendUser = async (
+    text: string,
+    options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
+  ) => {
+    await submitTextAnswer(text, options);
   };
 
   const sendChoice = async (choice: ChatChoice) => {
@@ -722,6 +735,9 @@ function ChatPage() {
               onChooseChoice={sendChoice}
               onResourceEvent={handleResourceEvent}
               voice={voice}
+              accessToken={accessToken || ""}
+              lessonId={lessonId}
+              sessionId={sessionId}
               onVoiceEvent={handleVoiceEvent}
             />
           ))}
@@ -747,8 +763,310 @@ function ChatPage() {
             onVoiceEvent={handleVoiceEvent}
             sending={sending}
           />
+          <RealtimeVoicePanel
+            accessToken={accessToken || ""}
+            lessonId={lessonId}
+            sessionId={sessionId}
+            voice={voice}
+            disabled={sending}
+            onVoiceEvent={handleVoiceEvent}
+            onSubmitVoiceTurn={async (text, confidence) =>
+              submitTextAnswer(text, {
+                inputModality: "audio_session",
+                transcriptConfidence: confidence ?? null,
+              })
+            }
+          />
         </div>
       </main>
+    </div>
+  );
+}
+
+type RealtimeEvent = Record<string, unknown> & {
+  type?: string;
+  item?: Record<string, unknown>;
+  response?: Record<string, unknown>;
+  transcript?: string;
+  arguments?: string;
+  call_id?: string;
+  name?: string;
+};
+
+function RealtimeVoicePanel({
+  accessToken,
+  lessonId,
+  sessionId,
+  voice,
+  disabled,
+  onVoiceEvent,
+  onSubmitVoiceTurn,
+}: {
+  accessToken: string;
+  lessonId: string;
+  sessionId: string | null;
+  voice: VoiceSettings;
+  disabled: boolean;
+  onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
+  onSubmitVoiceTurn: (
+    text: string,
+    confidence?: number | null,
+  ) => Promise<TypedChatEnvelope | null>;
+}) {
+  const [status, setStatus] = useState<"idle" | "connecting" | "live" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const [lastTranscript, setLastTranscript] = useState("");
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const channelRef = useRef<RTCDataChannel | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const submittedCallIdsRef = useRef<Set<string>>(new Set());
+  const supported =
+    typeof window !== "undefined" &&
+    "RTCPeerConnection" in window &&
+    Boolean(navigator.mediaDevices?.getUserMedia);
+
+  const stop = useCallback(
+    (nextMessage = "Live voice stopped.") => {
+      channelRef.current?.close();
+      pcRef.current?.close();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.srcObject = null;
+      }
+      channelRef.current = null;
+      pcRef.current = null;
+      streamRef.current = null;
+      audioRef.current = null;
+      submittedCallIdsRef.current.clear();
+      setStatus("idle");
+      setMessage(nextMessage);
+      void onVoiceEvent({ event_type: "voice_session_ended", input_modality: "audio_session" });
+    },
+    [onVoiceEvent],
+  );
+
+  useEffect(() => {
+    return () => {
+      channelRef.current?.close();
+      pcRef.current?.close();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.srcObject = null;
+      }
+    };
+  }, []);
+
+  if (!voice.realtimeEnabled) return null;
+
+  const sendToolResult = (callId: string, output: Record<string, unknown>) => {
+    const channel = channelRef.current;
+    if (!channel || channel.readyState !== "open") return;
+    channel.send(
+      JSON.stringify({
+        type: "conversation.item.create",
+        item: {
+          type: "function_call_output",
+          call_id: callId,
+          output: JSON.stringify(output),
+        },
+      }),
+    );
+    channel.send(JSON.stringify({ type: "response.create" }));
+  };
+
+  const submitRealtimeTurn = async (callId: string, args: Record<string, unknown>) => {
+    if (submittedCallIdsRef.current.has(callId)) return;
+    submittedCallIdsRef.current.add(callId);
+    const text =
+      typeof args.text === "string" && args.text.trim()
+        ? args.text.trim()
+        : typeof args.transcript === "string"
+          ? args.transcript.trim()
+          : lastTranscript.trim();
+    const confidence = typeof args.confidence === "number" ? args.confidence : null;
+    if (!text) {
+      sendToolResult(callId, {
+        status: "error",
+        reply: "I did not catch that. Please say it one more time.",
+      });
+      return;
+    }
+    setLastTranscript(text);
+    setMessage("Sending your spoken answer to Jargon...");
+    void onVoiceEvent({
+      event_type: "voice_turn_submitted",
+      input_modality: "audio_session",
+      transcript: text,
+      transcript_confidence: confidence,
+    });
+    const envelope = await onSubmitVoiceTurn(text, confidence);
+    void onVoiceEvent({
+      event_type: "voice_tool_result",
+      input_modality: "audio_session",
+      payload: {
+        status: envelope?.status || "error",
+        stage: envelope?.stage || null,
+        next_action: envelope?.next_action || null,
+      },
+    });
+    sendToolResult(callId, {
+      status: envelope?.status || "error",
+      reply: envelope?.reply || "The Mentor could not answer that yet.",
+      stage: envelope?.stage || null,
+      next_action: envelope?.next_action || null,
+      choices: envelope?.choices || [],
+      assessment: envelope?.assessment || null,
+    });
+    setMessage("Live voice is listening.");
+  };
+
+  const maybeHandleFunctionCall = (event: RealtimeEvent) => {
+    const candidates = [
+      event.item,
+      event.response && Array.isArray(event.response.output)
+        ? (event.response.output as Record<string, unknown>[]).find(
+            (item) => item?.type === "function_call",
+          )
+        : null,
+      event,
+    ].filter(Boolean) as Record<string, unknown>[];
+
+    for (const item of candidates) {
+      const itemType = String(item.type || "");
+      const name = String(item.name || "");
+      const callId = String(item.call_id || item.callId || "");
+      const rawArgs = item.arguments;
+      if (name !== "submit_voice_turn" || !callId || typeof rawArgs !== "string") continue;
+      try {
+        void submitRealtimeTurn(callId, JSON.parse(rawArgs) as Record<string, unknown>);
+      } catch {
+        void submitRealtimeTurn(callId, { text: lastTranscript });
+      }
+      return;
+    }
+  };
+
+  const handleRealtimeEvent = (event: RealtimeEvent) => {
+    if (event.type === "session.created") {
+      setStatus("live");
+      setMessage("Live voice is listening.");
+      void onVoiceEvent({ event_type: "voice_session_ready", input_modality: "audio_session" });
+    }
+    if (
+      event.type === "conversation.item.input_audio_transcription.completed" &&
+      typeof event.transcript === "string"
+    ) {
+      setLastTranscript(event.transcript);
+    }
+    maybeHandleFunctionCall(event);
+  };
+
+  const start = async () => {
+    if (!supported) {
+      setStatus("error");
+      setMessage("Live voice is not available in this browser.");
+      return;
+    }
+    setStatus("connecting");
+    setMessage("Opening microphone...");
+    void onVoiceEvent({ event_type: "voice_session_started", input_modality: "audio_session" });
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const pc = new RTCPeerConnection();
+      pcRef.current = pc;
+
+      const audio = document.createElement("audio");
+      audio.autoplay = true;
+      audioRef.current = audio;
+      pc.ontrack = (event) => {
+        audio.srcObject = event.streams[0];
+      };
+      stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
+
+      const channel = pc.createDataChannel("oai-events");
+      channelRef.current = channel;
+      channel.addEventListener("message", (event) => {
+        try {
+          handleRealtimeEvent(JSON.parse(event.data) as RealtimeEvent);
+        } catch {
+          // Realtime event parsing should never kill the voice session.
+        }
+      });
+      channel.addEventListener("open", () => {
+        setMessage("Live voice is warming up...");
+      });
+      channel.addEventListener("close", () => {
+        if (status === "live") setMessage("Live voice closed.");
+      });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const realtime = await createRealtimeVoiceSession({
+        accessToken,
+        lessonId,
+        sessionId,
+        voice: voice.voiceName,
+        sdp: offer.sdp || "",
+      });
+      await pc.setRemoteDescription({ type: "answer", sdp: realtime.sdp });
+      setStatus("live");
+      setMessage("Live voice is listening.");
+    } catch (error) {
+      setStatus("error");
+      setMessage((error as Error).message || "Live voice could not start.");
+      void onVoiceEvent({
+        event_type: "voice_session_failed",
+        input_modality: "audio_session",
+        payload: { error: (error as Error).message || "unknown" },
+      });
+      stop("Live voice could not start.");
+    }
+  };
+
+  const live = status === "live" || status === "connecting";
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-background/55 px-3 py-2 text-[12.5px] text-muted-foreground">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-foreground">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              status === "live"
+                ? "bg-emerald-400"
+                : status === "connecting"
+                  ? "bg-amber-300"
+                  : status === "error"
+                    ? "bg-red-400"
+                    : "bg-muted-foreground/50"
+            }`}
+          />
+          <span className="font-medium">Live voice</span>
+          <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+            {voice.voiceName}
+          </span>
+        </div>
+        <div className="mt-0.5 truncate">
+          {message || "Talk with Mentor out loud. Spoken answers auto-submit to the lesson."}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => (live ? stop() : void start())}
+        disabled={disabled || status === "connecting" || !accessToken}
+        className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+      >
+        {live ? (
+          <MicOff className="h-3.5 w-3.5" strokeWidth={1.8} />
+        ) : (
+          <Mic className="h-3.5 w-3.5" strokeWidth={1.8} />
+        )}
+        {live ? "Stop" : "Start"}
+      </button>
     </div>
   );
 }
@@ -974,6 +1292,9 @@ function MessageRow({
   onChooseChoice,
   onResourceEvent,
   voice,
+  accessToken,
+  lessonId,
+  sessionId,
   onVoiceEvent,
 }: {
   msg: Msg;
@@ -985,6 +1306,9 @@ function MessageRow({
     progress?: { progress_seconds?: number; progress_percent?: number },
   ) => Promise<void>;
   voice: VoiceSettings;
+  accessToken: string;
+  lessonId: string;
+  sessionId: string | null;
   onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -1009,9 +1333,9 @@ function MessageRow({
           <div className="whitespace-pre-wrap rounded-2xl border border-border/60 bg-foreground/5 px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground/85">
             {text}
           </div>
-          {msg.inputModality === "dictated" ? (
+          {msg.inputModality === "dictated" || msg.inputModality === "audio_session" ? (
             <span className="rounded-full border border-border/70 px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              Dictated
+              {msg.inputModality === "audio_session" ? "Voice" : "Dictated"}
             </span>
           ) : null}
           {code && (
@@ -1091,7 +1415,14 @@ function MessageRow({
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <CopyAction text={msg.text} />
-          <ReadAloudAction text={msg.text} voice={voice} onVoiceEvent={onVoiceEvent} />
+          <ReadAloudAction
+            text={msg.text}
+            voice={voice}
+            accessToken={accessToken}
+            lessonId={lessonId}
+            sessionId={sessionId}
+            onVoiceEvent={onVoiceEvent}
+          />
         </div>
         {msg.code && <HistoryCodePanel code={msg.code} onUseCode={onUseCode} />}
       </div>
@@ -1102,27 +1433,36 @@ function MessageRow({
 function ReadAloudAction({
   text,
   voice,
+  accessToken,
+  lessonId,
+  sessionId,
   onVoiceEvent,
 }: {
   text: string;
   voice: VoiceSettings;
+  accessToken: string;
+  lessonId: string;
+  sessionId: string | null;
   onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
 }) {
   const [speaking, setSpeaking] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [loading, setLoading] = useState(false);
   const startedAtRef = useRef<number | null>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const supported = typeof window !== "undefined" && "speechSynthesis" in window;
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fallbackUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const fallbackSupported = typeof window !== "undefined" && "speechSynthesis" in window;
 
   useEffect(() => {
     return () => {
-      if (utteranceRef.current && supported) {
+      audioRef.current?.pause();
+      if (fallbackUtteranceRef.current && fallbackSupported) {
         window.speechSynthesis.cancel();
       }
     };
-  }, [supported]);
+  }, [fallbackSupported]);
 
-  if (!voice.readAloudEnabled || !supported || !text.trim()) return null;
+  if (!voice.readAloudEnabled || !text.trim()) return null;
 
   const finish = () => {
     setSpeaking(false);
@@ -1133,22 +1473,19 @@ function ReadAloudAction({
         ? Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000))
         : null,
     });
-    utteranceRef.current = null;
+    audioRef.current = null;
+    fallbackUtteranceRef.current = null;
     startedAtRef.current = null;
   };
 
-  const play = () => {
-    if (speaking && paused) {
-      window.speechSynthesis.resume();
-      setPaused(false);
-      return;
-    }
+  const playFallback = () => {
+    if (!fallbackSupported) throw new Error("Browser speech is not available.");
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = voice.readAloudRate;
     utterance.onend = finish;
     utterance.onerror = finish;
-    utteranceRef.current = utterance;
+    fallbackUtteranceRef.current = utterance;
     startedAtRef.current = Date.now();
     setSpeaking(true);
     setPaused(false);
@@ -1156,28 +1493,92 @@ function ReadAloudAction({
     window.speechSynthesis.speak(utterance);
   };
 
+  const play = async () => {
+    if (speaking && paused) {
+      if (audioRef.current) {
+        await audioRef.current.play();
+      } else if (fallbackSupported) {
+        window.speechSynthesis.resume();
+      }
+      setPaused(false);
+      return;
+    }
+    audioRef.current?.pause();
+    if (fallbackSupported) window.speechSynthesis.cancel();
+    setLoading(true);
+    try {
+      const audio = await getMentorAudio({
+        accessToken,
+        text,
+        lessonId,
+        sessionId,
+        voice: voice.voiceName,
+        rate: voice.readAloudRate,
+      });
+      const element = new Audio(audio.audio_url);
+      element.playbackRate = voice.readAloudRate;
+      element.onended = finish;
+      element.onerror = finish;
+      audioRef.current = element;
+      startedAtRef.current = Date.now();
+      setSpeaking(true);
+      setPaused(false);
+      void onVoiceEvent({
+        event_type: "read_aloud_started",
+        payload: {
+          provider: "openai",
+          model: audio.model,
+          voice: audio.voice,
+          cache_hit: audio.cache_hit,
+        },
+      });
+      await element.play();
+    } catch {
+      void onVoiceEvent({ event_type: "read_aloud_failed" });
+      try {
+        playFallback();
+      } catch {
+        finish();
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const pause = () => {
-    window.speechSynthesis.pause();
+    if (audioRef.current) {
+      audioRef.current.pause();
+    } else if (fallbackSupported) {
+      window.speechSynthesis.pause();
+    }
     setPaused(true);
   };
 
   const replay = () => {
-    window.speechSynthesis.cancel();
+    audioRef.current?.pause();
+    if (fallbackSupported) window.speechSynthesis.cancel();
     setSpeaking(false);
     setPaused(false);
-    requestAnimationFrame(play);
+    requestAnimationFrame(() => void play());
   };
 
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-border/70 px-1.5 py-1">
       <button
         type="button"
-        onClick={speaking && !paused ? pause : play}
+        onClick={speaking && !paused ? pause : () => void play()}
         aria-label={speaking && !paused ? "Pause read aloud" : "Read mentor message aloud"}
         title={speaking && !paused ? "Pause" : "Read aloud"}
+        disabled={loading}
         className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
-        {speaking && !paused ? (
+        {loading ? (
+          <span className="run-bounce-loader scale-75" aria-label="Preparing audio">
+            <span className="run-bounce-dot" />
+            <span className="run-bounce-dot" />
+            <span className="run-bounce-dot" />
+          </span>
+        ) : speaking && !paused ? (
           <Pause className="h-3.5 w-3.5" strokeWidth={1.8} />
         ) : (
           <Volume2 className="h-3.5 w-3.5" strokeWidth={1.8} />

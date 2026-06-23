@@ -2159,9 +2159,9 @@ function StudentDetail({
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <span className="flex flex-wrap items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
                           {turn.role} - {turn.stage}
-                          {modality === "dictated" ? (
+                          {modality === "dictated" || modality === "audio_session" ? (
                             <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] tracking-[0.08em] text-muted-foreground">
-                              Dictated
+                              {modality === "audio_session" ? "Voice" : "Dictated"}
                             </span>
                           ) : null}
                         </span>
@@ -2285,9 +2285,9 @@ function StudentDetail({
                 items={attempts.slice(0, 8).map((item) => ({
                   id: item.id,
                   title: `${lessonName(lessonsById, item.lesson_id)} - ${item.answer_mode}`,
-                  meta: `${item.input_modality === "dictated" ? "Dictated - " : ""}${formatPass(
-                    item.passed,
-                  )} - score ${formatScore(item.score)}`,
+                  meta: `${modalityLabel(item.input_modality)}${formatPass(item.passed)} - score ${formatScore(
+                    item.score,
+                  )}`,
                   body:
                     item.feedback || item.answer_text || item.answer_code || "No feedback text.",
                 }))}
@@ -2744,6 +2744,12 @@ function inputModalityFromPayload(
   return modality === "typed" || modality === "dictated" || modality === "audio_session"
     ? modality
     : null;
+}
+
+function modalityLabel(modality: ChatInputModality | null | undefined) {
+  if (modality === "dictated") return "Dictated - ";
+  if (modality === "audio_session") return "Voice - ";
+  return "";
 }
 
 function statusLabel(session: LearningSession) {

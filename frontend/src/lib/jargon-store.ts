@@ -33,13 +33,17 @@ export const DEFAULT_MENTOR: MentorConfig = {
 export type VoiceSettings = {
   dictationEnabled: boolean;
   readAloudEnabled: boolean;
+  realtimeEnabled: boolean;
   readAloudRate: 0.85 | 1 | 1.2;
+  voiceName: "marin" | "cedar" | "coral" | "nova" | "shimmer";
 };
 
 export const DEFAULT_VOICE: VoiceSettings = {
   dictationEnabled: true,
   readAloudEnabled: true,
+  realtimeEnabled: true,
   readAloudRate: 1,
+  voiceName: "marin",
 };
 
 const KEYS = {
