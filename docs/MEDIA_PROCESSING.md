@@ -1,4 +1,4 @@
-# Media Processing v2
+# Media Processing v3
 
 ## Purpose
 
@@ -8,18 +8,21 @@ without trusting raw extraction automatically.
 The current path is intentionally review-first:
 
 1. Teacher uploads a private PDF, audio, or video lesson resource.
-2. PDF: teacher clicks **Extract PDF text** in `/teacher`; the browser extracts selectable text with PDF.js.
-3. Audio/video: teacher clicks **Transcribe audio/video**; the `resource-processing` Edge Function downloads the private file and sends it to OpenAI speech-to-text server-side.
-4. Extracted/transcribed chunks are stored as `draft`.
-5. Teacher reviews, edits, approves, rejects, or deletes chunks.
-6. `chat` loads only `approved` chunks for resources attached to the active lesson.
-7. Mentor may cite PDF/document chunks by resource title/page and audio/video chunks by resource title/time range.
-8. Mentor must not claim the student opened, watched, listened to, or read a resource unless `resource_interactions` proves it.
+2. PDF: teacher can click **Generate page previews**; the browser renders private page thumbnails/OCR images with PDF.js.
+3. PDF with selectable text: teacher clicks **Extract PDF text**; the browser extracts text with PDF.js.
+4. Scanned PDF: teacher clicks **OCR scanned pages**; the `resource-processing` Edge Function sends private page images to OpenAI Vision server-side.
+5. Audio/video: teacher clicks **Transcribe audio/video**; the Edge Function downloads the private file and sends it to OpenAI speech-to-text server-side.
+6. Extracted/OCR/transcribed chunks are stored as `draft`.
+7. Teacher reviews, edits, approves, rejects, or deletes chunks.
+8. `chat` loads only `approved` chunks for resources attached to the active lesson.
+9. Mentor may cite PDF/document/OCR chunks by resource title/page and audio/video chunks by resource title/time range.
+10. Mentor must not claim the student opened, watched, listened to, or read a resource unless `resource_interactions` proves it.
 
 ## Tables
 
 - `resource_processing_jobs`: extraction/transcription job metadata and counts.
 - `resource_processing_errors`: processing validation warnings/errors.
+- `resource_page_assets`: private rendered PDF page thumbnails/OCR images.
 - `resource_text_chunks`: teacher-reviewed chunks with `draft | approved | rejected` status.
 
 `resource_text_chunks` supports:
@@ -40,12 +43,15 @@ All tables have RLS enabled. Anonymous access is revoked.
 - Draft and rejected chunks are teacher-only and never enter Mentor context.
 - Files remain in the private `lesson-resources` bucket.
 - The OpenAI API key is used only inside the Edge Function and is never exposed to the browser.
+- Private PDF page thumbnails/OCR images are stored in `lesson-resources` and are readable only through the same resource access helpers.
 
 ## Edge Function
 
 `resource-processing` supports:
 
 - `extract_pdf_chunks`
+- `save_pdf_page_assets`
+- `ocr_pdf_pages`
 - `transcribe_media_resource`
 - `save_chunk_edits`
 - `approve_chunks`
@@ -64,6 +70,14 @@ Audio/video transcription v1 follows OpenAI's speech-to-text limits:
 
 Files over 25 MB are rejected with a teacher-facing error. V1 does not split large files.
 
+PDF OCR v1 follows OpenAI Vision limits:
+
+- page assets are rendered in the teacher browser with PDF.js
+- OCR images are capped at 1.5 MB each
+- OCR runs are capped at 30 pages
+- default model is `gpt-5.4-mini`, configurable with `OPENAI_OCR_MODEL`
+- OCR output is stored as draft chunks with `metadata.generated_from = openai_vision_ocr`
+
 ## Mentor Context
 
 The `chat` function loads a bounded set of approved chunks for active lesson resources:
@@ -80,8 +94,7 @@ This is private prompt context only. The typed chat response shape is unchanged.
 ## Deferred
 
 - YouTube transcript API import.
-- OCR for scanned PDFs.
-- PDF page thumbnails.
+- OCR layout reconstruction beyond plain text.
 - Embeddings/vector search.
 - Automatic trust of extracted/transcribed text.
 - Audio/video chunking beyond 25 MB.
@@ -91,12 +104,14 @@ This is private prompt context only. The typed chat response shape is unchanged.
 PDF:
 
 1. Teacher uploads a PDF to `lesson1`.
-2. Teacher extracts text.
-3. Teacher edits and approves at least one chunk.
-4. Student opens `lesson1`.
-5. Mentor references approved PDF context with resource title/page.
-6. Student opens the resource card.
-7. `resource_interactions` records `shown` and `opened`.
+2. Teacher generates page previews.
+3. For selectable PDFs, teacher extracts text.
+4. For scanned PDFs, teacher OCRs one or more pages.
+5. Teacher edits and approves at least one chunk.
+6. Student opens `lesson1`.
+7. Mentor references approved PDF context with resource title/page.
+8. Student opens the resource card.
+9. `resource_interactions` records `shown` and `opened`.
 
 Audio/video:
 

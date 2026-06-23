@@ -251,6 +251,8 @@ export type LessonChatResource = {
   signed_url?: string;
   external_url?: string | null;
   thumbnail_url?: string | null;
+  thumbnail_bucket?: string | null;
+  thumbnail_path?: string | null;
   student_instructions?: string;
 };
 
@@ -282,7 +284,12 @@ export type ResourceProcessingJob = {
   organization_id: string | null;
   class_id: string | null;
   lesson_id: string | null;
-  job_type: "pdf_text_extraction" | "audio_transcription" | "video_transcription";
+  job_type:
+    | "pdf_text_extraction"
+    | "pdf_page_render"
+    | "pdf_ocr"
+    | "audio_transcription"
+    | "video_transcription";
   status: ResourceProcessingJobStatus;
   requested_by: string | null;
   completed_by: string | null;
@@ -307,6 +314,30 @@ export type ResourceProcessingError = {
 
 export type ResourceTextChunkStatus = "draft" | "approved" | "rejected";
 export type ResourceTextChunkSourceKind = "document" | "audio" | "video" | "manual";
+
+export type ResourcePageAssetType = "thumbnail" | "ocr_image";
+
+export type ResourcePageAsset = {
+  id: string;
+  resource_id: string;
+  job_id: string | null;
+  organization_id: string | null;
+  class_id: string | null;
+  lesson_id: string | null;
+  page_number: number;
+  asset_type: ResourcePageAssetType;
+  storage_bucket: string;
+  storage_path: string;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  file_size_bytes: number | null;
+  status: "ready" | "failed" | "deleted";
+  created_by: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
 
 export type ResourceTextChunk = {
   id: string;
@@ -339,6 +370,7 @@ export type ResourceProcessingResponse = {
   chunks?: ResourceTextChunk[];
   jobs?: ResourceProcessingJob[];
   errors?: ResourceProcessingError[];
+  assets?: ResourcePageAsset[];
   deleted_chunk_ids?: string[];
   error?: string;
 };

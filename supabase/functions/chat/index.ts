@@ -106,6 +106,8 @@ type LessonChatResource = {
   storage_path?: string | null;
   external_url?: string | null;
   thumbnail_url?: string | null;
+  thumbnail_bucket?: string | null;
+  thumbnail_path?: string | null;
   student_instructions?: string;
 };
 
@@ -937,10 +939,13 @@ function resourceForEnvelope(resource: DbRow): LessonChatResource {
       typeof resource.storage_path === "string" ? resource.storage_path : null,
     external_url:
       typeof resource.external_url === "string" ? resource.external_url : null,
-    thumbnail_url:
-      typeof resource.thumbnail_path === "string"
-        ? resource.thumbnail_path
-        : null,
+    thumbnail_bucket:
+      typeof resource.storage_bucket === "string"
+        ? resource.storage_bucket
+        : "lesson-resources",
+    thumbnail_path:
+      typeof resource.thumbnail_path === "string" ? resource.thumbnail_path : null,
+    thumbnail_url: null,
     student_instructions:
       typeof resource.student_instructions === "string"
         ? resource.student_instructions

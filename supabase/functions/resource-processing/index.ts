@@ -1,6 +1,7 @@
 // Resource processing for teacher-reviewed Mentor context.
-// PDF text is extracted in the teacher's browser; uploaded audio/video is
-// transcribed server-side with OpenAI. All chunks stay draft until approved.
+// PDF text/page previews are extracted in the teacher's browser; uploaded
+// audio/video and scanned PDF page images are processed server-side with
+// OpenAI. All chunks stay draft until approved.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
@@ -32,12 +33,29 @@ type ChunkInput = {
 
 type ProcessingJobType =
   | "pdf_text_extraction"
+  | "pdf_page_render"
+  | "pdf_ocr"
   | "audio_transcription"
   | "video_transcription";
+
+type PageAssetInput = {
+  page_number?: number;
+  asset_type?: string;
+  storage_bucket?: string;
+  storage_path?: string;
+  mime_type?: string;
+  width?: number | string | null;
+  height?: number | string | null;
+  file_size_bytes?: number | string | null;
+  metadata?: DbRow;
+};
 
 const MAX_CHUNKS = 500;
 const MAX_CHUNK_CHARS = 8000;
 const MAX_TRANSCRIPTION_BYTES = 25 * 1024 * 1024;
+const MAX_PDF_PAGE_ASSETS = 60;
+const MAX_OCR_PAGES = 30;
+const MAX_OCR_IMAGE_BYTES = 1.5 * 1024 * 1024;
 const SUPPORTED_TRANSCRIPTION_EXTENSIONS = new Set([
   "mp3",
   "mp4",
@@ -183,12 +201,58 @@ async function requireManageableResource(
 
   const data = await supabaseFetch(
     config,
-    `lesson_resources?id=eq.${encodeURIComponent(resourceId)}&select=id,organization_id,class_id,lesson_id,title,resource_type,source_type,storage_bucket,storage_path,mime_type,file_size_bytes,status,visibility`,
+    `lesson_resources?id=eq.${encodeURIComponent(resourceId)}&select=id,organization_id,class_id,lesson_id,title,resource_type,source_type,storage_bucket,storage_path,mime_type,file_size_bytes,status,visibility,page_count,thumbnail_path`,
   );
   if (!Array.isArray(data) || !data[0] || typeof data[0] !== "object") {
     throw new Error("Resource not found.");
   }
   return data[0] as DbRow;
+}
+
+function assertUploadedPdf(resource: DbRow, message = "Only uploaded PDF resources are supported.") {
+  if (resource.resource_type !== "pdf" || resource.source_type !== "upload") {
+    throw new Error(message);
+  }
+}
+
+function cleanAssetType(value: unknown): "thumbnail" | "ocr_image" {
+  const clean = cleanText(value);
+  if (clean === "thumbnail" || clean === "ocr_image") return clean;
+  throw new Error("PDF page assets must be thumbnails or OCR images.");
+}
+
+function normalizePageAsset(raw: PageAssetInput, index: number): DbRow {
+  const pageNumber = Math.max(1, Math.floor(numberValue(raw.page_number, index + 1)));
+  const storageBucket = cleanText(raw.storage_bucket, "lesson-resources");
+  const storagePath = cleanText(raw.storage_path);
+  if (!storagePath) throw new Error("PDF page asset storage_path is required.");
+  if (storageBucket !== "lesson-resources") {
+    throw new Error("PDF page assets must stay in the private lesson-resources bucket.");
+  }
+  const assetType = cleanAssetType(raw.asset_type);
+  const mimeType = cleanText(raw.mime_type, "image/jpeg").toLowerCase();
+  if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+    throw new Error("PDF page assets must be JPEG, PNG, or WebP images.");
+  }
+  const fileSizeBytes = optionalNumberValue(raw.file_size_bytes);
+  if (fileSizeBytes !== null && fileSizeBytes > MAX_OCR_IMAGE_BYTES) {
+    throw new Error("PDF page OCR images must be under 1.5 MB.");
+  }
+  return {
+    page_number: pageNumber,
+    asset_type: assetType,
+    storage_bucket: storageBucket,
+    storage_path: storagePath,
+    mime_type: mimeType,
+    width: optionalNumberValue(raw.width),
+    height: optionalNumberValue(raw.height),
+    file_size_bytes: fileSizeBytes,
+    status: "ready",
+    metadata:
+      raw.metadata && typeof raw.metadata === "object" && !Array.isArray(raw.metadata)
+        ? raw.metadata
+        : {},
+  };
 }
 
 function normalizeChunk(raw: ChunkInput, index: number): DbRow {
@@ -228,7 +292,7 @@ function normalizeChunk(raw: ChunkInput, index: number): DbRow {
 
 async function listResourceChunks(config: Config, resourceId: string) {
   await requireManageableResource(config, resourceId);
-  const [chunks, jobs, errors] = await Promise.all([
+  const [chunks, jobs, errors, assets] = await Promise.all([
     supabaseFetch(
       config,
       `resource_text_chunks?resource_id=eq.${encodeURIComponent(resourceId)}&select=*&order=page_number.asc,chunk_index.asc,created_at.asc`,
@@ -241,8 +305,12 @@ async function listResourceChunks(config: Config, resourceId: string) {
       config,
       `resource_processing_errors?resource_id=eq.${encodeURIComponent(resourceId)}&select=*&order=created_at.desc&limit=20`,
     ),
+    supabaseFetch(
+      config,
+      `resource_page_assets?resource_id=eq.${encodeURIComponent(resourceId)}&status=eq.ready&select=*&order=page_number.asc,asset_type.asc`,
+    ),
   ]);
-  return { status: "ok", chunks, jobs, errors };
+  return { status: "ok", chunks, jobs, errors, assets };
 }
 
 async function extractPdfChunks(config: Config, body: DbRow, user: DbRow) {
@@ -376,6 +444,78 @@ async function insertProcessingError(
   });
 }
 
+async function savePdfPageAssets(config: Config, body: DbRow, user: DbRow) {
+  const resourceId = cleanId(body.resource_id);
+  const resource = await requireManageableResource(config, resourceId);
+  assertUploadedPdf(resource, "Only uploaded PDF resources can have page previews.");
+
+  const rawAssets = Array.isArray(body.assets) ? (body.assets as PageAssetInput[]) : [];
+  if (!rawAssets.length) throw new Error("No PDF page assets were provided.");
+  if (rawAssets.length > MAX_PDF_PAGE_ASSETS) {
+    throw new Error("Too many PDF page assets. Generate previews for at most 30 pages.");
+  }
+  const assets = rawAssets.map(normalizePageAsset);
+  const pageCount = Math.max(...assets.map((asset) => numberValue(asset.page_number, 1)));
+  const job = await createProcessingJob(config, resource, user, "pdf_page_render", "complete", {
+    rendered_in: "browser",
+    asset_count: assets.length,
+    metadata:
+      body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+        ? body.metadata
+        : {},
+  });
+
+  const insertRows = assets.map((asset) => ({
+    ...asset,
+    resource_id: resourceId,
+    job_id: job.id,
+    organization_id: resource.organization_id || null,
+    class_id: resource.class_id || null,
+    lesson_id: resource.lesson_id || null,
+    created_by: user.id,
+  }));
+  const inserted = await supabaseFetch(
+    config,
+    "resource_page_assets?on_conflict=resource_id,page_number,asset_type",
+    {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify(insertRows),
+    },
+  );
+  const firstThumbnail = Array.isArray(inserted)
+    ? (inserted as DbRow[]).find(
+        (asset) => asset.asset_type === "thumbnail" && numberValue(asset.page_number, 0) === 1,
+      )
+    : null;
+
+  await supabaseFetch(config, `lesson_resources?id=eq.${encodeURIComponent(resourceId)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      page_count: pageCount,
+      thumbnail_path:
+        typeof firstThumbnail?.storage_path === "string"
+          ? firstThumbnail.storage_path
+          : resource.thumbnail_path || null,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  await updateProcessingJob(config, String(job.id), {
+    completed_by: user.id,
+    chunk_count: Array.isArray(inserted) ? inserted.length : assets.length,
+    completed_at: new Date().toISOString(),
+  });
+
+  return {
+    status: "ok",
+    resource_id: resourceId,
+    job_id: job.id,
+    assets: inserted,
+  };
+}
+
 function resourceFileName(resource: DbRow): string {
   const storagePath = cleanText(resource.storage_path);
   const title = cleanText(resource.title, "media");
@@ -431,11 +571,14 @@ function storageObjectUrl(config: Config, bucket: string, path: string): string 
   return `${config.url}/storage/v1/object/${encodedBucket}/${encodedPath}`;
 }
 
-async function downloadResourceFile(config: Config, resource: DbRow) {
-  const bucket = cleanText(resource.storage_bucket, "lesson-resources");
-  const path = cleanText(resource.storage_path);
-  if (!path) throw new Error("This resource has no uploaded media file.");
-
+async function downloadStorageFile(
+  config: Config,
+  bucket: string,
+  path: string,
+  maxBytes: number,
+  emptyMessage: string,
+) {
+  if (!path) throw new Error(emptyMessage);
   const res = await fetch(storageObjectUrl(config, bucket, path), {
     headers: {
       apikey: config.anonKey,
@@ -443,19 +586,29 @@ async function downloadResourceFile(config: Config, resource: DbRow) {
     },
   });
   if (!res.ok) {
-    throw new Error(`Could not open the private media file (${res.status}).`);
+    throw new Error(`Could not open the private file (${res.status}).`);
   }
   const blob = await res.blob();
-  if (blob.size > MAX_TRANSCRIPTION_BYTES) {
-    throw new Error("Audio/video transcription is limited to files under 25 MB in v1.");
-  }
-  if (!blob.size) throw new Error("The uploaded media file is empty.");
+  if (blob.size > maxBytes) throw new Error("The private file is too large for this operation.");
+  if (!blob.size) throw new Error("The private file is empty.");
   return blob;
 }
 
-function requireOpenAiKey(): string {
+async function downloadResourceFile(config: Config, resource: DbRow) {
+  const bucket = cleanText(resource.storage_bucket, "lesson-resources");
+  const path = cleanText(resource.storage_path);
+  return downloadStorageFile(
+    config,
+    bucket,
+    path,
+    MAX_TRANSCRIPTION_BYTES,
+    "This resource has no uploaded media file.",
+  );
+}
+
+function requireOpenAiKey(purpose = "resource processing"): string {
   const key = Deno.env.get("OPENAI_API_KEY");
-  if (!key) throw new Error("OPENAI_API_KEY is not configured for transcription.");
+  if (!key) throw new Error(`OPENAI_API_KEY is not configured for ${purpose}.`);
   return key;
 }
 
@@ -501,6 +654,47 @@ function splitTranscriptText(text: string, sourceKind: "audio" | "video"): DbRow
   return rows;
 }
 
+function splitDocumentText(text: string, pageNumber: number, metadata: DbRow): DbRow[] {
+  const clean = text.trim();
+  if (!clean) return [];
+  const rows: DbRow[] = [];
+  let cursor = 0;
+  let index = 0;
+  const maxLength = 3000;
+  while (cursor < clean.length) {
+    const next = clean.slice(cursor, cursor + maxLength);
+    const sentenceBreak = Math.max(
+      next.lastIndexOf(". "),
+      next.lastIndexOf("? "),
+      next.lastIndexOf("! "),
+      next.lastIndexOf("; "),
+      next.lastIndexOf("\n"),
+    );
+    const cut =
+      cursor + next.length < clean.length && sentenceBreak > 500
+        ? sentenceBreak + 1
+        : next.length;
+    const chunkText = clean.slice(cursor, cursor + cut).replace(/\s+/g, " ").trim();
+    if (chunkText) {
+      rows.push(
+        normalizeChunk(
+          {
+            page_number: pageNumber,
+            chunk_index: index,
+            chunk_text: chunkText,
+            source_kind: "document",
+            metadata,
+          },
+          index,
+        ),
+      );
+      index += 1;
+    }
+    cursor += Math.max(cut, 1);
+  }
+  return rows;
+}
+
 function chunksFromTranscriptionResponse(response: DbRow, sourceKind: "audio" | "video") {
   const rawSegments = Array.isArray(response.segments)
     ? (response.segments as OpenAiSegment[])
@@ -531,6 +725,63 @@ function chunksFromTranscriptionResponse(response: DbRow, sourceKind: "audio" | 
   if (segmentChunks.length) return segmentChunks;
 
   return splitTranscriptText(cleanText(response.text), sourceKind);
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return blob.arrayBuffer().then((buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    return btoa(binary);
+  });
+}
+
+async function ocrPageWithOpenAi(openAiKey: string, asset: DbRow, imageBlob: Blob): Promise<string> {
+  const model = Deno.env.get("OPENAI_OCR_MODEL") || "gpt-5.4-mini";
+  const mimeType = cleanText(asset.mime_type, imageBlob.type || "image/jpeg");
+  const base64 = await blobToBase64(imageBlob);
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openAiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Extract the visible text from this scanned PDF page. Return only the OCR text in natural reading order. If no readable text is visible, return an empty string.",
+            },
+            {
+              type: "image_url",
+              image_url: { url: `data:${mimeType};base64,${base64}` },
+            },
+          ],
+        },
+      ],
+      max_completion_tokens: 1800,
+    }),
+  });
+  const data = (await res.json().catch(() => null)) as DbRow | null;
+  if (!res.ok) {
+    const message =
+      data && typeof data === "object" && "error" in data
+        ? cleanText((data.error as DbRow)?.message, res.statusText)
+        : res.statusText;
+    throw new Error(`OpenAI OCR failed: ${message}`);
+  }
+  const choices = Array.isArray(data?.choices) ? (data?.choices as DbRow[]) : [];
+  const first = choices[0];
+  const message = first?.message as DbRow | undefined;
+  return cleanText(message?.content);
 }
 
 async function transcribeWithOpenAi(
@@ -653,6 +904,136 @@ async function transcribeMediaResource(config: Config, body: DbRow, user: DbRow)
   }
 }
 
+function requestedPageNumbers(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => Math.floor(numberValue(item, 0)))
+    .filter((item) => item > 0)
+    .filter((item, index, all) => all.indexOf(item) === index)
+    .sort((a, b) => a - b);
+}
+
+async function loadOcrPageAssets(config: Config, resourceId: string, pageNumbers: number[]) {
+  const pageFilter = pageNumbers.length
+    ? `&page_number=in.(${pageNumbers.map(String).join(",")})`
+    : "";
+  const rows = await supabaseFetch(
+    config,
+    `resource_page_assets?resource_id=eq.${encodeURIComponent(resourceId)}&asset_type=eq.ocr_image&status=eq.ready${pageFilter}&select=*&order=page_number.asc`,
+  );
+  const assets = Array.isArray(rows) ? (rows as DbRow[]) : [];
+  if (assets.length) return assets;
+  const fallbackRows = await supabaseFetch(
+    config,
+    `resource_page_assets?resource_id=eq.${encodeURIComponent(resourceId)}&asset_type=eq.thumbnail&status=eq.ready${pageFilter}&select=*&order=page_number.asc`,
+  );
+  return Array.isArray(fallbackRows) ? (fallbackRows as DbRow[]) : [];
+}
+
+async function ocrPdfPages(config: Config, body: DbRow, user: DbRow) {
+  const resourceId = cleanId(body.resource_id);
+  const resource = await requireManageableResource(config, resourceId);
+  assertUploadedPdf(resource, "Only uploaded PDF resources can be OCR processed.");
+  const pageNumbers = requestedPageNumbers(body.page_numbers);
+  if (pageNumbers.length > MAX_OCR_PAGES) {
+    throw new Error("OCR is limited to 30 pages per run.");
+  }
+  const assets = await loadOcrPageAssets(config, resourceId, pageNumbers);
+  if (!assets.length) {
+    throw new Error("Generate PDF page previews before running OCR.");
+  }
+  if (assets.length > MAX_OCR_PAGES) {
+    throw new Error("OCR is limited to 30 pages per run.");
+  }
+
+  const openAiKey = requireOpenAiKey("OCR");
+  const model = Deno.env.get("OPENAI_OCR_MODEL") || "gpt-5.4-mini";
+  const job = await createProcessingJob(config, resource, user, "pdf_ocr", "processing", {
+    model,
+    page_count: assets.length,
+    max_image_bytes: MAX_OCR_IMAGE_BYTES,
+  });
+
+  try {
+    const chunks: DbRow[] = [];
+    for (const asset of assets) {
+      const bucket = cleanText(asset.storage_bucket, "lesson-resources");
+      const path = cleanText(asset.storage_path);
+      const blob = await downloadStorageFile(
+        config,
+        bucket,
+        path,
+        MAX_OCR_IMAGE_BYTES,
+        "This PDF page asset has no private image file.",
+      );
+      const ocrText = await ocrPageWithOpenAi(openAiKey, asset, blob);
+      chunks.push(
+        ...splitDocumentText(ocrText, numberValue(asset.page_number, 1), {
+          generated_from: "openai_vision_ocr",
+          model,
+          page_asset_id: asset.id,
+          asset_type: asset.asset_type,
+        }),
+      );
+    }
+    if (!chunks.length) {
+      throw new Error("No OCR text was found in the selected PDF pages.");
+    }
+    if (chunks.length > MAX_CHUNKS) {
+      throw new Error("Too many OCR chunks. Use fewer pages in one OCR run.");
+    }
+
+    const insertRows = chunks.map((chunk) => ({
+      ...chunk,
+      resource_id: resourceId,
+      job_id: job.id,
+      organization_id: resource.organization_id || null,
+      class_id: resource.class_id || null,
+      lesson_id: resource.lesson_id || null,
+      status: "draft",
+      created_by: user.id,
+      updated_by: user.id,
+    }));
+    const inserted = await supabaseFetch(config, "resource_text_chunks", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(insertRows),
+    });
+
+    await updateProcessingJob(config, String(job.id), {
+      status: "complete",
+      completed_by: user.id,
+      chunk_count: chunks.length,
+      completed_at: new Date().toISOString(),
+      metadata: {
+        model,
+        page_count: assets.length,
+        response_format: "plain_text",
+      },
+    });
+
+    return {
+      status: "ok",
+      resource_id: resourceId,
+      job_id: job.id,
+      chunks: inserted,
+    };
+  } catch (error) {
+    const message = errorMessage(error);
+    await updateProcessingJob(config, String(job.id), {
+      status: "failed",
+      completed_by: user.id,
+      error_count: 1,
+      completed_at: new Date().toISOString(),
+    });
+    await insertProcessingError(config, resourceId, String(job.id), message, {
+      action: "ocr_pdf_pages",
+      resource_type: resource.resource_type,
+    });
+    throw error;
+  }
+}
+
 async function saveChunkEdits(config: Config, body: DbRow, user: DbRow) {
   const resourceId = cleanId(body.resource_id);
   await requireManageableResource(config, resourceId);
@@ -665,20 +1046,25 @@ async function saveChunkEdits(config: Config, body: DbRow, user: DbRow) {
     const chunkId = cleanId(chunks[i].id);
     if (!chunkId) throw new Error("chunk id is required.");
     const normalized = normalizeChunk(chunks[i], i);
+    const patch: DbRow = {
+      page_number: normalized.page_number,
+      chunk_index: normalized.chunk_index,
+      chunk_text: normalized.chunk_text,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    };
+    if ("metadata" in chunks[i]) patch.metadata = normalized.metadata;
+    if ("source_kind" in chunks[i]) patch.source_kind = normalized.source_kind;
+    if ("start_seconds" in chunks[i]) patch.start_seconds = normalized.start_seconds;
+    if ("end_seconds" in chunks[i]) patch.end_seconds = normalized.end_seconds;
+    if ("confidence" in chunks[i]) patch.confidence = normalized.confidence;
     const rows = await supabaseFetch(
       config,
       `resource_text_chunks?id=eq.${encodeURIComponent(chunkId)}&resource_id=eq.${encodeURIComponent(resourceId)}`,
       {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
-        body: JSON.stringify({
-          page_number: normalized.page_number,
-          chunk_index: normalized.chunk_index,
-          chunk_text: normalized.chunk_text,
-          metadata: normalized.metadata,
-          updated_by: user.id,
-          updated_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(patch),
       },
     );
     if (Array.isArray(rows) && rows[0]) updated.push(rows[0] as DbRow);
@@ -753,6 +1139,12 @@ Deno.serve(async (req) => {
     }
     if (action === "extract_pdf_chunks") {
       return json(await extractPdfChunks(config, body, user));
+    }
+    if (action === "save_pdf_page_assets") {
+      return json(await savePdfPageAssets(config, body, user));
+    }
+    if (action === "ocr_pdf_pages") {
+      return json(await ocrPdfPages(config, body, user));
     }
     if (action === "transcribe_media_resource") {
       return json(await transcribeMediaResource(config, body, user));

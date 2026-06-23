@@ -41,6 +41,7 @@ import {
   fetchLessons,
   createRealtimeVoiceSession,
   getLessonResourceSignedUrl,
+  getLessonResourceThumbnailSignedUrl,
   getMentorAudio,
   getSession,
   invokeJargonRun,
@@ -1761,11 +1762,32 @@ function ResourceCard({
   ) => Promise<void>;
 }) {
   const [openedUrl, setOpenedUrl] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void onResourceEvent(resource, "shown");
   }, [onResourceEvent, resource]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!resource.thumbnail_path && !resource.thumbnail_url) {
+      setThumbnailUrl("");
+      return () => {
+        cancelled = true;
+      };
+    }
+    void getLessonResourceThumbnailSignedUrl(resource)
+      .then((url) => {
+        if (!cancelled) setThumbnailUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setThumbnailUrl("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [resource]);
 
   const mediaProgress = (element: HTMLMediaElement) => ({
     progress_seconds: Math.round(element.currentTime || 0),
@@ -1801,21 +1823,30 @@ function ResourceCard({
     <GradientCard innerClassName="overflow-hidden">
       <div className="bg-background/55 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              <FileText className="h-3.5 w-3.5" strokeWidth={1.6} />
-              {resource.resource_type}
-            </div>
-            <h3 className="text-[14px] font-medium text-foreground">{resource.title}</h3>
-            {resource.student_instructions ? (
-              <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-                {resource.student_instructions}
-              </p>
-            ) : resource.description ? (
-              <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-                {resource.description}
-              </p>
+          <div className="flex min-w-0 gap-3">
+            {thumbnailUrl ? (
+              <img
+                src={thumbnailUrl}
+                alt=""
+                className="mt-1 hidden h-24 w-16 shrink-0 rounded-2xl border border-border object-cover sm:block"
+              />
             ) : null}
+            <div className="min-w-0">
+              <div className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                <FileText className="h-3.5 w-3.5" strokeWidth={1.6} />
+                {resource.resource_type}
+              </div>
+              <h3 className="text-[14px] font-medium text-foreground">{resource.title}</h3>
+              {resource.student_instructions ? (
+                <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                  {resource.student_instructions}
+                </p>
+              ) : resource.description ? (
+                <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                  {resource.description}
+                </p>
+              ) : null}
+            </div>
           </div>
           <button
             type="button"

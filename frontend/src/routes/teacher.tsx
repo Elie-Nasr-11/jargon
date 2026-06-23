@@ -34,11 +34,13 @@ import {
   deleteResourceChunks,
   fetchTeacherDashboard,
   fetchResourceTextChunks,
+  getResourcePageAssetSignedUrl,
   getSubmissionFileSignedUrl,
   gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
   getSession,
   heartbeatLiveSessionViewer,
+  ocrPdfPages,
   sendTeacherLiveComment,
   startLiveSessionViewer,
   stopLiveSessionViewer,
@@ -49,8 +51,9 @@ import {
   updateAssignmentStatus,
   updateInterventionAlertStatus,
   updateLessonResource,
+  uploadPdfPageAssets,
 } from "@/lib/api";
-import { extractPdfTextChunksFromUrl } from "@/lib/pdf-extract";
+import { extractPdfTextChunksFromUrl, renderPdfPageAssetsFromUrl } from "@/lib/pdf-extract";
 import type {
   Assignment,
   AssignmentRecipient,
@@ -69,6 +72,7 @@ import type {
   LessonResourceVisibility,
   LiveSessionViewer,
   Profile,
+  ResourcePageAsset,
   ResourceTextChunk,
   ResourceTextChunkStatus,
   StudentMastery,
@@ -1005,7 +1009,46 @@ function chunkLocationLabel(chunk: ResourceTextChunk) {
     if (start) return `${chunk.source_kind === "video" ? "Video" : "Audio"} ${start}`;
     return `${chunk.source_kind === "video" ? "Video" : "Audio"} transcript`;
   }
-  return `Page ${chunk.page_number}`;
+  const generatedFrom =
+    chunk.metadata && typeof chunk.metadata.generated_from === "string"
+      ? chunk.metadata.generated_from
+      : "";
+  return generatedFrom === "openai_vision_ocr"
+    ? `Page ${chunk.page_number} OCR`
+    : `Page ${chunk.page_number}`;
+}
+
+function ResourcePageThumbnail({ asset }: { asset: ResourcePageAsset }) {
+  const [url, setUrl] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void getResourcePageAssetSignedUrl(asset)
+      .then((signedUrl) => {
+        if (!cancelled) setUrl(signedUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setUrl("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [asset]);
+
+  return (
+    <div
+      className="h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border bg-muted/35"
+      title={`Page ${asset.page_number} preview`}
+    >
+      {url ? (
+        <img src={url} alt={`Page ${asset.page_number}`} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+          p{asset.page_number}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ResourceManager({
@@ -1032,6 +1075,7 @@ function ResourceManager({
   const [reviewingId, setReviewingId] = useState("");
   const [chunkBusyId, setChunkBusyId] = useState("");
   const [chunksByResource, setChunksByResource] = useState<Record<string, ResourceTextChunk[]>>({});
+  const [assetsByResource, setAssetsByResource] = useState<Record<string, ResourcePageAsset[]>>({});
   const [chunkDrafts, setChunkDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -1133,6 +1177,10 @@ function ResourceManager({
         ...current,
         [resource.id]: data.chunks,
       }));
+      setAssetsByResource((current) => ({
+        ...current,
+        [resource.id]: data.assets,
+      }));
       setChunkDrafts((current) => ({
         ...current,
         ...Object.fromEntries(data.chunks.map((chunk) => [chunk.id, chunk.chunk_text])),
@@ -1174,6 +1222,65 @@ function ResourceManager({
       );
     } catch (error) {
       setResourceMessage((error as Error).message || "Could not extract PDF text.");
+    } finally {
+      setProcessingId("");
+    }
+  };
+
+  const generatePagePreviews = async (resource: LessonResource) => {
+    try {
+      setProcessingId(resource.id);
+      setResourceMessage("Rendering PDF page previews in this browser...");
+      const url = await getLessonResourceSignedUrl(resource);
+      if (!url) throw new Error("This resource does not have an openable PDF URL.");
+      const pageAssets = await renderPdfPageAssetsFromUrl(url);
+      if (!pageAssets.length) {
+        throw new Error("No PDF pages were rendered.");
+      }
+      const saved = await uploadPdfPageAssets(resource, pageAssets);
+      setAssetsByResource((current) => ({
+        ...current,
+        [resource.id]: saved,
+      }));
+      setReviewingId(resource.id);
+      const pageCount = new Set(saved.map((asset) => asset.page_number)).size;
+      setResourceMessage(
+        `Generated previews for ${pageCount} page${pageCount === 1 ? "" : "s"}. Scanned pages can now be OCR processed.`,
+      );
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not generate page previews.");
+    } finally {
+      setProcessingId("");
+    }
+  };
+
+  const ocrPdfResource = async (resource: LessonResource) => {
+    try {
+      setProcessingId(resource.id);
+      setResourceMessage("Running OCR on scanned PDF page images...");
+      const assets = assetsByResource[resource.id] || [];
+      const pageNumbers = Array.from(
+        new Set(
+          assets
+            .filter((asset) => asset.asset_type === "ocr_image")
+            .map((asset) => asset.page_number),
+        ),
+      ).sort((a, b) => a - b);
+      const saved = await ocrPdfPages(resource.id, pageNumbers);
+      setChunksByResource((current) => ({
+        ...current,
+        [resource.id]: [...(current[resource.id] || []), ...saved],
+      }));
+      setChunkDrafts((current) => ({
+        ...current,
+        ...Object.fromEntries(saved.map((chunk) => [chunk.id, chunk.chunk_text])),
+      }));
+      setReviewingId(resource.id);
+      setResourceMessage(
+        `Created ${saved.length} draft OCR chunk${saved.length === 1 ? "" : "s"}. Review and approve before Mentor can use them.`,
+      );
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not OCR PDF pages.");
     } finally {
       setProcessingId("");
     }
@@ -1476,11 +1583,17 @@ function ResourceManager({
           {resources.length ? (
             resources.map((resource) => {
               const chunks = chunksByResource[resource.id] || [];
+              const assets = assetsByResource[resource.id] || [];
               const draftCount = chunks.filter((chunk) => chunk.status === "draft").length;
               const approvedCount = chunks.filter((chunk) => chunk.status === "approved").length;
               const rejectedCount = chunks.filter((chunk) => chunk.status === "rejected").length;
               const canExtractPdf =
                 resource.resource_type === "pdf" && resource.source_type === "upload";
+              const pdfPageCount = new Set(assets.map((asset) => asset.page_number)).size;
+              const thumbnailAssets = assets.filter((asset) => asset.asset_type === "thumbnail");
+              const ocrAssetCount = assets.filter(
+                (asset) => asset.asset_type === "ocr_image",
+              ).length;
               const canTranscribeMedia =
                 (resource.resource_type === "audio" || resource.resource_type === "video") &&
                 resource.source_type === "upload";
@@ -1518,6 +1631,28 @@ function ResourceManager({
                           <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
                             {rejectedCount} rejected
                           </span>
+                        </div>
+                      ) : null}
+                      {assets.length ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                          <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
+                            {pdfPageCount} rendered page{pdfPageCount === 1 ? "" : "s"}
+                          </span>
+                          <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-blue-500">
+                            {ocrAssetCount} OCR image{ocrAssetCount === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                      ) : null}
+                      {thumbnailAssets.length ? (
+                        <div className="mt-2 flex max-w-full gap-2 overflow-x-auto pb-1">
+                          {thumbnailAssets.slice(0, 6).map((asset) => (
+                            <ResourcePageThumbnail key={asset.id} asset={asset} />
+                          ))}
+                          {thumbnailAssets.length > 6 ? (
+                            <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/35 text-[10px] text-muted-foreground">
+                              +{thumbnailAssets.length - 6}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                       {resource.student_instructions ? (
@@ -1572,12 +1707,34 @@ function ResourceManager({
                     {canExtractPdf ? (
                       <button
                         type="button"
+                        onClick={() => void generatePagePreviews(resource)}
+                        disabled={processingId === resource.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/35 px-3 py-1.5 text-[11.5px] text-cyan-500 transition-colors hover:bg-cyan-500/10 disabled:opacity-45"
+                      >
+                        <FileText className="h-3.5 w-3.5" strokeWidth={1.6} />
+                        {processingId === resource.id ? "Rendering..." : "Generate page previews"}
+                      </button>
+                    ) : null}
+                    {canExtractPdf ? (
+                      <button
+                        type="button"
                         onClick={() => void extractChunks(resource)}
                         disabled={processingId === resource.id}
                         className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/35 px-3 py-1.5 text-[11.5px] text-blue-500 transition-colors hover:bg-blue-500/10 disabled:opacity-45"
                       >
                         <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
                         {processingId === resource.id ? "Extracting..." : "Extract PDF text"}
+                      </button>
+                    ) : null}
+                    {canExtractPdf ? (
+                      <button
+                        type="button"
+                        onClick={() => void ocrPdfResource(resource)}
+                        disabled={processingId === resource.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/35 px-3 py-1.5 text-[11.5px] text-purple-500 transition-colors hover:bg-purple-500/10 disabled:opacity-45"
+                      >
+                        <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
+                        {processingId === resource.id ? "Running OCR..." : "OCR scanned pages"}
                       </button>
                     ) : null}
                     {canTranscribeMedia ? (
@@ -1713,8 +1870,8 @@ function ResourceManager({
                         </div>
                       ) : (
                         <div className="rounded-2xl border border-border bg-background/55 p-4 text-[12.5px] text-muted-foreground">
-                          No chunks yet. Extract an uploaded PDF or transcribe uploaded audio/video
-                          to begin review.
+                          No chunks yet. Extract selectable PDF text, OCR scanned PDF pages, or
+                          transcribe uploaded audio/video to begin review.
                         </div>
                       )}
                     </div>

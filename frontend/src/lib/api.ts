@@ -1,5 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { functionUrl, supabase, supabaseAnonKey } from "@/lib/supabase";
+import type { RenderedPdfPageAsset } from "@/lib/pdf-extract";
 import type {
   Assignment,
   AssignmentRecipient,
@@ -55,6 +56,7 @@ import type {
   RuntimeEvent,
   TranscriptHeatmapEvent,
   ResourceInteractionEvent,
+  ResourcePageAsset,
   ResourceProcessingResponse,
   ResourceTextChunk,
   StudentAssignmentBundle,
@@ -121,6 +123,21 @@ function storagePathForResource(input: {
     safePathSegment(input.classId),
     safePathSegment(input.lessonId),
     `${uniqueId()}-${name}`,
+  ].join("/");
+}
+
+function storagePathForPdfPageAsset(input: {
+  resourceId: string;
+  pageNumber: number;
+  assetType: "thumbnail" | "ocr_image";
+  mimeType: string;
+}) {
+  const extension =
+    input.mimeType === "image/png" ? "png" : input.mimeType === "image/webp" ? "webp" : "jpg";
+  return [
+    "derived",
+    safePathSegment(input.resourceId),
+    `${input.assetType}-page-${String(input.pageNumber).padStart(3, "0")}-${uniqueId()}.${extension}`,
   ].join("/");
 }
 
@@ -1291,6 +1308,29 @@ export async function getLessonResourceSignedUrl(resource: {
   return data.signedUrl;
 }
 
+export async function getLessonResourceThumbnailSignedUrl(resource: {
+  thumbnail_url?: string | null;
+  thumbnail_bucket?: string | null;
+  thumbnail_path?: string | null;
+}) {
+  if (resource.thumbnail_url?.startsWith("http")) return resource.thumbnail_url;
+  const path = resource.thumbnail_path || resource.thumbnail_url || "";
+  if (!path) return "";
+  const { data, error } = await supabase.storage
+    .from(resource.thumbnail_bucket || "lesson-resources")
+    .createSignedUrl(path, 60 * 30);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function getResourcePageAssetSignedUrl(asset: ResourcePageAsset) {
+  const { data, error } = await supabase.storage
+    .from(asset.storage_bucket || "lesson-resources")
+    .createSignedUrl(asset.storage_path, 60 * 30);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
 export async function recordResourceInteraction(event: ResourceInteractionEvent) {
   const {
     data: { user },
@@ -1336,7 +1376,53 @@ export async function fetchResourceTextChunks(resourceId: string) {
     chunks: data.chunks || [],
     jobs: data.jobs || [],
     errors: data.errors || [],
+    assets: data.assets || [],
   };
+}
+
+export async function uploadPdfPageAssets(
+  resource: LessonResource,
+  renderedAssets: RenderedPdfPageAsset[],
+) {
+  if (!renderedAssets.length) throw new Error("No PDF page previews were generated.");
+  const assets = [];
+  for (const asset of renderedAssets) {
+    const storagePath = storagePathForPdfPageAsset({
+      resourceId: resource.id,
+      pageNumber: asset.page_number,
+      assetType: asset.asset_type,
+      mimeType: asset.mime_type,
+    });
+    const { error } = await supabase.storage
+      .from("lesson-resources")
+      .upload(storagePath, asset.blob, {
+        cacheControl: "3600",
+        contentType: asset.mime_type,
+        upsert: false,
+      });
+    if (error) throw error;
+    assets.push({
+      page_number: asset.page_number,
+      asset_type: asset.asset_type,
+      storage_bucket: "lesson-resources",
+      storage_path: storagePath,
+      mime_type: asset.mime_type,
+      width: asset.width,
+      height: asset.height,
+      file_size_bytes: asset.blob.size,
+      metadata: asset.metadata || {},
+    });
+  }
+  const data = await invokeResourceProcessing({
+    action: "save_pdf_page_assets",
+    resource_id: resource.id,
+    assets,
+    metadata: {
+      rendered_in: "browser",
+      rendered_at: new Date().toISOString(),
+    },
+  });
+  return data.assets || [];
 }
 
 export async function saveExtractedPdfChunks(
@@ -1357,6 +1443,15 @@ export async function transcribeMediaResource(resourceId: string) {
   const data = await invokeResourceProcessing({
     action: "transcribe_media_resource",
     resource_id: resourceId,
+  });
+  return data.chunks || [];
+}
+
+export async function ocrPdfPages(resourceId: string, pageNumbers?: number[]) {
+  const data = await invokeResourceProcessing({
+    action: "ocr_pdf_pages",
+    resource_id: resourceId,
+    page_numbers: pageNumbers || [],
   });
   return data.chunks || [];
 }
