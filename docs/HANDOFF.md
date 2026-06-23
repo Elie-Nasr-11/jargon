@@ -8,7 +8,7 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Codex -> Claude / Human - 2026-06-23 21:06
 
-Status: Google Classroom roster-import spike implemented repo-side; live activation pending Google OAuth secrets
+Status: Google Classroom roster-import spike implemented, pushed, migrated, deployed; OAuth smoke pending Google secrets
 
 What changed:
 
@@ -36,6 +36,22 @@ What changed:
 
 Verification:
 
+- Implementation commit: `0844b43` (`Add Google Classroom roster import`).
+- Pushed GitHub `main` through `0844b43`.
+- Applied Supabase migration `google_classroom_integration` to project `qztpieiizmiayzjhezwh`: success.
+- Live DB check confirmed all Google Classroom tables exist with RLS enabled:
+  - `google_classroom_connections`;
+  - `google_classroom_course_mappings`;
+  - `google_classroom_user_mappings`;
+  - `google_classroom_sync_runs`.
+- Deployed Supabase Edge Function:
+  - `google-classroom` version `1`, status `ACTIVE`, `verify_jwt=true`,
+    deployment hash `3d37b272327cc9a6d2fb7dc60e419e5340002272622ec97ab396e0b5a73a8ca1`.
+- Unauthenticated `POST /functions/v1/google-classroom` returned `401 UNAUTHORIZED_NO_AUTH_HEADER`.
+- Render live bundle at `https://jargon-9bv5.onrender.com/admin` contains:
+  - `google-classroom`;
+  - `Google Classroom`;
+  - roster preview/import UI strings.
 - Local checks passed:
   - `cd frontend && npx tsc --noEmit`;
   - `cd frontend && npm run lint` with the existing 11 warnings;
@@ -48,10 +64,8 @@ Verification:
   - Classroom auth scopes;
   - Google OAuth web server flow.
 
-Live activation still needed:
+Live OAuth smoke still needed:
 
-- Apply `supabase/migrations/0014_google_classroom_integration.sql`.
-- Deploy Supabase Edge Function `google-classroom` with JWT verification enabled.
 - Set Edge Function secrets:
   - `GOOGLE_CLASSROOM_CLIENT_ID`;
   - `GOOGLE_CLASSROOM_CLIENT_SECRET`;
