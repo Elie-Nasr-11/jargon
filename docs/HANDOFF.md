@@ -6,6 +6,42 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 09:40
+
+Status: Phase 7 Multi-Subject Chat-LMS accepted live; Voice v2 still parked
+
+Live acceptance result:
+
+- Published the first non-coding pilot lesson through the real teacher/curriculum path:
+  `Logic Foundations -> Clear Thinking -> Claims, Reasons, Evidence -> What Makes a Good Reason?`.
+- Live lesson id:
+  `pilot-school-logic-foundations-clear-thinking-v1-1-claims-reasons-evidence-what-makes-a-good-reason`.
+- Attached and published one teacher-approved link resource:
+  `Claim, Reason, Evidence Quick Guide`.
+- Completed the lesson as seeded student `student2@gmail.com` through the normal typed `chat`
+  orchestrator with no Jargon/code dependency.
+
+Verified live records:
+
+- `learning_sessions`: latest session is `complete`, stage `complete`, score `1`.
+- `learning_turns`: 5 turns.
+- `lesson_attempts`: 2 attempts (`text` discussion + `multiple_choice` quiz).
+- `quiz_attempts`: 1 passed attempt, choice `b`, score `1`.
+- `learning_evidence`: 1 evidence row.
+- `student_mastery`: 4 logic skill summaries (`logic.clarity`, `logic.claims`,
+  `logic.reasons`, `logic.evidence`).
+- `resource_interactions`: `shown` and `opened`.
+
+Notes:
+
+- The direct resource write must use the same minimal-return pattern as the frontend
+  resource manager; asking PostgREST to return a draft resource row immediately can trip
+  RLS/representation behavior even though the normal UI write path is valid.
+- The lesson menu grouping code for subject/course/unit is already pushed in commit `97b5f3f`.
+- Recommended next slice: Phase 8 should be tightened around org/admin management and pilot
+  operations only if needed for the school demo; otherwise move to Phase 9 media processing
+  or Phase 10 analytics depending on demo priority.
+
 ## Codex -> Claude / Human - 2026-06-23 09:00
 
 Status: Phase 7 implementation started; Voice v2 parked
