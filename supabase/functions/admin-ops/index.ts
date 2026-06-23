@@ -26,6 +26,18 @@ type ActorAccess = {
   organizationIds: string[];
 };
 
+type ReadinessStatus = "ready" | "needs_setup" | "needs_attention" | "blocked";
+
+type ReadinessIssue = {
+  severity: "setup" | "attention" | "blocked";
+  message: string;
+};
+
+type ReadinessChecklistItem = {
+  label: string;
+  status: "ok" | "missing" | "attention";
+};
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -63,6 +75,12 @@ function cleanText(value: unknown, fallback = ""): string {
 
 function cleanId(value: unknown): string {
   return cleanText(value);
+}
+
+function numericDate(value: unknown): number {
+  if (typeof value !== "string" || !value) return 0;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? time : 0;
 }
 
 function normalizeEmail(value: unknown): string {
@@ -176,6 +194,58 @@ function actorAccessPayload(access: ActorAccess): DbRow {
 
 function inFilter(column: string, values: string[]): string {
   return `${column}=in.(${values.map((value) => encodeURIComponent(value)).join(",")})`;
+}
+
+function idsFrom(rows: DbRow[], key: string): string[] {
+  return Array.from(
+    new Set(rows.map((row) => cleanId(row[key])).filter(Boolean)),
+  );
+}
+
+function rowsByKey(rows: DbRow[], key: string): Map<string, DbRow[]> {
+  const map = new Map<string, DbRow[]>();
+  for (const row of rows) {
+    const value = cleanId(row[key]);
+    if (!value) continue;
+    const items = map.get(value) || [];
+    items.push(row);
+    map.set(value, items);
+  }
+  return map;
+}
+
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const text =
+    typeof value === "object" ? JSON.stringify(value) : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+  return text;
+}
+
+function csvFromRows(
+  rows: DbRow[],
+  columns: Array<{ key: string; label: string }>,
+): string {
+  const header = columns.map((column) => csvEscape(column.label)).join(",");
+  const body = rows.map((row) =>
+    columns.map((column) => csvEscape(row[column.key])).join(",")
+  );
+  return [header, ...body].join("\n");
+}
+
+function readinessStatusFromIssues(issues: ReadinessIssue[]): ReadinessStatus {
+  if (issues.some((issue) => issue.severity === "blocked")) return "blocked";
+  if (issues.some((issue) => issue.severity === "attention"))
+    return "needs_attention";
+  if (issues.some((issue) => issue.severity === "setup")) return "needs_setup";
+  return "ready";
+}
+
+function worstStatus(statuses: ReadinessStatus[]): ReadinessStatus {
+  if (statuses.includes("blocked")) return "blocked";
+  if (statuses.includes("needs_attention")) return "needs_attention";
+  if (statuses.includes("needs_setup")) return "needs_setup";
+  return "ready";
 }
 
 function hasOrganizationAccess(
@@ -485,6 +555,461 @@ async function handleListAdminScope(
   access: ActorAccess,
 ): Promise<Response> {
   return json({ status: "ok", data: await scopeResponse(config, access) });
+}
+
+async function loadPilotReadinessData(
+  config: Config,
+  access: ActorAccess,
+): Promise<{
+  scope: DbRow;
+  lessons: DbRow[];
+  sessions: DbRow[];
+  assignments: DbRow[];
+  assignmentRecipients: DbRow[];
+  resources: DbRow[];
+  runtimeEvents: DbRow[];
+  interventionAlerts: DbRow[];
+}> {
+  const scope = await loadAdminScope(config, access);
+  const classes = Array.isArray(scope.classes) ? scope.classes as DbRow[] : [];
+  const memberships = Array.isArray(scope.class_memberships)
+    ? scope.class_memberships as DbRow[]
+    : [];
+  const classIds = idsFrom(classes, "id");
+  const studentIds = idsFrom(
+    memberships.filter((row) => cleanText(row.role) === "student"),
+    "user_id",
+  );
+
+  const [lessons, sessions, assignments, resources, runtimeByClass, runtimeByUser, alertsByClass, alertsByUser] =
+    await Promise.all([
+      selectRows(
+        config,
+        "lessons?select=id,title,publication_status,module,level&limit=1000",
+      ),
+      studentIds.length
+        ? selectRows(
+            config,
+            `learning_sessions?${inFilter("user_id", studentIds)}&select=id,user_id,lesson_id,stage,status,score,retry_count,rescue_count,created_at,updated_at&order=updated_at.desc&limit=1000`,
+          )
+        : [],
+      classIds.length
+        ? selectRows(
+            config,
+            `assignments?${inFilter("class_id", classIds)}&select=id,organization_id,class_id,lesson_id,title,status,due_at,created_at,updated_at&order=updated_at.desc&limit=1000`,
+          )
+        : [],
+      classIds.length
+        ? selectRows(
+            config,
+            `lesson_resources?${inFilter("class_id", classIds)}&select=id,organization_id,class_id,lesson_id,title,resource_type,status,visibility,created_at,updated_at&order=created_at.desc&limit=1000`,
+          )
+        : [],
+      classIds.length
+        ? selectRows(
+            config,
+            `runtime_events?${inFilter("class_id", classIds)}&select=id,user_id,organization_id,class_id,session_id,lesson_id,event_type,status,latency_ms,payload,created_at&order=created_at.desc&limit=500`,
+          )
+        : [],
+      studentIds.length
+        ? selectRows(
+            config,
+            `runtime_events?${inFilter("user_id", studentIds)}&select=id,user_id,organization_id,class_id,session_id,lesson_id,event_type,status,latency_ms,payload,created_at&order=created_at.desc&limit=500`,
+          )
+        : [],
+      classIds.length
+        ? selectRows(
+            config,
+            `intervention_alerts?${inFilter("class_id", classIds)}&select=id,student_id,class_id,session_id,lesson_id,alert_type,severity,title,message,status,created_at,updated_at&order=created_at.desc&limit=500`,
+          )
+        : [],
+      studentIds.length
+        ? selectRows(
+            config,
+            `intervention_alerts?${inFilter("student_id", studentIds)}&select=id,student_id,class_id,session_id,lesson_id,alert_type,severity,title,message,status,created_at,updated_at&order=created_at.desc&limit=500`,
+          )
+        : [],
+    ]);
+
+  const assignmentIds = idsFrom(assignments, "id");
+  const assignmentRecipients = assignmentIds.length
+    ? await selectRows(
+        config,
+        `assignment_recipients?${inFilter("assignment_id", assignmentIds)}&select=id,assignment_id,user_id,status,score,assigned_at,completed_at,updated_at&order=updated_at.desc&limit=1500`,
+      )
+    : [];
+
+  const seenRuntime = new Map<string, DbRow>();
+  for (const row of [...runtimeByClass, ...runtimeByUser]) {
+    const id = cleanId(row.id);
+    if (id) seenRuntime.set(id, row);
+  }
+  const seenAlerts = new Map<string, DbRow>();
+  for (const row of [...alertsByClass, ...alertsByUser]) {
+    const id = cleanId(row.id);
+    if (id) seenAlerts.set(id, row);
+  }
+
+  return {
+    scope,
+    lessons,
+    sessions,
+    assignments,
+    assignmentRecipients,
+    resources,
+    runtimeEvents: Array.from(seenRuntime.values()),
+    interventionAlerts: Array.from(seenAlerts.values()),
+  };
+}
+
+async function buildPilotReadiness(
+  config: Config,
+  access: ActorAccess,
+): Promise<{ scope: DbRow; readiness: DbRow }> {
+  const data = await loadPilotReadinessData(config, access);
+  const organizations = Array.isArray(data.scope.organizations)
+    ? data.scope.organizations as DbRow[]
+    : [];
+  const classes = Array.isArray(data.scope.classes)
+    ? data.scope.classes as DbRow[]
+    : [];
+  const classMemberships = Array.isArray(data.scope.class_memberships)
+    ? data.scope.class_memberships as DbRow[]
+    : [];
+  const auditEvents = Array.isArray(data.scope.audit_events)
+    ? data.scope.audit_events as DbRow[]
+    : [];
+  const profiles = Array.isArray(data.scope.profiles)
+    ? data.scope.profiles as DbRow[]
+    : [];
+  const users = Array.isArray(data.scope.users) ? data.scope.users as DbRow[] : [];
+
+  const lessonsAvailable = data.lessons.filter((lesson) => {
+    const status = cleanText(lesson.publication_status || "published");
+    return status === "" || status === "published";
+  });
+  const lessonCount = lessonsAvailable.length;
+  const membershipsByClass = rowsByKey(classMemberships, "class_id");
+  const sessionsByUser = rowsByKey(data.sessions, "user_id");
+  const assignmentsByClass = rowsByKey(data.assignments, "class_id");
+  const resourcesByClass = rowsByKey(data.resources, "class_id");
+  const runtimeByClass = rowsByKey(data.runtimeEvents, "class_id");
+  const alertsByClass = rowsByKey(data.interventionAlerts, "class_id");
+  const auditByClass = rowsByKey(auditEvents, "class_id");
+  const profileById = new Map(profiles.map((profile) => [cleanId(profile.id), profile]));
+  const userById = new Map(users.map((user) => [cleanId(user.id), user]));
+  const recentCutoff = Date.now() - 1000 * 60 * 60 * 24 * 14;
+
+  const classReadiness = classes.map((classRow) => {
+    const classId = cleanId(classRow.id);
+    const organizationId = cleanId(classRow.organization_id);
+    const members = membershipsByClass.get(classId) || [];
+    const activeMembers = members.filter((row) => cleanText(row.status) === "active");
+    const activeTeachers = activeMembers.filter((row) => cleanText(row.role) === "teacher");
+    const activeStudents = activeMembers.filter((row) => cleanText(row.role) === "student");
+    const studentIds = new Set(activeStudents.map((row) => cleanId(row.user_id)).filter(Boolean));
+    const classSessions = Array.from(studentIds).flatMap((studentId) =>
+      sessionsByUser.get(studentId) || []
+    );
+    const completedSessions = classSessions.filter(
+      (session) => cleanText(session.status) === "complete",
+    );
+    const recentCompletions = completedSessions.filter(
+      (session) => numericDate(session.updated_at) >= recentCutoff,
+    );
+    const classAssignments = assignmentsByClass.get(classId) || [];
+    const assignedAssignments = classAssignments.filter(
+      (assignment) => cleanText(assignment.status) === "assigned",
+    );
+    const classResources = resourcesByClass.get(classId) || [];
+    const publishedResources = classResources.filter(
+      (resource) => cleanText(resource.status) === "published",
+    );
+    const classErrors = (runtimeByClass.get(classId) || []).filter(
+      (event) => cleanText(event.status) === "error",
+    );
+    const classAlerts = (alertsByClass.get(classId) || []).filter((alert) =>
+      ["open", "acknowledged"].includes(cleanText(alert.status)),
+    );
+    const issues: ReadinessIssue[] = [];
+    if (!activeTeachers.length) {
+      issues.push({ severity: "blocked", message: "No active teacher in this class." });
+    }
+    if (!activeStudents.length) {
+      issues.push({ severity: "blocked", message: "No active students in this class." });
+    }
+    if (!lessonCount) {
+      issues.push({ severity: "setup", message: "No published lessons are available." });
+    }
+    if (!assignedAssignments.length && !publishedResources.length) {
+      issues.push({
+        severity: "setup",
+        message: "No assigned work or published resources are prepared yet.",
+      });
+    }
+    if (classErrors.length) {
+      issues.push({
+        severity: "attention",
+        message: `${classErrors.length} recent runtime error${classErrors.length === 1 ? "" : "s"}.`,
+      });
+    }
+    if (classAlerts.length) {
+      issues.push({
+        severity: "attention",
+        message: `${classAlerts.length} open intervention alert${classAlerts.length === 1 ? "" : "s"}.`,
+      });
+    }
+    const status = readinessStatusFromIssues(issues);
+    const rosterRows = activeMembers.map((membership) => {
+      const userId = cleanId(membership.user_id);
+      const profile = profileById.get(userId) || {};
+      const user = userById.get(userId) || {};
+      return {
+        user_id: userId,
+        role: membership.role,
+        status: membership.status,
+        name: profile.name || "",
+        grade: profile.grade || "",
+        email: user.email || "",
+        last_sign_in_at: user.last_sign_in_at || null,
+      };
+    });
+    return {
+      class_id: classId,
+      organization_id: organizationId,
+      class_name: classRow.name || "Untitled class",
+      organization_name:
+        organizations.find((org) => cleanId(org.id) === organizationId)?.name ||
+        "Organization",
+      status,
+      teacher_count: activeTeachers.length,
+      student_count: activeStudents.length,
+      active_membership_count: activeMembers.length,
+      disabled_membership_count: members.filter((row) => cleanText(row.status) !== "active").length,
+      published_lesson_count: lessonCount,
+      completed_session_count: completedSessions.length,
+      recent_completion_count: recentCompletions.length,
+      assignment_count: assignedAssignments.length,
+      resource_count: publishedResources.length,
+      open_alert_count: classAlerts.length,
+      recent_error_count: classErrors.length,
+      audit_event_count: (auditByClass.get(classId) || []).length,
+      checklist: [
+        {
+          label: "Active teacher",
+          status: activeTeachers.length ? "ok" : "missing",
+        },
+        {
+          label: "Active students",
+          status: activeStudents.length ? "ok" : "missing",
+        },
+        {
+          label: "Published lessons",
+          status: lessonCount ? "ok" : "missing",
+        },
+        {
+          label: "Work/resources prepared",
+          status: assignedAssignments.length || publishedResources.length ? "ok" : "missing",
+        },
+        {
+          label: "Recent completion",
+          status: recentCompletions.length ? "ok" : "attention",
+        },
+        {
+          label: "No open alerts/errors",
+          status: classAlerts.length || classErrors.length ? "attention" : "ok",
+        },
+      ] as ReadinessChecklistItem[],
+      issues,
+      roster: rosterRows,
+    };
+  });
+
+  const classReadinessByOrg = rowsByKey(classReadiness as DbRow[], "organization_id");
+  const organizationReadiness = organizations.map((org) => {
+    const rows = (classReadinessByOrg.get(cleanId(org.id)) || []) as Array<
+      DbRow & { status: ReadinessStatus }
+    >;
+    const statuses = rows.map((row) => row.status);
+    return {
+      organization_id: org.id,
+      organization_name: org.name || "Organization",
+      status: rows.length ? worstStatus(statuses) : "needs_setup",
+      class_count: rows.length,
+      ready_class_count: rows.filter((row) => row.status === "ready").length,
+      needs_setup_class_count: rows.filter((row) => row.status === "needs_setup").length,
+      needs_attention_class_count: rows.filter((row) => row.status === "needs_attention").length,
+      blocked_class_count: rows.filter((row) => row.status === "blocked").length,
+    };
+  });
+
+  return {
+    scope: data.scope,
+    readiness: {
+      generated_at: new Date().toISOString(),
+      organizations: organizationReadiness,
+      classes: classReadiness,
+      recent_errors: data.runtimeEvents
+        .filter((event) => cleanText(event.status) === "error")
+        .sort((a, b) => numericDate(b.created_at) - numericDate(a.created_at))
+        .slice(0, 25),
+      open_alerts: data.interventionAlerts
+        .filter((alert) => ["open", "acknowledged"].includes(cleanText(alert.status)))
+        .sort((a, b) => numericDate(b.created_at) - numericDate(a.created_at))
+        .slice(0, 25),
+    },
+  };
+}
+
+async function handleListPilotReadiness(
+  config: Config,
+  access: ActorAccess,
+): Promise<Response> {
+  const data = await buildPilotReadiness(config, access);
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      scope: data.scope,
+      readiness: data.readiness,
+    },
+  });
+}
+
+async function handleExportClassSnapshot(
+  config: Config,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const classId = cleanId(body.class_id);
+  if (!classId) throw new Error("class_id is required.");
+  const organizationId = await fetchClassOrganizationId(config, classId);
+  requireOrganizationAccess(access, organizationId);
+  const data = await loadPilotReadinessData(config, access);
+  const scope = data.scope;
+  const classes = Array.isArray(scope.classes) ? scope.classes as DbRow[] : [];
+  const targetClass = classes.find((row) => cleanId(row.id) === classId);
+  if (!targetClass) throw new Error("Class is not available in admin scope.");
+  const organizations = Array.isArray(scope.organizations)
+    ? scope.organizations as DbRow[]
+    : [];
+  const memberships = (Array.isArray(scope.class_memberships)
+    ? scope.class_memberships as DbRow[]
+    : []).filter((row) => cleanId(row.class_id) === classId);
+  const profiles = Array.isArray(scope.profiles) ? scope.profiles as DbRow[] : [];
+  const users = Array.isArray(scope.users) ? scope.users as DbRow[] : [];
+  const profileById = new Map(profiles.map((profile) => [cleanId(profile.id), profile]));
+  const userById = new Map(users.map((user) => [cleanId(user.id), user]));
+  const lessonsById = new Map(data.lessons.map((lesson) => [cleanId(lesson.id), lesson]));
+  const studentIds = new Set(
+    memberships
+      .filter((membership) => cleanText(membership.role) === "student")
+      .map((membership) => cleanId(membership.user_id))
+      .filter(Boolean),
+  );
+  const assignments = data.assignments.filter((row) => cleanId(row.class_id) === classId);
+  const assignmentsById = new Map(assignments.map((row) => [cleanId(row.id), row]));
+  const recipientsByUser = rowsByKey(
+    data.assignmentRecipients.filter((row) => assignmentsById.has(cleanId(row.assignment_id))),
+    "user_id",
+  );
+  const sessionsByUser = rowsByKey(
+    data.sessions.filter((row) => studentIds.has(cleanId(row.user_id))),
+    "user_id",
+  );
+  const alertsByUser = rowsByKey(
+    data.interventionAlerts.filter((row) => studentIds.has(cleanId(row.student_id))),
+    "student_id",
+  );
+  const orgName =
+    organizations.find((org) => cleanId(org.id) === organizationId)?.name || "";
+
+  const rows = memberships.map((membership) => {
+    const userId = cleanId(membership.user_id);
+    const profile = profileById.get(userId) || {};
+    const user = userById.get(userId) || {};
+    const sessions = sessionsByUser.get(userId) || [];
+    const completedLessons = Array.from(
+      new Set(
+        sessions
+          .filter((session) => cleanText(session.status) === "complete")
+          .map((session) => cleanText(lessonsById.get(cleanId(session.lesson_id))?.title || session.lesson_id))
+          .filter(Boolean),
+      ),
+    );
+    const latestSession = sessions.sort(
+      (a, b) => numericDate(b.updated_at) - numericDate(a.updated_at),
+    )[0];
+    const recipients = recipientsByUser.get(userId) || [];
+    const submittedCount = recipients.filter((recipient) =>
+      ["submitted", "returned", "complete"].includes(cleanText(recipient.status))
+    ).length;
+    const completeCount = recipients.filter(
+      (recipient) => cleanText(recipient.status) === "complete",
+    ).length;
+    const openAlerts = (alertsByUser.get(userId) || []).filter((alert) =>
+      ["open", "acknowledged"].includes(cleanText(alert.status)),
+    ).length;
+    return {
+      organization: orgName,
+      class: targetClass.name || "",
+      role: membership.role,
+      membership_status: membership.status,
+      email: user.email || "",
+      name: profile.name || "",
+      grade: profile.grade || "",
+      last_sign_in_at: user.last_sign_in_at || "",
+      completed_lessons: completedLessons.join("; "),
+      completed_lesson_count: completedLessons.length,
+      active_session_count: sessions.filter((session) => cleanText(session.status) === "active")
+        .length,
+      latest_session_status: latestSession ? latestSession.status : "",
+      latest_session_lesson: latestSession
+        ? cleanText(lessonsById.get(cleanId(latestSession.lesson_id))?.title || latestSession.lesson_id)
+        : "",
+      assignments_total: recipients.length,
+      assignments_submitted: submittedCount,
+      assignments_complete: completeCount,
+      open_alerts: openAlerts,
+    };
+  });
+
+  const safeClass = cleanText(targetClass.name || "class")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "class";
+  const csv = csvFromRows(rows, [
+    { key: "organization", label: "Organization" },
+    { key: "class", label: "Class" },
+    { key: "role", label: "Role" },
+    { key: "membership_status", label: "Membership status" },
+    { key: "email", label: "Email" },
+    { key: "name", label: "Name" },
+    { key: "grade", label: "Grade" },
+    { key: "last_sign_in_at", label: "Last sign-in" },
+    { key: "completed_lessons", label: "Completed lessons" },
+    { key: "completed_lesson_count", label: "Completed lesson count" },
+    { key: "active_session_count", label: "Active sessions" },
+    { key: "latest_session_status", label: "Latest session status" },
+    { key: "latest_session_lesson", label: "Latest session lesson" },
+    { key: "assignments_total", label: "Assignments total" },
+    { key: "assignments_submitted", label: "Assignments submitted" },
+    { key: "assignments_complete", label: "Assignments complete" },
+    { key: "open_alerts", label: "Open alerts" },
+  ]);
+
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      export: {
+        filename: `${safeClass}-snapshot.csv`,
+        content_type: "text/csv",
+        body: csv,
+      },
+    },
+  });
 }
 
 async function handleCreateClass(
@@ -922,6 +1447,10 @@ Deno.serve(async (req: Request) => {
     const action = cleanText(record.action);
     if (action === "list_admin_scope")
       return await handleListAdminScope(config, actorAccess);
+    if (action === "list_pilot_readiness")
+      return await handleListPilotReadiness(config, actorAccess);
+    if (action === "export_class_snapshot")
+      return await handleExportClassSnapshot(config, actorAccess, record);
     if (action === "create_class")
       return await handleCreateClass(config, actorId, actorAccess, record);
     if (action === "update_class")

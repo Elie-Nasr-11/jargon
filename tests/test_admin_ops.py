@@ -45,6 +45,8 @@ class AdminOpsStaticTests(unittest.TestCase):
     def test_admin_ops_supports_required_actions_and_audit(self):
         for fragment in (
             '"list_admin_scope"',
+            '"list_pilot_readiness"',
+            '"export_class_snapshot"',
             '"create_class"',
             '"update_class"',
             '"reset_user_password"',
@@ -57,6 +59,8 @@ class AdminOpsStaticTests(unittest.TestCase):
             "admin.membership_role_updated",
             "admin.class_created",
             "admin.class_updated",
+            "buildPilotReadiness",
+            "handleExportClassSnapshot",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.function)
@@ -88,12 +92,32 @@ class AdminOpsStaticTests(unittest.TestCase):
         self.assertIn('functionUrl("admin-ops")', self.api)
         self.assertIn("invokeAdminOps", self.api)
         self.assertIn("fetchAdminScope", self.api)
+        self.assertIn("fetchPilotReadiness", self.api)
+        self.assertIn("exportClassSnapshot", self.api)
         self.assertIn("AdminActorAccess", self.types)
         self.assertIn("AdminScope", self.types)
+        self.assertIn("PilotReadiness", self.types)
+        self.assertIn("ClassSnapshotExport", self.types)
+
+    def test_snapshot_export_does_not_include_passwords(self):
+        export_section = self.function[
+            self.function.index("async function handleExportClassSnapshot") :
+            self.function.index("async function handleCreateClass")
+        ]
+        self.assertNotIn("temporary_password", export_section)
+        self.assertNotIn("password_supplied", export_section)
+        self.assertNotIn("password", export_section.lower())
+        self.assertIn("Completed lessons", export_section)
+        self.assertIn("Open alerts", export_section)
 
     def test_admin_route_contains_operations_dashboard(self):
         for fragment in (
             "Operations dashboard",
+            "Pilot Readiness",
+            "Classroom launch command center",
+            "Roster/account health",
+            "Export CSV",
+            "Copy login instructions",
             "Org admin",
             "Platform admin",
             "Create class",

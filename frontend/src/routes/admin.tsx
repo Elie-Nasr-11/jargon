@@ -4,6 +4,8 @@ import {
   AlertCircle,
   Archive,
   CheckCircle2,
+  ClipboardList,
+  Download,
   KeyRound,
   Plus,
   RefreshCw,
@@ -14,14 +16,24 @@ import {
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
-import { fetchAdminScope, getSession, invokeAdminOps, invokeAdminSeed } from "@/lib/api";
+import {
+  exportClassSnapshot,
+  fetchAdminScope,
+  fetchPilotReadiness,
+  getSession,
+  invokeAdminOps,
+  invokeAdminSeed,
+} from "@/lib/api";
 import type {
   AdminActorAccess,
   AdminClass,
   AdminScope,
   AdminSeedResult,
   AdminSeedUser,
+  ClassReadiness,
+  PilotReadiness,
   PilotRole,
+  ReadinessStatus,
   TeacherClassMembership,
 } from "@/lib/types";
 
@@ -119,6 +131,32 @@ function classStatusLabel(status: string) {
   return status;
 }
 
+function readinessLabel(status: ReadinessStatus) {
+  if (status === "ready") return "Ready";
+  if (status === "needs_setup") return "Needs setup";
+  if (status === "needs_attention") return "Needs attention";
+  return "Blocked";
+}
+
+function readinessTone(status: ReadinessStatus) {
+  if (status === "ready") return "border-emerald-500/40 text-emerald-500";
+  if (status === "needs_attention") return "border-amber-500/45 text-amber-500";
+  if (status === "needs_setup") return "border-sky-500/45 text-sky-500";
+  return "border-red-500/45 text-red-500";
+}
+
+function downloadTextFile(filename: string, body: string, contentType: string) {
+  const blob = new Blob([body], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 function AdminPage() {
   const navigate = useNavigate();
   const [booting, setBooting] = useState(true);
@@ -147,6 +185,9 @@ function AdminPage() {
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
   const [existingUserId, setExistingUserId] = useState("");
   const [existingUserRole, setExistingUserRole] = useState<PilotRole>("student");
+  const [readiness, setReadiness] = useState<PilotReadiness | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  const [readinessMessage, setReadinessMessage] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -158,6 +199,7 @@ function AdminPage() {
           return;
         }
         const allowed = await refreshScope(session.access_token);
+        if (allowed) void refreshReadiness(session.access_token, true);
         if (!alive) return;
         setEmail(session.user.email || "");
         setToken(session.access_token);
@@ -207,6 +249,25 @@ function AdminPage() {
       return false;
     } finally {
       setScopeLoading(false);
+    }
+  };
+
+  const refreshReadiness = async (accessToken = token, silent = false) => {
+    if (!accessToken) return false;
+    setReadinessLoading(true);
+    if (!silent) setReadinessMessage("");
+    try {
+      const data = await fetchPilotReadiness(accessToken);
+      setActorAccess(data.actorAccess);
+      setScope(data.scope);
+      setReadiness(data.readiness);
+      if (!silent) setReadinessMessage("Pilot readiness refreshed.");
+      return true;
+    } catch (error) {
+      setReadinessMessage((error as Error).message || "Could not load pilot readiness.");
+      return false;
+    } finally {
+      setReadinessLoading(false);
     }
   };
 
@@ -335,6 +396,61 @@ function AdminPage() {
   const activeStudentCount = classMemberships.filter(
     (membership) => membership.role === "student" && membership.status === "active",
   ).length;
+  const selectedClassReadiness = useMemo(
+    () => readiness?.classes.find((item) => item.class_id === selectedClassId) || null,
+    [readiness, selectedClassId],
+  );
+  const readinessCounts = useMemo(() => {
+    const classes = readiness?.classes || [];
+    return {
+      ready: classes.filter((item) => item.status === "ready").length,
+      needsSetup: classes.filter((item) => item.status === "needs_setup").length,
+      needsAttention: classes.filter((item) => item.status === "needs_attention").length,
+      blocked: classes.filter((item) => item.status === "blocked").length,
+    };
+  }, [readiness]);
+
+  const copyLoginInstructions = async (item: ClassReadiness | null) => {
+    if (!item) {
+      setReadinessMessage("Choose a class before copying login instructions.");
+      return;
+    }
+    const lines = [
+      `Jargon class: ${item.class_name}`,
+      "Student app: https://jargon-9bv5.onrender.com/login",
+      "Use the email address assigned by your teacher or admin.",
+      "If your temporary password does not work, ask your teacher/admin to reset it.",
+      "",
+      "Roster:",
+      ...item.roster.map(
+        (row) =>
+          `- ${row.role}: ${row.name || row.email || row.user_id}${row.email ? ` <${row.email}>` : ""}`,
+      ),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setReadinessMessage("Login instructions copied without passwords.");
+    } catch {
+      setReadinessMessage("Could not copy login instructions.");
+    }
+  };
+
+  const exportSelectedClass = async () => {
+    if (!selectedClassId || !token) {
+      setReadinessMessage("Choose a class before exporting.");
+      return;
+    }
+    setReadinessLoading(true);
+    try {
+      const file = await exportClassSnapshot(token, selectedClassId);
+      downloadTextFile(file.filename, file.body, file.content_type);
+      setReadinessMessage("Class snapshot exported.");
+    } catch (error) {
+      setReadinessMessage((error as Error).message || "Could not export class snapshot.");
+    } finally {
+      setReadinessLoading(false);
+    }
+  };
 
   const runAdminOp = async (busyKey: string, success: string, operation: () => Promise<void>) => {
     if (!token) return;
@@ -342,6 +458,7 @@ function AdminPage() {
     setOpsMessage("");
     try {
       await operation();
+      void refreshReadiness(token, true);
       setOpsMessage(success);
     } catch (error) {
       setOpsMessage((error as Error).message || "Admin operation failed.");
@@ -598,6 +715,308 @@ function AdminPage() {
             </Link>
           </div>
         </section>
+
+        <GradientCard>
+          <div className="space-y-5 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  Pilot Readiness
+                </div>
+                <h2 className="text-[18px] font-medium text-foreground">
+                  Classroom launch command center
+                </h2>
+                <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                  Check whether classes can run tomorrow: roster health, lesson availability, recent
+                  completions, assignments/resources, errors, alerts, and support activity.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void refreshReadiness()}
+                  disabled={readinessLoading}
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${readinessLoading ? "animate-spin" : ""}`}
+                    strokeWidth={1.6}
+                  />
+                  Refresh readiness
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportSelectedClass()}
+                  disabled={!selectedClassId || readinessLoading}
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  <Download className="h-4 w-4" strokeWidth={1.6} />
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyLoginInstructions(selectedClassReadiness)}
+                  disabled={!selectedClassReadiness}
+                  className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  Copy login instructions
+                </button>
+              </div>
+            </div>
+
+            {readinessMessage ? (
+              <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                {readinessMessage}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Stat label="Ready" value={readinessCounts.ready} />
+              <Stat label="Needs setup" value={readinessCounts.needsSetup} />
+              <Stat label="Needs attention" value={readinessCounts.needsAttention} />
+              <Stat label="Blocked" value={readinessCounts.blocked} />
+            </div>
+
+            {selectedClassReadiness ? (
+              <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-[14px] font-medium text-foreground">
+                        {selectedClassReadiness.class_name}
+                      </h3>
+                      <p className="mt-1 text-[12px] text-muted-foreground">
+                        {selectedClassReadiness.organization_name} ·{" "}
+                        {selectedClassReadiness.teacher_count} teacher
+                        {selectedClassReadiness.teacher_count === 1 ? "" : "s"} ·{" "}
+                        {selectedClassReadiness.student_count} student
+                        {selectedClassReadiness.student_count === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full border px-3 py-1.5 text-[11.5px] ${readinessTone(
+                        selectedClassReadiness.status,
+                      )}`}
+                    >
+                      {readinessLabel(selectedClassReadiness.status)}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {selectedClassReadiness.checklist.map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-2xl border border-border/60 bg-background/45 px-3 py-2"
+                      >
+                        <div className="text-[12px] text-foreground">{item.label}</div>
+                        <div
+                          className={`mt-1 text-[11px] uppercase tracking-[0.09em] ${
+                            item.status === "ok"
+                              ? "text-emerald-500"
+                              : item.status === "attention"
+                                ? "text-amber-500"
+                                : "text-sky-500"
+                          }`}
+                        >
+                          {item.status}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {selectedClassReadiness.issues.length ? (
+                      selectedClassReadiness.issues.map((issue) => (
+                        <div
+                          key={`${issue.severity}-${issue.message}`}
+                          className="rounded-2xl border border-border/60 bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground"
+                        >
+                          <span
+                            className={`mr-2 font-medium ${
+                              issue.severity === "blocked"
+                                ? "text-red-500"
+                                : issue.severity === "attention"
+                                  ? "text-amber-500"
+                                  : "text-sky-500"
+                            }`}
+                          >
+                            {issue.severity}
+                          </span>
+                          {issue.message}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12.5px] text-emerald-500">
+                        No readiness blockers found.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <h3 className="text-[14px] font-medium text-foreground">Roster/account health</h3>
+                  <div className="mt-3 max-h-[260px] overflow-auto pr-1">
+                    <table className="min-w-[640px] w-full border-collapse text-left text-[12px]">
+                      <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                        <tr>
+                          <th className="py-2 pr-3 font-medium">Person</th>
+                          <th className="py-2 pr-3 font-medium">Role</th>
+                          <th className="py-2 pr-3 font-medium">Status</th>
+                          <th className="py-2 font-medium">Last sign-in</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedClassReadiness.roster.map((row) => (
+                          <tr key={row.user_id} className="border-b border-border/55">
+                            <td className="py-2 pr-3">
+                              <div className="font-medium text-foreground">
+                                {row.name || row.email || row.user_id}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {row.email || "No email loaded"} · grade {row.grade || "n/a"}
+                              </div>
+                            </td>
+                            <td className="py-2 pr-3 text-muted-foreground">{row.role}</td>
+                            <td className="py-2 pr-3 text-muted-foreground">
+                              {classStatusLabel(row.status)}
+                            </td>
+                            <td className="py-2 text-muted-foreground">
+                              {formatDate(row.last_sign_in_at)}
+                            </td>
+                          </tr>
+                        ))}
+                        {!selectedClassReadiness.roster.length ? (
+                          <tr>
+                            <td className="py-4 text-muted-foreground" colSpan={4}>
+                              No active roster rows found.
+                            </td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-border/80 bg-background/45 p-4 text-[12.5px] text-muted-foreground">
+                Choose a class and refresh readiness to see launch status.
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="min-w-[940px] w-full border-collapse text-left text-[12.5px]">
+                <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                  <tr>
+                    <th className="py-2 pr-3 font-medium">Class</th>
+                    <th className="py-2 pr-3 font-medium">Status</th>
+                    <th className="py-2 pr-3 font-medium">Roster</th>
+                    <th className="py-2 pr-3 font-medium">Learning</th>
+                    <th className="py-2 pr-3 font-medium">Work/media</th>
+                    <th className="py-2 font-medium">Support</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(readiness?.classes || []).map((item) => (
+                    <tr
+                      key={item.class_id}
+                      className="cursor-pointer border-b border-border/60 align-top transition-colors hover:bg-muted/40"
+                      onClick={() => {
+                        setSelectedOrgId(item.organization_id);
+                        setSelectedClassId(item.class_id);
+                        setRenameClassName(item.class_name);
+                      }}
+                    >
+                      <td className="py-3 pr-3">
+                        <div className="font-medium text-foreground">{item.class_name}</div>
+                        <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                          {item.organization_name}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-3">
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11px] ${readinessTone(
+                            item.status,
+                          )}`}
+                        >
+                          {readinessLabel(item.status)}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-3 text-muted-foreground">
+                        {item.teacher_count} teachers · {item.student_count} students
+                        {item.disabled_membership_count ? (
+                          <div className="mt-0.5 text-amber-500">
+                            {item.disabled_membership_count} inactive memberships
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="py-3 pr-3 text-muted-foreground">
+                        {item.completed_session_count} completions · {item.recent_completion_count}{" "}
+                        recent
+                        <div className="mt-0.5">
+                          {item.published_lesson_count} lessons available
+                        </div>
+                      </td>
+                      <td className="py-3 pr-3 text-muted-foreground">
+                        {item.assignment_count} assigned · {item.resource_count} resources
+                      </td>
+                      <td className="py-3 text-muted-foreground">
+                        {item.open_alert_count} alerts · {item.recent_error_count} errors ·{" "}
+                        {item.audit_event_count} audit events
+                      </td>
+                    </tr>
+                  ))}
+                  {!readiness?.classes.length ? (
+                    <tr>
+                      <td className="py-5 text-muted-foreground" colSpan={6}>
+                        No readiness data loaded yet.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                <h3 className="text-[14px] font-medium text-foreground">Recent errors</h3>
+                <div className="mt-3 space-y-2">
+                  {(readiness?.recent_errors || []).slice(0, 5).map((event) => (
+                    <div key={event.id} className="border-b border-border/55 pb-2 text-[12px]">
+                      <div className="text-foreground">
+                        {event.event_type} · {event.lesson_id || "no lesson"}
+                      </div>
+                      <div className="mt-0.5 text-muted-foreground">
+                        {formatDate(event.created_at)}
+                      </div>
+                    </div>
+                  ))}
+                  {!readiness?.recent_errors.length ? (
+                    <div className="text-[12px] text-muted-foreground">
+                      No recent runtime errors in scope.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                <h3 className="text-[14px] font-medium text-foreground">Open interventions</h3>
+                <div className="mt-3 space-y-2">
+                  {(readiness?.open_alerts || []).slice(0, 5).map((alert) => (
+                    <div key={alert.id} className="border-b border-border/55 pb-2 text-[12px]">
+                      <div className="text-foreground">{alert.title}</div>
+                      <div className="mt-0.5 text-muted-foreground">
+                        {alert.severity} · {alert.status} · {formatDate(alert.created_at)}
+                      </div>
+                    </div>
+                  ))}
+                  {!readiness?.open_alerts.length ? (
+                    <div className="text-[12px] text-muted-foreground">
+                      No open intervention alerts in scope.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </GradientCard>
 
         <GradientCard>
           <div className="space-y-5 p-5">

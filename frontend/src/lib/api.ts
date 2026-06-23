@@ -429,6 +429,30 @@ export async function fetchAdminScope(accessToken: string): Promise<AdminScopeRe
   };
 }
 
+export async function fetchPilotReadiness(accessToken: string) {
+  const data = await invokeAdminOps({ accessToken, action: "list_pilot_readiness" });
+  if (!data.data?.readiness || !data.data.actor_access || !data.data.scope) {
+    throw new Error("Pilot readiness response was missing data.");
+  }
+  return {
+    actorAccess: data.data.actor_access,
+    scope: data.data.scope,
+    readiness: data.data.readiness,
+  };
+}
+
+export async function exportClassSnapshot(accessToken: string, classId: string) {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "export_class_snapshot",
+    classId,
+  });
+  if (!data.data?.export) {
+    throw new Error("Class snapshot export response was missing data.");
+  }
+  return data.data.export;
+}
+
 export async function fetchCurriculumAuthoringData(
   userId: string,
 ): Promise<CurriculumAuthoringData> {

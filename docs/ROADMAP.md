@@ -22,8 +22,11 @@ Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete en
   inspect scoped org/class/user data, create/update/archive classes, add existing users to
   classes, reset temporary passwords, change class roles/statuses, and inspect recent seed/audit
   events through privileged `admin-ops`.
-- Next implementation slice after live QA: school-readiness, then cost/model dashboards. Media
-  extraction and Voice v2 remain deferred.
+- School-readiness / Pilot Ops v1 is implemented repo-side: `/admin` now has Pilot Readiness,
+  scoped class snapshot CSV export, roster/account health, support/error panels, and copyable
+  password-free login instructions; `/teacher` has a compact class readiness strip.
+- Next implementation slice after deploy/live smoke: cost/model dashboards. Media extraction and
+  Voice v2 remain deferred.
 
 ## Product Direction Locked
 
@@ -145,14 +148,17 @@ Exit criteria: student completes one non-coding lesson with media, quiz, evidenc
 
 Goal: support real schools/classes.
 
-- Status: Admin Operations v1 plus org-admin scoped operations are implemented repo-side;
-  live deployment/smoke remains.
+- Status: Admin Operations v1, org-admin scoped operations, and Pilot Ops v1 are implemented
+  repo-side; latest Pilot Ops deploy/smoke remains.
 - Add `/admin`.
 - Let org admins manage their own organization scope: classes, existing org users, class roles,
   class membership status, password resets, and org audit visibility.
 - Let platform admins manage all tenants, global content, feature flags, and support/debug workflows.
 - Keep authorization DB/RLS-enforced.
 - Multiple organizations and org admins are V1 requirements.
+- Add school-readiness controls before external integrations: class launch checklist, roster/account
+  health, scoped progress exports, recent runtime errors, open interventions, and support/audit
+  visibility.
 
 Exit criteria: two organizations can exist side by side, and RLS prevents cross-org reads.
 

@@ -766,6 +766,24 @@ function ClassDetail({
   onUpdateAlertStatus: (alertId: string, status: InterventionAlert["status"]) => void;
   onUpdateResource: (resource: LessonResource) => void;
 }) {
+  const studentSet = useMemo(() => new Set(studentIds), [studentIds]);
+  const openAlerts = dashboard.interventionAlerts.filter(
+    (alert) =>
+      alert.class_id === item.id && (alert.status === "open" || alert.status === "acknowledged"),
+  );
+  const activeAssignments = assignments.filter((assignment) => assignment.status === "assigned");
+  const recentCompletions = dashboard.sessions.filter(
+    (session) =>
+      studentSet.has(session.user_id) &&
+      session.status === "complete" &&
+      Date.now() - new Date(session.updated_at).getTime() < 1000 * 60 * 60 * 24 * 14,
+  ).length;
+  const runtimeErrors = dashboard.runtimeEvents.filter(
+    (event) =>
+      event.status === "error" &&
+      (event.class_id === item.id || (event.user_id && studentSet.has(event.user_id))),
+  ).length;
+
   return (
     <GradientCard>
       <div className="p-4 sm:p-5">
@@ -785,6 +803,24 @@ function ClassDetail({
             <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
             <MiniMetric label="Evidence" value={String(stats.evidence)} />
           </div>
+        </div>
+
+        <div className="mt-5 rounded-3xl border border-border bg-background/35 p-4">
+          <div className="mb-3 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+            Pilot readiness
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            <MiniMetric label="Roster" value={`${stats.students} students`} />
+            <MiniMetric label="Open work" value={String(activeAssignments.length)} />
+            <MiniMetric label="Recent complete" value={String(recentCompletions)} />
+            <MiniMetric label="Open alerts" value={String(openAlerts.length)} />
+            <MiniMetric label="Runtime errors" value={String(runtimeErrors)} />
+          </div>
+          <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
+            {openAlerts.length || runtimeErrors
+              ? "This class has support signals to review before launch."
+              : "No open intervention or runtime-error signals for this class."}
+          </p>
         </div>
 
         <ClassAnalyticsPanel

@@ -764,8 +764,80 @@ export type AdminScopeResult = {
   scope: AdminScope;
 };
 
+export type ReadinessStatus = "ready" | "needs_setup" | "needs_attention" | "blocked";
+
+export type ReadinessIssue = {
+  severity: "setup" | "attention" | "blocked";
+  message: string;
+};
+
+export type ReadinessChecklistItem = {
+  label: string;
+  status: "ok" | "missing" | "attention";
+};
+
+export type ReadinessRosterRow = {
+  user_id: string;
+  role: "student" | "teacher";
+  status: string;
+  name: string;
+  grade: string;
+  email: string;
+  last_sign_in_at: string | null;
+};
+
+export type ClassReadiness = {
+  class_id: string;
+  organization_id: string;
+  class_name: string;
+  organization_name: string;
+  status: ReadinessStatus;
+  teacher_count: number;
+  student_count: number;
+  active_membership_count: number;
+  disabled_membership_count: number;
+  published_lesson_count: number;
+  completed_session_count: number;
+  recent_completion_count: number;
+  assignment_count: number;
+  resource_count: number;
+  open_alert_count: number;
+  recent_error_count: number;
+  audit_event_count: number;
+  checklist: ReadinessChecklistItem[];
+  issues: ReadinessIssue[];
+  roster: ReadinessRosterRow[];
+};
+
+export type OrganizationReadiness = {
+  organization_id: string;
+  organization_name: string;
+  status: ReadinessStatus;
+  class_count: number;
+  ready_class_count: number;
+  needs_setup_class_count: number;
+  needs_attention_class_count: number;
+  blocked_class_count: number;
+};
+
+export type PilotReadiness = {
+  generated_at: string;
+  organizations: OrganizationReadiness[];
+  classes: ClassReadiness[];
+  recent_errors: RuntimeEvent[];
+  open_alerts: InterventionAlert[];
+};
+
+export type ClassSnapshotExport = {
+  filename: string;
+  content_type: "text/csv";
+  body: string;
+};
+
 export type AdminOpsAction =
   | "list_admin_scope"
+  | "list_pilot_readiness"
+  | "export_class_snapshot"
   | "create_class"
   | "update_class"
   | "reset_user_password"
@@ -778,6 +850,8 @@ export type AdminOpsResponse = {
   data?: {
     actor_access?: AdminActorAccess;
     scope?: AdminScope;
+    readiness?: PilotReadiness;
+    export?: ClassSnapshotExport;
     class?: AdminClass | null;
     membership?: OrganizationMembership | TeacherClassMembership | null;
   } & Record<string, unknown>;

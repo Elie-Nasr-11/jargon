@@ -6,6 +6,55 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 15:47
+
+Status: School-readiness / Pilot Ops v1 implemented repo-side
+
+What changed:
+
+- Extended `admin-ops` with scoped read-only pilot operations:
+  - `list_pilot_readiness`;
+  - `export_class_snapshot`.
+- Pilot readiness is deterministic and scoped by the same platform-admin/org-admin rules:
+  - platform admins see all orgs/classes;
+  - org admins see only their active organization scope.
+- `/admin` now has a Pilot Readiness section with:
+  - class status chips: `Ready`, `Needs setup`, `Needs attention`, `Blocked`;
+  - class launch checklist;
+  - roster/account health table;
+  - recent runtime errors;
+  - open interventions;
+  - selected-class CSV export;
+  - copyable login instructions that intentionally contain no passwords.
+- `/teacher` now has a compact class readiness strip with roster count, open work, latest
+  completions, open alerts, and runtime errors.
+- Added `docs/PILOT_OPERATIONS.md` as the classroom launch runbook.
+- Updated `docs/ROADMAP.md` so the next roadmap slice after deploy/live smoke is cost/model
+  dashboards; media extraction and Voice v2 remain deferred.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit`: passed.
+- `cd frontend && npm run lint`: passed with the existing 11 warnings.
+- `cd frontend && npm run build`: passed.
+- `python3 -m unittest discover -s tests -q`: passed.
+- `python3 tools/validate_examples.py examples legacy/examples`: passed.
+- `git diff --check`: passed.
+- `deno check supabase/functions/admin-ops/index.ts`: unavailable locally (`deno` not installed).
+
+Next live steps:
+
+- Push this commit to GitHub `main`.
+- Deploy Supabase Edge Function `admin-ops` so the new read actions are live.
+- Wait for Render to deploy the frontend.
+- Live smoke:
+  - platform admin opens `/admin` and confirms Pilot Readiness loads;
+  - org admin opens `/admin` and sees only their organization;
+  - export a class CSV and confirm no plaintext passwords;
+  - copy login instructions and confirm they contain no passwords;
+  - teacher opens `/teacher` and confirms the readiness strip;
+  - student completes one lesson, then refresh readiness and confirm completion/support counts.
+
 ## Codex -> Claude / Human - 2026-06-23 15:20
 
 Status: Admin Operations org-admin polish implemented, pushed, and `admin-ops` deployed
