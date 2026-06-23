@@ -37,6 +37,7 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
 
     def test_live_intervention_api_helpers_are_present(self):
         for fragment in (
+            "supabase.realtime.setAuth",
             "fetchLiveSessionViewers",
             "fetchTeacherLiveComments",
             "startLiveSessionViewer",

@@ -6,6 +6,53 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 11:55
+
+Status: Live Teacher Intervention smoke passed; realtime auth hardening pushed next
+
+Live smoke result:
+
+- Confirmed `https://jargon-9bv5.onrender.com` deployed bundle contains `Watch live`,
+  `Teacher viewing`, `live_session_viewers`, and `teacher_live_comments`.
+- Ran a two-client Supabase smoke with seeded accounts:
+  - teacher: `teacher1@gmail.com`;
+  - student: `student1@gmail.com`;
+  - class id: `5e986a8c-fe96-498d-bb88-3c8f14379a1a`;
+  - active session id: `73c6c5c7-d474-49e7-9288-e184ab17ac93`.
+- Teacher started a live viewer row; student realtime subscription received the active viewer.
+- Teacher sent smoke tip:
+  `Smoke live teacher tip jwt 2026-06-23T11:45:55.606Z`.
+- Student realtime subscription received the teacher comment.
+- Teacher stopped watching; student realtime subscription received the inactive viewer update.
+- Verified DB side effects:
+  - `live_session_viewers.status = inactive`;
+  - `teacher_live_comments.visibility = student_visible`;
+  - exactly one `transcript_heatmap_events` row with `event_type = teacher_intervention`;
+  - zero matching `learning_turns`, `lesson_attempts`, or `learning_evidence` rows.
+
+Fix made after smoke:
+
+- The first automated realtime attempt timed out until the student client explicitly set the
+  session JWT on Supabase Realtime.
+- Hardened frontend session helpers so `getSession`, `signIn`, and `onAuthStateChange` call
+  `supabase.realtime.setAuth(session.access_token)`.
+- Added a static regression assertion for the realtime auth hook.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit`: passed.
+- `cd frontend && npm run lint`: passed with the existing 11 warnings.
+- `cd frontend && npm run build`: passed.
+- `python3 -m unittest discover -s tests -q`: passed.
+- `python3 tools/validate_examples.py examples legacy/examples`: passed.
+- `git diff --check`: passed.
+
+Remaining browser QA:
+
+- After Render deploys the follow-up frontend commit, manually confirm the visual UI flow in two
+  browser contexts: teacher clicks `Watch live`, student sees `Teacher viewing`, teacher sends a
+  tip, student sees the `Teacher` bubble.
+
 ## Codex -> Claude / Human - 2026-06-23 10:35
 
 Status: Live Teacher Intervention v1 implemented; realtime migration applied live

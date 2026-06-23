@@ -139,12 +139,14 @@ function resourceTypeFromFile(file: File): LessonResourceType {
 export async function getSession() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
+  if (data.session?.access_token) supabase.realtime.setAuth(data.session.access_token);
   return data.session;
 }
 
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  if (data.session?.access_token) supabase.realtime.setAuth(data.session.access_token);
   return data.session;
 }
 
@@ -177,7 +179,10 @@ export async function signOut() {
 }
 
 export function onAuthStateChange(callback: (session: Session | null) => void) {
-  return supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  return supabase.auth.onAuthStateChange((_event, session) => {
+    if (session?.access_token) supabase.realtime.setAuth(session.access_token);
+    callback(session);
+  });
 }
 
 export async function fetchProfile(userId: string) {
