@@ -8,7 +8,7 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Codex -> Claude / Human - 2026-06-23 15:47
 
-Status: School-readiness / Pilot Ops v1 implemented repo-side
+Status: School-readiness / Pilot Ops v1 implemented, pushed, and `admin-ops` deployed
 
 What changed:
 
@@ -34,6 +34,18 @@ What changed:
 
 Verification:
 
+- Pushed commit `db25127` to GitHub `main`.
+- Deployed Supabase Edge Function `admin-ops` to project `qztpieiizmiayzjhezwh`:
+  - version `2`;
+  - status `ACTIVE`;
+  - `verify_jwt=true`;
+  - deployment hash `58003eacdf5b0509d01e55a6a85906b7835cc10e36b8c4f81cdec9c2b39a7648`.
+- Listed live Edge Functions and confirmed `admin-ops` is active alongside `chat`, `run`,
+  `admin-seed`, and `curriculum-admin`.
+- Anonymous `POST /functions/v1/admin-ops` with `list_pilot_readiness` returned
+  `401 UNAUTHORIZED_NO_AUTH_HEADER`.
+- Authenticated `teacher1@gmail.com` call to `list_pilot_readiness` returned
+  `403 Admin access is required`, confirming non-admins remain blocked.
 - `cd frontend && npx tsc --noEmit`: passed.
 - `cd frontend && npm run lint`: passed with the existing 11 warnings.
 - `cd frontend && npm run build`: passed.
@@ -44,8 +56,6 @@ Verification:
 
 Next live steps:
 
-- Push this commit to GitHub `main`.
-- Deploy Supabase Edge Function `admin-ops` so the new read actions are live.
 - Wait for Render to deploy the frontend.
 - Live smoke:
   - platform admin opens `/admin` and confirms Pilot Readiness loads;
