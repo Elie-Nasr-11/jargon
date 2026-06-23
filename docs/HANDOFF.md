@@ -8,7 +8,7 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Codex -> Claude / Human - 2026-06-23 16:35
 
-Status: Cost/Model Dashboard v1 implemented repo-side; live deploy/smoke pending
+Status: Cost/Model Dashboard v1 implemented, pushed, deployed, and boundary-smoked
 
 What changed:
 
@@ -38,6 +38,20 @@ What changed:
 Verification:
 
 - Implementation commit: `f634aa4` (`Add cost model dashboard`).
+- Handoff commit: `dc07ffd` (`Record cost dashboard handoff`).
+- Pushed GitHub `main` through `dc07ffd`.
+- Deployed Supabase Edge Function `admin-ops` to project `qztpieiizmiayzjhezwh`:
+  - version `3`;
+  - status `ACTIVE`;
+  - `verify_jwt=true`;
+  - deployment hash `ee474ed617c62b24409f119da3cb4687fab5886c66084d09c421416cb13fbafd`.
+- Confirmed Render live bundle at `https://jargon-9bv5.onrender.com/admin` contains:
+  - `AI/runtime operations`;
+  - `list_cost_model_dashboard`.
+- Anonymous `POST /functions/v1/admin-ops` with `list_cost_model_dashboard` returned
+  `401 UNAUTHORIZED_NO_AUTH_HEADER`.
+- Authenticated `teacher1@gmail.com` call to `list_cost_model_dashboard` returned
+  `403 Admin access is required`, confirming teachers remain blocked from `/admin` operations.
 - `cd frontend && npx tsc --noEmit`: passed.
 - `cd frontend && npm run lint`: passed with the existing 11 warnings.
 - `cd frontend && npm run build`: passed.
@@ -46,16 +60,12 @@ Verification:
 - `git diff --check`: passed.
 - `deno check supabase/functions/admin-ops/index.ts`: unavailable locally (`deno` not installed).
 
-Next live steps:
+Remaining browser smoke:
 
-- Push `main`.
-- Deploy `admin-ops` from commit `f634aa4`.
-- Wait for Render to deploy the frontend.
-- Live smoke:
-  - platform admin opens `/admin` and confirms `AI/runtime operations` loads with cost visible;
-  - org admin opens `/admin` and confirms usage/reliability is scoped and cost reads `Hidden`;
-  - complete one lesson, refresh metrics, and confirm sessions/completions update;
-  - trigger one controlled Jargon error and confirm a runtime error appears.
+- Platform admin opens `/admin` and confirms `AI/runtime operations` loads with cost visible.
+- Org admin opens `/admin` and confirms usage/reliability is scoped and cost reads `Hidden`.
+- Complete one lesson, refresh metrics, and confirm sessions/completions update.
+- Trigger one controlled Jargon error and confirm a runtime error appears.
 
 ## Codex -> Claude / Human - 2026-06-23 15:47
 
