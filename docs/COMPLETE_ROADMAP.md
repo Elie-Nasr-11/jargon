@@ -262,6 +262,10 @@ Acceptance: two organizations can exist side by side, and RLS prevents cross-org
 
 Goal: make uploaded resources deeply useful to Mentor.
 
+Status: PDF-first v1 is implemented repo-side. Uploaded PDFs can be extracted in the teacher
+browser, saved as draft chunks through a JWT-protected Edge Function, approved by teachers,
+and loaded by Mentor only after approval.
+
 Add processing jobs for teacher-uploaded resources:
 
 - PDF text extraction

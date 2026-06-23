@@ -16,7 +16,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 export function functionUrl(
-  slug: "chat" | "run" | "admin-seed" | "admin-ops" | "curriculum-admin" | "voice-session",
+  slug:
+    | "chat"
+    | "run"
+    | "admin-seed"
+    | "admin-ops"
+    | "curriculum-admin"
+    | "voice-session"
+    | "resource-processing",
 ) {
   return `${supabaseUrl}/functions/v1/${slug}`;
 }

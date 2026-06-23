@@ -13,11 +13,13 @@ import {
   EyeOff,
   ExternalLink,
   FileText,
+  FileSearch,
   GraduationCap,
   MessageSquare,
   NotebookText,
   Paperclip,
   Send,
+  Trash2,
   TrendingUp,
   UsersRound,
 } from "lucide-react";
@@ -28,7 +30,10 @@ import {
   createAssignment,
   createLessonResource,
   createTeacherNote,
+  approveResourceChunks,
+  deleteResourceChunks,
   fetchTeacherDashboard,
+  fetchResourceTextChunks,
   getSubmissionFileSignedUrl,
   gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
@@ -37,10 +42,14 @@ import {
   sendTeacherLiveComment,
   startLiveSessionViewer,
   stopLiveSessionViewer,
+  rejectResourceChunks,
+  saveExtractedPdfChunks,
+  saveResourceChunkEdits,
   updateAssignmentStatus,
   updateInterventionAlertStatus,
   updateLessonResource,
 } from "@/lib/api";
+import { extractPdfTextChunksFromUrl } from "@/lib/pdf-extract";
 import type {
   Assignment,
   AssignmentRecipient,
@@ -59,6 +68,8 @@ import type {
   LessonResourceVisibility,
   LiveSessionViewer,
   Profile,
+  ResourceTextChunk,
+  ResourceTextChunkStatus,
   StudentMastery,
   TeacherClassSummary,
   TeacherDashboardData,
@@ -997,6 +1008,11 @@ function ResourceManager({
   );
   const [resourceMessage, setResourceMessage] = useState("");
   const [openingId, setOpeningId] = useState("");
+  const [processingId, setProcessingId] = useState("");
+  const [reviewingId, setReviewingId] = useState("");
+  const [chunkBusyId, setChunkBusyId] = useState("");
+  const [chunksByResource, setChunksByResource] = useState<Record<string, ResourceTextChunk[]>>({});
+  const [chunkDrafts, setChunkDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setDraft(defaultResourceForm(classSummary, lessons));
@@ -1086,6 +1102,126 @@ function ResourceManager({
       setResourceMessage((error as Error).message || "Could not open resource.");
     } finally {
       setOpeningId("");
+    }
+  };
+
+  const loadChunks = async (resource: LessonResource, openPanel = true) => {
+    try {
+      setChunkBusyId(resource.id);
+      const data = await fetchResourceTextChunks(resource.id);
+      setChunksByResource((current) => ({
+        ...current,
+        [resource.id]: data.chunks,
+      }));
+      setChunkDrafts((current) => ({
+        ...current,
+        ...Object.fromEntries(data.chunks.map((chunk) => [chunk.id, chunk.chunk_text])),
+      }));
+      if (openPanel) setReviewingId(resource.id);
+      if (!data.chunks.length) setResourceMessage("No extracted text chunks yet.");
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not load extracted text.");
+    } finally {
+      setChunkBusyId("");
+    }
+  };
+
+  const extractChunks = async (resource: LessonResource) => {
+    try {
+      setProcessingId(resource.id);
+      setResourceMessage("Opening PDF and extracting text in this browser...");
+      const url = await getLessonResourceSignedUrl(resource);
+      if (!url) throw new Error("This resource does not have an openable PDF URL.");
+      const chunks = await extractPdfTextChunksFromUrl(url);
+      if (!chunks.length) {
+        throw new Error("No selectable text was found in this PDF.");
+      }
+      const saved = await saveExtractedPdfChunks(resource.id, chunks, {
+        extracted_in: "browser",
+        extracted_at: new Date().toISOString(),
+      });
+      setChunksByResource((current) => ({
+        ...current,
+        [resource.id]: saved,
+      }));
+      setChunkDrafts((current) => ({
+        ...current,
+        ...Object.fromEntries(saved.map((chunk) => [chunk.id, chunk.chunk_text])),
+      }));
+      setReviewingId(resource.id);
+      setResourceMessage(
+        `Extracted ${saved.length} draft chunk${saved.length === 1 ? "" : "s"}. Review and approve before Mentor can use them.`,
+      );
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not extract PDF text.");
+    } finally {
+      setProcessingId("");
+    }
+  };
+
+  const saveChunk = async (resource: LessonResource, chunk: ResourceTextChunk) => {
+    try {
+      setChunkBusyId(chunk.id);
+      const saved = await saveResourceChunkEdits(resource.id, [
+        {
+          id: chunk.id,
+          page_number: chunk.page_number,
+          chunk_index: chunk.chunk_index,
+          chunk_text: chunkDrafts[chunk.id] ?? chunk.chunk_text,
+        },
+      ]);
+      setChunksByResource((current) => ({
+        ...current,
+        [resource.id]: (current[resource.id] || []).map((existing) =>
+          existing.id === chunk.id ? saved[0] || existing : existing,
+        ),
+      }));
+      setResourceMessage("Chunk saved.");
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not save chunk.");
+    } finally {
+      setChunkBusyId("");
+    }
+  };
+
+  const setChunkStatus = async (
+    resource: LessonResource,
+    chunk: ResourceTextChunk,
+    status: Extract<ResourceTextChunkStatus, "approved" | "rejected">,
+  ) => {
+    try {
+      setChunkBusyId(chunk.id);
+      const updated =
+        status === "approved"
+          ? await approveResourceChunks(resource.id, [chunk.id])
+          : await rejectResourceChunks(resource.id, [chunk.id]);
+      setChunksByResource((current) => ({
+        ...current,
+        [resource.id]: (current[resource.id] || []).map((existing) =>
+          existing.id === chunk.id ? updated[0] || existing : existing,
+        ),
+      }));
+      setResourceMessage(status === "approved" ? "Chunk approved." : "Chunk rejected.");
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not update chunk status.");
+    } finally {
+      setChunkBusyId("");
+    }
+  };
+
+  const removeChunk = async (resource: LessonResource, chunk: ResourceTextChunk) => {
+    try {
+      setChunkBusyId(chunk.id);
+      await deleteResourceChunks(resource.id, [chunk.id]);
+      setChunksByResource((current) => ({
+        ...current,
+        [resource.id]: (current[resource.id] || []).filter((existing) => existing.id !== chunk.id),
+      }));
+      setResourceMessage("Chunk deleted.");
+    } catch (error) {
+      setResourceMessage((error as Error).message || "Could not delete chunk.");
+    } finally {
+      setChunkBusyId("");
     }
   };
 
@@ -1294,76 +1430,235 @@ function ResourceManager({
 
         <div className="grid content-start gap-2">
           {resources.length ? (
-            resources.map((resource) => (
-              <div
-                key={resource.id}
-                className="rounded-2xl border border-border bg-background/35 p-4"
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13px] font-medium text-foreground">
-                        {resource.title}
-                      </span>
-                      <ResourceStatusChip status={resource.status} />
+            resources.map((resource) => {
+              const chunks = chunksByResource[resource.id] || [];
+              const draftCount = chunks.filter((chunk) => chunk.status === "draft").length;
+              const approvedCount = chunks.filter((chunk) => chunk.status === "approved").length;
+              const rejectedCount = chunks.filter((chunk) => chunk.status === "rejected").length;
+              const canExtractPdf =
+                resource.resource_type === "pdf" && resource.source_type === "upload";
+              const reviewOpen = reviewingId === resource.id;
+
+              return (
+                <div
+                  key={resource.id}
+                  className="rounded-2xl border border-border bg-background/35 p-4"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-medium text-foreground">
+                          {resource.title}
+                        </span>
+                        <ResourceStatusChip status={resource.status} />
+                      </div>
+                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        {resource.resource_type} ·{" "}
+                        {resource.source_type === "upload" ? "private file" : "external link"} ·{" "}
+                        {lessonTitle(lessons, resource.lesson_id)}
+                      </div>
+                      {chunks.length ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                          <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
+                            {chunks.length} chunk{chunks.length === 1 ? "" : "s"}
+                          </span>
+                          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-500">
+                            {approvedCount} approved
+                          </span>
+                          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-500">
+                            {draftCount} draft
+                          </span>
+                          <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
+                            {rejectedCount} rejected
+                          </span>
+                        </div>
+                      ) : null}
+                      {resource.student_instructions ? (
+                        <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
+                          {resource.student_instructions}
+                        </p>
+                      ) : null}
                     </div>
-                    <div className="mt-1 text-[11.5px] text-muted-foreground">
-                      {resource.resource_type} ·{" "}
-                      {resource.source_type === "upload" ? "private file" : "external link"} ·{" "}
-                      {lessonTitle(lessons, resource.lesson_id)}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editResource(resource)}
+                        className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void openResource(resource)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.6} />
+                        {openingId === resource.id ? "Opening..." : "Open"}
+                      </button>
                     </div>
-                    {resource.student_instructions ? (
-                      <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
-                        {resource.student_instructions}
-                      </p>
-                    ) : null}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => editResource(resource)}
+                      onClick={() => void setStatus(resource, "draft")}
+                      disabled={resource.status === "draft"}
+                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                    >
+                      Draft
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void setStatus(resource, "published")}
+                      disabled={resource.status === "published"}
+                      className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                    >
+                      Publish
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void setStatus(resource, "archived")}
+                      disabled={resource.status === "archived"}
+                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                    >
+                      Archive
+                    </button>
+                    {canExtractPdf ? (
+                      <button
+                        type="button"
+                        onClick={() => void extractChunks(resource)}
+                        disabled={processingId === resource.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/35 px-3 py-1.5 text-[11.5px] text-blue-500 transition-colors hover:bg-blue-500/10 disabled:opacity-45"
+                      >
+                        <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
+                        {processingId === resource.id ? "Extracting..." : "Extract PDF text"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        reviewOpen ? setReviewingId("") : void loadChunks(resource, true)
+                      }
                       className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
                     >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void openResource(resource)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.6} />
-                      {openingId === resource.id ? "Opening..." : "Open"}
+                      {reviewOpen
+                        ? "Hide review"
+                        : chunkBusyId === resource.id
+                          ? "Loading..."
+                          : "Review text"}
                     </button>
                   </div>
+
+                  {reviewOpen ? (
+                    <div className="mt-4 rounded-2xl border border-border bg-background/45 p-3">
+                      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                          <div className="text-[12.5px] font-medium text-foreground">
+                            Extracted text review
+                          </div>
+                          <div className="text-[11.5px] text-muted-foreground">
+                            Draft and rejected chunks are teacher-only. Mentor can use approved
+                            chunks.
+                          </div>
+                        </div>
+                        {chunks.length ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void approveResourceChunks(
+                                resource.id,
+                                chunks
+                                  .filter((chunk) => chunk.status === "draft")
+                                  .map((chunk) => chunk.id),
+                              ).then((updated) => {
+                                setChunksByResource((current) => ({
+                                  ...current,
+                                  [resource.id]: (current[resource.id] || []).map(
+                                    (existing) =>
+                                      updated.find((chunk) => chunk.id === existing.id) || existing,
+                                  ),
+                                }));
+                                setResourceMessage("Draft chunks approved.");
+                              })
+                            }
+                            disabled={!draftCount}
+                            className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                          >
+                            Approve drafts
+                          </button>
+                        ) : null}
+                      </div>
+                      {chunks.length ? (
+                        <div className="grid max-h-[520px] gap-3 overflow-auto pr-1">
+                          {chunks.map((chunk) => (
+                            <div
+                              key={chunk.id}
+                              className="rounded-2xl border border-border bg-background/55 p-3"
+                            >
+                              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
+                                  <span>Page {chunk.page_number}</span>
+                                  <span>Chunk {chunk.chunk_index + 1}</span>
+                                  <ResourceChunkStatusChip status={chunk.status} />
+                                </div>
+                                <button
+                                  type="button"
+                                  title="Delete chunk"
+                                  onClick={() => void removeChunk(resource, chunk)}
+                                  disabled={chunkBusyId === chunk.id}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.6} />
+                                </button>
+                              </div>
+                              <textarea
+                                value={chunkDrafts[chunk.id] ?? chunk.chunk_text}
+                                onChange={(event) =>
+                                  setChunkDrafts((current) => ({
+                                    ...current,
+                                    [chunk.id]: event.target.value,
+                                  }))
+                                }
+                                className="min-h-[120px] w-full rounded-2xl border border-border bg-background/80 px-3 py-2 text-[12.5px] leading-relaxed text-foreground outline-none"
+                              />
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void saveChunk(resource, chunk)}
+                                  disabled={chunkBusyId === chunk.id}
+                                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void setChunkStatus(resource, chunk, "approved")}
+                                  disabled={chunk.status === "approved" || chunkBusyId === chunk.id}
+                                  className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void setChunkStatus(resource, chunk, "rejected")}
+                                  disabled={chunk.status === "rejected" || chunkBusyId === chunk.id}
+                                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-border bg-background/55 p-4 text-[12.5px] text-muted-foreground">
+                          No chunks yet. Extract text from an uploaded PDF to begin review.
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void setStatus(resource, "draft")}
-                    disabled={resource.status === "draft"}
-                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                  >
-                    Draft
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void setStatus(resource, "published")}
-                    disabled={resource.status === "published"}
-                    className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
-                  >
-                    Publish
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void setStatus(resource, "archived")}
-                    disabled={resource.status === "archived"}
-                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                  >
-                    Archive
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="rounded-2xl border border-border bg-background/35 p-5 text-[13px] text-muted-foreground">
               No lesson resources yet. Add a draft, then publish it when students should see it.
@@ -2959,6 +3254,20 @@ function ResourceStatusChip({ status }: { status: LessonResourceStatus }) {
     status === "published"
       ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
       : status === "archived"
+        ? "border-border bg-background/45 text-muted-foreground"
+        : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+      {status}
+    </span>
+  );
+}
+
+function ResourceChunkStatusChip({ status }: { status: ResourceTextChunkStatus }) {
+  const classes =
+    status === "approved"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      : status === "rejected"
         ? "border-border bg-background/45 text-muted-foreground"
         : "border-amber-500/35 bg-amber-500/10 text-amber-500";
   return (

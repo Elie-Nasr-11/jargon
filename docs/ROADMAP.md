@@ -169,6 +169,9 @@ Exit criteria: two organizations can exist side by side, and RLS prevents cross-
 
 Goal: make uploaded resources deeply useful to Mentor.
 
+- Status: PDF-first v1 implemented repo-side. Teachers can extract PDF text in-browser,
+  store draft chunks through `resource-processing`, review/edit/approve/reject/delete
+  chunks, and `chat` can load approved chunks as bounded Mentor context.
 - Add PDF text extraction and page thumbnails.
 - Add audio/video transcription.
 - Add YouTube transcript import where available and permitted.

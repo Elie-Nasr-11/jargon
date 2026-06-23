@@ -536,6 +536,10 @@ function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function inFilter(values: string[]): string {
+  return `in.(${values.map((value) => encodeURIComponent(value)).join(",")})`;
+}
+
 function outputLines(runResult: unknown): string[] {
   if (!runResult || typeof runResult !== "object") return [];
   const raw = runResult as DbRow;
@@ -804,6 +808,7 @@ async function loadContext(
   recentAttempts: DbRow[];
   mastery: DbRow[];
   resources: DbRow[];
+  resourceChunks: DbRow[];
   resourceInteractions: DbRow[];
 }> {
   const lesson = await loadFirst(
@@ -882,6 +887,17 @@ async function loadContext(
       `resource_interactions?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&order=created_at.desc&limit=20&select=resource_id,event_type,progress_seconds,progress_percent,created_at`,
     ),
   ]);
+  const resourceIds = uniqueStrings(
+    resources.map((resource) =>
+      typeof resource.id === "string" ? resource.id : String(resource.id || ""),
+    ),
+  );
+  const resourceChunks = resourceIds.length
+    ? await loadMany(
+        config,
+        `resource_text_chunks?resource_id=${inFilter(resourceIds)}&status=eq.approved&order=page_number.asc,chunk_index.asc&limit=18&select=resource_id,page_number,chunk_index,chunk_text,status`,
+      )
+    : [];
 
   return {
     lesson,
@@ -892,6 +908,7 @@ async function loadContext(
     recentAttempts,
     mastery,
     resources,
+    resourceChunks,
     resourceInteractions,
   };
 }
@@ -1171,7 +1188,7 @@ async function handleTypedRequest(
         role: "user",
         content: JSON.stringify({
           instruction:
-            "Return only the typed JSON envelope. The orchestrator owns records, final stage/action, and resource cards; you own concise student-facing wording. If lesson_resources are present, invite the student to open one. Do not claim a resource was viewed unless resource_interactions proves it.",
+            "Return only the typed JSON envelope. The orchestrator owns records, final stage/action, and resource cards; you own concise student-facing wording. If lesson_resources are present, invite the student to open one. If approved_resource_chunks are present, you may use them as teacher-approved context and cite the resource title/page briefly. Do not claim a resource was viewed unless resource_interactions proves it.",
           lesson: context.lesson,
           activity: context.activity,
           milestone: context.milestone,
@@ -1187,6 +1204,18 @@ async function handleTypedRequest(
             student_instructions: resource.student_instructions,
             transcript_text: resource.transcript_text,
           })),
+          approved_resource_chunks: context.resourceChunks.map((chunk) => {
+            const resource = context.resources.find(
+              (item) => String(item.id) === String(chunk.resource_id),
+            );
+            return {
+              resource_id: chunk.resource_id,
+              resource_title: resource?.title || "Lesson resource",
+              page_number: chunk.page_number,
+              chunk_index: chunk.chunk_index,
+              chunk_text: String(chunk.chunk_text || "").slice(0, 1400),
+            };
+          }),
           resource_interactions: context.resourceInteractions,
           session: {
             id: sessionId,

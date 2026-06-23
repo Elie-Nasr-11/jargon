@@ -51,6 +51,8 @@ import type {
   RuntimeEvent,
   TranscriptHeatmapEvent,
   ResourceInteractionEvent,
+  ResourceProcessingResponse,
+  ResourceTextChunk,
   StudentAssignmentBundle,
   TypedChatAnswer,
   TypedChatEnvelope,
@@ -1162,6 +1164,87 @@ export async function recordResourceInteraction(event: ResourceInteractionEvent)
     progress_percent: event.progress_percent ?? null,
   });
   if (error) throw error;
+}
+
+async function invokeResourceProcessing(
+  body: Record<string, unknown>,
+): Promise<ResourceProcessingResponse> {
+  const session = await getSession();
+  if (!session?.access_token) throw new Error("You need to sign in to process lesson resources.");
+  const response = await fetchWithTimeout(functionUrl("resource-processing"), {
+    method: "POST",
+    headers: authHeaders(session.access_token),
+    body: JSON.stringify(body),
+  });
+  const data = (await response.json()) as ResourceProcessingResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Resource processing failed.");
+  }
+  return data;
+}
+
+export async function fetchResourceTextChunks(resourceId: string) {
+  const data = await invokeResourceProcessing({
+    action: "list_resource_chunks",
+    resource_id: resourceId,
+  });
+  return {
+    chunks: data.chunks || [],
+    jobs: data.jobs || [],
+    errors: data.errors || [],
+  };
+}
+
+export async function saveExtractedPdfChunks(
+  resourceId: string,
+  chunks: Array<Pick<ResourceTextChunk, "page_number" | "chunk_index" | "chunk_text">>,
+  metadata: Record<string, unknown> = {},
+) {
+  const data = await invokeResourceProcessing({
+    action: "extract_pdf_chunks",
+    resource_id: resourceId,
+    chunks,
+    metadata,
+  });
+  return data.chunks || [];
+}
+
+export async function saveResourceChunkEdits(
+  resourceId: string,
+  chunks: Array<Pick<ResourceTextChunk, "id" | "page_number" | "chunk_index" | "chunk_text">>,
+) {
+  const data = await invokeResourceProcessing({
+    action: "save_chunk_edits",
+    resource_id: resourceId,
+    chunks,
+  });
+  return data.chunks || [];
+}
+
+export async function approveResourceChunks(resourceId: string, chunkIds: string[]) {
+  const data = await invokeResourceProcessing({
+    action: "approve_chunks",
+    resource_id: resourceId,
+    chunk_ids: chunkIds,
+  });
+  return data.chunks || [];
+}
+
+export async function rejectResourceChunks(resourceId: string, chunkIds: string[]) {
+  const data = await invokeResourceProcessing({
+    action: "reject_chunks",
+    resource_id: resourceId,
+    chunk_ids: chunkIds,
+  });
+  return data.chunks || [];
+}
+
+export async function deleteResourceChunks(resourceId: string, chunkIds: string[]) {
+  await invokeResourceProcessing({
+    action: "delete_chunks",
+    resource_id: resourceId,
+    chunk_ids: chunkIds,
+  });
 }
 
 export async function recordVoiceInteraction(event: VoiceInteractionEvent) {

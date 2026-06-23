@@ -269,6 +269,75 @@ export type ResourceInteraction = ResourceInteractionEvent & {
   created_at: string;
 };
 
+export type ResourceProcessingJobStatus =
+  | "draft"
+  | "processing"
+  | "complete"
+  | "failed"
+  | "cancelled";
+
+export type ResourceProcessingJob = {
+  id: string;
+  resource_id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  lesson_id: string | null;
+  job_type: "pdf_text_extraction";
+  status: ResourceProcessingJobStatus;
+  requested_by: string | null;
+  completed_by: string | null;
+  chunk_count: number;
+  error_count: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+};
+
+export type ResourceProcessingError = {
+  id: string;
+  job_id: string | null;
+  resource_id: string;
+  severity: "warning" | "error";
+  page_number: number | null;
+  message: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ResourceTextChunkStatus = "draft" | "approved" | "rejected";
+
+export type ResourceTextChunk = {
+  id: string;
+  resource_id: string;
+  job_id: string | null;
+  organization_id: string | null;
+  class_id: string | null;
+  lesson_id: string | null;
+  page_number: number;
+  chunk_index: number;
+  chunk_text: string;
+  status: ResourceTextChunkStatus;
+  created_by: string | null;
+  updated_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ResourceProcessingResponse = {
+  status: "ok" | "error";
+  resource_id?: string;
+  job_id?: string;
+  chunks?: ResourceTextChunk[];
+  jobs?: ResourceProcessingJob[];
+  errors?: ResourceProcessingError[];
+  deleted_chunk_ids?: string[];
+  error?: string;
+};
+
 export type ChatInputModality = "typed" | "dictated" | "audio_session";
 
 export type VoiceInteractionEventType =
