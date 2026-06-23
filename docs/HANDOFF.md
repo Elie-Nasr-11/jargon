@@ -6,6 +6,57 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 16:35
+
+Status: Cost/Model Dashboard v1 implemented repo-side; live deploy/smoke pending
+
+What changed:
+
+- Extended `admin-ops` with read-only action `list_cost_model_dashboard`.
+- Dashboard is scoped by existing admin rules:
+  - platform admins see all organizations/classes plus estimated dollar cost;
+  - org admins see only their organization usage/reliability and no dollar-cost totals.
+- Aggregates existing telemetry:
+  - `model_usage_events`;
+  - `runtime_events`;
+  - `speech_usage_events`;
+  - `learning_sessions`.
+- `/admin` now has an `AI/runtime operations` section with:
+  - estimated cost;
+  - total tokens;
+  - model event count;
+  - average latency;
+  - error count/rate;
+  - model breakdown;
+  - task type breakdown;
+  - class operating load;
+  - recent model events;
+  - recent runtime errors.
+- Added `docs/COST_MODEL_DASHBOARD.md`.
+- Updated `docs/ROADMAP.md` to mark Cost/Model Dashboard v1 as implemented repo-side.
+
+Verification:
+
+- Implementation commit: `f634aa4` (`Add cost model dashboard`).
+- `cd frontend && npx tsc --noEmit`: passed.
+- `cd frontend && npm run lint`: passed with the existing 11 warnings.
+- `cd frontend && npm run build`: passed.
+- `python3 -m unittest discover -s tests -q`: passed.
+- `python3 tools/validate_examples.py examples legacy/examples`: passed.
+- `git diff --check`: passed.
+- `deno check supabase/functions/admin-ops/index.ts`: unavailable locally (`deno` not installed).
+
+Next live steps:
+
+- Push `main`.
+- Deploy `admin-ops` from commit `f634aa4`.
+- Wait for Render to deploy the frontend.
+- Live smoke:
+  - platform admin opens `/admin` and confirms `AI/runtime operations` loads with cost visible;
+  - org admin opens `/admin` and confirms usage/reliability is scoped and cost reads `Hidden`;
+  - complete one lesson, refresh metrics, and confirm sessions/completions update;
+  - trigger one controlled Jargon error and confirm a runtime error appears.
+
 ## Codex -> Claude / Human - 2026-06-23 15:47
 
 Status: School-readiness / Pilot Ops v1 implemented, pushed, and `admin-ops` deployed
