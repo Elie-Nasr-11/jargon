@@ -32,6 +32,9 @@ import type {
   LearningEvidence,
   LiveSessionViewer,
   ModelUsageEvent,
+  AdminOpsAction,
+  AdminOpsResponse,
+  AdminScope,
   AdminSeedResponse,
   AdminSeedUser,
   MentorPreferences,
@@ -379,6 +382,46 @@ export async function invokeAdminSeed(input: {
     throw new Error(data.error || "Pilot roster seed failed.");
   }
   return data;
+}
+
+export async function invokeAdminOps(input: {
+  accessToken: string;
+  action: AdminOpsAction;
+  organizationId?: string | null;
+  classId?: string | null;
+  userId?: string | null;
+  membershipId?: string | null;
+  role?: "student" | "teacher" | "org_admin" | null;
+  status?: "active" | "invited" | "disabled" | "removed" | null;
+  temporaryPassword?: string | null;
+  payload?: Record<string, unknown>;
+}) {
+  const response = await fetchWithTimeout(functionUrl("admin-ops"), {
+    method: "POST",
+    headers: authHeaders(input.accessToken),
+    body: JSON.stringify({
+      action: input.action,
+      organization_id: input.organizationId || undefined,
+      class_id: input.classId || undefined,
+      user_id: input.userId || undefined,
+      membership_id: input.membershipId || undefined,
+      role: input.role || undefined,
+      status: input.status || undefined,
+      temporary_password: input.temporaryPassword || undefined,
+      payload: input.payload,
+    }),
+  });
+  const data = (await response.json()) as AdminOpsResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Admin operation failed.");
+  }
+  return data;
+}
+
+export async function fetchAdminScope(accessToken: string): Promise<AdminScope> {
+  const data = await invokeAdminOps({ accessToken, action: "list_admin_scope" });
+  if (!data.data?.scope) throw new Error("Admin scope response was missing data.");
+  return data.data.scope;
 }
 
 export async function fetchCurriculumAuthoringData(

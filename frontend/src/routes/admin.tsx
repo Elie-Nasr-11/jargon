@@ -1,11 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertCircle, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  Archive,
+  CheckCircle2,
+  KeyRound,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+} from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
-import { getSession, invokeAdminSeed, isPlatformAdmin } from "@/lib/api";
-import type { AdminSeedResult, AdminSeedUser, PilotRole } from "@/lib/types";
+import {
+  fetchAdminScope,
+  getSession,
+  invokeAdminOps,
+  invokeAdminSeed,
+  isPlatformAdmin,
+} from "@/lib/api";
+import type {
+  AdminClass,
+  AdminScope,
+  AdminSeedResult,
+  AdminSeedUser,
+  PilotRole,
+  TeacherClassMembership,
+} from "@/lib/types";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -85,6 +108,21 @@ function resultTone(status: AdminSeedResult["status"]) {
   return "text-red-500";
 }
 
+function formatDate(value?: string | null) {
+  if (!value) return "Never";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function classStatusLabel(status: string) {
+  if (status === "removed") return "disabled";
+  return status;
+}
+
 function AdminPage() {
   const navigate = useNavigate();
   const [booting, setBooting] = useState(true);
@@ -101,6 +139,17 @@ function AdminPage() {
   const [batchId, setBatchId] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [scope, setScope] = useState<AdminScope | null>(null);
+  const [scopeLoading, setScopeLoading] = useState(false);
+  const [opsMessage, setOpsMessage] = useState("");
+  const [opsBusy, setOpsBusy] = useState("");
+  const [selectedOrgId, setSelectedOrgId] = useState("");
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [newClassName, setNewClassName] = useState("");
+  const [renameClassName, setRenameClassName] = useState("");
+  const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
+  const [existingUserId, setExistingUserId] = useState("");
+  const [existingUserRole, setExistingUserRole] = useState<PilotRole>("student");
 
   useEffect(() => {
     let alive = true;
@@ -117,6 +166,7 @@ function AdminPage() {
         setToken(session.access_token);
         setAuthorized(allowed);
         setMessage(allowed ? "" : "This area is available only to platform admins.");
+        if (allowed) void refreshScope(session.access_token);
       } catch (error) {
         if (!alive) return;
         setMessage((error as Error).message || "Could not load admin access.");
@@ -128,7 +178,38 @@ function AdminPage() {
     return () => {
       alive = false;
     };
+    // The initial admin scope load should run only with the first authenticated session.
+    // Later updates are explicit via Refresh ops or operation responses.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
+
+  const refreshScope = async (accessToken = token) => {
+    if (!accessToken) return;
+    setScopeLoading(true);
+    try {
+      const data = await fetchAdminScope(accessToken);
+      setScope(data);
+      const firstOrg = data.organizations[0]?.id || "";
+      const nextOrg =
+        selectedOrgId && data.organizations.some((org) => org.id === selectedOrgId)
+          ? selectedOrgId
+          : firstOrg;
+      const orgClasses = data.classes.filter((item) => item.organization_id === nextOrg);
+      const nextClass =
+        selectedClassId && orgClasses.some((item) => item.id === selectedClassId)
+          ? selectedClassId
+          : orgClasses[0]?.id || "";
+      setSelectedOrgId(nextOrg);
+      setSelectedClassId(nextClass);
+      if (!renameClassName && nextClass) {
+        setRenameClassName(data.classes.find((item) => item.id === nextClass)?.name || "");
+      }
+    } catch (error) {
+      setOpsMessage((error as Error).message || "Could not load admin operations.");
+    } finally {
+      setScopeLoading(false);
+    }
+  };
 
   const validRows = useMemo(
     () =>
@@ -208,6 +289,180 @@ function AdminPage() {
 
   const canSeed = !submitting && formErrors.length === 0;
 
+  const selectedOrg = useMemo(
+    () => scope?.organizations.find((organization) => organization.id === selectedOrgId) || null,
+    [scope, selectedOrgId],
+  );
+  const orgClasses = useMemo(
+    () => (scope?.classes || []).filter((item) => item.organization_id === selectedOrgId),
+    [scope, selectedOrgId],
+  );
+  const selectedClass = useMemo(
+    () => scope?.classes.find((item) => item.id === selectedClassId) || null,
+    [scope, selectedClassId],
+  );
+  const classMemberships = useMemo(
+    () => (scope?.class_memberships || []).filter((item) => item.class_id === selectedClassId),
+    [scope, selectedClassId],
+  );
+  const profileById = useMemo(
+    () => new Map((scope?.profiles || []).map((profile) => [profile.id, profile])),
+    [scope],
+  );
+  const userById = useMemo(
+    () => new Map((scope?.users || []).map((user) => [user.id, user])),
+    [scope],
+  );
+  const organizationMembershipByUser = useMemo(() => {
+    const map = new Map<string, AdminScope["organization_memberships"][number]>();
+    (scope?.organization_memberships || [])
+      .filter((membership) => membership.organization_id === selectedOrgId)
+      .forEach((membership) => map.set(membership.user_id, membership));
+    return map;
+  }, [scope, selectedOrgId]);
+  const classMemberIds = useMemo(
+    () => new Set(classMemberships.map((membership) => membership.user_id)),
+    [classMemberships],
+  );
+  const addableUsers = useMemo(
+    () => (scope?.users || []).filter((user) => !classMemberIds.has(user.id)),
+    [classMemberIds, scope],
+  );
+  const activeTeacherCount = classMemberships.filter(
+    (membership) => membership.role === "teacher" && membership.status === "active",
+  ).length;
+  const activeStudentCount = classMemberships.filter(
+    (membership) => membership.role === "student" && membership.status === "active",
+  ).length;
+
+  const runAdminOp = async (busyKey: string, success: string, operation: () => Promise<void>) => {
+    if (!token) return;
+    setOpsBusy(busyKey);
+    setOpsMessage("");
+    try {
+      await operation();
+      setOpsMessage(success);
+    } catch (error) {
+      setOpsMessage((error as Error).message || "Admin operation failed.");
+    } finally {
+      setOpsBusy("");
+    }
+  };
+
+  const applyScopeFromResponse = (response: Awaited<ReturnType<typeof invokeAdminOps>>) => {
+    if (response.data?.scope) setScope(response.data.scope);
+  };
+
+  const createClass = async () => {
+    if (!selectedOrgId || !newClassName.trim()) {
+      setOpsMessage("Choose an organization and enter a class name.");
+      return;
+    }
+    await runAdminOp("create-class", "Class created.", async () => {
+      const response = await invokeAdminOps({
+        accessToken: token,
+        action: "create_class",
+        organizationId: selectedOrgId,
+        payload: { name: newClassName.trim() },
+      });
+      applyScopeFromResponse(response);
+      const created = response.data?.class as AdminClass | undefined;
+      if (created?.id) {
+        setSelectedClassId(created.id);
+        setRenameClassName(created.name);
+      }
+      setNewClassName("");
+    });
+  };
+
+  const updateSelectedClass = async (status?: "active" | "archived") => {
+    if (!selectedClassId) return;
+    const name = renameClassName.trim();
+    await runAdminOp(
+      "update-class",
+      status === "archived" ? "Class archived." : "Class updated.",
+      async () => {
+        const response = await invokeAdminOps({
+          accessToken: token,
+          action: "update_class",
+          classId: selectedClassId,
+          payload: { name: name || selectedClass?.name, status },
+        });
+        applyScopeFromResponse(response);
+      },
+    );
+  };
+
+  const updateMembershipStatus = async (
+    membership: TeacherClassMembership,
+    status: "active" | "disabled",
+  ) => {
+    await runAdminOp(
+      `status-${membership.id}`,
+      status === "active" ? "Membership reactivated." : "Membership disabled.",
+      async () => {
+        const response = await invokeAdminOps({
+          accessToken: token,
+          action: "update_membership_status",
+          membershipId: membership.id,
+          status,
+          payload: { membership_type: "class" },
+        });
+        applyScopeFromResponse(response);
+      },
+    );
+  };
+
+  const updateMembershipRole = async (membership: TeacherClassMembership, role: PilotRole) => {
+    await runAdminOp(`role-${membership.id}`, "Membership role updated.", async () => {
+      const response = await invokeAdminOps({
+        accessToken: token,
+        action: "update_membership_role",
+        membershipId: membership.id,
+        role,
+        payload: { membership_type: "class" },
+      });
+      applyScopeFromResponse(response);
+    });
+  };
+
+  const resetUserPassword = async (userId: string) => {
+    const password = (resetPasswords[userId] || "").trim();
+    if (password.length < MIN_TEMP_PASSWORD_LENGTH) {
+      setOpsMessage(`Temporary password must be at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    await runAdminOp(`reset-${userId}`, "Temporary password reset.", async () => {
+      const response = await invokeAdminOps({
+        accessToken: token,
+        action: "reset_user_password",
+        userId,
+        temporaryPassword: password,
+      });
+      applyScopeFromResponse(response);
+      setResetPasswords((current) => ({ ...current, [userId]: "" }));
+    });
+  };
+
+  const addExistingUser = async () => {
+    if (!selectedOrgId || !selectedClassId || !existingUserId) {
+      setOpsMessage("Choose a class and user first.");
+      return;
+    }
+    await runAdminOp("add-user", "User added to class.", async () => {
+      const response = await invokeAdminOps({
+        accessToken: token,
+        action: "add_existing_user_to_class",
+        organizationId: selectedOrgId,
+        classId: selectedClassId,
+        userId: existingUserId,
+        role: existingUserRole,
+      });
+      applyScopeFromResponse(response);
+      setExistingUserId("");
+    });
+  };
+
   const updateRow = (rowId: string, patch: Partial<RosterRow>) => {
     setRows((current) => current.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)));
   };
@@ -261,6 +516,7 @@ function AdminPage() {
           ? "Pilot roster seed finished with errors."
           : "Pilot roster seed finished.",
       );
+      void refreshScope();
     } catch (error) {
       setMessage((error as Error).message || "Could not seed the pilot roster.");
     } finally {
@@ -294,20 +550,385 @@ function AdminPage() {
               Platform admin
             </div>
             <h1 className="font-serif mt-2 text-[38px] leading-tight tracking-tight text-foreground">
-              Seed a pilot classroom.
+              Manage pilot classrooms.
             </h1>
             <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
-              Create or reuse teacher and student accounts, then attach them to one organization and
-              class. Passwords are sent only to Supabase Auth and are not stored in Jargon tables.
+              Create and seed classes, manage memberships, reset temporary passwords, and inspect
+              account operations. Passwords are sent only to Supabase Auth and are not stored in
+              Jargon tables.
             </p>
           </div>
-          <Link
-            to="/teacher"
-            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-          >
-            Open teacher shell
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void refreshScope()}
+              disabled={scopeLoading}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${scopeLoading ? "animate-spin" : ""}`}
+                strokeWidth={1.6}
+              />
+              Refresh ops
+            </button>
+            <Link
+              to="/teacher"
+              className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+            >
+              Open teacher shell
+            </Link>
+          </div>
         </section>
+
+        <GradientCard>
+          <div className="space-y-5 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[16px] font-medium text-foreground">Operations dashboard</h2>
+                <p className="mt-1 text-[12.5px] text-muted-foreground">
+                  Platform-admin tools for classroom setup, roster repair, and account support.
+                </p>
+              </div>
+              {opsMessage ? (
+                <div className="max-w-lg rounded-full border border-border px-3 py-1.5 text-[12px] text-muted-foreground">
+                  {opsMessage}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Stat label="Organizations" value={scope?.organizations.length || 0} />
+              <Stat label="Classes" value={scope?.classes.length || 0} />
+              <Stat label="Users" value={scope?.users.length || 0} />
+              <Stat label="Seed batches" value={scope?.seed_batches.length || 0} />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[0.78fr_1.22fr]">
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                  <Field label="Organization">
+                    <select
+                      value={selectedOrgId}
+                      onChange={(event) => {
+                        const orgId = event.target.value;
+                        const firstClass = (scope?.classes || []).find(
+                          (item) => item.organization_id === orgId,
+                        );
+                        setSelectedOrgId(orgId);
+                        setSelectedClassId(firstClass?.id || "");
+                        setRenameClassName(firstClass?.name || "");
+                      }}
+                      className="jargon-input"
+                    >
+                      {(scope?.organizations || []).map((organization) => (
+                        <option key={organization.id} value={organization.id}>
+                          {organization.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Class">
+                    <select
+                      value={selectedClassId}
+                      onChange={(event) => {
+                        const classId = event.target.value;
+                        setSelectedClassId(classId);
+                        setRenameClassName(
+                          scope?.classes.find((item) => item.id === classId)?.name || "",
+                        );
+                      }}
+                      className="jargon-input"
+                    >
+                      {orgClasses.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} · {item.status}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+                    <Plus className="h-4 w-4" strokeWidth={1.6} />
+                    Create class
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      value={newClassName}
+                      onChange={(event) => setNewClassName(event.target.value)}
+                      placeholder={
+                        selectedOrg ? `New class in ${selectedOrg.name}` : "New class name"
+                      }
+                      className="jargon-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void createClass()}
+                      disabled={
+                        !selectedOrgId || !newClassName.trim() || opsBusy === "create-class"
+                      }
+                      className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+                    <Archive className="h-4 w-4" strokeWidth={1.6} />
+                    Class settings
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      value={renameClassName}
+                      onChange={(event) => setRenameClassName(event.target.value)}
+                      placeholder="Selected class name"
+                      className="jargon-input"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void updateSelectedClass()}
+                        disabled={
+                          !selectedClassId || !renameClassName.trim() || opsBusy === "update-class"
+                        }
+                        className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                      >
+                        Save class
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void updateSelectedClass(
+                            selectedClass?.status === "archived" ? "active" : "archived",
+                          )
+                        }
+                        disabled={!selectedClassId || opsBusy === "update-class"}
+                        className="rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                      >
+                        {selectedClass?.status === "archived" ? "Reactivate" : "Archive"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+                    <UserPlus className="h-4 w-4" strokeWidth={1.6} />
+                    Add existing user
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={existingUserId}
+                      onChange={(event) => setExistingUserId(event.target.value)}
+                      className="jargon-input"
+                    >
+                      <option value="">Choose an existing seeded user</option>
+                      {addableUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.email || user.id}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <select
+                        value={existingUserRole}
+                        onChange={(event) => setExistingUserRole(event.target.value as PilotRole)}
+                        className="jargon-input max-w-[140px]"
+                      >
+                        <option value="student">student</option>
+                        <option value="teacher">teacher</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void addExistingUser()}
+                        disabled={!existingUserId || !selectedClassId || opsBusy === "add-user"}
+                        className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-[14px] font-medium text-foreground">
+                        {selectedClass?.name || "Choose a class"}
+                      </h3>
+                      <p className="mt-1 text-[12px] text-muted-foreground">
+                        {activeTeacherCount} active teacher{activeTeacherCount === 1 ? "" : "s"} ·{" "}
+                        {activeStudentCount} active student{activeStudentCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground" strokeWidth={1.6} />
+                  </div>
+
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="min-w-[820px] w-full border-collapse text-left text-[12.5px]">
+                      <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                        <tr>
+                          <th className="py-2 pr-3 font-medium">Person</th>
+                          <th className="py-2 pr-3 font-medium">Role</th>
+                          <th className="py-2 pr-3 font-medium">Status</th>
+                          <th className="py-2 pr-3 font-medium">Password reset</th>
+                          <th className="py-2 font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {classMemberships.map((membership) => {
+                          const user = userById.get(membership.user_id);
+                          const profile = profileById.get(membership.user_id);
+                          const orgMembership = organizationMembershipByUser.get(
+                            membership.user_id,
+                          );
+                          const inactive = membership.status !== "active";
+                          return (
+                            <tr key={membership.id} className="border-b border-border/60 align-top">
+                              <td className="py-3 pr-3">
+                                <div className="font-medium text-foreground">
+                                  {profile?.name || user?.email || membership.user_id}
+                                </div>
+                                <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                                  {user?.email || "No email loaded"} · grade{" "}
+                                  {profile?.grade || "n/a"}
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-muted-foreground/75">
+                                  Last sign-in {formatDate(user?.last_sign_in_at)}
+                                </div>
+                              </td>
+                              <td className="py-3 pr-3">
+                                <select
+                                  value={membership.role}
+                                  onChange={(event) =>
+                                    void updateMembershipRole(
+                                      membership,
+                                      event.target.value as PilotRole,
+                                    )
+                                  }
+                                  className="jargon-input min-w-[110px]"
+                                >
+                                  <option value="student">student</option>
+                                  <option value="teacher">teacher</option>
+                                </select>
+                                <div className="mt-1 text-[11px] text-muted-foreground">
+                                  Org: {orgMembership?.role || "none"}
+                                </div>
+                              </td>
+                              <td className="py-3 pr-3">
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] ${
+                                    inactive
+                                      ? "border-amber-500/35 text-amber-500"
+                                      : "border-emerald-500/35 text-emerald-500"
+                                  }`}
+                                >
+                                  {classStatusLabel(membership.status)}
+                                </span>
+                              </td>
+                              <td className="py-3 pr-3">
+                                <div className="flex min-w-[230px] gap-2">
+                                  <input
+                                    type="password"
+                                    value={resetPasswords[membership.user_id] || ""}
+                                    onChange={(event) =>
+                                      setResetPasswords((current) => ({
+                                        ...current,
+                                        [membership.user_id]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="New temporary password"
+                                    className="jargon-input"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void resetUserPassword(membership.user_id)}
+                                    disabled={opsBusy === `reset-${membership.user_id}`}
+                                    aria-label="Reset temporary password"
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                  >
+                                    <KeyRound className="h-4 w-4" strokeWidth={1.6} />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="py-3">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void updateMembershipStatus(
+                                      membership,
+                                      inactive ? "active" : "disabled",
+                                    )
+                                  }
+                                  disabled={opsBusy === `status-${membership.id}`}
+                                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                >
+                                  {inactive ? "Reactivate" : "Disable"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {!classMemberships.length ? (
+                          <tr>
+                            <td className="py-5 text-muted-foreground" colSpan={5}>
+                              No roster rows for this class yet.
+                            </td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                    <h3 className="text-[14px] font-medium text-foreground">Recent seed batches</h3>
+                    <div className="mt-3 space-y-2">
+                      {(scope?.seed_batches || []).slice(0, 5).map((batch) => (
+                        <div key={batch.id} className="border-b border-border/55 pb-2 text-[12px]">
+                          <div className="text-foreground">{batch.label}</div>
+                          <div className="mt-0.5 text-muted-foreground">
+                            {batch.status} · {formatDate(batch.created_at)}
+                          </div>
+                        </div>
+                      ))}
+                      {!scope?.seed_batches.length ? (
+                        <div className="text-[12px] text-muted-foreground">
+                          No seed batches yet.
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                    <h3 className="text-[14px] font-medium text-foreground">Recent audit events</h3>
+                    <div className="mt-3 space-y-2">
+                      {(scope?.audit_events || []).slice(0, 6).map((event) => (
+                        <div key={event.id} className="border-b border-border/55 pb-2 text-[12px]">
+                          <div className="text-foreground">{event.event_type}</div>
+                          <div className="mt-0.5 text-muted-foreground">
+                            {event.entity_type} · {formatDate(event.created_at)}
+                          </div>
+                        </div>
+                      ))}
+                      {!scope?.audit_events.length ? (
+                        <div className="text-[12px] text-muted-foreground">
+                          No audit events yet.
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </GradientCard>
 
         <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
           <GradientCard>
@@ -633,5 +1254,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </span>
       <div className="mt-1.5">{children}</div>
     </label>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-border/75 bg-background/45 p-4">
+      <div className="text-[24px] font-semibold leading-none text-foreground">{value}</div>
+      <div className="mt-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
+      </div>
+    </div>
   );
 }

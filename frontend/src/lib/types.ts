@@ -593,6 +593,27 @@ export type Profile = {
   grade: string | null;
 };
 
+export type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+  organization_type?: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminClass = {
+  id: string;
+  organization_id: string;
+  name: string;
+  class_code?: string | null;
+  status: string;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MentorPreferences = {
   pace: "brief" | "balanced" | "guided";
   tone: "neutral" | "encouraging";
@@ -678,6 +699,77 @@ export type AdminSeedResponse = {
   organization_id?: string;
   class_id?: string;
   results: AdminSeedResult[];
+  error?: string;
+};
+
+export type OrganizationMembership = {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: "student" | "teacher" | "org_admin";
+  status: "active" | "invited" | "disabled";
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminAuthUser = {
+  id: string;
+  email: string;
+  created_at?: string | null;
+  last_sign_in_at?: string | null;
+  banned_until?: string | null;
+};
+
+export type AdminSeedBatch = {
+  id: string;
+  label: string;
+  status: string;
+  summary: Record<string, unknown>;
+  organization_id?: string | null;
+  class_id?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type AuditEvent = {
+  id: string;
+  actor_id: string | null;
+  organization_id: string | null;
+  class_id: string | null;
+  event_type: string;
+  entity_type: string;
+  entity_id: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AdminScope = {
+  organizations: Organization[];
+  classes: AdminClass[];
+  organization_memberships: OrganizationMembership[];
+  class_memberships: TeacherClassMembership[];
+  profiles: Profile[];
+  users: AdminAuthUser[];
+  seed_batches: AdminSeedBatch[];
+  audit_events: AuditEvent[];
+};
+
+export type AdminOpsAction =
+  | "list_admin_scope"
+  | "create_class"
+  | "update_class"
+  | "reset_user_password"
+  | "update_membership_status"
+  | "update_membership_role"
+  | "add_existing_user_to_class";
+
+export type AdminOpsResponse = {
+  status: "ok" | "error";
+  data?: {
+    scope?: AdminScope;
+    class?: AdminClass | null;
+    membership?: OrganizationMembership | TeacherClassMembership | null;
+  } & Record<string, unknown>;
   error?: string;
 };
 

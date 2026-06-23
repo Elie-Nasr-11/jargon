@@ -6,6 +6,51 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-23 12:30
+
+Status: Admin Operations v1 implemented repo-side
+
+What changed:
+
+- Added privileged Supabase Edge Function `admin-ops`.
+  - Requires signed-in JWT.
+  - Verifies caller in `public.platform_admins`.
+  - Uses `SUPABASE_SERVICE_ROLE_KEY` only server-side.
+  - Supports `list_admin_scope`, `create_class`, `update_class`, `reset_user_password`,
+    `update_membership_status`, `update_membership_role`, and `add_existing_user_to_class`.
+- Expanded `/admin` from seed-only into a pilot operations console:
+  - organization/class/user summary;
+  - class selector and roster view;
+  - class create/rename/archive/reactivate;
+  - add an already seeded user to a class;
+  - change class membership role;
+  - disable/reactivate class membership;
+  - reset temporary passwords without storing plaintext;
+  - recent seed batches and audit events.
+- Added frontend `admin-ops` API/types and kept `admin-seed` as the bulk roster creation path.
+- Updated `docs/ADMIN_SEEDED_PILOT.md` and `docs/ROADMAP.md`.
+- Added static tests in `tests/test_admin_ops.py`.
+
+Verification:
+
+- `cd frontend && npx tsc --noEmit`: passed.
+- `cd frontend && npm run lint`: passed with the existing 11 warnings.
+- `cd frontend && npm run build`: passed.
+- `python3 -m unittest discover -s tests -q`: passed.
+- `python3 tools/validate_examples.py examples legacy/examples`: passed.
+- `git diff --check`: passed.
+- `deno check supabase/functions/admin-ops/index.ts`: not run because `deno` is unavailable
+  in this workspace.
+
+Next live steps:
+
+- Deploy Supabase Edge Function `admin-ops` with existing Edge Function secrets:
+  `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
+- Push/deploy the frontend bundle.
+- Live smoke: platform admin creates/updates a class, adds an existing user, resets a student
+  password, disables/reactivates a class membership, verifies teacher roster update, and confirms
+  `audit_events` rows for sensitive actions.
+
 ## Codex -> Claude / Human - 2026-06-23 11:55
 
 Status: Live Teacher Intervention smoke passed; realtime auth hardening pushed next

@@ -17,8 +17,13 @@ Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete en
 - Teacher Analytics & Intervention Intelligence v1 is implemented repo-side: class metrics,
   mastery heatmaps, deterministic Needs Attention signals, student drilldowns, and lightweight
   runtime/model telemetry hooks.
-- Next implementation slice after live QA: live teacher watching/comments, media processing, or
-  org-admin polish depending on the pilot demo priority.
+- Live teacher watching/comments is implemented and data/realtime-smoked.
+- Admin Operations v1 is implemented repo-side: `/admin` can inspect orgs/classes/users,
+  create/update/archive classes, add existing users to classes, reset temporary passwords,
+  change class roles/statuses, and inspect recent seed/audit events through privileged
+  `admin-ops`.
+- Next implementation slice after live QA: deploy/smoke `admin-ops`, then choose media
+  processing, org-admin delegation polish, or school-readiness needs.
 
 ## Product Direction Locked
 
@@ -140,6 +145,8 @@ Exit criteria: student completes one non-coding lesson with media, quiz, evidenc
 
 Goal: support real schools/classes.
 
+- Status: Admin Operations v1 is implemented repo-side for platform-admin pilot operations;
+  live deployment/smoke remains.
 - Add `/admin`.
 - Let org admins manage organizations, teachers, students, classes, roles, and audit.
 - Let platform admins manage all tenants, global content, feature flags, and support/debug workflows.
