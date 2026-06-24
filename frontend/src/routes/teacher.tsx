@@ -28,6 +28,7 @@ import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import {
   createAssignment,
+  createAssessment,
   createLessonResource,
   createTeacherNote,
   approveResourceChunks,
@@ -49,6 +50,9 @@ import {
   saveResourceChunkEdits,
   transcribeMediaResource,
   updateAssignmentStatus,
+  updateAssessmentStatus,
+  reviewAssessmentItem,
+  returnAssessment,
   updateInterventionAlertStatus,
   updateLessonResource,
   uploadPdfPageAssets,
@@ -60,7 +64,16 @@ import type {
   AssignmentStatus,
   AssignmentSubmission,
   AssignmentSubmissionFile,
+  Assessment,
+  AssessmentAttempt,
+  AssessmentGradingMode,
+  AssessmentItem,
+  AssessmentItemAttempt,
+  AssessmentRecipient,
+  AssessmentResultReleasePolicy,
+  AssessmentStatus,
   ChatInputModality,
+  CurriculumQuizItem,
   InterventionAlert,
   LearningSession,
   Lesson,
@@ -112,6 +125,7 @@ function TeacherPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [savingResource, setSavingResource] = useState(false);
   const [savingAssignment, setSavingAssignment] = useState(false);
+  const [savingAssessment, setSavingAssessment] = useState(false);
   const [liveViewer, setLiveViewer] = useState<LiveSessionViewer | null>(null);
   const [liveCommentDraft, setLiveCommentDraft] = useState("");
   const [sendingLiveComment, setSendingLiveComment] = useState(false);
@@ -397,6 +411,105 @@ function TeacherPage() {
     }
   };
 
+  const saveAssessment = async (input: AssessmentFormValues) => {
+    setSavingAssessment(true);
+    try {
+      const created = await createAssessment({
+        organizationId: input.organizationId,
+        classId: input.classId,
+        lessonId: input.lessonId,
+        title: input.title,
+        instructions: input.instructions,
+        dueAt: input.dueAt || null,
+        status: input.status,
+        gradingMode: input.gradingMode,
+        resultReleasePolicy: input.resultReleasePolicy,
+        attemptLimit: input.attemptLimit,
+        recipientIds: input.recipientIds,
+        items: input.items,
+      });
+      if (!created?.assessment) return;
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              assessments: [created.assessment!, ...current.assessments],
+              assessmentItems: [
+                ...(created.items || []),
+                ...current.assessmentItems.filter(
+                  (item) => item.assessment_id !== created.assessment!.id,
+                ),
+              ],
+              assessmentRecipients: [
+                ...(created.recipients || []),
+                ...current.assessmentRecipients.filter(
+                  (recipient) => recipient.assessment_id !== created.assessment!.id,
+                ),
+              ],
+            }
+          : current,
+      );
+    } catch (error) {
+      setMessage((error as Error).message || "Could not create assessment.");
+      throw error;
+    } finally {
+      setSavingAssessment(false);
+    }
+  };
+
+  const setAssessmentStatus = async (assessmentId: string, status: AssessmentStatus) => {
+    try {
+      const updated = await updateAssessmentStatus(assessmentId, status);
+      if (!updated) return;
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              assessments: current.assessments.map((assessment) =>
+                assessment.id === updated.id ? updated : assessment,
+              ),
+            }
+          : current,
+      );
+    } catch (error) {
+      setMessage((error as Error).message || "Could not update assessment.");
+    }
+  };
+
+  const reviewAssessment = async (input: {
+    itemAttemptId: string;
+    scorePercent: number;
+    feedback: string;
+  }) => {
+    try {
+      const updated = await reviewAssessmentItem(input);
+      if (!updated) return;
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              assessmentItemAttempts: current.assessmentItemAttempts.map((item) =>
+                item.id === updated.id ? updated : item,
+              ),
+            }
+          : current,
+      );
+    } catch (error) {
+      setMessage((error as Error).message || "Could not review quiz question.");
+      throw error;
+    }
+  };
+
+  const returnAssessmentResult = async (input: { attemptId: string; feedback: string }) => {
+    try {
+      await returnAssessment(input);
+      await loadDashboard();
+    } catch (error) {
+      setMessage((error as Error).message || "Could not return quiz result.");
+      throw error;
+    }
+  };
+
   const startWatchingSelectedSession = async () => {
     if (!selectedSession || !selectedStudentId || !selectedClassId) return;
     if (selectedSession.status === "complete") {
@@ -601,6 +714,14 @@ function TeacherPage() {
                     assignmentRecipients={dashboard.assignmentRecipients}
                     assignmentSubmissions={dashboard.assignmentSubmissions}
                     assignmentSubmissionFiles={dashboard.assignmentSubmissionFiles}
+                    assessments={dashboard.assessments.filter(
+                      (assessment) => assessment.class_id === selectedClass.id,
+                    )}
+                    assessmentItems={dashboard.assessmentItems}
+                    assessmentRecipients={dashboard.assessmentRecipients}
+                    assessmentAttempts={dashboard.assessmentAttempts}
+                    assessmentItemAttempts={dashboard.assessmentItemAttempts}
+                    quizItems={dashboard.quizItems}
                     studentIds={classStudents}
                     selectedLessonId={selectedGradebookLessonId}
                     selectedStudentId={selectedStudentId}
@@ -608,12 +729,19 @@ function TeacherPage() {
                     onSelectStudent={setSelectedStudentId}
                     savingResource={savingResource}
                     savingAssignment={savingAssignment}
+                    savingAssessment={savingAssessment}
                     onSaveResource={saveResource}
                     onSaveAssignment={saveAssignment}
+                    onSaveAssessment={saveAssessment}
                     onSetAssignmentStatus={(assignmentId, status) =>
                       void setAssignmentStatus(assignmentId, status)
                     }
+                    onSetAssessmentStatus={(assessmentId, status) =>
+                      void setAssessmentStatus(assessmentId, status)
+                    }
                     onReviewSubmission={reviewSubmission}
+                    onReviewAssessmentItem={reviewAssessment}
+                    onReturnAssessment={returnAssessmentResult}
                     updatingAlertId={updatingAlertId}
                     onUpdateAlertStatus={(alertId, status) =>
                       void updateAlertStatus(alertId, status)
@@ -735,6 +863,12 @@ function ClassDetail({
   assignmentRecipients,
   assignmentSubmissions,
   assignmentSubmissionFiles,
+  assessments,
+  assessmentItems,
+  assessmentRecipients,
+  assessmentAttempts,
+  assessmentItemAttempts,
+  quizItems,
   studentIds,
   selectedLessonId,
   selectedStudentId,
@@ -742,10 +876,15 @@ function ClassDetail({
   onSelectStudent,
   savingResource,
   savingAssignment,
+  savingAssessment,
   onSaveResource,
   onSaveAssignment,
+  onSaveAssessment,
   onSetAssignmentStatus,
+  onSetAssessmentStatus,
   onReviewSubmission,
+  onReviewAssessmentItem,
+  onReturnAssessment,
   updatingAlertId,
   onUpdateAlertStatus,
   onUpdateResource,
@@ -761,6 +900,12 @@ function ClassDetail({
   assignmentRecipients: AssignmentRecipient[];
   assignmentSubmissions: AssignmentSubmission[];
   assignmentSubmissionFiles: AssignmentSubmissionFile[];
+  assessments: Assessment[];
+  assessmentItems: AssessmentItem[];
+  assessmentRecipients: AssessmentRecipient[];
+  assessmentAttempts: AssessmentAttempt[];
+  assessmentItemAttempts: AssessmentItemAttempt[];
+  quizItems: CurriculumQuizItem[];
   studentIds: string[];
   selectedLessonId: string;
   selectedStudentId: string | null;
@@ -768,9 +913,12 @@ function ClassDetail({
   onSelectStudent: (studentId: string) => void;
   savingResource: boolean;
   savingAssignment: boolean;
+  savingAssessment: boolean;
   onSaveResource: (input: ResourceFormValues) => Promise<void>;
   onSaveAssignment: (input: AssignmentFormValues) => Promise<void>;
+  onSaveAssessment: (input: AssessmentFormValues) => Promise<void>;
   onSetAssignmentStatus: (assignmentId: string, status: AssignmentStatus) => void;
+  onSetAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
   onReviewSubmission: (input: {
     assignment: Assignment;
     submission: AssignmentSubmission;
@@ -778,6 +926,12 @@ function ClassDetail({
     feedback: string;
     decision: "accepted" | "returned";
   }) => Promise<void>;
+  onReviewAssessmentItem: (input: {
+    itemAttemptId: string;
+    scorePercent: number;
+    feedback: string;
+  }) => Promise<void>;
+  onReturnAssessment: (input: { attemptId: string; feedback: string }) => Promise<void>;
   updatingAlertId: string | null;
   onUpdateAlertStatus: (alertId: string, status: InterventionAlert["status"]) => void;
   onUpdateResource: (resource: LessonResource) => void;
@@ -867,6 +1021,24 @@ function ClassDetail({
           saving={savingResource}
           onSaveResource={onSaveResource}
           onUpdateResource={onUpdateResource}
+        />
+
+        <AssessmentManager
+          classSummary={item}
+          lessons={lessons}
+          quizItems={quizItems}
+          assessments={assessments}
+          assessmentItems={assessmentItems}
+          assessmentRecipients={assessmentRecipients}
+          assessmentAttempts={assessmentAttempts}
+          assessmentItemAttempts={assessmentItemAttempts}
+          studentIds={studentIds}
+          profilesById={profilesById}
+          saving={savingAssessment}
+          onSaveAssessment={onSaveAssessment}
+          onSetAssessmentStatus={onSetAssessmentStatus}
+          onReviewAssessmentItem={onReviewAssessmentItem}
+          onReturnAssessment={onReturnAssessment}
         />
 
         <AssignmentManager
@@ -1901,6 +2073,765 @@ type AssignmentFormValues = {
   recipientIds: string[];
   resourceIds: string[];
 };
+
+type AssessmentFormQuestion = {
+  quizItemId?: string;
+  prompt?: string;
+  questionType?: "multiple_choice" | "text" | "code";
+  choices?: Array<{ id: string; text: string }>;
+  correctChoiceIds?: string[];
+  rubric?: Record<string, unknown>;
+  skillKeys?: string[];
+  points: number;
+  required: boolean;
+};
+
+type AssessmentFormValues = {
+  organizationId: string;
+  classId: string;
+  lessonId: string;
+  title: string;
+  instructions: string;
+  dueAt: string;
+  status: Extract<AssessmentStatus, "draft" | "published">;
+  gradingMode: AssessmentGradingMode;
+  resultReleasePolicy: AssessmentResultReleasePolicy;
+  attemptLimit: number;
+  recipientIds: string[];
+  items: AssessmentFormQuestion[];
+};
+
+function defaultAssessmentQuestion(): AssessmentFormQuestion {
+  return {
+    prompt: "",
+    questionType: "multiple_choice",
+    choices: [
+      { id: "a", text: "" },
+      { id: "b", text: "" },
+      { id: "c", text: "" },
+    ],
+    correctChoiceIds: ["a"],
+    skillKeys: [],
+    points: 1,
+    required: true,
+  };
+}
+
+function defaultAssessmentForm(
+  classSummary: TeacherClassSummary,
+  lessons: Lesson[],
+  studentIds: string[],
+): AssessmentFormValues {
+  return {
+    organizationId: classSummary.organization_id,
+    classId: classSummary.id,
+    lessonId: lessons[0]?.id || "lesson1",
+    title: "",
+    instructions: "",
+    dueAt: "",
+    status: "published",
+    gradingMode: "mixed",
+    resultReleasePolicy: "after_review",
+    attemptLimit: 1,
+    recipientIds: studentIds,
+    items: [defaultAssessmentQuestion(), { ...defaultAssessmentQuestion() }],
+  };
+}
+
+function AssessmentManager({
+  classSummary,
+  lessons,
+  quizItems,
+  assessments,
+  assessmentItems,
+  assessmentRecipients,
+  assessmentAttempts,
+  assessmentItemAttempts,
+  studentIds,
+  profilesById,
+  saving,
+  onSaveAssessment,
+  onSetAssessmentStatus,
+  onReviewAssessmentItem,
+  onReturnAssessment,
+}: {
+  classSummary: TeacherClassSummary;
+  lessons: Lesson[];
+  quizItems: CurriculumQuizItem[];
+  assessments: Assessment[];
+  assessmentItems: AssessmentItem[];
+  assessmentRecipients: AssessmentRecipient[];
+  assessmentAttempts: AssessmentAttempt[];
+  assessmentItemAttempts: AssessmentItemAttempt[];
+  studentIds: string[];
+  profilesById: Map<string, Profile>;
+  saving: boolean;
+  onSaveAssessment: (input: AssessmentFormValues) => Promise<void>;
+  onSetAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
+  onReviewAssessmentItem: (input: {
+    itemAttemptId: string;
+    scorePercent: number;
+    feedback: string;
+  }) => Promise<void>;
+  onReturnAssessment: (input: { attemptId: string; feedback: string }) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<AssessmentFormValues>(() =>
+    defaultAssessmentForm(classSummary, lessons, studentIds),
+  );
+  const [assessmentMessage, setAssessmentMessage] = useState("");
+  const [reviewDrafts, setReviewDrafts] = useState<
+    Record<string, { score: string; feedback: string; saving: boolean }>
+  >({});
+  const quizItemsById = useMemo(
+    () => new Map(quizItems.map((quiz) => [quiz.id, quiz])),
+    [quizItems],
+  );
+  const lessonQuizItems = quizItems.filter(
+    (quiz) => quiz.lesson_id === draft.lessonId && quiz.status !== "archived",
+  );
+
+  useEffect(() => {
+    setDraft(defaultAssessmentForm(classSummary, lessons, studentIds));
+    setAssessmentMessage("");
+    setReviewDrafts({});
+  }, [classSummary, lessons, studentIds]);
+
+  const setField = <K extends keyof AssessmentFormValues>(key: K, value: AssessmentFormValues[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+
+  const updateQuestion = (index: number, patch: Partial<AssessmentFormQuestion>) => {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    }));
+  };
+
+  const toggleRecipient = (studentId: string) => {
+    setDraft((current) => ({
+      ...current,
+      recipientIds: current.recipientIds.includes(studentId)
+        ? current.recipientIds.filter((id) => id !== studentId)
+        : [...current.recipientIds, studentId],
+    }));
+  };
+
+  const updateChoice = (questionIndex: number, choiceId: string, text: string) => {
+    const question = draft.items[questionIndex];
+    const choices = (question.choices || []).map((choice) =>
+      choice.id === choiceId ? { ...choice, text } : choice,
+    );
+    updateQuestion(questionIndex, { choices });
+  };
+
+  const submit = async () => {
+    try {
+      if (!draft.title.trim()) throw new Error("Add an assessment title.");
+      if (!draft.lessonId) throw new Error("Choose a lesson.");
+      if (!draft.recipientIds.length) throw new Error("Choose at least one student.");
+      const items = draft.items.map((item) => {
+        if (item.quizItemId) return item;
+        const prompt = item.prompt?.trim() || "";
+        if (!prompt) throw new Error("Every new question needs a prompt.");
+        if (item.questionType === "multiple_choice") {
+          const choices = (item.choices || []).filter((choice) => choice.text.trim());
+          if (choices.length < 2)
+            throw new Error("Multiple-choice questions need at least two choices.");
+          if (!item.correctChoiceIds?.[0])
+            throw new Error("Choose the correct answer for each MCQ.");
+          return { ...item, choices, prompt };
+        }
+        return { ...item, prompt };
+      });
+
+      await onSaveAssessment({
+        ...draft,
+        title: draft.title.trim(),
+        instructions: draft.instructions.trim(),
+        dueAt: draft.dueAt ? new Date(draft.dueAt).toISOString() : "",
+        items,
+      });
+      setAssessmentMessage(
+        draft.status === "published" ? "Quiz created and assigned." : "Draft quiz saved.",
+      );
+      setDraft(defaultAssessmentForm(classSummary, lessons, studentIds));
+    } catch (error) {
+      setAssessmentMessage((error as Error).message || "Could not create quiz.");
+    }
+  };
+
+  const updateReviewDraft = (
+    itemAttemptId: string,
+    patch: Partial<{ score: string; feedback: string; saving: boolean }>,
+  ) => {
+    setReviewDrafts((current) => ({
+      ...current,
+      [itemAttemptId]: {
+        score: current[itemAttemptId]?.score || "",
+        feedback: current[itemAttemptId]?.feedback || "",
+        saving: current[itemAttemptId]?.saving || false,
+        ...patch,
+      },
+    }));
+  };
+
+  const reviewItem = async (itemAttempt: AssessmentItemAttempt) => {
+    const draft = reviewDrafts[itemAttempt.id] || { score: "", feedback: "", saving: false };
+    const score = Number(draft.score);
+    if (!Number.isFinite(score) || score < 0 || score > 100) {
+      setAssessmentMessage("Enter a score from 0 to 100 before reviewing the question.");
+      return;
+    }
+    updateReviewDraft(itemAttempt.id, { saving: true });
+    try {
+      await onReviewAssessmentItem({
+        itemAttemptId: itemAttempt.id,
+        scorePercent: score,
+        feedback: draft.feedback.trim(),
+      });
+      setAssessmentMessage("Question reviewed.");
+    } catch (error) {
+      setAssessmentMessage((error as Error).message || "Could not review question.");
+    } finally {
+      updateReviewDraft(itemAttempt.id, { saving: false });
+    }
+  };
+
+  const returnAttempt = async (attempt: AssessmentAttempt) => {
+    const feedback = window.prompt("Final feedback for the student", attempt.feedback || "") || "";
+    try {
+      await onReturnAssessment({ attemptId: attempt.id, feedback });
+      setAssessmentMessage("Quiz result returned.");
+    } catch (error) {
+      setAssessmentMessage((error as Error).message || "Could not return quiz result.");
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-[15px] font-medium text-foreground">Lesson quizzes</h3>
+          <p className="text-[12.5px] text-muted-foreground">
+            Assign multi-question quizzes, auto-grade MCQ items, and review written answers.
+          </p>
+        </div>
+        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
+          {assessments.length} quiz{assessments.length === 1 ? "" : "zes"}
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="rounded-2xl border border-border bg-background/35 p-4">
+          <div className="text-[13px] font-medium text-foreground">Create quiz</div>
+          <div className="mt-3 grid gap-3">
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Lesson
+              <select
+                value={draft.lessonId}
+                onChange={(event) => setField("lessonId", event.target.value)}
+                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+              >
+                {lessons.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    {lesson.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Title
+              <input
+                value={draft.title}
+                onChange={(event) => setField("title", event.target.value)}
+                placeholder="Clear reasons checkpoint"
+                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Instructions
+              <textarea
+                value={draft.instructions}
+                onChange={(event) => setField("instructions", event.target.value)}
+                placeholder="Answer each question carefully. Written answers will be reviewed by your teacher."
+                className="min-h-[76px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Due
+                <input
+                  type="datetime-local"
+                  value={draft.dueAt}
+                  onChange={(event) => setField("dueAt", event.target.value)}
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                />
+              </label>
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Status
+                <select
+                  value={draft.status}
+                  onChange={(event) =>
+                    setField(
+                      "status",
+                      event.target.value as Extract<AssessmentStatus, "draft" | "published">,
+                    )
+                  }
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                >
+                  <option value="published">Published</option>
+                  <option value="draft">Draft</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Attempts
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={draft.attemptLimit}
+                  onChange={(event) => setField("attemptLimit", Number(event.target.value) || 1)}
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-background/40 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Recipients
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setField(
+                      "recipientIds",
+                      draft.recipientIds.length === studentIds.length ? [] : studentIds,
+                    )
+                  }
+                  className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {draft.recipientIds.length === studentIds.length ? "Clear" : "All students"}
+                </button>
+              </div>
+              <div className="grid gap-2">
+                {studentIds.map((studentId) => {
+                  const profile = profilesById.get(studentId) || null;
+                  return (
+                    <label
+                      key={studentId}
+                      className="flex items-center gap-2 text-[12.5px] text-foreground"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={draft.recipientIds.includes(studentId)}
+                        onChange={() => toggleRecipient(studentId)}
+                        className="h-4 w-4 accent-foreground"
+                      />
+                      {displayName(profile, studentId)}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Questions
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setField("items", [...draft.items, defaultAssessmentQuestion()])}
+                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                >
+                  Add question
+                </button>
+              </div>
+              {draft.items.map((question, index) => (
+                <div key={index} className="rounded-2xl border border-border bg-background/45 p-3">
+                  <div className="mb-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px]">
+                    <select
+                      value={question.quizItemId || ""}
+                      onChange={(event) =>
+                        updateQuestion(index, {
+                          quizItemId: event.target.value || undefined,
+                          prompt: event.target.value ? "" : question.prompt,
+                        })
+                      }
+                      className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                    >
+                      <option value="">New question</option>
+                      {lessonQuizItems.map((quiz) => (
+                        <option key={quiz.id} value={quiz.id}>
+                          Existing: {quiz.prompt.slice(0, 70)}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={0.1}
+                      step={0.5}
+                      value={question.points}
+                      onChange={(event) =>
+                        updateQuestion(index, { points: Number(event.target.value) || 1 })
+                      }
+                      className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                    />
+                  </div>
+                  {!question.quizItemId ? (
+                    <div className="grid gap-2">
+                      <select
+                        value={question.questionType || "multiple_choice"}
+                        onChange={(event) =>
+                          updateQuestion(index, {
+                            questionType: event.target
+                              .value as AssessmentFormQuestion["questionType"],
+                          })
+                        }
+                        className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                      >
+                        <option value="multiple_choice">Multiple choice</option>
+                        <option value="text">Text response</option>
+                        <option value="code">Code response</option>
+                      </select>
+                      <textarea
+                        value={question.prompt || ""}
+                        onChange={(event) => updateQuestion(index, { prompt: event.target.value })}
+                        placeholder="Question prompt"
+                        className="min-h-[72px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+                      />
+                      {question.questionType === "multiple_choice" ? (
+                        <div className="grid gap-2">
+                          {(question.choices || []).map((choice) => (
+                            <div
+                              key={choice.id}
+                              className="grid gap-2 sm:grid-cols-[72px_minmax(0,1fr)]"
+                            >
+                              <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                                <input
+                                  type="radio"
+                                  checked={question.correctChoiceIds?.[0] === choice.id}
+                                  onChange={() =>
+                                    updateQuestion(index, { correctChoiceIds: [choice.id] })
+                                  }
+                                  className="h-4 w-4 accent-foreground"
+                                />
+                                {choice.id.toUpperCase()}
+                              </label>
+                              <input
+                                value={choice.text}
+                                onChange={(event) =>
+                                  updateChoice(index, choice.id, event.target.value)
+                                }
+                                placeholder={`Choice ${choice.id.toUpperCase()}`}
+                                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <input
+                        value={(question.skillKeys || []).join(", ")}
+                        onChange={(event) =>
+                          updateQuestion(index, {
+                            skillKeys: event.target.value
+                              .split(",")
+                              .map((item) => item.trim())
+                              .filter(Boolean),
+                          })
+                        }
+                        placeholder="Skill keys, comma separated"
+                        className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-[12px] text-muted-foreground">
+                      Uses existing lesson question. Points and recipients are controlled here.
+                    </div>
+                  )}
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setField(
+                          "items",
+                          draft.items.length > 1
+                            ? draft.items.filter((_, itemIndex) => itemIndex !== index)
+                            : draft.items,
+                        )
+                      }
+                      className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={saving}
+              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
+              {saving ? "Saving..." : draft.status === "published" ? "Assign quiz" : "Save draft"}
+            </button>
+            {assessmentMessage ? (
+              <div className="text-[12px] leading-relaxed text-muted-foreground">
+                {assessmentMessage}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid content-start gap-3">
+          {assessments.length ? (
+            assessments.map((assessment) => {
+              const items = assessmentItems
+                .filter((item) => item.assessment_id === assessment.id)
+                .sort((a, b) => a.position - b.position);
+              const recipients = assessmentRecipients.filter(
+                (recipient) => recipient.assessment_id === assessment.id,
+              );
+              const attempts = assessmentAttempts.filter(
+                (attempt) => attempt.assessment_id === assessment.id,
+              );
+              return (
+                <div
+                  key={assessment.id}
+                  className="rounded-2xl border border-border bg-background/35 p-4"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-medium text-foreground">
+                          {assessment.title}
+                        </span>
+                        <AssessmentStatusChip status={assessment.status} />
+                      </div>
+                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        {lessonTitle(lessons, assessment.lesson_id)} · {items.length} questions ·{" "}
+                        {recipients.length} recipients
+                      </div>
+                      {assessment.due_at ? (
+                        <div className="mt-1 text-[11.5px] text-muted-foreground">
+                          Due {formatDateTime(assessment.due_at)}
+                        </div>
+                      ) : null}
+                      <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                        {assessment.instructions || "No instructions."}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onSetAssessmentStatus(assessment.id, "published")}
+                        disabled={assessment.status === "published"}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                      >
+                        <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
+                        Publish
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSetAssessmentStatus(assessment.id, "draft")}
+                        disabled={assessment.status === "draft"}
+                        className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                      >
+                        Draft
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSetAssessmentStatus(assessment.id, "archived")}
+                        disabled={assessment.status === "archived"}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                      >
+                        <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
+                        Archive
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2">
+                    {recipients.map((recipient) => {
+                      const profile = profilesById.get(recipient.user_id) || null;
+                      return (
+                        <div
+                          key={recipient.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-background/35 px-3 py-2"
+                        >
+                          <div className="text-[12.5px] text-foreground">
+                            {displayName(profile, recipient.user_id)}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <AssessmentRecipientChip status={recipient.status} />
+                            <span className="text-[11.5px] text-muted-foreground">
+                              {recipient.final_score === null
+                                ? "ungraded"
+                                : formatScore(recipient.final_score)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 grid gap-3">
+                    {attempts.length ? (
+                      attempts.map((attempt) => {
+                        const profile = profilesById.get(attempt.user_id) || null;
+                        const itemAttempts = assessmentItemAttempts.filter(
+                          (item) => item.assessment_attempt_id === attempt.id,
+                        );
+                        const pending = itemAttempts.some(
+                          (item) => item.review_state === "pending_review",
+                        );
+                        return (
+                          <div
+                            key={attempt.id}
+                            className="rounded-2xl border border-border bg-background/45 p-3"
+                          >
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <div className="text-[12.5px] font-medium text-foreground">
+                                  {displayName(profile, attempt.user_id)}
+                                </div>
+                                <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                                  {attempt.status} · {formatDateTime(attempt.created_at)}
+                                </div>
+                              </div>
+                              <span className="text-[11.5px] text-muted-foreground">
+                                {attempt.final_score === null
+                                  ? "pending"
+                                  : formatScore(attempt.final_score)}
+                              </span>
+                            </div>
+                            <div className="grid gap-2">
+                              {itemAttempts.map((itemAttempt) => {
+                                const quiz = quizItemsById.get(itemAttempt.quiz_item_id);
+                                const draft = reviewDrafts[itemAttempt.id] || {
+                                  score:
+                                    itemAttempt.score === null || itemAttempt.score === undefined
+                                      ? ""
+                                      : String(
+                                          Math.round(
+                                            (Number(itemAttempt.score || 0) /
+                                              Number(itemAttempt.max_score || 1)) *
+                                              100,
+                                          ),
+                                        ),
+                                  feedback: itemAttempt.feedback || "",
+                                  saving: false,
+                                };
+                                return (
+                                  <div
+                                    key={itemAttempt.id}
+                                    className="rounded-2xl border border-border bg-background/45 p-3"
+                                  >
+                                    <div className="text-[12.5px] font-medium text-foreground">
+                                      {quiz?.prompt || "Question"}
+                                    </div>
+                                    <div className="mt-1 text-[11.5px] text-muted-foreground">
+                                      {itemAttempt.review_state.replace("_", " ")} · score{" "}
+                                      {itemAttempt.score === null
+                                        ? "pending"
+                                        : `${itemAttempt.score}/${itemAttempt.max_score}`}
+                                    </div>
+                                    {itemAttempt.answer_text ? (
+                                      <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                                        {itemAttempt.answer_text}
+                                      </p>
+                                    ) : null}
+                                    {itemAttempt.answer_code ? (
+                                      <pre
+                                        className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap rounded-2xl border border-border bg-[var(--code-background)] p-3 text-[12px] leading-relaxed text-[var(--code-foreground)]"
+                                        style={{
+                                          fontFamily:
+                                            "ui-monospace, SFMono-Regular, Menlo, monospace",
+                                        }}
+                                      >
+                                        {itemAttempt.answer_code}
+                                      </pre>
+                                    ) : null}
+                                    {itemAttempt.review_state === "pending_review" ? (
+                                      <div className="mt-3 grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)_auto]">
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={100}
+                                          value={draft.score}
+                                          onChange={(event) =>
+                                            updateReviewDraft(itemAttempt.id, {
+                                              score: event.target.value,
+                                            })
+                                          }
+                                          placeholder="Score"
+                                          className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                                        />
+                                        <input
+                                          value={draft.feedback}
+                                          onChange={(event) =>
+                                            updateReviewDraft(itemAttempt.id, {
+                                              feedback: event.target.value,
+                                            })
+                                          }
+                                          placeholder="Feedback"
+                                          className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => void reviewItem(itemAttempt)}
+                                          disabled={draft.saving}
+                                          className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                        >
+                                          Review
+                                        </button>
+                                      </div>
+                                    ) : itemAttempt.feedback ? (
+                                      <p className="mt-2 text-[12.5px] text-muted-foreground">
+                                        {itemAttempt.feedback}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="mt-3 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => void returnAttempt(attempt)}
+                                disabled={pending || attempt.status === "returned"}
+                                className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                              >
+                                Return result
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-2xl border border-border bg-background/35 p-4 text-[12.5px] text-muted-foreground">
+                        No attempts yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-2xl border border-border bg-background/35 p-5 text-[13px] text-muted-foreground">
+              No lesson quizzes yet. Create one when you need a larger checkpoint.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function defaultAssignmentForm(
   classSummary: TeacherClassSummary,
@@ -3525,6 +4456,38 @@ function AssignmentRecipientChip({ status }: { status: AssignmentRecipient["stat
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
       {status}
+    </span>
+  );
+}
+
+function AssessmentStatusChip({ status }: { status: AssessmentStatus }) {
+  const classes =
+    status === "published"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      : status === "archived"
+        ? "border-border bg-background/45 text-muted-foreground"
+        : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+      {status}
+    </span>
+  );
+}
+
+function AssessmentRecipientChip({ status }: { status: AssessmentRecipient["status"] }) {
+  const classes =
+    status === "complete"
+      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      : status === "submitted"
+        ? "border-blue-500/35 bg-blue-500/10 text-blue-500"
+        : status === "started"
+          ? "border-cyan-500/35 bg-cyan-500/10 text-cyan-500"
+          : status === "returned"
+            ? "border-amber-500/35 bg-amber-500/10 text-amber-500"
+            : "border-border bg-background/45 text-muted-foreground";
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+      {status.replace("_", " ")}
     </span>
   );
 }

@@ -9,6 +9,15 @@ import type {
   AssignmentSubmission,
   AssignmentSubmissionFile,
   AssignmentSubmissionStatus,
+  Assessment,
+  AssessmentAdminResponse,
+  AssessmentAttempt,
+  AssessmentGradingMode,
+  AssessmentItem,
+  AssessmentItemAttempt,
+  AssessmentRecipient,
+  AssessmentResultReleasePolicy,
+  AssessmentStatus,
   CostModelDashboard,
   CurriculumAdminResponse,
   CurriculumAuthoringData,
@@ -59,6 +68,7 @@ import type {
   ResourcePageAsset,
   ResourceProcessingResponse,
   ResourceTextChunk,
+  StudentAssessmentBundle,
   StudentAssignmentBundle,
   TypedChatAnswer,
   TypedChatEnvelope,
@@ -750,6 +760,12 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
   const classes = await fetchTeacherClasses(userId);
   const classIds = uniqueStrings(classes.map((item) => item.id));
   const lessons = await fetchLessons({ includeDrafts: true });
+  const { data: quizRows, error: quizItemsError } = await supabase
+    .from("quiz_items")
+    .select("*")
+    .order("position", { ascending: true });
+  if (quizItemsError) throw quizItemsError;
+  const quizItems = (quizRows || []) as CurriculumQuizItem[];
 
   if (!classIds.length) {
     return {
@@ -757,6 +773,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
       memberships: [],
       profiles: [],
       lessons,
+      quizItems,
       sessions: [],
       turns: [],
       attempts: [],
@@ -775,6 +792,11 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
       assignmentRecipients: [],
       assignmentSubmissions: [],
       assignmentSubmissionFiles: [],
+      assessments: [],
+      assessmentItems: [],
+      assessmentRecipients: [],
+      assessmentAttempts: [],
+      assessmentItemAttempts: [],
     };
   }
 
@@ -811,6 +833,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     runtimeEventsResult,
     modelUsageEventsResult,
     assignmentsResult,
+    assessmentsResult,
   ] = await Promise.all([
     profileIds.length
       ? supabase.from("profiles").select("id,name,grade").in("id", profileIds)
@@ -914,6 +937,14 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .order("updated_at", { ascending: false })
           .limit(250)
       : Promise.resolve({ data: [], error: null }),
+    classIds.length
+      ? supabase
+          .from("assessments")
+          .select("*")
+          .in("class_id", classIds)
+          .order("updated_at", { ascending: false })
+          .limit(250)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   for (const result of [
@@ -931,13 +962,16 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     runtimeEventsResult,
     modelUsageEventsResult,
     assignmentsResult,
+    assessmentsResult,
   ]) {
     if (result.error) throw result.error;
   }
 
   const sessions = (sessionsResult.data || []) as LearningSession[];
   const assignments = (assignmentsResult.data || []) as Assignment[];
+  const assessments = (assessmentsResult.data || []) as Assessment[];
   const assignmentIds = uniqueStrings(assignments.map((assignment) => assignment.id));
+  const assessmentIds = uniqueStrings(assessments.map((assessment) => assessment.id));
   const sessionIds = uniqueStrings(sessions.map((session) => session.id));
   const [
     { data: turnRows, error: turnsError },
@@ -945,6 +979,9 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assignmentRecipientsResult,
     assignmentSubmissionsResult,
     assignmentFilesResult,
+    assessmentItemsResult,
+    assessmentRecipientsResult,
+    assessmentAttemptsResult,
   ] = await Promise.all([
     sessionIds.length
       ? supabase
@@ -986,6 +1023,30 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .order("created_at", { ascending: false })
           .limit(600)
       : Promise.resolve({ data: [], error: null }),
+    assessmentIds.length
+      ? supabase
+          .from("assessment_items")
+          .select("*")
+          .in("assessment_id", assessmentIds)
+          .order("position", { ascending: true })
+          .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+    assessmentIds.length
+      ? supabase
+          .from("assessment_recipients")
+          .select("*")
+          .in("assessment_id", assessmentIds)
+          .order("updated_at", { ascending: false })
+          .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+    assessmentIds.length
+      ? supabase
+          .from("assessment_attempts")
+          .select("*")
+          .in("assessment_id", assessmentIds)
+          .order("updated_at", { ascending: false })
+          .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (turnsError) throw turnsError;
   for (const result of [
@@ -993,15 +1054,31 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assignmentRecipientsResult,
     assignmentSubmissionsResult,
     assignmentFilesResult,
+    assessmentItemsResult,
+    assessmentRecipientsResult,
+    assessmentAttemptsResult,
   ]) {
     if (result.error) throw result.error;
   }
+  const assessmentAttempts = (assessmentAttemptsResult.data || []) as AssessmentAttempt[];
+  const assessmentAttemptIds = uniqueStrings(assessmentAttempts.map((attempt) => attempt.id));
+  const { data: assessmentItemAttemptRows, error: assessmentItemAttemptError } =
+    assessmentAttemptIds.length
+      ? await supabase
+          .from("assessment_item_attempts")
+          .select("*")
+          .in("assessment_attempt_id", assessmentAttemptIds)
+          .order("created_at", { ascending: true })
+          .limit(1500)
+      : { data: [], error: null };
+  if (assessmentItemAttemptError) throw assessmentItemAttemptError;
 
   return {
     classes,
     memberships,
     profiles: (profilesResult.data || []) as Profile[],
     lessons,
+    quizItems,
     sessions,
     turns: (turnRows || []) as LearningTurn[],
     attempts: (attemptsResult.data || []) as LessonAttempt[],
@@ -1020,6 +1097,11 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assignmentRecipients: (assignmentRecipientsResult.data || []) as AssignmentRecipient[],
     assignmentSubmissions: (assignmentSubmissionsResult.data || []) as AssignmentSubmission[],
     assignmentSubmissionFiles: (assignmentFilesResult.data || []) as AssignmentSubmissionFile[],
+    assessments,
+    assessmentItems: (assessmentItemsResult.data || []) as AssessmentItem[],
+    assessmentRecipients: (assessmentRecipientsResult.data || []) as AssessmentRecipient[],
+    assessmentAttempts,
+    assessmentItemAttempts: (assessmentItemAttemptRows || []) as AssessmentItemAttempt[],
   };
 }
 
@@ -1829,6 +1911,219 @@ export async function gradeAssignmentSubmission(input: {
     submission: submission as AssignmentSubmission,
     recipient: recipient as AssignmentRecipient,
   };
+}
+
+async function invokeAssessmentAdmin(
+  payload: Record<string, unknown>,
+): Promise<AssessmentAdminResponse> {
+  const session = await getSession();
+  if (!session?.access_token) throw new Error("Sign in to work with assessments.");
+  const response = await fetchWithTimeout(functionUrl("assessment-admin"), {
+    method: "POST",
+    headers: authHeaders(session.access_token),
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as AssessmentAdminResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Assessment operation failed.");
+  }
+  return data;
+}
+
+export async function createAssessment(input: {
+  organizationId: string;
+  classId: string;
+  lessonId: string;
+  title: string;
+  instructions: string;
+  dueAt?: string | null;
+  status: Extract<AssessmentStatus, "draft" | "published">;
+  gradingMode: AssessmentGradingMode;
+  resultReleasePolicy: AssessmentResultReleasePolicy;
+  attemptLimit: number;
+  recipientIds: string[];
+  items: Array<{
+    quizItemId?: string;
+    prompt?: string;
+    questionType?: "multiple_choice" | "text" | "code";
+    choices?: Array<{ id: string; text: string }>;
+    correctChoiceIds?: string[];
+    rubric?: Record<string, unknown>;
+    skillKeys?: string[];
+    points: number;
+    required: boolean;
+  }>;
+}) {
+  const data = await invokeAssessmentAdmin({
+    action: "create_assessment",
+    organization_id: input.organizationId,
+    class_id: input.classId,
+    lesson_id: input.lessonId,
+    title: input.title,
+    instructions: input.instructions,
+    due_at: input.dueAt || null,
+    status: input.status,
+    grading_mode: input.gradingMode,
+    result_release_policy: input.resultReleasePolicy,
+    attempt_limit: input.attemptLimit,
+    recipient_ids: input.recipientIds,
+    items: input.items.map((item) => ({
+      quiz_item_id: item.quizItemId || undefined,
+      prompt: item.prompt || undefined,
+      question_type: item.questionType || undefined,
+      choices: item.choices || undefined,
+      correct_choice_ids: item.correctChoiceIds || undefined,
+      rubric: item.rubric || undefined,
+      skill_keys: item.skillKeys || undefined,
+      points: item.points,
+      required: item.required,
+    })),
+  });
+  return data.data;
+}
+
+export async function updateAssessmentStatus(assessmentId: string, status: AssessmentStatus) {
+  const data = await invokeAssessmentAdmin({
+    action: "set_assessment_status",
+    assessment_id: assessmentId,
+    status,
+  });
+  return data.data?.assessment || null;
+}
+
+export async function fetchStudentAssessments(): Promise<StudentAssessmentBundle> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user) throw new Error("Sign in to view assessments.");
+
+  const { data: recipients, error: recipientsError } = await supabase
+    .from("assessment_recipients")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+  if (recipientsError) throw recipientsError;
+  const recipientRows = (recipients || []) as AssessmentRecipient[];
+  const assessmentIds = uniqueStrings(recipientRows.map((recipient) => recipient.assessment_id));
+  if (!assessmentIds.length) {
+    return {
+      assessments: [],
+      items: [],
+      recipients: [],
+      attempts: [],
+      itemAttempts: [],
+      quizzes: [],
+    };
+  }
+
+  const [assessmentsResult, itemsResult, attemptsResult] = await Promise.all([
+    supabase
+      .from("assessments")
+      .select("*")
+      .in("id", assessmentIds)
+      .neq("status", "archived")
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("assessment_items")
+      .select("*")
+      .in("assessment_id", assessmentIds)
+      .order("position", { ascending: true }),
+    supabase
+      .from("assessment_attempts")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("assessment_id", assessmentIds)
+      .order("updated_at", { ascending: false }),
+  ]);
+  for (const result of [assessmentsResult, itemsResult, attemptsResult]) {
+    if (result.error) throw result.error;
+  }
+  const items = (itemsResult.data || []) as AssessmentItem[];
+  const attempts = (attemptsResult.data || []) as AssessmentAttempt[];
+  const quizIds = uniqueStrings(items.map((item) => item.quiz_item_id));
+  const attemptIds = uniqueStrings(attempts.map((attempt) => attempt.id));
+  const [quizzesResult, itemAttemptsResult] = await Promise.all([
+    quizIds.length
+      ? supabase.from("quiz_items").select("*").in("id", quizIds)
+      : Promise.resolve({ data: [], error: null }),
+    attemptIds.length
+      ? supabase
+          .from("assessment_item_attempts")
+          .select("*")
+          .in("assessment_attempt_id", attemptIds)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (quizzesResult.error) throw quizzesResult.error;
+  if (itemAttemptsResult.error) throw itemAttemptsResult.error;
+
+  return {
+    assessments: (assessmentsResult.data || []) as Assessment[],
+    items,
+    recipients: recipientRows,
+    attempts,
+    itemAttempts: (itemAttemptsResult.data || []) as AssessmentItemAttempt[],
+    quizzes: (quizzesResult.data || []) as CurriculumQuizItem[],
+  };
+}
+
+export async function startAssessment(assessmentId: string) {
+  const data = await invokeAssessmentAdmin({
+    action: "start_assessment",
+    assessment_id: assessmentId,
+  });
+  return data.data;
+}
+
+export async function submitAssessment(input: {
+  attemptId: string;
+  answers: Array<{
+    assessmentItemId: string;
+    answerMode: "text" | "code" | "multiple_choice";
+    answerText?: string;
+    answerCode?: string;
+    choiceId?: string;
+    runResult?: Record<string, unknown> | null;
+  }>;
+}) {
+  const data = await invokeAssessmentAdmin({
+    action: "submit_assessment",
+    attempt_id: input.attemptId,
+    answers: input.answers.map((answer) => ({
+      assessment_item_id: answer.assessmentItemId,
+      answer_mode: answer.answerMode,
+      answer_text: answer.answerText || undefined,
+      answer_code: answer.answerCode || undefined,
+      choice_id: answer.choiceId || undefined,
+      run_result: answer.runResult || undefined,
+    })),
+  });
+  return data.data;
+}
+
+export async function reviewAssessmentItem(input: {
+  itemAttemptId: string;
+  scorePercent: number;
+  feedback: string;
+}) {
+  const data = await invokeAssessmentAdmin({
+    action: "review_assessment_item",
+    item_attempt_id: input.itemAttemptId,
+    score_percent: input.scorePercent,
+    feedback: input.feedback,
+  });
+  return data.data?.item_attempt || null;
+}
+
+export async function returnAssessment(input: { attemptId: string; feedback: string }) {
+  const data = await invokeAssessmentAdmin({
+    action: "return_assessment",
+    attempt_id: input.attemptId,
+    feedback: input.feedback,
+  });
+  return data.data;
 }
 
 export async function getSubmissionFileSignedUrl(file: AssignmentSubmissionFile) {

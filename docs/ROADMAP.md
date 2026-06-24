@@ -4,7 +4,7 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 
 ## Current State
 
-Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete enough for the live pilot path. Voice v2 is deferred until the OpenAI voice-processing boundary is explicitly approved. The active implementation slice should now be chosen from admin hardening, media processing, analytics, or school-readiness needs.
+Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete enough for the live pilot path. Voice v2 is deferred until the OpenAI voice-processing boundary is explicitly approved. The active implementation slice should now be chosen from assessment acceptance, admin hardening, media processing, analytics, or school-readiness needs.
 
 - The tutor frontend is live at `https://jargon-9bv5.onrender.com/`.
 - Supabase Auth, lessons, sessions, turns, attempts, quiz attempts, evidence, and mastery are live.
@@ -31,9 +31,13 @@ Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete en
 - Google Classroom roster import v1 is implemented repo-side as the first Phase 12
   integration spike: OAuth connection, read-only course list, roster preview, email-based
   mapping to existing Jargon users, class import, and sync-run logging.
-- Next step after deploy/live smoke: apply the Google Classroom migration, deploy the
-  `google-classroom` Edge Function, set Google OAuth secrets, and run a real course/roster import.
-  Voice v2 remains deferred.
+- Assessment Expansion v1 is implemented repo-side: teacher-assigned multi-question lesson
+  quizzes now have grouped assessment tables, `/quiz/$assessmentId`, MCQ auto-grading,
+  text/code teacher review, rubric-backed evidence/mastery writes, and teacher/student
+  visibility while preserving existing in-chat checkpoint quizzes.
+- Next step after deploy/live smoke: apply `0017_assessment_expansion.sql`, deploy
+  `assessment-admin`, and run the live acceptance path with 2 MCQ questions plus 1 text
+  review question. Voice v2 remains deferred.
 
 ## Product Direction Locked
 
@@ -150,6 +154,21 @@ Goal: prove Jargon can teach beyond coding.
 - No Jargon code dependency.
 
 Exit criteria: student completes one non-coding lesson with media, quiz, evidence, and teacher-visible progress.
+
+## Assessment Expansion: Lesson Quizzes
+
+Goal: support larger teacher-assigned assessments without replacing in-chat mini quizzes.
+
+- Status: v1 implemented repo-side; live migration/function deploy/smoke remains.
+- Keep existing in-chat checkpoint quizzes on `quiz_attempts`.
+- Add class/lesson-scoped assessments, assessment items, recipients, full-attempt records, and per-item answer/review records.
+- Add `/quiz/$assessmentId` for student completion.
+- Auto-grade MCQ items immediately.
+- Route text/code items to teacher review.
+- Let teachers create/publish/archive quizzes from `/teacher`, assign recipients, review subjective items, and return final results.
+- Finalized assessments write rubric-backed `learning_evidence` and update `student_mastery`.
+
+Exit criteria: teacher assigns a 2-MCQ + 1-text lesson quiz, student submits it, teacher reviews the text response, final score appears to student/teacher, and evidence/mastery update.
 
 ## Phase 8: Admin And Organization Management
 

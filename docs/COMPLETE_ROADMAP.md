@@ -245,6 +245,24 @@ Requirements:
 
 Acceptance: student completes one non-coding lesson through chat, with media, quiz, evidence, and teacher-visible progress.
 
+## Assessment Expansion: Lesson Quizzes
+
+Goal: move beyond single in-chat checkpoints into teacher-assigned assessment pages while preserving the chat mini-quiz flow.
+
+Status: Assessment Expansion v1 is implemented repo-side. The schema adds grouped assessment records, the `assessment-admin` Edge Function manages privileged teacher/admin actions, `/teacher` can create/publish/archive/review/return lesson quizzes, `/chat` surfaces assigned quizzes, and `/quiz/$assessmentId` lets students complete assigned assessments.
+
+V1 behavior:
+
+- Existing in-chat checkpoint quizzes continue to use `quiz_attempts`.
+- Larger lesson quizzes use `assessments`, `assessment_items`, `assessment_recipients`, `assessment_attempts`, and `assessment_item_attempts`.
+- MCQ questions auto-grade immediately.
+- Text/code questions wait for teacher review.
+- Teacher final review writes `learning_evidence` and updates `student_mastery`.
+- Students see only assigned assessments and their own attempts.
+- Teachers see/manage assessments only for assigned classes; org/platform admins follow existing scope.
+
+Acceptance: teacher creates a 2-MCQ + 1-text lesson quiz, assigns it to a pilot student, student completes it from `/quiz/$assessmentId`, MCQ score appears immediately, text answer waits for review, teacher returns final score/feedback, and gradebook/evidence/mastery update.
+
 ## Phase 8: Admin And Organization Management
 
 Goal: support real schools/classes.

@@ -708,6 +708,126 @@ export type AssignmentSubmissionFile = {
   updated_at: string;
 };
 
+export type AssessmentStatus = "draft" | "published" | "archived";
+export type AssessmentGradingMode = "auto" | "teacher" | "mixed";
+export type AssessmentResultReleasePolicy = "immediate" | "after_review" | "manual";
+export type AssessmentRecipientStatus =
+  | "assigned"
+  | "started"
+  | "submitted"
+  | "returned"
+  | "complete";
+export type AssessmentAttemptStatus = "in_progress" | "submitted" | "graded" | "returned";
+export type AssessmentReviewState = "auto_graded" | "pending_review" | "reviewed";
+
+export type Assessment = {
+  id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  lesson_id: string;
+  title: string;
+  instructions: string;
+  created_by: string | null;
+  status: AssessmentStatus;
+  grading_mode: AssessmentGradingMode;
+  result_release_policy: AssessmentResultReleasePolicy;
+  attempt_limit: number;
+  due_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AssessmentItem = {
+  id: string;
+  assessment_id: string;
+  quiz_item_id: string;
+  position: number;
+  points: number;
+  required: boolean;
+  rubric_override: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AssessmentRecipient = {
+  id: string;
+  assessment_id: string;
+  user_id: string;
+  status: AssessmentRecipientStatus;
+  final_score: number | null;
+  feedback: string | null;
+  assigned_at: string;
+  started_at: string | null;
+  submitted_at: string | null;
+  returned_at: string | null;
+  completed_at: string | null;
+  updated_at: string;
+};
+
+export type AssessmentAttempt = {
+  id: string;
+  assessment_id: string;
+  recipient_id: string | null;
+  user_id: string;
+  attempt_number: number;
+  status: AssessmentAttemptStatus;
+  auto_score: number | null;
+  teacher_score: number | null;
+  final_score: number | null;
+  feedback: string | null;
+  started_at: string;
+  submitted_at: string | null;
+  graded_at: string | null;
+  returned_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AssessmentItemAttempt = {
+  id: string;
+  assessment_attempt_id: string;
+  assessment_item_id: string;
+  quiz_item_id: string;
+  user_id: string;
+  answer_mode: "text" | "code" | "multiple_choice" | "file";
+  answer_text: string | null;
+  answer_code: string | null;
+  choice_id: string | null;
+  run_result: Record<string, unknown> | null;
+  score: number | null;
+  max_score: number;
+  passed: boolean | null;
+  feedback: string | null;
+  review_state: AssessmentReviewState;
+  graded_by: "system" | "teacher";
+  created_at: string;
+  updated_at: string;
+};
+
+export type StudentAssessmentBundle = {
+  assessments: Assessment[];
+  items: AssessmentItem[];
+  recipients: AssessmentRecipient[];
+  attempts: AssessmentAttempt[];
+  itemAttempts: AssessmentItemAttempt[];
+  quizzes: CurriculumQuizItem[];
+};
+
+export type AssessmentAdminResponse = {
+  status: "ok" | "error";
+  data?: {
+    assessment?: Assessment;
+    items?: AssessmentItem[];
+    recipients?: AssessmentRecipient[];
+    quizzes?: CurriculumQuizItem[];
+    attempt?: AssessmentAttempt;
+    item_attempt?: AssessmentItemAttempt;
+    item_attempts?: AssessmentItemAttempt[];
+    final_score?: number;
+  };
+  error?: string;
+};
+
 export type Profile = {
   id: string;
   name: string | null;
@@ -1191,6 +1311,7 @@ export type TeacherDashboardData = {
   memberships: TeacherClassMembership[];
   profiles: Profile[];
   lessons: Lesson[];
+  quizItems: CurriculumQuizItem[];
   sessions: LearningSession[];
   turns: LearningTurn[];
   attempts: LessonAttempt[];
@@ -1209,6 +1330,11 @@ export type TeacherDashboardData = {
   assignmentRecipients: AssignmentRecipient[];
   assignmentSubmissions: AssignmentSubmission[];
   assignmentSubmissionFiles: AssignmentSubmissionFile[];
+  assessments: Assessment[];
+  assessmentItems: AssessmentItem[];
+  assessmentRecipients: AssessmentRecipient[];
+  assessmentAttempts: AssessmentAttempt[];
+  assessmentItemAttempts: AssessmentItemAttempt[];
 };
 
 export type StudentAssignmentBundle = {

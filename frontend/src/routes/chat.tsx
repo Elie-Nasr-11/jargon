@@ -36,6 +36,7 @@ import {
   fetchLearningTurns,
   fetchTeacherLiveComments,
   fetchStudentAssignments,
+  fetchStudentAssessments,
   fetchLatestLearningSession,
   fetchLessonActivities,
   fetchLessons,
@@ -64,6 +65,7 @@ import type {
   LiveSessionViewer,
   MentorPreferences,
   StudentAssignmentBundle,
+  StudentAssessmentBundle,
   TeacherLiveComment,
   TypedChatEnvelope,
   VoiceInteractionEvent,
@@ -342,6 +344,14 @@ function ChatPage() {
     submissions: [],
     files: [],
   });
+  const [assessments, setAssessments] = useState<StudentAssessmentBundle>({
+    assessments: [],
+    items: [],
+    recipients: [],
+    attempts: [],
+    itemAttempts: [],
+    quizzes: [],
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerWrapRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<ComposerHandle>(null);
@@ -461,9 +471,10 @@ function ChatPage() {
           navigate({ to: "/login", replace: true });
           return;
         }
-        const [liveLessons, liveAssignments] = await Promise.all([
+        const [liveLessons, liveAssignments, liveAssessments] = await Promise.all([
           fetchLessons(),
           fetchStudentAssignments(),
+          fetchStudentAssessments(),
         ]);
         if (!alive) return;
         const selected =
@@ -476,6 +487,7 @@ function ChatPage() {
         setEmail(session.user.email || "");
         setLessons(liveLessons);
         setAssignments(liveAssignments);
+        setAssessments(liveAssessments);
         setLessonId(selected);
         setMentor(savedMentor);
         setVoice(savedVoice);
@@ -888,6 +900,7 @@ function ChatPage() {
             bundle={assignments}
             onSubmitAssignment={submitStudentAssignment}
           />
+          <AssessmentDock lessonId={lessonId} bundle={assessments} />
           <Composer
             ref={composerRef}
             key={lessonId}
@@ -1204,6 +1217,72 @@ function RealtimeVoicePanel({
         )}
         {live ? "Stop" : "Start"}
       </button>
+    </div>
+  );
+}
+
+function AssessmentDock({
+  lessonId,
+  bundle,
+}: {
+  lessonId: string;
+  bundle: StudentAssessmentBundle;
+}) {
+  const visibleAssessments = bundle.assessments
+    .filter((assessment) => assessment.status === "published" && assessment.lesson_id === lessonId)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+
+  if (!visibleAssessments.length) return null;
+
+  return (
+    <div className="mb-3 space-y-2">
+      {visibleAssessments.map((assessment) => {
+        const recipient = bundle.recipients.find((item) => item.assessment_id === assessment.id);
+        const attempts = bundle.attempts.filter(
+          (attempt) => attempt.assessment_id === assessment.id,
+        );
+        const latestAttempt = attempts[0] || null;
+        const questionCount = bundle.items.filter(
+          (item) => item.assessment_id === assessment.id,
+        ).length;
+        return (
+          <GradientCard key={assessment.id} innerClassName="overflow-hidden">
+            <div className="bg-background/70 p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                    <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    Quiz · {recipient?.status || "assigned"}
+                  </div>
+                  <div className="mt-1 text-[13.5px] font-medium text-foreground">
+                    {assessment.title}
+                  </div>
+                  <div className="mt-1 text-[11.5px] text-muted-foreground">
+                    {questionCount} question{questionCount === 1 ? "" : "s"}
+                    {assessment.due_at ? ` · Due ${formatChatDateTime(assessment.due_at)}` : ""}
+                  </div>
+                  {latestAttempt?.final_score !== null &&
+                  latestAttempt?.final_score !== undefined ? (
+                    <div className="mt-1 text-[11.5px] text-muted-foreground">
+                      Latest score {formatChatScore(latestAttempt.final_score)}
+                    </div>
+                  ) : recipient?.status === "submitted" ? (
+                    <div className="mt-1 text-[11.5px] text-amber-500">
+                      Submitted · pending teacher review
+                    </div>
+                  ) : null}
+                </div>
+                <a
+                  href={`/quiz/${assessment.id}`}
+                  className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted"
+                >
+                  {recipient?.status === "complete" ? "View result" : "Open quiz"}
+                </a>
+              </div>
+            </div>
+          </GradientCard>
+        );
+      })}
     </div>
   );
 }

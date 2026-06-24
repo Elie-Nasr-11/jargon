@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as QuizAssessmentIdRouteImport } from './routes/quiz.$assessmentId'
 import { Route as TeacherRouteImport } from './routes/teacher'
 import { Route as TeacherCurriculumRouteImport } from './routes/teacher.curriculum'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +30,11 @@ const LoginRoute = LoginRouteImport.update({
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuizAssessmentIdRoute = QuizAssessmentIdRouteImport.update({
+  id: '/quiz/$assessmentId',
+  path: '/quiz/$assessmentId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TeacherRoute = TeacherRouteImport.update({
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
+  '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
+  '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
 }
@@ -69,15 +77,16 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
+  '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum'
+  fullPaths: '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum'
-  id: '__root__' | '/' | '/admin' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum'
+  to: '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum'
+  id: '__root__' | '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -85,6 +94,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   ChatRoute: typeof ChatRoute
   LoginRoute: typeof LoginRoute
+  QuizAssessmentIdRoute: typeof QuizAssessmentIdRoute
   TeacherRoute: typeof TeacherRoute
   TeacherCurriculumRoute: typeof TeacherCurriculumRoute
 }
@@ -110,6 +120,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quiz/$assessmentId': {
+      id: '/quiz/$assessmentId'
+      path: '/quiz/$assessmentId'
+      fullPath: '/quiz/$assessmentId'
+      preLoaderRoute: typeof QuizAssessmentIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/teacher': {
@@ -141,6 +158,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   ChatRoute: ChatRoute,
   LoginRoute: LoginRoute,
+  QuizAssessmentIdRoute: QuizAssessmentIdRoute,
   TeacherRoute: TeacherRoute,
   TeacherCurriculumRoute: TeacherCurriculumRoute,
 }

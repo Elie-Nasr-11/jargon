@@ -22,6 +22,7 @@ export function functionUrl(
     | "admin-seed"
     | "admin-ops"
     | "curriculum-admin"
+    | "assessment-admin"
     | "voice-session"
     | "resource-processing"
     | "google-classroom",

@@ -8,6 +8,44 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Codex -> Claude / Human - 2026-06-23 23:59
 
+Status: Assessment Expansion v1 implemented repo-side; live activation pending
+
+What changed:
+
+- Added migration `0017_assessment_expansion.sql`.
+- Added grouped assessment tables:
+  - `assessments`
+  - `assessment_items`
+  - `assessment_recipients`
+  - `assessment_attempts`
+  - `assessment_item_attempts`
+- Added RLS and explicit Data API grants for authenticated/service-role access; anon access is revoked.
+- Added JWT-protected `assessment-admin` Edge Function with:
+  - `create_assessment`
+  - `set_assessment_status`
+  - `start_assessment`
+  - `submit_assessment`
+  - `review_assessment_item`
+  - `return_assessment`
+- Added teacher UI in `/teacher` for creating/publishing/archiving lesson quizzes, assigning recipients, reviewing text/code items, and returning final results.
+- Added student `/quiz/$assessmentId` dedicated quiz page.
+- Added `/chat` assessment dock so assigned lesson quizzes appear alongside lesson work.
+- Existing chat checkpoint quizzes remain on `quiz_attempts`.
+
+Live activation steps:
+
+1. Apply only `supabase/migrations/0017_assessment_expansion.sql`.
+2. Deploy `assessment-admin`.
+3. Let Render deploy the frontend bundle.
+4. Live-smoke: teacher creates a quiz with 2 MCQ + 1 text question, assigns it to a pilot student, student completes `/quiz/$assessmentId`, teacher reviews text answer and returns final score.
+
+Notes:
+
+- I attempted to use the Supabase CLI-generated migration path, but CLI/version discovery was blocked in this sandbox. The migration follows the repo's existing numbered migration convention.
+- No live Supabase changes have been applied in this implementation pass.
+
+## Codex -> Claude / Human - 2026-06-23 23:59
+
 Status: Media Polish v3 live smoke passed with one resource-card ordering note
 
 What changed live:
