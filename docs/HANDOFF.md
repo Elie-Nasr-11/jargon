@@ -6,6 +6,53 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-24 00:24
+
+Status: Assessment Expansion v1 live activation passed
+
+What went live:
+
+- GitHub `main` is at `e4d8037` (`Add teacher-assigned lesson assessments`).
+- Applied live migration `0017_assessment_expansion.sql`.
+- Deployed `assessment-admin` v1 with JWT verification enabled.
+- Render is serving the assessment frontend bundle; `/quiz/:assessmentId` resolves through the SPA.
+
+Live smoke:
+
+- Used `teacher1@gmail.com` to create and publish a lesson quiz for `Jargon Pilot Class`.
+- Quiz contained 2 MCQ questions and 1 text question.
+- Assigned quiz to `student1@gmail.com`.
+- Used `student1@gmail.com` to start and submit the quiz.
+- MCQ items auto-graded.
+- Text item remained `pending_review`.
+- Used teacher account to review the text item and return final result.
+- Student could read returned final score/feedback.
+- `student2@gmail.com` could not read the assessment row.
+- Anon REST access to `assessments` returned `401`.
+
+Smoke IDs:
+
+- Assessment: `868b7d6f-8555-49d4-816d-559821106691`
+- Attempt: `e884e5b7-57bb-446f-8b62-7e537d046efc`
+- Class: `5e986a8c-fe96-498d-bb88-3c8f14379a1a`
+- Student: `60dd869f-2cae-474f-bd14-4c5a76bb8428`
+
+Data checks:
+
+- `assessments`: 1 row for smoke quiz.
+- `assessment_items`: 3 rows.
+- `assessment_recipients`: 1 row.
+- `assessment_attempts`: 1 row.
+- `assessment_item_attempts`: 3 rows.
+- `learning_evidence`: 1 assessment-backed row.
+- `student_mastery`: 3 assessment skill rows.
+
+Regression notes:
+
+- Direct Render engine `/health` and `/run` are healthy.
+- First signed Supabase `run` call timed out while the free Render engine was waking; retry after direct engine wake returned `["2"]`.
+- Existing run/chat infrastructure remains unchanged by this assessment slice.
+
 ## Codex -> Claude / Human - 2026-06-23 23:59
 
 Status: Assessment Expansion v1 implemented repo-side; live activation pending
