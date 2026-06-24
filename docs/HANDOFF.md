@@ -2759,9 +2759,10 @@ Verification:
 - `git diff --check` passed.
 - `deno check` was not run because `deno` is not installed locally.
 
-Live activation still needed:
+Live activation:
 
-- Apply `supabase/migrations/20260624064345_platform_completion_sprint.sql` only.
-- Deploy updated Edge Functions: `admin-ops`, `google-classroom`, `voice-session`, and `resource-processing`.
+- Applied `supabase/migrations/20260624064345_platform_completion_sprint.sql` to live Supabase project `qztpieiizmiayzjhezwh`.
+- Edge Function deploy is still needed for: `admin-ops`, `google-classroom`, `voice-session`, and `resource-processing`.
+- Supabase CLI deploy was blocked locally because no `SUPABASE_ACCESS_TOKEN` is configured.
 - Let Render deploy the frontend bundle from GitHub `main`.
 - Smoke `/admin` CSV preview/apply, archive/report export, consent settings, Google diagnose, Voice diagnose, and draft curriculum import from approved media chunks.
