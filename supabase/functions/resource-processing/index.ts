@@ -1276,6 +1276,158 @@ async function deleteChunks(config: Config, body: DbRow) {
   return { status: "ok", deleted_chunk_ids: chunkIds };
 }
 
+function firstSentence(value: string): string {
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  const match = trimmed.match(/^(.{20,220}?[.!?])\s/);
+  return match?.[1]?.trim() || trimmed.slice(0, 220);
+}
+
+async function createCurriculumImportDraft(config: Config, body: DbRow, user: DbRow) {
+  const resourceId = cleanId(body.resource_id);
+  const resource = await requireManageableResource(config, resourceId);
+  const title = cleanText(resource.title, "Teacher resource");
+  const chunks = await supabaseFetch(
+    config,
+    `resource_text_chunks?resource_id=eq.${encodeURIComponent(resourceId)}&status=eq.approved&select=*&order=page_number.asc,start_seconds.asc,chunk_index.asc&limit=20`,
+  ) as DbRow[];
+  if (!Array.isArray(chunks) || !chunks.length) {
+    throw new Error("Approve at least one resource chunk before creating curriculum suggestions.");
+  }
+  const sampleText = chunks
+    .map((chunk) => cleanText(chunk.chunk_text))
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 5000);
+  const objective = firstSentence(sampleText) ||
+    `Students can explain the main idea from ${title}.`;
+  const skillKey = cleanText(body.skill_key, "resource_reasoning");
+  const jobRows = await supabaseFetch(config, "curriculum_import_jobs", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      organization_id: resource.organization_id || null,
+      class_id: resource.class_id || null,
+      resource_id: resourceId,
+      source_type: "resource",
+      status: "draft",
+      title: `Draft from ${title}`,
+      created_by: user.id,
+      source_metadata: {
+        resource_title: title,
+        approved_chunk_count: chunks.length,
+        method: "deterministic_v1",
+      },
+    }),
+  }) as DbRow[];
+  const job = Array.isArray(jobRows) ? jobRows[0] : null;
+  if (!job) throw new Error("Could not create curriculum import job.");
+
+  const suggestions = [
+    {
+      suggestion_type: "lesson",
+      title: `Discuss: ${title}`,
+      position: 1,
+      payload: {
+        lesson: {
+          title: `Discuss: ${title}`,
+          type: "discussion",
+          level: cleanText(body.level, "Any level"),
+          tutor_prompt:
+            "Guide the student through the teacher-approved resource one idea at a time. Ask for reasoning and examples before assessment.",
+          student_prompt: `Let's discuss ${title}.`,
+        },
+      },
+    },
+    {
+      suggestion_type: "milestone",
+      title: `Understand ${title}`,
+      position: 2,
+      payload: {
+        milestone: {
+          title: `Understand ${title}`,
+          objective,
+          skill_keys: [skillKey],
+          allowed_response_modes: ["text", "multiple_choice"],
+          pass_rule: { min_score: 0.7, teacher_review_allowed: true },
+        },
+        evidence_source_chunks: chunks.slice(0, 5).map((chunk) => ({
+          id: chunk.id,
+          page_number: chunk.page_number || null,
+          start_seconds: chunk.start_seconds || null,
+          end_seconds: chunk.end_seconds || null,
+        })),
+      },
+    },
+    {
+      suggestion_type: "activity",
+      title: "Explain the idea in your own words",
+      position: 3,
+      payload: {
+        activity: {
+          stage: "practice",
+          response_mode: "text",
+          prompt:
+            "In your own words, explain the clearest idea from this resource and give one example.",
+          rubric: {
+            pass: "Student gives a relevant explanation and example tied to the approved resource.",
+            skill_keys: [skillKey],
+          },
+        },
+      },
+    },
+    {
+      suggestion_type: "quiz",
+      title: "Resource check",
+      position: 4,
+      payload: {
+        quiz: {
+          prompt: `Which answer best matches the resource "${title}"?`,
+          choices: [
+            { id: "a", text: objective || "A clear idea from the resource." },
+            { id: "b", text: "A detail that is unrelated to the resource." },
+            { id: "c", text: "A claim that should be checked by the teacher." },
+          ],
+          correct_choice_ids: ["a"],
+          review_required: true,
+        },
+      },
+    },
+  ];
+
+  const inserted = await supabaseFetch(config, "curriculum_import_suggestions", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(
+      suggestions.map((suggestion) => ({
+        job_id: job.id,
+        status: "draft",
+        ...suggestion,
+      })),
+    ),
+  });
+
+  return {
+    status: "ok",
+    job,
+    suggestions: inserted,
+  };
+}
+
+async function listCurriculumImportJob(config: Config, body: DbRow) {
+  const jobId = cleanId(body.job_id);
+  if (!jobId) throw new Error("job_id is required.");
+  const jobs = await supabaseFetch(
+    config,
+    `curriculum_import_jobs?id=eq.${encodeURIComponent(jobId)}&select=*`,
+  ) as DbRow[];
+  if (!Array.isArray(jobs) || !jobs[0]) throw new Error("Curriculum import job not found.");
+  const suggestions = await supabaseFetch(
+    config,
+    `curriculum_import_suggestions?job_id=eq.${encodeURIComponent(jobId)}&select=*&order=position.asc`,
+  );
+  return { status: "ok", job: jobs[0], suggestions };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
@@ -1314,6 +1466,12 @@ Deno.serve(async (req) => {
     }
     if (action === "delete_chunks") {
       return json(await deleteChunks(config, body));
+    }
+    if (action === "create_curriculum_import_draft") {
+      return json(await createCurriculumImportDraft(config, body, user));
+    }
+    if (action === "list_curriculum_import_job") {
+      return json(await listCurriculumImportJob(config, body));
     }
 
     return errorResponse("Unknown resource-processing action.", 400);

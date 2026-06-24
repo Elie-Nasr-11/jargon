@@ -504,16 +504,154 @@ export async function exportClassSnapshot(accessToken: string, classId: string) 
   return data.data.export;
 }
 
+export async function previewCsvImport(input: {
+  accessToken: string;
+  organizationId: string;
+  classId?: string | null;
+  csvText: string;
+  filename?: string;
+  importType?: string;
+}) {
+  const data = await invokeAdminOps({
+    accessToken: input.accessToken,
+    action: "preview_csv_import",
+    organizationId: input.organizationId,
+    classId: input.classId,
+    payload: {
+      csv_text: input.csvText,
+      filename: input.filename || "roster.csv",
+      import_type: input.importType || "roster",
+    },
+  });
+  if (!data.data?.csv_import) {
+    throw new Error("CSV preview response was missing data.");
+  }
+  return data.data.csv_import;
+}
+
+export async function applyCsvRosterImport(accessToken: string, batchId: string) {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "apply_csv_roster_import",
+    payload: { batch_id: batchId },
+  });
+  if (!data.data?.csv_import) {
+    throw new Error("CSV import response was missing data.");
+  }
+  return data.data.csv_import;
+}
+
+export async function exportStudentArchive(input: {
+  accessToken: string;
+  organizationId?: string | null;
+  userId: string;
+}) {
+  const data = await invokeAdminOps({
+    accessToken: input.accessToken,
+    action: "export_student_archive",
+    organizationId: input.organizationId,
+    userId: input.userId,
+  });
+  if (!data.data?.export) {
+    throw new Error("Student archive export response was missing data.");
+  }
+  return data.data.export;
+}
+
+export async function requestDataRetention(input: {
+  accessToken: string;
+  organizationId: string;
+  classId?: string | null;
+  userId?: string | null;
+  requestType: "delete" | "anonymize";
+  reason?: string;
+}) {
+  const data = await invokeAdminOps({
+    accessToken: input.accessToken,
+    action: "request_data_retention",
+    organizationId: input.organizationId,
+    classId: input.classId,
+    userId: input.userId,
+    payload: {
+      request_type: input.requestType,
+      reason: input.reason || "",
+    },
+  });
+  if (!data.data?.retention_request) {
+    throw new Error("Retention request response was missing data.");
+  }
+  return data.data.retention_request;
+}
+
+export async function upsertConsentSettings(input: {
+  accessToken: string;
+  organizationId?: string | null;
+  classId?: string | null;
+  userId?: string | null;
+  scope: "organization" | "class" | "student";
+  settings: Record<string, unknown>;
+}) {
+  const data = await invokeAdminOps({
+    accessToken: input.accessToken,
+    action: "upsert_consent_settings",
+    organizationId: input.organizationId,
+    classId: input.classId,
+    userId: input.userId,
+    payload: {
+      organization_id: input.organizationId,
+      class_id: input.classId,
+      user_id: input.userId,
+      scope: input.scope,
+      settings: input.settings,
+    },
+  });
+  if (!data.data?.consent_settings) {
+    throw new Error("Consent settings response was missing data.");
+  }
+  return data.data.consent_settings;
+}
+
+export async function generateProgressReport(input: {
+  accessToken: string;
+  organizationId?: string | null;
+  classId?: string | null;
+  userId: string;
+  title?: string;
+  reportType?: string;
+}) {
+  const data = await invokeAdminOps({
+    accessToken: input.accessToken,
+    action: "generate_progress_report",
+    organizationId: input.organizationId,
+    classId: input.classId,
+    userId: input.userId,
+    payload: {
+      title: input.title || "Student progress report",
+      report_type: input.reportType || "parent",
+    },
+  });
+  if (!data.data?.progress_report || !data.data.export) {
+    throw new Error("Progress report response was missing data.");
+  }
+  return {
+    report: data.data.progress_report,
+    export: data.data.export,
+  };
+}
+
 export async function invokeGoogleClassroom(input: {
   accessToken: string;
   action:
+    | "diagnose"
     | "start_oauth"
     | "oauth_callback"
     | "list_courses"
     | "preview_roster"
     | "import_course"
     | "list_mappings"
-    | "disconnect";
+    | "disconnect"
+    | "export_coursework"
+    | "passback_grade";
   organizationId?: string | null;
   connectionId?: string | null;
   googleCourseId?: string | null;
@@ -539,6 +677,15 @@ export async function invokeGoogleClassroom(input: {
     throw new Error(data.error || "Google Classroom operation failed.");
   }
   return data;
+}
+
+export async function diagnoseGoogleClassroom(accessToken: string, organizationId?: string | null) {
+  const data = await invokeGoogleClassroom({
+    accessToken,
+    action: "diagnose",
+    organizationId,
+  });
+  return data.data;
 }
 
 export async function startGoogleClassroomOAuth(accessToken: string, organizationId: string) {

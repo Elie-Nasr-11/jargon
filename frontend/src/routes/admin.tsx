@@ -11,6 +11,8 @@ import {
   Download,
   DollarSign,
   ExternalLink,
+  FileDown,
+  FileSpreadsheet,
   KeyRound,
   Plus,
   RefreshCw,
@@ -22,24 +24,32 @@ import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import {
+  applyCsvRosterImport,
   exportClassSnapshot,
+  exportStudentArchive,
   fetchAdminScope,
   fetchCostModelDashboard,
   fetchGoogleClassroomCourses,
   fetchGoogleClassroomMappings,
   fetchPilotReadiness,
+  generateProgressReport,
   getSession,
   importGoogleClassroomCourse,
   invokeAdminOps,
   invokeAdminSeed,
+  previewCsvImport,
   previewGoogleClassroomRoster,
+  requestDataRetention,
   startGoogleClassroomOAuth,
   completeGoogleClassroomOAuth,
   disconnectGoogleClassroom,
+  diagnoseGoogleClassroom,
+  upsertConsentSettings,
 } from "@/lib/api";
 import type {
   AdminActorAccess,
   AdminClass,
+  AdminCsvImportRow,
   AdminScope,
   AdminSeedResult,
   AdminSeedUser,
@@ -253,6 +263,20 @@ function AdminPage() {
     students: GoogleClassroomPerson[];
   } | null>(null);
   const [oauthHandled, setOauthHandled] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [csvRows, setCsvRows] = useState<AdminCsvImportRow[]>([]);
+  const [csvBatchId, setCsvBatchId] = useState("");
+  const [schoolOpsMessage, setSchoolOpsMessage] = useState("");
+  const [schoolOpsBusy, setSchoolOpsBusy] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [retentionReason, setRetentionReason] = useState("");
+  const [consentSettings, setConsentSettings] = useState({
+    voice_enabled: true,
+    media_processing_enabled: true,
+    external_sync_enabled: false,
+    ai_enabled: true,
+    quiz_voice_enabled: false,
+  });
 
   useEffect(() => {
     let alive = true;
@@ -539,6 +563,30 @@ function AdminPage() {
     () => new Set(classMemberships.map((membership) => membership.user_id)),
     [classMemberships],
   );
+  const classStudentUsers = useMemo(
+    () =>
+      classMemberships
+        .filter((membership) => membership.role === "student")
+        .map((membership) => {
+          const profile = profileById.get(membership.user_id);
+          const user = userById.get(membership.user_id);
+          return {
+            id: membership.user_id,
+            label: profile?.name || user?.email || membership.user_id,
+            email: user?.email || "",
+          };
+        }),
+    [classMemberships, profileById, userById],
+  );
+  useEffect(() => {
+    if (!classStudentUsers.length) {
+      setSelectedStudentId("");
+      return;
+    }
+    if (!classStudentUsers.some((student) => student.id === selectedStudentId)) {
+      setSelectedStudentId(classStudentUsers[0].id);
+    }
+  }, [classStudentUsers, selectedStudentId]);
   const addableUsers = useMemo(
     () => (scope?.users || []).filter((user) => !classMemberIds.has(user.id)),
     [classMemberIds, scope],
@@ -645,6 +693,25 @@ function AdminPage() {
       window.location.href = authUrl;
     } catch (error) {
       setClassroomMessage((error as Error).message || "Could not start Google Classroom OAuth.");
+      setClassroomLoading(false);
+    }
+  };
+
+  const diagnoseClassroom = async () => {
+    if (!token) return;
+    setClassroomLoading(true);
+    setClassroomMessage("");
+    try {
+      const data = await diagnoseGoogleClassroom(token, selectedOrgId);
+      const missing = data?.missing || [];
+      setClassroomMessage(
+        missing.length
+          ? `Google Classroom needs: ${missing.join(", ")}.`
+          : data?.next_step || "Google Classroom OAuth configuration looks ready.",
+      );
+    } catch (error) {
+      setClassroomMessage((error as Error).message || "Could not diagnose Google Classroom.");
+    } finally {
       setClassroomLoading(false);
     }
   };
@@ -895,6 +962,125 @@ function AdminPage() {
       });
       applyScopeFromResponse(response);
       setExistingUserId("");
+    });
+  };
+
+  const runSchoolOp = async (busyKey: string, success: string, operation: () => Promise<void>) => {
+    setSchoolOpsBusy(busyKey);
+    setSchoolOpsMessage("");
+    try {
+      await operation();
+      setSchoolOpsMessage(success);
+    } catch (error) {
+      setSchoolOpsMessage((error as Error).message || "School data operation failed.");
+    } finally {
+      setSchoolOpsBusy("");
+    }
+  };
+
+  const previewCsv = async () => {
+    if (!selectedOrgId || !csvText.trim()) {
+      setSchoolOpsMessage("Choose an organization and paste CSV roster text.");
+      return;
+    }
+    await runSchoolOp("csv-preview", "CSV roster preview created.", async () => {
+      const result = await previewCsvImport({
+        accessToken: token,
+        organizationId: selectedOrgId,
+        classId: selectedClassId || undefined,
+        csvText,
+      });
+      setCsvRows(result.rows || []);
+      const batchId = String(result.batch?.id || "");
+      setCsvBatchId(batchId);
+    });
+  };
+
+  const applyCsvImport = async () => {
+    if (!csvBatchId) {
+      setSchoolOpsMessage("Preview a CSV roster before applying it.");
+      return;
+    }
+    await runSchoolOp("csv-apply", "CSV roster applied to existing users.", async () => {
+      const result = await applyCsvRosterImport(token, csvBatchId);
+      setCsvRows([]);
+      setCsvBatchId("");
+      setCsvText("");
+      setSchoolOpsMessage(
+        `CSV roster applied: ${result.applied?.length || 0} memberships, ${
+          result.skipped_count || 0
+        } skipped.`,
+      );
+      await refreshScope();
+      await refreshReadiness(token, true);
+    });
+  };
+
+  const exportSelectedStudentArchive = async () => {
+    if (!selectedStudentId) {
+      setSchoolOpsMessage("Choose a student first.");
+      return;
+    }
+    await runSchoolOp("student-archive", "Student archive exported.", async () => {
+      const file = await exportStudentArchive({
+        accessToken: token,
+        organizationId: selectedOrgId,
+        userId: selectedStudentId,
+      });
+      downloadTextFile(file.filename, file.body, file.content_type);
+    });
+  };
+
+  const requestRetention = async (requestType: "anonymize" | "delete") => {
+    if (!selectedOrgId || !selectedStudentId) {
+      setSchoolOpsMessage("Choose an organization and student first.");
+      return;
+    }
+    await runSchoolOp(
+      `retention-${requestType}`,
+      `${requestType === "delete" ? "Deletion" : "Anonymization"} request recorded.`,
+      async () => {
+        await requestDataRetention({
+          accessToken: token,
+          organizationId: selectedOrgId,
+          classId: selectedClassId,
+          userId: selectedStudentId,
+          requestType,
+          reason: retentionReason,
+        });
+      },
+    );
+  };
+
+  const saveConsentSettings = async () => {
+    if (!selectedOrgId) {
+      setSchoolOpsMessage("Choose an organization first.");
+      return;
+    }
+    await runSchoolOp("consent", "Consent and feature settings saved.", async () => {
+      await upsertConsentSettings({
+        accessToken: token,
+        organizationId: selectedOrgId,
+        classId: selectedClassId || undefined,
+        scope: selectedClassId ? "class" : "organization",
+        settings: consentSettings,
+      });
+    });
+  };
+
+  const generateStudentReport = async () => {
+    if (!selectedStudentId) {
+      setSchoolOpsMessage("Choose a student first.");
+      return;
+    }
+    await runSchoolOp("progress-report", "Progress report generated.", async () => {
+      const result = await generateProgressReport({
+        accessToken: token,
+        organizationId: selectedOrgId,
+        classId: selectedClassId,
+        userId: selectedStudentId,
+      });
+      downloadTextFile(result.export.filename, result.export.body, result.export.content_type);
     });
   };
 
@@ -1323,6 +1509,231 @@ function AdminPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  School data ops
+                </div>
+                <h2 className="text-[18px] font-medium text-foreground">
+                  CSV fallback, exports, retention, and consent
+                </h2>
+                <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                  Run school operations without OAuth: preview roster CSV files, map existing users,
+                  export student records, record retention requests, and store class-level feature
+                  controls. CSV import does not create accounts or expose passwords.
+                </p>
+              </div>
+              <div className="text-[12px] text-muted-foreground">
+                {selectedOrg?.name || "Choose an organization"}
+                {selectedClass ? ` · ${selectedClass.name}` : ""}
+              </div>
+            </div>
+
+            {schoolOpsMessage ? (
+              <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                {schoolOpsMessage}
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                  <FileSpreadsheet className="h-4 w-4" strokeWidth={1.6} />
+                  CSV roster import
+                </h3>
+                <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                  Paste columns `email,name,role,grade`. Existing Jargon users are mapped; missing
+                  users are marked `needs seed` and must be created through account seeding.
+                </p>
+                <textarea
+                  value={csvText}
+                  onChange={(event) => setCsvText(event.target.value)}
+                  rows={6}
+                  placeholder={
+                    "email,name,role,grade\nstudent@example.com,Student Name,student,Grade 5"
+                  }
+                  className="jargon-input mt-3 min-h-[130px] font-mono text-[12px]"
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void previewCsv()}
+                    disabled={!selectedOrgId || !csvText.trim() || schoolOpsBusy === "csv-preview"}
+                    className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                  >
+                    Preview CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void applyCsvImport()}
+                    disabled={!csvBatchId || schoolOpsBusy === "csv-apply"}
+                    className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                  >
+                    Apply mapped rows
+                  </button>
+                </div>
+                {csvRows.length ? (
+                  <div className="mt-4 max-h-[220px] overflow-auto">
+                    <table className="min-w-[560px] w-full border-collapse text-left text-[12px]">
+                      <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                        <tr>
+                          <th className="py-2 pr-3 font-medium">Row</th>
+                          <th className="py-2 pr-3 font-medium">Email</th>
+                          <th className="py-2 pr-3 font-medium">Role</th>
+                          <th className="py-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {csvRows.map((row) => (
+                          <tr key={row.row_index} className="border-b border-border/55">
+                            <td className="py-2 pr-3 text-muted-foreground">{row.row_index}</td>
+                            <td className="py-2 pr-3 text-foreground">
+                              {String(row.normalized_row.email || "")}
+                            </td>
+                            <td className="py-2 pr-3 text-muted-foreground">
+                              {String(row.normalized_row.role || "student")}
+                            </td>
+                            <td
+                              className={`py-2 ${
+                                row.status === "ready" || row.status === "applied"
+                                  ? "text-emerald-500"
+                                  : row.status === "needs_seed"
+                                    ? "text-amber-500"
+                                    : "text-red-500"
+                              }`}
+                            >
+                              {row.status}
+                              {row.error ? (
+                                <div className="text-[11px] text-muted-foreground">{row.error}</div>
+                              ) : null}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                  <FileDown className="h-4 w-4" strokeWidth={1.6} />
+                  Student records and reports
+                </h3>
+                <div className="mt-3 grid gap-3">
+                  <Field label="Student">
+                    <select
+                      value={selectedStudentId}
+                      onChange={(event) => setSelectedStudentId(event.target.value)}
+                      className="jargon-input"
+                    >
+                      <option value="">Choose a student</option>
+                      {classStudentUsers.map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {student.label}
+                          {student.email ? ` · ${student.email}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => void exportSelectedStudentArchive()}
+                      disabled={!selectedStudentId || schoolOpsBusy === "student-archive"}
+                      className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    >
+                      Export archive
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void generateStudentReport()}
+                      disabled={!selectedStudentId || schoolOpsBusy === "progress-report"}
+                      className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    >
+                      Generate progress report
+                    </button>
+                  </div>
+                  <textarea
+                    value={retentionReason}
+                    onChange={(event) => setRetentionReason(event.target.value)}
+                    rows={3}
+                    placeholder="Retention/anonymization request reason"
+                    className="jargon-input"
+                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => void requestRetention("anonymize")}
+                      disabled={!selectedStudentId || schoolOpsBusy === "retention-anonymize"}
+                      className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    >
+                      Request anonymization
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void requestRetention("delete")}
+                      disabled={!selectedStudentId || schoolOpsBusy === "retention-delete"}
+                      className="rounded-full border border-red-500/35 px-4 py-2 text-[12.5px] text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                    >
+                      Request deletion
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+              <h3 className="text-[14px] font-medium text-foreground">
+                Class consent and feature controls
+              </h3>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Stored for policy enforcement and teacher visibility. Runtime enforcement can grow
+                against these settings as pilot policy gets stricter.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {(
+                  [
+                    ["voice_enabled", "Voice"],
+                    ["media_processing_enabled", "Media processing"],
+                    ["external_sync_enabled", "External sync"],
+                    ["ai_enabled", "AI mentor"],
+                    ["quiz_voice_enabled", "Voice in quizzes"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/45 px-3 py-2 text-[12.5px] text-foreground"
+                  >
+                    <span>{label}</span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(consentSettings[key])}
+                      onChange={(event) =>
+                        setConsentSettings((current) => ({
+                          ...current,
+                          [key]: event.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => void saveConsentSettings()}
+                disabled={!selectedOrgId || schoolOpsBusy === "consent"}
+                className="mt-4 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+              >
+                Save settings
+              </button>
+            </div>
+          </div>
+        </GradientCard>
+
+        <GradientCard>
+          <div className="space-y-5 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                   <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
                   Google Classroom
                 </div>
@@ -1347,6 +1758,14 @@ function AdminPage() {
                     strokeWidth={1.6}
                   />
                   Refresh Classroom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void diagnoseClassroom()}
+                  disabled={classroomLoading}
+                  className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  Diagnose
                 </button>
                 <button
                   type="button"

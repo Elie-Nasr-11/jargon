@@ -174,8 +174,9 @@ Exit criteria: teacher assigns a 2-MCQ + 1-text lesson quiz, student submits it,
 
 Goal: support real schools/classes.
 
-- Status: Admin Operations v1, org-admin scoped operations, and Pilot Ops v1 are implemented
-  repo-side; latest Pilot Ops deploy/smoke remains.
+- Status: Admin Operations v1, org-admin scoped operations, Pilot Ops v1, CSV roster fallback,
+  student archive/progress exports, retention request logging, and consent/feature controls are
+  implemented repo-side; latest platform-completion migration/function deploy/smoke remains.
 - Add `/admin`.
 - Let org admins manage their own organization scope: classes, existing org users, class roles,
   class membership status, password resets, and org audit visibility.
@@ -231,9 +232,26 @@ Exit criteria: platform reports cost per active student/session and routes expen
 Goal: fit into real school workflows.
 
 - Status: Google Classroom roster import v1 is implemented repo-side as the first integration
-  spike. It connects a teacher/org-admin Google Classroom account with read-only scopes, imports
-  courses as Jargon classes, maps existing users by email, and records sync runs. Assignment and
-  grade export are intentionally deferred.
+  spike. Diagnostics now report missing OAuth secrets; write-sync tables and guarded stubs exist
+  for later coursework/grade passback, but assignment and grade export remain disabled until
+  explicit Google write scopes are accepted.
 - Add Google/Microsoft SSO, Clever/ClassLink, CSV roster import, LTI 1.3, Canvas, grade passback, exports, retention/delete workflows, and parent/student reports.
 
 Exit criteria: one school-style roster can be imported, classes created, and grades exported.
+
+## Pre-UI-Cleanup Completion Sprint
+
+Goal: build remaining platform breadth before a dedicated visual cleanup pass.
+
+- Status: repo-side implementation in progress/completed for:
+  - CSV roster import preview/apply for existing users;
+  - data export, progress report, retention request, guardian/report foundation tables;
+  - org/class/student consent and feature settings;
+  - Google Classroom diagnostics and future write-back mapping tables;
+  - Voice v2 diagnostics and env-configurable model names;
+  - draft curriculum import suggestions from teacher-approved resource chunks.
+- Live acceptance requires applying the new migration and deploying updated Edge Functions.
+
+Exit criteria: admins can run the CSV/governance fallback flows live, external gates diagnose their
+missing secrets clearly, and draft curriculum import produces teacher-reviewable suggestions without
+publishing anything automatically.

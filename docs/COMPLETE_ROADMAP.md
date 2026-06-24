@@ -471,3 +471,16 @@ Teacher upload flow:
 - Student experience remains chat-first; resources appear inside the conversation rather than a separate LMS content page.
 - Current Supabase + Render architecture remains the base until scale/cost evidence says otherwise.
 - Voice interaction is part of the chat runtime; teacher-uploaded audio resources remain a separate media-resource feature.
+
+## 2026-06-24 Platform Completion Sprint Addendum
+
+Before UI cleanup, the platform breadth now includes repo-side foundations for:
+
+- CSV roster import preview/apply as the non-OAuth school fallback.
+- Student archive exports, progress report generation, and retention/anonymization request logging.
+- Parent/guardian report/link tables and consent/feature settings for org/class/student policy.
+- Google Classroom diagnostics plus future coursework/grade-passback mapping tables, with external writes still disabled until scopes are explicitly accepted.
+- Voice v2 diagnostics and configurable realtime/STT/TTS model names, with raw student audio unstored by default.
+- Draft curriculum import suggestions generated only from teacher-approved resource chunks.
+
+Live acceptance for this addendum requires applying the platform-completion migration, deploying updated Edge Functions, and smoking the new admin/governance/resource-import flows.

@@ -1071,8 +1071,76 @@ export type PilotReadiness = {
 
 export type ClassSnapshotExport = {
   filename: string;
-  content_type: "text/csv";
+  content_type: "text/csv" | "application/json";
   body: string;
+};
+
+export type AdminCsvImportRow = {
+  row_index: number;
+  raw_row: Record<string, unknown>;
+  normalized_row: Record<string, unknown>;
+  matched_user_id: string | null;
+  status: "ready" | "needs_seed" | "duplicate" | "error" | "applied";
+  error?: string | null;
+};
+
+export type AdminCsvImportResult = {
+  batch?: Record<string, unknown>;
+  rows?: AdminCsvImportRow[];
+  applied?: TeacherClassMembership[];
+  skipped_count?: number;
+};
+
+export type AdminDataExportRequest = {
+  id: string;
+  organization_id: string | null;
+  target_user_id: string | null;
+  requested_by: string | null;
+  export_type: string;
+  status: string;
+  filename: string | null;
+  content_type: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type AdminDataRetentionRequest = {
+  id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  target_user_id: string | null;
+  requested_by: string | null;
+  request_type: "delete" | "anonymize";
+  status: string;
+  reason: string | null;
+  created_at: string;
+};
+
+export type PlatformConsentSetting = {
+  id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  user_id: string | null;
+  scope: "organization" | "class" | "student";
+  settings: Record<string, unknown>;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StudentProgressReport = {
+  id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  student_id: string;
+  generated_by: string | null;
+  report_type: string;
+  title: string;
+  status: string;
+  summary: Record<string, unknown>;
+  body: Record<string, unknown>;
+  visibility: string;
+  created_at: string;
 };
 
 export type CostModelVisibility = "full_cost" | "scoped_usage";
@@ -1221,7 +1289,17 @@ export type GoogleClassroomSyncRun = {
   course_mapping_id: string | null;
   class_id: string | null;
   triggered_by: string | null;
-  action: "oauth_connect" | "list_courses" | "preview_roster" | "import_course" | "disconnect";
+  action:
+    | "oauth_connect"
+    | "list_courses"
+    | "preview_roster"
+    | "import_course"
+    | "disconnect"
+    | "export_coursework"
+    | "sync_coursework"
+    | "passback_grade"
+    | "list_coursework"
+    | "list_submissions";
   status: "success" | "partial" | "failed";
   counts: Record<string, unknown>;
   errors: unknown[];
@@ -1256,6 +1334,11 @@ export type GoogleClassroomResponse = {
     class_id?: string;
     counts?: Record<string, unknown>;
     missing_users?: GoogleClassroomPerson[];
+    configured?: Record<string, boolean>;
+    missing?: string[];
+    redirect_uri?: string | null;
+    write_scopes_enabled?: boolean;
+    next_step?: string;
   };
   error?: string;
 };
@@ -1265,6 +1348,12 @@ export type AdminOpsAction =
   | "list_pilot_readiness"
   | "list_cost_model_dashboard"
   | "export_class_snapshot"
+  | "preview_csv_import"
+  | "apply_csv_roster_import"
+  | "export_student_archive"
+  | "request_data_retention"
+  | "upsert_consent_settings"
+  | "generate_progress_report"
   | "create_class"
   | "update_class"
   | "reset_user_password"
@@ -1280,6 +1369,11 @@ export type AdminOpsResponse = {
     readiness?: PilotReadiness;
     cost_model_dashboard?: CostModelDashboard;
     export?: ClassSnapshotExport;
+    csv_import?: AdminCsvImportResult;
+    export_request?: AdminDataExportRequest;
+    retention_request?: AdminDataRetentionRequest;
+    consent_settings?: PlatformConsentSetting;
+    progress_report?: StudentProgressReport;
     class?: AdminClass | null;
     membership?: OrganizationMembership | TeacherClassMembership | null;
   } & Record<string, unknown>;

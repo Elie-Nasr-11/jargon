@@ -276,6 +276,74 @@ function csvFromRows(
   return [header, ...body].join("\n");
 }
 
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (char === "," && !quoted) {
+      cells.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function parseCsv(text: string): { headers: string[]; rows: DbRow[] } {
+  const lines = text
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
+    .split("\n")
+    .filter((line) => line.trim().length > 0);
+  if (!lines.length) return { headers: [], rows: [] };
+  const headers = parseCsvLine(lines[0]).map((header) =>
+    header.trim().toLowerCase().replaceAll(" ", "_")
+  );
+  const rows = lines.slice(1).map((line) => {
+    const cells = parseCsvLine(line);
+    const row: DbRow = {};
+    headers.forEach((header, index) => {
+      row[header] = cells[index] || "";
+    });
+    return row;
+  });
+  return { headers, rows };
+}
+
+function normalizedRosterRow(row: DbRow): DbRow {
+  const email = normalizeEmail(row.email || row.email_address || row.user_email);
+  const roleText = cleanText(row.role, "student").toLowerCase();
+  const role = roleText === "teacher" ? "teacher" : "student";
+  return {
+    email,
+    name: cleanText(row.name || row.full_name || row.display_name),
+    role,
+    grade: cleanText(row.grade || row.year || row.level),
+  };
+}
+
+function safeFilenamePart(value: unknown, fallback = "export"): string {
+  return cleanText(value, fallback)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 70) || fallback;
+}
+
 function readinessStatusFromIssues(issues: ReadinessIssue[]): ReadinessStatus {
   if (issues.some((issue) => issue.severity === "blocked")) return "blocked";
   if (issues.some((issue) => issue.severity === "attention"))
@@ -1114,6 +1182,462 @@ async function handleExportClassSnapshot(
   });
 }
 
+async function handlePreviewCsvImport(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const organizationId = cleanId(body.organization_id);
+  const classId = cleanId(body.class_id);
+  const payload = body.payload && typeof body.payload === "object" ? body.payload as DbRow : {};
+  const csvText = cleanText(payload.csv_text);
+  const filename = cleanText(payload.filename, "roster.csv");
+  const importType = cleanText(payload.import_type, "roster") || "roster";
+  if (!organizationId) throw new Error("organization_id is required.");
+  requireOrganizationAccess(access, organizationId);
+  if (classId) {
+    const classOrganizationId = await fetchClassOrganizationId(config, classId);
+    if (classOrganizationId !== organizationId) {
+      throw new Error("Class does not belong to the selected organization.");
+    }
+  }
+  if (!csvText) throw new Error("CSV text is required.");
+
+  const parsed = parseCsv(csvText);
+  if (!parsed.headers.includes("email")) {
+    throw new Error("CSV must include an email column.");
+  }
+
+  const authUsers = await listAllAuthUsers(config);
+  const userByEmail = new Map(
+    authUsers.map((user) => [normalizeEmail(user.email), user]).filter(([email]) => email),
+  );
+  const seenEmails = new Set<string>();
+  const normalizedRows = parsed.rows.map((row, index) => {
+    const normalized = normalizedRosterRow(row);
+    const email = cleanText(normalized.email);
+    const matchedUser = email ? userByEmail.get(email) : null;
+    let status = "ready";
+    let error = "";
+    if (!email) {
+      status = "error";
+      error = "Missing email.";
+    } else if (seenEmails.has(email)) {
+      status = "duplicate";
+      error = "Duplicate email in CSV.";
+    } else if (!matchedUser) {
+      status = "needs_seed";
+      error = "No existing Jargon account with this email.";
+    }
+    seenEmails.add(email);
+    return {
+      row_index: index + 1,
+      raw_row: row,
+      normalized_row: normalized,
+      matched_user_id: matchedUser ? matchedUser.id : null,
+      status,
+      error,
+    };
+  });
+
+  const summary = {
+    total: normalizedRows.length,
+    ready: normalizedRows.filter((row) => row.status === "ready").length,
+    needs_seed: normalizedRows.filter((row) => row.status === "needs_seed").length,
+    duplicate: normalizedRows.filter((row) => row.status === "duplicate").length,
+    error: normalizedRows.filter((row) => row.status === "error").length,
+  };
+  const batch = await insertRow(config, "admin_csv_import_batches", {
+    organization_id: organizationId,
+    class_id: classId || null,
+    created_by: actorId,
+    import_type: importType,
+    status: "previewed",
+    filename,
+    headers: parsed.headers,
+    row_count: normalizedRows.length,
+    summary,
+    errors: normalizedRows.filter((row) => row.error).map((row) => ({
+      row_index: row.row_index,
+      error: row.error,
+    })),
+  });
+  for (const row of normalizedRows) {
+    await insertRow(config, "admin_csv_import_rows", {
+      batch_id: batch.id,
+      ...row,
+    });
+  }
+  await audit(config, {
+    actorId,
+    organizationId,
+    classId: classId || null,
+    eventType: "admin.csv_import_previewed",
+    entityType: "admin_csv_import_batch",
+    entityId: cleanId(batch.id),
+    payload: { import_type: importType, summary, filename },
+  });
+
+  return json({
+    status: "ok",
+    data: await scopeResponse(config, access, {
+      csv_import: {
+        batch,
+        rows: normalizedRows,
+      },
+    }),
+  });
+}
+
+async function handleApplyCsvRosterImport(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const batchId = cleanId(body.payload && typeof body.payload === "object" ? (body.payload as DbRow).batch_id : body.id);
+  if (!batchId) throw new Error("batch_id is required.");
+  const batch = await selectFirst(
+    config,
+    `admin_csv_import_batches?id=eq.${encodeURIComponent(batchId)}&select=*`,
+  );
+  if (!batch) throw new Error("CSV import batch not found.");
+  const organizationId = cleanId(batch.organization_id);
+  const classId = cleanId(batch.class_id);
+  requireOrganizationAccess(access, organizationId);
+  if (!classId) throw new Error("Roster imports need a class_id.");
+  const classOrganizationId = await fetchClassOrganizationId(config, classId);
+  if (classOrganizationId !== organizationId) {
+    throw new Error("Class does not belong to the import organization.");
+  }
+
+  const rows = await selectRows(
+    config,
+    `admin_csv_import_rows?batch_id=eq.${encodeURIComponent(batchId)}&select=*&order=row_index.asc`,
+  );
+  const applied: DbRow[] = [];
+  const skipped: DbRow[] = [];
+  for (const row of rows) {
+    const status = cleanText(row.status);
+    const userId = cleanId(row.matched_user_id);
+    const normalized = row.normalized_row && typeof row.normalized_row === "object"
+      ? row.normalized_row as DbRow
+      : {};
+    const role = cleanText(normalized.role, "student") === "teacher" ? "teacher" : "student";
+    if (status !== "ready" || !userId) {
+      skipped.push(row);
+      continue;
+    }
+    await upsertByConflict(config, "organization_memberships", "organization_id,user_id", {
+      organization_id: organizationId,
+      user_id: userId,
+      role,
+      status: "active",
+      updated_at: new Date().toISOString(),
+    });
+    const membership = await upsertByConflict(config, "class_memberships", "class_id,user_id", {
+      class_id: classId,
+      user_id: userId,
+      role,
+      status: "active",
+      updated_at: new Date().toISOString(),
+    });
+    await patchRows(
+      config,
+      `admin_csv_import_rows?id=eq.${encodeURIComponent(cleanId(row.id))}`,
+      { status: "applied" },
+    );
+    applied.push(membership);
+  }
+  const summary = {
+    total: rows.length,
+    applied: applied.length,
+    skipped: skipped.length,
+  };
+  const patchedBatch = await patchRows(
+    config,
+    `admin_csv_import_batches?id=eq.${encodeURIComponent(batchId)}`,
+    {
+      status: skipped.length ? "failed" : "applied",
+      summary,
+      updated_at: new Date().toISOString(),
+    },
+  );
+  await audit(config, {
+    actorId,
+    organizationId,
+    classId,
+    eventType: "admin.csv_roster_import_applied",
+    entityType: "admin_csv_import_batch",
+    entityId: batchId,
+    payload: summary,
+  });
+
+  return json({
+    status: "ok",
+    data: await scopeResponse(config, access, {
+      csv_import: {
+        batch: patchedBatch[0] || batch,
+        applied,
+        skipped_count: skipped.length,
+      },
+    }),
+  });
+}
+
+async function buildStudentArchive(
+  config: Config,
+  userId: string,
+): Promise<DbRow> {
+  const [
+    profile,
+    sessions,
+    turns,
+    lessonAttempts,
+    quizAttempts,
+    evidence,
+    mastery,
+    assignmentRecipients,
+    assignmentSubmissions,
+    assessmentRecipients,
+    assessmentAttempts,
+    voiceEvents,
+  ] = await Promise.all([
+    selectFirst(config, `profiles?id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `learning_sessions?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `learning_turns?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `lesson_attempts?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `quiz_attempts?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `learning_evidence?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `student_mastery?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `assignment_recipients?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `assignment_submissions?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `assessment_recipients?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `assessment_attempts?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+    selectRows(config, `voice_interaction_events?user_id=eq.${encodeURIComponent(userId)}&select=*`),
+  ]);
+  return {
+    exported_at: new Date().toISOString(),
+    user_id: userId,
+    profile,
+    learning_sessions: sessions,
+    learning_turns: turns,
+    lesson_attempts: lessonAttempts,
+    quiz_attempts: quizAttempts,
+    learning_evidence: evidence,
+    student_mastery: mastery,
+    assignment_recipients: assignmentRecipients,
+    assignment_submissions: assignmentSubmissions,
+    assessment_recipients: assessmentRecipients,
+    assessment_attempts: assessmentAttempts,
+    voice_interaction_events: voiceEvents,
+  };
+}
+
+async function handleExportStudentArchive(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const userId = cleanId(body.user_id);
+  if (!userId) throw new Error("user_id is required.");
+  const memberships = await fetchAccessibleOrgMembershipsForUser(config, access, userId);
+  if (access.level !== "platform_admin" && !memberships.length) {
+    throw new Error("Student is outside your organization scope.");
+  }
+  const organizationId = access.level === "platform_admin"
+    ? cleanId(body.organization_id) || cleanId(memberships[0]?.organization_id)
+    : cleanId(memberships[0]?.organization_id);
+  const archive = await buildStudentArchive(config, userId);
+  const request = await insertRow(config, "admin_data_export_requests", {
+    organization_id: organizationId || null,
+    target_user_id: userId,
+    requested_by: actorId,
+    export_type: "student_archive",
+    status: "complete",
+    filename: `student-${safeFilenamePart(userId)}-archive.json`,
+    content_type: "application/json",
+    result: archive,
+    completed_at: new Date().toISOString(),
+  });
+  await audit(config, {
+    actorId,
+    organizationId,
+    eventType: "admin.student_archive_exported",
+    entityType: "admin_data_export_request",
+    entityId: cleanId(request.id),
+    payload: { target_user_id: userId },
+  });
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      export_request: request,
+      export: {
+        filename: request.filename,
+        content_type: request.content_type,
+        body: JSON.stringify(archive, null, 2),
+      },
+    },
+  });
+}
+
+async function handleRequestDataRetention(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const payload = body.payload && typeof body.payload === "object" ? body.payload as DbRow : {};
+  const organizationId = cleanId(body.organization_id || payload.organization_id);
+  const classId = cleanId(body.class_id || payload.class_id);
+  const targetUserId = cleanId(body.user_id || payload.target_user_id);
+  const requestType = cleanText(payload.request_type, "anonymize") === "delete" ? "delete" : "anonymize";
+  if (!organizationId) throw new Error("organization_id is required.");
+  requireOrganizationAccess(access, organizationId);
+  const request = await insertRow(config, "admin_data_retention_requests", {
+    organization_id: organizationId,
+    class_id: classId || null,
+    target_user_id: targetUserId || null,
+    requested_by: actorId,
+    request_type: requestType,
+    status: "requested",
+    reason: cleanText(payload.reason),
+    plan: {
+      dry_run: true,
+      note:
+        "This request records the governance workflow. Actual destructive deletion/anonymization must be approved and executed separately.",
+    },
+  });
+  await audit(config, {
+    actorId,
+    organizationId,
+    classId: classId || null,
+    eventType: `admin.data_${requestType}_requested`,
+    entityType: "admin_data_retention_request",
+    entityId: cleanId(request.id),
+    payload: { target_user_id: targetUserId || null },
+  });
+  return json({
+    status: "ok",
+    data: await scopeResponse(config, access, { retention_request: request }),
+  });
+}
+
+async function handleUpsertConsentSettings(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const payload = body.payload && typeof body.payload === "object" ? body.payload as DbRow : {};
+  const scope = cleanText(payload.scope, "organization");
+  const organizationId = cleanId(body.organization_id || payload.organization_id);
+  const classId = cleanId(body.class_id || payload.class_id);
+  const userId = cleanId(body.user_id || payload.user_id);
+  if (scope === "organization") requireOrganizationAccess(access, organizationId);
+  if (scope === "class") {
+    const classOrganizationId = await fetchClassOrganizationId(config, classId);
+    requireOrganizationAccess(access, classOrganizationId);
+  }
+  if (scope === "student" && access.level !== "platform_admin") {
+    const memberships = await fetchAccessibleOrgMembershipsForUser(config, access, userId);
+    if (!memberships.length) throw new Error("Student is outside your organization scope.");
+  }
+  const settings = payload.settings && typeof payload.settings === "object"
+    ? payload.settings as DbRow
+    : {};
+  const row = await insertRow(config, "platform_consent_settings", {
+    organization_id: organizationId || null,
+    class_id: classId || null,
+    user_id: userId || null,
+    scope,
+    settings,
+    updated_by: actorId,
+  });
+  await audit(config, {
+    actorId,
+    organizationId: organizationId || null,
+    classId: classId || null,
+    eventType: "admin.consent_settings_updated",
+    entityType: "platform_consent_settings",
+    entityId: cleanId(row.id),
+    payload: { scope, settings },
+  });
+  return json({
+    status: "ok",
+    data: await scopeResponse(config, access, { consent_settings: row }),
+  });
+}
+
+async function handleGenerateProgressReport(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const organizationId = cleanId(body.organization_id);
+  const classId = cleanId(body.class_id);
+  const studentId = cleanId(body.user_id);
+  if (!studentId) throw new Error("user_id is required.");
+  if (organizationId) requireOrganizationAccess(access, organizationId);
+  const archive = await buildStudentArchive(config, studentId);
+  const sessions = Array.isArray(archive.learning_sessions) ? archive.learning_sessions as DbRow[] : [];
+  const evidence = Array.isArray(archive.learning_evidence) ? archive.learning_evidence as DbRow[] : [];
+  const mastery = Array.isArray(archive.student_mastery) ? archive.student_mastery as DbRow[] : [];
+  const reportBody = {
+    generated_at: new Date().toISOString(),
+    completed_lessons: sessions.filter((session) => cleanText(session.status) === "complete").length,
+    active_lessons: sessions.filter((session) => cleanText(session.status) === "active").length,
+    evidence_count: evidence.length,
+    mastery: mastery.map((row) => ({
+      skill_key: row.skill_key,
+      mastery_score: row.mastery_score,
+      confidence: row.confidence,
+      updated_at: row.updated_at,
+    })),
+  };
+  const report = await insertRow(config, "student_progress_reports", {
+    organization_id: organizationId || null,
+    class_id: classId || null,
+    student_id: studentId,
+    generated_by: actorId,
+    report_type: cleanText((body.payload as DbRow | undefined)?.report_type, "parent"),
+    title: cleanText((body.payload as DbRow | undefined)?.title, "Student progress report"),
+    status: "draft",
+    summary: {
+      completed_lessons: reportBody.completed_lessons,
+      evidence_count: reportBody.evidence_count,
+      mastery_count: mastery.length,
+    },
+    body: reportBody,
+    visibility: "teacher_private",
+  });
+  await audit(config, {
+    actorId,
+    organizationId: organizationId || null,
+    classId: classId || null,
+    eventType: "admin.progress_report_generated",
+    entityType: "student_progress_report",
+    entityId: cleanId(report.id),
+    payload: { student_id: studentId },
+  });
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      progress_report: report,
+      export: {
+        filename: `student-${safeFilenamePart(studentId)}-progress-report.json`,
+        content_type: "application/json",
+        body: JSON.stringify(report, null, 2),
+      },
+    },
+  });
+}
+
 async function selectScopedTelemetryRows(
   config: Config,
   table: string,
@@ -1929,6 +2453,18 @@ Deno.serve(async (req: Request) => {
       return await handleListCostModelDashboard(config, actorAccess);
     if (action === "export_class_snapshot")
       return await handleExportClassSnapshot(config, actorAccess, record);
+    if (action === "preview_csv_import")
+      return await handlePreviewCsvImport(config, actorId, actorAccess, record);
+    if (action === "apply_csv_roster_import")
+      return await handleApplyCsvRosterImport(config, actorId, actorAccess, record);
+    if (action === "export_student_archive")
+      return await handleExportStudentArchive(config, actorId, actorAccess, record);
+    if (action === "request_data_retention")
+      return await handleRequestDataRetention(config, actorId, actorAccess, record);
+    if (action === "upsert_consent_settings")
+      return await handleUpsertConsentSettings(config, actorId, actorAccess, record);
+    if (action === "generate_progress_report")
+      return await handleGenerateProgressReport(config, actorId, actorAccess, record);
     if (action === "create_class")
       return await handleCreateClass(config, actorId, actorAccess, record);
     if (action === "update_class")

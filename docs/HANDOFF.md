@@ -2733,3 +2733,35 @@ Earlier context:
 - Desktop folder was organized into canonical, legacy Python, examples, web runners, docs, notebooks, branding, archives, and misc assets.
 - Canonical repo was rebuilt and pushed at commit `85ab0db`.
 - The legacy example corpus validated cleanly after adding example extraction, smart canned ASK answers, and bounded exponentiation.
+
+## Codex -> Human - 2026-06-24
+
+Status: In progress until live activation
+
+Task: Pre-UI-cleanup platform completion sprint.
+
+Summary:
+
+- Added additive platform-completion schema for CSV imports, Google Classroom write-back mappings, data export/retention requests, guardian/report foundations, consent settings, and draft curriculum import suggestions.
+- Extended `admin-ops` with CSV roster preview/apply, student archive export, retention request recording, consent settings, and progress report generation.
+- Added `/admin` functional controls for CSV fallback import, student archive/report export, retention/anonymization request logging, and class/org feature controls.
+- Added Google Classroom diagnostics and guarded write-sync stubs so missing OAuth secrets and future write-scope requirements are explicit.
+- Added Voice v2 diagnostics and env-configurable realtime/STT/TTS model names while keeping raw student audio unstored by default.
+- Added resource-processing draft curriculum import from teacher-approved chunks. Suggestions are draft-only and require teacher/admin review before any student-visible curriculum exists.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -q` passed.
+- `python3 tools/validate_examples.py examples legacy/examples` passed.
+- `cd frontend && npx tsc --noEmit` passed.
+- `cd frontend && npm run build` passed.
+- `cd frontend && npm run lint` passed with the existing 11 warnings.
+- `git diff --check` passed.
+- `deno check` was not run because `deno` is not installed locally.
+
+Live activation still needed:
+
+- Apply `supabase/migrations/20260624064345_platform_completion_sprint.sql` only.
+- Deploy updated Edge Functions: `admin-ops`, `google-classroom`, `voice-session`, and `resource-processing`.
+- Let Render deploy the frontend bundle from GitHub `main`.
+- Smoke `/admin` CSV preview/apply, archive/report export, consent settings, Google diagnose, Voice diagnose, and draft curriculum import from approved media chunks.

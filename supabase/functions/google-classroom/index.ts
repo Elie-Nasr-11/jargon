@@ -74,7 +74,22 @@ function errorResponse(message: string, status = 500): Response {
   return json({ status: "error", error: message }, status);
 }
 
-function envConfig(req: Request): Config {
+function googleSecretStatus() {
+  return {
+    GOOGLE_CLASSROOM_CLIENT_ID: Boolean(Deno.env.get("GOOGLE_CLASSROOM_CLIENT_ID")),
+    GOOGLE_CLASSROOM_CLIENT_SECRET: Boolean(Deno.env.get("GOOGLE_CLASSROOM_CLIENT_SECRET")),
+    GOOGLE_CLASSROOM_REDIRECT_URI: Boolean(Deno.env.get("GOOGLE_CLASSROOM_REDIRECT_URI")),
+    GOOGLE_TOKEN_ENCRYPTION_KEY: Boolean(Deno.env.get("GOOGLE_TOKEN_ENCRYPTION_KEY")),
+  };
+}
+
+function missingGoogleSecrets(): string[] {
+  return Object.entries(googleSecretStatus())
+    .filter(([, configured]) => !configured)
+    .map(([key]) => key);
+}
+
+function envConfig(req: Request, options: { requireGoogle?: boolean } = {}): Config {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -87,7 +102,8 @@ function envConfig(req: Request): Config {
   if (!url || !anonKey || !serviceRoleKey) {
     throw new Error("SUPABASE_URL, SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY is not configured.");
   }
-  if (!googleClientId || !googleClientSecret || !googleRedirectUri || !tokenKey) {
+  const requireGoogle = options.requireGoogle !== false;
+  if (requireGoogle && (!googleClientId || !googleClientSecret || !googleRedirectUri || !tokenKey)) {
     throw new Error(
       "Google Classroom OAuth is not configured. Set GOOGLE_CLASSROOM_CLIENT_ID, GOOGLE_CLASSROOM_CLIENT_SECRET, GOOGLE_CLASSROOM_REDIRECT_URI, and GOOGLE_TOKEN_ENCRYPTION_KEY.",
     );
@@ -99,10 +115,10 @@ function envConfig(req: Request): Config {
     anonKey,
     serviceRoleKey,
     authorization,
-    googleClientId,
-    googleClientSecret,
-    googleRedirectUri,
-    tokenKey,
+    googleClientId: googleClientId || "",
+    googleClientSecret: googleClientSecret || "",
+    googleRedirectUri: googleRedirectUri || "",
+    tokenKey: tokenKey || "",
   };
 }
 
@@ -1100,8 +1116,13 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
 
   let config: Config;
+  let body: DbRow;
   try {
-    config = envConfig(req);
+    body = (await req.json()) as DbRow;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return errorResponse("Request body must be a JSON object.", 400);
+    }
+    config = envConfig(req, { requireGoogle: cleanText(body.action) !== "diagnose" });
   } catch (error) {
     const message = errorMessage(error);
     return errorResponse(message, message.includes("Authentication") ? 401 : 500);
@@ -1111,12 +1132,24 @@ Deno.serve(async (req: Request) => {
     const actor = await fetchCurrentUser(config);
     const actorId = cleanId(actor.id);
     const actorAccess = await fetchActorAccess(config, actorId);
-    const body = (await req.json()) as DbRow;
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return errorResponse("Request body must be a JSON object.", 400);
-    }
 
     const action = cleanText(body.action);
+    if (action === "diagnose") {
+      return json({
+        status: "ok",
+        data: {
+          actor_access: actorAccessPayload(actorAccess),
+          configured: googleSecretStatus(),
+          missing: missingGoogleSecrets(),
+          redirect_uri: Deno.env.get("GOOGLE_CLASSROOM_REDIRECT_URI") || null,
+          scopes: CLASSROOM_SCOPES,
+          write_scopes_enabled: false,
+          next_step: missingGoogleSecrets().length
+            ? "Set the missing Google OAuth secrets before starting OAuth."
+            : "Google Classroom OAuth secrets are present. Start OAuth from /admin.",
+        },
+      });
+    }
     if (action === "start_oauth")
       return await handleStartOauth(config, actorId, actorAccess, body);
     if (action === "oauth_callback")
@@ -1131,6 +1164,12 @@ Deno.serve(async (req: Request) => {
       return await handleImportCourse(config, actorId, actorAccess, body);
     if (action === "disconnect")
       return await handleDisconnect(config, actorId, actorAccess, body);
+    if (action === "export_coursework" || action === "passback_grade") {
+      return errorResponse(
+        "Google Classroom write sync is not enabled yet. Add coursework/grade scopes and enable this action after roster import is accepted.",
+        409,
+      );
+    }
 
     return errorResponse("Unsupported Google Classroom action.", 400);
   } catch (error) {

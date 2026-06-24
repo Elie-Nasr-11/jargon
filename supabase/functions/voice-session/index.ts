@@ -10,9 +10,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const REALTIME_MODEL = "gpt-realtime-2";
-const TTS_MODEL = "gpt-4o-mini-tts";
-const TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
+const REALTIME_MODEL = Deno.env.get("OPENAI_REALTIME_MODEL") || "gpt-realtime-2";
+const TTS_MODEL = Deno.env.get("OPENAI_TTS_MODEL") || "gpt-4o-mini-tts";
+const TRANSCRIBE_MODEL = Deno.env.get("OPENAI_TRANSCRIBE_MODEL") || "gpt-4o-mini-transcribe";
 const AUDIO_BUCKET = "mentor-audio-cache";
 const MAX_TTS_CHARS = 4_000;
 
@@ -58,20 +58,36 @@ function errorResponse(message: string, status = 500): Response {
   return json({ status: "error", error: message }, status);
 }
 
-function envConfig(req: Request): Config {
+function secretStatus() {
+  return {
+    SUPABASE_URL: Boolean(Deno.env.get("SUPABASE_URL")),
+    SUPABASE_ANON_KEY: Boolean(Deno.env.get("SUPABASE_ANON_KEY")),
+    SUPABASE_SERVICE_ROLE_KEY: Boolean(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")),
+    OPENAI_API_KEY: Boolean(Deno.env.get("OPENAI_API_KEY")),
+  };
+}
+
+function missingSecrets(): string[] {
+  return Object.entries(secretStatus())
+    .filter(([, configured]) => !configured)
+    .map(([key]) => key);
+}
+
+function envConfig(req: Request, options: { requireOpenAi?: boolean } = {}): Config {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
   const authorization = req.headers.get("Authorization") || "";
 
-  if (!url || !anonKey || !serviceRoleKey || !openAiKey) {
+  const requireOpenAi = options.requireOpenAi !== false;
+  if (!url || !anonKey || !serviceRoleKey || (requireOpenAi && !openAiKey)) {
     throw new Error(
       "SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, or OPENAI_API_KEY is not configured.",
     );
   }
   if (!authorization) throw new Error("Authentication is required.");
-  return { url, anonKey, serviceRoleKey, openAiKey, authorization };
+  return { url, anonKey, serviceRoleKey, openAiKey: openAiKey || "", authorization };
 }
 
 async function userFetch(config: Config, path: string, init: RequestInit = {}): Promise<unknown> {
@@ -465,15 +481,45 @@ async function createMentorAudio(config: Config, user: DbRow, body: DbRow): Prom
   });
 }
 
+async function diagnoseVoice(config: Config, user: DbRow): Promise<Response> {
+  await recordVoiceEvent(config, String(user.id), "voice_diagnose_requested", {
+    provider: "openai",
+    realtime_model: REALTIME_MODEL,
+    tts_model: TTS_MODEL,
+    transcribe_model: TRANSCRIBE_MODEL,
+  });
+  return json({
+    status: "ok",
+    data: {
+      configured: secretStatus(),
+      missing: missingSecrets(),
+      models: {
+        realtime: REALTIME_MODEL,
+        text_to_speech: TTS_MODEL,
+        speech_to_text: TRANSCRIBE_MODEL,
+      },
+      privacy: {
+        raw_student_audio_stored: false,
+        mentor_audio_cached_private: true,
+      },
+      browser_requirements: {
+        realtime: "WebRTC support and microphone permission required.",
+        fallback: "Mentor audio cache can still work without realtime voice.",
+      },
+    },
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Use POST.", 405);
 
   try {
-    const config = envConfig(req);
-    const user = await getUser(config);
     const body = await req.json() as DbRow;
     const action = cleanText(body.action);
+    const config = envConfig(req, { requireOpenAi: action !== "diagnose" });
+    const user = await getUser(config);
+    if (action === "diagnose") return await diagnoseVoice(config, user);
     if (action === "realtime_session") return await createRealtimeSession(config, user, body);
     if (action === "mentor_audio") return await createMentorAudio(config, user, body);
     return errorResponse("Unknown voice action.", 400);
