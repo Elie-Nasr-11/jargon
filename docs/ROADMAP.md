@@ -217,9 +217,9 @@ Exit criteria: teacher can answer why a student is weak on a skill and see linke
 
 Goal: make the product economically viable.
 
-- Status: Cost/Model Dashboard v1 is implemented repo-side as the first ops view over
-  `model_usage_events`, `runtime_events`, `speech_usage_events`, and `learning_sessions`.
-- Add model routing by turn type.
+- Status: Cost/Model Dashboard v1 is implemented. Pilot Reliability + Model Routing v1 adds
+  env-configured Mentor model routes, Jargon engine wake/retry telemetry, media-processing usage
+  telemetry, soft rate limits, and an admin runtime-health summary.
 - Track token/cost per student, user, session, class, and organization.
 - Run a cost-to-quality spike before locking model routing.
 - Add rate limits, abuse limits, timeout handling, background jobs, and runner scaling.

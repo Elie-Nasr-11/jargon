@@ -1625,6 +1625,43 @@ function AdminPage() {
               />
             </div>
 
+            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-[14px] font-medium text-foreground">Runtime health</h3>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    Engine wakeups, retry recoveries, controlled code errors, and pilot safety
+                    limits from recent runtime events.
+                  </p>
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                  Last event {formatDate(costDashboard?.runtime_health?.last_runtime_event_at)}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <MetricStat
+                  label="Run failures"
+                  value={formatNumber(costDashboard?.runtime_health?.run_failures)}
+                />
+                <MetricStat
+                  label="Wake timeouts"
+                  value={formatNumber(costDashboard?.runtime_health?.engine_wake_timeouts)}
+                />
+                <MetricStat
+                  label="Retry recoveries"
+                  value={formatNumber(costDashboard?.runtime_health?.engine_retry_successes)}
+                />
+                <MetricStat
+                  label="Rate limits"
+                  value={formatNumber(costDashboard?.runtime_health?.rate_limit_hits)}
+                />
+                <MetricStat
+                  label="Controlled errors"
+                  value={formatNumber(costDashboard?.runtime_health?.controlled_errors)}
+                />
+              </div>
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-2">
               <CostMetricTable
                 title="Model breakdown"

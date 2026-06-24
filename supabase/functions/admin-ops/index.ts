@@ -63,6 +63,15 @@ type CostMetric = {
   error_rate: number | null;
 };
 
+type RuntimeHealthSummary = {
+  run_failures: number;
+  engine_wake_timeouts: number;
+  engine_retry_successes: number;
+  rate_limit_hits: number;
+  controlled_errors: number;
+  last_runtime_event_at: string | null;
+};
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -1195,7 +1204,7 @@ async function buildCostModelDashboard(
     selectScopedTelemetryRows(
       config,
       "runtime_events",
-      "id,user_id,organization_id,class_id,session_id,lesson_id,event_type,status,latency_ms,created_at",
+      "id,user_id,organization_id,class_id,session_id,lesson_id,event_type,status,latency_ms,payload,created_at",
       access,
       organizationIds,
       classIds,
@@ -1388,6 +1397,28 @@ async function buildCostModelDashboard(
     }
   }
 
+  const runtimeHealth: RuntimeHealthSummary = {
+    run_failures: 0,
+    engine_wake_timeouts: 0,
+    engine_retry_successes: 0,
+    rate_limit_hits: 0,
+    controlled_errors: 0,
+    last_runtime_event_at: null,
+  };
+  for (const row of runtimeEvents) {
+    const payload = row.payload && typeof row.payload === "object" ? row.payload as DbRow : {};
+    const reason = cleanText(payload.reason);
+    const eventType = cleanText(row.event_type);
+    if (!runtimeHealth.last_runtime_event_at && typeof row.created_at === "string") {
+      runtimeHealth.last_runtime_event_at = row.created_at;
+    }
+    if (eventType === "run_failure") runtimeHealth.run_failures += 1;
+    if (reason.includes("engine_wake_timeout")) runtimeHealth.engine_wake_timeouts += 1;
+    if (reason === "engine_retry_success") runtimeHealth.engine_retry_successes += 1;
+    if (reason.includes("rate_limit")) runtimeHealth.rate_limit_hits += 1;
+    if (eventType === "controlled_error") runtimeHealth.controlled_errors += 1;
+  }
+
   const sanitizeModelEvent = (row: DbRow) => ({
     id: row.id,
     user_id: row.user_id || null,
@@ -1419,6 +1450,7 @@ async function buildCostModelDashboard(
       by_model: sortedMetrics(byModel, showCost),
       by_task_type: sortedMetrics(byTaskType, showCost),
       by_lesson: sortedMetrics(byLesson, showCost).slice(0, 40),
+      runtime_health: runtimeHealth,
       recent_model_events: modelEvents.slice(0, 30).map(sanitizeModelEvent),
       recent_runtime_errors: runtimeEvents
         .filter((row) => cleanText(row.status) === "error")

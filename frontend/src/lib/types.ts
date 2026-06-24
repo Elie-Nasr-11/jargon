@@ -1102,6 +1102,15 @@ export type CostModelMetric = {
   error_rate: number | null;
 };
 
+export type RuntimeHealthSummary = {
+  run_failures: number;
+  engine_wake_timeouts: number;
+  engine_retry_successes: number;
+  rate_limit_hits: number;
+  controlled_errors: number;
+  last_runtime_event_at: string | null;
+};
+
 export type CostModelDashboard = {
   generated_at: string;
   visibility: CostModelVisibility;
@@ -1112,6 +1121,7 @@ export type CostModelDashboard = {
   by_model: CostModelMetric[];
   by_task_type: CostModelMetric[];
   by_lesson: CostModelMetric[];
+  runtime_health?: RuntimeHealthSummary;
   recent_model_events: Array<
     Pick<
       ModelUsageEvent,

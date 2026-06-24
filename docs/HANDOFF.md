@@ -6,6 +6,62 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-24 01:05
+
+Status: Phase 11 Pilot Reliability + Model Routing v1 implemented repo-side
+
+What changed:
+
+- Hardened Supabase `run` around sleeping Render engine behavior:
+  - retry count and delay are configurable with `JARGON_ENGINE_RETRY_COUNT` and `JARGON_ENGINE_RETRY_DELAY_MS`;
+  - retryable engine statuses and timeout/unreachable attempts write structured `runtime_events`;
+  - retry recovery is recorded with payload reason `engine_retry_success`.
+- Added server-side Mentor model routing in `chat`:
+  - `OPENAI_MODEL_DEFAULT` defaults routine Mentor turns;
+  - `OPENAI_MODEL_GRADING` handles deterministic grading/review turns;
+  - `OPENAI_MODEL_RESCUE` handles rescue turns;
+  - `OPENAI_MODEL_RESOURCE_CONTEXT` handles resource-context-heavy turns;
+  - model usage rows include a `payload.route` field.
+- Added a soft chat rate limit using recent `learning_turns`.
+  - Rate-limit hits return the existing typed error envelope with HTTP `429`.
+  - Hits write `runtime_events` as `controlled_error` with reason `chat_rate_limit`.
+- Added media-processing cost telemetry and safety:
+  - OCR writes `model_usage_events` with task type `summarization`;
+  - audio/video transcription writes `model_usage_events` with task type `speech_to_text`;
+  - expensive OCR/transcription jobs are softly rate-limited from recent `resource_processing_jobs`.
+- Extended `admin-ops` Cost/Model Dashboard response with `runtime_health`.
+- `/admin` AI/runtime operations now shows run failures, wake timeouts, retry recoveries, rate-limit hits, and controlled errors.
+
+Local verification:
+
+- `cd frontend && npx tsc --noEmit` -> passed.
+- `cd frontend && npm run lint` -> passed with the existing 11 warnings.
+- `cd frontend && npm run build` -> passed.
+- `python3 -m unittest discover -s tests -q` -> 157 tests passed, 4 skipped.
+- `python3 tools/validate_examples.py examples legacy/examples` -> 136 files ok.
+- `git diff --check` -> passed.
+- `deno check ...` was not run because `deno` is unavailable locally.
+
+Deploy needed:
+
+- Deploy Supabase Edge Functions `run`, `chat`, `resource-processing`, and `admin-ops`.
+- Let Render deploy the frontend bundle from GitHub `main`.
+- Optional secrets to set/tune:
+  - `OPENAI_MODEL_DEFAULT`
+  - `OPENAI_MODEL_GRADING`
+  - `OPENAI_MODEL_RESCUE`
+  - `OPENAI_MODEL_RESOURCE_CONTEXT`
+  - `JARGON_ENGINE_RETRY_COUNT`
+  - `JARGON_ENGINE_RETRY_DELAY_MS`
+
+Live smoke:
+
+- Cold/wake `run` with `PRINT 5 // 2` and confirm retry telemetry if Render sleeps.
+- Trigger one controlled Jargon error and confirm runtime health updates.
+- Complete a normal chat lesson and confirm a `model_usage_events.payload.route` value.
+- Run one OCR/transcription if needed and confirm model usage task type.
+- Open `/admin` as platform admin and confirm Runtime health appears in AI/runtime operations.
+
 ## Codex -> Claude / Human - 2026-06-24 00:24
 
 Status: Assessment Expansion v1 live activation passed

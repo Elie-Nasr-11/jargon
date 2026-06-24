@@ -50,12 +50,27 @@ type PageAssetInput = {
   metadata?: DbRow;
 };
 
+type OpenAiUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+};
+
+type OcrPageResult = {
+  text: string;
+  model: string;
+  usage: OpenAiUsage;
+  latencyMs: number;
+};
+
 const MAX_CHUNKS = 500;
 const MAX_CHUNK_CHARS = 8000;
 const MAX_TRANSCRIPTION_BYTES = 25 * 1024 * 1024;
 const MAX_PDF_PAGE_ASSETS = 60;
 const MAX_OCR_PAGES = 30;
 const MAX_OCR_IMAGE_BYTES = 1.5 * 1024 * 1024;
+const RESOURCE_PROCESSING_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const RESOURCE_PROCESSING_RATE_LIMIT_MAX = 10;
 const SUPPORTED_TRANSCRIPTION_EXTENSIONS = new Set([
   "mp3",
   "mp4",
@@ -94,6 +109,17 @@ function errorMessage(error: unknown): string {
 
 function errorResponse(message: string, status = 500): Response {
   return json({ status: "error", error: message }, status);
+}
+
+function emptyOpenAiUsage(): OpenAiUsage {
+  return { inputTokens: 0, outputTokens: 0, cachedTokens: 0 };
+}
+
+function addOpenAiUsage(target: OpenAiUsage, source: OpenAiUsage): OpenAiUsage {
+  target.inputTokens += source.inputTokens;
+  target.outputTokens += source.outputTokens;
+  target.cachedTokens += source.cachedTokens;
+  return target;
 }
 
 function envConfig(req: Request): Config {
@@ -169,6 +195,45 @@ async function supabaseFetch(
   return data;
 }
 
+async function insertModelUsage(
+  config: Config,
+  resource: DbRow,
+  user: DbRow,
+  input: {
+    model: string;
+    taskType: "speech_to_text" | "summarization";
+    status: "ok" | "error";
+    latencyMs: number;
+    usage?: OpenAiUsage;
+    payload?: DbRow;
+  },
+): Promise<void> {
+  try {
+    await supabaseFetch(config, "model_usage_events", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        user_id: user.id,
+        organization_id: resource.organization_id || null,
+        class_id: resource.class_id || null,
+        lesson_id: resource.lesson_id || null,
+        provider: "openai",
+        model: input.model,
+        task_type: input.taskType,
+        input_tokens: input.usage?.inputTokens || 0,
+        output_tokens: input.usage?.outputTokens || 0,
+        cached_tokens: input.usage?.cachedTokens || 0,
+        estimated_cost_usd: null,
+        latency_ms: input.latencyMs,
+        status: input.status,
+        payload: input.payload || {},
+      }),
+    });
+  } catch {
+    // Cost telemetry must never block teacher processing.
+  }
+}
+
 async function fetchCurrentUser(config: Config): Promise<DbRow> {
   const res = await fetch(`${config.url}/auth/v1/user`, {
     headers: {
@@ -181,6 +246,22 @@ async function fetchCurrentUser(config: Config): Promise<DbRow> {
     throw new Error("Could not identify authenticated user.");
   }
   return data as DbRow;
+}
+
+async function enforceProcessingRateLimit(config: Config, user: DbRow): Promise<void> {
+  const userId = cleanId(user.id);
+  if (!userId) return;
+  const since = encodeURIComponent(
+    new Date(Date.now() - RESOURCE_PROCESSING_RATE_LIMIT_WINDOW_MS).toISOString(),
+  );
+  const rows = await supabaseFetch(
+    config,
+    `resource_processing_jobs?requested_by=eq.${encodeURIComponent(userId)}&created_at=gte.${since}&select=id&limit=${RESOURCE_PROCESSING_RATE_LIMIT_MAX + 1}`,
+  );
+  const count = Array.isArray(rows) ? rows.length : 0;
+  if (count >= RESOURCE_PROCESSING_RATE_LIMIT_MAX) {
+    throw new Error("Processing rate limit reached. Wait a bit before starting another media job.");
+  }
 }
 
 async function userCanManageResource(config: Config, resourceId: string): Promise<boolean> {
@@ -739,10 +820,11 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-async function ocrPageWithOpenAi(openAiKey: string, asset: DbRow, imageBlob: Blob): Promise<string> {
+async function ocrPageWithOpenAi(openAiKey: string, asset: DbRow, imageBlob: Blob): Promise<OcrPageResult> {
   const model = Deno.env.get("OPENAI_OCR_MODEL") || "gpt-5.4-mini";
   const mimeType = cleanText(asset.mime_type, imageBlob.type || "image/jpeg");
   const base64 = await blobToBase64(imageBlob);
+  const startedAt = Date.now();
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -781,7 +863,21 @@ async function ocrPageWithOpenAi(openAiKey: string, asset: DbRow, imageBlob: Blo
   const choices = Array.isArray(data?.choices) ? (data?.choices as DbRow[]) : [];
   const first = choices[0];
   const message = first?.message as DbRow | undefined;
-  return cleanText(message?.content);
+  const usage = data?.usage && typeof data.usage === "object" ? data.usage as DbRow : {};
+  const promptDetails =
+    usage.prompt_tokens_details && typeof usage.prompt_tokens_details === "object"
+      ? usage.prompt_tokens_details as DbRow
+      : {};
+  return {
+    text: cleanText(message?.content),
+    model: typeof data?.model === "string" ? data.model : model,
+    usage: {
+      inputTokens: numberValue(usage.prompt_tokens),
+      outputTokens: numberValue(usage.completion_tokens),
+      cachedTokens: numberValue(promptDetails.cached_tokens),
+    },
+    latencyMs: Date.now() - startedAt,
+  };
 }
 
 async function transcribeWithOpenAi(
@@ -832,6 +928,7 @@ async function transcribeMediaResource(config: Config, body: DbRow, user: DbRow)
     model: "whisper-1",
     supported_limit_bytes: MAX_TRANSCRIPTION_BYTES,
   });
+  const processingStartedAt = Date.now();
 
   try {
     const mediaBlob = await downloadResourceFile(config, resource);
@@ -881,6 +978,18 @@ async function transcribeMediaResource(config: Config, body: DbRow, user: DbRow)
         timestamp_granularity: "segment",
       },
     });
+    await insertModelUsage(config, resource, user, {
+      model: "whisper-1",
+      taskType: "speech_to_text",
+      status: "ok",
+      latencyMs: Date.now() - processingStartedAt,
+      payload: {
+        job_id: job.id,
+        resource_id: resourceId,
+        source_kind: sourceKind,
+        media_size_bytes: mediaBlob.size,
+      },
+    });
 
     return {
       status: "ok",
@@ -899,6 +1008,18 @@ async function transcribeMediaResource(config: Config, body: DbRow, user: DbRow)
     await insertProcessingError(config, resourceId, String(job.id), message, {
       action: "transcribe_media_resource",
       resource_type: resource.resource_type,
+    });
+    await insertModelUsage(config, resource, user, {
+      model: "whisper-1",
+      taskType: "speech_to_text",
+      status: "error",
+      latencyMs: Date.now() - processingStartedAt,
+      payload: {
+        job_id: job.id,
+        resource_id: resourceId,
+        source_kind: sourceKind,
+        error: message,
+      },
     });
     throw error;
   }
@@ -953,9 +1074,12 @@ async function ocrPdfPages(config: Config, body: DbRow, user: DbRow) {
     page_count: assets.length,
     max_image_bytes: MAX_OCR_IMAGE_BYTES,
   });
+  const processingStartedAt = Date.now();
 
   try {
     const chunks: DbRow[] = [];
+    const usage = emptyOpenAiUsage();
+    let resolvedModel = model;
     for (const asset of assets) {
       const bucket = cleanText(asset.storage_bucket, "lesson-resources");
       const path = cleanText(asset.storage_path);
@@ -966,11 +1090,13 @@ async function ocrPdfPages(config: Config, body: DbRow, user: DbRow) {
         MAX_OCR_IMAGE_BYTES,
         "This PDF page asset has no private image file.",
       );
-      const ocrText = await ocrPageWithOpenAi(openAiKey, asset, blob);
+      const pageResult = await ocrPageWithOpenAi(openAiKey, asset, blob);
+      resolvedModel = pageResult.model || resolvedModel;
+      addOpenAiUsage(usage, pageResult.usage);
       chunks.push(
-        ...splitDocumentText(ocrText, numberValue(asset.page_number, 1), {
+        ...splitDocumentText(pageResult.text, numberValue(asset.page_number, 1), {
           generated_from: "openai_vision_ocr",
-          model,
+          model: resolvedModel,
           page_asset_id: asset.id,
           asset_type: asset.asset_type,
         }),
@@ -1011,6 +1137,19 @@ async function ocrPdfPages(config: Config, body: DbRow, user: DbRow) {
         response_format: "plain_text",
       },
     });
+    await insertModelUsage(config, resource, user, {
+      model: resolvedModel,
+      taskType: "summarization",
+      status: "ok",
+      latencyMs: Date.now() - processingStartedAt,
+      usage,
+      payload: {
+        job_id: job.id,
+        resource_id: resourceId,
+        route: "ocr_pdf_pages",
+        page_count: assets.length,
+      },
+    });
 
     return {
       status: "ok",
@@ -1029,6 +1168,19 @@ async function ocrPdfPages(config: Config, body: DbRow, user: DbRow) {
     await insertProcessingError(config, resourceId, String(job.id), message, {
       action: "ocr_pdf_pages",
       resource_type: resource.resource_type,
+    });
+    await insertModelUsage(config, resource, user, {
+      model,
+      taskType: "summarization",
+      status: "error",
+      latencyMs: Date.now() - processingStartedAt,
+      payload: {
+        job_id: job.id,
+        resource_id: resourceId,
+        route: "ocr_pdf_pages",
+        page_count: assets.length,
+        error: message,
+      },
     });
     throw error;
   }
@@ -1144,9 +1296,11 @@ Deno.serve(async (req) => {
       return json(await savePdfPageAssets(config, body, user));
     }
     if (action === "ocr_pdf_pages") {
+      await enforceProcessingRateLimit(config, user);
       return json(await ocrPdfPages(config, body, user));
     }
     if (action === "transcribe_media_resource") {
+      await enforceProcessingRateLimit(config, user);
       return json(await transcribeMediaResource(config, body, user));
     }
     if (action === "save_chunk_edits") {
@@ -1168,6 +1322,8 @@ Deno.serve(async (req) => {
     const status =
       message.includes("Authentication") || message.includes("authenticated")
         ? 401
+        : message.includes("rate limit")
+          ? 429
         : message.includes("access") || message.includes("Resource management")
           ? 403
           : 400;

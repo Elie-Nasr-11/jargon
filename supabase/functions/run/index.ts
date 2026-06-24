@@ -11,6 +11,8 @@ const corsHeaders = {
 };
 
 const ENGINE_FETCH_TIMEOUT_MS = 10_000;
+const DEFAULT_ENGINE_RETRY_COUNT = 1;
+const DEFAULT_ENGINE_RETRY_DELAY_MS = 1_500;
 
 type RuntimeEventType = "run_failure" | "controlled_error";
 
@@ -45,6 +47,26 @@ function runError(message: string) {
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+function envInt(name: string, fallback: number, min: number, max: number): number {
+  const raw = Deno.env.get(name);
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(value)));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
+function isRetryableEngineStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
 }
 
 function runtimeConfig(req: Request): SupabaseConfig | null {
@@ -119,6 +141,89 @@ async function fetchEngine(engineUrl: string, payload: string): Promise<Response
   }
 }
 
+async function fetchEngineWithRetry(
+  engineUrl: string,
+  payload: string,
+  input: {
+    runtime: SupabaseConfig | null;
+    userId?: string | null;
+    startedAt: number;
+    codeChars: number | null;
+  },
+): Promise<Response> {
+  const retryCount = envInt("JARGON_ENGINE_RETRY_COUNT", DEFAULT_ENGINE_RETRY_COUNT, 0, 3);
+  const retryDelayMs = envInt(
+    "JARGON_ENGINE_RETRY_DELAY_MS",
+    DEFAULT_ENGINE_RETRY_DELAY_MS,
+    250,
+    10_000,
+  );
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt <= retryCount; attempt += 1) {
+    try {
+      const res = await fetchEngine(engineUrl, payload);
+      if (isRetryableEngineStatus(res.status) && attempt < retryCount) {
+        await recordRuntimeEvent(input.runtime, {
+          userId: input.userId,
+          eventType: "run_failure",
+          status: "error",
+          latencyMs: Date.now() - input.startedAt,
+          payload: {
+            reason: "engine_retryable_status",
+            engine_status: res.status,
+            attempt: attempt + 1,
+            max_attempts: retryCount + 1,
+            retry_delay_ms: retryDelayMs,
+            code_chars: input.codeChars,
+          },
+        });
+        await sleep(retryDelayMs);
+        continue;
+      }
+      if (attempt > 0) {
+        await recordRuntimeEvent(input.runtime, {
+          userId: input.userId,
+          eventType: "run_failure",
+          status: "ok",
+          latencyMs: Date.now() - input.startedAt,
+          payload: {
+            reason: "engine_retry_success",
+            attempt: attempt + 1,
+            max_attempts: retryCount + 1,
+            engine_status: res.status,
+            code_chars: input.codeChars,
+          },
+        });
+      }
+      return res;
+    } catch (err) {
+      lastError = err;
+      if (attempt < retryCount) {
+        await recordRuntimeEvent(input.runtime, {
+          userId: input.userId,
+          eventType: "run_failure",
+          status: "error",
+          latencyMs: Date.now() - input.startedAt,
+          payload: {
+            reason: isAbortError(err) ? "engine_wake_timeout_retrying" : "engine_unreachable_retrying",
+            message: errorMessage(err),
+            attempt: attempt + 1,
+            max_attempts: retryCount + 1,
+            retry_delay_ms: retryDelayMs,
+            code_chars: input.codeChars,
+          },
+        });
+        await sleep(retryDelayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || new Error("Engine request failed.");
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -127,8 +232,10 @@ Deno.serve(async (req: Request) => {
   const engineUrl = Deno.env.get("JARGON_ENGINE_URL");
   const startedAt = Date.now();
   const runtime = runtimeConfig(req);
+  const userId = runtime ? await fetchCurrentUser(runtime) : null;
   if (!engineUrl) {
     await recordRuntimeEvent(runtime, {
+      userId,
       eventType: "run_failure",
       latencyMs: Date.now() - startedAt,
       payload: { reason: "missing_engine_url" },
@@ -145,7 +252,14 @@ Deno.serve(async (req: Request) => {
     } catch {
       parsedPayload = {};
     }
-    const res = await fetchEngine(engineUrl, payload);
+    const codeChars =
+      typeof parsedPayload.code === "string" ? parsedPayload.code.length : null;
+    const res = await fetchEngineWithRetry(engineUrl, payload, {
+      runtime,
+      userId,
+      startedAt,
+      codeChars,
+    });
 
     const text = await res.text();
     try {
@@ -156,6 +270,7 @@ Deno.serve(async (req: Request) => {
         (data.status !== "ok" || (Array.isArray(data.errors) && data.errors.length > 0))
       ) {
         await recordRuntimeEvent(runtime, {
+          userId,
           eventType: "controlled_error",
           latencyMs: Date.now() - startedAt,
           payload: {
@@ -169,6 +284,7 @@ Deno.serve(async (req: Request) => {
       return json(data, res.status);
     } catch {
       await recordRuntimeEvent(runtime, {
+        userId,
         eventType: "run_failure",
         latencyMs: Date.now() - startedAt,
         payload: { reason: "engine_non_json", engine_status: res.status },
@@ -176,13 +292,14 @@ Deno.serve(async (req: Request) => {
       return json(runError(`Engine returned non-JSON response with status ${res.status}.`), 502);
     }
   } catch (err) {
-    const message = err instanceof DOMException && err.name === "AbortError"
-      ? `Engine request timed out after ${ENGINE_FETCH_TIMEOUT_MS}ms.`
+    const message = isAbortError(err)
+      ? `Engine request timed out after ${ENGINE_FETCH_TIMEOUT_MS}ms after wake retry.`
       : `Engine unreachable: ${errorMessage(err)}`;
     await recordRuntimeEvent(runtime, {
+      userId,
       eventType: "run_failure",
       latencyMs: Date.now() - startedAt,
-      payload: { message },
+      payload: { reason: isAbortError(err) ? "engine_wake_timeout" : "engine_unreachable", message },
     });
     return json(runError(message), 502);
   }

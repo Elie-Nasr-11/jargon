@@ -31,6 +31,8 @@ const NEXT_ACTIONS = new Set([
 const PACE_OPTIONS = new Set(["brief", "balanced", "guided"]);
 const TONE_OPTIONS = new Set(["neutral", "encouraging"]);
 const HINT_LEVEL_OPTIONS = new Set(["low", "medium", "high"]);
+const CHAT_RATE_LIMIT_WINDOW_MS = 60_000;
+const CHAT_RATE_LIMIT_MAX = 30;
 
 const SYSTEM_PROMPT = `You are the Jargon Mentor, a warm, curious, firm logic coach for school children.
 
@@ -122,11 +124,19 @@ type DbRow = Record<string, unknown>;
 type OpenAIResult = {
   content: string;
   model: string;
+  route: ModelRoute;
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
   latencyMs: number;
 };
+
+type ModelRoute = "default" | "grading" | "rescue" | "resource_context";
+type ModelUsageTaskType =
+  | "mentor_turn"
+  | "grading"
+  | "rescue"
+  | "summarization";
 
 type Assessment = {
   score?: number;
@@ -152,6 +162,11 @@ function json(body: unknown, status = 200): Response {
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+function envText(name: string, fallback: string): string {
+  const value = Deno.env.get(name);
+  return value && value.trim() ? value.trim() : fallback;
 }
 
 function stage(value: unknown, fallback: Stage = "intro"): Stage {
@@ -411,7 +426,7 @@ async function recordModelUsage(
   sessionId: string,
   lessonId: string,
   usage: OpenAIResult,
-  taskType: "mentor_turn" | "grading" | "rescue" = "mentor_turn",
+  taskType: ModelUsageTaskType = "mentor_turn",
   status: "ok" | "error" = "ok",
 ): Promise<void> {
   try {
@@ -428,7 +443,7 @@ async function recordModelUsage(
       estimated_cost_usd: null,
       latency_ms: usage.latencyMs,
       status,
-      payload: {},
+      payload: { route: usage.route },
     });
   } catch {
     // Best-effort cost/usage telemetry.
@@ -453,6 +468,29 @@ async function loadMany(
   return Array.isArray(data)
     ? (data.filter((row) => row && typeof row === "object") as DbRow[])
     : [];
+}
+
+async function recentRowCount(
+  config: SupabaseConfig,
+  path: string,
+): Promise<number> {
+  const rows = await loadMany(config, path);
+  return rows.length;
+}
+
+async function isChatRateLimited(
+  config: SupabaseConfig,
+  userId: string,
+  sessionId: string,
+): Promise<boolean> {
+  const since = encodeURIComponent(
+    new Date(Date.now() - CHAT_RATE_LIMIT_WINDOW_MS).toISOString(),
+  );
+  const count = await recentRowCount(
+    config,
+    `learning_turns?user_id=eq.${encodeURIComponent(userId)}&session_id=eq.${encodeURIComponent(sessionId)}&created_at=gte.${since}&select=id&limit=${CHAT_RATE_LIMIT_MAX + 1}`,
+  );
+  return count >= CHAT_RATE_LIMIT_MAX;
 }
 
 async function loadOrCreateSession(
@@ -481,10 +519,20 @@ async function loadOrCreateSession(
 async function callOpenAI(
   messages: unknown[],
   jsonMode: boolean,
+  route: ModelRoute = "default",
 ): Promise<OpenAIResult> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
-  const model = "gpt-4o";
+  const defaultModel = envText("OPENAI_MODEL_DEFAULT", "gpt-4o-mini");
+  const strongModel = envText("OPENAI_MODEL_GRADING", "gpt-4o");
+  const model =
+    route === "grading"
+      ? envText("OPENAI_MODEL_GRADING", strongModel)
+      : route === "rescue"
+        ? envText("OPENAI_MODEL_RESCUE", strongModel)
+        : route === "resource_context"
+          ? envText("OPENAI_MODEL_RESOURCE_CONTEXT", strongModel)
+          : defaultModel;
 
   const body: DbRow = {
     model,
@@ -513,11 +561,26 @@ async function callOpenAI(
   return {
     content: data?.choices?.[0]?.message?.content || "",
     model: typeof data?.model === "string" ? data.model : model,
+    route,
     inputTokens: Number(usage.prompt_tokens || 0),
     outputTokens: Number(usage.completion_tokens || 0),
     cachedTokens: Number(promptDetails.cached_tokens || 0),
     latencyMs: Date.now() - startedAt,
   };
+}
+
+function modelRouteFor(
+  flow: FlowDecision,
+  answer: DbRow | null,
+  assessment: Assessment | null,
+  context: Awaited<ReturnType<typeof loadContext>>,
+): { route: ModelRoute; taskType: ModelUsageTaskType } {
+  if (flow.nextAction === "rescue") return { route: "rescue", taskType: "rescue" };
+  if (answer && assessment) return { route: "grading", taskType: "grading" };
+  if (context.resourceChunks.length > 0) {
+    return { route: "resource_context", taskType: "summarization" };
+  }
+  return { route: "default", taskType: "mentor_turn" };
 }
 
 function stringArray(value: unknown): string[] {
@@ -1110,7 +1173,7 @@ async function handleLegacyRequest(
     chatHistory.unshift({ role: "system", content: SYSTEM_PROMPT });
 
   try {
-    const reply = await callOpenAI(chatHistory, false);
+    const reply = await callOpenAI(chatHistory, false, "default");
     return json({ reply: reply.content || "No response." });
   } catch (err) {
     return json({ reply: `Error: ${errorMessage(err)}` }, 500);
@@ -1166,6 +1229,27 @@ async function handleTypedRequest(
   );
 
   try {
+    if (await isChatRateLimited(config, userId, sessionId)) {
+      await recordRuntimeEvent(config, {
+        userId,
+        sessionId,
+        lessonId,
+        eventType: "controlled_error",
+        status: "error",
+        latencyMs: Date.now() - requestStartedAt,
+        payload: {
+          reason: "chat_rate_limit",
+          window_ms: CHAT_RATE_LIMIT_WINDOW_MS,
+          max_turns: CHAT_RATE_LIMIT_MAX,
+        },
+      });
+      return typedError("Too many chat turns at once. Pause for a minute and try again.", 429, {
+        session_id: sessionId,
+        lesson_id: lessonId,
+        stage: currentStage,
+      });
+    }
+
     if (answer && content) {
       await insertRow(config, "learning_turns", {
         session_id: sessionId,
@@ -1253,14 +1337,20 @@ async function handleTypedRequest(
       },
     ];
 
-    const openAIResult = await callOpenAI(messages, true);
+    const modelRouting = modelRouteFor(
+      draftFlow,
+      answer,
+      orchestratorAssessment,
+      context,
+    );
+    const openAIResult = await callOpenAI(messages, true, modelRouting.route);
     await recordModelUsage(
       config,
       userId,
       sessionId,
       lessonId,
       openAIResult,
-      draftFlow.nextAction === "rescue" ? "rescue" : "mentor_turn",
+      modelRouting.taskType,
     );
     const contentJson = openAIResult.content;
     let parsed: DbRow;

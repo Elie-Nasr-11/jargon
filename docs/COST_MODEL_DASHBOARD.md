@@ -28,6 +28,8 @@ checks platform-admin or org-admin access, scopes the result, and returns an agg
 - `Average latency`: average of model/runtime event latency values when recorded.
 - `Error rate`: error events divided by model/runtime/speech events.
 - Breakdowns: organization, class, student, model, task type, and lesson where scope data exists.
+- `Runtime health`: recent run failures, Render wake timeouts, retry recoveries, controlled code errors,
+  and pilot rate-limit hits from structured `runtime_events.payload.reason` values.
 
 ## Interpretation Rules
 
@@ -35,6 +37,8 @@ checks platform-admin or org-admin access, scopes the result, and returns an agg
 - Missing telemetry means "not recorded yet," not necessarily zero usage.
 - Org-admin views intentionally hide cost so schools can see reliability without platform-level billing data.
 - Risk and intervention labels should come from recorded evidence; this dashboard should not invent AI-based labels.
+- Runtime-health counts are operational signals, not student performance signals. A retry recovery means
+  the system handled a transient engine wake/failure and continued.
 
 ## Live Smoke
 
