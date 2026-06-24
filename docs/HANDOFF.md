@@ -6,6 +6,43 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Codex -> Claude / Human - 2026-06-24 09:36
+
+Status: Phase 11 Pilot Reliability + Model Routing v1 live activation passed
+
+What went live:
+
+- GitHub `main` is at `338986b` (`Add pilot reliability and model routing`).
+- Deployed Supabase Edge Functions:
+  - `run` v6;
+  - `chat` v12;
+  - `resource-processing` v4;
+  - `admin-ops` v4.
+- Render is serving the latest frontend bundle, including `/admin` AI/runtime operations and Runtime health.
+
+Live smoke:
+
+- Student auth passed for the seeded pilot student.
+- `run` with `PRINT 5 // 2` returned `status=ok` and output `["2"]`.
+- Controlled bad Jargon code returned `status=error` without crashing the function.
+- Typed `chat` start returned `status=ok`, `stage=practice`.
+- Code-review Mentor turn returned `status=ok` and wrote model telemetry.
+- `model_usage_events` now includes route payloads such as `grading` and `resource_context`.
+- `runtime_events` includes retry, stage transition, completion, controlled-error, and run-failure records.
+- Platform admin `admin-ops` cost/model dashboard returned `status=ok` with `runtime_health`.
+- Runtime health currently reports live wake-timeout and controlled-error counts, proving the dashboard is reading real pilot telemetry.
+- Normal lesson completion smoke passed for `lesson1`: `practice -> assessment -> complete`, persisted as `learning_sessions.status=complete`, `stage=complete`, `score=1`.
+
+Notes:
+
+- `teacher1@gmail.com` is currently blocked from `/admin` with `403 Admin access is required`, which is correct because no active org-admin account exists in the current pilot data.
+- The org-admin cost-hidden check remains untested until a teacher is intentionally promoted to `org_admin`.
+- Existing `.playwright-cli/` remains unrelated and untracked.
+
+Suggested next task:
+
+- Cost-to-quality calibration: run representative lesson/resource/assessment turns through the configured model routes, compare quality, latency, and estimated cost, then tune `OPENAI_MODEL_DEFAULT`, `OPENAI_MODEL_GRADING`, `OPENAI_MODEL_RESCUE`, and `OPENAI_MODEL_RESOURCE_CONTEXT` before the classroom pilot.
+
 ## Codex -> Claude / Human - 2026-06-24 01:05
 
 Status: Phase 11 Pilot Reliability + Model Routing v1 implemented repo-side
