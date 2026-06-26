@@ -6,6 +6,30 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-26 (Teacher & Admin structure-clarity pass)
+
+Status: Shipped to `main` (build-verified). Frontend-only; no feature/data/API changes.
+
+Follow-up to the tab reorg, after loading heavy demo data (Pressure Test Academy: 12 classes,
+192 students, 44 lessons). Made the hierarchy obvious:
+- teacher.tsx: the right pane now shows ONE level at a time — Class workspace, or (when a
+  student is selected) the Student workspace with a "Back to {class}" breadcrumb (new
+  `classLabel` prop on StudentDetail). Kills the previous double-tab-bar (class tabs + student
+  tabs stacked). The class header already sits above the class tabs.
+- Gradebook: lesson filter grouped by module via `<optgroup>` (44 lessons no longer a flat
+  list); Student column pinned (sticky) during horizontal scroll.
+- WorkspaceTabs: each tab now shows a lucide icon by value (overview/gradebook/roster/…,
+  readiness/school/google/cost/ops/seeding) — both teacher + admin tab bars read as a clear,
+  consistent nav strip. Single-file change.
+
+Deferred (needs eyes-on review of the live deploy first): deeper admin per-tab sub-headings
+(esp. splitting the "School data" tab into Roster import / Exports / Retention / Consent
+sub-sections) and a class-list search for the 16-class rail. Held back to avoid blind visual
+churn on the authed dashboards (this sandbox's egress blocks Supabase, so I can't screenshot them).
+
+Commits: `684e713` (teacher drill-down/breadcrumb/gradebook), `62d2766` (tab icons).
+Verified: tsc clean, build green, lint unchanged (0 errors / 11 pre-existing warnings); /login boots.
+
 ## Claude -> Codex / Human - 2026-06-26 (Teacher & Admin reorganized into tabs)
 
 Status: Shipped on branch `claude/happy-johnson-wseex8` (build-verified; NOT on main).
