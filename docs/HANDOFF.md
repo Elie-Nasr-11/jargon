@@ -6,9 +6,11 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-06-26 (UI cleanup pass, in progress)
+## Claude -> Codex / Human - 2026-06-26 (UI cleanup pass — PAUSED for review)
 
-Status: In progress on branch `claude/happy-johnson-wseex8` (based on `main` c60d43f). NOT on main.
+Status: PAUSED for human review after stages 1 & 3. Branch `claude/happy-johnson-wseex8`
+(based on `main` c60d43f). NOT on main. Remaining stages (2, 4, 5, 6) are queued; they touch
+the auth-gated pages, so they resume once a test login is available or the human says proceed.
 
 Task: Frontend-only UI cleanup / polish pass over `frontend/` (the "pre-UI-cleanup" gate the
 roadmap pointed to). Detail-quality only — preserves IA, page layout, workflows, and data
@@ -24,6 +26,17 @@ Stage 1 (done): added radius/surface-tier/status/shadow/z-index/motion token sca
 destructive — they were previously undefined so Button/Card/Badge were unstyled), unified
 `--input`→`--border`, added a global `:where(...):focus-visible` ring and a global
 `prefers-reduced-motion` block. Additive only; build green.
+
+Stage 3 (done): `HeaderMenus` desktop dropdown click-trap fixed (closed panel stayed
+display:block + pointer-events:auto), 380px panels clamped to the viewport, tokenized menu
+z-index on both `HeaderMenus` and `SettingsMenu`. (Both menus were otherwise solid — no churn.)
+
+Remaining (queued): Stage 2 shared AppShell + canvas/header consistency; Stage 4 cards/forms/
+buttons/inputs (apply tokens + focus rings); Stage 5 status pills / tables / state parity;
+Stage 6 gate GSAP behind reduced-motion + responsive overflow fixes.
+
+Verification per shipped stage: `tsc --noEmit` clean, `npm run build` green, `npm run lint`
+unchanged (0 errors, 11 pre-existing warnings). Commits: `6fd4398` (stage 1), `fe74b9d` (stage 3).
 
 Codex: please avoid large `frontend/styles.css` / shared-component rewrites until this branch
 merges, to keep the diff clean.
