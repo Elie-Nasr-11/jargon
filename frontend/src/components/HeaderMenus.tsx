@@ -259,10 +259,14 @@ export function HeaderMenus({
           ref={panelRef}
           onMouseEnter={cancelClose}
           onMouseLeave={leave}
-          className="pointer-events-auto absolute left-1/2 top-[calc(100%+10px)] -translate-x-1/2"
+          className="absolute left-1/2 top-[calc(100%+10px)] z-[var(--z-menu)] -translate-x-1/2"
           style={{
             width: contentKey ? WIDTHS[contentKey] : 380,
+            maxWidth: "calc(100vw - 24px)",
             opacity: 0,
+            // Closed panel must not intercept clicks: it stays display:block
+            // (contentKey persists for the morph), so gate pointer events on open.
+            pointerEvents: activeKey ? "auto" : "none",
             willChange: "transform, opacity, width, height",
             transform: "translateZ(0)",
             display: contentKey ? "block" : "none",

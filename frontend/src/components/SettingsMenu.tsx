@@ -89,7 +89,7 @@ export function SettingsMenu({
       {mounted && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-[calc(100%+10px)]"
+          className="absolute right-0 top-[calc(100%+10px)] z-[var(--z-menu)]"
           style={{ width: "min(320px, calc(100vw - 16px))" }}
         >
           <GradientCard>
