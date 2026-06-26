@@ -27,6 +27,7 @@ import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createAssignment,
   createAssessment,
@@ -1271,6 +1272,7 @@ function ResourceManager({
   const [chunksByResource, setChunksByResource] = useState<Record<string, ResourceTextChunk[]>>({});
   const [assetsByResource, setAssetsByResource] = useState<Record<string, ResourcePageAsset[]>>({});
   const [chunkDrafts, setChunkDrafts] = useState<Record<string, string>>({});
+  const [formOpen, setFormOpen] = useState(false);
 
   useEffect(() => {
     setDraft(defaultResourceForm(classSummary, lessons));
@@ -1300,6 +1302,7 @@ function ResourceManager({
       file: null,
     });
     setResourceMessage("Editing resource metadata. File/source cannot be replaced in v1.");
+    setFormOpen(true);
   };
 
   const cancelEdit = () => {
@@ -1336,6 +1339,7 @@ function ResourceManager({
       });
       setResourceMessage(draft.resourceId ? "Resource metadata saved." : "Resource created.");
       setDraft(defaultResourceForm(classSummary, lessons));
+      setFormOpen(false);
     } catch (error) {
       setResourceMessage((error as Error).message || "Could not save resource.");
     }
@@ -1579,199 +1583,208 @@ function ResourceManager({
             Attach teacher-approved files and links. Drafts stay hidden from students.
           </p>
         </div>
-        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
-          {resources.length} resource{resources.length === 1 ? "" : "s"}
+        <div className="flex items-center gap-3">
+          <span className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
+            {resources.length} resource{resources.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              cancelEdit();
+              setFormOpen(true);
+            }}
+            className="rounded-full bg-foreground px-3 py-1.5 text-[12px] font-medium text-background transition-colors hover:opacity-90"
+          >
+            New resource
+          </button>
         </div>
       </div>
 
       <div className="grid gap-4">
-        <div className="rounded-2xl border border-border bg-background/35 p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-[13px] font-medium text-foreground">
-              {draft.resourceId ? "Edit resource" : "Add resource"}
-            </div>
-            {draft.resourceId ? (
-              <button
-                type="button"
-                onClick={cancelEdit}
-                className="rounded-full border border-border px-3 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                Cancel edit
-              </button>
-            ) : null}
-          </div>
+        <Dialog
+          open={formOpen}
+          onOpenChange={(open) => {
+            setFormOpen(open);
+            if (!open) cancelEdit();
+          }}
+        >
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[560px]">
+            <DialogHeader>
+              <DialogTitle>{draft.resourceId ? "Edit resource" : "New resource"}</DialogTitle>
+            </DialogHeader>
 
-          <div className="grid gap-3">
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Lesson
-              <select
-                value={draft.lessonId}
-                onChange={(event) => setField("lessonId", event.target.value)}
-                disabled={Boolean(draft.resourceId)}
-                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
-              >
-                {lessons.map((lesson) => (
-                  <option key={lesson.id} value={lesson.id}>
-                    {lesson.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Title
-              <input
-                value={draft.title}
-                onChange={(event) => setField("title", event.target.value)}
-                placeholder="Purpose explainer PDF"
-                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                Source
+                Lesson
                 <select
-                  value={draft.sourceType}
-                  onChange={(event) => {
-                    const next = event.target.value as LessonResourceSource;
-                    setDraft((current) => ({
-                      ...current,
-                      sourceType: next,
-                      resourceType: next === "external_url" ? "link" : "pdf",
-                      file: null,
-                    }));
-                  }}
+                  value={draft.lessonId}
+                  onChange={(event) => setField("lessonId", event.target.value)}
                   disabled={Boolean(draft.resourceId)}
                   className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
                 >
-                  <option value="upload">Upload</option>
-                  <option value="external_url">External URL</option>
+                  {lessons.map((lesson) => (
+                    <option key={lesson.id} value={lesson.id}>
+                      {lesson.title}
+                    </option>
+                  ))}
                 </select>
               </label>
 
               <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                Type
-                <select
-                  value={draft.resourceType}
-                  onChange={(event) =>
-                    setField("resourceType", event.target.value as LessonResourceType)
-                  }
-                  disabled={draft.sourceType === "upload" || Boolean(draft.resourceId)}
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
-                >
-                  <option value="pdf">PDF</option>
-                  <option value="video">Video</option>
-                  <option value="audio">Audio</option>
-                  <option value="image">Image</option>
-                  <option value="document">Document</option>
-                  <option value="youtube">YouTube</option>
-                  <option value="link">Link</option>
-                </select>
-              </label>
-            </div>
-
-            {draft.sourceType === "upload" && !draft.resourceId ? (
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                File
+                Title
                 <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,image/*,audio/*,video/*"
-                  onChange={(event) => setField("file", event.target.files?.[0] || null)}
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
-                />
-              </label>
-            ) : null}
-
-            {draft.sourceType === "external_url" ? (
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                External URL
-                <input
-                  value={draft.externalUrl || ""}
-                  onChange={(event) => setField("externalUrl", event.target.value)}
-                  placeholder="https://youtube.com/watch?v=..."
+                  value={draft.title}
+                  onChange={(event) => setField("title", event.target.value)}
+                  placeholder="Purpose explainer PDF"
                   className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </label>
-            ) : null}
 
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Student instructions
-              <textarea
-                value={draft.studentInstructions}
-                onChange={(event) => setField("studentInstructions", event.target.value)}
-                placeholder="Open this before the checkpoint and look for the input/process/output idea."
-                className="min-h-[72px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Source
+                  <select
+                    value={draft.sourceType}
+                    onChange={(event) => {
+                      const next = event.target.value as LessonResourceSource;
+                      setDraft((current) => ({
+                        ...current,
+                        sourceType: next,
+                        resourceType: next === "external_url" ? "link" : "pdf",
+                        file: null,
+                      }));
+                    }}
+                    disabled={Boolean(draft.resourceId)}
+                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                  >
+                    <option value="upload">Upload</option>
+                    <option value="external_url">External URL</option>
+                  </select>
+                </label>
 
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Description
-              <textarea
-                value={draft.description}
-                onChange={(event) => setField("description", event.target.value)}
-                placeholder="Short student-facing summary."
-                className="min-h-[66px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Teacher notes
-              <textarea
-                value={draft.teacherNotes}
-                onChange={(event) => setField("teacherNotes", event.target.value)}
-                placeholder="Private classroom context for teachers."
-                className="min-h-[66px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                Status
-                <select
-                  value={draft.status}
-                  onChange={(event) =>
-                    setField("status", event.target.value as LessonResourceStatus)
-                  }
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
-                >
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </label>
-
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                Visibility
-                <select
-                  value={draft.visibility}
-                  onChange={(event) =>
-                    setField("visibility", event.target.value as LessonResourceVisibility)
-                  }
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
-                >
-                  <option value="class_private">Class private</option>
-                  <option value="org_private">Organization private</option>
-                  <option value="public">Public metadata</option>
-                </select>
-              </label>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void submit()}
-              disabled={saving}
-              className="mt-1 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? "Saving..." : draft.resourceId ? "Save resource" : "Create resource"}
-            </button>
-            {resourceMessage ? (
-              <div className="text-[12px] leading-relaxed text-muted-foreground">
-                {resourceMessage}
+                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Type
+                  <select
+                    value={draft.resourceType}
+                    onChange={(event) =>
+                      setField("resourceType", event.target.value as LessonResourceType)
+                    }
+                    disabled={draft.sourceType === "upload" || Boolean(draft.resourceId)}
+                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                  >
+                    <option value="pdf">PDF</option>
+                    <option value="video">Video</option>
+                    <option value="audio">Audio</option>
+                    <option value="image">Image</option>
+                    <option value="document">Document</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="link">Link</option>
+                  </select>
+                </label>
               </div>
-            ) : null}
-          </div>
-        </div>
+
+              {draft.sourceType === "upload" && !draft.resourceId ? (
+                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  File
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,image/*,audio/*,video/*"
+                    onChange={(event) => setField("file", event.target.files?.[0] || null)}
+                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
+                  />
+                </label>
+              ) : null}
+
+              {draft.sourceType === "external_url" ? (
+                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  External URL
+                  <input
+                    value={draft.externalUrl || ""}
+                    onChange={(event) => setField("externalUrl", event.target.value)}
+                    placeholder="https://youtube.com/watch?v=..."
+                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                  />
+                </label>
+              ) : null}
+
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Student instructions
+                <textarea
+                  value={draft.studentInstructions}
+                  onChange={(event) => setField("studentInstructions", event.target.value)}
+                  placeholder="Open this before the checkpoint and look for the input/process/output idea."
+                  className="min-h-[72px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </label>
+
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Description
+                <textarea
+                  value={draft.description}
+                  onChange={(event) => setField("description", event.target.value)}
+                  placeholder="Short student-facing summary."
+                  className="min-h-[66px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </label>
+
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Teacher notes
+                <textarea
+                  value={draft.teacherNotes}
+                  onChange={(event) => setField("teacherNotes", event.target.value)}
+                  placeholder="Private classroom context for teachers."
+                  className="min-h-[66px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Status
+                  <select
+                    value={draft.status}
+                    onChange={(event) =>
+                      setField("status", event.target.value as LessonResourceStatus)
+                    }
+                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Visibility
+                  <select
+                    value={draft.visibility}
+                    onChange={(event) =>
+                      setField("visibility", event.target.value as LessonResourceVisibility)
+                    }
+                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                  >
+                    <option value="class_private">Class private</option>
+                    <option value="org_private">Organization private</option>
+                    <option value="public">Public metadata</option>
+                  </select>
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={saving}
+                className="mt-1 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Saving..." : draft.resourceId ? "Save resource" : "Create resource"}
+              </button>
+              {resourceMessage ? (
+                <div className="text-[12px] leading-relaxed text-muted-foreground">
+                  {resourceMessage}
+                </div>
+              ) : null}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid content-start gap-2">
           {resources.length ? (
@@ -3674,7 +3687,7 @@ function GradebookTable({
       </div>
 
       {rows.length ? (
-        <div className="overflow-x-auto pb-1">
+        <div className="max-h-[58vh] overflow-auto pb-1">
           <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
             <thead className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
               <tr>
