@@ -6,10 +6,46 @@
 // Style matches the app: a segmented pill bar using the shared tokens, and the
 // tab strip scrolls horizontally on narrow viewports instead of wrapping.
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity,
+  BookOpen,
+  ClipboardList,
+  DollarSign,
+  FileSpreadsheet,
+  FileText,
+  FolderOpen,
+  GraduationCap,
+  LayoutDashboard,
+  MessageSquare,
+  Settings,
+  Table2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 export { Tabs };
+
+// Icon per known tab value, so both the teacher and admin tab bars are scannable
+// and consistent without each call site passing an icon.
+const TAB_ICONS: Record<string, LucideIcon> = {
+  overview: LayoutDashboard,
+  gradebook: Table2,
+  roster: Users,
+  resources: FolderOpen,
+  assignments: ClipboardList,
+  assessments: GraduationCap,
+  transcript: MessageSquare,
+  records: FileText,
+  readiness: Activity,
+  school: FileSpreadsheet,
+  google: BookOpen,
+  cost: DollarSign,
+  ops: Settings,
+  seeding: UserPlus,
+};
 
 export function WorkspaceTabList({
   children,
@@ -33,11 +69,13 @@ export function WorkspaceTabList({
 }
 
 export function WorkspaceTab({ value, children }: { value: string; children: ReactNode }) {
+  const Icon = TAB_ICONS[value];
   return (
     <TabsTrigger
       value={value}
-      className="rounded-pill whitespace-nowrap px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-none"
+      className="inline-flex items-center gap-1.5 rounded-pill whitespace-nowrap px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-none"
     >
+      {Icon ? <Icon className="h-3.5 w-3.5" strokeWidth={1.7} /> : null}
       {children}
     </TabsTrigger>
   );
