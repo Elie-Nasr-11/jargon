@@ -668,7 +668,7 @@ function TeacherPage() {
               <MetricCard label="Evidence" value={String(dashboard.evidence.length)} />
             </div>
 
-            <div className="grid min-h-[680px] gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="flex flex-col gap-4">
               <GradientCard>
                 <div className="p-4">
                   <div className="mb-4 flex items-center justify-between gap-3">
@@ -679,19 +679,20 @@ function TeacherPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
                     {dashboard.classes.map((item) => (
-                      <ClassButton
-                        key={item.id}
-                        item={item}
-                        active={item.id === selectedClassId}
-                        stats={summarizeClass(dashboard, item.id)}
-                        onClick={() => {
-                          setSelectedClassId(item.id);
-                          setSelectedStudentId(null);
-                          setSelectedSessionId(null);
-                        }}
-                      />
+                      <div key={item.id} className="w-[240px] shrink-0">
+                        <ClassButton
+                          item={item}
+                          active={item.id === selectedClassId}
+                          stats={summarizeClass(dashboard, item.id)}
+                          onClick={() => {
+                            setSelectedClassId(item.id);
+                            setSelectedStudentId(null);
+                            setSelectedSessionId(null);
+                          }}
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1583,7 +1584,7 @@ function ResourceManager({
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="grid gap-4">
         <div className="rounded-2xl border border-border bg-background/35 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="text-[13px] font-medium text-foreground">
@@ -2343,7 +2344,7 @@ function AssessmentManager({
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <div className="grid gap-4">
         <div className="rounded-2xl border border-border bg-background/35 p-4">
           <div className="text-[13px] font-medium text-foreground">Create quiz</div>
           <div className="mt-3 grid gap-3">
@@ -3049,7 +3050,7 @@ function AssignmentManager({
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="grid gap-4">
         <div className="rounded-2xl border border-border bg-background/35 p-4">
           <div className="text-[13px] font-medium text-foreground">Create assignment</div>
           <div className="mt-3 grid gap-3">
@@ -3486,7 +3487,7 @@ function ClassAnalyticsPanel({
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-4">
         <Panel title="Mastery heatmap" icon={<TrendingUp className="h-4 w-4" strokeWidth={1.6} />}>
           {masteryRows.length ? (
             <div className="grid gap-2">
@@ -4030,7 +4031,7 @@ function StudentDetail({
           </WorkspacePanel>
 
           <WorkspacePanel value="transcript">
-            <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+            <div className="mt-5 grid gap-4">
               <Panel
                 title="Transcript"
                 icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}
@@ -4253,7 +4254,7 @@ function StudentDetail({
           </WorkspacePanel>
 
           <WorkspacePanel value="records">
-            <div className="mt-4 grid gap-4 xl:grid-cols-3">
+            <div className="mt-4 grid gap-4">
               <Panel
                 title="Lesson attempts"
                 icon={<ClipboardList className="h-4 w-4" strokeWidth={1.6} />}
@@ -4354,7 +4355,7 @@ function StudentAnalyticsPanel({
         <MiniMetric label="Resources" value={String(analytics.resourceOpened)} />
         <MiniMetric label="Alerts" value={String(signals.length)} />
       </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+      <div className="mt-3 grid gap-3">
         <div className="rounded-2xl border border-border bg-background/45 p-3">
           <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
             Strongest skill
