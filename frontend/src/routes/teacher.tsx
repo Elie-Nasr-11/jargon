@@ -698,7 +698,7 @@ function TeacherPage() {
               </GradientCard>
 
               <div className="grid gap-4">
-                {selectedClass && classStats ? (
+                {selectedStudentId ? null : selectedClass && classStats ? (
                   <ClassDetail
                     item={selectedClass}
                     stats={classStats}
@@ -770,6 +770,7 @@ function TeacherPage() {
                 {selectedStudentId && studentStats ? (
                   <StudentDetail
                     studentId={selectedStudentId}
+                    classLabel={selectedClass?.name ?? ""}
                     profile={selectedStudent}
                     stats={studentStats}
                     dashboard={dashboard}
@@ -796,12 +797,7 @@ function TeacherPage() {
                       setSelectedSessionId(null);
                     }}
                   />
-                ) : (
-                  <EmptyPanel
-                    title="Select a student"
-                    body="Choose a student from the roster to view transcript, attempts, evidence, mastery, and notes."
-                  />
-                )}
+                ) : null}
               </div>
             </div>
           </>
@@ -3640,6 +3636,11 @@ function GradebookTable({
   const rows = studentIds.map((studentId) =>
     gradebookRowForStudent(dashboard, studentId, selectedLessonId, lessons, lessonsById),
   );
+  const lessonGroups = lessons.reduce<Record<string, Lesson[]>>((acc, lesson) => {
+    const key = lesson.module || "Other";
+    (acc[key] ??= []).push(lesson);
+    return acc;
+  }, {});
 
   return (
     <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
@@ -3658,10 +3659,14 @@ function GradebookTable({
             className="min-w-[220px] rounded-full border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
           >
             <option value="all">All lessons</option>
-            {lessons.map((lesson) => (
-              <option key={lesson.id} value={lesson.id}>
-                {lesson.title}
-              </option>
+            {Object.entries(lessonGroups).map(([moduleName, moduleLessons]) => (
+              <optgroup key={moduleName} label={moduleName}>
+                {moduleLessons.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    {lesson.title}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
@@ -3672,7 +3677,7 @@ function GradebookTable({
           <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
             <thead className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
               <tr>
-                <th className="px-3 py-1 font-medium">Student</th>
+                <th className="sticky left-0 z-[1] bg-background px-3 py-1 font-medium">Student</th>
                 <th className="px-3 py-1 font-medium">Lesson status</th>
                 <th className="px-3 py-1 font-medium">Score</th>
                 <th className="px-3 py-1 font-medium">Attempts</th>
@@ -3695,7 +3700,7 @@ function GradebookTable({
                         : ""
                     }`}
                   >
-                    <td className="rounded-l-2xl border-y border-l border-border px-3 py-3">
+                    <td className="sticky left-0 z-[1] rounded-l-2xl border-y border-l border-border bg-background px-3 py-3">
                       <div className="text-[13px] font-medium text-foreground">
                         {displayName(profile, row.studentId)}
                       </div>
@@ -3839,6 +3844,7 @@ function LessonProgress({
 
 function StudentDetail({
   studentId,
+  classLabel,
   profile,
   stats,
   dashboard,
@@ -3863,6 +3869,7 @@ function StudentDetail({
   onBack,
 }: {
   studentId: string;
+  classLabel: string;
   profile: Profile | null;
   stats: StudentSummary;
   dashboard: TeacherDashboardData;
@@ -3938,7 +3945,7 @@ function StudentDetail({
           onClick={onBack}
           className="mb-4 inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground transition-colors hover:text-foreground"
         >
-          <ChevronLeft className="h-4 w-4" strokeWidth={1.6} /> Back to class
+          <ChevronLeft className="h-4 w-4" strokeWidth={1.6} /> Back to {classLabel || "class"}
         </button>
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
