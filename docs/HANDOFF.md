@@ -6,6 +6,28 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-26 (UI cleanup pass, in progress)
+
+Status: In progress on branch `claude/happy-johnson-wseex8` (based on `main` c60d43f). NOT on main.
+
+Task: Frontend-only UI cleanup / polish pass over `frontend/` (the "pre-UI-cleanup" gate the
+roadmap pointed to). Detail-quality only — preserves IA, page layout, workflows, and data
+placement. No backend/engine/migration/route-data changes. The dead root static SPA is untouched.
+
+Plan: 6 staged commits — (1) token foundation in `styles.css`, (2) shared AppShell + canvas/header
+consistency, (3) HeaderMenus/SettingsMenu fixes, (4) cards/forms/buttons/inputs, (5) status pills/
+tables/state parity, (6) responsive + reduced-motion sweep. Verified per stage with
+`tsc --noEmit` + `npm run lint` + `npm run build` (baseline: 0 errors, 11 pre-existing warnings).
+
+Stage 1 (done): added radius/surface-tier/status/shadow/z-index/motion token scales to
+`styles.css`, wired the shadcn primitive tokens (primary/secondary/accent/card/popover/input/ring/
+destructive — they were previously undefined so Button/Card/Badge were unstyled), unified
+`--input`→`--border`, added a global `:where(...):focus-visible` ring and a global
+`prefers-reduced-motion` block. Additive only; build green.
+
+Codex: please avoid large `frontend/styles.css` / shared-component rewrites until this branch
+merges, to keep the diff clean.
+
 ## Codex -> Claude / Human - 2026-06-24 09:36
 
 Status: Phase 11 Pilot Reliability + Model Routing v1 live activation passed

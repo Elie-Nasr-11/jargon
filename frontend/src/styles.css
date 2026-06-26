@@ -15,6 +15,44 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-surface: var(--surface);
   --color-border: var(--border);
+
+  /* shadcn primitive wiring — maps the primitives' expected tokens onto the
+     existing palette so Button/Card/Badge/Input render correctly. */
+  --color-input: var(--border);
+  --color-ring: var(--ring);
+  --color-primary: var(--emphasis);
+  --color-primary-foreground: var(--background);
+  --color-secondary: var(--surface);
+  --color-secondary-foreground: var(--foreground);
+  --color-accent: var(--surface-hover);
+  --color-accent-foreground: var(--foreground);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--foreground);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+
+  /* semantic status — use with /alpha modifiers for soft fills, e.g.
+     border-success/40 bg-success/12 text-success */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  /* translucent surface tiers layered over the ambient canvas */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  /* radius scale (opt-in: rounded-control / rounded-card / rounded-pill) */
+  --radius-control: 14px;
+  --radius-card: 18px;
+  --radius-pill: 999px;
+
+  /* elevation (shadow-card / shadow-pop) */
+  --shadow-card: 0 1px 2px rgba(10, 12, 20, 0.05), 0 8px 24px rgba(10, 12, 20, 0.06);
+  --shadow-pop: 0 12px 40px rgba(10, 12, 20, 0.16);
 }
 
 :root {
@@ -54,6 +92,33 @@
   --jargon-syntax-string: #25845a;
   --jargon-syntax-number: #b86b00;
   --jargon-syntax-bracket: #777984;
+
+  /* semantic status */
+  --success: #1f8a5b;
+  --warning: #b07400;
+  --danger: #d64545;
+  --info: #2f6fd6;
+
+  /* translucent surface tiers (auto-adapt via var(--background)) */
+  --surface-1: color-mix(in oklab, var(--background) 40%, transparent);
+  --surface-2: color-mix(in oklab, var(--background) 62%, transparent);
+  --surface-3: color-mix(in oklab, var(--background) 82%, transparent);
+
+  /* focus ring */
+  --ring: rgba(10, 10, 10, 0.34);
+
+  /* motion durations */
+  --dur-fast: 0.16s;
+  --dur: 0.24s;
+  --dur-slow: 0.45s;
+
+  /* z-index ladder */
+  --z-canvas: 0;
+  --z-base: 1;
+  --z-header: 30;
+  --z-menu: 50;
+  --z-overlay: 60;
+  --z-toast: 80;
 }
 
 /* Dark mode driven exclusively by the .dark class on <html>
@@ -87,6 +152,15 @@
   --jargon-syntax-string: #8ad0a8;
   --jargon-syntax-number: #f0a868;
   --jargon-syntax-bracket: #8a8a90;
+
+  /* semantic status (dark) */
+  --success: #5ec98f;
+  --warning: #e3a949;
+  --danger: #f0716f;
+  --info: #6ea8f0;
+
+  /* focus ring (dark) */
+  --ring: rgba(245, 245, 247, 0.4);
 }
 
 @font-face {
@@ -115,7 +189,7 @@ body {
 /* Rainbow gradient — yellow → orange → pink → purple → blue */
 .grad-border {
   position: relative;
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   padding: 1.25px;
   background: linear-gradient(
     135deg,
@@ -130,7 +204,7 @@ body {
 }
 .grad-border-inner {
   background: var(--surface);
-  border-radius: 16.75px;
+  border-radius: calc(var(--radius-card) - 1.25px);
   width: 100%;
   height: 100%;
 }
@@ -270,7 +344,7 @@ body {
 
 .jargon-input {
   width: 100%;
-  border-radius: 14px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
   background: color-mix(in oklab, var(--background) 72%, transparent);
   padding: 0.68rem 0.8rem;
@@ -296,5 +370,31 @@ body {
   }
   button {
     cursor: pointer;
+  }
+}
+
+/* One consistent, crisp keyboard focus ring across every interactive element.
+   :where() keeps specificity at 0 so component/utility focus styles still win
+   where they exist (e.g. shadcn focus-visible:ring-*). */
+@layer base {
+  :where(a, button, [role="button"], input, textarea, select, summary, [tabindex]):focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 4px var(--ring);
+  }
+}
+
+/* Respect reduced-motion globally: neutralize the CSS keyframes (grad-shift,
+   shimmer-dot, run-bounce-dot) and transitions. GSAP-driven animation is
+   gated separately in JS (Stage 6). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
