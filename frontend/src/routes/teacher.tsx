@@ -26,6 +26,7 @@ import {
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
+import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import {
   createAssignment,
   createAssessment,
@@ -936,6 +937,7 @@ function ClassDetail({
   onUpdateAlertStatus: (alertId: string, status: InterventionAlert["status"]) => void;
   onUpdateResource: (resource: LessonResource) => void;
 }) {
+  const [classTab, setClassTab] = useState("overview");
   const studentSet = useMemo(() => new Set(studentIds), [studentIds]);
   const openAlerts = dashboard.interventionAlerts.filter(
     (alert) =>
@@ -975,151 +977,174 @@ function ClassDetail({
           </div>
         </div>
 
-        <div className="mt-5 rounded-3xl border border-border bg-background/35 p-4">
-          <div className="mb-3 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-            Pilot readiness
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-            <MiniMetric label="Roster" value={`${stats.students} students`} />
-            <MiniMetric label="Open work" value={String(activeAssignments.length)} />
-            <MiniMetric label="Recent complete" value={String(recentCompletions)} />
-            <MiniMetric label="Open alerts" value={String(openAlerts.length)} />
-            <MiniMetric label="Runtime errors" value={String(runtimeErrors)} />
-          </div>
-          <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
-            {openAlerts.length || runtimeErrors
-              ? "This class has support signals to review before launch."
-              : "No open intervention or runtime-error signals for this class."}
-          </p>
-        </div>
+        <Tabs value={classTab} onValueChange={setClassTab}>
+          <WorkspaceTabList>
+            <WorkspaceTab value="overview">Overview</WorkspaceTab>
+            <WorkspaceTab value="gradebook">Gradebook</WorkspaceTab>
+            <WorkspaceTab value="roster">Roster</WorkspaceTab>
+            <WorkspaceTab value="resources">Resources</WorkspaceTab>
+            <WorkspaceTab value="assignments">Assignments</WorkspaceTab>
+            <WorkspaceTab value="assessments">Assessments</WorkspaceTab>
+          </WorkspaceTabList>
 
-        <ClassAnalyticsPanel
-          dashboard={dashboard}
-          studentIds={studentIds}
-          lessonsById={lessonsById}
-          onSelectStudent={onSelectStudent}
-          updatingAlertId={updatingAlertId}
-          onUpdateAlertStatus={onUpdateAlertStatus}
-        />
-
-        <GradebookTable
-          lessons={lessons}
-          lessonsById={lessonsById}
-          studentIds={studentIds}
-          dashboard={dashboard}
-          profilesById={profilesById}
-          selectedLessonId={selectedLessonId}
-          selectedStudentId={selectedStudentId}
-          onSelectLesson={onSelectLesson}
-          onSelectStudent={onSelectStudent}
-        />
-
-        <ResourceManager
-          classSummary={item}
-          lessons={lessons}
-          resources={resources}
-          saving={savingResource}
-          onSaveResource={onSaveResource}
-          onUpdateResource={onUpdateResource}
-        />
-
-        <AssessmentManager
-          classSummary={item}
-          lessons={lessons}
-          quizItems={quizItems}
-          assessments={assessments}
-          assessmentItems={assessmentItems}
-          assessmentRecipients={assessmentRecipients}
-          assessmentAttempts={assessmentAttempts}
-          assessmentItemAttempts={assessmentItemAttempts}
-          studentIds={studentIds}
-          profilesById={profilesById}
-          saving={savingAssessment}
-          onSaveAssessment={onSaveAssessment}
-          onSetAssessmentStatus={onSetAssessmentStatus}
-          onReviewAssessmentItem={onReviewAssessmentItem}
-          onReturnAssessment={onReturnAssessment}
-        />
-
-        <AssignmentManager
-          classSummary={item}
-          lessons={lessons}
-          resources={resources}
-          assignments={assignments}
-          recipients={assignmentRecipients}
-          submissions={assignmentSubmissions}
-          files={assignmentSubmissionFiles}
-          studentIds={studentIds}
-          profilesById={profilesById}
-          saving={savingAssignment}
-          onSaveAssignment={onSaveAssignment}
-          onSetAssignmentStatus={onSetAssignmentStatus}
-          onReviewSubmission={onReviewSubmission}
-        />
-
-        <div className="mt-5 grid gap-3">
-          {studentIds.length ? (
-            studentIds.map((studentId) => {
-              const profile = profilesById.get(studentId) || null;
-              const latest = latestSessionFor(dashboard.sessions, studentId);
-              const completedLessons = completedLessonNamesFor(
-                dashboard.sessions,
-                studentId,
-                lessonsById,
-              );
-              const masteryCount = dashboard.mastery.filter(
-                (item) => item.user_id === studentId,
-              ).length;
-              return (
-                <button
-                  type="button"
-                  key={studentId}
-                  onClick={() => onSelectStudent(studentId)}
-                  className={`rounded-3xl border p-4 text-left transition-colors ${
-                    selectedStudentId === studentId
-                      ? "border-foreground/25 bg-background/80"
-                      : "border-border bg-background/45 hover:bg-muted"
-                  }`}
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-[14px] font-medium text-foreground">
-                        {displayName(profile, studentId)}
-                      </div>
-                      <div className="mt-1 text-[12px] text-muted-foreground">
-                        {profile?.grade || "Grade not set"} - {masteryCount} mastery skills
-                      </div>
-                      <div className="mt-2 text-[12px] text-muted-foreground">
-                        {completedLessons.length
-                          ? `Completed: ${completedLessons.join(", ")}`
-                          : "No completed lessons yet"}
-                      </div>
-                    </div>
-                    <div className="text-left text-[12px] text-muted-foreground sm:text-right">
-                      <div>{latest ? statusLabel(latest) : "No session yet"}</div>
-                      <div className="mt-1">
-                        {latest
-                          ? lessonName(lessonsById, latest.lesson_id)
-                          : "Waiting for first lesson"}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })
-          ) : (
-            <div className="rounded-3xl border border-border bg-background/45 p-5 text-[13px] text-muted-foreground">
-              No active students are assigned to this class yet.
+          <WorkspacePanel value="overview">
+            <div className="mt-5 rounded-3xl border border-border bg-background/35 p-4">
+              <div className="mb-3 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                Pilot readiness
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                <MiniMetric label="Roster" value={`${stats.students} students`} />
+                <MiniMetric label="Open work" value={String(activeAssignments.length)} />
+                <MiniMetric label="Recent complete" value={String(recentCompletions)} />
+                <MiniMetric label="Open alerts" value={String(openAlerts.length)} />
+                <MiniMetric label="Runtime errors" value={String(runtimeErrors)} />
+              </div>
+              <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
+                {openAlerts.length || runtimeErrors
+                  ? "This class has support signals to review before launch."
+                  : "No open intervention or runtime-error signals for this class."}
+              </p>
             </div>
-          )}
-        </div>
 
-        <LessonProgress
-          lessons={lessons}
-          studentIds={studentIds}
-          dashboard={dashboard}
-          profilesById={profilesById}
-        />
+            <ClassAnalyticsPanel
+              dashboard={dashboard}
+              studentIds={studentIds}
+              lessonsById={lessonsById}
+              onSelectStudent={onSelectStudent}
+              updatingAlertId={updatingAlertId}
+              onUpdateAlertStatus={onUpdateAlertStatus}
+            />
+          </WorkspacePanel>
+
+          <WorkspacePanel value="gradebook">
+            <GradebookTable
+              lessons={lessons}
+              lessonsById={lessonsById}
+              studentIds={studentIds}
+              dashboard={dashboard}
+              profilesById={profilesById}
+              selectedLessonId={selectedLessonId}
+              selectedStudentId={selectedStudentId}
+              onSelectLesson={onSelectLesson}
+              onSelectStudent={onSelectStudent}
+            />
+          </WorkspacePanel>
+
+          <WorkspacePanel value="resources">
+            <ResourceManager
+              classSummary={item}
+              lessons={lessons}
+              resources={resources}
+              saving={savingResource}
+              onSaveResource={onSaveResource}
+              onUpdateResource={onUpdateResource}
+            />
+          </WorkspacePanel>
+
+          <WorkspacePanel value="assessments">
+            <AssessmentManager
+              classSummary={item}
+              lessons={lessons}
+              quizItems={quizItems}
+              assessments={assessments}
+              assessmentItems={assessmentItems}
+              assessmentRecipients={assessmentRecipients}
+              assessmentAttempts={assessmentAttempts}
+              assessmentItemAttempts={assessmentItemAttempts}
+              studentIds={studentIds}
+              profilesById={profilesById}
+              saving={savingAssessment}
+              onSaveAssessment={onSaveAssessment}
+              onSetAssessmentStatus={onSetAssessmentStatus}
+              onReviewAssessmentItem={onReviewAssessmentItem}
+              onReturnAssessment={onReturnAssessment}
+            />
+          </WorkspacePanel>
+
+          <WorkspacePanel value="assignments">
+            <AssignmentManager
+              classSummary={item}
+              lessons={lessons}
+              resources={resources}
+              assignments={assignments}
+              recipients={assignmentRecipients}
+              submissions={assignmentSubmissions}
+              files={assignmentSubmissionFiles}
+              studentIds={studentIds}
+              profilesById={profilesById}
+              saving={savingAssignment}
+              onSaveAssignment={onSaveAssignment}
+              onSetAssignmentStatus={onSetAssignmentStatus}
+              onReviewSubmission={onReviewSubmission}
+            />
+          </WorkspacePanel>
+
+          <WorkspacePanel value="roster">
+            <div className="mt-5 grid gap-3">
+              {studentIds.length ? (
+                studentIds.map((studentId) => {
+                  const profile = profilesById.get(studentId) || null;
+                  const latest = latestSessionFor(dashboard.sessions, studentId);
+                  const completedLessons = completedLessonNamesFor(
+                    dashboard.sessions,
+                    studentId,
+                    lessonsById,
+                  );
+                  const masteryCount = dashboard.mastery.filter(
+                    (item) => item.user_id === studentId,
+                  ).length;
+                  return (
+                    <button
+                      type="button"
+                      key={studentId}
+                      onClick={() => onSelectStudent(studentId)}
+                      className={`rounded-3xl border p-4 text-left transition-colors ${
+                        selectedStudentId === studentId
+                          ? "border-foreground/25 bg-background/80"
+                          : "border-border bg-background/45 hover:bg-muted"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-[14px] font-medium text-foreground">
+                            {displayName(profile, studentId)}
+                          </div>
+                          <div className="mt-1 text-[12px] text-muted-foreground">
+                            {profile?.grade || "Grade not set"} - {masteryCount} mastery skills
+                          </div>
+                          <div className="mt-2 text-[12px] text-muted-foreground">
+                            {completedLessons.length
+                              ? `Completed: ${completedLessons.join(", ")}`
+                              : "No completed lessons yet"}
+                          </div>
+                        </div>
+                        <div className="text-left text-[12px] text-muted-foreground sm:text-right">
+                          <div>{latest ? statusLabel(latest) : "No session yet"}</div>
+                          <div className="mt-1">
+                            {latest
+                              ? lessonName(lessonsById, latest.lesson_id)
+                              : "Waiting for first lesson"}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="rounded-3xl border border-border bg-background/45 p-5 text-[13px] text-muted-foreground">
+                  No active students are assigned to this class yet.
+                </div>
+              )}
+            </div>
+
+            <LessonProgress
+              lessons={lessons}
+              studentIds={studentIds}
+              dashboard={dashboard}
+              profilesById={profilesById}
+            />
+          </WorkspacePanel>
+        </Tabs>
       </div>
     </GradientCard>
   );
@@ -3861,6 +3886,7 @@ function StudentDetail({
   onSendLiveComment: () => void;
   onBack: () => void;
 }) {
+  const [studentTab, setStudentTab] = useState("overview");
   const turns = selectedSession
     ? dashboard.turns.filter((turn) => turn.session_id === selectedSession.id)
     : [];
@@ -3981,281 +4007,311 @@ function StudentDetail({
           </div>
         ) : null}
 
-        <StudentAnalyticsPanel
-          dashboard={dashboard}
-          studentId={studentId}
-          lessonsById={lessonsById}
-        />
+        <Tabs value={studentTab} onValueChange={setStudentTab}>
+          <WorkspaceTabList>
+            <WorkspaceTab value="overview">Overview</WorkspaceTab>
+            <WorkspaceTab value="transcript">Transcript &amp; notes</WorkspaceTab>
+            <WorkspaceTab value="records">Records</WorkspaceTab>
+          </WorkspaceTabList>
 
-        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-          <Panel title="Transcript" icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}>
-            {sessions.length ? (
-              <div className="mb-3 grid gap-3">
-                <SessionChipGroup
-                  label="Active"
-                  sessions={activeSessions}
-                  lessonsById={lessonsById}
-                  selectedSessionId={selectedSessionId}
-                  onSelectSession={onSelectSession}
-                />
-                <SessionChipGroup
-                  label="Completed"
-                  sessions={completedSessions}
-                  lessonsById={lessonsById}
-                  selectedSessionId={selectedSessionId}
-                  onSelectSession={onSelectSession}
-                />
-              </div>
-            ) : null}
+          <WorkspacePanel value="overview">
+            <StudentAnalyticsPanel
+              dashboard={dashboard}
+              studentId={studentId}
+              lessonsById={lessonsById}
+            />
+          </WorkspacePanel>
 
-            {selectedSession && canWatchSelectedSession ? (
-              <div className="mb-3 rounded-2xl border border-border bg-background/45 p-3">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-[12px] font-medium text-foreground">Live teacher tip</div>
-                    <div className="text-[11.5px] text-muted-foreground">
-                      Visible in the student chat as a Teacher message.
+          <WorkspacePanel value="transcript">
+            <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+              <Panel
+                title="Transcript"
+                icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}
+              >
+                {sessions.length ? (
+                  <div className="mb-3 grid gap-3">
+                    <SessionChipGroup
+                      label="Active"
+                      sessions={activeSessions}
+                      lessonsById={lessonsById}
+                      selectedSessionId={selectedSessionId}
+                      onSelectSession={onSelectSession}
+                    />
+                    <SessionChipGroup
+                      label="Completed"
+                      sessions={completedSessions}
+                      lessonsById={lessonsById}
+                      selectedSessionId={selectedSessionId}
+                      onSelectSession={onSelectSession}
+                    />
+                  </div>
+                ) : null}
+
+                {selectedSession && canWatchSelectedSession ? (
+                  <div className="mb-3 rounded-2xl border border-border bg-background/45 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[12px] font-medium text-foreground">
+                          Live teacher tip
+                        </div>
+                        <div className="text-[11.5px] text-muted-foreground">
+                          Visible in the student chat as a Teacher message.
+                        </div>
+                      </div>
+                      {watchingSelectedSession ? (
+                        <span className="rounded-full border border-blue-400/35 bg-blue-400/10 px-2.5 py-1 text-[11px] text-blue-200">
+                          Watching
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        value={liveCommentDraft}
+                        onChange={(event) => onLiveCommentChange(event.target.value)}
+                        disabled={!watchingSelectedSession}
+                        placeholder={
+                          watchingSelectedSession
+                            ? "Send a short tip to this student..."
+                            : "Start watching live before sending a tip."
+                        }
+                        className="min-w-0 flex-1 rounded-full border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-55"
+                      />
+                      <button
+                        type="button"
+                        onClick={onSendLiveComment}
+                        disabled={
+                          !watchingSelectedSession || !liveCommentDraft.trim() || sendingLiveComment
+                        }
+                        className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-3 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
+                        {sendingLiveComment ? "Sending..." : "Send"}
+                      </button>
                     </div>
                   </div>
-                  {watchingSelectedSession ? (
-                    <span className="rounded-full border border-blue-400/35 bg-blue-400/10 px-2.5 py-1 text-[11px] text-blue-200">
-                      Watching
-                    </span>
-                  ) : null}
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    value={liveCommentDraft}
-                    onChange={(event) => onLiveCommentChange(event.target.value)}
-                    disabled={!watchingSelectedSession}
-                    placeholder={
-                      watchingSelectedSession
-                        ? "Send a short tip to this student..."
-                        : "Start watching live before sending a tip."
-                    }
-                    className="min-w-0 flex-1 rounded-full border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-55"
-                  />
-                  <button
-                    type="button"
-                    onClick={onSendLiveComment}
-                    disabled={
-                      !watchingSelectedSession || !liveCommentDraft.trim() || sendingLiveComment
-                    }
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-3 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    {sendingLiveComment ? "Sending..." : "Send"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
+                ) : null}
 
-            {transcriptItems.length ? (
-              <div className="max-h-[440px] space-y-3 overflow-auto pr-1">
-                {transcriptItems.map((item) => {
-                  if (item.kind === "live_comment") {
-                    return (
-                      <div
-                        key={item.id}
-                        className="rounded-3xl border border-blue-400/35 bg-blue-400/10 p-4"
-                      >
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <span className="text-[12px] uppercase tracking-[0.1em] text-blue-200">
-                            Teacher live
-                          </span>
-                          <span className="text-[11.5px] text-muted-foreground">
-                            {formatDateTime(item.comment.created_at)}
-                          </span>
-                        </div>
-                        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-                          {item.comment.content}
-                        </p>
-                      </div>
-                    );
-                  }
-                  const modality = inputModalityFromPayload(item.turn.payload);
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-3xl border border-border bg-background/45 p-4"
-                    >
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <span className="flex flex-wrap items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                          {item.turn.role} - {item.turn.stage}
-                          {modality === "dictated" || modality === "audio_session" ? (
-                            <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] tracking-[0.08em] text-muted-foreground">
-                              {modality === "audio_session" ? "Voice" : "Dictated"}
+                {transcriptItems.length ? (
+                  <div className="max-h-[440px] space-y-3 overflow-auto pr-1">
+                    {transcriptItems.map((item) => {
+                      if (item.kind === "live_comment") {
+                        return (
+                          <div
+                            key={item.id}
+                            className="rounded-3xl border border-blue-400/35 bg-blue-400/10 p-4"
+                          >
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[12px] uppercase tracking-[0.1em] text-blue-200">
+                                Teacher live
+                              </span>
+                              <span className="text-[11.5px] text-muted-foreground">
+                                {formatDateTime(item.comment.created_at)}
+                              </span>
+                            </div>
+                            <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
+                              {item.comment.content}
+                            </p>
+                          </div>
+                        );
+                      }
+                      const modality = inputModalityFromPayload(item.turn.payload);
+                      return (
+                        <div
+                          key={item.id}
+                          className="rounded-3xl border border-border bg-background/45 p-4"
+                        >
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <span className="flex flex-wrap items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                              {item.turn.role} - {item.turn.stage}
+                              {modality === "dictated" || modality === "audio_session" ? (
+                                <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] tracking-[0.08em] text-muted-foreground">
+                                  {modality === "audio_session" ? "Voice" : "Dictated"}
+                                </span>
+                              ) : null}
                             </span>
-                          ) : null}
-                        </span>
-                        <span className="text-[11.5px] text-muted-foreground">
-                          {formatDateTime(item.turn.created_at)}
-                        </span>
-                      </div>
-                      <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-                        {item.turn.content || "[Empty turn]"}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyInline
-                title={
-                  sessions.length && !selectedSession ? "Choose a session" : "No transcript yet"
-                }
-                body={
-                  sessions.length && !selectedSession
-                    ? "Choose a session to inspect the transcript."
-                    : "The transcript will appear after this student starts or completes a lesson."
-                }
-              />
-            )}
-          </Panel>
-
-          <div className="grid gap-4">
-            <Panel
-              title="Teacher notes"
-              icon={<NotebookText className="h-4 w-4" strokeWidth={1.6} />}
-            >
-              <textarea
-                value={noteDraft}
-                onChange={(event) => onNoteChange(event.target.value)}
-                placeholder="Add a private observation or student-visible note..."
-                className="min-h-[96px] w-full rounded-2xl border border-border bg-background/60 px-3 py-3 text-[13px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/30"
-              />
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <select
-                  value={noteVisibility}
-                  onChange={(event) =>
-                    onNoteVisibilityChange(event.target.value as TeacherNote["visibility"])
-                  }
-                  className="rounded-full border border-border bg-background/60 px-3 py-2 text-[12px] text-foreground outline-none"
-                >
-                  <option value="teacher_private">Teacher private</option>
-                  <option value="student_visible">Student visible</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={onSaveNote}
-                  disabled={!noteDraft.trim() || savingNote}
-                  className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  {savingNote ? "Saving..." : "Save note"}
-                </button>
-              </div>
-              <div className="mt-4 space-y-2">
-                {notes.length ? (
-                  notes.map((note) => (
-                    <div
-                      key={note.id}
-                      className="rounded-2xl border border-border bg-background/45 p-3"
-                    >
-                      <div className="mb-1 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
-                        <span>
-                          {note.visibility === "student_visible" ? "Student visible" : "Private"}
-                        </span>
-                        <span>{formatDateTime(note.created_at)}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-                        {note.note}
-                      </p>
-                    </div>
-                  ))
+                            <span className="text-[11.5px] text-muted-foreground">
+                              {formatDateTime(item.turn.created_at)}
+                            </span>
+                          </div>
+                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
+                            {item.turn.content || "[Empty turn]"}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <div className="text-[12.5px] text-muted-foreground">No notes yet.</div>
+                  <EmptyInline
+                    title={
+                      sessions.length && !selectedSession ? "Choose a session" : "No transcript yet"
+                    }
+                    body={
+                      sessions.length && !selectedSession
+                        ? "Choose a session to inspect the transcript."
+                        : "The transcript will appear after this student starts or completes a lesson."
+                    }
+                  />
                 )}
-              </div>
-            </Panel>
+              </Panel>
 
-            <Panel title="Mastery" icon={<GraduationCap className="h-4 w-4" strokeWidth={1.6} />}>
-              {mastery.length ? (
-                <div className="space-y-2">
-                  {mastery.map((item) => (
-                    <div
-                      key={`${item.user_id}-${item.skill_key}`}
-                      className="rounded-2xl border border-border bg-background/45 p-3"
+              <div className="grid gap-4">
+                <Panel
+                  title="Teacher notes"
+                  icon={<NotebookText className="h-4 w-4" strokeWidth={1.6} />}
+                >
+                  <textarea
+                    value={noteDraft}
+                    onChange={(event) => onNoteChange(event.target.value)}
+                    placeholder="Add a private observation or student-visible note..."
+                    className="min-h-[96px] w-full rounded-2xl border border-border bg-background/60 px-3 py-3 text-[13px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/30"
+                  />
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <select
+                      value={noteVisibility}
+                      onChange={(event) =>
+                        onNoteVisibilityChange(event.target.value as TeacherNote["visibility"])
+                      }
+                      className="rounded-full border border-border bg-background/60 px-3 py-2 text-[12px] text-foreground outline-none"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-medium text-foreground">
-                          {item.skill_key}
-                        </span>
-                        <span className="text-[12px] text-muted-foreground">{item.level}</span>
-                      </div>
-                      <div className="mt-1 text-[12px] text-muted-foreground">
-                        {item.evidence_count} evidence - score {formatScore(item.score)}
-                      </div>
+                      <option value="teacher_private">Teacher private</option>
+                      <option value="student_visible">Student visible</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={onSaveNote}
+                      disabled={!noteDraft.trim() || savingNote}
+                      className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      {savingNote ? "Saving..." : "Save note"}
+                    </button>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {notes.length ? (
+                      notes.map((note) => (
+                        <div
+                          key={note.id}
+                          className="rounded-2xl border border-border bg-background/45 p-3"
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
+                            <span>
+                              {note.visibility === "student_visible"
+                                ? "Student visible"
+                                : "Private"}
+                            </span>
+                            <span>{formatDateTime(note.created_at)}</span>
+                          </div>
+                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
+                            {note.note}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-[12.5px] text-muted-foreground">No notes yet.</div>
+                    )}
+                  </div>
+                </Panel>
+
+                <Panel
+                  title="Mastery"
+                  icon={<GraduationCap className="h-4 w-4" strokeWidth={1.6} />}
+                >
+                  {mastery.length ? (
+                    <div className="space-y-2">
+                      {mastery.map((item) => (
+                        <div
+                          key={`${item.user_id}-${item.skill_key}`}
+                          className="rounded-2xl border border-border bg-background/45 p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[13px] font-medium text-foreground">
+                              {item.skill_key}
+                            </span>
+                            <span className="text-[12px] text-muted-foreground">{item.level}</span>
+                          </div>
+                          <div className="mt-1 text-[12px] text-muted-foreground">
+                            {item.evidence_count} evidence - score {formatScore(item.score)}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyInline
-                  title="No mastery rows"
-                  body="Mastery appears after assessed lesson work."
-                />
-              )}
-            </Panel>
-          </div>
-        </div>
+                  ) : (
+                    <EmptyInline
+                      title="No mastery rows"
+                      body="Mastery appears after assessed lesson work."
+                    />
+                  )}
+                </Panel>
+              </div>
+            </div>
+          </WorkspacePanel>
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-3">
-          <Panel
-            title="Lesson attempts"
-            icon={<ClipboardList className="h-4 w-4" strokeWidth={1.6} />}
-          >
-            {attempts.length ? (
-              <RecordList
-                items={attempts.slice(0, 8).map((item) => ({
-                  id: item.id,
-                  title: `${lessonName(lessonsById, item.lesson_id)} - ${item.answer_mode}`,
-                  meta: `${modalityLabel(item.input_modality)}${formatPass(item.passed)} - score ${formatScore(
-                    item.score,
-                  )}`,
-                  body:
-                    item.feedback || item.answer_text || item.answer_code || "No feedback text.",
-                }))}
-              />
-            ) : (
-              <EmptyInline
-                title="No attempts"
-                body="Code/text attempts appear after lesson activity."
-              />
-            )}
-          </Panel>
+          <WorkspacePanel value="records">
+            <div className="mt-4 grid gap-4 xl:grid-cols-3">
+              <Panel
+                title="Lesson attempts"
+                icon={<ClipboardList className="h-4 w-4" strokeWidth={1.6} />}
+              >
+                {attempts.length ? (
+                  <RecordList
+                    items={attempts.slice(0, 8).map((item) => ({
+                      id: item.id,
+                      title: `${lessonName(lessonsById, item.lesson_id)} - ${item.answer_mode}`,
+                      meta: `${modalityLabel(item.input_modality)}${formatPass(item.passed)} - score ${formatScore(
+                        item.score,
+                      )}`,
+                      body:
+                        item.feedback ||
+                        item.answer_text ||
+                        item.answer_code ||
+                        "No feedback text.",
+                    }))}
+                  />
+                ) : (
+                  <EmptyInline
+                    title="No attempts"
+                    body="Code/text attempts appear after lesson activity."
+                  />
+                )}
+              </Panel>
 
-          <Panel title="Quiz checks" icon={<BookOpen className="h-4 w-4" strokeWidth={1.6} />}>
-            {quizAttempts.length ? (
-              <RecordList
-                items={quizAttempts.slice(0, 8).map((item) => ({
-                  id: item.id,
-                  title: `${lessonName(lessonsById, item.lesson_id)} - ${item.choice_id || item.answer_mode}`,
-                  meta: `${formatPass(item.passed)} - score ${formatScore(item.score)}`,
-                  body: item.feedback || item.answer_text || "Objective quiz attempt.",
-                }))}
-              />
-            ) : (
-              <EmptyInline
-                title="No quiz attempts"
-                body="Quiz records appear after a checkpoint."
-              />
-            )}
-          </Panel>
+              <Panel title="Quiz checks" icon={<BookOpen className="h-4 w-4" strokeWidth={1.6} />}>
+                {quizAttempts.length ? (
+                  <RecordList
+                    items={quizAttempts.slice(0, 8).map((item) => ({
+                      id: item.id,
+                      title: `${lessonName(lessonsById, item.lesson_id)} - ${item.choice_id || item.answer_mode}`,
+                      meta: `${formatPass(item.passed)} - score ${formatScore(item.score)}`,
+                      body: item.feedback || item.answer_text || "Objective quiz attempt.",
+                    }))}
+                  />
+                ) : (
+                  <EmptyInline
+                    title="No quiz attempts"
+                    body="Quiz records appear after a checkpoint."
+                  />
+                )}
+              </Panel>
 
-          <Panel title="Evidence" icon={<FileText className="h-4 w-4" strokeWidth={1.6} />}>
-            {evidence.length ? (
-              <RecordList
-                items={evidence.slice(0, 8).map((item) => ({
-                  id: item.id,
-                  title: `${item.source_type} - ${item.skill_keys.join(", ") || "skill evidence"}`,
-                  meta: `${lessonName(lessonsById, item.lesson_id)} - score ${formatScore(item.score)}`,
-                  body: item.notes || "Evidence captured from lesson work.",
-                }))}
-              />
-            ) : (
-              <EmptyInline title="No evidence" body="Evidence appears after rubric-backed work." />
-            )}
-          </Panel>
-        </div>
+              <Panel title="Evidence" icon={<FileText className="h-4 w-4" strokeWidth={1.6} />}>
+                {evidence.length ? (
+                  <RecordList
+                    items={evidence.slice(0, 8).map((item) => ({
+                      id: item.id,
+                      title: `${item.source_type} - ${item.skill_keys.join(", ") || "skill evidence"}`,
+                      meta: `${lessonName(lessonsById, item.lesson_id)} - score ${formatScore(item.score)}`,
+                      body: item.notes || "Evidence captured from lesson work.",
+                    }))}
+                  />
+                ) : (
+                  <EmptyInline
+                    title="No evidence"
+                    body="Evidence appears after rubric-backed work."
+                  />
+                )}
+              </Panel>
+            </div>
+          </WorkspacePanel>
+        </Tabs>
       </div>
     </GradientCard>
   );
