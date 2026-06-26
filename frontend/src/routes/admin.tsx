@@ -167,10 +167,10 @@ function readinessLabel(status: ReadinessStatus) {
 }
 
 function readinessTone(status: ReadinessStatus) {
-  if (status === "ready") return "border-emerald-500/40 text-emerald-500";
-  if (status === "needs_attention") return "border-amber-500/45 text-amber-500";
-  if (status === "needs_setup") return "border-sky-500/45 text-sky-500";
-  return "border-red-500/45 text-red-500";
+  if (status === "ready") return "border-success/45 text-success";
+  if (status === "needs_attention") return "border-warning/45 text-warning";
+  if (status === "needs_setup") return "border-info/45 text-info";
+  return "border-danger/45 text-danger";
 }
 
 function formatNumber(value: number | null | undefined) {
@@ -2570,7 +2570,7 @@ function AdminPage() {
                       value={defaultPassword}
                       onChange={(event) => setDefaultPassword(event.target.value)}
                       placeholder="Optional if every row has a password"
-                      className={`jargon-input ${hasShortDefaultPassword ? "border-red-500/60" : ""}`}
+                      className={`jargon-input ${hasShortDefaultPassword ? "border-danger/60" : ""}`}
                     />
                     <p
                       className={`mt-1.5 text-[12px] ${
@@ -2681,7 +2681,7 @@ function AdminPage() {
                                   updateRow(row.rowId, { email: event.target.value })
                                 }
                                 className={`jargon-input min-w-[220px] ${
-                                  emailErrors[row.rowId] ? "border-red-500/60" : ""
+                                  emailErrors[row.rowId] ? "border-danger/60" : ""
                                 }`}
                               />
                               {emailErrors[row.rowId] ? (
@@ -2699,7 +2699,7 @@ function AdminPage() {
                                   updateRow(row.rowId, { name: event.target.value })
                                 }
                                 className={`jargon-input min-w-[180px] ${
-                                  nameErrors[row.rowId] ? "border-red-500/60" : ""
+                                  nameErrors[row.rowId] ? "border-danger/60" : ""
                                 }`}
                               />
                               {nameErrors[row.rowId] ? (
@@ -2727,7 +2727,7 @@ function AdminPage() {
                                   updateRow(row.rowId, { password: event.target.value })
                                 }
                                 className={`jargon-input min-w-[180px] ${
-                                  passwordErrors[row.rowId] ? "border-red-500/60" : ""
+                                  passwordErrors[row.rowId] ? "border-danger/60" : ""
                                 }`}
                               />
                               {passwordErrors[row.rowId] ? (

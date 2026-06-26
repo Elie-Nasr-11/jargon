@@ -868,8 +868,8 @@ function ChatPage() {
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
         {activeLiveViewers.length ? (
           <div className="mb-3 flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/35 bg-blue-400/10 px-3 py-1.5 text-[12px] text-blue-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-blue-300" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-info/40 bg-info/12 px-3 py-1.5 text-[12px] text-info">
+              <span className="h-1.5 w-1.5 rounded-full bg-info" />
               Teacher viewing
               {activeLiveViewers.length > 1 ? ` · ${activeLiveViewers.length}` : ""}
             </div>
@@ -1187,11 +1187,11 @@ function RealtimeVoicePanel({
           <span
             className={`h-2 w-2 rounded-full ${
               status === "live"
-                ? "bg-emerald-400"
+                ? "bg-success"
                 : status === "connecting"
-                  ? "bg-amber-300"
+                  ? "bg-warning"
                   : status === "error"
-                    ? "bg-red-400"
+                    ? "bg-danger"
                     : "bg-muted-foreground/50"
             }`}
           />
@@ -1267,7 +1267,7 @@ function AssessmentDock({
                       Latest score {formatChatScore(latestAttempt.final_score)}
                     </div>
                   ) : recipient?.status === "submitted" ? (
-                    <div className="mt-1 text-[11.5px] text-amber-500">
+                    <div className="mt-1 text-[11.5px] text-warning">
                       Submitted · pending teacher review
                     </div>
                   ) : null}
@@ -1604,8 +1604,8 @@ function MessageRow({
     return (
       <div ref={ref} className="flex">
         <div className="w-full max-w-[92%] space-y-2">
-          <div className="rounded-2xl border border-blue-400/35 bg-blue-400/10 px-4 py-3">
-            <div className="mb-1 text-[11px] uppercase tracking-[0.1em] text-blue-200">Teacher</div>
+          <div className="rounded-2xl border border-info/40 bg-info/12 px-4 py-3">
+            <div className="mb-1 text-[11px] uppercase tracking-[0.1em] text-info">Teacher</div>
             <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
               {msg.text}
             </p>

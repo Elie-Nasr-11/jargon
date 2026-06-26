@@ -4403,10 +4403,10 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
 function ResourceStatusChip({ status }: { status: LessonResourceStatus }) {
   const classes =
     status === "published"
-      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      ? "border-success/40 bg-success/12 text-success"
       : status === "archived"
         ? "border-border bg-background/45 text-muted-foreground"
-        : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+        : "border-warning/40 bg-warning/12 text-warning";
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
       {status}
@@ -4417,10 +4417,10 @@ function ResourceStatusChip({ status }: { status: LessonResourceStatus }) {
 function ResourceChunkStatusChip({ status }: { status: ResourceTextChunkStatus }) {
   const classes =
     status === "approved"
-      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      ? "border-success/40 bg-success/12 text-success"
       : status === "rejected"
         ? "border-border bg-background/45 text-muted-foreground"
-        : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+        : "border-warning/40 bg-warning/12 text-warning";
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
       {status}
@@ -4431,12 +4431,12 @@ function ResourceChunkStatusChip({ status }: { status: ResourceTextChunkStatus }
 function AssignmentStatusChip({ status }: { status: AssignmentStatus }) {
   const classes =
     status === "assigned"
-      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      ? "border-success/40 bg-success/12 text-success"
       : status === "archived"
         ? "border-border bg-background/45 text-muted-foreground"
         : status === "recommended"
-          ? "border-blue-500/35 bg-blue-500/10 text-blue-500"
-          : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+          ? "border-info/40 bg-info/12 text-info"
+          : "border-warning/40 bg-warning/12 text-warning";
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
       {status.replace("_", " ")}
@@ -4447,11 +4447,11 @@ function AssignmentStatusChip({ status }: { status: AssignmentStatus }) {
 function AssignmentRecipientChip({ status }: { status: AssignmentRecipient["status"] }) {
   const classes =
     status === "complete"
-      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      ? "border-success/40 bg-success/12 text-success"
       : status === "submitted"
-        ? "border-blue-500/35 bg-blue-500/10 text-blue-500"
+        ? "border-info/40 bg-info/12 text-info"
         : status === "returned"
-          ? "border-amber-500/35 bg-amber-500/10 text-amber-500"
+          ? "border-warning/40 bg-warning/12 text-warning"
           : "border-border bg-background/45 text-muted-foreground";
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
@@ -4463,10 +4463,10 @@ function AssignmentRecipientChip({ status }: { status: AssignmentRecipient["stat
 function AssessmentStatusChip({ status }: { status: AssessmentStatus }) {
   const classes =
     status === "published"
-      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      ? "border-success/40 bg-success/12 text-success"
       : status === "archived"
         ? "border-border bg-background/45 text-muted-foreground"
-        : "border-amber-500/35 bg-amber-500/10 text-amber-500";
+        : "border-warning/40 bg-warning/12 text-warning";
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
       {status}
@@ -4477,13 +4477,13 @@ function AssessmentStatusChip({ status }: { status: AssessmentStatus }) {
 function AssessmentRecipientChip({ status }: { status: AssessmentRecipient["status"] }) {
   const classes =
     status === "complete"
-      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+      ? "border-success/40 bg-success/12 text-success"
       : status === "submitted"
-        ? "border-blue-500/35 bg-blue-500/10 text-blue-500"
+        ? "border-info/40 bg-info/12 text-info"
         : status === "started"
-          ? "border-cyan-500/35 bg-cyan-500/10 text-cyan-500"
+          ? "border-info/40 bg-info/12 text-info"
           : status === "returned"
-            ? "border-amber-500/35 bg-amber-500/10 text-amber-500"
+            ? "border-warning/40 bg-warning/12 text-warning"
             : "border-border bg-background/45 text-muted-foreground";
   return (
     <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
@@ -4943,7 +4943,7 @@ function gradebookRowForStudent(
     statusLabel: `${completedCount}/${totalLessons} complete`,
     statusClass:
       completedCount > 0
-        ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-500"
+        ? "border-success/40 bg-success/12 text-success"
         : "border-border bg-background/45 text-muted-foreground",
     lessonDetail: activeCount
       ? `${activeCount} active lesson${activeCount === 1 ? "" : "s"}`
@@ -5021,21 +5021,21 @@ function lessonProgressStatus(
 
 function lessonStatusClass(status: LessonProgressStatus) {
   if (status === "Complete") {
-    return "border-emerald-500/35 bg-emerald-500/10 text-emerald-500";
+    return "border-success/40 bg-success/12 text-success";
   }
   if (status === "Active") {
-    return "border-blue-500/35 bg-blue-500/10 text-blue-500";
+    return "border-info/40 bg-info/12 text-info";
   }
   if (status === "Retry") {
-    return "border-amber-500/35 bg-amber-500/10 text-amber-500";
+    return "border-warning/40 bg-warning/12 text-warning";
   }
   return "border-border bg-background/45 text-muted-foreground";
 }
 
 function severityClass(severity: "low" | "medium" | "high") {
   if (severity === "high") return "border-red-500/35 bg-red-500/10 text-red-500";
-  if (severity === "medium") return "border-amber-500/35 bg-amber-500/10 text-amber-500";
-  return "border-blue-500/35 bg-blue-500/10 text-blue-500";
+  if (severity === "medium") return "border-warning/40 bg-warning/12 text-warning";
+  return "border-info/40 bg-info/12 text-info";
 }
 
 function severityRank(severity: "low" | "medium" | "high") {
