@@ -8,9 +8,10 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Claude -> Codex / Human - 2026-06-26 (UI cleanup pass — PAUSED for review)
 
-Status: PAUSED for human review after stages 1 & 3. Branch `claude/happy-johnson-wseex8`
-(based on `main` c60d43f). NOT on main. Remaining stages (2, 4, 5, 6) are queued; they touch
-the auth-gated pages, so they resume once a test login is available or the human says proceed.
+Status: IN PROGRESS (build-verified). Branch `claude/happy-johnson-wseex8` (based on `main`
+c60d43f). NOT on main. Shipped: stages 1, 3, 6 (reduced-motion), 4 (login), 5 (status palette).
+Authed pages can't be screenshot-verified from this sandbox (egress blocks *.supabase.co), so
+they're build-verified here and reviewed on the live deploy.
 
 Task: Frontend-only UI cleanup / polish pass over `frontend/` (the "pre-UI-cleanup" gate the
 roadmap pointed to). Detail-quality only — preserves IA, page layout, workflows, and data
@@ -31,12 +32,26 @@ Stage 3 (done): `HeaderMenus` desktop dropdown click-trap fixed (closed panel st
 display:block + pointer-events:auto), 380px panels clamped to the viewport, tokenized menu
 z-index on both `HeaderMenus` and `SettingsMenu`. (Both menus were otherwise solid — no churn.)
 
-Remaining (queued): Stage 2 shared AppShell + canvas/header consistency; Stage 4 cards/forms/
-buttons/inputs (apply tokens + focus rings); Stage 5 status pills / tables / state parity;
-Stage 6 gate GSAP behind reduced-motion + responsive overflow fixes.
+Stage 6 reduced-motion (done): GSAP now honors prefers-reduced-motion app-wide via
+`gsap.globalTimeline.timeScale` in `main.tsx` + `lib/motion.ts` (the CSS half was stage 1).
+
+Stage 4 — login (done): failed sign-in styled as an error (danger token + role=alert) and a
+disabled submit state. Visually verified on /login (light/dark/mobile) via Playwright.
+
+Stage 5 — status palette (done): ad-hoc emerald/amber/blue/cyan/sky/red status colors are
+consolidated onto semantic success/warning/info/danger tokens across teacher (chips + pills),
+admin (readiness + form errors), and chat (live banner, voice dots, pending text, teacher msg).
+Non-status uses of those hues (mastery heatmap, ghost buttons) left intentionally.
+
+Remaining (best done with eyes on the deploy, or with *.supabase.co egress opened so the
+Playwright harness can log in): surface-tier + radius harmonization across the dashboards (a
+blind remap is risky, so held back), table row-density unification + a shared StatePanel for
+loading/empty/error, quiz scroll-to-error, and the Stage 2 shared-AppShell extraction
+(deferred: highest visual risk, lowest payoff).
 
 Verification per shipped stage: `tsc --noEmit` clean, `npm run build` green, `npm run lint`
-unchanged (0 errors, 11 pre-existing warnings). Commits: `6fd4398` (stage 1), `fe74b9d` (stage 3).
+unchanged (0 errors, 11 pre-existing warnings). Commits: `6fd4398` (stage 1), `fe74b9d` (stage 3),
+`1aea96b` (stage 6 reduced-motion), `87b4c27` (stage 4 login), `e120329` (stage 5 status palette).
 
 Codex: please avoid large `frontend/styles.css` / shared-component rewrites until this branch
 merges, to keep the diff clean.
