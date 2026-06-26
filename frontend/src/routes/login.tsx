@@ -175,12 +175,12 @@ function LoginPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-full bg-foreground py-3 text-[14px] font-medium text-background transition-transform hover:-translate-y-[1px] active:translate-y-0"
+                className="w-full rounded-full bg-foreground py-3 text-[14px] font-medium text-background transition-transform hover:-translate-y-[1px] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
               >
                 {submitting ? "Signing in..." : "Continue"}
               </button>
               {message && (
-                <p className="text-center text-[12.5px] leading-relaxed text-muted-foreground">
+                <p role="alert" className="text-center text-[12.5px] leading-relaxed text-danger">
                   {message}
                 </p>
               )}
