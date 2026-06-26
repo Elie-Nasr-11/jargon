@@ -6,6 +6,32 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-26 (Teacher & Admin reorganized into tabs)
+
+Status: Shipped on branch `claude/happy-johnson-wseex8` (build-verified; NOT on main).
+
+Task: Make the teacher/admin consoles human-friendly — the dense single-scroll pages now read
+as a few simple tabs. Approach: in-page tabs (no new URL routes — `routeTree.gen.ts` is
+hand-maintained, no router-plugin), reusing a new shared `WorkspaceTabs` wrapper over the
+shadcn/Radix Tabs primitive. Panels use `forceMount` so all form state, fetches, refreshers,
+the Google OAuth callback effect, and the live-watch heartbeat behave exactly as before —
+only visibility is tab-gated. Pure JSX regrouping; no `@/lib/api`, data, or feature changes.
+
+- `admin.tsx`: 6 tabs — Readiness · School data · Google Classroom · Cost & runtime · Operations
+  · Seeding (Seeding only when `isPlatformLevel`). Dropped the redundant org-admin
+  "seeding unavailable" note (org admins just don't see that tab).
+- `teacher.tsx`: ClassDetail → Overview · Gradebook · Roster · Resources · Assignments ·
+  Assessments. StudentDetail → Overview · Transcript & notes · Records. Class/student headers
+  stay above their tabs; master-detail selection unchanged.
+- New file `frontend/src/components/WorkspaceTabs.tsx`.
+
+Verification: `tsc --noEmit` clean, `npm run build` green, `npm run lint` unchanged (0 errors,
+11 pre-existing warnings); semantic diffs (git diff -w) are just tab scaffolding (admin +105/-47,
+teacher +62/-6); the large raw line counts are prettier reindent from the new nesting. `/login`
+re-screenshotted OK (app boots with the new bundle). The authed dashboards can't be screenshot
+from this sandbox (egress blocks *.supabase.co) — please review the tabs on the live deploy of
+this branch. Commits: `4b49272` (admin), `14a8ae5` (teacher), plus `WorkspaceTabs`.
+
 ## Claude -> Codex / Human - 2026-06-26 (UI cleanup pass — PAUSED for review)
 
 Status: IN PROGRESS (build-verified). Branch `claude/happy-johnson-wseex8` (based on `main`
