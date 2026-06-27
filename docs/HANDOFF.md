@@ -6,6 +6,32 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-27 (Org-admin experience + curriculum integration — Parts A/B)
+
+Status: On branch `claude/happy-johnson-wseex8` (build-verified; NOT on main — awaiting deploy OK).
+Frontend-only so far; no backend/data changes.
+
+- **Part A — organization-admin console** (`routes/admin.tsx`): `/admin` is now level-aware. For an
+  `org_admin` actor (principal / school-chain owner) it labels "Organization admin", scopes the org
+  picker to their own org(s), and hides the platform-only Cost tab. Platform-admin view unchanged.
+  Backend already authorizes org_admins (admin-ops scopes by `actorAccess.level`); this matches the UI.
+- **Part B — shared shell + nav switcher** (`components/ConsoleShell.tsx` new): the teacher dashboard and
+  curriculum now render inside one shared shell with a Dashboard ⇄ Curriculum segmented switcher in the
+  header, so curriculum no longer feels like a separate page. Removed the redundant hero "Curriculum" /
+  "Teacher dashboard" links; lesson breadcrumb retained. (Admin keeps its own `AdminShell` for now.)
+
+Commits: `53e7676` (Part A), `6405194` (Part B). Verified: tsc 0 errors, lint 0 errors / 11 pre-existing
+warnings, build green, Playwright boot smoke passes on `/teacher`, `/teacher/curriculum`, `/admin`.
+
+**Part A2 — org-admin account onboarding — BLOCKED ON A DECISION.** Investigation found the *only*
+account-creation path is the `admin-seed` edge function, which is **platform-admin-only**
+(`assertPlatformAdmin`); the CSV roster import (`admin-ops apply_csv_roster_import`) only links
+*existing* users, it does not create accounts. So letting principals create new teacher/student accounts
+requires editing the auth-critical `admin-seed` function (authorize org_admin, restrict to their existing
+org, no new-org creation, student/teacher only) and deploying it — which can't be fully auth-tested from
+this sandbox. Holding for the human's call: do the backend change, or keep account creation platform-side
+(we seed a new school; principals then manage classes/rosters/roles of those accounts, which already works).
+
 ## Claude -> Codex / Human - 2026-06-27 (Push the spine further — Phase 5)
 
 Status: On branch `claude/happy-johnson-wseex8` (build-verified). Phases 1-4 are now on `main`
