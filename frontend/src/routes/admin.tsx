@@ -25,6 +25,7 @@ import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { notifyOk, notifyErr } from "@/lib/feedback";
 import {
   applyCsvRosterImport,
   exportClassSnapshot,
@@ -856,8 +857,10 @@ function AdminPage() {
       await operation();
       void refreshReadiness(token, true);
       setOpsMessage(success);
+      notifyOk(success);
     } catch (error) {
       setOpsMessage((error as Error).message || "Admin operation failed.");
+      notifyErr(error, "Admin operation failed.");
     } finally {
       setOpsBusy("");
     }
@@ -1000,8 +1003,10 @@ function AdminPage() {
     try {
       await operation();
       setSchoolOpsMessage(success);
+      notifyOk(success);
     } catch (error) {
       setSchoolOpsMessage((error as Error).message || "School data operation failed.");
+      notifyErr(error, "School data operation failed.");
     } finally {
       setSchoolOpsBusy("");
     }
