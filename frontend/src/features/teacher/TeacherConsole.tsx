@@ -6,9 +6,11 @@ import {
   AlertTriangle,
   BarChart3,
   BookOpen,
+  Building2,
   Check,
   CheckCircle2,
   ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Eye,
   EyeOff,
@@ -205,6 +207,32 @@ export function TeacherConsole() {
     );
     return { profilesById, lessonsById, classesById, studentIds };
   }, [dashboard]);
+
+  // Org -> classes, so the picker mirrors the real hierarchy.
+  const classesByOrg = useMemo(() => {
+    const groups = new Map<string, TeacherClassSummary[]>();
+    for (const item of dashboard?.classes ?? []) {
+      const org = organizationName(item);
+      const list = groups.get(org) ?? [];
+      list.push(item);
+      groups.set(org, list);
+    }
+    return Array.from(groups.entries());
+  }, [dashboard]);
+
+  // Cross-class "needs attention" counts for the home action queue.
+  const pendingGrading = dashboard
+    ? dashboard.assignmentSubmissions.filter((submission) => submission.status === "submitted")
+        .length
+    : 0;
+  const pendingReviews = dashboard
+    ? dashboard.assessmentAttempts.filter((attempt) => attempt.status === "submitted").length
+    : 0;
+  const openAlertCount = dashboard
+    ? dashboard.interventionAlerts.filter(
+        (alert) => alert.status === "open" || alert.status === "acknowledged",
+      ).length
+    : 0;
 
   const selectedClass =
     selectedClassId && model ? model.classesById.get(selectedClassId) || null : null;
@@ -706,35 +734,89 @@ export function TeacherConsole() {
             </div>
 
             <div className="flex flex-col gap-4">
-              <GradientCard>
-                <div className="p-4">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-[16px] font-medium text-foreground">Classes</h2>
-                      <p className="mt-1 text-[12.5px] text-muted-foreground">
-                        Live roster counts and latest student activity.
-                      </p>
+              {!selectedClassId ? (
+                <GradientCard>
+                  <div className="p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-[16px] font-medium text-foreground">Classes</h2>
+                        <p className="mt-1 text-[12.5px] text-muted-foreground">
+                          Live roster counts and latest student activity.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                      {classesByOrg.map(([org, items]) => (
+                        <div key={org}>
+                          <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                            <Building2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                            {org}
+                            <span className="text-muted-foreground/60">· {items.length}</span>
+                          </div>
+                          <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                            {items.map((item) => (
+                              <div key={item.id} className="w-[240px] shrink-0">
+                                <ClassButton
+                                  item={item}
+                                  active={item.id === selectedClassId}
+                                  stats={summarizeClass(dashboard, item.id)}
+                                  onClick={() =>
+                                    navigate({
+                                      to: "/teacher/class/$classId",
+                                      params: { classId: item.id },
+                                    })
+                                  }
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-                    {dashboard.classes.map((item) => (
-                      <div key={item.id} className="w-[240px] shrink-0">
-                        <ClassButton
-                          item={item}
-                          active={item.id === selectedClassId}
-                          stats={summarizeClass(dashboard, item.id)}
-                          onClick={() =>
-                            navigate({
-                              to: "/teacher/class/$classId",
-                              params: { classId: item.id },
-                            })
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </GradientCard>
+                </GradientCard>
+              ) : (
+                <nav className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
+                  <button
+                    type="button"
+                    onClick={() => navigate({ to: "/teacher" })}
+                    className="transition-colors hover:text-foreground"
+                  >
+                    Teacher
+                  </button>
+                  {selectedClass ? (
+                    <>
+                      <ChevronRight className="h-3.5 w-3.5 opacity-50" strokeWidth={1.7} />
+                      <span>{organizationName(selectedClass)}</span>
+                      <ChevronRight className="h-3.5 w-3.5 opacity-50" strokeWidth={1.7} />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate({
+                            to: "/teacher/class/$classId",
+                            params: { classId: selectedClass.id },
+                          })
+                        }
+                        className={
+                          selectedStudentId
+                            ? "transition-colors hover:text-foreground"
+                            : "font-medium text-foreground"
+                        }
+                      >
+                        {selectedClass.name}
+                      </button>
+                    </>
+                  ) : null}
+                  {selectedStudentId ? (
+                    <>
+                      <ChevronRight className="h-3.5 w-3.5 opacity-50" strokeWidth={1.7} />
+                      <span className="font-medium text-foreground">
+                        {displayName(selectedStudent, selectedStudentId)}
+                      </span>
+                    </>
+                  ) : null}
+                </nav>
+              )}
 
               <div className="grid gap-4">
                 {selectedStudentId ? null : selectedClass && classStats ? (
@@ -813,10 +895,22 @@ export function TeacherConsole() {
                     }
                   />
                 ) : (
-                  <EmptyPanel
-                    title="No class selected"
-                    body="Choose a class to inspect the roster."
-                  />
+                  <GradientCard>
+                    <div className="p-4 sm:p-5">
+                      <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                        Needs attention
+                      </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <MetricCard label="Submissions to grade" value={String(pendingGrading)} />
+                        <MetricCard label="Assessments to review" value={String(pendingReviews)} />
+                        <MetricCard label="Open alerts" value={String(openAlertCount)} />
+                      </div>
+                      <p className="mt-4 text-[12.5px] text-muted-foreground">
+                        Pick a class above to open its roster, gradebook, resources, assignments,
+                        and assessments.
+                      </p>
+                    </div>
+                  </GradientCard>
                 )}
 
                 {selectedStudentId && studentStats ? (
