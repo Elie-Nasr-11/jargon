@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Archive, BookOpen, Check, Eye, FilePlus2, Layers3, NotebookPen, Send } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import {
   createLessonResource,
   fetchCurriculumAuthoringData,
@@ -63,6 +64,11 @@ type DraftState = {
 };
 
 export const Route = createFileRoute("/teacher/curriculum")({
+  // Selected lesson lives in the URL (?lesson=) so a lesson editor view is
+  // deep-linkable and back/forward works.
+  validateSearch: (search: Record<string, unknown>): { lesson?: string } => ({
+    lesson: typeof search.lesson === "string" ? search.lesson : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Curriculum - Jargon" },
@@ -77,6 +83,7 @@ export const Route = createFileRoute("/teacher/curriculum")({
 
 function CurriculumPage() {
   const navigate = useNavigate();
+  const { lesson: lessonParam } = useSearch({ strict: false }) as { lesson?: string };
   const [booting, setBooting] = useState(true);
   const [email, setEmail] = useState("");
   const [teacherId, setTeacherId] = useState("");
@@ -138,6 +145,14 @@ function CurriculumPage() {
     setDraft(draftFromLesson(lesson, data));
     setMessage(`Editing ${lesson.title}.`);
   };
+
+  // Deep-link: load the lesson named by ?lesson= into the editor when it changes.
+  useEffect(() => {
+    if (!data || !lessonParam || draft.lessonId === lessonParam) return;
+    const lesson = data.lessons.find((item) => item.id === lessonParam);
+    if (lesson) selectLesson(lesson);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, lessonParam, draft.lessonId]);
 
   const setField = <K extends keyof DraftState>(key: K, value: DraftState[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -246,6 +261,18 @@ function CurriculumPage() {
       </header>
 
       <main className="relative z-10 mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-5 px-4 py-6 sm:px-6">
+        <Breadcrumb
+          segments={[
+            { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
+            {
+              label: "Curriculum",
+              onClick: () => navigate({ to: "/teacher/curriculum", search: {} }),
+            },
+            ...(draft.lessonId && lessonsById.get(draft.lessonId)
+              ? [{ label: lessonsById.get(draft.lessonId)!.title }]
+              : []),
+          ]}
+        />
         <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -313,7 +340,9 @@ function CurriculumPage() {
                 <CurriculumTree
                   data={data}
                   activeLessonId={draft.lessonId}
-                  onSelectLesson={selectLesson}
+                  onSelectLesson={(lesson) =>
+                    navigate({ to: "/teacher/curriculum", search: { lesson: lesson.id } })
+                  }
                 />
               </div>
             </GradientCard>

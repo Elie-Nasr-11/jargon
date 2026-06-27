@@ -10,7 +10,6 @@ import {
   Check,
   CheckCircle2,
   ChevronLeft,
-  ChevronRight,
   ClipboardList,
   Eye,
   EyeOff,
@@ -30,6 +29,7 @@ import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createAssignment,
@@ -776,46 +776,27 @@ export function TeacherConsole() {
                   </div>
                 </GradientCard>
               ) : (
-                <nav className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
-                  <button
-                    type="button"
-                    onClick={() => navigate({ to: "/teacher" })}
-                    className="transition-colors hover:text-foreground"
-                  >
-                    Teacher
-                  </button>
-                  {selectedClass ? (
-                    <>
-                      <ChevronRight className="h-3.5 w-3.5 opacity-50" strokeWidth={1.7} />
-                      <span>{organizationName(selectedClass)}</span>
-                      <ChevronRight className="h-3.5 w-3.5 opacity-50" strokeWidth={1.7} />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate({
-                            to: "/teacher/class/$classId",
-                            params: { classId: selectedClass.id },
-                          })
-                        }
-                        className={
-                          selectedStudentId
-                            ? "transition-colors hover:text-foreground"
-                            : "font-medium text-foreground"
-                        }
-                      >
-                        {selectedClass.name}
-                      </button>
-                    </>
-                  ) : null}
-                  {selectedStudentId ? (
-                    <>
-                      <ChevronRight className="h-3.5 w-3.5 opacity-50" strokeWidth={1.7} />
-                      <span className="font-medium text-foreground">
-                        {displayName(selectedStudent, selectedStudentId)}
-                      </span>
-                    </>
-                  ) : null}
-                </nav>
+                <Breadcrumb
+                  segments={[
+                    { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
+                    ...(selectedClass
+                      ? [
+                          { label: organizationName(selectedClass) },
+                          {
+                            label: selectedClass.name,
+                            onClick: () =>
+                              navigate({
+                                to: "/teacher/class/$classId",
+                                params: { classId: selectedClass.id },
+                              }),
+                          },
+                        ]
+                      : []),
+                    ...(selectedStudentId
+                      ? [{ label: displayName(selectedStudent, selectedStudentId) }]
+                      : []),
+                  ]}
+                />
               )}
 
               <div className="grid gap-4">
@@ -1099,6 +1080,7 @@ function ClassDetail({
   const [localTab, setLocalTab] = useState("overview");
   const classTab = tab ?? localTab;
   const setClassTab = (value: string) => (onTabChange ? onTabChange(value) : setLocalTab(value));
+  const navigate = useNavigate();
   const studentSet = useMemo(() => new Set(studentIds), [studentIds]);
   const openAlerts = dashboard.interventionAlerts.filter(
     (alert) =>
@@ -1123,7 +1105,7 @@ function ClassDetail({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
-              {organizationName(item)}
+              {organizationName(item)} · {item.status}
             </div>
             <h2 className="mt-1 text-[22px] font-medium text-foreground">{item.name}</h2>
             <p className="mt-1 text-[13px] text-muted-foreground">
@@ -1235,16 +1217,30 @@ function ClassDetail({
                                 {lesson.level || "Lesson"}
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onSelectLesson(lesson.id);
-                                setClassTab("gradebook");
-                              }}
-                              className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] text-foreground transition-colors hover:bg-muted"
-                            >
-                              Open in gradebook
-                            </button>
+                            <div className="flex shrink-0 flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onSelectLesson(lesson.id);
+                                  setClassTab("gradebook");
+                                }}
+                                className="rounded-full border border-border px-3 py-1 text-[12px] text-foreground transition-colors hover:bg-muted"
+                              >
+                                Open in gradebook
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate({
+                                    to: "/teacher/curriculum",
+                                    search: { lesson: lesson.id },
+                                  })
+                                }
+                                className="rounded-full border border-border px-3 py-1 text-[12px] text-foreground transition-colors hover:bg-muted"
+                              >
+                                Edit in curriculum
+                              </button>
+                            </div>
                           </div>
                           <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11.5px] text-muted-foreground">
                             <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1">

@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-27 (Push the spine further — Phase 5)
+
+Status: On branch `claude/happy-johnson-wseex8` (build-verified). Phases 1-4 are now on `main`
+(deployed). Frontend-only; no feature/data/API changes.
+
+Follow-on to the URL-spine redesign, continuing it with the deferred items (existing APIs only):
+- **Shared `Breadcrumb` component** (`frontend/src/components/Breadcrumb.tsx`): segments
+  `{ label, onClick? }`, last = current. Replaces the inline breadcrumb markup in
+  `TeacherConsole` and `admin.tsx` (both now import it; `ChevronRight` import dropped from both).
+- **Curriculum on the spine** (`routes/teacher.curriculum.tsx`): added a `?lesson=` search param
+  (`validateSearch` + `useSearch`); selecting a lesson in the tree now `navigate`s to
+  `?lesson=<id>`, and an effect loads that lesson into the editor on deep-link/back-forward. Added
+  a Teacher / Curriculum / {lesson} breadcrumb. So a lesson editor view is now shareable.
+- **Entry point**: each row of the class **Lessons** tab now has an "Edit in curriculum" button →
+  `/teacher/curriculum?lesson=<id>` (alongside "Open in gradebook"). (Teacher header already had a
+  Curriculum link.)
+- **Class context**: the class header eyebrow now shows `{org} · {status}` (read-only; teachers
+  can't edit class settings — that's admin-only, confirmed via api.ts).
+
+Deliberately NOT done (rationale in `docs/DECISIONS.md`): admin stays on search params (no
+path-param rewrite); no subject/course/unit CRUD (needs new backend actions). Optional `ConsoleShell`
+unification not done (Breadcrumb already gives most of the consistency).
+
+Verified: tsc 0 errors, lint 0 errors / 11 pre-existing warnings, build green, Playwright boot smoke
+passes on all routes incl. `/teacher/curriculum?lesson=...`. Held on branch for your review (deploy
+on request).
+
 ## Claude -> Codex / Human - 2026-06-27 (Docs sync — Phase 4/4)
 
 Status: On branch `claude/happy-johnson-wseex8` (build-verified; NOT on main — holding for review).

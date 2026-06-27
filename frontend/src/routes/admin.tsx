@@ -7,7 +7,6 @@ import {
   BarChart3,
   BookOpen,
   CheckCircle2,
-  ChevronRight,
   ClipboardList,
   Download,
   DollarSign,
@@ -25,6 +24,7 @@ import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import {
   applyCsvRosterImport,
   exportClassSnapshot,
@@ -1261,19 +1261,12 @@ function AdminPage() {
           </GradientCard>
         ) : (
           <>
-            <nav className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/admin", search: {} })}
-                className="transition-colors hover:text-foreground"
-              >
-                Admin
-              </button>
-              <ChevronRight className="h-3.5 w-3.5 opacity-50" strokeWidth={1.7} />
-              <span className="font-medium text-foreground">
-                {selectedOrg?.name || "Organization"}
-              </span>
-            </nav>
+            <Breadcrumb
+              segments={[
+                { label: "Admin", onClick: () => navigate({ to: "/admin", search: {} }) },
+                { label: selectedOrg?.name || "Organization" },
+              ]}
+            />
 
             <Tabs value={adminTab} onValueChange={setAdminTab}>
               <WorkspaceTabList>
