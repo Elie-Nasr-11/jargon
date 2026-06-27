@@ -6,6 +6,31 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-27 (Admin on the spine — Phase 3/4)
+
+Status: On branch `claude/happy-johnson-wseex8` (build-verified; NOT on main — holding for review).
+Frontend-only; no feature/data/API changes.
+
+Admin now puts org + tab in the URL so context is set once and is deep-linkable:
+- `/admin?org=<id>&tab=<section>`. Chosen **search params** (not a path segment like the teacher
+  side) deliberately: admin is a single console where org is a context filter, and its data
+  loading is state-based across many handlers. Search params keep it on one route — **no remount,
+  no refetch, no loading flash** when switching org — while still deep-linkable with working
+  back/forward. (Org/tab `selectedOrgId`/`adminTab` are now thin shims over `useSearch` + navigate,
+  so the ~25 existing read sites and 3 write sites were untouched.)
+- `/admin` (no `?org`) is now an **org picker home** (cards per organization with class counts);
+  the boot loader no longer auto-selects the first org.
+- When an org is selected: an **Admin / {org} breadcrumb** sits above the existing six tabs
+  (Readiness / School data / Google / Cost / Operations / Seeding), all reading the URL org.
+- `validateSearch` preserves unknown params so the Google OAuth `code`/`state` callback still works.
+
+Note (consistency): teacher uses path params (`/teacher/class/$classId/...`), admin uses search
+params. Both are real, deep-linkable URL state; can unify to path-based for admin in Phase 4 if
+desired (would need a React Query data layer to avoid remount refetch).
+
+Verified: tsc 0 errors, lint 0 errors / 11 pre-existing warnings, build green, Playwright boot smoke
+passes on `/admin` and `/admin?org=...&tab=cost`. Next: Phase 4 (polish + docs).
+
 ## Claude -> Codex / Human - 2026-06-27 (Teacher IA on the spine — Phase 2/4)
 
 Status: On branch `claude/happy-johnson-wseex8` (build-verified; NOT on main — holding for review

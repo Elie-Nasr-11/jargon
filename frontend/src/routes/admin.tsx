@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   Activity,
   AlertCircle,
@@ -7,6 +7,7 @@ import {
   BarChart3,
   BookOpen,
   CheckCircle2,
+  ChevronRight,
   ClipboardList,
   Download,
   DollarSign,
@@ -67,6 +68,15 @@ import type {
 } from "@/lib/types";
 
 export const Route = createFileRoute("/admin")({
+  // Org + active tab live in the URL (?org=&tab=) so context is set once and is
+  // deep-linkable. Unknown params (e.g. Google OAuth code/state) are preserved.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): Record<string, unknown> & { org?: string; tab?: string } => ({
+    ...search,
+    org: typeof search.org === "string" ? search.org : undefined,
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Pilot Admin - Jargon" },
@@ -239,7 +249,13 @@ function AdminPage() {
   const [scopeLoading, setScopeLoading] = useState(false);
   const [opsMessage, setOpsMessage] = useState("");
   const [opsBusy, setOpsBusy] = useState("");
-  const [selectedOrgId, setSelectedOrgId] = useState("");
+  const search = useSearch({ strict: false }) as { org?: string; tab?: string };
+  const selectedOrgId = search.org ?? "";
+  const setSelectedOrgId = (orgId: string) =>
+    navigate({
+      to: "/admin",
+      search: (prev: Record<string, unknown>) => ({ ...prev, org: orgId || undefined }),
+    });
   const [selectedClassId, setSelectedClassId] = useState("");
   const [newClassName, setNewClassName] = useState("");
   const [renameClassName, setRenameClassName] = useState("");
@@ -351,17 +367,15 @@ function AdminPage() {
       const data = await fetchAdminScope(accessToken);
       setActorAccess(data.actorAccess);
       setScope(data.scope);
-      const firstOrg = data.scope.organizations[0]?.id || "";
-      const nextOrg =
-        selectedOrgId && data.scope.organizations.some((org) => org.id === selectedOrgId)
-          ? selectedOrgId
-          : firstOrg;
-      const orgClasses = data.scope.classes.filter((item) => item.organization_id === nextOrg);
+      // Org selection lives in the URL (?org=); the home shows a picker, so we no
+      // longer auto-select the first org. The class default follows the URL org.
+      const orgClasses = data.scope.classes.filter(
+        (item) => item.organization_id === selectedOrgId,
+      );
       const nextClass =
         selectedClassId && orgClasses.some((item) => item.id === selectedClassId)
           ? selectedClassId
           : orgClasses[0]?.id || "";
-      setSelectedOrgId(nextOrg);
       setSelectedClassId(nextClass);
       if (!renameClassName && nextClass) {
         setRenameClassName(data.scope.classes.find((item) => item.id === nextClass)?.name || "");
@@ -526,7 +540,9 @@ function AdminPage() {
   ]);
 
   const canSeed = !submitting && formErrors.length === 0;
-  const [adminTab, setAdminTab] = useState("readiness");
+  const adminTab = search.tab ?? "readiness";
+  const setAdminTab = (tab: string) =>
+    navigate({ to: "/admin", search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
   const isPlatformLevel = actorAccess?.level === "platform_admin";
   const adminLevelLabel = isPlatformLevel ? "Platform admin" : "Org admin";
 
@@ -1204,1683 +1220,1795 @@ function AdminPage() {
           </div>
         </section>
 
-        <Tabs value={adminTab} onValueChange={setAdminTab}>
-          <WorkspaceTabList>
-            <WorkspaceTab value="readiness">Readiness</WorkspaceTab>
-            <WorkspaceTab value="school">School data</WorkspaceTab>
-            <WorkspaceTab value="google">Google Classroom</WorkspaceTab>
-            <WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>
-            <WorkspaceTab value="ops">Operations</WorkspaceTab>
-            {isPlatformLevel ? <WorkspaceTab value="seeding">Seeding</WorkspaceTab> : null}
-          </WorkspaceTabList>
-
-          <WorkspacePanel value="readiness">
-            <GradientCard>
-              <div className="space-y-5 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                      <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
-                      Pilot Readiness
-                    </div>
-                    <h2 className="text-[18px] font-medium text-foreground">
-                      Classroom launch command center
-                    </h2>
-                    <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
-                      Check whether classes can run tomorrow: roster health, lesson availability,
-                      recent completions, assignments/resources, errors, alerts, and support
-                      activity.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+        {!selectedOrgId ? (
+          <GradientCard>
+            <div className="p-5">
+              <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                Organizations
+              </div>
+              <p className="mt-1 text-[12.5px] text-muted-foreground">
+                Pick an organization to manage its readiness, roster, Google Classroom, cost, and
+                operations.
+              </p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {(scope?.organizations || []).map((organization) => {
+                  const orgClassCount = (scope?.classes || []).filter(
+                    (item) => item.organization_id === organization.id,
+                  ).length;
+                  return (
                     <button
+                      key={organization.id}
                       type="button"
-                      onClick={() => void refreshReadiness()}
-                      disabled={readinessLoading}
-                      className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                      onClick={() => setSelectedOrgId(organization.id)}
+                      className="rounded-2xl border border-border bg-background/35 p-3.5 text-left transition-colors hover:bg-muted"
                     >
-                      <RefreshCw
-                        className={`h-4 w-4 ${readinessLoading ? "animate-spin" : ""}`}
-                        strokeWidth={1.6}
-                      />
-                      Refresh readiness
+                      <div className="text-[14px] font-medium text-foreground">
+                        {organization.name}
+                      </div>
+                      <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                        {organization.status || "active"} · {orgClassCount} classes
+                      </div>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void exportSelectedClass()}
-                      disabled={!selectedClassId || readinessLoading}
-                      className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                    >
-                      <Download className="h-4 w-4" strokeWidth={1.6} />
-                      Export CSV
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void copyLoginInstructions(selectedClassReadiness)}
-                      disabled={!selectedClassReadiness}
-                      className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                    >
-                      Copy login instructions
-                    </button>
-                  </div>
-                </div>
-
-                {readinessMessage ? (
-                  <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
-                    {readinessMessage}
+                  );
+                })}
+                {(scope?.organizations || []).length === 0 ? (
+                  <div className="text-[13px] text-muted-foreground">
+                    No organizations in scope yet.
                   </div>
                 ) : null}
+              </div>
+            </div>
+          </GradientCard>
+        ) : (
+          <>
+            <nav className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/admin", search: {} })}
+                className="transition-colors hover:text-foreground"
+              >
+                Admin
+              </button>
+              <ChevronRight className="h-3.5 w-3.5 opacity-50" strokeWidth={1.7} />
+              <span className="font-medium text-foreground">
+                {selectedOrg?.name || "Organization"}
+              </span>
+            </nav>
 
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <Stat label="Ready" value={readinessCounts.ready} />
-                  <Stat label="Needs setup" value={readinessCounts.needsSetup} />
-                  <Stat label="Needs attention" value={readinessCounts.needsAttention} />
-                  <Stat label="Blocked" value={readinessCounts.blocked} />
-                </div>
+            <Tabs value={adminTab} onValueChange={setAdminTab}>
+              <WorkspaceTabList>
+                <WorkspaceTab value="readiness">Readiness</WorkspaceTab>
+                <WorkspaceTab value="school">School data</WorkspaceTab>
+                <WorkspaceTab value="google">Google Classroom</WorkspaceTab>
+                <WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>
+                <WorkspaceTab value="ops">Operations</WorkspaceTab>
+                {isPlatformLevel ? <WorkspaceTab value="seeding">Seeding</WorkspaceTab> : null}
+              </WorkspaceTabList>
 
-                {selectedClassReadiness ? (
-                  <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+              <WorkspacePanel value="readiness">
+                <GradientCard>
+                  <div className="space-y-5 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
+                          Pilot Readiness
+                        </div>
+                        <h2 className="text-[18px] font-medium text-foreground">
+                          Classroom launch command center
+                        </h2>
+                        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                          Check whether classes can run tomorrow: roster health, lesson
+                          availability, recent completions, assignments/resources, errors, alerts,
+                          and support activity.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void refreshReadiness()}
+                          disabled={readinessLoading}
+                          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`h-4 w-4 ${readinessLoading ? "animate-spin" : ""}`}
+                            strokeWidth={1.6}
+                          />
+                          Refresh readiness
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void exportSelectedClass()}
+                          disabled={!selectedClassId || readinessLoading}
+                          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        >
+                          <Download className="h-4 w-4" strokeWidth={1.6} />
+                          Export CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void copyLoginInstructions(selectedClassReadiness)}
+                          disabled={!selectedClassReadiness}
+                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        >
+                          Copy login instructions
+                        </button>
+                      </div>
+                    </div>
+
+                    {readinessMessage ? (
+                      <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                        {readinessMessage}
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      <Stat label="Ready" value={readinessCounts.ready} />
+                      <Stat label="Needs setup" value={readinessCounts.needsSetup} />
+                      <Stat label="Needs attention" value={readinessCounts.needsAttention} />
+                      <Stat label="Blocked" value={readinessCounts.blocked} />
+                    </div>
+
+                    {selectedClassReadiness ? (
+                      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                {selectedClassReadiness.class_name}
+                              </h3>
+                              <p className="mt-1 text-[12px] text-muted-foreground">
+                                {selectedClassReadiness.organization_name} ·{" "}
+                                {selectedClassReadiness.teacher_count} teacher
+                                {selectedClassReadiness.teacher_count === 1 ? "" : "s"} ·{" "}
+                                {selectedClassReadiness.student_count} student
+                                {selectedClassReadiness.student_count === 1 ? "" : "s"}
+                              </p>
+                            </div>
+                            <span
+                              className={`rounded-full border px-3 py-1.5 text-[11.5px] ${readinessTone(
+                                selectedClassReadiness.status,
+                              )}`}
+                            >
+                              {readinessLabel(selectedClassReadiness.status)}
+                            </span>
+                          </div>
+                          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                            {selectedClassReadiness.checklist.map((item) => (
+                              <div
+                                key={item.label}
+                                className="rounded-2xl border border-border/60 bg-background/45 px-3 py-2"
+                              >
+                                <div className="text-[12px] text-foreground">{item.label}</div>
+                                <div
+                                  className={`mt-1 text-[11px] uppercase tracking-[0.09em] ${
+                                    item.status === "ok"
+                                      ? "text-emerald-500"
+                                      : item.status === "attention"
+                                        ? "text-amber-500"
+                                        : "text-sky-500"
+                                  }`}
+                                >
+                                  {item.status}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-4 space-y-2">
+                            {selectedClassReadiness.issues.length ? (
+                              selectedClassReadiness.issues.map((issue) => (
+                                <div
+                                  key={`${issue.severity}-${issue.message}`}
+                                  className="rounded-2xl border border-border/60 bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground"
+                                >
+                                  <span
+                                    className={`mr-2 font-medium ${
+                                      issue.severity === "blocked"
+                                        ? "text-red-500"
+                                        : issue.severity === "attention"
+                                          ? "text-amber-500"
+                                          : "text-sky-500"
+                                    }`}
+                                  >
+                                    {issue.severity}
+                                  </span>
+                                  {issue.message}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12.5px] text-emerald-500">
+                                No readiness blockers found.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="text-[14px] font-medium text-foreground">
+                            Roster/account health
+                          </h3>
+                          <div className="mt-3 max-h-[260px] overflow-auto pr-1">
+                            <table className="min-w-[640px] w-full border-collapse text-left text-[12px]">
+                              <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                                <tr>
+                                  <th className="py-2 pr-3 font-medium">Person</th>
+                                  <th className="py-2 pr-3 font-medium">Role</th>
+                                  <th className="py-2 pr-3 font-medium">Status</th>
+                                  <th className="py-2 font-medium">Last sign-in</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedClassReadiness.roster.map((row) => (
+                                  <tr key={row.user_id} className="border-b border-border/55">
+                                    <td className="py-2 pr-3">
+                                      <div className="font-medium text-foreground">
+                                        {row.name || row.email || row.user_id}
+                                      </div>
+                                      <div className="text-[11px] text-muted-foreground">
+                                        {row.email || "No email loaded"} · grade{" "}
+                                        {row.grade || "n/a"}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 pr-3 text-muted-foreground">{row.role}</td>
+                                    <td className="py-2 pr-3 text-muted-foreground">
+                                      {classStatusLabel(row.status)}
+                                    </td>
+                                    <td className="py-2 text-muted-foreground">
+                                      {formatDate(row.last_sign_in_at)}
+                                    </td>
+                                  </tr>
+                                ))}
+                                {!selectedClassReadiness.roster.length ? (
+                                  <tr>
+                                    <td className="py-4 text-muted-foreground" colSpan={4}>
+                                      No active roster rows found.
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4 text-[12.5px] text-muted-foreground">
+                        Choose a class and refresh readiness to see launch status.
+                      </div>
+                    )}
+
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[940px] w-full border-collapse text-left text-[12.5px]">
+                        <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <tr>
+                            <th className="py-2 pr-3 font-medium">Class</th>
+                            <th className="py-2 pr-3 font-medium">Status</th>
+                            <th className="py-2 pr-3 font-medium">Roster</th>
+                            <th className="py-2 pr-3 font-medium">Learning</th>
+                            <th className="py-2 pr-3 font-medium">Work/media</th>
+                            <th className="py-2 font-medium">Support</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(readiness?.classes || []).map((item) => (
+                            <tr
+                              key={item.class_id}
+                              className="cursor-pointer border-b border-border/60 align-top transition-colors hover:bg-muted/40"
+                              onClick={() => {
+                                setSelectedOrgId(item.organization_id);
+                                setSelectedClassId(item.class_id);
+                                setRenameClassName(item.class_name);
+                              }}
+                            >
+                              <td className="py-3 pr-3">
+                                <div className="font-medium text-foreground">{item.class_name}</div>
+                                <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                                  {item.organization_name}
+                                </div>
+                              </td>
+                              <td className="py-3 pr-3">
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] ${readinessTone(
+                                    item.status,
+                                  )}`}
+                                >
+                                  {readinessLabel(item.status)}
+                                </span>
+                              </td>
+                              <td className="py-3 pr-3 text-muted-foreground">
+                                {item.teacher_count} teachers · {item.student_count} students
+                                {item.disabled_membership_count ? (
+                                  <div className="mt-0.5 text-amber-500">
+                                    {item.disabled_membership_count} inactive memberships
+                                  </div>
+                                ) : null}
+                              </td>
+                              <td className="py-3 pr-3 text-muted-foreground">
+                                {item.completed_session_count} completions ·{" "}
+                                {item.recent_completion_count} recent
+                                <div className="mt-0.5">
+                                  {item.published_lesson_count} lessons available
+                                </div>
+                              </td>
+                              <td className="py-3 pr-3 text-muted-foreground">
+                                {item.assignment_count} assigned · {item.resource_count} resources
+                              </td>
+                              <td className="py-3 text-muted-foreground">
+                                {item.open_alert_count} alerts · {item.recent_error_count} errors ·{" "}
+                                {item.audit_event_count} audit events
+                              </td>
+                            </tr>
+                          ))}
+                          {!readiness?.classes.length ? (
+                            <tr>
+                              <td className="py-5 text-muted-foreground" colSpan={6}>
+                                No readiness data loaded yet.
+                              </td>
+                            </tr>
+                          ) : null}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <h3 className="text-[14px] font-medium text-foreground">Recent errors</h3>
+                        <div className="mt-3 space-y-2">
+                          {(readiness?.recent_errors || []).slice(0, 5).map((event) => (
+                            <div
+                              key={event.id}
+                              className="border-b border-border/55 pb-2 text-[12px]"
+                            >
+                              <div className="text-foreground">
+                                {event.event_type} · {event.lesson_id || "no lesson"}
+                              </div>
+                              <div className="mt-0.5 text-muted-foreground">
+                                {formatDate(event.created_at)}
+                              </div>
+                            </div>
+                          ))}
+                          {!readiness?.recent_errors.length ? (
+                            <div className="text-[12px] text-muted-foreground">
+                              No recent runtime errors in scope.
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <h3 className="text-[14px] font-medium text-foreground">
+                          Open interventions
+                        </h3>
+                        <div className="mt-3 space-y-2">
+                          {(readiness?.open_alerts || []).slice(0, 5).map((alert) => (
+                            <div
+                              key={alert.id}
+                              className="border-b border-border/55 pb-2 text-[12px]"
+                            >
+                              <div className="text-foreground">{alert.title}</div>
+                              <div className="mt-0.5 text-muted-foreground">
+                                {alert.severity} · {alert.status} · {formatDate(alert.created_at)}
+                              </div>
+                            </div>
+                          ))}
+                          {!readiness?.open_alerts.length ? (
+                            <div className="text-[12px] text-muted-foreground">
+                              No open intervention alerts in scope.
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </GradientCard>
+              </WorkspacePanel>
+
+              <WorkspacePanel value="school">
+                <GradientCard>
+                  <div className="space-y-5 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.7} />
+                          School data ops
+                        </div>
+                        <h2 className="text-[18px] font-medium text-foreground">
+                          CSV fallback, exports, retention, and consent
+                        </h2>
+                        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                          Run school operations without OAuth: preview roster CSV files, map
+                          existing users, export student records, record retention requests, and
+                          store class-level feature controls. CSV import does not create accounts or
+                          expose passwords.
+                        </p>
+                      </div>
+                      <div className="text-[12px] text-muted-foreground">
+                        {selectedOrg?.name || "Choose an organization"}
+                        {selectedClass ? ` · ${selectedClass.name}` : ""}
+                      </div>
+                    </div>
+
+                    {schoolOpsMessage ? (
+                      <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                        {schoolOpsMessage}
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                          <FileSpreadsheet className="h-4 w-4" strokeWidth={1.6} />
+                          CSV roster import
+                        </h3>
+                        <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                          Paste columns `email,name,role,grade`. Existing Jargon users are mapped;
+                          missing users are marked `needs seed` and must be created through account
+                          seeding.
+                        </p>
+                        <textarea
+                          value={csvText}
+                          onChange={(event) => setCsvText(event.target.value)}
+                          rows={6}
+                          placeholder={
+                            "email,name,role,grade\nstudent@example.com,Student Name,student,Grade 5"
+                          }
+                          className="jargon-input mt-3 min-h-[130px] font-mono text-[12px]"
+                        />
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void previewCsv()}
+                            disabled={
+                              !selectedOrgId || !csvText.trim() || schoolOpsBusy === "csv-preview"
+                            }
+                            className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                          >
+                            Preview CSV
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void applyCsvImport()}
+                            disabled={!csvBatchId || schoolOpsBusy === "csv-apply"}
+                            className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                          >
+                            Apply mapped rows
+                          </button>
+                        </div>
+                        {csvRows.length ? (
+                          <div className="mt-4 max-h-[220px] overflow-auto">
+                            <table className="min-w-[560px] w-full border-collapse text-left text-[12px]">
+                              <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                                <tr>
+                                  <th className="py-2 pr-3 font-medium">Row</th>
+                                  <th className="py-2 pr-3 font-medium">Email</th>
+                                  <th className="py-2 pr-3 font-medium">Role</th>
+                                  <th className="py-2 font-medium">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {csvRows.map((row) => (
+                                  <tr key={row.row_index} className="border-b border-border/55">
+                                    <td className="py-2 pr-3 text-muted-foreground">
+                                      {row.row_index}
+                                    </td>
+                                    <td className="py-2 pr-3 text-foreground">
+                                      {String(row.normalized_row.email || "")}
+                                    </td>
+                                    <td className="py-2 pr-3 text-muted-foreground">
+                                      {String(row.normalized_row.role || "student")}
+                                    </td>
+                                    <td
+                                      className={`py-2 ${
+                                        row.status === "ready" || row.status === "applied"
+                                          ? "text-emerald-500"
+                                          : row.status === "needs_seed"
+                                            ? "text-amber-500"
+                                            : "text-red-500"
+                                      }`}
+                                    >
+                                      {row.status}
+                                      {row.error ? (
+                                        <div className="text-[11px] text-muted-foreground">
+                                          {row.error}
+                                        </div>
+                                      ) : null}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                          <FileDown className="h-4 w-4" strokeWidth={1.6} />
+                          Student records and reports
+                        </h3>
+                        <div className="mt-3 grid gap-3">
+                          <Field label="Student">
+                            <select
+                              value={selectedStudentId}
+                              onChange={(event) => setSelectedStudentId(event.target.value)}
+                              className="jargon-input"
+                            >
+                              <option value="">Choose a student</option>
+                              {classStudentUsers.map((student) => (
+                                <option key={student.id} value={student.id}>
+                                  {student.label}
+                                  {student.email ? ` · ${student.email}` : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() => void exportSelectedStudentArchive()}
+                              disabled={!selectedStudentId || schoolOpsBusy === "student-archive"}
+                              className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              Export archive
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void generateStudentReport()}
+                              disabled={!selectedStudentId || schoolOpsBusy === "progress-report"}
+                              className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              Generate progress report
+                            </button>
+                          </div>
+                          <textarea
+                            value={retentionReason}
+                            onChange={(event) => setRetentionReason(event.target.value)}
+                            rows={3}
+                            placeholder="Retention/anonymization request reason"
+                            className="jargon-input"
+                          />
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() => void requestRetention("anonymize")}
+                              disabled={
+                                !selectedStudentId || schoolOpsBusy === "retention-anonymize"
+                              }
+                              className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              Request anonymization
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void requestRetention("delete")}
+                              disabled={!selectedStudentId || schoolOpsBusy === "retention-delete"}
+                              className="rounded-full border border-red-500/35 px-4 py-2 text-[12.5px] text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                            >
+                              Request deletion
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                      <h3 className="text-[14px] font-medium text-foreground">
+                        Class consent and feature controls
+                      </h3>
+                      <p className="mt-1 text-[12px] text-muted-foreground">
+                        Stored for policy enforcement and teacher visibility. Runtime enforcement
+                        can grow against these settings as pilot policy gets stricter.
+                      </p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        {(
+                          [
+                            ["voice_enabled", "Voice"],
+                            ["media_processing_enabled", "Media processing"],
+                            ["external_sync_enabled", "External sync"],
+                            ["ai_enabled", "AI mentor"],
+                            ["quiz_voice_enabled", "Voice in quizzes"],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <label
+                            key={key}
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/45 px-3 py-2 text-[12.5px] text-foreground"
+                          >
+                            <span>{label}</span>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(consentSettings[key])}
+                              onChange={(event) =>
+                                setConsentSettings((current) => ({
+                                  ...current,
+                                  [key]: event.target.checked,
+                                }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void saveConsentSettings()}
+                        disabled={!selectedOrgId || schoolOpsBusy === "consent"}
+                        className="mt-4 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                      >
+                        Save settings
+                      </button>
+                    </div>
+                  </div>
+                </GradientCard>
+              </WorkspacePanel>
+
+              <WorkspacePanel value="google">
+                <GradientCard>
+                  <div className="space-y-5 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
+                          Google Classroom
+                        </div>
+                        <h2 className="text-[18px] font-medium text-foreground">
+                          Course and roster import
+                        </h2>
+                        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                          Connect a teacher or org-admin Google Classroom account, preview courses
+                          and rosters, then import matched users into Jargon classes. This is
+                          read-only: assignments, grades, and mastery stay authoritative in Jargon.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void refreshGoogleClassroomMappings()}
+                          disabled={classroomLoading || !selectedOrgId}
+                          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`h-4 w-4 ${classroomLoading ? "animate-spin" : ""}`}
+                            strokeWidth={1.6}
+                          />
+                          Refresh Classroom
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void diagnoseClassroom()}
+                          disabled={classroomLoading}
+                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        >
+                          Diagnose
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void connectGoogleClassroom()}
+                          disabled={classroomLoading || !selectedOrgId}
+                          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                        >
+                          <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
+                          Connect Google
+                        </button>
+                      </div>
+                    </div>
+
+                    {classroomMessage ? (
+                      <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                        {classroomMessage}
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="text-[14px] font-medium text-foreground">Connection</h3>
+                          <div className="mt-3 space-y-3">
+                            <Field label="Google account">
+                              <select
+                                value={selectedConnectionId}
+                                onChange={(event) => {
+                                  setSelectedConnectionId(event.target.value);
+                                  setClassroomCourses([]);
+                                  setSelectedGoogleCourseId("");
+                                  setRosterPreview(null);
+                                }}
+                                className="jargon-input"
+                              >
+                                <option value="">
+                                  {activeClassroomConnections.length
+                                    ? "Choose a Google Classroom connection"
+                                    : "No active Google connection"}
+                                </option>
+                                {activeClassroomConnections.map((connection) => (
+                                  <option key={connection.id} value={connection.id}>
+                                    {connection.google_email}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                            {selectedClassroomConnection ? (
+                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                <div className="font-medium text-foreground">
+                                  {selectedClassroomConnection.google_name ||
+                                    selectedClassroomConnection.google_email}
+                                </div>
+                                <div className="mt-1">
+                                  Last refreshed{" "}
+                                  {formatDate(selectedClassroomConnection.last_refreshed_at)}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void disconnectSelectedGoogleClassroom()}
+                                  disabled={classroomLoading}
+                                  className="mt-3 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                >
+                                  Disconnect
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                Connect Google Classroom with read-only course, roster, and
+                                profile-email scopes. Google secrets and refresh tokens are never
+                                sent to the browser.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
+                            <button
+                              type="button"
+                              onClick={() => void loadGoogleCourses()}
+                              disabled={!selectedConnectionId || classroomLoading}
+                              className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                            >
+                              Load courses
+                            </button>
+                          </div>
+                          <div className="mt-3 space-y-3">
+                            <Field label="Google course">
+                              <select
+                                value={selectedGoogleCourseId}
+                                onChange={(event) => {
+                                  setSelectedGoogleCourseId(event.target.value);
+                                  setRosterPreview(null);
+                                }}
+                                className="jargon-input"
+                              >
+                                <option value="">
+                                  {classroomCourses.length
+                                    ? "Choose a course"
+                                    : "Load courses first"}
+                                </option>
+                                {classroomCourses.map((course) => (
+                                  <option key={course.id} value={course.id}>
+                                    {course.name}
+                                    {course.section ? ` - ${course.section}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                            {selectedGoogleCourse ? (
+                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                <div className="font-medium text-foreground">
+                                  {selectedGoogleCourse.name}
+                                </div>
+                                <div className="mt-1">
+                                  {selectedGoogleCourse.section || "No section"} ·{" "}
+                                  {selectedGoogleCourse.course_state || "unknown state"}
+                                </div>
+                              </div>
+                            ) : null}
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void previewGoogleRoster()}
+                                disabled={!selectedGoogleCourseId || classroomLoading}
+                                className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                              >
+                                Preview roster
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void importGoogleCourse()}
+                                disabled={!selectedGoogleCourseId || classroomLoading}
+                                className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                              >
+                                Import into Jargon
+                              </button>
+                            </div>
+                            {selectedCourseMapping ? (
+                              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-[12px] text-emerald-500">
+                                Mapped to Jargon class{" "}
+                                {scope?.classes.find(
+                                  (item) => item.id === selectedCourseMapping.class_id,
+                                )?.name ||
+                                  selectedCourseMapping.class_id ||
+                                  "unknown"}{" "}
+                                · last sync {formatDate(selectedCourseMapping.last_synced_at)}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="text-[14px] font-medium text-foreground">
+                            Roster preview
+                          </h3>
+                          {rosterPreview ? (
+                            <div className="mt-3 space-y-4">
+                              <div className="grid gap-3 sm:grid-cols-4">
+                                <MiniStat
+                                  label="Teachers"
+                                  value={String(rosterPreview.teachers.length)}
+                                />
+                                <MiniStat
+                                  label="Students"
+                                  value={String(rosterPreview.students.length)}
+                                />
+                                <MiniStat
+                                  label="Matched"
+                                  value={String(
+                                    [...rosterPreview.teachers, ...rosterPreview.students].filter(
+                                      (person) => person.matched,
+                                    ).length,
+                                  )}
+                                />
+                                <MiniStat
+                                  label="Missing"
+                                  value={String(
+                                    [...rosterPreview.teachers, ...rosterPreview.students].filter(
+                                      (person) => !person.matched,
+                                    ).length,
+                                  )}
+                                />
+                              </div>
+                              <RosterPreviewTable
+                                title="Teachers"
+                                people={rosterPreview.teachers}
+                              />
+                              <RosterPreviewTable
+                                title="Students"
+                                people={rosterPreview.students}
+                              />
+                            </div>
+                          ) : (
+                            <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                              Preview before importing. Existing Jargon users are matched by email.
+                              Missing users are not created here; seed them through the existing
+                              roster tools and import again.
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="text-[14px] font-medium text-foreground">
+                            Recent Classroom syncs
+                          </h3>
+                          <div className="mt-3 space-y-2">
+                            {(classroom?.sync_runs || []).slice(0, 6).map((run) => (
+                              <div
+                                key={run.id}
+                                className="border-b border-border/55 pb-2 text-[12px]"
+                              >
+                                <div className="text-foreground">
+                                  {run.action.replaceAll("_", " ")} · {run.status}
+                                </div>
+                                <div className="mt-0.5 text-muted-foreground">
+                                  {formatDate(run.started_at)} · {JSON.stringify(run.counts)}
+                                </div>
+                              </div>
+                            ))}
+                            {!classroom?.sync_runs.length ? (
+                              <div className="text-[12px] text-muted-foreground">
+                                No Classroom sync runs yet.
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </GradientCard>
+              </WorkspacePanel>
+
+              <WorkspacePanel value="cost">
+                <GradientCard>
+                  <div className="space-y-5 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <Activity className="h-3.5 w-3.5" strokeWidth={1.7} />
+                          AI/runtime operations
+                        </div>
+                        <h2 className="text-[18px] font-medium text-foreground">
+                          Usage, reliability, and model load
+                        </h2>
+                        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                          {costVisible
+                            ? "Platform admins see estimated model cost, tokens, latency, and failure signals across the pilot."
+                            : "Org admins see scoped usage and reliability. Dollar-cost totals stay platform-admin only."}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void refreshCostDashboard()}
+                        disabled={costLoading}
+                        className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 ${costLoading ? "animate-spin" : ""}`}
+                          strokeWidth={1.6}
+                        />
+                        Refresh metrics
+                      </button>
+                    </div>
+
+                    {costMessage ? (
+                      <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                        {costMessage}
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      <MetricStat
+                        icon={<DollarSign className="h-4 w-4" strokeWidth={1.6} />}
+                        label="Estimated cost"
+                        value={formatUsd(costDashboard?.totals.estimated_cost_usd)}
+                      />
+                      <MetricStat
+                        icon={<BarChart3 className="h-4 w-4" strokeWidth={1.6} />}
+                        label="Total tokens"
+                        value={formatCompactNumber(costDashboard?.totals.total_tokens)}
+                      />
+                      <MetricStat
+                        label="Model events"
+                        value={formatNumber(costDashboard?.totals.model_event_count)}
+                      />
+                      <MetricStat
+                        label="Avg latency"
+                        value={formatMs(costDashboard?.totals.average_latency_ms)}
+                      />
+                      <MetricStat
+                        label="Errors"
+                        value={`${formatNumber(costDashboard?.totals.error_count)} · ${formatPercent(
+                          costDashboard?.totals.error_rate,
+                        )}`}
+                      />
+                    </div>
+
                     <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="text-[14px] font-medium text-foreground">
-                            {selectedClassReadiness.class_name}
+                            Runtime health
                           </h3>
                           <p className="mt-1 text-[12px] text-muted-foreground">
-                            {selectedClassReadiness.organization_name} ·{" "}
-                            {selectedClassReadiness.teacher_count} teacher
-                            {selectedClassReadiness.teacher_count === 1 ? "" : "s"} ·{" "}
-                            {selectedClassReadiness.student_count} student
-                            {selectedClassReadiness.student_count === 1 ? "" : "s"}
+                            Engine wakeups, retry recoveries, controlled code errors, and pilot
+                            safety limits from recent runtime events.
                           </p>
                         </div>
-                        <span
-                          className={`rounded-full border px-3 py-1.5 text-[11.5px] ${readinessTone(
-                            selectedClassReadiness.status,
-                          )}`}
-                        >
-                          {readinessLabel(selectedClassReadiness.status)}
-                        </span>
-                      </div>
-                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                        {selectedClassReadiness.checklist.map((item) => (
-                          <div
-                            key={item.label}
-                            className="rounded-2xl border border-border/60 bg-background/45 px-3 py-2"
-                          >
-                            <div className="text-[12px] text-foreground">{item.label}</div>
-                            <div
-                              className={`mt-1 text-[11px] uppercase tracking-[0.09em] ${
-                                item.status === "ok"
-                                  ? "text-emerald-500"
-                                  : item.status === "attention"
-                                    ? "text-amber-500"
-                                    : "text-sky-500"
-                              }`}
-                            >
-                              {item.status}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-4 space-y-2">
-                        {selectedClassReadiness.issues.length ? (
-                          selectedClassReadiness.issues.map((issue) => (
-                            <div
-                              key={`${issue.severity}-${issue.message}`}
-                              className="rounded-2xl border border-border/60 bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground"
-                            >
-                              <span
-                                className={`mr-2 font-medium ${
-                                  issue.severity === "blocked"
-                                    ? "text-red-500"
-                                    : issue.severity === "attention"
-                                      ? "text-amber-500"
-                                      : "text-sky-500"
-                                }`}
-                              >
-                                {issue.severity}
-                              </span>
-                              {issue.message}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12.5px] text-emerald-500">
-                            No readiness blockers found.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <h3 className="text-[14px] font-medium text-foreground">
-                        Roster/account health
-                      </h3>
-                      <div className="mt-3 max-h-[260px] overflow-auto pr-1">
-                        <table className="min-w-[640px] w-full border-collapse text-left text-[12px]">
-                          <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                            <tr>
-                              <th className="py-2 pr-3 font-medium">Person</th>
-                              <th className="py-2 pr-3 font-medium">Role</th>
-                              <th className="py-2 pr-3 font-medium">Status</th>
-                              <th className="py-2 font-medium">Last sign-in</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {selectedClassReadiness.roster.map((row) => (
-                              <tr key={row.user_id} className="border-b border-border/55">
-                                <td className="py-2 pr-3">
-                                  <div className="font-medium text-foreground">
-                                    {row.name || row.email || row.user_id}
-                                  </div>
-                                  <div className="text-[11px] text-muted-foreground">
-                                    {row.email || "No email loaded"} · grade {row.grade || "n/a"}
-                                  </div>
-                                </td>
-                                <td className="py-2 pr-3 text-muted-foreground">{row.role}</td>
-                                <td className="py-2 pr-3 text-muted-foreground">
-                                  {classStatusLabel(row.status)}
-                                </td>
-                                <td className="py-2 text-muted-foreground">
-                                  {formatDate(row.last_sign_in_at)}
-                                </td>
-                              </tr>
-                            ))}
-                            {!selectedClassReadiness.roster.length ? (
-                              <tr>
-                                <td className="py-4 text-muted-foreground" colSpan={4}>
-                                  No active roster rows found.
-                                </td>
-                              </tr>
-                            ) : null}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4 text-[12.5px] text-muted-foreground">
-                    Choose a class and refresh readiness to see launch status.
-                  </div>
-                )}
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-[940px] w-full border-collapse text-left text-[12.5px]">
-                    <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                      <tr>
-                        <th className="py-2 pr-3 font-medium">Class</th>
-                        <th className="py-2 pr-3 font-medium">Status</th>
-                        <th className="py-2 pr-3 font-medium">Roster</th>
-                        <th className="py-2 pr-3 font-medium">Learning</th>
-                        <th className="py-2 pr-3 font-medium">Work/media</th>
-                        <th className="py-2 font-medium">Support</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(readiness?.classes || []).map((item) => (
-                        <tr
-                          key={item.class_id}
-                          className="cursor-pointer border-b border-border/60 align-top transition-colors hover:bg-muted/40"
-                          onClick={() => {
-                            setSelectedOrgId(item.organization_id);
-                            setSelectedClassId(item.class_id);
-                            setRenameClassName(item.class_name);
-                          }}
-                        >
-                          <td className="py-3 pr-3">
-                            <div className="font-medium text-foreground">{item.class_name}</div>
-                            <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                              {item.organization_name}
-                            </div>
-                          </td>
-                          <td className="py-3 pr-3">
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-[11px] ${readinessTone(
-                                item.status,
-                              )}`}
-                            >
-                              {readinessLabel(item.status)}
-                            </span>
-                          </td>
-                          <td className="py-3 pr-3 text-muted-foreground">
-                            {item.teacher_count} teachers · {item.student_count} students
-                            {item.disabled_membership_count ? (
-                              <div className="mt-0.5 text-amber-500">
-                                {item.disabled_membership_count} inactive memberships
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="py-3 pr-3 text-muted-foreground">
-                            {item.completed_session_count} completions ·{" "}
-                            {item.recent_completion_count} recent
-                            <div className="mt-0.5">
-                              {item.published_lesson_count} lessons available
-                            </div>
-                          </td>
-                          <td className="py-3 pr-3 text-muted-foreground">
-                            {item.assignment_count} assigned · {item.resource_count} resources
-                          </td>
-                          <td className="py-3 text-muted-foreground">
-                            {item.open_alert_count} alerts · {item.recent_error_count} errors ·{" "}
-                            {item.audit_event_count} audit events
-                          </td>
-                        </tr>
-                      ))}
-                      {!readiness?.classes.length ? (
-                        <tr>
-                          <td className="py-5 text-muted-foreground" colSpan={6}>
-                            No readiness data loaded yet.
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                    <h3 className="text-[14px] font-medium text-foreground">Recent errors</h3>
-                    <div className="mt-3 space-y-2">
-                      {(readiness?.recent_errors || []).slice(0, 5).map((event) => (
-                        <div key={event.id} className="border-b border-border/55 pb-2 text-[12px]">
-                          <div className="text-foreground">
-                            {event.event_type} · {event.lesson_id || "no lesson"}
-                          </div>
-                          <div className="mt-0.5 text-muted-foreground">
-                            {formatDate(event.created_at)}
-                          </div>
+                        <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                          Last event{" "}
+                          {formatDate(costDashboard?.runtime_health?.last_runtime_event_at)}
                         </div>
-                      ))}
-                      {!readiness?.recent_errors.length ? (
-                        <div className="text-[12px] text-muted-foreground">
-                          No recent runtime errors in scope.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                    <h3 className="text-[14px] font-medium text-foreground">Open interventions</h3>
-                    <div className="mt-3 space-y-2">
-                      {(readiness?.open_alerts || []).slice(0, 5).map((alert) => (
-                        <div key={alert.id} className="border-b border-border/55 pb-2 text-[12px]">
-                          <div className="text-foreground">{alert.title}</div>
-                          <div className="mt-0.5 text-muted-foreground">
-                            {alert.severity} · {alert.status} · {formatDate(alert.created_at)}
-                          </div>
-                        </div>
-                      ))}
-                      {!readiness?.open_alerts.length ? (
-                        <div className="text-[12px] text-muted-foreground">
-                          No open intervention alerts in scope.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </GradientCard>
-          </WorkspacePanel>
-
-          <WorkspacePanel value="school">
-            <GradientCard>
-              <div className="space-y-5 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                      <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.7} />
-                      School data ops
-                    </div>
-                    <h2 className="text-[18px] font-medium text-foreground">
-                      CSV fallback, exports, retention, and consent
-                    </h2>
-                    <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
-                      Run school operations without OAuth: preview roster CSV files, map existing
-                      users, export student records, record retention requests, and store
-                      class-level feature controls. CSV import does not create accounts or expose
-                      passwords.
-                    </p>
-                  </div>
-                  <div className="text-[12px] text-muted-foreground">
-                    {selectedOrg?.name || "Choose an organization"}
-                    {selectedClass ? ` · ${selectedClass.name}` : ""}
-                  </div>
-                </div>
-
-                {schoolOpsMessage ? (
-                  <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
-                    {schoolOpsMessage}
-                  </div>
-                ) : null}
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                    <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
-                      <FileSpreadsheet className="h-4 w-4" strokeWidth={1.6} />
-                      CSV roster import
-                    </h3>
-                    <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                      Paste columns `email,name,role,grade`. Existing Jargon users are mapped;
-                      missing users are marked `needs seed` and must be created through account
-                      seeding.
-                    </p>
-                    <textarea
-                      value={csvText}
-                      onChange={(event) => setCsvText(event.target.value)}
-                      rows={6}
-                      placeholder={
-                        "email,name,role,grade\nstudent@example.com,Student Name,student,Grade 5"
-                      }
-                      className="jargon-input mt-3 min-h-[130px] font-mono text-[12px]"
-                    />
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void previewCsv()}
-                        disabled={
-                          !selectedOrgId || !csvText.trim() || schoolOpsBusy === "csv-preview"
-                        }
-                        className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                      >
-                        Preview CSV
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void applyCsvImport()}
-                        disabled={!csvBatchId || schoolOpsBusy === "csv-apply"}
-                        className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                      >
-                        Apply mapped rows
-                      </button>
-                    </div>
-                    {csvRows.length ? (
-                      <div className="mt-4 max-h-[220px] overflow-auto">
-                        <table className="min-w-[560px] w-full border-collapse text-left text-[12px]">
-                          <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                            <tr>
-                              <th className="py-2 pr-3 font-medium">Row</th>
-                              <th className="py-2 pr-3 font-medium">Email</th>
-                              <th className="py-2 pr-3 font-medium">Role</th>
-                              <th className="py-2 font-medium">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {csvRows.map((row) => (
-                              <tr key={row.row_index} className="border-b border-border/55">
-                                <td className="py-2 pr-3 text-muted-foreground">{row.row_index}</td>
-                                <td className="py-2 pr-3 text-foreground">
-                                  {String(row.normalized_row.email || "")}
-                                </td>
-                                <td className="py-2 pr-3 text-muted-foreground">
-                                  {String(row.normalized_row.role || "student")}
-                                </td>
-                                <td
-                                  className={`py-2 ${
-                                    row.status === "ready" || row.status === "applied"
-                                      ? "text-emerald-500"
-                                      : row.status === "needs_seed"
-                                        ? "text-amber-500"
-                                        : "text-red-500"
-                                  }`}
-                                >
-                                  {row.status}
-                                  {row.error ? (
-                                    <div className="text-[11px] text-muted-foreground">
-                                      {row.error}
-                                    </div>
-                                  ) : null}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
                       </div>
-                    ) : null}
-                  </div>
-
-                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                    <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
-                      <FileDown className="h-4 w-4" strokeWidth={1.6} />
-                      Student records and reports
-                    </h3>
-                    <div className="mt-3 grid gap-3">
-                      <Field label="Student">
-                        <select
-                          value={selectedStudentId}
-                          onChange={(event) => setSelectedStudentId(event.target.value)}
-                          className="jargon-input"
-                        >
-                          <option value="">Choose a student</option>
-                          {classStudentUsers.map((student) => (
-                            <option key={student.id} value={student.id}>
-                              {student.label}
-                              {student.email ? ` · ${student.email}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <button
-                          type="button"
-                          onClick={() => void exportSelectedStudentArchive()}
-                          disabled={!selectedStudentId || schoolOpsBusy === "student-archive"}
-                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        >
-                          Export archive
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void generateStudentReport()}
-                          disabled={!selectedStudentId || schoolOpsBusy === "progress-report"}
-                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        >
-                          Generate progress report
-                        </button>
-                      </div>
-                      <textarea
-                        value={retentionReason}
-                        onChange={(event) => setRetentionReason(event.target.value)}
-                        rows={3}
-                        placeholder="Retention/anonymization request reason"
-                        className="jargon-input"
-                      />
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <button
-                          type="button"
-                          onClick={() => void requestRetention("anonymize")}
-                          disabled={!selectedStudentId || schoolOpsBusy === "retention-anonymize"}
-                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        >
-                          Request anonymization
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void requestRetention("delete")}
-                          disabled={!selectedStudentId || schoolOpsBusy === "retention-delete"}
-                          className="rounded-full border border-red-500/35 px-4 py-2 text-[12.5px] text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
-                        >
-                          Request deletion
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                  <h3 className="text-[14px] font-medium text-foreground">
-                    Class consent and feature controls
-                  </h3>
-                  <p className="mt-1 text-[12px] text-muted-foreground">
-                    Stored for policy enforcement and teacher visibility. Runtime enforcement can
-                    grow against these settings as pilot policy gets stricter.
-                  </p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    {(
-                      [
-                        ["voice_enabled", "Voice"],
-                        ["media_processing_enabled", "Media processing"],
-                        ["external_sync_enabled", "External sync"],
-                        ["ai_enabled", "AI mentor"],
-                        ["quiz_voice_enabled", "Voice in quizzes"],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <label
-                        key={key}
-                        className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/45 px-3 py-2 text-[12.5px] text-foreground"
-                      >
-                        <span>{label}</span>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(consentSettings[key])}
-                          onChange={(event) =>
-                            setConsentSettings((current) => ({
-                              ...current,
-                              [key]: event.target.checked,
-                            }))
-                          }
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <MetricStat
+                          label="Run failures"
+                          value={formatNumber(costDashboard?.runtime_health?.run_failures)}
                         />
-                      </label>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void saveConsentSettings()}
-                    disabled={!selectedOrgId || schoolOpsBusy === "consent"}
-                    className="mt-4 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                  >
-                    Save settings
-                  </button>
-                </div>
-              </div>
-            </GradientCard>
-          </WorkspacePanel>
-
-          <WorkspacePanel value="google">
-            <GradientCard>
-              <div className="space-y-5 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                      <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
-                      Google Classroom
+                        <MetricStat
+                          label="Wake timeouts"
+                          value={formatNumber(costDashboard?.runtime_health?.engine_wake_timeouts)}
+                        />
+                        <MetricStat
+                          label="Retry recoveries"
+                          value={formatNumber(
+                            costDashboard?.runtime_health?.engine_retry_successes,
+                          )}
+                        />
+                        <MetricStat
+                          label="Rate limits"
+                          value={formatNumber(costDashboard?.runtime_health?.rate_limit_hits)}
+                        />
+                        <MetricStat
+                          label="Controlled errors"
+                          value={formatNumber(costDashboard?.runtime_health?.controlled_errors)}
+                        />
+                      </div>
                     </div>
-                    <h2 className="text-[18px] font-medium text-foreground">
-                      Course and roster import
-                    </h2>
-                    <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
-                      Connect a teacher or org-admin Google Classroom account, preview courses and
-                      rosters, then import matched users into Jargon classes. This is read-only:
-                      assignments, grades, and mastery stay authoritative in Jargon.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void refreshGoogleClassroomMappings()}
-                      disabled={classroomLoading || !selectedOrgId}
-                      className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                    >
-                      <RefreshCw
-                        className={`h-4 w-4 ${classroomLoading ? "animate-spin" : ""}`}
-                        strokeWidth={1.6}
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <CostMetricTable
+                        title="Model breakdown"
+                        rows={costDashboard?.by_model || []}
+                        showCost={costVisible}
+                        empty="No model usage recorded yet."
                       />
-                      Refresh Classroom
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void diagnoseClassroom()}
-                      disabled={classroomLoading}
-                      className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                    >
-                      Diagnose
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void connectGoogleClassroom()}
-                      disabled={classroomLoading || !selectedOrgId}
-                      className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                    >
-                      <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
-                      Connect Google
-                    </button>
-                  </div>
-                </div>
+                      <CostMetricTable
+                        title="Task type breakdown"
+                        rows={costDashboard?.by_task_type || []}
+                        showCost={costVisible}
+                        empty="No task usage recorded yet."
+                      />
+                    </div>
 
-                {classroomMessage ? (
-                  <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
-                    {classroomMessage}
-                  </div>
-                ) : null}
+                    <CostMetricTable
+                      title="Class operating load"
+                      rows={costDashboard?.by_class || []}
+                      showCost={costVisible}
+                      empty="No class-scoped usage recorded yet."
+                      wide
+                    />
 
-                <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <h3 className="text-[14px] font-medium text-foreground">Connection</h3>
-                      <div className="mt-3 space-y-3">
-                        <Field label="Google account">
-                          <select
-                            value={selectedConnectionId}
-                            onChange={(event) => {
-                              setSelectedConnectionId(event.target.value);
-                              setClassroomCourses([]);
-                              setSelectedGoogleCourseId("");
-                              setRosterPreview(null);
-                            }}
-                            className="jargon-input"
-                          >
-                            <option value="">
-                              {activeClassroomConnections.length
-                                ? "Choose a Google Classroom connection"
-                                : "No active Google connection"}
-                            </option>
-                            {activeClassroomConnections.map((connection) => (
-                              <option key={connection.id} value={connection.id}>
-                                {connection.google_email}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                        {selectedClassroomConnection ? (
-                          <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                            <div className="font-medium text-foreground">
-                              {selectedClassroomConnection.google_name ||
-                                selectedClassroomConnection.google_email}
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <h3 className="text-[14px] font-medium text-foreground">
+                          Recent model events
+                        </h3>
+                        <div className="mt-3 space-y-2">
+                          {(costDashboard?.recent_model_events || []).slice(0, 6).map((event) => (
+                            <div
+                              key={event.id}
+                              className="border-b border-border/55 pb-2 text-[12px]"
+                            >
+                              <div className="text-foreground">
+                                {event.model} · {event.task_type.replaceAll("_", " ")}
+                              </div>
+                              <div className="mt-0.5 text-muted-foreground">
+                                {formatCompactNumber(
+                                  event.input_tokens + event.output_tokens + event.cached_tokens,
+                                )}{" "}
+                                tokens · {formatMs(event.latency_ms)} ·{" "}
+                                {formatUsd(event.estimated_cost_usd)}
+                              </div>
                             </div>
-                            <div className="mt-1">
-                              Last refreshed{" "}
-                              {formatDate(selectedClassroomConnection.last_refreshed_at)}
+                          ))}
+                          {!costDashboard?.recent_model_events.length ? (
+                            <div className="text-[12px] text-muted-foreground">
+                              No model events recorded yet.
                             </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <h3 className="text-[14px] font-medium text-foreground">Runtime errors</h3>
+                        <div className="mt-3 space-y-2">
+                          {(costDashboard?.recent_runtime_errors || []).slice(0, 6).map((event) => (
+                            <div
+                              key={event.id}
+                              className="border-b border-border/55 pb-2 text-[12px]"
+                            >
+                              <div className="text-foreground">
+                                {event.event_type} · {event.lesson_id || "no lesson"}
+                              </div>
+                              <div className="mt-0.5 text-muted-foreground">
+                                {event.session_id || "no session"} · {formatDate(event.created_at)}
+                              </div>
+                            </div>
+                          ))}
+                          {!costDashboard?.recent_runtime_errors.length ? (
+                            <div className="text-[12px] text-muted-foreground">
+                              No runtime errors in the current scope.
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </GradientCard>
+              </WorkspacePanel>
+
+              <WorkspacePanel value="ops">
+                <GradientCard>
+                  <div className="space-y-5 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-[16px] font-medium text-foreground">
+                          Operations dashboard
+                        </h2>
+                        <p className="mt-1 text-[12.5px] text-muted-foreground">
+                          {isPlatformLevel
+                            ? "Platform-admin tools for classroom setup, roster repair, and account support."
+                            : "Org-admin tools scoped to your own organization."}
+                        </p>
+                      </div>
+                      {opsMessage ? (
+                        <div className="max-w-lg rounded-full border border-border px-3 py-1.5 text-[12px] text-muted-foreground">
+                          {opsMessage}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      <Stat label="Organizations" value={scope?.organizations.length || 0} />
+                      <Stat label="Classes" value={scope?.classes.length || 0} />
+                      <Stat label="Users" value={scope?.users.length || 0} />
+                      <Stat label="Seed batches" value={scope?.seed_batches.length || 0} />
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-[0.78fr_1.22fr]">
+                      <div className="space-y-4">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                          <Field label="Organization">
+                            <select
+                              value={selectedOrgId}
+                              onChange={(event) => {
+                                const orgId = event.target.value;
+                                const firstClass = (scope?.classes || []).find(
+                                  (item) => item.organization_id === orgId,
+                                );
+                                setSelectedOrgId(orgId);
+                                setSelectedClassId(firstClass?.id || "");
+                                setRenameClassName(firstClass?.name || "");
+                              }}
+                              className="jargon-input"
+                            >
+                              {(scope?.organizations || []).map((organization) => (
+                                <option key={organization.id} value={organization.id}>
+                                  {organization.name}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Class">
+                            <select
+                              value={selectedClassId}
+                              onChange={(event) => {
+                                const classId = event.target.value;
+                                setSelectedClassId(classId);
+                                setRenameClassName(
+                                  scope?.classes.find((item) => item.id === classId)?.name || "",
+                                );
+                              }}
+                              className="jargon-input"
+                            >
+                              {orgClasses.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name} · {item.status}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                        </div>
+
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+                            <Plus className="h-4 w-4" strokeWidth={1.6} />
+                            Create class
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                              value={newClassName}
+                              onChange={(event) => setNewClassName(event.target.value)}
+                              placeholder={
+                                selectedOrg ? `New class in ${selectedOrg.name}` : "New class name"
+                              }
+                              className="jargon-input"
+                            />
                             <button
                               type="button"
-                              onClick={() => void disconnectSelectedGoogleClassroom()}
-                              disabled={classroomLoading}
-                              className="mt-3 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                              onClick={() => void createClass()}
+                              disabled={
+                                !selectedOrgId || !newClassName.trim() || opsBusy === "create-class"
+                              }
+                              className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
                             >
-                              Disconnect
+                              Create
                             </button>
                           </div>
-                        ) : (
-                          <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                            Connect Google Classroom with read-only course, roster, and
-                            profile-email scopes. Google secrets and refresh tokens are never sent
-                            to the browser.
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                        </div>
 
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
-                        <button
-                          type="button"
-                          onClick={() => void loadGoogleCourses()}
-                          disabled={!selectedConnectionId || classroomLoading}
-                          className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                        >
-                          Load courses
-                        </button>
-                      </div>
-                      <div className="mt-3 space-y-3">
-                        <Field label="Google course">
-                          <select
-                            value={selectedGoogleCourseId}
-                            onChange={(event) => {
-                              setSelectedGoogleCourseId(event.target.value);
-                              setRosterPreview(null);
-                            }}
-                            className="jargon-input"
-                          >
-                            <option value="">
-                              {classroomCourses.length ? "Choose a course" : "Load courses first"}
-                            </option>
-                            {classroomCourses.map((course) => (
-                              <option key={course.id} value={course.id}>
-                                {course.name}
-                                {course.section ? ` - ${course.section}` : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                        {selectedGoogleCourse ? (
-                          <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                            <div className="font-medium text-foreground">
-                              {selectedGoogleCourse.name}
-                            </div>
-                            <div className="mt-1">
-                              {selectedGoogleCourse.section || "No section"} ·{" "}
-                              {selectedGoogleCourse.course_state || "unknown state"}
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+                            <Archive className="h-4 w-4" strokeWidth={1.6} />
+                            Class settings
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <input
+                              value={renameClassName}
+                              onChange={(event) => setRenameClassName(event.target.value)}
+                              placeholder="Selected class name"
+                              className="jargon-input"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void updateSelectedClass()}
+                                disabled={
+                                  !selectedClassId ||
+                                  !renameClassName.trim() ||
+                                  opsBusy === "update-class"
+                                }
+                                className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                              >
+                                Save class
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void updateSelectedClass(
+                                    selectedClass?.status === "archived" ? "active" : "archived",
+                                  )
+                                }
+                                disabled={!selectedClassId || opsBusy === "update-class"}
+                                className="rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                              >
+                                {selectedClass?.status === "archived" ? "Reactivate" : "Archive"}
+                              </button>
                             </div>
                           </div>
-                        ) : null}
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void previewGoogleRoster()}
-                            disabled={!selectedGoogleCourseId || classroomLoading}
-                            className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                          >
-                            Preview roster
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void importGoogleCourse()}
-                            disabled={!selectedGoogleCourseId || classroomLoading}
-                            className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                          >
-                            Import into Jargon
-                          </button>
                         </div>
-                        {selectedCourseMapping ? (
-                          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-[12px] text-emerald-500">
-                            Mapped to Jargon class{" "}
-                            {scope?.classes.find(
-                              (item) => item.id === selectedCourseMapping.class_id,
-                            )?.name ||
-                              selectedCourseMapping.class_id ||
-                              "unknown"}{" "}
-                            · last sync {formatDate(selectedCourseMapping.last_synced_at)}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <h3 className="text-[14px] font-medium text-foreground">Roster preview</h3>
-                      {rosterPreview ? (
-                        <div className="mt-3 space-y-4">
-                          <div className="grid gap-3 sm:grid-cols-4">
-                            <MiniStat
-                              label="Teachers"
-                              value={String(rosterPreview.teachers.length)}
-                            />
-                            <MiniStat
-                              label="Students"
-                              value={String(rosterPreview.students.length)}
-                            />
-                            <MiniStat
-                              label="Matched"
-                              value={String(
-                                [...rosterPreview.teachers, ...rosterPreview.students].filter(
-                                  (person) => person.matched,
-                                ).length,
-                              )}
-                            />
-                            <MiniStat
-                              label="Missing"
-                              value={String(
-                                [...rosterPreview.teachers, ...rosterPreview.students].filter(
-                                  (person) => !person.matched,
-                                ).length,
-                              )}
-                            />
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+                            <UserPlus className="h-4 w-4" strokeWidth={1.6} />
+                            Add existing user
                           </div>
-                          <RosterPreviewTable title="Teachers" people={rosterPreview.teachers} />
-                          <RosterPreviewTable title="Students" people={rosterPreview.students} />
-                        </div>
-                      ) : (
-                        <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
-                          Preview before importing. Existing Jargon users are matched by email.
-                          Missing users are not created here; seed them through the existing roster
-                          tools and import again.
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <h3 className="text-[14px] font-medium text-foreground">
-                        Recent Classroom syncs
-                      </h3>
-                      <div className="mt-3 space-y-2">
-                        {(classroom?.sync_runs || []).slice(0, 6).map((run) => (
-                          <div key={run.id} className="border-b border-border/55 pb-2 text-[12px]">
-                            <div className="text-foreground">
-                              {run.action.replaceAll("_", " ")} · {run.status}
-                            </div>
-                            <div className="mt-0.5 text-muted-foreground">
-                              {formatDate(run.started_at)} · {JSON.stringify(run.counts)}
+                          <div className="flex flex-col gap-2">
+                            <select
+                              value={existingUserId}
+                              onChange={(event) => setExistingUserId(event.target.value)}
+                              className="jargon-input"
+                            >
+                              <option value="">Choose an existing seeded user</option>
+                              {addableUsers.map((user) => (
+                                <option key={user.id} value={user.id}>
+                                  {user.email || user.id}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex gap-2">
+                              <select
+                                value={existingUserRole}
+                                onChange={(event) =>
+                                  setExistingUserRole(event.target.value as PilotRole)
+                                }
+                                className="jargon-input max-w-[140px]"
+                              >
+                                <option value="student">student</option>
+                                <option value="teacher">teacher</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => void addExistingUser()}
+                                disabled={
+                                  !existingUserId || !selectedClassId || opsBusy === "add-user"
+                                }
+                                className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                              >
+                                Add
+                              </button>
                             </div>
                           </div>
-                        ))}
-                        {!classroom?.sync_runs.length ? (
-                          <div className="text-[12px] text-muted-foreground">
-                            No Classroom sync runs yet.
-                          </div>
-                        ) : null}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </GradientCard>
-          </WorkspacePanel>
 
-          <WorkspacePanel value="cost">
-            <GradientCard>
-              <div className="space-y-5 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                      <Activity className="h-3.5 w-3.5" strokeWidth={1.7} />
-                      AI/runtime operations
-                    </div>
-                    <h2 className="text-[18px] font-medium text-foreground">
-                      Usage, reliability, and model load
-                    </h2>
-                    <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
-                      {costVisible
-                        ? "Platform admins see estimated model cost, tokens, latency, and failure signals across the pilot."
-                        : "Org admins see scoped usage and reliability. Dollar-cost totals stay platform-admin only."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void refreshCostDashboard()}
-                    disabled={costLoading}
-                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                  >
-                    <RefreshCw
-                      className={`h-4 w-4 ${costLoading ? "animate-spin" : ""}`}
-                      strokeWidth={1.6}
-                    />
-                    Refresh metrics
-                  </button>
-                </div>
-
-                {costMessage ? (
-                  <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
-                    {costMessage}
-                  </div>
-                ) : null}
-
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  <MetricStat
-                    icon={<DollarSign className="h-4 w-4" strokeWidth={1.6} />}
-                    label="Estimated cost"
-                    value={formatUsd(costDashboard?.totals.estimated_cost_usd)}
-                  />
-                  <MetricStat
-                    icon={<BarChart3 className="h-4 w-4" strokeWidth={1.6} />}
-                    label="Total tokens"
-                    value={formatCompactNumber(costDashboard?.totals.total_tokens)}
-                  />
-                  <MetricStat
-                    label="Model events"
-                    value={formatNumber(costDashboard?.totals.model_event_count)}
-                  />
-                  <MetricStat
-                    label="Avg latency"
-                    value={formatMs(costDashboard?.totals.average_latency_ms)}
-                  />
-                  <MetricStat
-                    label="Errors"
-                    value={`${formatNumber(costDashboard?.totals.error_count)} · ${formatPercent(
-                      costDashboard?.totals.error_rate,
-                    )}`}
-                  />
-                </div>
-
-                <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-[14px] font-medium text-foreground">Runtime health</h3>
-                      <p className="mt-1 text-[12px] text-muted-foreground">
-                        Engine wakeups, retry recoveries, controlled code errors, and pilot safety
-                        limits from recent runtime events.
-                      </p>
-                    </div>
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                      Last event {formatDate(costDashboard?.runtime_health?.last_runtime_event_at)}
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    <MetricStat
-                      label="Run failures"
-                      value={formatNumber(costDashboard?.runtime_health?.run_failures)}
-                    />
-                    <MetricStat
-                      label="Wake timeouts"
-                      value={formatNumber(costDashboard?.runtime_health?.engine_wake_timeouts)}
-                    />
-                    <MetricStat
-                      label="Retry recoveries"
-                      value={formatNumber(costDashboard?.runtime_health?.engine_retry_successes)}
-                    />
-                    <MetricStat
-                      label="Rate limits"
-                      value={formatNumber(costDashboard?.runtime_health?.rate_limit_hits)}
-                    />
-                    <MetricStat
-                      label="Controlled errors"
-                      value={formatNumber(costDashboard?.runtime_health?.controlled_errors)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <CostMetricTable
-                    title="Model breakdown"
-                    rows={costDashboard?.by_model || []}
-                    showCost={costVisible}
-                    empty="No model usage recorded yet."
-                  />
-                  <CostMetricTable
-                    title="Task type breakdown"
-                    rows={costDashboard?.by_task_type || []}
-                    showCost={costVisible}
-                    empty="No task usage recorded yet."
-                  />
-                </div>
-
-                <CostMetricTable
-                  title="Class operating load"
-                  rows={costDashboard?.by_class || []}
-                  showCost={costVisible}
-                  empty="No class-scoped usage recorded yet."
-                  wide
-                />
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                    <h3 className="text-[14px] font-medium text-foreground">Recent model events</h3>
-                    <div className="mt-3 space-y-2">
-                      {(costDashboard?.recent_model_events || []).slice(0, 6).map((event) => (
-                        <div key={event.id} className="border-b border-border/55 pb-2 text-[12px]">
-                          <div className="text-foreground">
-                            {event.model} · {event.task_type.replaceAll("_", " ")}
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                {selectedClass?.name || "Choose a class"}
+                              </h3>
+                              <p className="mt-1 text-[12px] text-muted-foreground">
+                                {activeTeacherCount} active teacher
+                                {activeTeacherCount === 1 ? "" : "s"} · {activeStudentCount} active
+                                student
+                                {activeStudentCount === 1 ? "" : "s"}
+                              </p>
+                            </div>
+                            <ShieldCheck
+                              className="h-4 w-4 text-muted-foreground"
+                              strokeWidth={1.6}
+                            />
                           </div>
-                          <div className="mt-0.5 text-muted-foreground">
-                            {formatCompactNumber(
-                              event.input_tokens + event.output_tokens + event.cached_tokens,
-                            )}{" "}
-                            tokens · {formatMs(event.latency_ms)} ·{" "}
-                            {formatUsd(event.estimated_cost_usd)}
-                          </div>
-                        </div>
-                      ))}
-                      {!costDashboard?.recent_model_events.length ? (
-                        <div className="text-[12px] text-muted-foreground">
-                          No model events recorded yet.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
 
-                  <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                    <h3 className="text-[14px] font-medium text-foreground">Runtime errors</h3>
-                    <div className="mt-3 space-y-2">
-                      {(costDashboard?.recent_runtime_errors || []).slice(0, 6).map((event) => (
-                        <div key={event.id} className="border-b border-border/55 pb-2 text-[12px]">
-                          <div className="text-foreground">
-                            {event.event_type} · {event.lesson_id || "no lesson"}
-                          </div>
-                          <div className="mt-0.5 text-muted-foreground">
-                            {event.session_id || "no session"} · {formatDate(event.created_at)}
+                          <div className="mt-4 overflow-x-auto">
+                            <table className="min-w-[820px] w-full border-collapse text-left text-[12.5px]">
+                              <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                                <tr>
+                                  <th className="py-2 pr-3 font-medium">Person</th>
+                                  <th className="py-2 pr-3 font-medium">Role</th>
+                                  <th className="py-2 pr-3 font-medium">Status</th>
+                                  <th className="py-2 pr-3 font-medium">Password reset</th>
+                                  <th className="py-2 font-medium">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {classMemberships.map((membership) => {
+                                  const user = userById.get(membership.user_id);
+                                  const profile = profileById.get(membership.user_id);
+                                  const orgMembership = organizationMembershipByUser.get(
+                                    membership.user_id,
+                                  );
+                                  const inactive = membership.status !== "active";
+                                  return (
+                                    <tr
+                                      key={membership.id}
+                                      className="border-b border-border/60 align-top"
+                                    >
+                                      <td className="py-3 pr-3">
+                                        <div className="font-medium text-foreground">
+                                          {profile?.name || user?.email || membership.user_id}
+                                        </div>
+                                        <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                                          {user?.email || "No email loaded"} · grade{" "}
+                                          {profile?.grade || "n/a"}
+                                        </div>
+                                        <div className="mt-0.5 text-[11px] text-muted-foreground/75">
+                                          Last sign-in {formatDate(user?.last_sign_in_at)}
+                                        </div>
+                                      </td>
+                                      <td className="py-3 pr-3">
+                                        <select
+                                          value={membership.role}
+                                          onChange={(event) =>
+                                            void updateMembershipRole(
+                                              membership,
+                                              event.target.value as PilotRole,
+                                            )
+                                          }
+                                          className="jargon-input min-w-[110px]"
+                                        >
+                                          <option value="student">student</option>
+                                          <option value="teacher">teacher</option>
+                                        </select>
+                                        <div className="mt-1 text-[11px] text-muted-foreground">
+                                          {isPlatformLevel && orgMembership ? (
+                                            <label className="mt-2 block">
+                                              <span className="mb-1 block text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                                                Org role
+                                              </span>
+                                              <select
+                                                value={orgMembership.role}
+                                                onChange={(event) =>
+                                                  void updateOrganizationMembershipRole(
+                                                    orgMembership,
+                                                    event.target.value as OrganizationRole,
+                                                  )
+                                                }
+                                                className="jargon-input min-w-[132px]"
+                                              >
+                                                <option value="student">student</option>
+                                                <option value="teacher">teacher</option>
+                                                <option value="org_admin">org_admin</option>
+                                              </select>
+                                            </label>
+                                          ) : (
+                                            <>Org: {orgMembership?.role || "none"}</>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="py-3 pr-3">
+                                        <span
+                                          className={`rounded-full border px-2.5 py-1 text-[11px] ${
+                                            inactive
+                                              ? "border-amber-500/35 text-amber-500"
+                                              : "border-emerald-500/35 text-emerald-500"
+                                          }`}
+                                        >
+                                          {classStatusLabel(membership.status)}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 pr-3">
+                                        <div className="flex min-w-[230px] gap-2">
+                                          <input
+                                            type="password"
+                                            value={resetPasswords[membership.user_id] || ""}
+                                            onChange={(event) =>
+                                              setResetPasswords((current) => ({
+                                                ...current,
+                                                [membership.user_id]: event.target.value,
+                                              }))
+                                            }
+                                            placeholder="New temporary password"
+                                            className="jargon-input"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              void resetUserPassword(membership.user_id)
+                                            }
+                                            disabled={opsBusy === `reset-${membership.user_id}`}
+                                            aria-label="Reset temporary password"
+                                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                          >
+                                            <KeyRound className="h-4 w-4" strokeWidth={1.6} />
+                                          </button>
+                                        </div>
+                                      </td>
+                                      <td className="py-3">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            void updateMembershipStatus(
+                                              membership,
+                                              inactive ? "active" : "disabled",
+                                            )
+                                          }
+                                          disabled={opsBusy === `status-${membership.id}`}
+                                          className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                        >
+                                          {inactive ? "Reactivate" : "Disable"}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {!classMemberships.length ? (
+                                  <tr>
+                                    <td className="py-5 text-muted-foreground" colSpan={5}>
+                                      No roster rows for this class yet.
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </tbody>
+                            </table>
                           </div>
                         </div>
-                      ))}
-                      {!costDashboard?.recent_runtime_errors.length ? (
-                        <div className="text-[12px] text-muted-foreground">
-                          No runtime errors in the current scope.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </GradientCard>
-          </WorkspacePanel>
 
-          <WorkspacePanel value="ops">
-            <GradientCard>
-              <div className="space-y-5 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-[16px] font-medium text-foreground">
-                      Operations dashboard
-                    </h2>
-                    <p className="mt-1 text-[12.5px] text-muted-foreground">
-                      {isPlatformLevel
-                        ? "Platform-admin tools for classroom setup, roster repair, and account support."
-                        : "Org-admin tools scoped to your own organization."}
-                    </p>
-                  </div>
-                  {opsMessage ? (
-                    <div className="max-w-lg rounded-full border border-border px-3 py-1.5 text-[12px] text-muted-foreground">
-                      {opsMessage}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <Stat label="Organizations" value={scope?.organizations.length || 0} />
-                  <Stat label="Classes" value={scope?.classes.length || 0} />
-                  <Stat label="Users" value={scope?.users.length || 0} />
-                  <Stat label="Seed batches" value={scope?.seed_batches.length || 0} />
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-[0.78fr_1.22fr]">
-                  <div className="space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                      <Field label="Organization">
-                        <select
-                          value={selectedOrgId}
-                          onChange={(event) => {
-                            const orgId = event.target.value;
-                            const firstClass = (scope?.classes || []).find(
-                              (item) => item.organization_id === orgId,
-                            );
-                            setSelectedOrgId(orgId);
-                            setSelectedClassId(firstClass?.id || "");
-                            setRenameClassName(firstClass?.name || "");
-                          }}
-                          className="jargon-input"
-                        >
-                          {(scope?.organizations || []).map((organization) => (
-                            <option key={organization.id} value={organization.id}>
-                              {organization.name}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field label="Class">
-                        <select
-                          value={selectedClassId}
-                          onChange={(event) => {
-                            const classId = event.target.value;
-                            setSelectedClassId(classId);
-                            setRenameClassName(
-                              scope?.classes.find((item) => item.id === classId)?.name || "",
-                            );
-                          }}
-                          className="jargon-input"
-                        >
-                          {orgClasses.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name} · {item.status}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
-                        <Plus className="h-4 w-4" strokeWidth={1.6} />
-                        Create class
-                      </div>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input
-                          value={newClassName}
-                          onChange={(event) => setNewClassName(event.target.value)}
-                          placeholder={
-                            selectedOrg ? `New class in ${selectedOrg.name}` : "New class name"
-                          }
-                          className="jargon-input"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void createClass()}
-                          disabled={
-                            !selectedOrgId || !newClassName.trim() || opsBusy === "create-class"
-                          }
-                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                        >
-                          Create
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
-                        <Archive className="h-4 w-4" strokeWidth={1.6} />
-                        Class settings
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <input
-                          value={renameClassName}
-                          onChange={(event) => setRenameClassName(event.target.value)}
-                          placeholder="Selected class name"
-                          className="jargon-input"
-                        />
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void updateSelectedClass()}
-                            disabled={
-                              !selectedClassId ||
-                              !renameClassName.trim() ||
-                              opsBusy === "update-class"
-                            }
-                            className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                          >
-                            Save class
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void updateSelectedClass(
-                                selectedClass?.status === "archived" ? "active" : "archived",
-                              )
-                            }
-                            disabled={!selectedClassId || opsBusy === "update-class"}
-                            className="rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                          >
-                            {selectedClass?.status === "archived" ? "Reactivate" : "Archive"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
-                        <UserPlus className="h-4 w-4" strokeWidth={1.6} />
-                        Add existing user
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <select
-                          value={existingUserId}
-                          onChange={(event) => setExistingUserId(event.target.value)}
-                          className="jargon-input"
-                        >
-                          <option value="">Choose an existing seeded user</option>
-                          {addableUsers.map((user) => (
-                            <option key={user.id} value={user.id}>
-                              {user.email || user.id}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="flex gap-2">
-                          <select
-                            value={existingUserRole}
-                            onChange={(event) =>
-                              setExistingUserRole(event.target.value as PilotRole)
-                            }
-                            className="jargon-input max-w-[140px]"
-                          >
-                            <option value="student">student</option>
-                            <option value="teacher">teacher</option>
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => void addExistingUser()}
-                            disabled={!existingUserId || !selectedClassId || opsBusy === "add-user"}
-                            className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                          >
-                            Add
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <h3 className="text-[14px] font-medium text-foreground">
-                            {selectedClass?.name || "Choose a class"}
-                          </h3>
-                          <p className="mt-1 text-[12px] text-muted-foreground">
-                            {activeTeacherCount} active teacher{activeTeacherCount === 1 ? "" : "s"}{" "}
-                            · {activeStudentCount} active student
-                            {activeStudentCount === 1 ? "" : "s"}
-                          </p>
-                        </div>
-                        <ShieldCheck className="h-4 w-4 text-muted-foreground" strokeWidth={1.6} />
-                      </div>
-
-                      <div className="mt-4 overflow-x-auto">
-                        <table className="min-w-[820px] w-full border-collapse text-left text-[12.5px]">
-                          <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                            <tr>
-                              <th className="py-2 pr-3 font-medium">Person</th>
-                              <th className="py-2 pr-3 font-medium">Role</th>
-                              <th className="py-2 pr-3 font-medium">Status</th>
-                              <th className="py-2 pr-3 font-medium">Password reset</th>
-                              <th className="py-2 font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {classMemberships.map((membership) => {
-                              const user = userById.get(membership.user_id);
-                              const profile = profileById.get(membership.user_id);
-                              const orgMembership = organizationMembershipByUser.get(
-                                membership.user_id,
-                              );
-                              const inactive = membership.status !== "active";
-                              return (
-                                <tr
-                                  key={membership.id}
-                                  className="border-b border-border/60 align-top"
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <h3 className="text-[14px] font-medium text-foreground">
+                              Recent seed batches
+                            </h3>
+                            <div className="mt-3 space-y-2">
+                              {(scope?.seed_batches || []).slice(0, 5).map((batch) => (
+                                <div
+                                  key={batch.id}
+                                  className="border-b border-border/55 pb-2 text-[12px]"
                                 >
-                                  <td className="py-3 pr-3">
-                                    <div className="font-medium text-foreground">
-                                      {profile?.name || user?.email || membership.user_id}
-                                    </div>
-                                    <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                                      {user?.email || "No email loaded"} · grade{" "}
-                                      {profile?.grade || "n/a"}
-                                    </div>
-                                    <div className="mt-0.5 text-[11px] text-muted-foreground/75">
-                                      Last sign-in {formatDate(user?.last_sign_in_at)}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 pr-3">
+                                  <div className="text-foreground">{batch.label}</div>
+                                  <div className="mt-0.5 text-muted-foreground">
+                                    {batch.status} · {formatDate(batch.created_at)}
+                                  </div>
+                                </div>
+                              ))}
+                              {!scope?.seed_batches.length ? (
+                                <div className="text-[12px] text-muted-foreground">
+                                  No seed batches yet.
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <h3 className="text-[14px] font-medium text-foreground">
+                              Recent audit events
+                            </h3>
+                            <div className="mt-3 space-y-2">
+                              {(scope?.audit_events || []).slice(0, 6).map((event) => (
+                                <div
+                                  key={event.id}
+                                  className="border-b border-border/55 pb-2 text-[12px]"
+                                >
+                                  <div className="text-foreground">{event.event_type}</div>
+                                  <div className="mt-0.5 text-muted-foreground">
+                                    {event.entity_type} · {formatDate(event.created_at)}
+                                  </div>
+                                </div>
+                              ))}
+                              {!scope?.audit_events.length ? (
+                                <div className="text-[12px] text-muted-foreground">
+                                  No audit events yet.
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </GradientCard>
+              </WorkspacePanel>
+
+              {isPlatformLevel ? (
+                <WorkspacePanel value="seeding">
+                  <>
+                    <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
+                      <GradientCard>
+                        <div className="space-y-5 p-5">
+                          <div>
+                            <h2 className="text-[16px] font-medium text-foreground">Class setup</h2>
+                            <p className="mt-1 text-[12.5px] text-muted-foreground">
+                              Use stable names for the real classroom pilot.
+                            </p>
+                          </div>
+                          <Field label="Organization name">
+                            <input
+                              value={orgName}
+                              onChange={(event) => {
+                                setOrgName(event.target.value);
+                                if (!orgSlug || orgSlug === slugify(orgName))
+                                  setOrgSlug(slugify(event.target.value));
+                              }}
+                              className="jargon-input"
+                            />
+                          </Field>
+                          <Field label="Organization slug">
+                            <input
+                              value={orgSlug}
+                              onChange={(event) => setOrgSlug(event.target.value)}
+                              className="jargon-input"
+                            />
+                          </Field>
+                          <Field label="Class name">
+                            <input
+                              value={className}
+                              onChange={(event) => setClassName(event.target.value)}
+                              className="jargon-input"
+                            />
+                          </Field>
+                          <Field label="Default temporary password">
+                            <input
+                              type="password"
+                              value={defaultPassword}
+                              onChange={(event) => setDefaultPassword(event.target.value)}
+                              placeholder="Optional if every row has a password"
+                              className={`jargon-input ${hasShortDefaultPassword ? "border-danger/60" : ""}`}
+                            />
+                            <p
+                              className={`mt-1.5 text-[12px] ${
+                                hasShortDefaultPassword ? "text-red-500" : "text-muted-foreground"
+                              }`}
+                            >
+                              {hasShortDefaultPassword
+                                ? `Use at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`
+                                : "Required unless every row has a password override."}
+                            </p>
+                          </Field>
+                          <div className="rounded-2xl border border-border bg-muted/30 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
+                            Bootstrap note: the first platform admin is still created manually in
+                            Supabase by inserting the signed-in admin user id into{" "}
+                            <code>public.platform_admins</code>.
+                          </div>
+                        </div>
+                      </GradientCard>
+
+                      <GradientCard>
+                        <div className="space-y-4 p-5">
+                          <div>
+                            <h2 className="text-[16px] font-medium text-foreground">
+                              Roster paste
+                            </h2>
+                            <p className="mt-1 text-[12.5px] text-muted-foreground">
+                              Paste CSV or tab-separated rows. Header fields can be email, name,
+                              role, grade, password.
+                            </p>
+                          </div>
+                          <textarea
+                            value={pasteText}
+                            onChange={(event) => setPasteText(event.target.value)}
+                            placeholder={
+                              "email,name,role,grade,password\nteacher@example.com,Teacher Name,teacher,,temporary123\nstudent@example.com,Student Name,student,Grade 4,temporary123"
+                            }
+                            className="min-h-[170px] w-full resize-y rounded-2xl border border-border bg-background/70 p-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={applyPaste}
+                              className="rounded-full bg-foreground px-4 py-2 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px]"
+                            >
+                              Load pasted roster
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRows((current) => [...current, blankRow()])}
+                              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+                            >
+                              <Plus className="h-4 w-4" strokeWidth={1.6} /> Add row
+                            </button>
+                          </div>
+                        </div>
+                      </GradientCard>
+                    </div>
+
+                    <GradientCard>
+                      <div className="p-5">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <h2 className="text-[16px] font-medium text-foreground">Roster rows</h2>
+                            <p className="mt-1 text-[12.5px] text-muted-foreground">
+                              {validRows.length} ready{" "}
+                              {validRows.length === 1 ? "account" : "accounts"}.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={seedRoster}
+                            disabled={!canSeed}
+                            title={formErrors[0] || "Seed classroom"}
+                            className="rounded-full bg-foreground px-5 py-2.5 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
+                          >
+                            {submitting ? "Seeding..." : "Seed classroom"}
+                          </button>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-[820px] w-full border-collapse text-left text-[13px]">
+                            <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                              <tr>
+                                <th className="py-2 pr-3 font-medium">Role</th>
+                                <th className="py-2 pr-3 font-medium">Email</th>
+                                <th className="py-2 pr-3 font-medium">Name</th>
+                                <th className="py-2 pr-3 font-medium">Grade</th>
+                                <th className="py-2 pr-3 font-medium">Password override</th>
+                                <th className="py-2 font-medium" />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((row) => (
+                                <tr key={row.rowId} className="border-b border-border/60">
+                                  <td className="py-2 pr-3">
                                     <select
-                                      value={membership.role}
+                                      value={row.role}
                                       onChange={(event) =>
-                                        void updateMembershipRole(
-                                          membership,
-                                          event.target.value as PilotRole,
-                                        )
+                                        updateRow(row.rowId, {
+                                          role: event.target.value as PilotRole,
+                                        })
                                       }
                                       className="jargon-input min-w-[110px]"
                                     >
                                       <option value="student">student</option>
                                       <option value="teacher">teacher</option>
                                     </select>
-                                    <div className="mt-1 text-[11px] text-muted-foreground">
-                                      {isPlatformLevel && orgMembership ? (
-                                        <label className="mt-2 block">
-                                          <span className="mb-1 block text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                                            Org role
-                                          </span>
-                                          <select
-                                            value={orgMembership.role}
-                                            onChange={(event) =>
-                                              void updateOrganizationMembershipRole(
-                                                orgMembership,
-                                                event.target.value as OrganizationRole,
-                                              )
-                                            }
-                                            className="jargon-input min-w-[132px]"
-                                          >
-                                            <option value="student">student</option>
-                                            <option value="teacher">teacher</option>
-                                            <option value="org_admin">org_admin</option>
-                                          </select>
-                                        </label>
-                                      ) : (
-                                        <>Org: {orgMembership?.role || "none"}</>
-                                      )}
+                                  </td>
+                                  <td className="py-2 pr-3">
+                                    <div className="space-y-1">
+                                      <input
+                                        value={row.email}
+                                        onChange={(event) =>
+                                          updateRow(row.rowId, { email: event.target.value })
+                                        }
+                                        className={`jargon-input min-w-[220px] ${
+                                          emailErrors[row.rowId] ? "border-danger/60" : ""
+                                        }`}
+                                      />
+                                      {emailErrors[row.rowId] ? (
+                                        <div className="text-[11px] text-red-500">
+                                          {emailErrors[row.rowId]}
+                                        </div>
+                                      ) : null}
                                     </div>
                                   </td>
-                                  <td className="py-3 pr-3">
-                                    <span
-                                      className={`rounded-full border px-2.5 py-1 text-[11px] ${
-                                        inactive
-                                          ? "border-amber-500/35 text-amber-500"
-                                          : "border-emerald-500/35 text-emerald-500"
-                                      }`}
-                                    >
-                                      {classStatusLabel(membership.status)}
-                                    </span>
+                                  <td className="py-2 pr-3">
+                                    <div className="space-y-1">
+                                      <input
+                                        value={row.name}
+                                        onChange={(event) =>
+                                          updateRow(row.rowId, { name: event.target.value })
+                                        }
+                                        className={`jargon-input min-w-[180px] ${
+                                          nameErrors[row.rowId] ? "border-danger/60" : ""
+                                        }`}
+                                      />
+                                      {nameErrors[row.rowId] ? (
+                                        <div className="text-[11px] text-red-500">
+                                          {nameErrors[row.rowId]}
+                                        </div>
+                                      ) : null}
+                                    </div>
                                   </td>
-                                  <td className="py-3 pr-3">
-                                    <div className="flex min-w-[230px] gap-2">
+                                  <td className="py-2 pr-3">
+                                    <input
+                                      value={row.grade || ""}
+                                      onChange={(event) =>
+                                        updateRow(row.rowId, { grade: event.target.value })
+                                      }
+                                      className="jargon-input min-w-[120px]"
+                                    />
+                                  </td>
+                                  <td className="py-2 pr-3">
+                                    <div className="space-y-1">
                                       <input
                                         type="password"
-                                        value={resetPasswords[membership.user_id] || ""}
+                                        value={row.password || ""}
                                         onChange={(event) =>
-                                          setResetPasswords((current) => ({
-                                            ...current,
-                                            [membership.user_id]: event.target.value,
-                                          }))
+                                          updateRow(row.rowId, { password: event.target.value })
                                         }
-                                        placeholder="New temporary password"
-                                        className="jargon-input"
+                                        className={`jargon-input min-w-[180px] ${
+                                          passwordErrors[row.rowId] ? "border-danger/60" : ""
+                                        }`}
                                       />
-                                      <button
-                                        type="button"
-                                        onClick={() => void resetUserPassword(membership.user_id)}
-                                        disabled={opsBusy === `reset-${membership.user_id}`}
-                                        aria-label="Reset temporary password"
-                                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                                      >
-                                        <KeyRound className="h-4 w-4" strokeWidth={1.6} />
-                                      </button>
+                                      {passwordErrors[row.rowId] ? (
+                                        <div className="text-[11px] text-red-500">
+                                          {passwordErrors[row.rowId]}
+                                        </div>
+                                      ) : null}
                                     </div>
                                   </td>
-                                  <td className="py-3">
+                                  <td className="py-2 text-right">
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        void updateMembershipStatus(
-                                          membership,
-                                          inactive ? "active" : "disabled",
-                                        )
-                                      }
-                                      disabled={opsBusy === `status-${membership.id}`}
-                                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                      onClick={() => removeRow(row.rowId)}
+                                      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                      aria-label="Remove roster row"
                                     >
-                                      {inactive ? "Reactivate" : "Disable"}
+                                      <Trash2 className="h-4 w-4" strokeWidth={1.6} />
                                     </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                            {!classMemberships.length ? (
-                              <tr>
-                                <td className="py-5 text-muted-foreground" colSpan={5}>
-                                  No roster rows for this class yet.
-                                </td>
-                              </tr>
-                            ) : null}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                        <h3 className="text-[14px] font-medium text-foreground">
-                          Recent seed batches
-                        </h3>
-                        <div className="mt-3 space-y-2">
-                          {(scope?.seed_batches || []).slice(0, 5).map((batch) => (
-                            <div
-                              key={batch.id}
-                              className="border-b border-border/55 pb-2 text-[12px]"
-                            >
-                              <div className="text-foreground">{batch.label}</div>
-                              <div className="mt-0.5 text-muted-foreground">
-                                {batch.status} · {formatDate(batch.created_at)}
-                              </div>
-                            </div>
-                          ))}
-                          {!scope?.seed_batches.length ? (
-                            <div className="text-[12px] text-muted-foreground">
-                              No seed batches yet.
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                        <h3 className="text-[14px] font-medium text-foreground">
-                          Recent audit events
-                        </h3>
-                        <div className="mt-3 space-y-2">
-                          {(scope?.audit_events || []).slice(0, 6).map((event) => (
-                            <div
-                              key={event.id}
-                              className="border-b border-border/55 pb-2 text-[12px]"
-                            >
-                              <div className="text-foreground">{event.event_type}</div>
-                              <div className="mt-0.5 text-muted-foreground">
-                                {event.entity_type} · {formatDate(event.created_at)}
-                              </div>
-                            </div>
-                          ))}
-                          {!scope?.audit_events.length ? (
-                            <div className="text-[12px] text-muted-foreground">
-                              No audit events yet.
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </GradientCard>
-          </WorkspacePanel>
-
-          {isPlatformLevel ? (
-            <WorkspacePanel value="seeding">
-              <>
-                <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
-                  <GradientCard>
-                    <div className="space-y-5 p-5">
-                      <div>
-                        <h2 className="text-[16px] font-medium text-foreground">Class setup</h2>
-                        <p className="mt-1 text-[12.5px] text-muted-foreground">
-                          Use stable names for the real classroom pilot.
-                        </p>
-                      </div>
-                      <Field label="Organization name">
-                        <input
-                          value={orgName}
-                          onChange={(event) => {
-                            setOrgName(event.target.value);
-                            if (!orgSlug || orgSlug === slugify(orgName))
-                              setOrgSlug(slugify(event.target.value));
-                          }}
-                          className="jargon-input"
-                        />
-                      </Field>
-                      <Field label="Organization slug">
-                        <input
-                          value={orgSlug}
-                          onChange={(event) => setOrgSlug(event.target.value)}
-                          className="jargon-input"
-                        />
-                      </Field>
-                      <Field label="Class name">
-                        <input
-                          value={className}
-                          onChange={(event) => setClassName(event.target.value)}
-                          className="jargon-input"
-                        />
-                      </Field>
-                      <Field label="Default temporary password">
-                        <input
-                          type="password"
-                          value={defaultPassword}
-                          onChange={(event) => setDefaultPassword(event.target.value)}
-                          placeholder="Optional if every row has a password"
-                          className={`jargon-input ${hasShortDefaultPassword ? "border-danger/60" : ""}`}
-                        />
-                        <p
-                          className={`mt-1.5 text-[12px] ${
-                            hasShortDefaultPassword ? "text-red-500" : "text-muted-foreground"
-                          }`}
-                        >
-                          {hasShortDefaultPassword
-                            ? `Use at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`
-                            : "Required unless every row has a password override."}
-                        </p>
-                      </Field>
-                      <div className="rounded-2xl border border-border bg-muted/30 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
-                        Bootstrap note: the first platform admin is still created manually in
-                        Supabase by inserting the signed-in admin user id into{" "}
-                        <code>public.platform_admins</code>.
-                      </div>
-                    </div>
-                  </GradientCard>
-
-                  <GradientCard>
-                    <div className="space-y-4 p-5">
-                      <div>
-                        <h2 className="text-[16px] font-medium text-foreground">Roster paste</h2>
-                        <p className="mt-1 text-[12.5px] text-muted-foreground">
-                          Paste CSV or tab-separated rows. Header fields can be email, name, role,
-                          grade, password.
-                        </p>
-                      </div>
-                      <textarea
-                        value={pasteText}
-                        onChange={(event) => setPasteText(event.target.value)}
-                        placeholder={
-                          "email,name,role,grade,password\nteacher@example.com,Teacher Name,teacher,,temporary123\nstudent@example.com,Student Name,student,Grade 4,temporary123"
-                        }
-                        className="min-h-[170px] w-full resize-y rounded-2xl border border-border bg-background/70 p-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={applyPaste}
-                          className="rounded-full bg-foreground px-4 py-2 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px]"
-                        >
-                          Load pasted roster
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRows((current) => [...current, blankRow()])}
-                          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-                        >
-                          <Plus className="h-4 w-4" strokeWidth={1.6} /> Add row
-                        </button>
-                      </div>
-                    </div>
-                  </GradientCard>
-                </div>
-
-                <GradientCard>
-                  <div className="p-5">
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-[16px] font-medium text-foreground">Roster rows</h2>
-                        <p className="mt-1 text-[12.5px] text-muted-foreground">
-                          {validRows.length} ready {validRows.length === 1 ? "account" : "accounts"}
-                          .
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={seedRoster}
-                        disabled={!canSeed}
-                        title={formErrors[0] || "Seed classroom"}
-                        className="rounded-full bg-foreground px-5 py-2.5 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
-                      >
-                        {submitting ? "Seeding..." : "Seed classroom"}
-                      </button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-[820px] w-full border-collapse text-left text-[13px]">
-                        <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                          <tr>
-                            <th className="py-2 pr-3 font-medium">Role</th>
-                            <th className="py-2 pr-3 font-medium">Email</th>
-                            <th className="py-2 pr-3 font-medium">Name</th>
-                            <th className="py-2 pr-3 font-medium">Grade</th>
-                            <th className="py-2 pr-3 font-medium">Password override</th>
-                            <th className="py-2 font-medium" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row) => (
-                            <tr key={row.rowId} className="border-b border-border/60">
-                              <td className="py-2 pr-3">
-                                <select
-                                  value={row.role}
-                                  onChange={(event) =>
-                                    updateRow(row.rowId, { role: event.target.value as PilotRole })
-                                  }
-                                  className="jargon-input min-w-[110px]"
-                                >
-                                  <option value="student">student</option>
-                                  <option value="teacher">teacher</option>
-                                </select>
-                              </td>
-                              <td className="py-2 pr-3">
-                                <div className="space-y-1">
-                                  <input
-                                    value={row.email}
-                                    onChange={(event) =>
-                                      updateRow(row.rowId, { email: event.target.value })
-                                    }
-                                    className={`jargon-input min-w-[220px] ${
-                                      emailErrors[row.rowId] ? "border-danger/60" : ""
-                                    }`}
-                                  />
-                                  {emailErrors[row.rowId] ? (
-                                    <div className="text-[11px] text-red-500">
-                                      {emailErrors[row.rowId]}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </td>
-                              <td className="py-2 pr-3">
-                                <div className="space-y-1">
-                                  <input
-                                    value={row.name}
-                                    onChange={(event) =>
-                                      updateRow(row.rowId, { name: event.target.value })
-                                    }
-                                    className={`jargon-input min-w-[180px] ${
-                                      nameErrors[row.rowId] ? "border-danger/60" : ""
-                                    }`}
-                                  />
-                                  {nameErrors[row.rowId] ? (
-                                    <div className="text-[11px] text-red-500">
-                                      {nameErrors[row.rowId]}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </td>
-                              <td className="py-2 pr-3">
-                                <input
-                                  value={row.grade || ""}
-                                  onChange={(event) =>
-                                    updateRow(row.rowId, { grade: event.target.value })
-                                  }
-                                  className="jargon-input min-w-[120px]"
-                                />
-                              </td>
-                              <td className="py-2 pr-3">
-                                <div className="space-y-1">
-                                  <input
-                                    type="password"
-                                    value={row.password || ""}
-                                    onChange={(event) =>
-                                      updateRow(row.rowId, { password: event.target.value })
-                                    }
-                                    className={`jargon-input min-w-[180px] ${
-                                      passwordErrors[row.rowId] ? "border-danger/60" : ""
-                                    }`}
-                                  />
-                                  {passwordErrors[row.rowId] ? (
-                                    <div className="text-[11px] text-red-500">
-                                      {passwordErrors[row.rowId]}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </td>
-                              <td className="py-2 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => removeRow(row.rowId)}
-                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                  aria-label="Remove roster row"
-                                >
-                                  <Trash2 className="h-4 w-4" strokeWidth={1.6} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </GradientCard>
-
-                {(message || results.length > 0) && (
-                  <GradientCard>
-                    <div className="space-y-4 p-5">
-                      {message && (
-                        <div className="flex items-start gap-2 text-[13px] text-muted-foreground">
-                          {results.some((result) => result.status === "failed") ? (
-                            <AlertCircle
-                              className="mt-0.5 h-4 w-4 shrink-0 text-red-500"
-                              strokeWidth={1.7}
-                            />
-                          ) : (
-                            <CheckCircle2
-                              className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
-                              strokeWidth={1.7}
-                            />
-                          )}
-                          <span>
-                            {message}
-                            {batchId ? (
-                              <span className="ml-2 text-muted-foreground/70">Batch {batchId}</span>
-                            ) : null}
-                          </span>
-                        </div>
-                      )}
-                      {results.length > 0 && (
-                        <div className="overflow-x-auto">
-                          <table className="min-w-[680px] w-full border-collapse text-left text-[13px]">
-                            <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                              <tr>
-                                <th className="py-2 pr-3 font-medium">Status</th>
-                                <th className="py-2 pr-3 font-medium">Role</th>
-                                <th className="py-2 pr-3 font-medium">Email</th>
-                                <th className="py-2 font-medium">Detail</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {results.map((result) => (
-                                <tr
-                                  key={`${result.email}-${result.role}`}
-                                  className="border-b border-border/60"
-                                >
-                                  <td
-                                    className={`py-2 pr-3 font-medium ${resultTone(result.status)}`}
-                                  >
-                                    {result.status}
-                                  </td>
-                                  <td className="py-2 pr-3 text-muted-foreground">{result.role}</td>
-                                  <td className="py-2 pr-3 text-foreground">{result.email}</td>
-                                  <td className="py-2 text-muted-foreground">
-                                    {result.error || result.user_id || ""}
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
-                      )}
-                    </div>
-                  </GradientCard>
-                )}
-              </>
-            </WorkspacePanel>
-          ) : null}
-        </Tabs>
+                      </div>
+                    </GradientCard>
+
+                    {(message || results.length > 0) && (
+                      <GradientCard>
+                        <div className="space-y-4 p-5">
+                          {message && (
+                            <div className="flex items-start gap-2 text-[13px] text-muted-foreground">
+                              {results.some((result) => result.status === "failed") ? (
+                                <AlertCircle
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-red-500"
+                                  strokeWidth={1.7}
+                                />
+                              ) : (
+                                <CheckCircle2
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
+                                  strokeWidth={1.7}
+                                />
+                              )}
+                              <span>
+                                {message}
+                                {batchId ? (
+                                  <span className="ml-2 text-muted-foreground/70">
+                                    Batch {batchId}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </div>
+                          )}
+                          {results.length > 0 && (
+                            <div className="overflow-x-auto">
+                              <table className="min-w-[680px] w-full border-collapse text-left text-[13px]">
+                                <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                                  <tr>
+                                    <th className="py-2 pr-3 font-medium">Status</th>
+                                    <th className="py-2 pr-3 font-medium">Role</th>
+                                    <th className="py-2 pr-3 font-medium">Email</th>
+                                    <th className="py-2 font-medium">Detail</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {results.map((result) => (
+                                    <tr
+                                      key={`${result.email}-${result.role}`}
+                                      className="border-b border-border/60"
+                                    >
+                                      <td
+                                        className={`py-2 pr-3 font-medium ${resultTone(result.status)}`}
+                                      >
+                                        {result.status}
+                                      </td>
+                                      <td className="py-2 pr-3 text-muted-foreground">
+                                        {result.role}
+                                      </td>
+                                      <td className="py-2 pr-3 text-foreground">{result.email}</td>
+                                      <td className="py-2 text-muted-foreground">
+                                        {result.error || result.user_id || ""}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </GradientCard>
+                    )}
+                  </>
+                </WorkspacePanel>
+              ) : null}
+            </Tabs>
+          </>
+        )}
       </main>
     </AdminShell>
   );
