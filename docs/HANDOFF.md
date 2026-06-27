@@ -6,6 +6,28 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-27 (Org-admin account onboarding — Part A2; EDGE FN DEPLOY PENDING)
+
+Status: A+B are LIVE on main. A2 is committed on branch `claude/happy-johnson-wseex8` (`0096be2`),
+frontend-verified, but **NOT deployed** — see the blocker.
+
+What A2 does (lets principals create student/teacher accounts for their own school):
+- Backend `supabase/functions/admin-seed/index.ts`: `assertPlatformAdmin` → `resolveActorAccess`
+  (platform_admin OR org_admin). Org admins are scoped by `resolveSeedOrganization`: must target an
+  EXISTING org they administer (rejects name/slug-only → no new-org creation), class is created/reused
+  by name in their org (no cross-org class id), roles stay student/teacher. `list_seed_batches` scoped
+  to their orgs. Platform path unchanged.
+- Frontend `routes/admin.tsx`: Seeding tab shown to org admins with a scoped form (org fixed to the
+  selected org, no org-create fields); `seedRoster` sends the existing org id for org admins.
+
+**BLOCKER — the admin-seed edge function is NOT yet deployed.** The Supabase MCP `deploy_edge_function`
+call returns "MCP tool call requires approval" and isn't going through from this session. Deploy it
+either by approving that MCP call, or via CLI: `supabase functions deploy admin-seed`. **Do NOT deploy
+the frontend A2 to main until the function is live** — otherwise an org_admin hitting Seed gets
+"Admin access is required" from the old platform-only function. Once the function is live: verify
+(a) platform seeding still works, (b) an org_admin can seed student/teacher into their own org only,
+(c) an org_admin cannot create a new org / seed an admin / target another org — then merge A2 to main.
+
 ## Claude -> Codex / Human - 2026-06-27 (Org-admin experience + curriculum integration — Parts A/B)
 
 Status: On branch `claude/happy-johnson-wseex8` (build-verified; NOT on main — awaiting deploy OK).
