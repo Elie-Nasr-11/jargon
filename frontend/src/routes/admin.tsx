@@ -72,10 +72,11 @@ export const Route = createFileRoute("/admin")({
   // deep-linkable. Unknown params (e.g. Google OAuth code/state) are preserved.
   validateSearch: (
     search: Record<string, unknown>,
-  ): Record<string, unknown> & { org?: string; tab?: string } => ({
+  ): Record<string, unknown> & { org?: string; tab?: string; view?: string } => ({
     ...search,
     org: typeof search.org === "string" ? search.org : undefined,
     tab: typeof search.tab === "string" ? search.tab : undefined,
+    view: search.view === "organization" ? "organization" : undefined,
   }),
   head: () => ({
     meta: [
@@ -249,7 +250,7 @@ function AdminPage() {
   const [scopeLoading, setScopeLoading] = useState(false);
   const [opsMessage, setOpsMessage] = useState("");
   const [opsBusy, setOpsBusy] = useState("");
-  const search = useSearch({ strict: false }) as { org?: string; tab?: string };
+  const search = useSearch({ strict: false }) as { org?: string; tab?: string; view?: string };
   const selectedOrgId = search.org ?? "";
   const setSelectedOrgId = (orgId: string) =>
     navigate({
@@ -514,7 +515,7 @@ function AdminPage() {
 
   const formErrors = useMemo(() => {
     const errors: string[] = [];
-    const platform = actorAccess?.level === "platform_admin";
+    const platform = actorAccess?.level === "platform_admin" && search.view !== "organization";
     if (platform && !orgName.trim()) errors.push("Organization name is required.");
     if (!platform && !selectedOrgId) errors.push("Select your organization first.");
     if (!className.trim()) errors.push("Class name is required.");
@@ -533,6 +534,7 @@ function AdminPage() {
     return errors;
   }, [
     actorAccess,
+    search.view,
     className,
     emailErrors,
     hasShortDefaultPassword,
@@ -547,7 +549,12 @@ function AdminPage() {
   const adminTab = search.tab ?? "readiness";
   const setAdminTab = (tab: string) =>
     navigate({ to: "/admin", search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
-  const isPlatformLevel = actorAccess?.level === "platform_admin";
+  const isPlatformAdmin = actorAccess?.level === "platform_admin";
+  // "Platform admin" is the real role; "platform view" is that role NOT currently on
+  // the scoped organization page. Platform admins switch between the two pages via the
+  // nav; org admins are always in the organization view. Every level-gated surface
+  // below keys off `isPlatformLevel` = platform view, so it flips with the toggle.
+  const isPlatformLevel = isPlatformAdmin && search.view !== "organization";
   const adminLevelLabel = isPlatformLevel ? "Platform admin" : "Organization admin";
 
   const selectedOrg = useMemo(
@@ -1231,6 +1238,43 @@ function AdminPage() {
             </Link>
           </div>
         </section>
+
+        {isPlatformAdmin ? (
+          <div className="flex w-fit items-center gap-1 rounded-pill border border-border bg-surface-1 p-0.5">
+            <button
+              type="button"
+              onClick={() =>
+                navigate({
+                  to: "/admin",
+                  search: (prev: Record<string, unknown>) => ({ ...prev, view: undefined }),
+                })
+              }
+              className={`rounded-pill px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+                isPlatformLevel
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Platform admin
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                navigate({
+                  to: "/admin",
+                  search: (prev: Record<string, unknown>) => ({ ...prev, view: "organization" }),
+                })
+              }
+              className={`rounded-pill px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+                !isPlatformLevel
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Organization admin
+            </button>
+          </div>
+        ) : null}
 
         {!selectedOrgId ? (
           <GradientCard>
