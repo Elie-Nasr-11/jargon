@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { Archive, BookOpen, Check, Eye, FilePlus2, Layers3, NotebookPen, Send } from "lucide-react";
+import {
+  Archive,
+  BookOpen,
+  Check,
+  ChevronRight,
+  Eye,
+  FilePlus2,
+  Layers3,
+  NotebookPen,
+  Send,
+} from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
 import { ConsoleShell } from "@/components/ConsoleShell";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -592,6 +602,17 @@ function CurriculumTree({
   );
 }
 
+function TreeToggle({ open }: { open: boolean }) {
+  return (
+    <ChevronRight
+      className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+        open ? "rotate-90" : ""
+      }`}
+      strokeWidth={1.7}
+    />
+  );
+}
+
 function SubjectBlock({
   subject,
   data,
@@ -603,59 +624,144 @@ function SubjectBlock({
   activeLessonId: string;
   onSelectLesson: (lesson: Lesson) => void;
 }) {
+  const [open, setOpen] = useState(true);
   const courses = data.courses.filter((course) => course.subject_id === subject.id);
   return (
     <div className="rounded-2xl border border-border bg-background/35 p-3">
-      <div className="text-[12px] font-medium text-foreground">{subject.title}</div>
-      <div className="mt-1 text-[11px] text-muted-foreground">{subject.status}</div>
-      <div className="mt-3 grid gap-2">
-        {courses.map((course) => {
-          const versions = data.courseVersions.filter((version) => version.course_id === course.id);
-          return (
-            <div key={course.id} className="rounded-xl border border-border bg-background/35 p-2">
-              <div className="text-[11.5px] font-medium text-foreground">{course.title}</div>
-              {versions.map((version) => {
-                const units = data.units.filter((unit) => unit.course_version_id === version.id);
-                return units.map((unit) => {
-                  const lessons = data.lessons.filter((lesson) => lesson.unit_id === unit.id);
-                  return (
-                    <div key={unit.id} className="mt-2">
-                      <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                        {unit.title}
-                      </div>
-                      <div className="mt-1 grid gap-1">
-                        {lessons.map((lesson) => (
-                          <button
-                            type="button"
-                            key={lesson.id}
-                            onClick={() => onSelectLesson(lesson)}
-                            className={`rounded-lg px-2 py-2 text-left text-[12px] transition-colors ${
-                              activeLessonId === lesson.id
-                                ? "bg-foreground text-background"
-                                : "text-foreground hover:bg-muted"
-                            }`}
-                          >
-                            <span className="block truncate">{lesson.title}</span>
-                            <span
-                              className={`mt-0.5 block text-[10.5px] ${
-                                activeLessonId === lesson.id
-                                  ? "text-background/70"
-                                  : "text-muted-foreground"
-                              }`}
-                            >
-                              {lesson.publication_status || "published"}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                });
-              })}
-            </div>
-          );
-        })}
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-start gap-2 text-left"
+      >
+        <span className="mt-0.5">
+          <TreeToggle open={open} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12px] font-medium text-foreground">{subject.title}</span>
+          <span className="block text-[11px] text-muted-foreground">{subject.status}</span>
+        </span>
+      </button>
+      {open ? (
+        <div className="mt-3 grid gap-2">
+          {courses.map((course) => (
+            <CourseBlock
+              key={course.id}
+              course={course}
+              data={data}
+              activeLessonId={activeLessonId}
+              onSelectLesson={onSelectLesson}
+            />
+          ))}
+          {courses.length === 0 ? (
+            <div className="pl-5 text-[11px] text-muted-foreground">No courses yet.</div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CourseBlock({
+  course,
+  data,
+  activeLessonId,
+  onSelectLesson,
+}: {
+  course: CurriculumAuthoringData["courses"][number];
+  data: CurriculumAuthoringData;
+  activeLessonId: string;
+  onSelectLesson: (lesson: Lesson) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const units = data.courseVersions
+    .filter((version) => version.course_id === course.id)
+    .flatMap((version) => data.units.filter((unit) => unit.course_version_id === version.id));
+  return (
+    <div className="rounded-xl border border-border bg-background/35 p-2">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <TreeToggle open={open} />
+        <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-foreground">
+          {course.title}
+        </span>
+      </button>
+      {open ? (
+        <div className="mt-2 grid gap-2 pl-2">
+          {units.map((unit) => (
+            <UnitBlock
+              key={unit.id}
+              unit={unit}
+              data={data}
+              activeLessonId={activeLessonId}
+              onSelectLesson={onSelectLesson}
+            />
+          ))}
+          {units.length === 0 ? (
+            <div className="pl-3 text-[11px] text-muted-foreground">No units yet.</div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function UnitBlock({
+  unit,
+  data,
+  activeLessonId,
+  onSelectLesson,
+}: {
+  unit: CurriculumAuthoringData["units"][number];
+  data: CurriculumAuthoringData;
+  activeLessonId: string;
+  onSelectLesson: (lesson: Lesson) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const lessons = data.lessons.filter((lesson) => lesson.unit_id === unit.id);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <TreeToggle open={open} />
+        <span className="min-w-0 flex-1 truncate text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+          {unit.title}
+        </span>
+        <span className="text-[10.5px] text-muted-foreground">{lessons.length}</span>
+      </button>
+      {open ? (
+        <div className="mt-1 grid gap-1 pl-2">
+          {lessons.map((lesson) => (
+            <button
+              type="button"
+              key={lesson.id}
+              onClick={() => onSelectLesson(lesson)}
+              className={`rounded-lg px-2 py-2 text-left text-[12px] transition-colors ${
+                activeLessonId === lesson.id
+                  ? "bg-foreground text-background"
+                  : "text-foreground hover:bg-muted"
+              }`}
+            >
+              <span className="block truncate">{lesson.title}</span>
+              <span
+                className={`mt-0.5 block text-[10.5px] ${
+                  activeLessonId === lesson.id ? "text-background/70" : "text-muted-foreground"
+                }`}
+              >
+                {lesson.publication_status || "published"}
+              </span>
+            </button>
+          ))}
+          {lessons.length === 0 ? (
+            <div className="pl-2 text-[10.5px] text-muted-foreground">No lessons yet.</div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
