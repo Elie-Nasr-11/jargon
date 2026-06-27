@@ -1298,6 +1298,12 @@ function AdminPage() {
                   const orgClassCount = (scope?.classes || []).filter(
                     (item) => item.organization_id === organization.id,
                   ).length;
+                  const orgReadiness = readiness?.organizations.find(
+                    (o) => o.organization_id === organization.id,
+                  );
+                  const flagged = orgReadiness
+                    ? orgReadiness.blocked_class_count + orgReadiness.needs_attention_class_count
+                    : 0;
                   return (
                     <button
                       key={organization.id}
@@ -1305,8 +1311,21 @@ function AdminPage() {
                       onClick={() => setSelectedOrgId(organization.id)}
                       className="rounded-2xl border border-border bg-background/35 p-3.5 text-left transition-colors hover:bg-muted"
                     >
-                      <div className="text-[14px] font-medium text-foreground">
-                        {organization.name}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-[14px] font-medium text-foreground">
+                          {organization.name}
+                        </div>
+                        {orgReadiness ? (
+                          <span
+                            className={`shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] ${readinessTone(
+                              orgReadiness.status,
+                            )}`}
+                          >
+                            {flagged > 0
+                              ? `${flagged} need fixing`
+                              : readinessLabel(orgReadiness.status)}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="mt-0.5 text-[11.5px] text-muted-foreground">
                         {organization.status || "active"} · {orgClassCount} classes
