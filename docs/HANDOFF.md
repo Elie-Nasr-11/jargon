@@ -6,6 +6,32 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-27 (Zero-friction Phase 0 + portal polish — LIVE/branch)
+
+Context: kicked off a "zero-friction" UI simplification (master vision in
+`/root/.claude/plans/...`; not in repo). Phase 0 (additive foundation) is LIVE on main; a polish
+pass on the teacher+admin portals is on branch `claude/happy-johnson-wseex8`. Frontend-only.
+
+Phase 0 (live): `lib/feedback.ts` + `<Toaster>` (one toast channel, success≠error) routed through the
+admin op-wrappers; color-coded health badges on teacher class cards (`classAttention`) and admin org
+cards (per-org readiness); `components/ConfirmButton.tsx` guards destructive admin actions (data
+delete, password reset); `components/PlaceSwitcher.tsx` (role-gated place indicator + Cmd/Ctrl+K
+command palette) backed by `hooks/useConsoleAccess.ts`, wired into ConsoleShell + AdminShell;
+SettingsMenu Teacher/Admin links role-gated.
+
+Polish pass (branch): unified the admin shell to ConsoleShell (max-w-[1240px], AmbientCanvas 0.24);
+replaced ALL hard-coded palette colors with semantic tokens across admin/teacher/curriculum
+(red-500→danger, emerald-500→success, amber-500→warning, sky-500/blue-*→info — use the soft-fill
+recipe border-X/40 bg-X/12 text-X going forward); connective links: gradebook rows clickable→student,
+flagged class card→Gradebook tab, org card "N need fixing"→that org's Readiness tab. Deliberately
+did NOT add an admin→teacher-class deep link (teacher console is scoped to the logged-in user's own
+classes, so it dead-ends for non-teacher admins).
+
+Verified each step: tsc 0 errors, lint 0 errors / 11 pre-existing warnings, build green. (Playwright
+boot smoke flaky in-sandbox this stretch; relied on tsc+build.) Next planned: per-role rebuild phases
+1-5 (student stage rail; teacher home queue + tab collapse + Work builder; admin fleet/split;
+curriculum) — see the plan file.
+
 ## Claude -> Codex / Human - 2026-06-27 (Org-admin account onboarding — Part A2; LIVE)
 
 Status: A+B and A2 are all LIVE on main. The `admin-seed` edge function was deployed by the human via

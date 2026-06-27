@@ -728,22 +728,29 @@ export function TeacherConsole() {
                           <span className="text-muted-foreground/60">· {items.length}</span>
                         </div>
                         <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-                          {items.map((item) => (
-                            <div key={item.id} className="w-[240px] shrink-0">
-                              <ClassButton
-                                item={item}
-                                active={item.id === selectedClassId}
-                                stats={summarizeClass(dashboard, item.id)}
-                                attention={classAttention(dashboard, item.id)}
-                                onClick={() =>
-                                  navigate({
-                                    to: "/teacher/class/$classId",
-                                    params: { classId: item.id },
-                                  })
-                                }
-                              />
-                            </div>
-                          ))}
+                          {items.map((item) => {
+                            const attention = classAttention(dashboard, item.id);
+                            return (
+                              <div key={item.id} className="w-[240px] shrink-0">
+                                <ClassButton
+                                  item={item}
+                                  active={item.id === selectedClassId}
+                                  stats={summarizeClass(dashboard, item.id)}
+                                  attention={attention}
+                                  onClick={() =>
+                                    navigate({
+                                      to: "/teacher/class/$classId",
+                                      params: { classId: item.id },
+                                      search:
+                                        attention.tone === "warning"
+                                          ? { tab: "gradebook" }
+                                          : undefined,
+                                    })
+                                  }
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -3956,7 +3963,8 @@ function GradebookTable({
                 return (
                   <tr
                     key={row.studentId}
-                    className={`rounded-2xl border border-border bg-background/35 ${
+                    onClick={() => onSelectStudent(row.studentId)}
+                    className={`cursor-pointer rounded-2xl border border-border bg-background/35 transition-colors hover:bg-muted ${
                       selectedStudentId === row.studentId
                         ? "outline outline-1 outline-foreground/20"
                         : ""

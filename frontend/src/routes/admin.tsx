@@ -1309,7 +1309,16 @@ function AdminPage() {
                     <button
                       key={organization.id}
                       type="button"
-                      onClick={() => setSelectedOrgId(organization.id)}
+                      onClick={() =>
+                        navigate({
+                          to: "/admin",
+                          search: (prev: Record<string, unknown>) => ({
+                            ...prev,
+                            org: organization.id,
+                            tab: flagged > 0 ? "readiness" : prev.tab,
+                          }),
+                        })
+                      }
                       className="rounded-2xl border border-border bg-background/35 p-3.5 text-left transition-colors hover:bg-muted"
                     >
                       <div className="flex items-start justify-between gap-2">
