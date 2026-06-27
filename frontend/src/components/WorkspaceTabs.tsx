@@ -32,6 +32,7 @@ export { Tabs };
 // and consistent without each call site passing an icon.
 const TAB_ICONS: Record<string, LucideIcon> = {
   overview: LayoutDashboard,
+  lessons: BookOpen,
   gradebook: Table2,
   roster: Users,
   resources: FolderOpen,

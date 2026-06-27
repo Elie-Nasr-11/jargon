@@ -6,9 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-27 (Teacher IA on the spine — Phase 2/4)
+
+Status: On branch `claude/happy-johnson-wseex8` (build-verified; NOT on main — holding for review
+per your call). Frontend-only; no feature/data/API changes.
+
+Builds on the Phase 1 URL spine:
+- Home (`/teacher`): class picker grouped by **Organization** (mirrors Org -> Class); the empty
+  detail area is now a "needs attention" action queue (submissions to grade, assessments to review,
+  open alerts) computed from the cached dashboard.
+- Class/student pages: a clickable **breadcrumb** (Teacher / Org / Class / Student) replaces the
+  always-on class list and the ad-hoc "Back to class" button; Student is now an explicit child.
+- New **Lessons** tab in the class workspace: lists every lesson that has student activity or
+  attached work, each with its resources/assignments/assessments counts + sessions-complete
+  progress, plus "Open in gradebook" (sets the gradebook lesson filter + switches tab). Addresses
+  "Lesson isn't navigable" — work is the bridge between class and lesson. Long list bounded to a
+  60vh scroll region.
+- WorkspaceTabs: added a `lessons` -> BookOpen icon.
+
+Commits: `d14ae76` (breadcrumb + org-grouped home) + this commit (Lessons tab). Verified: tsc 0
+errors, lint 0 errors / 11 pre-existing warnings, build green, Playwright boot smoke passes.
+Deferred: class settings surfaced in-class (needs an edit endpoint), and Phase 3 (admin on the
+same spine).
+
 ## Claude -> Codex / Human - 2026-06-27 (Teacher console: URL spine + React Query — Phase 1/4)
 
-Status: Shipped to `main` (build-verified). Frontend-only; no feature/data/API changes.
+Status: On branch `claude/happy-johnson-wseex8` (build-verified; held on branch, NOT on main).
+Frontend-only; no feature/data/API changes.
 
 Phase 1 of the teacher/admin structural redesign ("URL spine = the domain"). Teacher drill-down
 is now real URLs instead of component state:

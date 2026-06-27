@@ -1141,6 +1141,7 @@ function ClassDetail({
         <Tabs value={classTab} onValueChange={setClassTab}>
           <WorkspaceTabList>
             <WorkspaceTab value="overview">Overview</WorkspaceTab>
+            <WorkspaceTab value="lessons">Lessons</WorkspaceTab>
             <WorkspaceTab value="gradebook">Gradebook</WorkspaceTab>
             <WorkspaceTab value="roster">Roster</WorkspaceTab>
             <WorkspaceTab value="resources">Resources</WorkspaceTab>
@@ -1175,6 +1176,101 @@ function ClassDetail({
               updatingAlertId={updatingAlertId}
               onUpdateAlertStatus={onUpdateAlertStatus}
             />
+          </WorkspacePanel>
+
+          <WorkspacePanel value="lessons">
+            <div className="mt-5">
+              <div className="mb-3">
+                <h3 className="text-[15px] font-medium text-foreground">Lessons in this class</h3>
+                <p className="mt-1 text-[12.5px] text-muted-foreground">
+                  Every lesson with student activity or attached work — its resources, assignments,
+                  assessments, and progress in one place.
+                </p>
+              </div>
+              {(() => {
+                const studentSetLocal = new Set(studentIds);
+                const activeLessonIds = new Set<string>();
+                for (const r of resources) if (r.lesson_id) activeLessonIds.add(r.lesson_id);
+                for (const a of assignments) if (a.lesson_id) activeLessonIds.add(a.lesson_id);
+                for (const a of assessments) if (a.lesson_id) activeLessonIds.add(a.lesson_id);
+                for (const s of dashboard.sessions)
+                  if (studentSetLocal.has(s.user_id)) activeLessonIds.add(s.lesson_id);
+                const rows = lessons.filter((lesson) => activeLessonIds.has(lesson.id));
+                if (!rows.length) {
+                  return (
+                    <div className="rounded-3xl border border-border bg-background/35 p-6 text-[13px] text-muted-foreground">
+                      No lessons have resources, assignments, assessments, or student activity in
+                      this class yet.
+                    </div>
+                  );
+                }
+                return (
+                  <div className="max-h-[60vh] space-y-2 overflow-auto pr-1">
+                    {rows.map((lesson) => {
+                      const lessonResources = resources.filter((r) => r.lesson_id === lesson.id);
+                      const lessonAssignments = assignments.filter(
+                        (a) => a.lesson_id === lesson.id,
+                      );
+                      const lessonAssessments = assessments.filter(
+                        (a) => a.lesson_id === lesson.id,
+                      );
+                      const lessonSessions = dashboard.sessions.filter(
+                        (s) => s.lesson_id === lesson.id && studentSetLocal.has(s.user_id),
+                      );
+                      const completed = lessonSessions.filter(
+                        (s) => s.status === "complete",
+                      ).length;
+                      return (
+                        <div
+                          key={lesson.id}
+                          className="rounded-2xl border border-border bg-background/35 p-3.5"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-[14px] font-medium text-foreground">
+                                {lesson.title}
+                              </div>
+                              <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                                {lesson.module ? `${lesson.module} · ` : ""}
+                                {lesson.level || "Lesson"}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSelectLesson(lesson.id);
+                                setClassTab("gradebook");
+                              }}
+                              className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] text-foreground transition-colors hover:bg-muted"
+                            >
+                              Open in gradebook
+                            </button>
+                          </div>
+                          <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11.5px] text-muted-foreground">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1">
+                              <FileText className="h-3 w-3" strokeWidth={1.7} />{" "}
+                              {lessonResources.length} resources
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1">
+                              <ClipboardList className="h-3 w-3" strokeWidth={1.7} />{" "}
+                              {lessonAssignments.length} assignments
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1">
+                              <GraduationCap className="h-3 w-3" strokeWidth={1.7} />{" "}
+                              {lessonAssessments.length} assessments
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1">
+                              <CheckCircle2 className="h-3 w-3" strokeWidth={1.7} /> {completed}/
+                              {lessonSessions.length} complete
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
           </WorkspacePanel>
 
           <WorkspacePanel value="gradebook">
