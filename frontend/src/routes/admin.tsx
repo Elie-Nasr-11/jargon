@@ -26,6 +26,7 @@ import { SettingsMenu } from "@/components/SettingsMenu";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { notifyOk, notifyErr } from "@/lib/feedback";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import {
   applyCsvRosterImport,
   exportClassSnapshot,
@@ -1833,14 +1834,16 @@ function AdminPage() {
                             >
                               Request anonymization
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => void requestRetention("delete")}
+                            <ConfirmButton
+                              onConfirm={() => void requestRetention("delete")}
                               disabled={!selectedStudentId || schoolOpsBusy === "retention-delete"}
                               className="rounded-full border border-red-500/35 px-4 py-2 text-[12.5px] text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                              title="Request data deletion?"
+                              description="This requests permanent deletion of the selected student's learning records. This cannot be undone."
+                              confirmLabel="Request deletion"
                             >
                               Request deletion
-                            </button>
+                            </ConfirmButton>
                           </div>
                         </div>
                       </div>
@@ -2665,17 +2668,19 @@ function AdminPage() {
                                             placeholder="New temporary password"
                                             className="jargon-input"
                                           />
-                                          <button
-                                            type="button"
-                                            onClick={() =>
+                                          <ConfirmButton
+                                            onConfirm={() =>
                                               void resetUserPassword(membership.user_id)
                                             }
                                             disabled={opsBusy === `reset-${membership.user_id}`}
-                                            aria-label="Reset temporary password"
+                                            ariaLabel="Reset temporary password"
                                             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                            title="Reset this user's password?"
+                                            description="Sets a new temporary password for this user in Supabase Auth. Make sure you've typed the new password in the field first."
+                                            confirmLabel="Reset password"
                                           >
                                             <KeyRound className="h-4 w-4" strokeWidth={1.6} />
-                                          </button>
+                                          </ConfirmButton>
                                         </div>
                                       </td>
                                       <td className="py-3">
