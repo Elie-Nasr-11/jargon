@@ -2,6 +2,39 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-06-27: Teacher/Admin URL Spine Mirrors The Domain
+
+Decision:
+
+- The teacher and admin consoles are organized to mirror the real entity hierarchy:
+  Organization -> Class -> Student, with the curriculum Lesson as a cross-section and
+  "work" (assignments/assessments/resources) as the bridge between a class and a lesson.
+- Drill-down state lives in the URL, not component state, so views are deep-linkable and
+  the browser back/forward button traverses the hierarchy.
+- Teacher uses **path params**: `/teacher`, `/teacher/class/$classId`,
+  `/teacher/class/$classId/student/$studentId`; active tab via `?tab=`. The shared page body
+  lives in `features/teacher/TeacherConsole.tsx` and the routes are thin shells reusing it.
+  The heavy `fetchTeacherDashboard` is cached with React Query (`["teacherDashboard", userId]`)
+  so drill-down across these routes does not refetch.
+- Admin uses **search params**: `/admin?org=<id>&tab=<section>`. Admin is a single console
+  where org is a context filter and its data loading is state-based across many handlers;
+  search params keep it on one route (no remount, no refetch) while staying deep-linkable.
+  `selectedOrgId`/`adminTab` are thin shims over `useSearch` + navigate.
+- `routeTree.gen.ts` is **hand-maintained** (no `@tanstack/router-plugin` in
+  `vite.config.ts`). Adding a route means writing the route file AND mirroring an existing
+  block in `routeTree.gen.ts`.
+
+Reason:
+
+- The consoles were organized by feature, but the domain is organized by entity. Matching the
+  UI to the data makes navigation predictable and makes the URL a faithful, shareable address
+  for "the thing you are looking at."
+- Path vs search params is chosen per console by data-loading shape: path params for teacher
+  (with a React Query cache to avoid refetch on remount), search params for admin (to get URL
+  state without a risky data-layer rewrite).
+- Delivered as a phased, build-verified rollout on branch `claude/happy-johnson-wseex8`; see
+  `docs/HANDOFF.md` for the Phase 1-4 entries.
+
 ## 2026-06-22: Voice Interaction Is First-Class
 
 Decision:

@@ -6,6 +6,26 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-27 (Docs sync — Phase 4/4)
+
+Status: On branch `claude/happy-johnson-wseex8` (build-verified; NOT on main — holding for review).
+
+Closes the teacher/admin structural redesign. Docs brought in sync with the new structure:
+- `frontend/src/routes/README.md`: corrected the false "routeTree.gen.ts is auto-generated"
+  note (there is no router-plugin — it is hand-maintained) and documented the current route table.
+- `docs/DECISIONS.md`: added "2026-06-27: Teacher/Admin URL Spine Mirrors The Domain" recording
+  the path-params-for-teacher (+ React Query cache) vs search-params-for-admin decision and the
+  hand-maintained route tree.
+
+Deep-link / refresh / back-forward correctness was validated by the Playwright boot smoke
+navigating directly to each deep URL (equivalent to a refresh) — all mount and resolve.
+Deferred (optional polish, not blocking): extract a single shared breadcrumb component across both
+consoles; surface class settings in-class (needs an edit endpoint); optionally unify admin onto
+path params (would require a React Query data layer there too).
+
+Whole redesign is on the branch across commits 303c511, d14ae76, d2d4629, b856f41, + this docs
+commit. Nothing deployed to main yet (your call).
+
 ## Claude -> Codex / Human - 2026-06-27 (Admin on the spine — Phase 3/4)
 
 Status: On branch `claude/happy-johnson-wseex8` (build-verified; NOT on main — holding for review).
