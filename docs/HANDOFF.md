@@ -6,10 +6,10 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-06-27 (Org-admin account onboarding — Part A2; EDGE FN DEPLOY PENDING)
+## Claude -> Codex / Human - 2026-06-27 (Org-admin account onboarding — Part A2; LIVE)
 
-Status: A+B are LIVE on main. A2 is committed on branch `claude/happy-johnson-wseex8` (`0096be2`),
-frontend-verified, but **NOT deployed** — see the blocker.
+Status: A+B and A2 are all LIVE on main. The `admin-seed` edge function was deployed by the human via
+the Supabase dashboard; the frontend scoped Seeding tab is merged to main (`13f2c43`).
 
 What A2 does (lets principals create student/teacher accounts for their own school):
 - Backend `supabase/functions/admin-seed/index.ts`: `assertPlatformAdmin` → `resolveActorAccess`
@@ -20,13 +20,14 @@ What A2 does (lets principals create student/teacher accounts for their own scho
 - Frontend `routes/admin.tsx`: Seeding tab shown to org admins with a scoped form (org fixed to the
   selected org, no org-create fields); `seedRoster` sends the existing org id for org admins.
 
-**BLOCKER — the admin-seed edge function is NOT yet deployed.** The Supabase MCP `deploy_edge_function`
-call returns "MCP tool call requires approval" and isn't going through from this session. Deploy it
-either by approving that MCP call, or via CLI: `supabase functions deploy admin-seed`. **Do NOT deploy
-the frontend A2 to main until the function is live** — otherwise an org_admin hitting Seed gets
-"Admin access is required" from the old platform-only function. Once the function is live: verify
-(a) platform seeding still works, (b) an org_admin can seed student/teacher into their own org only,
-(c) an org_admin cannot create a new org / seed an admin / target another org — then merge A2 to main.
+**Verify on the live deploy** (couldn't be auth-tested from the sandbox): (a) platform seeding still
+works for us; (b) an org_admin can seed student/teacher into *their* org only; (c) an org_admin cannot
+create a new org, seed an admin role, or target another org. The org-scope boundary lives in
+`resolveSeedOrganization` / `resolveActorAccess` in `admin-seed/index.ts`.
+
+Note: the Supabase MCP `deploy_edge_function` was blocked in-session ("requires approval"), so the human
+deployed the function from the dashboard. If future edge-function deploys are needed, either clear that
+MCP approval or use `supabase functions deploy <name> --project-ref qztpieiizmiayzjhezwh`.
 
 ## Claude -> Codex / Human - 2026-06-27 (Org-admin experience + curriculum integration — Parts A/B)
 
