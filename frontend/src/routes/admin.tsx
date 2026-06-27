@@ -27,6 +27,7 @@ import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/componen
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { notifyOk, notifyErr } from "@/lib/feedback";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { PlaceSwitcher } from "@/components/PlaceSwitcher";
 import {
   applyCsvRosterImport,
   exportClassSnapshot,
@@ -3126,9 +3127,12 @@ function AdminShell({
       >
         <div className="hairline">
           <div className="mx-auto flex h-[60px] max-w-[1200px] items-center justify-between gap-2 px-3 sm:px-6">
-            <Link to="/chat" className="font-serif text-[22px] tracking-tight text-foreground">
-              Jargon
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link to="/chat" className="font-serif text-[22px] tracking-tight text-foreground">
+                Jargon
+              </Link>
+              <PlaceSwitcher active="admin" />
+            </div>
             {email ? <SettingsMenu email={email} /> : null}
           </div>
         </div>

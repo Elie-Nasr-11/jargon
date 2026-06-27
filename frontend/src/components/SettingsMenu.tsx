@@ -15,6 +15,7 @@ import {
 import { GradientCard } from "./GradientCard";
 import type { VoiceSettings } from "@/lib/jargon-store";
 import { useTheme } from "@/lib/theme";
+import { useConsoleAccess } from "@/hooks/useConsoleAccess";
 import { signOut } from "@/lib/api";
 
 export function SettingsMenu({
@@ -32,6 +33,7 @@ export function SettingsMenu({
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { resolved, toggle } = useTheme();
+  const access = useConsoleAccess();
 
   const open = () => {
     setMounted(true);
@@ -232,26 +234,30 @@ export function SettingsMenu({
               >
                 <BookOpen className="h-[15px] w-[15px]" strokeWidth={1.5} /> Student chat
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  close();
-                  navigate({ to: "/teacher" });
-                }}
-                className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
-              >
-                <GraduationCap className="h-[15px] w-[15px]" strokeWidth={1.5} /> Teacher
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  close();
-                  navigate({ to: "/admin" });
-                }}
-                className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
-              >
-                <Shield className="h-[15px] w-[15px]" strokeWidth={1.5} /> Admin
-              </button>
+              {access.teacher ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    navigate({ to: "/teacher" });
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+                >
+                  <GraduationCap className="h-[15px] w-[15px]" strokeWidth={1.5} /> Teacher
+                </button>
+              ) : null}
+              {access.admin ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    navigate({ to: "/admin" });
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+                >
+                  <Shield className="h-[15px] w-[15px]" strokeWidth={1.5} /> Admin
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={async () => {

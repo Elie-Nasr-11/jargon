@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { SettingsMenu } from "@/components/SettingsMenu";
+import { PlaceSwitcher } from "@/components/PlaceSwitcher";
 import { cn } from "@/lib/utils";
 
 export function ConsoleShell({
@@ -44,32 +45,11 @@ export function ConsoleShell({
               <Link to="/chat" className="font-serif text-[22px] tracking-tight text-foreground">
                 Jargon
               </Link>
-              {activeNav ? (
-                <div className="hidden items-center gap-1 rounded-pill border border-border bg-surface-1 p-0.5 sm:flex">
-                  <Link
-                    to="/teacher"
-                    className={cn(
-                      "rounded-pill px-3 py-1.5 text-[13px] font-medium transition-colors",
-                      activeNav === "dashboard"
-                        ? "bg-foreground text-background"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    Dashboard
-                  </Link>
-                  <Link
-                    to="/teacher/curriculum"
-                    className={cn(
-                      "rounded-pill px-3 py-1.5 text-[13px] font-medium transition-colors",
-                      activeNav === "curriculum"
-                        ? "bg-foreground text-background"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    Curriculum
-                  </Link>
-                </div>
-              ) : null}
+              <PlaceSwitcher
+                active={
+                  activeNav === "curriculum" ? "curriculum" : activeNav ? "teacher" : undefined
+                }
+              />
             </div>
             {email ? <SettingsMenu email={email} /> : null}
           </div>
