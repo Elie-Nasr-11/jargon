@@ -581,23 +581,36 @@ function CurriculumTree({
   activeLessonId: string;
   onSelectLesson: (lesson: Lesson) => void;
 }) {
+  const [open, setOpen] = useState(true);
   return (
     <div className="mt-5">
-      <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="mb-3 flex w-full items-center gap-2 text-[13px] font-medium text-foreground"
+      >
         <Layers3 className="h-4 w-4" strokeWidth={1.7} />
         Course tree
-      </div>
-      <div className="grid max-h-[70vh] gap-3 overflow-auto pr-1">
-        {data.subjects.map((subject) => (
-          <SubjectBlock
-            key={subject.id}
-            subject={subject}
-            data={data}
-            activeLessonId={activeLessonId}
-            onSelectLesson={onSelectLesson}
-          />
-        ))}
-      </div>
+        <ChevronRight
+          className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${
+            open ? "rotate-90" : ""
+          }`}
+          strokeWidth={1.7}
+        />
+      </button>
+      {open ? (
+        <div className="grid max-h-[70vh] gap-3 overflow-auto pr-1">
+          {data.subjects.map((subject) => (
+            <SubjectBlock
+              key={subject.id}
+              subject={subject}
+              data={data}
+              activeLessonId={activeLessonId}
+              onSelectLesson={onSelectLesson}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
