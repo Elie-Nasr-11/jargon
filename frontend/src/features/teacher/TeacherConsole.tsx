@@ -25,11 +25,10 @@ import {
   TrendingUp,
   UsersRound,
 } from "lucide-react";
-import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
-import { SettingsMenu } from "@/components/SettingsMenu";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { ConsoleShell } from "@/components/ConsoleShell";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createAssignment,
@@ -653,297 +652,269 @@ export function TeacherConsole() {
   };
 
   return (
-    <div
-      className="relative flex min-h-screen flex-col overflow-hidden"
-      style={{ background: "var(--background)" }}
-    >
-      <AmbientCanvas intensity={0.24} />
-      <header
-        className="relative z-20 shrink-0 backdrop-blur-md"
-        style={{ background: "color-mix(in oklab, var(--background) 72%, transparent)" }}
-      >
-        <div className="hairline">
-          <div className="mx-auto flex h-[60px] max-w-[1240px] items-center justify-between gap-2 px-3 sm:px-6">
-            <Link to="/chat" className="font-serif text-[22px] tracking-tight text-foreground">
-              Jargon
-            </Link>
-            {email ? <SettingsMenu email={email} /> : null}
+    <ConsoleShell email={email} activeNav="dashboard">
+      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
+            Teacher dashboard
           </div>
+          <h1 className="font-serif mt-2 text-[38px] leading-tight tracking-tight text-foreground sm:text-[48px]">
+            Classroom evidence.
+          </h1>
+          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
+            Inspect roster progress, learning attempts, chat transcripts, quiz checks, mastery, and
+            notes for students in your assigned pilot classes.
+          </p>
         </div>
-      </header>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => void loadDashboard()}
+            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+          >
+            Refresh
+          </button>
+          <Link
+            to="/chat"
+            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+          >
+            Student chat
+          </Link>
+        </div>
+      </section>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-[1240px] flex-1 flex-col gap-5 px-4 py-6 sm:px-6">
-        <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
-              Teacher dashboard
-            </div>
-            <h1 className="font-serif mt-2 text-[38px] leading-tight tracking-tight text-foreground sm:text-[48px]">
-              Classroom evidence.
-            </h1>
-            <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
-              Inspect roster progress, learning attempts, chat transcripts, quiz checks, mastery,
-              and notes for students in your assigned pilot classes.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void loadDashboard()}
-              className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-            >
-              Refresh
-            </button>
-            <Link
-              to="/teacher/curriculum"
-              className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-            >
-              Curriculum
-            </Link>
-            <Link
-              to="/chat"
-              className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-            >
-              Student chat
-            </Link>
-          </div>
-        </section>
+      {booting ? (
+        <GradientCard>
+          <div className="p-6 text-[14px] text-muted-foreground">Loading teacher access...</div>
+        </GradientCard>
+      ) : message ? (
+        <GradientCard>
+          <div className="p-6 text-[14px] text-muted-foreground">{message}</div>
+        </GradientCard>
+      ) : null}
 
-        {booting ? (
-          <GradientCard>
-            <div className="p-6 text-[14px] text-muted-foreground">Loading teacher access...</div>
-          </GradientCard>
-        ) : message ? (
-          <GradientCard>
-            <div className="p-6 text-[14px] text-muted-foreground">{message}</div>
-          </GradientCard>
-        ) : null}
-
-        {!booting && dashboard && model && (
-          <>
-            <div className="grid gap-3 md:grid-cols-4">
-              <MetricCard label="Classes" value={String(dashboard.classes.length)} />
-              <MetricCard label="Students" value={String(model.studentIds.length)} />
-              <MetricCard
-                label="Completed"
-                value={String(
-                  dashboard.sessions.filter((session) => session.status === "complete").length,
-                )}
-              />
-              <MetricCard label="Evidence" value={String(dashboard.evidence.length)} />
-            </div>
-
-            <div className="flex flex-col gap-4">
-              {!selectedClassId ? (
-                <GradientCard>
-                  <div className="p-4">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-[16px] font-medium text-foreground">Classes</h2>
-                        <p className="mt-1 text-[12.5px] text-muted-foreground">
-                          Live roster counts and latest student activity.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-4">
-                      {classesByOrg.map(([org, items]) => (
-                        <div key={org}>
-                          <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                            <Building2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                            {org}
-                            <span className="text-muted-foreground/60">· {items.length}</span>
-                          </div>
-                          <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-                            {items.map((item) => (
-                              <div key={item.id} className="w-[240px] shrink-0">
-                                <ClassButton
-                                  item={item}
-                                  active={item.id === selectedClassId}
-                                  stats={summarizeClass(dashboard, item.id)}
-                                  onClick={() =>
-                                    navigate({
-                                      to: "/teacher/class/$classId",
-                                      params: { classId: item.id },
-                                    })
-                                  }
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </GradientCard>
-              ) : (
-                <Breadcrumb
-                  segments={[
-                    { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
-                    ...(selectedClass
-                      ? [
-                          { label: organizationName(selectedClass) },
-                          {
-                            label: selectedClass.name,
-                            onClick: () =>
-                              navigate({
-                                to: "/teacher/class/$classId",
-                                params: { classId: selectedClass.id },
-                              }),
-                          },
-                        ]
-                      : []),
-                    ...(selectedStudentId
-                      ? [{ label: displayName(selectedStudent, selectedStudentId) }]
-                      : []),
-                  ]}
-                />
+      {!booting && dashboard && model && (
+        <>
+          <div className="grid gap-3 md:grid-cols-4">
+            <MetricCard label="Classes" value={String(dashboard.classes.length)} />
+            <MetricCard label="Students" value={String(model.studentIds.length)} />
+            <MetricCard
+              label="Completed"
+              value={String(
+                dashboard.sessions.filter((session) => session.status === "complete").length,
               )}
+            />
+            <MetricCard label="Evidence" value={String(dashboard.evidence.length)} />
+          </div>
 
-              <div className="grid gap-4">
-                {selectedStudentId ? null : selectedClass && classStats ? (
-                  <ClassDetail
-                    item={selectedClass}
-                    stats={classStats}
-                    dashboard={dashboard}
-                    profilesById={model.profilesById}
-                    lessons={dashboard.lessons}
-                    lessonsById={model.lessonsById}
-                    resources={dashboard.resources.filter(
-                      (resource) => resource.class_id === selectedClass.id,
-                    )}
-                    assignments={dashboard.assignments.filter(
-                      (assignment) => assignment.class_id === selectedClass.id,
-                    )}
-                    assignmentRecipients={dashboard.assignmentRecipients}
-                    assignmentSubmissions={dashboard.assignmentSubmissions}
-                    assignmentSubmissionFiles={dashboard.assignmentSubmissionFiles}
-                    assessments={dashboard.assessments.filter(
-                      (assessment) => assessment.class_id === selectedClass.id,
-                    )}
-                    assessmentItems={dashboard.assessmentItems}
-                    assessmentRecipients={dashboard.assessmentRecipients}
-                    assessmentAttempts={dashboard.assessmentAttempts}
-                    assessmentItemAttempts={dashboard.assessmentItemAttempts}
-                    quizItems={dashboard.quizItems}
-                    studentIds={classStudents}
-                    selectedLessonId={selectedGradebookLessonId}
-                    selectedStudentId={selectedStudentId}
-                    onSelectLesson={setSelectedGradebookLessonId}
-                    onSelectStudent={(studentId) =>
-                      navigate({
-                        to: "/teacher/class/$classId/student/$studentId",
-                        params: { classId: selectedClass.id, studentId },
-                      })
-                    }
-                    tab={search.tab ?? "overview"}
-                    onTabChange={(value) =>
-                      navigate({
-                        to: "/teacher/class/$classId",
-                        params: { classId: selectedClass.id },
-                        search: { tab: value },
-                      })
-                    }
-                    savingResource={savingResource}
-                    savingAssignment={savingAssignment}
-                    savingAssessment={savingAssessment}
-                    onSaveResource={saveResource}
-                    onSaveAssignment={saveAssignment}
-                    onSaveAssessment={saveAssessment}
-                    onSetAssignmentStatus={(assignmentId, status) =>
-                      void setAssignmentStatus(assignmentId, status)
-                    }
-                    onSetAssessmentStatus={(assessmentId, status) =>
-                      void setAssessmentStatus(assessmentId, status)
-                    }
-                    onReviewSubmission={reviewSubmission}
-                    onReviewAssessmentItem={reviewAssessment}
-                    onReturnAssessment={returnAssessmentResult}
-                    updatingAlertId={updatingAlertId}
-                    onUpdateAlertStatus={(alertId, status) =>
-                      void updateAlertStatus(alertId, status)
-                    }
-                    onUpdateResource={(resource) =>
-                      setDashboard((current) =>
-                        current
-                          ? {
-                              ...current,
-                              resources: current.resources.map((item) =>
-                                item.id === resource.id ? resource : item,
-                              ),
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                ) : (
-                  <GradientCard>
-                    <div className="p-4 sm:p-5">
-                      <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                        Needs attention
-                      </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                        <MetricCard label="Submissions to grade" value={String(pendingGrading)} />
-                        <MetricCard label="Assessments to review" value={String(pendingReviews)} />
-                        <MetricCard label="Open alerts" value={String(openAlertCount)} />
-                      </div>
-                      <p className="mt-4 text-[12.5px] text-muted-foreground">
-                        Pick a class above to open its roster, gradebook, resources, assignments,
-                        and assessments.
+          <div className="flex flex-col gap-4">
+            {!selectedClassId ? (
+              <GradientCard>
+                <div className="p-4">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-[16px] font-medium text-foreground">Classes</h2>
+                      <p className="mt-1 text-[12.5px] text-muted-foreground">
+                        Live roster counts and latest student activity.
                       </p>
                     </div>
-                  </GradientCard>
-                )}
-
-                {selectedStudentId && studentStats ? (
-                  <StudentDetail
-                    studentId={selectedStudentId}
-                    classLabel={selectedClass?.name ?? ""}
-                    profile={selectedStudent}
-                    stats={studentStats}
-                    dashboard={dashboard}
-                    lessonsById={model.lessonsById}
-                    sessions={studentSessions}
-                    selectedSession={selectedSession}
-                    selectedSessionId={selectedSessionId}
-                    onSelectSession={setSelectedSessionId}
-                    noteDraft={noteDraft}
-                    noteVisibility={noteVisibility}
-                    savingNote={savingNote}
-                    liveViewer={liveViewer}
-                    liveCommentDraft={liveCommentDraft}
-                    sendingLiveComment={sendingLiveComment}
-                    onNoteChange={setNoteDraft}
-                    onNoteVisibilityChange={setNoteVisibility}
-                    onSaveNote={() => void saveNote()}
-                    onLiveCommentChange={setLiveCommentDraft}
-                    onStartWatching={() => void startWatchingSelectedSession()}
-                    onStopWatching={() => void stopWatchingSelectedSession()}
-                    onSendLiveComment={() => void sendLiveComment()}
-                    tab={search.tab ?? "overview"}
-                    onTabChange={(value) =>
-                      navigate({
-                        to: "/teacher/class/$classId/student/$studentId",
-                        params: {
-                          classId: selectedClassId ?? "",
-                          studentId: selectedStudentId,
+                  </div>
+                  <div className="flex flex-col gap-4">
+                    {classesByOrg.map(([org, items]) => (
+                      <div key={org}>
+                        <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                          <Building2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                          {org}
+                          <span className="text-muted-foreground/60">· {items.length}</span>
+                        </div>
+                        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                          {items.map((item) => (
+                            <div key={item.id} className="w-[240px] shrink-0">
+                              <ClassButton
+                                item={item}
+                                active={item.id === selectedClassId}
+                                stats={summarizeClass(dashboard, item.id)}
+                                onClick={() =>
+                                  navigate({
+                                    to: "/teacher/class/$classId",
+                                    params: { classId: item.id },
+                                  })
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </GradientCard>
+            ) : (
+              <Breadcrumb
+                segments={[
+                  { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
+                  ...(selectedClass
+                    ? [
+                        { label: organizationName(selectedClass) },
+                        {
+                          label: selectedClass.name,
+                          onClick: () =>
+                            navigate({
+                              to: "/teacher/class/$classId",
+                              params: { classId: selectedClass.id },
+                            }),
                         },
-                        search: { tab: value },
-                      })
-                    }
-                    onBack={() =>
-                      navigate({
-                        to: "/teacher/class/$classId",
-                        params: { classId: selectedClassId ?? "" },
-                      })
-                    }
-                  />
-                ) : null}
-              </div>
+                      ]
+                    : []),
+                  ...(selectedStudentId
+                    ? [{ label: displayName(selectedStudent, selectedStudentId) }]
+                    : []),
+                ]}
+              />
+            )}
+
+            <div className="grid gap-4">
+              {selectedStudentId ? null : selectedClass && classStats ? (
+                <ClassDetail
+                  item={selectedClass}
+                  stats={classStats}
+                  dashboard={dashboard}
+                  profilesById={model.profilesById}
+                  lessons={dashboard.lessons}
+                  lessonsById={model.lessonsById}
+                  resources={dashboard.resources.filter(
+                    (resource) => resource.class_id === selectedClass.id,
+                  )}
+                  assignments={dashboard.assignments.filter(
+                    (assignment) => assignment.class_id === selectedClass.id,
+                  )}
+                  assignmentRecipients={dashboard.assignmentRecipients}
+                  assignmentSubmissions={dashboard.assignmentSubmissions}
+                  assignmentSubmissionFiles={dashboard.assignmentSubmissionFiles}
+                  assessments={dashboard.assessments.filter(
+                    (assessment) => assessment.class_id === selectedClass.id,
+                  )}
+                  assessmentItems={dashboard.assessmentItems}
+                  assessmentRecipients={dashboard.assessmentRecipients}
+                  assessmentAttempts={dashboard.assessmentAttempts}
+                  assessmentItemAttempts={dashboard.assessmentItemAttempts}
+                  quizItems={dashboard.quizItems}
+                  studentIds={classStudents}
+                  selectedLessonId={selectedGradebookLessonId}
+                  selectedStudentId={selectedStudentId}
+                  onSelectLesson={setSelectedGradebookLessonId}
+                  onSelectStudent={(studentId) =>
+                    navigate({
+                      to: "/teacher/class/$classId/student/$studentId",
+                      params: { classId: selectedClass.id, studentId },
+                    })
+                  }
+                  tab={search.tab ?? "overview"}
+                  onTabChange={(value) =>
+                    navigate({
+                      to: "/teacher/class/$classId",
+                      params: { classId: selectedClass.id },
+                      search: { tab: value },
+                    })
+                  }
+                  savingResource={savingResource}
+                  savingAssignment={savingAssignment}
+                  savingAssessment={savingAssessment}
+                  onSaveResource={saveResource}
+                  onSaveAssignment={saveAssignment}
+                  onSaveAssessment={saveAssessment}
+                  onSetAssignmentStatus={(assignmentId, status) =>
+                    void setAssignmentStatus(assignmentId, status)
+                  }
+                  onSetAssessmentStatus={(assessmentId, status) =>
+                    void setAssessmentStatus(assessmentId, status)
+                  }
+                  onReviewSubmission={reviewSubmission}
+                  onReviewAssessmentItem={reviewAssessment}
+                  onReturnAssessment={returnAssessmentResult}
+                  updatingAlertId={updatingAlertId}
+                  onUpdateAlertStatus={(alertId, status) => void updateAlertStatus(alertId, status)}
+                  onUpdateResource={(resource) =>
+                    setDashboard((current) =>
+                      current
+                        ? {
+                            ...current,
+                            resources: current.resources.map((item) =>
+                              item.id === resource.id ? resource : item,
+                            ),
+                          }
+                        : current,
+                    )
+                  }
+                />
+              ) : (
+                <GradientCard>
+                  <div className="p-4 sm:p-5">
+                    <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                      Needs attention
+                    </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <MetricCard label="Submissions to grade" value={String(pendingGrading)} />
+                      <MetricCard label="Assessments to review" value={String(pendingReviews)} />
+                      <MetricCard label="Open alerts" value={String(openAlertCount)} />
+                    </div>
+                    <p className="mt-4 text-[12.5px] text-muted-foreground">
+                      Pick a class above to open its roster, gradebook, resources, assignments, and
+                      assessments.
+                    </p>
+                  </div>
+                </GradientCard>
+              )}
+
+              {selectedStudentId && studentStats ? (
+                <StudentDetail
+                  studentId={selectedStudentId}
+                  classLabel={selectedClass?.name ?? ""}
+                  profile={selectedStudent}
+                  stats={studentStats}
+                  dashboard={dashboard}
+                  lessonsById={model.lessonsById}
+                  sessions={studentSessions}
+                  selectedSession={selectedSession}
+                  selectedSessionId={selectedSessionId}
+                  onSelectSession={setSelectedSessionId}
+                  noteDraft={noteDraft}
+                  noteVisibility={noteVisibility}
+                  savingNote={savingNote}
+                  liveViewer={liveViewer}
+                  liveCommentDraft={liveCommentDraft}
+                  sendingLiveComment={sendingLiveComment}
+                  onNoteChange={setNoteDraft}
+                  onNoteVisibilityChange={setNoteVisibility}
+                  onSaveNote={() => void saveNote()}
+                  onLiveCommentChange={setLiveCommentDraft}
+                  onStartWatching={() => void startWatchingSelectedSession()}
+                  onStopWatching={() => void stopWatchingSelectedSession()}
+                  onSendLiveComment={() => void sendLiveComment()}
+                  tab={search.tab ?? "overview"}
+                  onTabChange={(value) =>
+                    navigate({
+                      to: "/teacher/class/$classId/student/$studentId",
+                      params: {
+                        classId: selectedClassId ?? "",
+                        studentId: selectedStudentId,
+                      },
+                      search: { tab: value },
+                    })
+                  }
+                  onBack={() =>
+                    navigate({
+                      to: "/teacher/class/$classId",
+                      params: { classId: selectedClassId ?? "" },
+                    })
+                  }
+                />
+              ) : null}
             </div>
-          </>
-        )}
-      </main>
-    </div>
+          </div>
+        </>
+      )}
+    </ConsoleShell>
   );
 }
 

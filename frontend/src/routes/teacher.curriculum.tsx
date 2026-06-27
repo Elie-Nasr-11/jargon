@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { Archive, BookOpen, Check, Eye, FilePlus2, Layers3, NotebookPen, Send } from "lucide-react";
-import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
-import { SettingsMenu } from "@/components/SettingsMenu";
+import { ConsoleShell } from "@/components/ConsoleShell";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import {
   createLessonResource,
@@ -241,159 +240,133 @@ function CurriculumPage() {
   };
 
   return (
-    <div
-      className="relative flex min-h-screen flex-col overflow-hidden"
-      style={{ background: "var(--background)" }}
-    >
-      <AmbientCanvas intensity={0.2} />
-      <header
-        className="relative z-20 shrink-0 backdrop-blur-md"
-        style={{ background: "color-mix(in oklab, var(--background) 72%, transparent)" }}
-      >
-        <div className="hairline">
-          <div className="mx-auto flex h-[60px] max-w-[1280px] items-center justify-between gap-2 px-3 sm:px-6">
-            <Link to="/chat" className="font-serif text-[22px] tracking-tight text-foreground">
-              Jargon
-            </Link>
-            {email ? <SettingsMenu email={email} /> : null}
+    <ConsoleShell email={email} activeNav="curriculum">
+      <Breadcrumb
+        segments={[
+          { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
+          {
+            label: "Curriculum",
+            onClick: () => navigate({ to: "/teacher/curriculum", search: {} }),
+          },
+          ...(draft.lessonId && lessonsById.get(draft.lessonId)
+            ? [{ label: lessonsById.get(draft.lessonId)!.title }]
+            : []),
+        ]}
+      />
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
+            Curriculum studio
           </div>
+          <h1 className="font-serif mt-2 text-[38px] leading-tight tracking-tight text-foreground sm:text-[48px]">
+            Build the lesson path.
+          </h1>
+          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
+            Create structured lessons with milestones, activities, quizzes, resources, and
+            publishing control. Preview first, then publish for students.
+          </p>
         </div>
-      </header>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+          >
+            Refresh
+          </button>
+        </div>
+      </section>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-5 px-4 py-6 sm:px-6">
-        <Breadcrumb
-          segments={[
-            { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
-            {
-              label: "Curriculum",
-              onClick: () => navigate({ to: "/teacher/curriculum", search: {} }),
-            },
-            ...(draft.lessonId && lessonsById.get(draft.lessonId)
-              ? [{ label: lessonsById.get(draft.lessonId)!.title }]
-              : []),
-          ]}
-        />
-        <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
-              Curriculum studio
-            </div>
-            <h1 className="font-serif mt-2 text-[38px] leading-tight tracking-tight text-foreground sm:text-[48px]">
-              Build the lesson path.
-            </h1>
-            <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
-              Create structured lessons with milestones, activities, quizzes, resources, and
-              publishing control. Preview first, then publish for students.
-            </p>
+      {message ? (
+        <GradientCard>
+          <div className="p-4 text-[13px] text-muted-foreground">{message}</div>
+        </GradientCard>
+      ) : null}
+
+      {booting ? (
+        <GradientCard>
+          <div className="p-6 text-[14px] text-muted-foreground">Loading curriculum...</div>
+        </GradientCard>
+      ) : !data?.classes.length ? (
+        <GradientCard>
+          <div className="p-6 text-[14px] text-muted-foreground">
+            Teacher curriculum access requires an assigned class.
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              to="/teacher"
-              className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-            >
-              Teacher dashboard
-            </Link>
-            <button
-              type="button"
-              onClick={() => void loadData()}
-              className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-            >
-              Refresh
-            </button>
-          </div>
-        </section>
-
-        {message ? (
+        </GradientCard>
+      ) : data && selectedClass ? (
+        <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
           <GradientCard>
-            <div className="p-4 text-[13px] text-muted-foreground">{message}</div>
-          </GradientCard>
-        ) : null}
-
-        {booting ? (
-          <GradientCard>
-            <div className="p-6 text-[14px] text-muted-foreground">Loading curriculum...</div>
-          </GradientCard>
-        ) : !data?.classes.length ? (
-          <GradientCard>
-            <div className="p-6 text-[14px] text-muted-foreground">
-              Teacher curriculum access requires an assigned class.
+            <div className="p-4">
+              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Class scope
+                <select
+                  value={selectedClassId}
+                  onChange={(event) => setSelectedClassId(event.target.value)}
+                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                >
+                  {data.classes.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <CurriculumTree
+                data={data}
+                activeLessonId={draft.lessonId}
+                onSelectLesson={(lesson) =>
+                  navigate({ to: "/teacher/curriculum", search: { lesson: lesson.id } })
+                }
+              />
             </div>
           </GradientCard>
-        ) : data && selectedClass ? (
-          <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
-            <GradientCard>
-              <div className="p-4">
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                  Class scope
-                  <select
-                    value={selectedClassId}
-                    onChange={(event) => setSelectedClassId(event.target.value)}
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
-                  >
-                    {data.classes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <CurriculumTree
-                  data={data}
-                  activeLessonId={draft.lessonId}
-                  onSelectLesson={(lesson) =>
-                    navigate({ to: "/teacher/curriculum", search: { lesson: lesson.id } })
-                  }
-                />
-              </div>
-            </GradientCard>
 
-            <GradientCard>
-              <div className="p-4 sm:p-5">
-                <BlueprintEditor
-                  draft={draft}
-                  resources={visibleResources}
-                  lessonsById={lessonsById}
-                  onField={setField}
-                />
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void saveBlueprint()}
-                    disabled={saving}
-                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    {saving ? "Saving..." : "Save draft"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void setPublication("publish_lesson")}
-                    disabled={publishing || !draft.lessonId}
-                    className="inline-flex items-center gap-2 rounded-full border border-emerald-500/35 px-4 py-2 text-[12.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    Publish
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void setPublication("archive_lesson")}
-                    disabled={publishing || !draft.lessonId}
-                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    Archive
-                  </button>
-                </div>
+          <GradientCard>
+            <div className="p-4 sm:p-5">
+              <BlueprintEditor
+                draft={draft}
+                resources={visibleResources}
+                lessonsById={lessonsById}
+                onField={setField}
+              />
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void saveBlueprint()}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  {saving ? "Saving..." : "Save draft"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void setPublication("publish_lesson")}
+                  disabled={publishing || !draft.lessonId}
+                  className="inline-flex items-center gap-2 rounded-full border border-emerald-500/35 px-4 py-2 text-[12.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  Publish
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void setPublication("archive_lesson")}
+                  disabled={publishing || !draft.lessonId}
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  Archive
+                </button>
               </div>
-            </GradientCard>
+            </div>
+          </GradientCard>
 
-            <GradientCard>
-              <PreviewPanel draft={draft} resources={visibleResources} />
-            </GradientCard>
-          </div>
-        ) : null}
-      </main>
-    </div>
+          <GradientCard>
+            <PreviewPanel draft={draft} resources={visibleResources} />
+          </GradientCard>
+        </div>
+      ) : null}
+    </ConsoleShell>
   );
 }
 
