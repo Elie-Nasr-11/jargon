@@ -2077,10 +2077,10 @@ function ResourceManager({
                           <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
                             {chunks.length} chunk{chunks.length === 1 ? "" : "s"}
                           </span>
-                          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-500">
+                          <span className="rounded-full border border-success/30 bg-success/10 px-2 py-1 text-success">
                             {approvedCount} approved
                           </span>
-                          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-500">
+                          <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-warning">
                             {draftCount} draft
                           </span>
                           <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
@@ -2093,7 +2093,7 @@ function ResourceManager({
                           <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
                             {pdfPageCount} rendered page{pdfPageCount === 1 ? "" : "s"}
                           </span>
-                          <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-blue-500">
+                          <span className="rounded-full border border-info/30 bg-info/10 px-2 py-1 text-info">
                             {ocrAssetCount} OCR image{ocrAssetCount === 1 ? "" : "s"}
                           </span>
                         </div>
@@ -2147,7 +2147,7 @@ function ResourceManager({
                       type="button"
                       onClick={() => void setStatus(resource, "published")}
                       disabled={resource.status === "published"}
-                      className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                      className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                     >
                       Publish
                     </button>
@@ -2175,7 +2175,7 @@ function ResourceManager({
                         type="button"
                         onClick={() => void extractChunks(resource)}
                         disabled={processingId === resource.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/35 px-3 py-1.5 text-[11.5px] text-blue-500 transition-colors hover:bg-blue-500/10 disabled:opacity-45"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-info/35 px-3 py-1.5 text-[11.5px] text-info transition-colors hover:bg-info/10 disabled:opacity-45"
                       >
                         <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
                         {processingId === resource.id ? "Extracting..." : "Extract PDF text"}
@@ -2197,7 +2197,7 @@ function ResourceManager({
                         type="button"
                         onClick={() => void transcribeResource(resource)}
                         disabled={processingId === resource.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/35 px-3 py-1.5 text-[11.5px] text-blue-500 transition-colors hover:bg-blue-500/10 disabled:opacity-45"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-info/35 px-3 py-1.5 text-[11.5px] text-info transition-colors hover:bg-info/10 disabled:opacity-45"
                       >
                         <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
                         {processingId === resource.id
@@ -2255,7 +2255,7 @@ function ResourceManager({
                               })
                             }
                             disabled={!draftCount}
-                            className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                            className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                           >
                             Approve drafts
                           </button>
@@ -2307,7 +2307,7 @@ function ResourceManager({
                                   type="button"
                                   onClick={() => void setChunkStatus(resource, chunk, "approved")}
                                   disabled={chunk.status === "approved" || chunkBusyId === chunk.id}
-                                  className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                                  className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                                 >
                                   Approve
                                 </button>
@@ -2914,7 +2914,7 @@ function AssessmentManager({
                         type="button"
                         onClick={() => onSetAssessmentStatus(assessment.id, "published")}
                         disabled={assessment.status === "published"}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                       >
                         <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                         Publish
@@ -3088,7 +3088,7 @@ function AssessmentManager({
                                 type="button"
                                 onClick={() => void returnAttempt(attempt)}
                                 disabled={pending || attempt.status === "returned"}
-                                className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                                className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                               >
                                 Return result
                               </button>
@@ -3527,7 +3527,7 @@ function AssignmentManager({
                         type="button"
                         onClick={() => onSetAssignmentStatus(assignment.id, "assigned")}
                         disabled={assignment.status === "assigned"}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                       >
                         <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                         Assign
@@ -3667,7 +3667,7 @@ function AssignmentManager({
                                 type="button"
                                 onClick={() => void review(assignment, submission, "accepted")}
                                 disabled={draft.saving}
-                                className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[11.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-45"
+                                className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                               >
                                 Mark complete
                               </button>
@@ -3675,7 +3675,7 @@ function AssignmentManager({
                                 type="button"
                                 onClick={() => void review(assignment, submission, "returned")}
                                 disabled={draft.saving}
-                                className="rounded-full border border-amber-500/35 px-3 py-1.5 text-[11.5px] text-amber-500 transition-colors hover:bg-amber-500/10 disabled:opacity-45"
+                                className="rounded-full border border-warning/35 px-3 py-1.5 text-[11.5px] text-warning transition-colors hover:bg-warning/10 disabled:opacity-45"
                               >
                                 Return
                               </button>
@@ -3978,7 +3978,7 @@ function GradebookTable({
                           {row.statusLabel}
                         </span>
                         {row.needsAttention ? (
-                          <span className="rounded-full border border-amber-500/35 bg-amber-500/10 px-2.5 py-1 text-[11.5px] text-amber-500">
+                          <span className="rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-[11.5px] text-warning">
                             Needs attention
                           </span>
                         ) : null}
@@ -4274,7 +4274,7 @@ function StudentDetail({
               </button>
             </div>
             {watchingSelectedSession ? (
-              <div className="mt-3 rounded-2xl border border-blue-400/35 bg-blue-400/10 px-3 py-2 text-[12px] text-blue-200">
+              <div className="mt-3 rounded-2xl border border-info/35 bg-info/10 px-3 py-2 text-[12px] text-info">
                 You are watching live. The student will see a teacher-viewing indicator while your
                 heartbeat is active.
               </div>
@@ -4334,7 +4334,7 @@ function StudentDetail({
                         </div>
                       </div>
                       {watchingSelectedSession ? (
-                        <span className="rounded-full border border-blue-400/35 bg-blue-400/10 px-2.5 py-1 text-[11px] text-blue-200">
+                        <span className="rounded-full border border-info/35 bg-info/10 px-2.5 py-1 text-[11px] text-info">
                           Watching
                         </span>
                       ) : null}
@@ -4373,10 +4373,10 @@ function StudentDetail({
                         return (
                           <div
                             key={item.id}
-                            className="rounded-3xl border border-blue-400/35 bg-blue-400/10 p-4"
+                            className="rounded-3xl border border-info/35 bg-info/10 p-4"
                           >
                             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-[12px] uppercase tracking-[0.1em] text-blue-200">
+                              <span className="text-[12px] uppercase tracking-[0.1em] text-info">
                                 Teacher live
                               </span>
                               <span className="text-[11.5px] text-muted-foreground">
@@ -5387,7 +5387,7 @@ function lessonStatusClass(status: LessonProgressStatus) {
 }
 
 function severityClass(severity: "low" | "medium" | "high") {
-  if (severity === "high") return "border-red-500/35 bg-red-500/10 text-red-500";
+  if (severity === "high") return "border-danger/35 bg-danger/10 text-danger";
   if (severity === "medium") return "border-warning/40 bg-warning/12 text-warning";
   return "border-info/40 bg-info/12 text-info";
 }
@@ -5399,9 +5399,9 @@ function severityRank(severity: "low" | "medium" | "high") {
 }
 
 function masteryBarClass(score: number) {
-  if (score >= 0.85) return "bg-emerald-500";
-  if (score >= 0.55) return "bg-amber-500";
-  return "bg-red-500";
+  if (score >= 0.85) return "bg-success";
+  if (score >= 0.55) return "bg-warning";
+  return "bg-danger";
 }
 
 function displayName(profile: Profile | null | undefined, userId: string) {

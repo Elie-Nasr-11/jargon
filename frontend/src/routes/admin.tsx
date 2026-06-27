@@ -154,9 +154,9 @@ function parseRosterPaste(value: string): RosterRow[] {
 }
 
 function resultTone(status: AdminSeedResult["status"]) {
-  if (status === "created") return "text-emerald-500";
-  if (status === "reused" || status === "skipped") return "text-sky-500";
-  return "text-red-500";
+  if (status === "created") return "text-success";
+  if (status === "reused" || status === "skipped") return "text-info";
+  return "text-danger";
 }
 
 function formatDate(value?: string | null) {
@@ -1208,7 +1208,7 @@ function AdminPage() {
 
   return (
     <AdminShell email={email}>
-      <main className="relative z-10 mx-auto flex w-full max-w-[1120px] flex-1 flex-col gap-5 px-5 py-8">
+      <main className="relative z-10 mx-auto flex w-full max-w-[1240px] flex-1 flex-col gap-5 px-5 py-8">
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -1461,10 +1461,10 @@ function AdminPage() {
                                 <div
                                   className={`mt-1 text-[11px] uppercase tracking-[0.09em] ${
                                     item.status === "ok"
-                                      ? "text-emerald-500"
+                                      ? "text-success"
                                       : item.status === "attention"
-                                        ? "text-amber-500"
-                                        : "text-sky-500"
+                                        ? "text-warning"
+                                        : "text-info"
                                   }`}
                                 >
                                   {item.status}
@@ -1482,10 +1482,10 @@ function AdminPage() {
                                   <span
                                     className={`mr-2 font-medium ${
                                       issue.severity === "blocked"
-                                        ? "text-red-500"
+                                        ? "text-danger"
                                         : issue.severity === "attention"
-                                          ? "text-amber-500"
-                                          : "text-sky-500"
+                                          ? "text-warning"
+                                          : "text-info"
                                     }`}
                                   >
                                     {issue.severity}
@@ -1494,7 +1494,7 @@ function AdminPage() {
                                 </div>
                               ))
                             ) : (
-                              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12.5px] text-emerald-500">
+                              <div className="rounded-2xl border border-success/30 bg-success/10 px-3 py-2 text-[12.5px] text-success">
                                 No readiness blockers found.
                               </div>
                             )}
@@ -1595,7 +1595,7 @@ function AdminPage() {
                               <td className="py-3 pr-3 text-muted-foreground">
                                 {item.teacher_count} teachers · {item.student_count} students
                                 {item.disabled_membership_count ? (
-                                  <div className="mt-0.5 text-amber-500">
+                                  <div className="mt-0.5 text-warning">
                                     {item.disabled_membership_count} inactive memberships
                                   </div>
                                 ) : null}
@@ -1776,10 +1776,10 @@ function AdminPage() {
                                     <td
                                       className={`py-2 ${
                                         row.status === "ready" || row.status === "applied"
-                                          ? "text-emerald-500"
+                                          ? "text-success"
                                           : row.status === "needs_seed"
-                                            ? "text-amber-500"
-                                            : "text-red-500"
+                                            ? "text-warning"
+                                            : "text-danger"
                                       }`}
                                     >
                                       {row.status}
@@ -1857,7 +1857,7 @@ function AdminPage() {
                             <ConfirmButton
                               onConfirm={() => void requestRetention("delete")}
                               disabled={!selectedStudentId || schoolOpsBusy === "retention-delete"}
-                              className="rounded-full border border-red-500/35 px-4 py-2 text-[12.5px] text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                              className="rounded-full border border-danger/35 px-4 py-2 text-[12.5px] text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
                               title="Request data deletion?"
                               description="This requests permanent deletion of the selected student's learning records. This cannot be undone."
                               confirmLabel="Request deletion"
@@ -2097,7 +2097,7 @@ function AdminPage() {
                               </button>
                             </div>
                             {selectedCourseMapping ? (
-                              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-[12px] text-emerald-500">
+                              <div className="rounded-2xl border border-success/30 bg-success/10 p-3 text-[12px] text-success">
                                 Mapped to Jargon class{" "}
                                 {scope?.classes.find(
                                   (item) => item.id === selectedCourseMapping.class_id,
@@ -2667,8 +2667,8 @@ function AdminPage() {
                                         <span
                                           className={`rounded-full border px-2.5 py-1 text-[11px] ${
                                             inactive
-                                              ? "border-amber-500/35 text-amber-500"
-                                              : "border-emerald-500/35 text-emerald-500"
+                                              ? "border-warning/35 text-warning"
+                                              : "border-success/35 text-success"
                                           }`}
                                         >
                                           {classStatusLabel(membership.status)}
@@ -2845,7 +2845,7 @@ function AdminPage() {
                             />
                             <p
                               className={`mt-1.5 text-[12px] ${
-                                hasShortDefaultPassword ? "text-red-500" : "text-muted-foreground"
+                                hasShortDefaultPassword ? "text-danger" : "text-muted-foreground"
                               }`}
                             >
                               {hasShortDefaultPassword
@@ -2961,7 +2961,7 @@ function AdminPage() {
                                         }`}
                                       />
                                       {emailErrors[row.rowId] ? (
-                                        <div className="text-[11px] text-red-500">
+                                        <div className="text-[11px] text-danger">
                                           {emailErrors[row.rowId]}
                                         </div>
                                       ) : null}
@@ -2979,7 +2979,7 @@ function AdminPage() {
                                         }`}
                                       />
                                       {nameErrors[row.rowId] ? (
-                                        <div className="text-[11px] text-red-500">
+                                        <div className="text-[11px] text-danger">
                                           {nameErrors[row.rowId]}
                                         </div>
                                       ) : null}
@@ -3007,7 +3007,7 @@ function AdminPage() {
                                         }`}
                                       />
                                       {passwordErrors[row.rowId] ? (
-                                        <div className="text-[11px] text-red-500">
+                                        <div className="text-[11px] text-danger">
                                           {passwordErrors[row.rowId]}
                                         </div>
                                       ) : null}
@@ -3038,12 +3038,12 @@ function AdminPage() {
                             <div className="flex items-start gap-2 text-[13px] text-muted-foreground">
                               {results.some((result) => result.status === "failed") ? (
                                 <AlertCircle
-                                  className="mt-0.5 h-4 w-4 shrink-0 text-red-500"
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-danger"
                                   strokeWidth={1.7}
                                 />
                               ) : (
                                 <CheckCircle2
-                                  className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-success"
                                   strokeWidth={1.7}
                                 />
                               )}
@@ -3120,13 +3120,13 @@ function AdminShell({
       className="relative flex min-h-screen flex-col overflow-hidden"
       style={{ background: "var(--background)" }}
     >
-      <AmbientCanvas intensity={0.28} />
+      <AmbientCanvas intensity={0.24} />
       <header
         className="relative z-20 shrink-0 backdrop-blur-md"
         style={{ background: "color-mix(in oklab, var(--background) 72%, transparent)" }}
       >
         <div className="hairline">
-          <div className="mx-auto flex h-[60px] max-w-[1200px] items-center justify-between gap-2 px-3 sm:px-6">
+          <div className="mx-auto flex h-[60px] max-w-[1240px] items-center justify-between gap-2 px-3 sm:px-6">
             <div className="flex items-center gap-4">
               <Link to="/chat" className="font-serif text-[22px] tracking-tight text-foreground">
                 Jargon
@@ -3206,8 +3206,8 @@ function RosterPreviewTable({ title, people }: { title: string; people: GoogleCl
                   <span
                     className={`rounded-full border px-2.5 py-1 text-[11px] ${
                       person.matched
-                        ? "border-emerald-500/35 text-emerald-500"
-                        : "border-amber-500/35 text-amber-500"
+                        ? "border-success/35 text-success"
+                        : "border-warning/35 text-warning"
                     }`}
                   >
                     {person.matched ? "matched" : "needs seed"}
@@ -3299,7 +3299,7 @@ function CostMetricTable({
                     row.model_event_count + row.runtime_event_count + row.speech_event_count,
                   )}
                   {row.error_count ? (
-                    <span className="ml-1 text-amber-500">
+                    <span className="ml-1 text-warning">
                       ({row.error_count} error{row.error_count === 1 ? "" : "s"})
                     </span>
                   ) : null}

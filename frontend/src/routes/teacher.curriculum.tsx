@@ -353,7 +353,7 @@ function CurriculumPage() {
                   type="button"
                   onClick={() => void setPublication("publish_lesson")}
                   disabled={publishing || !draft.lessonId}
-                  className="inline-flex items-center gap-2 rounded-full border border-emerald-500/35 px-4 py-2 text-[12.5px] text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                   Publish
@@ -994,7 +994,7 @@ function BlueprintEditor({
                   onClick={() => onField("quizCorrectChoiceId", choice.id)}
                   className={`rounded-full border px-3 py-1.5 text-[11.5px] ${
                     draft.quizCorrectChoiceId === choice.id
-                      ? "border-emerald-500/35 text-emerald-500"
+                      ? "border-success/35 text-success"
                       : "border-border text-muted-foreground"
                   }`}
                 >
