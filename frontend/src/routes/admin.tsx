@@ -514,7 +514,9 @@ function AdminPage() {
 
   const formErrors = useMemo(() => {
     const errors: string[] = [];
-    if (!orgName.trim()) errors.push("Organization name is required.");
+    const platform = actorAccess?.level === "platform_admin";
+    if (platform && !orgName.trim()) errors.push("Organization name is required.");
+    if (!platform && !selectedOrgId) errors.push("Select your organization first.");
     if (!className.trim()) errors.push("Class name is required.");
     if (!validRows.length) errors.push("Add at least one teacher or student.");
     if (hasShortDefaultPassword) {
@@ -530,12 +532,14 @@ function AdminPage() {
     }
     return errors;
   }, [
+    actorAccess,
     className,
     emailErrors,
     hasShortDefaultPassword,
     nameErrors,
     orgName,
     passwordErrors,
+    selectedOrgId,
     validRows.length,
   ]);
 
@@ -1134,16 +1138,24 @@ function AdminPage() {
     setBatchId("");
 
     try {
-      if (!orgName.trim()) throw new Error("Organization name is required.");
+      if (isPlatformLevel && !orgName.trim()) throw new Error("Organization name is required.");
+      if (!isPlatformLevel && !selectedOrgId) throw new Error("Select your organization first.");
       if (!className.trim()) throw new Error("Class name is required.");
       if (!validRows.length) throw new Error("Add at least one teacher or student.");
 
+      // Org admins seed into their existing org (id); the backend ignores name/slug
+      // for them and forbids new-org creation. Platform admins can create an org.
+      const organization = isPlatformLevel
+        ? { name: orgName.trim(), slug: slugify(orgSlug || orgName) }
+        : {
+            id: selectedOrgId,
+            name: selectedOrg?.name || "",
+            slug: selectedOrg?.slug || slugify(selectedOrg?.name || selectedOrgId),
+          };
+
       const response = await invokeAdminSeed({
         accessToken: token,
-        organization: {
-          name: orgName.trim(),
-          slug: slugify(orgSlug || orgName),
-        },
+        organization,
         class: { name: className.trim() },
         defaultPassword: defaultPassword.trim(),
         users: validRows.map(({ rowId: _rowId, ...row }) => row),
@@ -1278,7 +1290,7 @@ function AdminPage() {
                   <WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>
                 ) : null}
                 <WorkspaceTab value="ops">Operations</WorkspaceTab>
-                {isPlatformLevel ? <WorkspaceTab value="seeding">Seeding</WorkspaceTab> : null}
+                <WorkspaceTab value="seeding">Seeding</WorkspaceTab>
               </WorkspaceTabList>
 
               <WorkspacePanel value="readiness">
@@ -2714,24 +2726,34 @@ function AdminPage() {
                               Use stable names for the real classroom pilot.
                             </p>
                           </div>
-                          <Field label="Organization name">
-                            <input
-                              value={orgName}
-                              onChange={(event) => {
-                                setOrgName(event.target.value);
-                                if (!orgSlug || orgSlug === slugify(orgName))
-                                  setOrgSlug(slugify(event.target.value));
-                              }}
-                              className="jargon-input"
-                            />
-                          </Field>
-                          <Field label="Organization slug">
-                            <input
-                              value={orgSlug}
-                              onChange={(event) => setOrgSlug(event.target.value)}
-                              className="jargon-input"
-                            />
-                          </Field>
+                          {isPlatformLevel ? (
+                            <>
+                              <Field label="Organization name">
+                                <input
+                                  value={orgName}
+                                  onChange={(event) => {
+                                    setOrgName(event.target.value);
+                                    if (!orgSlug || orgSlug === slugify(orgName))
+                                      setOrgSlug(slugify(event.target.value));
+                                  }}
+                                  className="jargon-input"
+                                />
+                              </Field>
+                              <Field label="Organization slug">
+                                <input
+                                  value={orgSlug}
+                                  onChange={(event) => setOrgSlug(event.target.value)}
+                                  className="jargon-input"
+                                />
+                              </Field>
+                            </>
+                          ) : (
+                            <Field label="Organization">
+                              <div className="jargon-input flex items-center text-muted-foreground">
+                                {selectedOrg?.name || "Your organization"}
+                              </div>
+                            </Field>
+                          )}
                           <Field label="Class name">
                             <input
                               value={className}

@@ -1,5 +1,6 @@
 // Jargon admin pilot seeding.
-// Platform-admin only: creates/reuses Auth users, profiles, org/class memberships,
+// Platform admins (any org) or organization admins (their own org only):
+// creates/reuses Auth users, profiles, org/class memberships,
 // and seed audit rows for classroom pilots.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
@@ -129,14 +130,55 @@ async function fetchCurrentUser(config: Config): Promise<DbRow> {
   return data as DbRow;
 }
 
-async function assertPlatformAdmin(config: Config, userId: string): Promise<void> {
-  const data = await serviceFetch(
+type ActorAccess = { level: "platform_admin" | "org_admin"; organizationIds: string[] };
+
+// Platform admins, or org admins scoped to the org(s) they administer.
+async function resolveActorAccess(config: Config, userId: string): Promise<ActorAccess> {
+  const platformData = await serviceFetch(
     config,
     `/rest/v1/platform_admins?user_id=eq.${encodeURIComponent(userId)}&select=user_id&limit=1`,
   );
-  if (!Array.isArray(data) || !data[0]) {
-    throw new Error("Platform admin access is required.");
+  if (Array.isArray(platformData) && platformData[0]) {
+    return { level: "platform_admin", organizationIds: [] };
   }
+
+  const orgData = await serviceFetch(
+    config,
+    `/rest/v1/organization_memberships?user_id=eq.${encodeURIComponent(userId)}&role=eq.org_admin&status=eq.active&select=organization_id`,
+  );
+  const organizationIds = Array.isArray(orgData)
+    ? orgData
+        .map((row) =>
+          row && typeof row === "object" ? cleanText((row as DbRow).organization_id) : "",
+        )
+        .filter(Boolean)
+    : [];
+  if (!organizationIds.length) {
+    throw new Error("Admin access is required.");
+  }
+  return { level: "org_admin", organizationIds: Array.from(new Set(organizationIds)) };
+}
+
+// Resolve the seed target org, enforcing the org-admin boundary: org admins may
+// only seed into an existing org they administer, never create a new org.
+async function resolveSeedOrganization(
+  config: Config,
+  access: ActorAccess,
+  input: DbRow,
+): Promise<DbRow> {
+  if (access.level === "org_admin") {
+    const id = cleanText(input.id);
+    if (!id || !access.organizationIds.includes(id)) {
+      throw new Error("Organization admins can only seed into their own organization.");
+    }
+    const org = await selectFirst(
+      config,
+      `organizations?id=eq.${encodeURIComponent(id)}&select=*`,
+    );
+    if (!org) throw new Error("Organization not found.");
+    return org;
+  }
+  return await upsertOrganization(config, input);
 }
 
 async function selectFirst(config: Config, path: string): Promise<DbRow | null> {
@@ -393,9 +435,20 @@ function summarize(results: SeedResult[]): DbRow {
   );
 }
 
-async function handleSeedRoster(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const organization = await upsertOrganization(config, body.organization as DbRow || {});
-  const classRow = await upsertClass(config, body.class as DbRow || {}, String(organization.id), actorId);
+async function handleSeedRoster(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const organization = await resolveSeedOrganization(config, access, (body.organization as DbRow) || {});
+  // Org admins cannot target a class by id (could belong to another org); they
+  // create/reuse a class by name within their own org.
+  const classInput =
+    access.level === "org_admin"
+      ? { name: ((body.class as DbRow) || {}).name }
+      : (body.class as DbRow) || {};
+  const classRow = await upsertClass(config, classInput, String(organization.id), actorId);
   const defaultPassword = cleanText(body.default_password);
   const rawUsers = Array.isArray(body.users) ? body.users : [];
   const users = normalizeSeedUsers(rawUsers);
@@ -462,17 +515,30 @@ async function handleSeedRoster(config: Config, actorId: string, body: DbRow): P
   });
 }
 
-async function handleListSeedBatches(config: Config): Promise<Response> {
+async function handleListSeedBatches(config: Config, access: ActorAccess): Promise<Response> {
+  const orgFilter =
+    access.level === "org_admin"
+      ? `&organization_id=in.(${access.organizationIds.map((id) => encodeURIComponent(id)).join(",")})`
+      : "";
   const data = await serviceFetch(
     config,
-    "/rest/v1/admin_account_seed_batches?select=id,label,status,summary,created_at,organization_id,class_id&order=created_at.desc&limit=20",
+    `/rest/v1/admin_account_seed_batches?select=id,label,status,summary,created_at,organization_id,class_id&order=created_at.desc&limit=20${orgFilter}`,
   );
   return json({ status: "ok", batches: Array.isArray(data) ? data : [], results: [] });
 }
 
-async function handleUpsertOrgClass(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const organization = await upsertOrganization(config, body.organization as DbRow || {});
-  const classRow = await upsertClass(config, body.class as DbRow || {}, String(organization.id), actorId);
+async function handleUpsertOrgClass(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const organization = await resolveSeedOrganization(config, access, (body.organization as DbRow) || {});
+  const classInput =
+    access.level === "org_admin"
+      ? { name: ((body.class as DbRow) || {}).name }
+      : (body.class as DbRow) || {};
+  const classRow = await upsertClass(config, classInput, String(organization.id), actorId);
   return json({
     status: "ok",
     organization_id: organization.id,
@@ -495,7 +561,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const actor = await fetchCurrentUser(config);
-    await assertPlatformAdmin(config, String(actor.id));
+    const access = await resolveActorAccess(config, String(actor.id));
 
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -504,17 +570,22 @@ Deno.serve(async (req: Request) => {
 
     const record = body as DbRow;
     const action = cleanText(record.action);
-    if (action === "seed_roster") return await handleSeedRoster(config, String(actor.id), record);
-    if (action === "list_seed_batches") return await handleListSeedBatches(config);
-    if (action === "upsert_org_class") return await handleUpsertOrgClass(config, String(actor.id), record);
+    if (action === "seed_roster")
+      return await handleSeedRoster(config, String(actor.id), access, record);
+    if (action === "list_seed_batches") return await handleListSeedBatches(config, access);
+    if (action === "upsert_org_class")
+      return await handleUpsertOrgClass(config, String(actor.id), access, record);
     return errorResponse("Unsupported admin-seed action.", 400);
   } catch (error) {
     const message = errorMessage(error);
-    const status = message.includes("Platform admin")
-      ? 403
-      : message.includes("authenticated") || message.includes("Authentication")
-        ? 401
-        : 500;
+    const status =
+      message.includes("Admin access") ||
+      message.includes("Platform admin") ||
+      message.includes("Organization admins")
+        ? 403
+        : message.includes("authenticated") || message.includes("Authentication")
+          ? 401
+          : 500;
     return errorResponse(message, status);
   }
 });
