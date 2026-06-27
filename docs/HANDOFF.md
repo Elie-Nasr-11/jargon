@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-27 (Teacher console: URL spine + React Query — Phase 1/4)
+
+Status: Shipped to `main` (build-verified). Frontend-only; no feature/data/API changes.
+
+Phase 1 of the teacher/admin structural redesign ("URL spine = the domain"). Teacher drill-down
+is now real URLs instead of component state:
+- New flat routes (hand-added to `routeTree.gen.ts`, same pattern as `quiz.$assessmentId` /
+  `teacher.curriculum`): `/teacher/class/$classId` and
+  `/teacher/class/$classId/student/$studentId`; active tab is a `?tab=` search param. Deep-linkable;
+  back/forward traverses Home -> Class -> Student.
+- The teacher page body moved out of `routes/teacher.tsx` (now a ~14-line route shell) into
+  `features/teacher/TeacherConsole.tsx`, reused as the `component` for all three routes. It reads
+  `classId`/`studentId` from `useParams({strict:false})`, tab from `useSearch`, and uses
+  `navigate()` instead of `setSelectedClassId/StudentId`.
+- Data layer: `fetchTeacherDashboard` now lives in a React Query cache
+  (`["teacherDashboard", userId]`, staleTime 5m) so class<->student drill-down no longer refetches.
+  Existing optimistic `setDashboard(updater)` call sites are preserved — `setDashboard` now writes
+  to the query cache; Refresh / returnAssessment use `invalidateQueries`.
+- `ClassDetail`/`StudentDetail` tabs made controllable (optional `tab`/`onTabChange`, fall back to
+  local state) so the URL drives them.
+
+No component decomposition yet (ClassDetail/StudentDetail/managers still live together in
+`TeacherConsole.tsx`) — deferred to Phase 2, where the lesson cross-section needs them separable.
+Verified: tsc 0 errors; lint 0 errors / 11 pre-existing warnings; build green; Playwright boot smoke
+loads `/login` + all three teacher routes (unauth -> redirect to `/login`) with no JS/route errors
+(only the expected egress-blocked Supabase calls).
+
+Next (Phase 2, held until you review the deploy): breadcrumb shell, lesson cross-section view, class
+settings surfaced, action-queue home. Then Phase 3 = admin on the same spine.
+
 ## Claude -> Codex / Human - 2026-06-26 (Teacher & Admin structure-clarity pass)
 
 Status: Shipped to `main` (build-verified). Frontend-only; no feature/data/API changes.

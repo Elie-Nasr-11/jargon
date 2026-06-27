@@ -15,6 +15,8 @@ import { Route as ChatRouteImport } from './routes/chat'
 import { Route as QuizAssessmentIdRouteImport } from './routes/quiz.$assessmentId'
 import { Route as TeacherRouteImport } from './routes/teacher'
 import { Route as TeacherCurriculumRouteImport } from './routes/teacher.curriculum'
+import { Route as TeacherClassClassIdRouteImport } from './routes/teacher.class.$classId'
+import { Route as TeacherClassClassIdStudentStudentIdRouteImport } from './routes/teacher.class.$classId.student.$studentId'
 import { Route as IndexRouteImport } from './routes/index'
 
 const AdminRoute = AdminRouteImport.update({
@@ -47,6 +49,17 @@ const TeacherCurriculumRoute = TeacherCurriculumRouteImport.update({
   path: '/teacher/curriculum',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TeacherClassClassIdRoute = TeacherClassClassIdRouteImport.update({
+  id: '/teacher/class/$classId',
+  path: '/teacher/class/$classId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeacherClassClassIdStudentStudentIdRoute =
+  TeacherClassClassIdStudentStudentIdRouteImport.update({
+    id: '/teacher/class/$classId/student/$studentId',
+    path: '/teacher/class/$classId/student/$studentId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -61,6 +74,8 @@ export interface FileRoutesByFullPath {
   '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
+  '/teacher/class/$classId': typeof TeacherClassClassIdRoute
+  '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +85,8 @@ export interface FileRoutesByTo {
   '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
+  '/teacher/class/$classId': typeof TeacherClassClassIdRoute
+  '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,13 +97,15 @@ export interface FileRoutesById {
   '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
+  '/teacher/class/$classId': typeof TeacherClassClassIdRoute
+  '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum'
+  fullPaths: '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum'
-  id: '__root__' | '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum'
+  to: '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
+  id: '__root__' | '/' | '/admin' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -97,6 +116,8 @@ export interface RootRouteChildren {
   QuizAssessmentIdRoute: typeof QuizAssessmentIdRoute
   TeacherRoute: typeof TeacherRoute
   TeacherCurriculumRoute: typeof TeacherCurriculumRoute
+  TeacherClassClassIdRoute: typeof TeacherClassClassIdRoute
+  TeacherClassClassIdStudentStudentIdRoute: typeof TeacherClassClassIdStudentStudentIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -143,6 +164,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeacherCurriculumRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/teacher/class/$classId': {
+      id: '/teacher/class/$classId'
+      path: '/teacher/class/$classId'
+      fullPath: '/teacher/class/$classId'
+      preLoaderRoute: typeof TeacherClassClassIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/teacher/class/$classId/student/$studentId': {
+      id: '/teacher/class/$classId/student/$studentId'
+      path: '/teacher/class/$classId/student/$studentId'
+      fullPath: '/teacher/class/$classId/student/$studentId'
+      preLoaderRoute: typeof TeacherClassClassIdStudentStudentIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -161,6 +196,8 @@ const rootRouteChildren: RootRouteChildren = {
   QuizAssessmentIdRoute: QuizAssessmentIdRoute,
   TeacherRoute: TeacherRoute,
   TeacherCurriculumRoute: TeacherCurriculumRoute,
+  TeacherClassClassIdRoute: TeacherClassClassIdRoute,
+  TeacherClassClassIdStudentStudentIdRoute: TeacherClassClassIdStudentStudentIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
