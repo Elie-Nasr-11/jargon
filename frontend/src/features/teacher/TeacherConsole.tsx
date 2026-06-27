@@ -734,6 +734,7 @@ export function TeacherConsole() {
                                 item={item}
                                 active={item.id === selectedClassId}
                                 stats={summarizeClass(dashboard, item.id)}
+                                attention={classAttention(dashboard, item.id)}
                                 onClick={() =>
                                   navigate({
                                     to: "/teacher/class/$classId",
@@ -923,11 +924,13 @@ function ClassButton({
   active,
   stats,
   onClick,
+  attention,
 }: {
   item: TeacherClassSummary;
   active: boolean;
   stats: ClassSummary;
   onClick: () => void;
+  attention?: ClassAttention;
 }) {
   return (
     <button
@@ -955,6 +958,25 @@ function ClassButton({
           {stats.completedSessions} complete
         </span>
       </div>
+      {attention ? (
+        <div className="mt-3">
+          {attention.tone === "danger" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-pill border border-danger/40 bg-danger/12 px-2.5 py-1 text-[11px] text-danger">
+              <AlertTriangle className="h-3 w-3" strokeWidth={2} /> {attention.alerts} alert
+              {attention.alerts === 1 ? "" : "s"}
+            </span>
+          ) : attention.tone === "warning" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-pill border border-warning/40 bg-warning/12 px-2.5 py-1 text-[11px] text-warning">
+              <ClipboardList className="h-3 w-3" strokeWidth={2} /> {attention.pendingGrading} to
+              grade
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-pill border border-success/40 bg-success/12 px-2.5 py-1 text-[11px] text-success">
+              <CheckCircle2 className="h-3 w-3" strokeWidth={2} /> Clear
+            </span>
+          )}
+        </div>
+      ) : null}
     </button>
   );
 }
@@ -5157,6 +5179,29 @@ function interventionSignal(alert: InterventionAlert): RiskSignal {
     severity: alert.severity || "medium",
     sourceId: alert.id,
   };
+}
+
+type ClassAttention = {
+  alerts: number;
+  pendingGrading: number;
+  tone: "danger" | "warning" | "ok";
+};
+
+// Per-class "what needs me" signal for the card health badge: open intervention
+// alerts (worst), then submissions waiting to be graded, else clear.
+function classAttention(dashboard: TeacherDashboardData, classId: string): ClassAttention {
+  const alerts = dashboard.interventionAlerts.filter(
+    (alert) =>
+      alert.class_id === classId && (alert.status === "open" || alert.status === "acknowledged"),
+  ).length;
+  const classAssignmentIds = new Set(
+    dashboard.assignments.filter((a) => a.class_id === classId).map((a) => a.id),
+  );
+  const pendingGrading = dashboard.assignmentSubmissions.filter(
+    (s) => s.status === "submitted" && classAssignmentIds.has(s.assignment_id),
+  ).length;
+  const tone = alerts > 0 ? "danger" : pendingGrading > 0 ? "warning" : "ok";
+  return { alerts, pendingGrading, tone };
 }
 
 function summarizeClass(dashboard: TeacherDashboardData, classId: string): ClassSummary {
