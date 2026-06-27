@@ -294,7 +294,7 @@ function CurriculumPage() {
           </div>
         </GradientCard>
       ) : data && selectedClass ? (
-        <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
+        <div className="grid gap-4">
           <GradientCard>
             <div className="p-4">
               <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
