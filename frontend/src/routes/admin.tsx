@@ -544,7 +544,7 @@ function AdminPage() {
   const setAdminTab = (tab: string) =>
     navigate({ to: "/admin", search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
   const isPlatformLevel = actorAccess?.level === "platform_admin";
-  const adminLevelLabel = isPlatformLevel ? "Platform admin" : "Org admin";
+  const adminLevelLabel = isPlatformLevel ? "Platform admin" : "Organization admin";
 
   const selectedOrg = useMemo(
     () => scope?.organizations.find((organization) => organization.id === selectedOrgId) || null,
@@ -1224,11 +1224,12 @@ function AdminPage() {
           <GradientCard>
             <div className="p-5">
               <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                Organizations
+                {isPlatformLevel ? "Organizations" : "Your organizations"}
               </div>
               <p className="mt-1 text-[12.5px] text-muted-foreground">
-                Pick an organization to manage its readiness, roster, Google Classroom, cost, and
-                operations.
+                {isPlatformLevel
+                  ? "Pick an organization to manage its readiness, roster, Google Classroom, cost, and operations."
+                  : "Pick an organization to manage its readiness, roster, Google Classroom, and operations."}
               </p>
               <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {(scope?.organizations || []).map((organization) => {
@@ -1273,7 +1274,9 @@ function AdminPage() {
                 <WorkspaceTab value="readiness">Readiness</WorkspaceTab>
                 <WorkspaceTab value="school">School data</WorkspaceTab>
                 <WorkspaceTab value="google">Google Classroom</WorkspaceTab>
-                <WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>
+                {isPlatformLevel ? (
+                  <WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>
+                ) : null}
                 <WorkspaceTab value="ops">Operations</WorkspaceTab>
                 {isPlatformLevel ? <WorkspaceTab value="seeding">Seeding</WorkspaceTab> : null}
               </WorkspaceTabList>
