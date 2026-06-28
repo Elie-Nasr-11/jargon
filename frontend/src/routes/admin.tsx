@@ -95,11 +95,17 @@ export const Route = createFileRoute("/admin")({
   // deep-linkable. Unknown params (e.g. Google OAuth code/state) are preserved.
   validateSearch: (
     search: Record<string, unknown>,
-  ): Record<string, unknown> & { org?: string; tab?: string; view?: string } => ({
+  ): Record<string, unknown> & {
+    org?: string;
+    tab?: string;
+    view?: string;
+    integration?: string;
+  } => ({
     ...search,
     org: typeof search.org === "string" ? search.org : undefined,
     tab: typeof search.tab === "string" ? search.tab : undefined,
     view: search.view === "organization" ? "organization" : undefined,
+    integration: typeof search.integration === "string" ? search.integration : undefined,
   }),
   head: () => ({
     meta: [
@@ -273,7 +279,12 @@ function AdminPage() {
   const [scopeLoading, setScopeLoading] = useState(false);
   const [opsMessage, setOpsMessage] = useState("");
   const [opsBusy, setOpsBusy] = useState("");
-  const search = useSearch({ strict: false }) as { org?: string; tab?: string; view?: string };
+  const search = useSearch({ strict: false }) as {
+    org?: string;
+    tab?: string;
+    view?: string;
+    integration?: string;
+  };
   const selectedOrgId = search.org ?? "";
   const setSelectedOrgId = (orgId: string) =>
     navigate({
@@ -395,7 +406,17 @@ function AdminPage() {
           setCanvasMessage(
             `Connected Canvas as ${connection.canvas_login_id || connection.canvas_name}.`,
           );
-          window.history.replaceState({}, document.title, window.location.pathname);
+          navigate({
+            to: "/admin",
+            replace: true,
+            search: (prev: Record<string, unknown>) => ({
+              ...prev,
+              code: undefined,
+              state: undefined,
+              tab: "integrations",
+              integration: "canvas",
+            }),
+          });
           return refreshCanvasMappings(token, connection.organization_id, true);
         })
         .catch((error) => {
@@ -409,7 +430,17 @@ function AdminPage() {
     completeGoogleClassroomOAuth(token, code, state)
       .then((connection) => {
         setClassroomMessage(`Connected Google Classroom as ${connection.google_email}.`);
-        window.history.replaceState({}, document.title, window.location.pathname);
+        navigate({
+          to: "/admin",
+          replace: true,
+          search: (prev: Record<string, unknown>) => ({
+            ...prev,
+            code: undefined,
+            state: undefined,
+            tab: "integrations",
+            integration: "google",
+          }),
+        });
         return refreshGoogleClassroomMappings(token, connection.organization_id, true);
       })
       .catch((error) => {
@@ -656,6 +687,12 @@ function AdminPage() {
   const adminTab = search.tab ?? "readiness";
   const setAdminTab = (tab: string) =>
     navigate({ to: "/admin", search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
+  const integrationMode = search.integration ?? "google";
+  const setIntegrationMode = (integration: string) =>
+    navigate({
+      to: "/admin",
+      search: (prev: Record<string, unknown>) => ({ ...prev, integration }),
+    });
   const isPlatformAdmin = actorAccess?.level === "platform_admin";
   // "Platform admin" is the real role; "platform view" is that role NOT currently on
   // the scoped organization page. Platform admins switch between the two pages via the
@@ -1830,8 +1867,7 @@ function AdminPage() {
               <WorkspaceTabList>
                 <WorkspaceTab value="readiness">Readiness</WorkspaceTab>
                 <WorkspaceTab value="school">School data</WorkspaceTab>
-                <WorkspaceTab value="google">Google Classroom</WorkspaceTab>
-                <WorkspaceTab value="canvas">Canvas</WorkspaceTab>
+                <WorkspaceTab value="integrations">Integrations</WorkspaceTab>
                 {isPlatformLevel ? (
                   <WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>
                 ) : null}
@@ -2165,13 +2201,12 @@ function AdminPage() {
                           School data ops
                         </div>
                         <h2 className="text-[18px] font-medium text-foreground">
-                          CSV fallback, exports, retention, and consent
+                          Student records, retention, and consent
                         </h2>
                         <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
-                          Run school operations without OAuth: preview roster CSV files, map
-                          existing users, export student records, record retention requests, and
-                          store class-level feature controls. CSV import does not create accounts or
-                          expose passwords.
+                          Export student records, record retention/anonymization requests, and store
+                          class-level feature controls. Roster import (CSV/OneRoster) and provider
+                          links now live under the Integrations tab.
                         </p>
                       </div>
                       <div className="text-[12px] text-muted-foreground">
@@ -2186,94 +2221,7 @@ function AdminPage() {
                       </div>
                     ) : null}
 
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                        <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
-                          <FileSpreadsheet className="h-4 w-4" strokeWidth={1.6} />
-                          CSV roster import
-                        </h3>
-                        <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                          Paste columns `email,name,role,grade`, or a OneRoster `users.csv`
-                          (`givenName,familyName,email,role,grades`) exported from Campus Live or
-                          any SIS. Existing Jargon users are mapped; missing users are marked `needs
-                          seed` and must be created through account seeding.
-                        </p>
-                        <textarea
-                          value={csvText}
-                          onChange={(event) => setCsvText(event.target.value)}
-                          rows={6}
-                          placeholder={
-                            "email,name,role,grade\nstudent@example.com,Student Name,student,Grade 5"
-                          }
-                          className="jargon-input mt-3 min-h-[130px] font-mono text-[12px]"
-                        />
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void previewCsv()}
-                            disabled={
-                              !selectedOrgId || !csvText.trim() || schoolOpsBusy === "csv-preview"
-                            }
-                            className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                          >
-                            Preview CSV
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void applyCsvImport()}
-                            disabled={!csvBatchId || schoolOpsBusy === "csv-apply"}
-                            className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                          >
-                            Apply mapped rows
-                          </button>
-                        </div>
-                        {csvRows.length ? (
-                          <div className="mt-4 max-h-[220px] overflow-auto">
-                            <table className="min-w-[560px] w-full border-collapse text-left text-[12px]">
-                              <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                                <tr>
-                                  <th className="py-2 pr-3 font-medium">Row</th>
-                                  <th className="py-2 pr-3 font-medium">Email</th>
-                                  <th className="py-2 pr-3 font-medium">Role</th>
-                                  <th className="py-2 font-medium">Status</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {csvRows.map((row) => (
-                                  <tr key={row.row_index} className="border-b border-border/55">
-                                    <td className="py-2 pr-3 text-muted-foreground">
-                                      {row.row_index}
-                                    </td>
-                                    <td className="py-2 pr-3 text-foreground">
-                                      {String(row.normalized_row.email || "")}
-                                    </td>
-                                    <td className="py-2 pr-3 text-muted-foreground">
-                                      {String(row.normalized_row.role || "student")}
-                                    </td>
-                                    <td
-                                      className={`py-2 ${
-                                        row.status === "ready" || row.status === "applied"
-                                          ? "text-success"
-                                          : row.status === "needs_seed"
-                                            ? "text-warning"
-                                            : "text-danger"
-                                      }`}
-                                    >
-                                      {row.status}
-                                      {row.error ? (
-                                        <div className="text-[11px] text-muted-foreground">
-                                          {row.error}
-                                        </div>
-                                      ) : null}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : null}
-                      </div>
-
+                    <div className="grid gap-4">
                       <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
                         <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
                           <FileDown className="h-4 w-4" strokeWidth={1.6} />
@@ -2347,40 +2295,6 @@ function AdminPage() {
                     </div>
 
                     <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
-                        <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
-                        Campus Live link-out
-                      </h3>
-                      <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                        Campus Live has no public API, so set its URL here to surface a "Campus
-                        Live" link in the Settings menu for this organization&apos;s students and
-                        teachers. Leave blank to remove it.
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-end gap-2">
-                        <div className="min-w-[260px] flex-1">
-                          <Field label="Campus Live URL">
-                            <input
-                              type="url"
-                              inputMode="url"
-                              placeholder="https://www.campus.live/"
-                              value={campusLiveUrl}
-                              onChange={(event) => setCampusLiveUrl(event.target.value)}
-                              className="jargon-input"
-                            />
-                          </Field>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void saveCampusLiveUrl()}
-                          disabled={!selectedOrgId || schoolOpsBusy === "campus_live"}
-                          className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                        >
-                          Save link
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
                       <h3 className="text-[14px] font-medium text-foreground">
                         Class consent and feature controls
                       </h3>
@@ -2429,836 +2343,1030 @@ function AdminPage() {
                 </GradientCard>
               </WorkspacePanel>
 
-              <WorkspacePanel value="google">
-                <GradientCard>
-                  <div className="space-y-5 p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                          <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
-                          Google Classroom
+              <WorkspacePanel value="integrations">
+                <Tabs value={integrationMode} onValueChange={setIntegrationMode}>
+                  <WorkspaceTabList>
+                    <WorkspaceTab value="google">Google Classroom</WorkspaceTab>
+                    <WorkspaceTab value="canvas">Canvas</WorkspaceTab>
+                    <WorkspaceTab value="csv">CSV / OneRoster</WorkspaceTab>
+                    <WorkspaceTab value="campuslive">Campus Live</WorkspaceTab>
+                  </WorkspaceTabList>
+
+                  <WorkspacePanel value="google">
+                    <GradientCard>
+                      <div className="space-y-5 p-5">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                              <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
+                              Google Classroom
+                            </div>
+                            <h2 className="text-[18px] font-medium text-foreground">
+                              Course and roster import
+                            </h2>
+                            <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                              Connect a teacher or org-admin Google Classroom account, preview
+                              courses and rosters, then import matched users into Jargon classes.
+                              This is read-only: assignments, grades, and mastery stay authoritative
+                              in Jargon.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void refreshGoogleClassroomMappings()}
+                              disabled={classroomLoading || !selectedOrgId}
+                              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              <RefreshCw
+                                className={`h-4 w-4 ${classroomLoading ? "animate-spin" : ""}`}
+                                strokeWidth={1.6}
+                              />
+                              Refresh Classroom
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void diagnoseClassroom()}
+                              disabled={classroomLoading}
+                              className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              Diagnose
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void connectGoogleClassroom()}
+                              disabled={classroomLoading || !selectedOrgId}
+                              className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                            >
+                              <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
+                              Connect Google
+                            </button>
+                          </div>
                         </div>
-                        <h2 className="text-[18px] font-medium text-foreground">
-                          Course and roster import
-                        </h2>
-                        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
-                          Connect a teacher or org-admin Google Classroom account, preview courses
-                          and rosters, then import matched users into Jargon classes. This is
-                          read-only: assignments, grades, and mastery stay authoritative in Jargon.
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void refreshGoogleClassroomMappings()}
-                          disabled={classroomLoading || !selectedOrgId}
-                          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        >
-                          <RefreshCw
-                            className={`h-4 w-4 ${classroomLoading ? "animate-spin" : ""}`}
-                            strokeWidth={1.6}
-                          />
-                          Refresh Classroom
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void diagnoseClassroom()}
-                          disabled={classroomLoading}
-                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        >
-                          Diagnose
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void connectGoogleClassroom()}
-                          disabled={classroomLoading || !selectedOrgId}
-                          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                        >
-                          <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
-                          Connect Google
-                        </button>
-                      </div>
-                    </div>
 
-                    {classroomMessage ? (
-                      <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
-                        {classroomMessage}
-                      </div>
-                    ) : null}
+                        {classroomMessage ? (
+                          <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                            {classroomMessage}
+                          </div>
+                        ) : null}
 
-                    <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                      <div className="space-y-4">
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                          <h3 className="text-[14px] font-medium text-foreground">Connection</h3>
-                          <div className="mt-3 space-y-3">
-                            <Field label="Google account">
-                              <select
-                                value={selectedConnectionId}
-                                onChange={(event) => {
-                                  setSelectedConnectionId(event.target.value);
-                                  setClassroomCourses([]);
-                                  setSelectedGoogleCourseId("");
-                                  setRosterPreview(null);
-                                }}
-                                className="jargon-input"
-                              >
-                                <option value="">
-                                  {activeClassroomConnections.length
-                                    ? "Choose a Google Classroom connection"
-                                    : "No active Google connection"}
-                                </option>
-                                {activeClassroomConnections.map((connection) => (
-                                  <option key={connection.id} value={connection.id}>
-                                    {connection.google_email}
-                                  </option>
-                                ))}
-                              </select>
-                            </Field>
-                            {selectedClassroomConnection ? (
-                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                                <div className="font-medium text-foreground">
-                                  {selectedClassroomConnection.google_name ||
-                                    selectedClassroomConnection.google_email}
-                                </div>
-                                <div className="mt-1">
-                                  Last refreshed{" "}
-                                  {formatDate(selectedClassroomConnection.last_refreshed_at)}
-                                </div>
+                        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                Connection
+                              </h3>
+                              <div className="mt-3 space-y-3">
+                                <Field label="Google account">
+                                  <select
+                                    value={selectedConnectionId}
+                                    onChange={(event) => {
+                                      setSelectedConnectionId(event.target.value);
+                                      setClassroomCourses([]);
+                                      setSelectedGoogleCourseId("");
+                                      setRosterPreview(null);
+                                    }}
+                                    className="jargon-input"
+                                  >
+                                    <option value="">
+                                      {activeClassroomConnections.length
+                                        ? "Choose a Google Classroom connection"
+                                        : "No active Google connection"}
+                                    </option>
+                                    {activeClassroomConnections.map((connection) => (
+                                      <option key={connection.id} value={connection.id}>
+                                        {connection.google_email}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </Field>
+                                {selectedClassroomConnection ? (
+                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                    <div className="font-medium text-foreground">
+                                      {selectedClassroomConnection.google_name ||
+                                        selectedClassroomConnection.google_email}
+                                    </div>
+                                    <div className="mt-1">
+                                      Last refreshed{" "}
+                                      {formatDate(selectedClassroomConnection.last_refreshed_at)}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => void disconnectSelectedGoogleClassroom()}
+                                      disabled={classroomLoading}
+                                      className="mt-3 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                    >
+                                      Disconnect
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                    Connect Google Classroom with read-only course, roster, and
+                                    profile-email scopes. Google secrets and refresh tokens are
+                                    never sent to the browser.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
                                 <button
                                   type="button"
-                                  onClick={() => void disconnectSelectedGoogleClassroom()}
-                                  disabled={classroomLoading}
-                                  className="mt-3 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                  onClick={() => void loadGoogleCourses()}
+                                  disabled={!selectedConnectionId || classroomLoading}
+                                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
                                 >
-                                  Disconnect
+                                  Load courses
                                 </button>
                               </div>
-                            ) : (
-                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                                Connect Google Classroom with read-only course, roster, and
-                                profile-email scopes. Google secrets and refresh tokens are never
-                                sent to the browser.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
-                            <button
-                              type="button"
-                              onClick={() => void loadGoogleCourses()}
-                              disabled={!selectedConnectionId || classroomLoading}
-                              className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                            >
-                              Load courses
-                            </button>
-                          </div>
-                          <div className="mt-3 space-y-3">
-                            <Field label="Google course">
-                              <select
-                                value={selectedGoogleCourseId}
-                                onChange={(event) => {
-                                  setSelectedGoogleCourseId(event.target.value);
-                                  setRosterPreview(null);
-                                }}
-                                className="jargon-input"
-                              >
-                                <option value="">
-                                  {classroomCourses.length
-                                    ? "Choose a course"
-                                    : "Load courses first"}
-                                </option>
-                                {classroomCourses.map((course) => (
-                                  <option key={course.id} value={course.id}>
-                                    {course.name}
-                                    {course.section ? ` - ${course.section}` : ""}
-                                  </option>
-                                ))}
-                              </select>
-                            </Field>
-                            {selectedGoogleCourse ? (
-                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                                <div className="font-medium text-foreground">
-                                  {selectedGoogleCourse.name}
-                                </div>
-                                <div className="mt-1">
-                                  {selectedGoogleCourse.section || "No section"} ·{" "}
-                                  {selectedGoogleCourse.course_state || "unknown state"}
-                                </div>
-                              </div>
-                            ) : null}
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void previewGoogleRoster()}
-                                disabled={!selectedGoogleCourseId || classroomLoading}
-                                className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                              >
-                                Preview roster
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void importGoogleCourse()}
-                                disabled={!selectedGoogleCourseId || classroomLoading}
-                                className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                              >
-                                Import into Jargon
-                              </button>
-                            </div>
-                            {selectedCourseMapping ? (
-                              <div className="rounded-2xl border border-success/30 bg-success/10 p-3 text-[12px] text-success">
-                                Mapped to Jargon class{" "}
-                                {scope?.classes.find(
-                                  (item) => item.id === selectedCourseMapping.class_id,
-                                )?.name ||
-                                  selectedCourseMapping.class_id ||
-                                  "unknown"}{" "}
-                                · last sync {formatDate(selectedCourseMapping.last_synced_at)}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                          <h3 className="text-[14px] font-medium text-foreground">
-                            Roster preview
-                          </h3>
-                          {rosterPreview ? (
-                            <div className="mt-3 space-y-4">
-                              <div className="grid gap-3 sm:grid-cols-4">
-                                <MiniStat
-                                  label="Teachers"
-                                  value={String(rosterPreview.teachers.length)}
-                                />
-                                <MiniStat
-                                  label="Students"
-                                  value={String(rosterPreview.students.length)}
-                                />
-                                <MiniStat
-                                  label="Matched"
-                                  value={String(
-                                    [...rosterPreview.teachers, ...rosterPreview.students].filter(
-                                      (person) => person.matched,
-                                    ).length,
-                                  )}
-                                />
-                                <MiniStat
-                                  label="Missing"
-                                  value={String(
-                                    [...rosterPreview.teachers, ...rosterPreview.students].filter(
-                                      (person) => !person.matched,
-                                    ).length,
-                                  )}
-                                />
-                              </div>
-                              <RosterPreviewTable
-                                title="Teachers"
-                                people={rosterPreview.teachers}
-                              />
-                              <RosterPreviewTable
-                                title="Students"
-                                people={rosterPreview.students}
-                              />
-                            </div>
-                          ) : (
-                            <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
-                              Preview before importing. Existing Jargon users are matched by email.
-                              Missing users are not created here; seed them through the existing
-                              roster tools and import again.
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                          <h3 className="text-[14px] font-medium text-foreground">
-                            Recent Classroom syncs
-                          </h3>
-                          <div className="mt-3 space-y-2">
-                            {(classroom?.sync_runs || []).slice(0, 6).map((run) => (
-                              <div
-                                key={run.id}
-                                className="border-b border-border/55 pb-2 text-[12px]"
-                              >
-                                <div className="text-foreground">
-                                  {run.action.replaceAll("_", " ")} · {run.status}
-                                </div>
-                                <div className="mt-0.5 text-muted-foreground">
-                                  {formatDate(run.started_at)} · {JSON.stringify(run.counts)}
-                                </div>
-                              </div>
-                            ))}
-                            {!classroom?.sync_runs.length ? (
-                              <div className="text-[12px] text-muted-foreground">
-                                No Classroom sync runs yet.
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </GradientCard>
-              </WorkspacePanel>
-
-              <WorkspacePanel value="canvas">
-                <GradientCard>
-                  <div className="space-y-5 p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                          <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
-                          Canvas LMS
-                        </div>
-                        <h2 className="text-[18px] font-medium text-foreground">
-                          Course and roster import
-                        </h2>
-                        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
-                          Connect a teacher or org-admin Canvas account for your institution,
-                          preview courses and rosters, then import matched users into Jargon
-                          classes. This is read-only: assignments, grades, and mastery stay
-                          authoritative in Jargon. Grade passback and scheduled sync arrive in later
-                          phases.
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void refreshCanvasMappings()}
-                          disabled={canvasLoading || !selectedOrgId}
-                          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        >
-                          <RefreshCw
-                            className={`h-4 w-4 ${canvasLoading ? "animate-spin" : ""}`}
-                            strokeWidth={1.6}
-                          />
-                          Refresh Canvas
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void diagnoseCanvasFn()}
-                          disabled={canvasLoading}
-                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        >
-                          Diagnose
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void connectCanvas()}
-                          disabled={canvasLoading || !selectedOrgId || !canvasBaseUrl.trim()}
-                          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                        >
-                          <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
-                          Connect Canvas
-                        </button>
-                      </div>
-                    </div>
-
-                    {canvasMessage ? (
-                      <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
-                        {canvasMessage}
-                      </div>
-                    ) : null}
-
-                    <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                      <div className="space-y-4">
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                          <h3 className="text-[14px] font-medium text-foreground">Connection</h3>
-                          <div className="mt-3 space-y-3">
-                            <Field label="Canvas base URL">
-                              <input
-                                type="url"
-                                inputMode="url"
-                                placeholder="https://school.instructure.com"
-                                value={canvasBaseUrl}
-                                onChange={(event) => setCanvasBaseUrl(event.target.value)}
-                                className="jargon-input"
-                              />
-                            </Field>
-                            <Field label="Canvas account">
-                              <select
-                                value={selectedCanvasConnectionId}
-                                onChange={(event) => {
-                                  setSelectedCanvasConnectionId(event.target.value);
-                                  setCanvasCourses([]);
-                                  setSelectedCanvasCourseId("");
-                                  setCanvasRosterPreview(null);
-                                }}
-                                className="jargon-input"
-                              >
-                                <option value="">
-                                  {activeCanvasConnections.length
-                                    ? "Choose a Canvas connection"
-                                    : "No active Canvas connection"}
-                                </option>
-                                {activeCanvasConnections.map((connection) => (
-                                  <option key={connection.id} value={connection.id}>
-                                    {connection.canvas_login_id || connection.canvas_name}
-                                  </option>
-                                ))}
-                              </select>
-                            </Field>
-                            {selectedCanvasConnection ? (
-                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                                <div className="font-medium text-foreground">
-                                  {selectedCanvasConnection.canvas_name ||
-                                    selectedCanvasConnection.canvas_login_id}
-                                </div>
-                                <div className="mt-1 break-all">
-                                  {selectedCanvasConnection.base_url}
-                                </div>
-                                <div className="mt-1">
-                                  Last refreshed{" "}
-                                  {formatDate(selectedCanvasConnection.last_refreshed_at)}
-                                </div>
-                                <label className="mt-3 flex items-center gap-2 text-[11.5px] text-foreground">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedCanvasConnection.auto_sync}
-                                    onChange={(event) =>
-                                      void toggleCanvasAutoSync(event.target.checked)
-                                    }
-                                    disabled={canvasLoading}
-                                  />
-                                  <span>
-                                    Auto-sync on schedule
-                                    <span className="ml-1 text-muted-foreground">
-                                      (daily roster + grade sync)
-                                    </span>
-                                  </span>
-                                </label>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => void syncCanvasNow()}
-                                    disabled={canvasLoading}
-                                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                              <div className="mt-3 space-y-3">
+                                <Field label="Google course">
+                                  <select
+                                    value={selectedGoogleCourseId}
+                                    onChange={(event) => {
+                                      setSelectedGoogleCourseId(event.target.value);
+                                      setRosterPreview(null);
+                                    }}
+                                    className="jargon-input"
                                   >
-                                    Sync now
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => void disconnectSelectedCanvas()}
-                                    disabled={canvasLoading}
-                                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                                  >
-                                    Disconnect
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                                Enter your institution Canvas URL, then connect a teacher or
-                                org-admin account. Canvas secrets and refresh tokens are never sent
-                                to the browser.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
-                            <button
-                              type="button"
-                              onClick={() => void loadCanvasCourses()}
-                              disabled={!selectedCanvasConnectionId || canvasLoading}
-                              className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                            >
-                              Load courses
-                            </button>
-                          </div>
-                          <div className="mt-3 space-y-3">
-                            <Field label="Canvas course">
-                              <select
-                                value={selectedCanvasCourseId}
-                                onChange={(event) => {
-                                  setSelectedCanvasCourseId(event.target.value);
-                                  setCanvasRosterPreview(null);
-                                }}
-                                className="jargon-input"
-                              >
-                                <option value="">
-                                  {canvasCourses.length ? "Choose a course" : "Load courses first"}
-                                </option>
-                                {canvasCourses.map((course) => (
-                                  <option key={course.id} value={course.id}>
-                                    {course.name}
-                                    {course.course_code ? ` (${course.course_code})` : ""}
-                                  </option>
-                                ))}
-                              </select>
-                            </Field>
-                            {selectedCanvasCourse ? (
-                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
-                                <div className="font-medium text-foreground">
-                                  {selectedCanvasCourse.name}
-                                </div>
-                                <div className="mt-1">
-                                  {selectedCanvasCourse.course_code || "No course code"} ·{" "}
-                                  {selectedCanvasCourse.workflow_state || "unknown state"}
-                                </div>
-                              </div>
-                            ) : null}
-                            <div className="rounded-2xl border border-border/70 bg-background/55 p-3">
-                              <label className="flex items-start gap-2.5 text-[12.5px] text-foreground">
-                                <input
-                                  type="checkbox"
-                                  checked={canvasCreateAccounts}
-                                  onChange={(event) =>
-                                    setCanvasCreateAccounts(event.target.checked)
-                                  }
-                                  className="mt-0.5"
-                                />
-                                <span>
-                                  Create Jargon accounts for unmatched roster members
-                                  <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
-                                    Missing students/teachers get a new account with the temporary
-                                    password below. Existing users are still linked by email.
-                                  </span>
-                                </span>
-                              </label>
-                              {canvasCreateAccounts ? (
-                                <div className="mt-3">
-                                  <Field label="Temporary password for new accounts">
-                                    <input
-                                      type="text"
-                                      autoComplete="off"
-                                      placeholder={`At least ${MIN_TEMP_PASSWORD_LENGTH} characters`}
-                                      value={canvasDefaultPassword}
-                                      onChange={(event) =>
-                                        setCanvasDefaultPassword(event.target.value)
-                                      }
-                                      className="jargon-input"
-                                    />
-                                  </Field>
-                                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                                    Share this password with new users; they should change it after
-                                    first sign-in. It is sent only to the server to provision
-                                    accounts.
-                                  </p>
-                                </div>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void previewCanvasRosterFn()}
-                                disabled={!selectedCanvasCourseId || canvasLoading}
-                                className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                              >
-                                Preview roster
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void importCanvasCourseFn()}
-                                disabled={
-                                  !selectedCanvasCourseId ||
-                                  canvasLoading ||
-                                  (canvasCreateAccounts &&
-                                    canvasDefaultPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH)
-                                }
-                                className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                              >
-                                {canvasCreateAccounts
-                                  ? "Import + create accounts"
-                                  : "Import into Jargon"}
-                              </button>
-                            </div>
-                            {selectedCanvasCourseMapping ? (
-                              <div className="rounded-2xl border border-success/30 bg-success/10 p-3 text-[12px] text-success">
-                                Mapped to Jargon class{" "}
-                                {scope?.classes.find(
-                                  (item) => item.id === selectedCanvasCourseMapping.class_id,
-                                )?.name ||
-                                  selectedCanvasCourseMapping.class_id ||
-                                  "unknown"}{" "}
-                                · last sync {formatDate(selectedCanvasCourseMapping.last_synced_at)}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                          <h3 className="text-[14px] font-medium text-foreground">
-                            Roster preview
-                          </h3>
-                          {canvasRosterPreview ? (
-                            <div className="mt-3 space-y-4">
-                              <div className="grid gap-3 sm:grid-cols-4">
-                                <MiniStat
-                                  label="Teachers"
-                                  value={String(canvasRosterPreview.teachers.length)}
-                                />
-                                <MiniStat
-                                  label="Students"
-                                  value={String(canvasRosterPreview.students.length)}
-                                />
-                                <MiniStat
-                                  label="Matched"
-                                  value={String(
-                                    [
-                                      ...canvasRosterPreview.teachers,
-                                      ...canvasRosterPreview.students,
-                                    ].filter((person) => person.matched).length,
-                                  )}
-                                />
-                                <MiniStat
-                                  label="Missing"
-                                  value={String(
-                                    [
-                                      ...canvasRosterPreview.teachers,
-                                      ...canvasRosterPreview.students,
-                                    ].filter((person) => !person.matched).length,
-                                  )}
-                                />
-                              </div>
-                              <RosterPreviewTable
-                                title="Teachers"
-                                people={canvasRosterPreview.teachers}
-                              />
-                              <RosterPreviewTable
-                                title="Students"
-                                people={canvasRosterPreview.students}
-                              />
-                            </div>
-                          ) : (
-                            <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
-                              Preview before importing. Existing Jargon users are matched by email.
-                              Missing users are not created here; seed them through the existing
-                              roster tools and import again.
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                          <h3 className="text-[14px] font-medium text-foreground">
-                            Recent Canvas syncs
-                          </h3>
-                          <div className="mt-3 space-y-2">
-                            {(canvas?.sync_runs || []).slice(0, 6).map((run) => (
-                              <div
-                                key={run.id}
-                                className="border-b border-border/55 pb-2 text-[12px]"
-                              >
-                                <div className="text-foreground">
-                                  {run.action.replaceAll("_", " ")} · {run.status}
-                                </div>
-                                <div className="mt-0.5 text-muted-foreground">
-                                  {formatDate(run.started_at)} · {JSON.stringify(run.counts)}
-                                </div>
-                              </div>
-                            ))}
-                            {!canvas?.sync_runs.length ? (
-                              <div className="text-[12px] text-muted-foreground">
-                                No Canvas sync runs yet.
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-[14px] font-medium text-foreground">
-                            Grade passback
-                          </h3>
-                          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
-                            Link a Jargon assessment or assignment to a Canvas assignment, then push
-                            scores. Grades are sent as a percentage of the Canvas assignment&apos;s
-                            points. Needs an active connection with grade-write permission on the
-                            connected Canvas account.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void pushGrades()}
-                          disabled={
-                            gradeLoading ||
-                            !selectedGradeMappingId ||
-                            !(gradeTargets?.grade_links.length ?? 0)
-                          }
-                          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                        >
-                          <RefreshCw
-                            className={`h-4 w-4 ${gradeLoading ? "animate-spin" : ""}`}
-                            strokeWidth={1.6}
-                          />
-                          Push all grades
-                        </button>
-                      </div>
-
-                      <div className="mt-3">
-                        <Field label="Imported Canvas course">
-                          <select
-                            value={selectedGradeMappingId}
-                            onChange={(event) => {
-                              setSelectedGradeMappingId(event.target.value);
-                              setGradeTargets(null);
-                              setGradeMessage("");
-                              if (event.target.value) void loadGradeTargets(event.target.value);
-                            }}
-                            className="jargon-input"
-                          >
-                            <option value="">
-                              {gradableCanvasMappings.length
-                                ? "Choose an imported course"
-                                : "Import a Canvas course first"}
-                            </option>
-                            {gradableCanvasMappings.map((mapping) => (
-                              <option key={mapping.id} value={mapping.id}>
-                                {mapping.canvas_course_name}
-                                {mapping.canvas_course_code
-                                  ? ` (${mapping.canvas_course_code})`
-                                  : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                      </div>
-
-                      {gradeMessage ? (
-                        <div className="mt-3 rounded-2xl border border-border bg-background/55 px-3 py-2 text-[12px] text-muted-foreground">
-                          {gradeMessage}
-                        </div>
-                      ) : null}
-
-                      {selectedGradeMappingId && gradeTargets ? (
-                        <div className="mt-4 space-y-4">
-                          <div className="space-y-2">
-                            {gradeTargets.grade_links.length ? (
-                              gradeTargets.grade_links.map((link) => {
-                                const jargonTitle =
-                                  gradeTargets.jargon_items.find(
-                                    (item) =>
-                                      item.kind === link.jargon_kind && item.id === link.jargon_id,
-                                  )?.title || `${link.jargon_kind} ${link.jargon_id.slice(0, 8)}`;
-                                const canvasName =
-                                  gradeTargets.canvas_assignments.find(
-                                    (assignment) => assignment.id === link.canvas_assignment_id,
-                                  )?.name || `Canvas assignment ${link.canvas_assignment_id}`;
-                                return (
-                                  <div
-                                    key={link.id}
-                                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px]"
-                                  >
-                                    <div className="min-w-0">
-                                      <div className="truncate text-foreground">
-                                        <span className="text-muted-foreground">
-                                          {link.jargon_kind}
-                                        </span>{" "}
-                                        {jargonTitle}{" "}
-                                        <span className="text-muted-foreground">→</span>{" "}
-                                        {canvasName}
-                                      </div>
-                                      <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                                        {link.last_pushed_at
-                                          ? `Last pushed ${formatDate(link.last_pushed_at)}`
-                                          : "Not pushed yet"}
-                                      </div>
+                                    <option value="">
+                                      {classroomCourses.length
+                                        ? "Choose a course"
+                                        : "Load courses first"}
+                                    </option>
+                                    {classroomCourses.map((course) => (
+                                      <option key={course.id} value={course.id}>
+                                        {course.name}
+                                        {course.section ? ` - ${course.section}` : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </Field>
+                                {selectedGoogleCourse ? (
+                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                    <div className="font-medium text-foreground">
+                                      {selectedGoogleCourse.name}
                                     </div>
-                                    <div className="flex shrink-0 gap-2">
+                                    <div className="mt-1">
+                                      {selectedGoogleCourse.section || "No section"} ·{" "}
+                                      {selectedGoogleCourse.course_state || "unknown state"}
+                                    </div>
+                                  </div>
+                                ) : null}
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void previewGoogleRoster()}
+                                    disabled={!selectedGoogleCourseId || classroomLoading}
+                                    className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                  >
+                                    Preview roster
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void importGoogleCourse()}
+                                    disabled={!selectedGoogleCourseId || classroomLoading}
+                                    className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                                  >
+                                    Import into Jargon
+                                  </button>
+                                </div>
+                                {selectedCourseMapping ? (
+                                  <div className="rounded-2xl border border-success/30 bg-success/10 p-3 text-[12px] text-success">
+                                    Mapped to Jargon class{" "}
+                                    {scope?.classes.find(
+                                      (item) => item.id === selectedCourseMapping.class_id,
+                                    )?.name ||
+                                      selectedCourseMapping.class_id ||
+                                      "unknown"}{" "}
+                                    · last sync {formatDate(selectedCourseMapping.last_synced_at)}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                Roster preview
+                              </h3>
+                              {rosterPreview ? (
+                                <div className="mt-3 space-y-4">
+                                  <div className="grid gap-3 sm:grid-cols-4">
+                                    <MiniStat
+                                      label="Teachers"
+                                      value={String(rosterPreview.teachers.length)}
+                                    />
+                                    <MiniStat
+                                      label="Students"
+                                      value={String(rosterPreview.students.length)}
+                                    />
+                                    <MiniStat
+                                      label="Matched"
+                                      value={String(
+                                        [
+                                          ...rosterPreview.teachers,
+                                          ...rosterPreview.students,
+                                        ].filter((person) => person.matched).length,
+                                      )}
+                                    />
+                                    <MiniStat
+                                      label="Missing"
+                                      value={String(
+                                        [
+                                          ...rosterPreview.teachers,
+                                          ...rosterPreview.students,
+                                        ].filter((person) => !person.matched).length,
+                                      )}
+                                    />
+                                  </div>
+                                  <RosterPreviewTable
+                                    title="Teachers"
+                                    people={rosterPreview.teachers}
+                                  />
+                                  <RosterPreviewTable
+                                    title="Students"
+                                    people={rosterPreview.students}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                                  Preview before importing. Existing Jargon users are matched by
+                                  email. Missing users are not created here; seed them through the
+                                  existing roster tools and import again.
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                Recent Classroom syncs
+                              </h3>
+                              <div className="mt-3 space-y-2">
+                                {(classroom?.sync_runs || []).slice(0, 6).map((run) => (
+                                  <div
+                                    key={run.id}
+                                    className="border-b border-border/55 pb-2 text-[12px]"
+                                  >
+                                    <div className="text-foreground">
+                                      {run.action.replaceAll("_", " ")} · {run.status}
+                                    </div>
+                                    <div className="mt-0.5 text-muted-foreground">
+                                      {formatDate(run.started_at)} · {JSON.stringify(run.counts)}
+                                    </div>
+                                  </div>
+                                ))}
+                                {!classroom?.sync_runs.length ? (
+                                  <div className="text-[12px] text-muted-foreground">
+                                    No Classroom sync runs yet.
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </GradientCard>
+                  </WorkspacePanel>
+
+                  <WorkspacePanel value="canvas">
+                    <GradientCard>
+                      <div className="space-y-5 p-5">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                              <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
+                              Canvas LMS
+                            </div>
+                            <h2 className="text-[18px] font-medium text-foreground">
+                              Course and roster import
+                            </h2>
+                            <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                              Connect a teacher or org-admin Canvas account for your institution,
+                              preview courses and rosters, then import matched users into Jargon
+                              classes. This is read-only: assignments, grades, and mastery stay
+                              authoritative in Jargon. Grade passback and scheduled sync arrive in
+                              later phases.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void refreshCanvasMappings()}
+                              disabled={canvasLoading || !selectedOrgId}
+                              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              <RefreshCw
+                                className={`h-4 w-4 ${canvasLoading ? "animate-spin" : ""}`}
+                                strokeWidth={1.6}
+                              />
+                              Refresh Canvas
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void diagnoseCanvasFn()}
+                              disabled={canvasLoading}
+                              className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              Diagnose
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void connectCanvas()}
+                              disabled={canvasLoading || !selectedOrgId || !canvasBaseUrl.trim()}
+                              className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                            >
+                              <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
+                              Connect Canvas
+                            </button>
+                          </div>
+                        </div>
+
+                        {canvasMessage ? (
+                          <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                            {canvasMessage}
+                          </div>
+                        ) : null}
+
+                        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                Connection
+                              </h3>
+                              <div className="mt-3 space-y-3">
+                                <Field label="Canvas base URL">
+                                  <input
+                                    type="url"
+                                    inputMode="url"
+                                    placeholder="https://school.instructure.com"
+                                    value={canvasBaseUrl}
+                                    onChange={(event) => setCanvasBaseUrl(event.target.value)}
+                                    className="jargon-input"
+                                  />
+                                </Field>
+                                <Field label="Canvas account">
+                                  <select
+                                    value={selectedCanvasConnectionId}
+                                    onChange={(event) => {
+                                      setSelectedCanvasConnectionId(event.target.value);
+                                      setCanvasCourses([]);
+                                      setSelectedCanvasCourseId("");
+                                      setCanvasRosterPreview(null);
+                                    }}
+                                    className="jargon-input"
+                                  >
+                                    <option value="">
+                                      {activeCanvasConnections.length
+                                        ? "Choose a Canvas connection"
+                                        : "No active Canvas connection"}
+                                    </option>
+                                    {activeCanvasConnections.map((connection) => (
+                                      <option key={connection.id} value={connection.id}>
+                                        {connection.canvas_login_id || connection.canvas_name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </Field>
+                                {selectedCanvasConnection ? (
+                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                    <div className="font-medium text-foreground">
+                                      {selectedCanvasConnection.canvas_name ||
+                                        selectedCanvasConnection.canvas_login_id}
+                                    </div>
+                                    <div className="mt-1 break-all">
+                                      {selectedCanvasConnection.base_url}
+                                    </div>
+                                    <div className="mt-1">
+                                      Last refreshed{" "}
+                                      {formatDate(selectedCanvasConnection.last_refreshed_at)}
+                                    </div>
+                                    <label className="mt-3 flex items-center gap-2 text-[11.5px] text-foreground">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedCanvasConnection.auto_sync}
+                                        onChange={(event) =>
+                                          void toggleCanvasAutoSync(event.target.checked)
+                                        }
+                                        disabled={canvasLoading}
+                                      />
+                                      <span>
+                                        Auto-sync on schedule
+                                        <span className="ml-1 text-muted-foreground">
+                                          (daily roster + grade sync)
+                                        </span>
+                                      </span>
+                                    </label>
+                                    <div className="mt-3 flex flex-wrap gap-2">
                                       <button
                                         type="button"
-                                        onClick={() => void pushGrades(link.id)}
-                                        disabled={gradeLoading}
+                                        onClick={() => void syncCanvasNow()}
+                                        disabled={canvasLoading}
                                         className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
                                       >
-                                        Push
+                                        Sync now
                                       </button>
                                       <button
                                         type="button"
-                                        onClick={() => void removeGradeLink(link.id)}
-                                        disabled={gradeLoading}
+                                        onClick={() => void disconnectSelectedCanvas()}
+                                        disabled={canvasLoading}
                                         className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
                                       >
-                                        Remove
+                                        Disconnect
                                       </button>
                                     </div>
                                   </div>
-                                );
-                              })
-                            ) : (
-                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12px] text-muted-foreground">
-                                No grade links yet. Link a Jargon item to a Canvas assignment below.
+                                ) : (
+                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                    Enter your institution Canvas URL, then connect a teacher or
+                                    org-admin account. Canvas secrets and refresh tokens are never
+                                    sent to the browser.
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            </div>
+
+                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
+                                <button
+                                  type="button"
+                                  onClick={() => void loadCanvasCourses()}
+                                  disabled={!selectedCanvasConnectionId || canvasLoading}
+                                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                >
+                                  Load courses
+                                </button>
+                              </div>
+                              <div className="mt-3 space-y-3">
+                                <Field label="Canvas course">
+                                  <select
+                                    value={selectedCanvasCourseId}
+                                    onChange={(event) => {
+                                      setSelectedCanvasCourseId(event.target.value);
+                                      setCanvasRosterPreview(null);
+                                    }}
+                                    className="jargon-input"
+                                  >
+                                    <option value="">
+                                      {canvasCourses.length
+                                        ? "Choose a course"
+                                        : "Load courses first"}
+                                    </option>
+                                    {canvasCourses.map((course) => (
+                                      <option key={course.id} value={course.id}>
+                                        {course.name}
+                                        {course.course_code ? ` (${course.course_code})` : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </Field>
+                                {selectedCanvasCourse ? (
+                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                    <div className="font-medium text-foreground">
+                                      {selectedCanvasCourse.name}
+                                    </div>
+                                    <div className="mt-1">
+                                      {selectedCanvasCourse.course_code || "No course code"} ·{" "}
+                                      {selectedCanvasCourse.workflow_state || "unknown state"}
+                                    </div>
+                                  </div>
+                                ) : null}
+                                <div className="rounded-2xl border border-border/70 bg-background/55 p-3">
+                                  <label className="flex items-start gap-2.5 text-[12.5px] text-foreground">
+                                    <input
+                                      type="checkbox"
+                                      checked={canvasCreateAccounts}
+                                      onChange={(event) =>
+                                        setCanvasCreateAccounts(event.target.checked)
+                                      }
+                                      className="mt-0.5"
+                                    />
+                                    <span>
+                                      Create Jargon accounts for unmatched roster members
+                                      <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                                        Missing students/teachers get a new account with the
+                                        temporary password below. Existing users are still linked by
+                                        email.
+                                      </span>
+                                    </span>
+                                  </label>
+                                  {canvasCreateAccounts ? (
+                                    <div className="mt-3">
+                                      <Field label="Temporary password for new accounts">
+                                        <input
+                                          type="text"
+                                          autoComplete="off"
+                                          placeholder={`At least ${MIN_TEMP_PASSWORD_LENGTH} characters`}
+                                          value={canvasDefaultPassword}
+                                          onChange={(event) =>
+                                            setCanvasDefaultPassword(event.target.value)
+                                          }
+                                          className="jargon-input"
+                                        />
+                                      </Field>
+                                      <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                                        Share this password with new users; they should change it
+                                        after first sign-in. It is sent only to the server to
+                                        provision accounts.
+                                      </p>
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void previewCanvasRosterFn()}
+                                    disabled={!selectedCanvasCourseId || canvasLoading}
+                                    className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                  >
+                                    Preview roster
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void importCanvasCourseFn()}
+                                    disabled={
+                                      !selectedCanvasCourseId ||
+                                      canvasLoading ||
+                                      (canvasCreateAccounts &&
+                                        canvasDefaultPassword.trim().length <
+                                          MIN_TEMP_PASSWORD_LENGTH)
+                                    }
+                                    className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                                  >
+                                    {canvasCreateAccounts
+                                      ? "Import + create accounts"
+                                      : "Import into Jargon"}
+                                  </button>
+                                </div>
+                                {selectedCanvasCourseMapping ? (
+                                  <div className="rounded-2xl border border-success/30 bg-success/10 p-3 text-[12px] text-success">
+                                    Mapped to Jargon class{" "}
+                                    {scope?.classes.find(
+                                      (item) => item.id === selectedCanvasCourseMapping.class_id,
+                                    )?.name ||
+                                      selectedCanvasCourseMapping.class_id ||
+                                      "unknown"}{" "}
+                                    · last sync{" "}
+                                    {formatDate(selectedCanvasCourseMapping.last_synced_at)}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="rounded-2xl border border-border/70 bg-background/55 p-3">
-                            <h4 className="text-[12.5px] font-medium text-foreground">
-                              Link a Jargon item
-                            </h4>
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                              <Field label="Jargon graded item">
-                                <select
-                                  value={newGradeJargon}
-                                  onChange={(event) => setNewGradeJargon(event.target.value)}
-                                  className="jargon-input"
-                                >
-                                  <option value="">
-                                    {gradeTargets.jargon_items.length
-                                      ? "Choose an assessment or assignment"
-                                      : "No graded items in this class"}
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                Roster preview
+                              </h3>
+                              {canvasRosterPreview ? (
+                                <div className="mt-3 space-y-4">
+                                  <div className="grid gap-3 sm:grid-cols-4">
+                                    <MiniStat
+                                      label="Teachers"
+                                      value={String(canvasRosterPreview.teachers.length)}
+                                    />
+                                    <MiniStat
+                                      label="Students"
+                                      value={String(canvasRosterPreview.students.length)}
+                                    />
+                                    <MiniStat
+                                      label="Matched"
+                                      value={String(
+                                        [
+                                          ...canvasRosterPreview.teachers,
+                                          ...canvasRosterPreview.students,
+                                        ].filter((person) => person.matched).length,
+                                      )}
+                                    />
+                                    <MiniStat
+                                      label="Missing"
+                                      value={String(
+                                        [
+                                          ...canvasRosterPreview.teachers,
+                                          ...canvasRosterPreview.students,
+                                        ].filter((person) => !person.matched).length,
+                                      )}
+                                    />
+                                  </div>
+                                  <RosterPreviewTable
+                                    title="Teachers"
+                                    people={canvasRosterPreview.teachers}
+                                  />
+                                  <RosterPreviewTable
+                                    title="Students"
+                                    people={canvasRosterPreview.students}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                                  Preview before importing. Existing Jargon users are matched by
+                                  email. Missing users are not created here; seed them through the
+                                  existing roster tools and import again.
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                Recent Canvas syncs
+                              </h3>
+                              <div className="mt-3 space-y-2">
+                                {(canvas?.sync_runs || []).slice(0, 6).map((run) => (
+                                  <div
+                                    key={run.id}
+                                    className="border-b border-border/55 pb-2 text-[12px]"
+                                  >
+                                    <div className="text-foreground">
+                                      {run.action.replaceAll("_", " ")} · {run.status}
+                                    </div>
+                                    <div className="mt-0.5 text-muted-foreground">
+                                      {formatDate(run.started_at)} · {JSON.stringify(run.counts)}
+                                    </div>
+                                  </div>
+                                ))}
+                                {!canvas?.sync_runs.length ? (
+                                  <div className="text-[12px] text-muted-foreground">
+                                    No Canvas sync runs yet.
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <h3 className="text-[14px] font-medium text-foreground">
+                                Grade passback
+                              </h3>
+                              <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
+                                Link a Jargon assessment or assignment to a Canvas assignment, then
+                                push scores. Grades are sent as a percentage of the Canvas
+                                assignment&apos;s points. Needs an active connection with
+                                grade-write permission on the connected Canvas account.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void pushGrades()}
+                              disabled={
+                                gradeLoading ||
+                                !selectedGradeMappingId ||
+                                !(gradeTargets?.grade_links.length ?? 0)
+                              }
+                              className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                            >
+                              <RefreshCw
+                                className={`h-4 w-4 ${gradeLoading ? "animate-spin" : ""}`}
+                                strokeWidth={1.6}
+                              />
+                              Push all grades
+                            </button>
+                          </div>
+
+                          <div className="mt-3">
+                            <Field label="Imported Canvas course">
+                              <select
+                                value={selectedGradeMappingId}
+                                onChange={(event) => {
+                                  setSelectedGradeMappingId(event.target.value);
+                                  setGradeTargets(null);
+                                  setGradeMessage("");
+                                  if (event.target.value) void loadGradeTargets(event.target.value);
+                                }}
+                                className="jargon-input"
+                              >
+                                <option value="">
+                                  {gradableCanvasMappings.length
+                                    ? "Choose an imported course"
+                                    : "Import a Canvas course first"}
+                                </option>
+                                {gradableCanvasMappings.map((mapping) => (
+                                  <option key={mapping.id} value={mapping.id}>
+                                    {mapping.canvas_course_name}
+                                    {mapping.canvas_course_code
+                                      ? ` (${mapping.canvas_course_code})`
+                                      : ""}
                                   </option>
-                                  {gradeTargets.jargon_items.map((item) => (
-                                    <option
-                                      key={`${item.kind}:${item.id}`}
-                                      value={`${item.kind}:${item.id}`}
+                                ))}
+                              </select>
+                            </Field>
+                          </div>
+
+                          {gradeMessage ? (
+                            <div className="mt-3 rounded-2xl border border-border bg-background/55 px-3 py-2 text-[12px] text-muted-foreground">
+                              {gradeMessage}
+                            </div>
+                          ) : null}
+
+                          {selectedGradeMappingId && gradeTargets ? (
+                            <div className="mt-4 space-y-4">
+                              <div className="space-y-2">
+                                {gradeTargets.grade_links.length ? (
+                                  gradeTargets.grade_links.map((link) => {
+                                    const jargonTitle =
+                                      gradeTargets.jargon_items.find(
+                                        (item) =>
+                                          item.kind === link.jargon_kind &&
+                                          item.id === link.jargon_id,
+                                      )?.title ||
+                                      `${link.jargon_kind} ${link.jargon_id.slice(0, 8)}`;
+                                    const canvasName =
+                                      gradeTargets.canvas_assignments.find(
+                                        (assignment) => assignment.id === link.canvas_assignment_id,
+                                      )?.name || `Canvas assignment ${link.canvas_assignment_id}`;
+                                    return (
+                                      <div
+                                        key={link.id}
+                                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px]"
+                                      >
+                                        <div className="min-w-0">
+                                          <div className="truncate text-foreground">
+                                            <span className="text-muted-foreground">
+                                              {link.jargon_kind}
+                                            </span>{" "}
+                                            {jargonTitle}{" "}
+                                            <span className="text-muted-foreground">→</span>{" "}
+                                            {canvasName}
+                                          </div>
+                                          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                                            {link.last_pushed_at
+                                              ? `Last pushed ${formatDate(link.last_pushed_at)}`
+                                              : "Not pushed yet"}
+                                          </div>
+                                        </div>
+                                        <div className="flex shrink-0 gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => void pushGrades(link.id)}
+                                            disabled={gradeLoading}
+                                            className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                          >
+                                            Push
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => void removeGradeLink(link.id)}
+                                            disabled={gradeLoading}
+                                            className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12px] text-muted-foreground">
+                                    No grade links yet. Link a Jargon item to a Canvas assignment
+                                    below.
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3">
+                                <h4 className="text-[12.5px] font-medium text-foreground">
+                                  Link a Jargon item
+                                </h4>
+                                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                  <Field label="Jargon graded item">
+                                    <select
+                                      value={newGradeJargon}
+                                      onChange={(event) => setNewGradeJargon(event.target.value)}
+                                      className="jargon-input"
                                     >
-                                      {item.kind === "assessment" ? "Assessment" : "Assignment"}:{" "}
-                                      {item.title}
-                                    </option>
-                                  ))}
-                                </select>
-                              </Field>
-                              <Field label="Canvas assignment">
-                                <select
-                                  value={newGradeCanvasAssignment}
-                                  onChange={(event) =>
-                                    setNewGradeCanvasAssignment(event.target.value)
+                                      <option value="">
+                                        {gradeTargets.jargon_items.length
+                                          ? "Choose an assessment or assignment"
+                                          : "No graded items in this class"}
+                                      </option>
+                                      {gradeTargets.jargon_items.map((item) => (
+                                        <option
+                                          key={`${item.kind}:${item.id}`}
+                                          value={`${item.kind}:${item.id}`}
+                                        >
+                                          {item.kind === "assessment" ? "Assessment" : "Assignment"}
+                                          : {item.title}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                  <Field label="Canvas assignment">
+                                    <select
+                                      value={newGradeCanvasAssignment}
+                                      onChange={(event) =>
+                                        setNewGradeCanvasAssignment(event.target.value)
+                                      }
+                                      className="jargon-input"
+                                    >
+                                      <option value="">
+                                        {gradeTargets.canvas_assignments.length
+                                          ? "Choose a Canvas assignment"
+                                          : "No Canvas assignments found"}
+                                      </option>
+                                      {gradeTargets.canvas_assignments.map((assignment) => (
+                                        <option key={assignment.id} value={assignment.id}>
+                                          {assignment.name}
+                                          {assignment.points_possible != null
+                                            ? ` (${assignment.points_possible} pts)`
+                                            : ""}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </Field>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void createGradeLink()}
+                                  disabled={
+                                    gradeLoading || !newGradeJargon || !newGradeCanvasAssignment
                                   }
-                                  className="jargon-input"
+                                  className="mt-3 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
                                 >
-                                  <option value="">
-                                    {gradeTargets.canvas_assignments.length
-                                      ? "Choose a Canvas assignment"
-                                      : "No Canvas assignments found"}
-                                  </option>
-                                  {gradeTargets.canvas_assignments.map((assignment) => (
-                                    <option key={assignment.id} value={assignment.id}>
-                                      {assignment.name}
-                                      {assignment.points_possible != null
-                                        ? ` (${assignment.points_possible} pts)`
-                                        : ""}
-                                    </option>
+                                  Link item
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </GradientCard>
+                  </WorkspacePanel>
+
+                  <WorkspacePanel value="csv">
+                    <GradientCard>
+                      <div className="space-y-5 p-5">
+                        <div>
+                          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                            <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.7} />
+                            CSV / OneRoster
+                          </div>
+                          <h2 className="text-[18px] font-medium text-foreground">Roster import</h2>
+                          <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                            Import a roster without OAuth — works with a Campus Live or any SIS
+                            export. Existing Jargon users are linked by email; missing users are
+                            marked `needs seed`. No accounts are created and no passwords are
+                            exposed.
+                          </p>
+                        </div>
+                        {schoolOpsMessage ? (
+                          <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                            {schoolOpsMessage}
+                          </div>
+                        ) : null}
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                            <FileSpreadsheet className="h-4 w-4" strokeWidth={1.6} />
+                            CSV roster import
+                          </h3>
+                          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                            Paste columns `email,name,role,grade`, or a OneRoster `users.csv`
+                            (`givenName,familyName,email,role,grades`) exported from Campus Live or
+                            any SIS. Existing Jargon users are mapped; missing users are marked
+                            `needs seed` and must be created through account seeding.
+                          </p>
+                          <textarea
+                            value={csvText}
+                            onChange={(event) => setCsvText(event.target.value)}
+                            rows={6}
+                            placeholder={
+                              "email,name,role,grade\nstudent@example.com,Student Name,student,Grade 5"
+                            }
+                            className="jargon-input mt-3 min-h-[130px] font-mono text-[12px]"
+                          />
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void previewCsv()}
+                              disabled={
+                                !selectedOrgId || !csvText.trim() || schoolOpsBusy === "csv-preview"
+                              }
+                              className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              Preview CSV
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void applyCsvImport()}
+                              disabled={!csvBatchId || schoolOpsBusy === "csv-apply"}
+                              className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                            >
+                              Apply mapped rows
+                            </button>
+                          </div>
+                          {csvRows.length ? (
+                            <div className="mt-4 max-h-[220px] overflow-auto">
+                              <table className="min-w-[560px] w-full border-collapse text-left text-[12px]">
+                                <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                                  <tr>
+                                    <th className="py-2 pr-3 font-medium">Row</th>
+                                    <th className="py-2 pr-3 font-medium">Email</th>
+                                    <th className="py-2 pr-3 font-medium">Role</th>
+                                    <th className="py-2 font-medium">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {csvRows.map((row) => (
+                                    <tr key={row.row_index} className="border-b border-border/55">
+                                      <td className="py-2 pr-3 text-muted-foreground">
+                                        {row.row_index}
+                                      </td>
+                                      <td className="py-2 pr-3 text-foreground">
+                                        {String(row.normalized_row.email || "")}
+                                      </td>
+                                      <td className="py-2 pr-3 text-muted-foreground">
+                                        {String(row.normalized_row.role || "student")}
+                                      </td>
+                                      <td
+                                        className={`py-2 ${
+                                          row.status === "ready" || row.status === "applied"
+                                            ? "text-success"
+                                            : row.status === "needs_seed"
+                                              ? "text-warning"
+                                              : "text-danger"
+                                        }`}
+                                      >
+                                        {row.status}
+                                        {row.error ? (
+                                          <div className="text-[11px] text-muted-foreground">
+                                            {row.error}
+                                          </div>
+                                        ) : null}
+                                      </td>
+                                    </tr>
                                   ))}
-                                </select>
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </GradientCard>
+                  </WorkspacePanel>
+
+                  <WorkspacePanel value="campuslive">
+                    <GradientCard>
+                      <div className="space-y-5 p-5">
+                        <div>
+                          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                            <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
+                            Campus Live
+                          </div>
+                          <h2 className="text-[18px] font-medium text-foreground">Link-out</h2>
+                          <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                            Campus Live has no public API. Import its roster via the CSV / OneRoster
+                            tab, and set its URL here to surface a "Campus Live" link to this
+                            organization&apos;s students and teachers.
+                          </p>
+                        </div>
+                        {schoolOpsMessage ? (
+                          <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                            {schoolOpsMessage}
+                          </div>
+                        ) : null}
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                            <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
+                            Campus Live link-out
+                          </h3>
+                          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                            Set the Campus Live URL to surface a "Campus Live" link in the Settings
+                            menu for this organization&apos;s students and teachers. Leave blank to
+                            remove it.
+                          </p>
+                          <div className="mt-3 flex flex-wrap items-end gap-2">
+                            <div className="min-w-[260px] flex-1">
+                              <Field label="Campus Live URL">
+                                <input
+                                  type="url"
+                                  inputMode="url"
+                                  placeholder="https://www.campus.live/"
+                                  value={campusLiveUrl}
+                                  onChange={(event) => setCampusLiveUrl(event.target.value)}
+                                  className="jargon-input"
+                                />
                               </Field>
                             </div>
                             <button
                               type="button"
-                              onClick={() => void createGradeLink()}
-                              disabled={
-                                gradeLoading || !newGradeJargon || !newGradeCanvasAssignment
-                              }
-                              className="mt-3 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                              onClick={() => void saveCampusLiveUrl()}
+                              disabled={!selectedOrgId || schoolOpsBusy === "campus_live"}
+                              className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
                             >
-                              Link item
+                              Save link
                             </button>
                           </div>
                         </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </GradientCard>
+                      </div>
+                    </GradientCard>
+                  </WorkspacePanel>
+                </Tabs>
               </WorkspacePanel>
 
               <WorkspacePanel value="cost">

@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Admin IA: consolidate all integrations under one "Integrations" tab; branch)
+
+Summary: Frontend-only IA reorg of the admin console. The separate **Google Classroom** and **Canvas**
+top-level tabs are gone, and **CSV/OneRoster import** + **Campus Live link-out** are pulled out of the
+"School data" tab. All four now live under a single **Integrations** tab with an in-tab provider selector
+(segmented pill row): Google Classroom · Canvas · CSV / OneRoster · Campus Live. Pure relocation — every
+piece of state/handlers/effects already lived at `AdminPage` scope, so nothing was rewired; no
+api/types/backend/migration changes.
+
+Details:
+- `frontend/src/routes/admin.tsx`: top tab list now `readiness · school · integrations · (cost) · ops ·
+  seeding`. New `<WorkspacePanel value="integrations">` wraps a nested `<Tabs value={integrationMode}>`
+  (reusing WorkspaceTabList/WorkspaceTab/WorkspacePanel — Radix nests fine) with sub-panels google/canvas/
+  csv/campuslive. The Google and Canvas panels moved in verbatim; the CSV-import card and Campus-Live card
+  were lifted out of the School-data panel into the `csv`/`campuslive` sub-panels (each given a short
+  intro header). School-data keeps Student records & reports + Class consent (intro reworded).
+- Sub-selector is deep-linkable: `?integration=` (default `google`), mirroring the existing `?tab=`
+  pattern; added `integration` to `validateSearch` and the `useSearch` cast. OAuth return now lands on
+  `?tab=integrations&integration=<google|canvas>` (replaced the bare history.replaceState in the callback).
+- `frontend/src/components/WorkspaceTabs.tsx`: TAB_ICONS gained `integrations` (Plug) + canvas/csv/
+  campuslive icons; imported Plug + ExternalLink.
+
+Tests run: `tsc --noEmit` 0 errors; `npm run lint` 0 errors / 11 pre-existing warnings; `npm run build`
+green.
+
+Remaining concerns: branch-only (`claude/happy-johnson-wseex8`); deploy to `main` on the user's OK
+(frontend-only, Render auto-build — no backend redeploy needed for this reorg). Backend edge fns
+(`canvas`, updated `admin-ops`) + Canvas migration + secrets are still the user's to deploy for the
+integration features to function (unchanged by this reorg).
+
 ## Claude -> Codex / Human - 2026-06-28 (Campus Live fallback — OneRoster CSV + link-out; branch, NOT deployed)
 
 Summary: Campus Live (campus.live) has no public API, so instead of a native integration we shipped two
