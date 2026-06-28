@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, ChevronsUpDown, GraduationCap, Layers3, Shield } from "lucide-react";
+import { BookOpen, Building2, ChevronsUpDown, GraduationCap, Layers3, Shield } from "lucide-react";
 import {
   CommandDialog,
   CommandInput,
@@ -15,11 +15,11 @@ import {
 } from "@/components/ui/command";
 import { useConsoleAccess } from "@/hooks/useConsoleAccess";
 
-export type Place = "chat" | "teacher" | "curriculum" | "admin";
+export type Place = "chat" | "teacher" | "curriculum" | "admin" | "platform";
 
 type Dest = {
   place: Place;
-  to: "/chat" | "/teacher" | "/teacher/curriculum" | "/admin";
+  to: "/chat" | "/teacher" | "/teacher/curriculum" | "/admin" | "/platform";
   label: string;
   icon: LucideIcon;
 };
@@ -28,7 +28,8 @@ const DESTS: Dest[] = [
   { place: "chat", to: "/chat", label: "Student chat", icon: BookOpen },
   { place: "teacher", to: "/teacher", label: "Teacher dashboard", icon: GraduationCap },
   { place: "curriculum", to: "/teacher/curriculum", label: "Curriculum", icon: Layers3 },
-  { place: "admin", to: "/admin", label: "Admin", icon: Shield },
+  { place: "platform", to: "/platform", label: "Platform admin", icon: Shield },
+  { place: "admin", to: "/admin", label: "Organization admin", icon: Building2 },
 ];
 
 export function PlaceSwitcher({ active }: { active?: Place }) {
@@ -49,7 +50,8 @@ export function PlaceSwitcher({ active }: { active?: Place }) {
 
   const visible = DESTS.filter((dest) => {
     if (dest.place === "chat") return access.student;
-    if (dest.place === "admin") return access.admin;
+    if (dest.place === "platform") return access.platformAdmin;
+    if (dest.place === "admin") return access.orgAdmin;
     return access.teacher; // teacher dashboard + curriculum
   });
 

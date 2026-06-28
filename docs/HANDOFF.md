@@ -6,6 +6,37 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Separate platform vs org admin portals + remove page titles from profile menu; LIVE)
+
+Summary: Platform admin and org admin are now genuinely separate portals, and the redundant page-title link
+was removed from the profile (Settings) menu for every role.
+
+- 4-way primary role: `fetchPrimaryRole`/`PrimaryRole` now return `platform_admin | org_admin | teacher |
+  student` (read from `fetchAdminScope` actor level). `roleHome`: platform_admin→`/platform`,
+  org_admin→`/admin`, teacher→`/teacher`, student→`/chat`. `useConsoleAccess` exposes `role` +
+  `platformAdmin`/`orgAdmin`/`admin` booleans + `home`.
+- New `/platform` route (`routes/platform.tsx`) renders the same `AdminPage` (exported from `routes/admin`),
+  reusing `validateAdminSearch`. Registered in the hand-maintained `routeTree.gen.ts`.
+- `admin.tsx`: the in-page Platform/Org toggle is removed; `isPlatformLevel = isPlatformAdmin`; an
+  `adminHome` (`/platform` for platform admins, `/admin` for org admins) drives ALL in-portal navigation
+  (org picker, tabs, integration sub-tab, OAuth return, org cards, breadcrumb, logo). A guard effect
+  cross-redirects an admin who lands on the wrong route (OAuth-exempt while `?code&state` present), and a
+  `routeMismatch` render gate holds the neutral RouteLoader so the other admin portal never flashes.
+- `PlaceSwitcher`: added a `platform` destination; filters by `platformAdmin`/`orgAdmin` so each admin sees
+  only its own (single → static "you are here" label: "Platform admin" / "Organization admin").
+- `SettingsMenu`: removed the role/page-title "Home" link entirely (the user's ask) — menu is now
+  appearance/voice/Campus Live/log out only; dropped the now-unused `useConsoleAccess` + icon imports.
+
+Net: signing in as each of the four types (student, teacher, org admin, platform admin) lands on and is
+locked to a distinct portal (`/chat`, `/teacher`, `/admin`, `/platform`); the profile menu shows no page
+title; switching between platform and org admin requires being that account (no in-app crossover).
+
+Tests: tsc 0 errors; lint 0 errors / 12 warnings (one new react-refresh notice from exporting AdminPage —
+harmless); build green. Deployed: fast-forwarded `main` (frontend-only). NOTE: to actually log in as the
+org-admin/student/teacher demo accounts, the `admin-seed` edge fn still needs redeploying so the "Create
+demo logins" button works; the platform-admin portal is testable now with the existing platform-admin
+account.
+
 ## Claude -> Codex / Human - 2026-06-28 (Lock down per-role nav: remove cross-portal links + no flash; LIVE on main)
 
 Summary: Follow-up to the role-gating commit — closed the gaps so each role sees ONLY its own portal with no

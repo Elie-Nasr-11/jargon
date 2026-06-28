@@ -186,22 +186,23 @@ export async function getSession() {
   return data.session;
 }
 
-// A user's single effective portal, by precedence admin > teacher > student.
-// "student" is the fallback (any authenticated user with no admin/teacher role).
-export type PrimaryRole = "admin" | "teacher" | "student";
+// A user's single effective portal, by precedence:
+// platform_admin > org_admin > teacher > student. The two admin types get
+// separate portals (/platform vs /admin). "student" is the fallback.
+export type PrimaryRole = "platform_admin" | "org_admin" | "teacher" | "student";
 
 export async function fetchPrimaryRole(accessToken: string, userId: string): Promise<PrimaryRole> {
-  const isAdmin = await fetchAdminScope(accessToken)
-    .then(() => true)
-    .catch(() => false);
-  if (isAdmin) return "admin";
+  const scope = await fetchAdminScope(accessToken).catch(() => null);
+  if (scope?.actorAccess?.level === "platform_admin") return "platform_admin";
+  if (scope?.actorAccess?.level === "org_admin") return "org_admin";
   const classes = await fetchTeacherClasses(userId).catch(() => [] as unknown[]);
   if (Array.isArray(classes) && classes.length > 0) return "teacher";
   return "student";
 }
 
-export function roleHome(role: PrimaryRole): "/chat" | "/teacher" | "/admin" {
-  if (role === "admin") return "/admin";
+export function roleHome(role: PrimaryRole): "/chat" | "/teacher" | "/admin" | "/platform" {
+  if (role === "platform_admin") return "/platform";
+  if (role === "org_admin") return "/admin";
   if (role === "teacher") return "/teacher";
   return "/chat";
 }

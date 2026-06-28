@@ -3,15 +3,17 @@
 // portal. Cached via React Query (one resolve/session).
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchAdminScope, fetchTeacherClasses, getSession, roleHome } from "@/lib/api";
+import { fetchPrimaryRole, getSession, roleHome } from "@/lib/api";
 import type { PrimaryRole } from "@/lib/api";
 
 export type ConsoleAccess = {
   role: PrimaryRole | null;
-  home: "/chat" | "/teacher" | "/admin" | null;
+  home: "/chat" | "/teacher" | "/admin" | "/platform" | null;
   student: boolean;
   teacher: boolean;
   admin: boolean;
+  platformAdmin: boolean;
+  orgAdmin: boolean;
   loading: boolean;
 };
 
@@ -32,15 +34,7 @@ export function useConsoleAccess(): ConsoleAccess {
     queryKey: ["consoleRole", auth?.id],
     enabled: Boolean(auth),
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<PrimaryRole> => {
-      const isAdmin = await fetchAdminScope(auth!.token)
-        .then(() => true)
-        .catch(() => false);
-      if (isAdmin) return "admin";
-      const classes = await fetchTeacherClasses(auth!.id).catch(() => [] as unknown[]);
-      if (Array.isArray(classes) && classes.length > 0) return "teacher";
-      return "student";
-    },
+    queryFn: (): Promise<PrimaryRole> => fetchPrimaryRole(auth!.token, auth!.id),
   });
 
   const role = query.data ?? null;
@@ -49,7 +43,9 @@ export function useConsoleAccess(): ConsoleAccess {
     home: role ? roleHome(role) : null,
     student: role === "student",
     teacher: role === "teacher",
-    admin: role === "admin",
+    admin: role === "platform_admin" || role === "org_admin",
+    platformAdmin: role === "platform_admin",
+    orgAdmin: role === "org_admin",
     loading: Boolean(auth) && query.isPending,
   };
 }

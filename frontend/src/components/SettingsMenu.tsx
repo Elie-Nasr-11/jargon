@@ -1,22 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import {
-  BookOpen,
-  ExternalLink,
-  GraduationCap,
-  LogOut,
-  Mic,
-  Moon,
-  Settings,
-  Shield,
-  Sun,
-  Volume2,
-} from "lucide-react";
+import { ExternalLink, LogOut, Mic, Moon, Settings, Sun, Volume2 } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import type { VoiceSettings } from "@/lib/jargon-store";
 import { useTheme } from "@/lib/theme";
-import { useConsoleAccess } from "@/hooks/useConsoleAccess";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 
@@ -35,7 +23,6 @@ export function SettingsMenu({
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { resolved, toggle } = useTheme();
-  const access = useConsoleAccess();
   const campusLiveUrl = useCampusLiveLink();
 
   const open = () => {
@@ -226,29 +213,6 @@ export function SettingsMenu({
                     </div>
                   </div>
                 </>
-              ) : null}
-              {access.home ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    close();
-                    navigate({ to: access.home! });
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
-                >
-                  {access.role === "admin" ? (
-                    <Shield className="h-[15px] w-[15px]" strokeWidth={1.5} />
-                  ) : access.role === "teacher" ? (
-                    <GraduationCap className="h-[15px] w-[15px]" strokeWidth={1.5} />
-                  ) : (
-                    <BookOpen className="h-[15px] w-[15px]" strokeWidth={1.5} />
-                  )}
-                  {access.role === "admin"
-                    ? "Admin"
-                    : access.role === "teacher"
-                      ? "Teacher dashboard"
-                      : "Student chat"}
-                </button>
               ) : null}
               {campusLiveUrl ? (
                 <a

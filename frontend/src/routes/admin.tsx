@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   Activity,
   AlertCircle,
@@ -94,23 +94,24 @@ import type {
   TeacherClassMembership,
 } from "@/lib/types";
 
-export const Route = createFileRoute("/admin")({
-  // Org + active tab live in the URL (?org=&tab=) so context is set once and is
-  // deep-linkable. Unknown params (e.g. Google OAuth code/state) are preserved.
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): Record<string, unknown> & {
-    org?: string;
-    tab?: string;
-    view?: string;
-    integration?: string;
-  } => ({
+// Org + active tab live in the URL (?org=&tab=) so context is set once and is
+// deep-linkable. Unknown params (e.g. OAuth code/state) are preserved. Shared by
+// the /admin (org admin) and /platform (platform admin) portals.
+export function validateAdminSearch(search: Record<string, unknown>): Record<string, unknown> & {
+  org?: string;
+  tab?: string;
+  integration?: string;
+} {
+  return {
     ...search,
     org: typeof search.org === "string" ? search.org : undefined,
     tab: typeof search.tab === "string" ? search.tab : undefined,
-    view: search.view === "organization" ? "organization" : undefined,
     integration: typeof search.integration === "string" ? search.integration : undefined,
-  }),
+  };
+}
+
+export const Route = createFileRoute("/admin")({
+  validateSearch: validateAdminSearch,
   head: () => ({
     meta: [
       { title: "Pilot Admin - Jargon" },
@@ -262,7 +263,7 @@ function downloadTextFile(filename: string, body: string, contentType: string) {
   URL.revokeObjectURL(url);
 }
 
-function AdminPage() {
+export function AdminPage() {
   const navigate = useNavigate();
   const [booting, setBooting] = useState(true);
   const [authorized, setAuthorized] = useState(false);
@@ -289,10 +290,20 @@ function AdminPage() {
     view?: string;
     integration?: string;
   };
+  const isPlatformAdmin = actorAccess?.level === "platform_admin";
+  // Platform admins and org admins now have separate portals (/platform vs /admin).
+  // The portal a user belongs to is fixed by their level — no in-page toggle — so
+  // every level-gated surface keys off `isPlatformLevel` = the platform admin.
+  const isPlatformLevel = isPlatformAdmin;
+  const adminLevelLabel = isPlatformLevel ? "Platform admin" : "Organization admin";
+  // The admin's own portal route — all in-portal navigation targets this so the
+  // platform/org portals stay separate. The current path drives the access guard.
+  const adminHome: "/admin" | "/platform" = isPlatformAdmin ? "/platform" : "/admin";
+  const onPlatformRoute = useLocation({ select: (loc) => loc.pathname.startsWith("/platform") });
   const selectedOrgId = search.org ?? "";
   const setSelectedOrgId = (orgId: string) =>
     navigate({
-      to: "/admin",
+      to: adminHome,
       search: (prev: Record<string, unknown>) => ({ ...prev, org: orgId || undefined }),
     });
   const [selectedClassId, setSelectedClassId] = useState("");
@@ -403,6 +414,20 @@ function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
+  // Keep each admin on their own portal: platform admins on /platform, org admins
+  // on /admin. Skip while an OAuth callback (?code&state) is completing so it can
+  // finish on whichever route it landed on.
+  useEffect(() => {
+    if (!actorAccess) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("code") && params.get("state")) return;
+    if (actorAccess.level === "platform_admin" && !onPlatformRoute) {
+      navigate({ to: "/platform", replace: true });
+    } else if (actorAccess.level === "org_admin" && onPlatformRoute) {
+      navigate({ to: "/admin", replace: true });
+    }
+  }, [actorAccess, onPlatformRoute, navigate]);
+
   useEffect(() => {
     if (!token || !authorized || oauthHandled) return;
     const params = new URLSearchParams(window.location.search);
@@ -424,7 +449,7 @@ function AdminPage() {
             `Connected Canvas as ${connection.canvas_login_id || connection.canvas_name}.`,
           );
           navigate({
-            to: "/admin",
+            to: adminHome,
             replace: true,
             search: (prev: Record<string, unknown>) => ({
               ...prev,
@@ -448,7 +473,7 @@ function AdminPage() {
       .then((connection) => {
         setClassroomMessage(`Connected Google Classroom as ${connection.google_email}.`);
         navigate({
-          to: "/admin",
+          to: adminHome,
           replace: true,
           search: (prev: Record<string, unknown>) => ({
             ...prev,
@@ -703,20 +728,13 @@ function AdminPage() {
   const canSeed = !submitting && formErrors.length === 0;
   const adminTab = search.tab ?? "readiness";
   const setAdminTab = (tab: string) =>
-    navigate({ to: "/admin", search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
+    navigate({ to: adminHome, search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
   const integrationMode = search.integration ?? "google";
   const setIntegrationMode = (integration: string) =>
     navigate({
-      to: "/admin",
+      to: adminHome,
       search: (prev: Record<string, unknown>) => ({ ...prev, integration }),
     });
-  const isPlatformAdmin = actorAccess?.level === "platform_admin";
-  // "Platform admin" is the real role; "platform view" is that role NOT currently on
-  // the scoped organization page. Platform admins switch between the two pages via the
-  // nav; org admins are always in the organization view. Every level-gated surface
-  // below keys off `isPlatformLevel` = platform view, so it flips with the toggle.
-  const isPlatformLevel = isPlatformAdmin && search.view !== "organization";
-  const adminLevelLabel = isPlatformLevel ? "Platform admin" : "Organization admin";
 
   const selectedOrg = useMemo(
     () => scope?.organizations.find((organization) => organization.id === selectedOrgId) || null,
@@ -1738,12 +1756,25 @@ function AdminPage() {
 
   // While the role check runs (or for a non-admin who will be redirected by the
   // bootstrap guard), show a neutral loader — never the admin chrome.
-  if (booting || !authorized) {
+  const oauthInFlight =
+    typeof window !== "undefined" &&
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      return Boolean(params.get("code") && params.get("state"));
+    })();
+  // An admin who landed on the wrong portal route is being redirected by the guard
+  // effect above — hold the loader so the other admin portal never flashes.
+  const routeMismatch =
+    Boolean(actorAccess) &&
+    !oauthInFlight &&
+    ((isPlatformAdmin && !onPlatformRoute) ||
+      (actorAccess?.level === "org_admin" && onPlatformRoute));
+  if (booting || !authorized || routeMismatch) {
     return <RouteLoader label={message || "Loading…"} />;
   }
 
   return (
-    <AdminShell email={email}>
+    <AdminShell email={email} home={adminHome} place={isPlatformAdmin ? "platform" : "admin"}>
       <main className="relative z-10 mx-auto flex w-full max-w-[1240px] flex-1 flex-col gap-5 px-5 py-8">
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -1776,43 +1807,6 @@ function AdminPage() {
           </div>
         </section>
 
-        {isPlatformAdmin ? (
-          <div className="flex w-fit items-center gap-1 rounded-pill border border-border bg-surface-1 p-0.5">
-            <button
-              type="button"
-              onClick={() =>
-                navigate({
-                  to: "/admin",
-                  search: (prev: Record<string, unknown>) => ({ ...prev, view: undefined }),
-                })
-              }
-              className={`rounded-pill px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
-                isPlatformLevel
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Platform admin
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                navigate({
-                  to: "/admin",
-                  search: (prev: Record<string, unknown>) => ({ ...prev, view: "organization" }),
-                })
-              }
-              className={`rounded-pill px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
-                !isPlatformLevel
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Organization admin
-            </button>
-          </div>
-        ) : null}
-
         {!selectedOrgId ? (
           <GradientCard>
             <div className="p-5">
@@ -1841,7 +1835,7 @@ function AdminPage() {
                       type="button"
                       onClick={() =>
                         navigate({
-                          to: "/admin",
+                          to: adminHome,
                           search: (prev: Record<string, unknown>) => ({
                             ...prev,
                             org: organization.id,
@@ -1885,7 +1879,10 @@ function AdminPage() {
           <>
             <Breadcrumb
               segments={[
-                { label: "Admin", onClick: () => navigate({ to: "/admin", search: {} }) },
+                {
+                  label: adminLevelLabel,
+                  onClick: () => navigate({ to: adminHome, search: {} }),
+                },
                 { label: selectedOrg?.name || "Organization" },
               ]}
             />
@@ -4379,11 +4376,13 @@ function AdminPage() {
 
 function AdminShell({
   email,
-  message,
+  home,
+  place,
   children,
 }: {
   email: string;
-  message?: string;
+  home: "/admin" | "/platform";
+  place: "admin" | "platform";
   children?: React.ReactNode;
 }) {
   return (
@@ -4399,20 +4398,16 @@ function AdminShell({
         <div className="hairline">
           <div className="mx-auto flex h-[60px] max-w-[1240px] items-center justify-between gap-2 px-3 sm:px-6">
             <div className="flex items-center gap-4">
-              <Link to="/admin" className="font-serif text-[22px] tracking-tight text-foreground">
+              <Link to={home} className="font-serif text-[22px] tracking-tight text-foreground">
                 Jargon
               </Link>
-              <PlaceSwitcher active="admin" />
+              <PlaceSwitcher active={place} />
             </div>
             {email ? <SettingsMenu email={email} /> : null}
           </div>
         </div>
       </header>
-      {children || (
-        <main className="relative z-10 mx-auto flex w-full max-w-[760px] flex-1 flex-col items-center justify-center px-5 text-center">
-          <div className="text-[14px] text-muted-foreground">{message}</div>
-        </main>
-      )}
+      {children}
     </div>
   );
 }
