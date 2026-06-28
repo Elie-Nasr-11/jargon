@@ -805,7 +805,7 @@ async function handleListMappings(
 ) {
   const requestedOrg = cleanId(body.organization_id);
   const filter = orgFilter(access, requestedOrg);
-  const [connections, courseMappings, userMappings, syncRuns] = await Promise.all([
+  const [connections, courseMappings, userMappings, syncRuns, gradeLinks] = await Promise.all([
     selectRows(
       config,
       `canvas_connections?${filter}select=*&order=updated_at.desc&limit=30`,
@@ -822,6 +822,10 @@ async function handleListMappings(
       config,
       `canvas_sync_runs?${filter}select=*&order=started_at.desc&limit=40`,
     ),
+    selectRows(
+      config,
+      `canvas_grade_links?${filter}select=*&order=updated_at.desc&limit=200`,
+    ),
   ]);
   return json({
     status: "ok",
@@ -831,6 +835,7 @@ async function handleListMappings(
       course_mappings: courseMappings,
       user_mappings: userMappings,
       sync_runs: syncRuns,
+      grade_links: gradeLinks,
     },
   });
 }
@@ -1198,6 +1203,404 @@ async function handleImportCourse(
   });
 }
 
+// ---------------------------------------------------------------------------
+// C3: grade passback
+// ---------------------------------------------------------------------------
+
+// Jargon scores follow the gradebook convention (see formatScore): a value <= 1
+// is a 0..1 fraction, a value > 1 is already a 0..100 percent. Canvas accepts a
+// percentage string for submission[posted_grade] and converts it against the
+// assignment's points_possible, so a percentage is the safe, scale-independent
+// value to push for both assessments and assignments.
+function scoreToPercentString(score: number): string {
+  const pct = score <= 1 ? score * 100 : score;
+  const rounded = Math.round(pct * 100) / 100;
+  return `${rounded}%`;
+}
+
+async function deleteRows(config: Config, path: string): Promise<void> {
+  await serviceFetch(config, `/rest/v1/${path}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+}
+
+async function canvasPutGrade(
+  baseUrl: string,
+  accessToken: string,
+  courseId: string,
+  assignmentId: string,
+  canvasUserId: string,
+  postedGrade: string,
+): Promise<void> {
+  const params = new URLSearchParams();
+  params.set("submission[posted_grade]", postedGrade);
+  const res = await fetch(
+    `${baseUrl}/api/v1/courses/${encodeURIComponent(courseId)}/assignments/${encodeURIComponent(assignmentId)}/submissions/${encodeURIComponent(canvasUserId)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params,
+    },
+  );
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(errorFromData(data, res.statusText));
+}
+
+async function loadCanvasUserMap(config: Config, organizationId: string): Promise<Map<string, string>> {
+  const rows = await selectRows(
+    config,
+    `canvas_user_mappings?organization_id=eq.${encodeURIComponent(organizationId)}&user_id=not.is.null&select=user_id,canvas_user_id`,
+  );
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    const userId = cleanId(row.user_id);
+    const canvasUserId = cleanId(row.canvas_user_id);
+    if (userId && canvasUserId && !map.has(userId)) map.set(userId, canvasUserId);
+  }
+  return map;
+}
+
+function gradeLinkTables(jargonKind: string): { table: string; idCol: string; scoreCol: string } {
+  return jargonKind === "assessment"
+    ? { table: "assessment_recipients", idCol: "assessment_id", scoreCol: "final_score" }
+    : { table: "assignment_recipients", idCol: "assignment_id", scoreCol: "score" };
+}
+
+async function handleListGradeTargets(
+  config: Config,
+  access: ActorAccess,
+  body: DbRow,
+) {
+  const courseMappingId = cleanId(body.course_mapping_id);
+  if (!courseMappingId) throw new Error("course_mapping_id is required.");
+  const mapping = await selectFirst(
+    config,
+    `canvas_course_mappings?id=eq.${encodeURIComponent(courseMappingId)}&select=*`,
+  );
+  if (!mapping) throw new Error("Canvas course mapping not found.");
+  const organizationId = cleanId(mapping.organization_id);
+  requireOrganizationAccess(access, organizationId);
+  const classId = cleanId(mapping.class_id);
+
+  const [assessments, assignments, gradeLinks] = await Promise.all([
+    classId
+      ? selectRows(
+        config,
+        `assessments?class_id=eq.${encodeURIComponent(classId)}&select=id,title,status&order=updated_at.desc&limit=200`,
+      )
+      : Promise.resolve([] as DbRow[]),
+    classId
+      ? selectRows(
+        config,
+        `assignments?class_id=eq.${encodeURIComponent(classId)}&select=id,title,status&order=updated_at.desc&limit=200`,
+      )
+      : Promise.resolve([] as DbRow[]),
+    selectRows(
+      config,
+      `canvas_grade_links?course_mapping_id=eq.${encodeURIComponent(courseMappingId)}&select=*&order=updated_at.desc`,
+    ),
+  ]);
+
+  const connection = await fetchConnection(config, access, cleanId(mapping.connection_id));
+  const baseUrl = normalizeBaseUrl(connection.base_url);
+  const accessToken = await refreshCanvasAccessToken(config, connection);
+  const canvasAssignmentsRaw = await canvasFetchPaged(
+    baseUrl,
+    accessToken,
+    `/courses/${encodeURIComponent(cleanId(mapping.canvas_course_id))}/assignments?per_page=100`,
+  );
+  const canvasAssignments = canvasAssignmentsRaw
+    .map((raw) => ({
+      id: cleanId(raw.id),
+      name: cleanText(raw.name, "Untitled assignment"),
+      points_possible: typeof raw.points_possible === "number" ? raw.points_possible : null,
+      grading_type: cleanText(raw.grading_type) || null,
+      published: Boolean(raw.published),
+    }))
+    .filter((assignment) => assignment.id);
+
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      jargon_items: [
+        ...assessments.map((row) => ({
+          kind: "assessment",
+          id: cleanId(row.id),
+          title: cleanText(row.title, "Untitled assessment"),
+          status: cleanText(row.status),
+        })),
+        ...assignments.map((row) => ({
+          kind: "assignment",
+          id: cleanId(row.id),
+          title: cleanText(row.title, "Untitled assignment"),
+          status: cleanText(row.status),
+        })),
+      ],
+      canvas_assignments: canvasAssignments,
+      grade_links: gradeLinks,
+    },
+  });
+}
+
+async function handleUpsertGradeLink(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+) {
+  const courseMappingId = cleanId(body.course_mapping_id);
+  const jargonKind = cleanText(body.jargon_kind);
+  const jargonId = cleanId(body.jargon_id);
+  const canvasAssignmentId = cleanId(body.canvas_assignment_id);
+  if (!courseMappingId) throw new Error("course_mapping_id is required.");
+  if (jargonKind !== "assessment" && jargonKind !== "assignment") {
+    throw new Error("jargon_kind must be 'assessment' or 'assignment'.");
+  }
+  if (!jargonId) throw new Error("jargon_id is required.");
+  if (!canvasAssignmentId) throw new Error("canvas_assignment_id is required.");
+
+  const mapping = await selectFirst(
+    config,
+    `canvas_course_mappings?id=eq.${encodeURIComponent(courseMappingId)}&select=*`,
+  );
+  if (!mapping) throw new Error("Canvas course mapping not found.");
+  const organizationId = cleanId(mapping.organization_id);
+  requireOrganizationAccess(access, organizationId);
+  const classId = cleanId(mapping.class_id);
+
+  const itemTable = jargonKind === "assessment" ? "assessments" : "assignments";
+  const item = await selectFirst(
+    config,
+    `${itemTable}?id=eq.${encodeURIComponent(jargonId)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,class_id`,
+  );
+  if (!item) throw new Error("The selected Jargon item is not in this organization.");
+  if (classId && cleanId(item.class_id) && cleanId(item.class_id) !== classId) {
+    throw new Error("The selected Jargon item is not in the mapped class.");
+  }
+
+  const gradeLink = await upsertByConflict(
+    config,
+    "canvas_grade_links",
+    "organization_id,jargon_kind,jargon_id",
+    {
+      organization_id: organizationId,
+      course_mapping_id: courseMappingId,
+      class_id: classId || null,
+      jargon_kind: jargonKind,
+      jargon_id: jargonId,
+      canvas_course_id: cleanId(mapping.canvas_course_id),
+      canvas_assignment_id: canvasAssignmentId,
+      updated_at: nowIso(),
+    },
+  );
+  await audit(config, {
+    actorId,
+    organizationId,
+    classId: classId || null,
+    eventType: "canvas_grade_link_set",
+    entityType: "canvas_grade_link",
+    entityId: cleanId(gradeLink.id),
+    payload: { jargon_kind: jargonKind, jargon_id: jargonId, canvas_assignment_id: canvasAssignmentId },
+  });
+  return json({
+    status: "ok",
+    data: { actor_access: actorAccessPayload(access), grade_link: gradeLink },
+  });
+}
+
+async function handleDeleteGradeLink(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+) {
+  const gradeLinkId = cleanId(body.grade_link_id);
+  if (!gradeLinkId) throw new Error("grade_link_id is required.");
+  const link = await selectFirst(
+    config,
+    `canvas_grade_links?id=eq.${encodeURIComponent(gradeLinkId)}&select=*`,
+  );
+  if (!link) throw new Error("Canvas grade link not found.");
+  const organizationId = cleanId(link.organization_id);
+  requireOrganizationAccess(access, organizationId);
+  await deleteRows(config, `canvas_grade_links?id=eq.${encodeURIComponent(gradeLinkId)}`);
+  await audit(config, {
+    actorId,
+    organizationId,
+    classId: cleanId(link.class_id) || null,
+    eventType: "canvas_grade_link_removed",
+    entityType: "canvas_grade_link",
+    entityId: gradeLinkId,
+    payload: { jargon_kind: cleanText(link.jargon_kind), jargon_id: cleanId(link.jargon_id) },
+  });
+  return json({ status: "ok", data: { actor_access: actorAccessPayload(access) } });
+}
+
+async function handlePushGrades(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+) {
+  const gradeLinkId = cleanId(body.grade_link_id);
+  const courseMappingId = cleanId(body.course_mapping_id);
+  let links: DbRow[] = [];
+  if (gradeLinkId) {
+    const link = await selectFirst(
+      config,
+      `canvas_grade_links?id=eq.${encodeURIComponent(gradeLinkId)}&select=*`,
+    );
+    if (!link) throw new Error("Canvas grade link not found.");
+    links = [link];
+  } else if (courseMappingId) {
+    links = await selectRows(
+      config,
+      `canvas_grade_links?course_mapping_id=eq.${encodeURIComponent(courseMappingId)}&select=*&order=updated_at.desc`,
+    );
+  } else {
+    throw new Error("grade_link_id or course_mapping_id is required.");
+  }
+  if (!links.length) throw new Error("No Canvas grade links to push.");
+
+  // Resolve each link's connection (token + base URL) once per course mapping,
+  // enforcing org access through the connection. Cache tokens by connection id.
+  const mappingCache = new Map<string, DbRow>();
+  const connectionCache = new Map<string, { baseUrl: string; accessToken: string; connection: DbRow }>();
+  const userMapCache = new Map<string, Map<string, string>>();
+
+  let totalPushed = 0;
+  let totalSkipped = 0;
+  let totalFailed = 0;
+  const results: DbRow[] = [];
+  const errors: DbRow[] = [];
+  let organizationId = "";
+  let pushedLinks = 0;
+
+  for (const link of links) {
+    const linkCourseMappingId = cleanId(link.course_mapping_id);
+    let mapping = linkCourseMappingId ? mappingCache.get(linkCourseMappingId) : undefined;
+    if (!mapping && linkCourseMappingId) {
+      mapping =
+        (await selectFirst(
+          config,
+          `canvas_course_mappings?id=eq.${encodeURIComponent(linkCourseMappingId)}&select=*`,
+        )) || undefined;
+      if (mapping) mappingCache.set(linkCourseMappingId, mapping);
+    }
+    if (!mapping) {
+      errors.push({ grade_link_id: cleanId(link.id), error: "Course mapping not found for grade link." });
+      continue;
+    }
+    const connectionId = cleanId(mapping.connection_id);
+    let resolved = connectionId ? connectionCache.get(connectionId) : undefined;
+    if (!resolved) {
+      const connection = await fetchConnection(config, access, connectionId);
+      const baseUrl = normalizeBaseUrl(connection.base_url);
+      const accessToken = await refreshCanvasAccessToken(config, connection);
+      resolved = { baseUrl, accessToken, connection };
+      connectionCache.set(connectionId, resolved);
+    }
+    const linkOrg = cleanId(link.organization_id);
+    organizationId = linkOrg || organizationId;
+    let userToCanvas = userMapCache.get(linkOrg);
+    if (!userToCanvas) {
+      userToCanvas = await loadCanvasUserMap(config, linkOrg);
+      userMapCache.set(linkOrg, userToCanvas);
+    }
+
+    const { table, idCol, scoreCol } = gradeLinkTables(cleanText(link.jargon_kind));
+    const recipients = await selectRows(
+      config,
+      `${table}?${idCol}=eq.${encodeURIComponent(cleanId(link.jargon_id))}&select=user_id,${scoreCol},status`,
+    );
+    let pushed = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const recipient of recipients) {
+      const rawScore = recipient[scoreCol];
+      if (typeof rawScore !== "number" || Number.isNaN(rawScore)) {
+        skipped += 1;
+        continue;
+      }
+      const userId = cleanId(recipient.user_id);
+      const canvasUserId = userId ? userToCanvas.get(userId) : undefined;
+      if (!canvasUserId) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        await canvasPutGrade(
+          resolved.baseUrl,
+          resolved.accessToken,
+          cleanId(link.canvas_course_id),
+          cleanId(link.canvas_assignment_id),
+          canvasUserId,
+          scoreToPercentString(rawScore),
+        );
+        pushed += 1;
+      } catch (error) {
+        failed += 1;
+        errors.push({ grade_link_id: cleanId(link.id), user_id: userId, error: errorMessage(error) });
+      }
+    }
+    await patchRows(
+      config,
+      `canvas_grade_links?id=eq.${encodeURIComponent(cleanId(link.id))}`,
+      { last_pushed_at: nowIso(), updated_at: nowIso() },
+    );
+    totalPushed += pushed;
+    totalSkipped += skipped;
+    totalFailed += failed;
+    pushedLinks += 1;
+    results.push({
+      grade_link_id: cleanId(link.id),
+      jargon_kind: cleanText(link.jargon_kind),
+      jargon_id: cleanId(link.jargon_id),
+      canvas_assignment_id: cleanId(link.canvas_assignment_id),
+      pushed,
+      skipped,
+      failed,
+    });
+  }
+
+  const status = totalFailed ? "partial" : "success";
+  await Promise.all([
+    logSyncRun(config, {
+      organizationId,
+      actorId,
+      action: "push_grades",
+      status,
+      counts: { links: pushedLinks, pushed: totalPushed, skipped: totalSkipped, failed: totalFailed },
+      errors,
+      metadata: { grade_link_id: gradeLinkId || null, course_mapping_id: courseMappingId || null },
+    }),
+    audit(config, {
+      actorId,
+      organizationId,
+      eventType: "canvas_grades_pushed",
+      entityType: "canvas_grade_link",
+      entityId: gradeLinkId || courseMappingId || null,
+      payload: { links: pushedLinks, pushed: totalPushed, skipped: totalSkipped, failed: totalFailed },
+    }),
+  ]);
+
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      counts: { links: pushedLinks, pushed: totalPushed, skipped: totalSkipped, failed: totalFailed },
+      results,
+      errors,
+    },
+  });
+}
+
 async function handleDisconnect(
   config: Config,
   actorId: string,
@@ -1297,9 +1700,17 @@ Deno.serve(async (req: Request) => {
       return await handleImportCourse(config, actorId, actorAccess, body);
     if (action === "disconnect")
       return await handleDisconnect(config, actorId, actorAccess, body);
-    if (action === "push_grades" || action === "sync") {
+    if (action === "list_grade_targets")
+      return await handleListGradeTargets(config, actorAccess, body);
+    if (action === "upsert_grade_link")
+      return await handleUpsertGradeLink(config, actorId, actorAccess, body);
+    if (action === "delete_grade_link")
+      return await handleDeleteGradeLink(config, actorId, actorAccess, body);
+    if (action === "push_grades")
+      return await handlePushGrades(config, actorId, actorAccess, body);
+    if (action === "sync") {
       return errorResponse(
-        "Canvas grade passback and scheduled sync are not enabled yet. Connect + import (C1) ships first; grade passback (C3) and sync (C4) follow.",
+        "Canvas scheduled sync is not enabled yet. Grade passback (C3) ships first; scheduled sync (C4) follows.",
         409,
       );
     }

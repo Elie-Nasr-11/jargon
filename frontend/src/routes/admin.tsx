@@ -57,6 +57,10 @@ import {
   completeCanvasOAuth,
   disconnectCanvas,
   diagnoseCanvas,
+  fetchCanvasGradeTargets,
+  upsertCanvasGradeLink,
+  deleteCanvasGradeLink,
+  pushCanvasGrades,
   upsertConsentSettings,
 } from "@/lib/api";
 import type {
@@ -73,6 +77,7 @@ import type {
   GoogleClassroomIntegrationState,
   GoogleClassroomPerson,
   CanvasCourse,
+  CanvasGradeTargets,
   CanvasIntegrationState,
   CanvasPerson,
   PilotReadiness,
@@ -308,6 +313,12 @@ function AdminPage() {
     teachers: CanvasPerson[];
     students: CanvasPerson[];
   } | null>(null);
+  const [selectedGradeMappingId, setSelectedGradeMappingId] = useState("");
+  const [gradeTargets, setGradeTargets] = useState<CanvasGradeTargets | null>(null);
+  const [gradeLoading, setGradeLoading] = useState(false);
+  const [gradeMessage, setGradeMessage] = useState("");
+  const [newGradeJargon, setNewGradeJargon] = useState("");
+  const [newGradeCanvasAssignment, setNewGradeCanvasAssignment] = useState("");
   const [oauthHandled, setOauthHandled] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvRows, setCsvRows] = useState<AdminCsvImportRow[]>([]);
@@ -781,6 +792,16 @@ function AdminPage() {
       ) || null,
     [canvas, selectedCanvasCourseId, selectedOrgId],
   );
+  const gradableCanvasMappings = useMemo(
+    () =>
+      (canvas?.course_mappings || []).filter(
+        (mapping) =>
+          mapping.organization_id === selectedOrgId &&
+          mapping.status === "active" &&
+          mapping.class_id,
+      ),
+    [canvas, selectedOrgId],
+  );
 
   const copyLoginInstructions = async (item: ClassReadiness | null) => {
     if (!item) {
@@ -1110,6 +1131,114 @@ function AdminPage() {
       setCanvasMessage((error as Error).message || "Could not disconnect Canvas.");
     } finally {
       setCanvasLoading(false);
+    }
+  };
+
+  const loadGradeTargets = async (mappingId = selectedGradeMappingId) => {
+    if (!token || !mappingId) {
+      setGradeTargets(null);
+      return;
+    }
+    setGradeLoading(true);
+    setGradeMessage("");
+    try {
+      const targets = await fetchCanvasGradeTargets(token, mappingId);
+      setGradeTargets(targets);
+      setNewGradeJargon("");
+      setNewGradeCanvasAssignment("");
+    } catch (error) {
+      setGradeTargets(null);
+      setGradeMessage((error as Error).message || "Could not load Canvas grade targets.");
+    } finally {
+      setGradeLoading(false);
+    }
+  };
+
+  const createGradeLink = async () => {
+    if (!token || !selectedGradeMappingId) {
+      setGradeMessage("Choose an imported Canvas course first.");
+      return;
+    }
+    const separator = newGradeJargon.indexOf(":");
+    const jargonKind = separator > 0 ? newGradeJargon.slice(0, separator) : "";
+    const jargonId = separator > 0 ? newGradeJargon.slice(separator + 1) : "";
+    if (
+      (jargonKind !== "assessment" && jargonKind !== "assignment") ||
+      !jargonId ||
+      !newGradeCanvasAssignment
+    ) {
+      setGradeMessage("Choose a Jargon item and a Canvas assignment to link.");
+      return;
+    }
+    setGradeLoading(true);
+    setGradeMessage("");
+    try {
+      await upsertCanvasGradeLink({
+        accessToken: token,
+        courseMappingId: selectedGradeMappingId,
+        jargonKind,
+        jargonId,
+        canvasAssignmentId: newGradeCanvasAssignment,
+      });
+      await Promise.all([
+        loadGradeTargets(selectedGradeMappingId),
+        refreshCanvasMappings(token, selectedOrgId, true),
+      ]);
+      setGradeMessage("Linked Jargon item to a Canvas assignment.");
+    } catch (error) {
+      setGradeMessage((error as Error).message || "Could not link grades.");
+    } finally {
+      setGradeLoading(false);
+    }
+  };
+
+  const removeGradeLink = async (gradeLinkId: string) => {
+    if (!token || !gradeLinkId) return;
+    setGradeLoading(true);
+    setGradeMessage("");
+    try {
+      await deleteCanvasGradeLink(token, gradeLinkId);
+      await Promise.all([
+        loadGradeTargets(selectedGradeMappingId),
+        refreshCanvasMappings(token, selectedOrgId, true),
+      ]);
+      setGradeMessage("Removed grade link.");
+    } catch (error) {
+      setGradeMessage((error as Error).message || "Could not remove grade link.");
+    } finally {
+      setGradeLoading(false);
+    }
+  };
+
+  const pushGrades = async (gradeLinkId?: string) => {
+    if (!token) return;
+    if (!gradeLinkId && !selectedGradeMappingId) {
+      setGradeMessage("Choose an imported Canvas course first.");
+      return;
+    }
+    setGradeLoading(true);
+    setGradeMessage("");
+    try {
+      const data = await pushCanvasGrades({
+        accessToken: token,
+        gradeLinkId: gradeLinkId || undefined,
+        courseMappingId: gradeLinkId ? undefined : selectedGradeMappingId,
+      });
+      const counts = data?.counts || {};
+      const pushed = typeof counts.pushed === "number" ? counts.pushed : 0;
+      const skipped = typeof counts.skipped === "number" ? counts.skipped : 0;
+      const failed = typeof counts.failed === "number" ? counts.failed : 0;
+      await Promise.all([
+        loadGradeTargets(selectedGradeMappingId),
+        refreshCanvasMappings(token, selectedOrgId, true),
+      ]);
+      setGradeMessage(
+        `Pushed ${pushed} grade${pushed === 1 ? "" : "s"} to Canvas. ${skipped} skipped, ${failed} failed.`,
+      );
+    } catch (error) {
+      setGradeMessage((error as Error).message || "Could not push grades to Canvas.");
+    } finally {
+      setGradeLoading(false);
     }
   };
 
@@ -2797,6 +2926,200 @@ function AdminPage() {
                           </div>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-[14px] font-medium text-foreground">
+                            Grade passback
+                          </h3>
+                          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
+                            Link a Jargon assessment or assignment to a Canvas assignment, then push
+                            scores. Grades are sent as a percentage of the Canvas assignment&apos;s
+                            points. Needs an active connection with grade-write permission on the
+                            connected Canvas account.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void pushGrades()}
+                          disabled={
+                            gradeLoading ||
+                            !selectedGradeMappingId ||
+                            !(gradeTargets?.grade_links.length ?? 0)
+                          }
+                          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`h-4 w-4 ${gradeLoading ? "animate-spin" : ""}`}
+                            strokeWidth={1.6}
+                          />
+                          Push all grades
+                        </button>
+                      </div>
+
+                      <div className="mt-3">
+                        <Field label="Imported Canvas course">
+                          <select
+                            value={selectedGradeMappingId}
+                            onChange={(event) => {
+                              setSelectedGradeMappingId(event.target.value);
+                              setGradeTargets(null);
+                              setGradeMessage("");
+                              if (event.target.value) void loadGradeTargets(event.target.value);
+                            }}
+                            className="jargon-input"
+                          >
+                            <option value="">
+                              {gradableCanvasMappings.length
+                                ? "Choose an imported course"
+                                : "Import a Canvas course first"}
+                            </option>
+                            {gradableCanvasMappings.map((mapping) => (
+                              <option key={mapping.id} value={mapping.id}>
+                                {mapping.canvas_course_name}
+                                {mapping.canvas_course_code
+                                  ? ` (${mapping.canvas_course_code})`
+                                  : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      </div>
+
+                      {gradeMessage ? (
+                        <div className="mt-3 rounded-2xl border border-border bg-background/55 px-3 py-2 text-[12px] text-muted-foreground">
+                          {gradeMessage}
+                        </div>
+                      ) : null}
+
+                      {selectedGradeMappingId && gradeTargets ? (
+                        <div className="mt-4 space-y-4">
+                          <div className="space-y-2">
+                            {gradeTargets.grade_links.length ? (
+                              gradeTargets.grade_links.map((link) => {
+                                const jargonTitle =
+                                  gradeTargets.jargon_items.find(
+                                    (item) =>
+                                      item.kind === link.jargon_kind && item.id === link.jargon_id,
+                                  )?.title || `${link.jargon_kind} ${link.jargon_id.slice(0, 8)}`;
+                                const canvasName =
+                                  gradeTargets.canvas_assignments.find(
+                                    (assignment) => assignment.id === link.canvas_assignment_id,
+                                  )?.name || `Canvas assignment ${link.canvas_assignment_id}`;
+                                return (
+                                  <div
+                                    key={link.id}
+                                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px]"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="truncate text-foreground">
+                                        <span className="text-muted-foreground">
+                                          {link.jargon_kind}
+                                        </span>{" "}
+                                        {jargonTitle}{" "}
+                                        <span className="text-muted-foreground">→</span>{" "}
+                                        {canvasName}
+                                      </div>
+                                      <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                                        {link.last_pushed_at
+                                          ? `Last pushed ${formatDate(link.last_pushed_at)}`
+                                          : "Not pushed yet"}
+                                      </div>
+                                    </div>
+                                    <div className="flex shrink-0 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => void pushGrades(link.id)}
+                                        disabled={gradeLoading}
+                                        className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                      >
+                                        Push
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => void removeGradeLink(link.id)}
+                                        disabled={gradeLoading}
+                                        className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12px] text-muted-foreground">
+                                No grade links yet. Link a Jargon item to a Canvas assignment below.
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="rounded-2xl border border-border/70 bg-background/55 p-3">
+                            <h4 className="text-[12.5px] font-medium text-foreground">
+                              Link a Jargon item
+                            </h4>
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              <Field label="Jargon graded item">
+                                <select
+                                  value={newGradeJargon}
+                                  onChange={(event) => setNewGradeJargon(event.target.value)}
+                                  className="jargon-input"
+                                >
+                                  <option value="">
+                                    {gradeTargets.jargon_items.length
+                                      ? "Choose an assessment or assignment"
+                                      : "No graded items in this class"}
+                                  </option>
+                                  {gradeTargets.jargon_items.map((item) => (
+                                    <option
+                                      key={`${item.kind}:${item.id}`}
+                                      value={`${item.kind}:${item.id}`}
+                                    >
+                                      {item.kind === "assessment" ? "Assessment" : "Assignment"}:{" "}
+                                      {item.title}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Field>
+                              <Field label="Canvas assignment">
+                                <select
+                                  value={newGradeCanvasAssignment}
+                                  onChange={(event) =>
+                                    setNewGradeCanvasAssignment(event.target.value)
+                                  }
+                                  className="jargon-input"
+                                >
+                                  <option value="">
+                                    {gradeTargets.canvas_assignments.length
+                                      ? "Choose a Canvas assignment"
+                                      : "No Canvas assignments found"}
+                                  </option>
+                                  {gradeTargets.canvas_assignments.map((assignment) => (
+                                    <option key={assignment.id} value={assignment.id}>
+                                      {assignment.name}
+                                      {assignment.points_possible != null
+                                        ? ` (${assignment.points_possible} pts)`
+                                        : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Field>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void createGradeLink()}
+                              disabled={
+                                gradeLoading || !newGradeJargon || !newGradeCanvasAssignment
+                              }
+                              className="mt-3 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                            >
+                              Link item
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </GradientCard>

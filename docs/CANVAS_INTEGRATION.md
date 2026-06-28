@@ -1,8 +1,8 @@
 # Canvas LMS Integration
 
-Status: C1 (connect + import) and C2 (create accounts on import) implemented,
-mirroring the Google Classroom spike. Built per the integrations plan (Canvas
-native, phased C1-C4 + Campus Live fallback).
+Status: C1 (connect + import), C2 (create accounts on import), and C3 (grade
+passback) implemented, mirroring the Google Classroom spike. Built per the
+integrations plan (Canvas native, phased C1-C4 + Campus Live fallback).
 
 Canvas is per-institution, so each connection stores the institution **base URL**
 (e.g. `https://school.instructure.com`). The OAuth flow and every API call are
@@ -16,10 +16,10 @@ scoped to that base URL.
   student/teacher accounts during import (admin-only), reusing the `admin-seed`
   account shape (email-confirmed Auth user + profile row + seeded-role metadata),
   instead of only linking existing users.
-- **C3 - Grade passback.** Map Jargon graded work to a Canvas assignment and push
-  scores via `PUT /api/v1/courses/:id/assignments/:id/submissions/:user_id`
-  (`submission[posted_grade]`). The `canvas_grade_links` table + `push_grades`
-  action/enum are pre-declared so no follow-up migration is needed.
+- **C3 - Grade passback (done).** Map Jargon graded work to a Canvas assignment and
+  push scores via `PUT /api/v1/courses/:id/assignments/:id/submissions/:user_id`
+  (`submission[posted_grade]`). Uses the pre-declared `canvas_grade_links` table +
+  `push_grades` action.
 - **C4 - Ongoing sync.** Scheduled re-sync (pg_cron / scheduled function) calling
   the `canvas` edge function per active connection, recording each run in
   `canvas_sync_runs` (`sync` action).
@@ -60,10 +60,45 @@ so no secret is generated or returned; new users should change it after first
 sign-in. Roster rows without a usable email cannot be created and remain "missing"
 (seed them via the existing admin roster tools, then re-import).
 
-## Not In C1/C2
+## C3 - Grade Passback
+
+Link a Jargon graded item to a Canvas assignment, then push scores. Scores are
+sent as a **percentage** of the Canvas assignment's points (Canvas converts
+`submission[posted_grade]` ending in `%` against `points_possible`), which is
+scale-independent and matches Jargon's own gradebook display convention:
+
+- A Jargon score `<= 1` is a 0..1 fraction (pushed as `score * 100`%); a score
+  `> 1` is already a 0..100 percent (pushed as-is).
+- **Assessments:** read `assessment_recipients.final_score` (0..1) by `assessment_id`.
+- **Assignments:** read `assignment_recipients.score` by `assignment_id`.
+- Jargon `user_id` -> Canvas user via `canvas_user_mappings`; recipients with no
+  Canvas mapping or no numeric score are skipped.
+
+Actions (admin or teacher with org access through the connection):
+
+- `list_grade_targets` (course_mapping_id) - returns the class's Jargon graded
+  items, the course's Canvas assignments, and existing grade links.
+- `upsert_grade_link` (course_mapping_id, jargon_kind, jargon_id, canvas_assignment_id)
+  - validates the Jargon item is in the mapped org/class, then upserts a link.
+- `delete_grade_link` (grade_link_id).
+- `push_grades` (grade_link_id for one link, or course_mapping_id for all links of
+  a course) - PUTs each student's percentage; records counts (pushed/skipped/
+  failed) + per-row errors in `canvas_sync_runs` and stamps `last_pushed_at`.
+
+Requires **grade-write permission** on the connected Canvas account (and the
+matching write scope if the developer key enforces scopes). The push is manual via
+the admin UI for now; automatic re-push is part of C4.
+
+## Admin UI - Grade passback
+
+The Canvas tab has a "Grade passback" section: choose an imported Canvas course,
+link each Jargon assessment/assignment to a Canvas assignment, and push grades per
+link or all at once. Last-pushed time and push results (pushed/skipped/failed) are
+shown.
+
+## Not In C1/C2/C3
 
 - No Canvas assignment creation.
-- No grade passback (C3).
 - No background sync/cron (C4).
 - No Canvas tokens in frontend code.
 
@@ -131,9 +166,10 @@ Actions:
 - `list_courses`
 - `preview_roster`
 - `import_course`
-- `list_mappings`
+- `list_mappings` (includes grade links)
 - `disconnect`
-- `push_grades` / `sync` (C3/C4 — currently return 409 "not enabled yet")
+- `list_grade_targets` / `upsert_grade_link` / `delete_grade_link` / `push_grades` (C3)
+- `sync` (C4 — currently returns 409 "not enabled yet")
 
 Deploy with JWT verification enabled. OAuth redirects return to `/admin`; the
 signed-in frontend completes the callback by sending the `code` and `state` to the

@@ -6,6 +6,43 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Canvas C3 — grade passback; branch, NOT deployed)
+
+Summary: Added **Canvas C3** grade passback on top of C1/C2. Admins/teachers can link a Jargon
+assessment or assignment to a Canvas assignment and push student scores to Canvas. Uses the
+pre-declared `canvas_grade_links` table — no new migration.
+
+Score model (important): Jargon scores follow the gradebook `formatScore` convention — a value <= 1 is a
+0..1 fraction, > 1 is already a 0..100 percent. We push a **percentage string** to Canvas
+(`submission[posted_grade]` ending in `%`), which Canvas converts against the assignment's
+points_possible. This is scale-independent and identical for assessments (`assessment_recipients.final_score`,
+0..1) and assignments (`assignment_recipients.score`). Jargon user -> Canvas user via
+`canvas_user_mappings`; recipients with no Canvas mapping or no numeric score are skipped.
+
+Edge function `supabase/functions/canvas/index.ts` new actions:
+- `list_grade_targets` (course_mapping_id) → class's Jargon graded items + the course's Canvas
+  assignments (`GET /courses/:id/assignments`) + existing links.
+- `upsert_grade_link` / `delete_grade_link` (validates the Jargon item's org/class).
+- `push_grades` (grade_link_id, or course_mapping_id for all links) → `PUT
+  /courses/:id/assignments/:id/submissions/:user_id`; records pushed/skipped/failed + per-row errors in
+  `canvas_sync_runs`, stamps `last_pushed_at`. Tokens cached per connection across links.
+- `list_mappings` now also returns `grade_links`. `sync` still 409 (C4).
+
+Frontend: `Canvas*` grade types (`CanvasGradeLink/Assignment/GradeTarget/GradeTargets`) + `grade_links` on
+`CanvasIntegrationState`; `api.ts` `fetchCanvasGradeTargets`/`upsertCanvasGradeLink`/`deleteCanvasGradeLink`/
+`pushCanvasGrades` (+ extended `invokeCanvas`); admin Canvas tab gained a **Grade passback** section (pick
+imported course → see/add/remove links → push per link or all, with last-pushed + result counts).
+
+Tests run: `tsc --noEmit` 0 errors; `npm run lint` 0 errors / 11 pre-existing warnings; `npm run build`
+green. Deno not in sandbox (edge fn not Deno-checked locally).
+
+Remaining concerns: needs **grade-write permission** on the connected Canvas account (+ matching write
+scope if the dev key enforces scopes) — read-only C1 connections can connect/import but `push_grades` will
+fail until write access is granted. Same deploy prerequisites as C1/C2 (Supabase deploy of migration
+`20260628000000` + `canvas` edge fn, `CANVAS_*` secrets, per-institution dev key; can't be exercised from
+the sandbox). Frontend branch-only. Next: C4 scheduled sync (pg_cron / scheduled fn calling `push_grades`
++ roster refresh per active connection); plus Campus Live OneRoster/CSV + link-out.
+
 ## Claude -> Codex / Human - 2026-06-28 (Canvas C2 — create accounts on import; branch, NOT deployed)
 
 Summary: Added **Canvas C2** on top of C1. `import_course` can now provision Jargon accounts for

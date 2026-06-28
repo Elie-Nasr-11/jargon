@@ -1434,11 +1434,47 @@ export type CanvasSyncRun = {
   completed_at: string | null;
 };
 
+export type CanvasGradeLink = {
+  id: string;
+  organization_id: string;
+  course_mapping_id: string | null;
+  class_id: string | null;
+  jargon_kind: "assignment" | "assessment";
+  jargon_id: string;
+  canvas_course_id: string;
+  canvas_assignment_id: string;
+  last_pushed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CanvasAssignment = {
+  id: string;
+  name: string;
+  points_possible: number | null;
+  grading_type: string | null;
+  published: boolean;
+};
+
+export type CanvasGradeTarget = {
+  kind: "assignment" | "assessment";
+  id: string;
+  title: string;
+  status: string;
+};
+
+export type CanvasGradeTargets = {
+  jargon_items: CanvasGradeTarget[];
+  canvas_assignments: CanvasAssignment[];
+  grade_links: CanvasGradeLink[];
+};
+
 export type CanvasIntegrationState = {
   connections: CanvasConnection[];
   course_mappings: CanvasCourseMapping[];
   user_mappings: CanvasUserMapping[];
   sync_runs: CanvasSyncRun[];
+  grade_links: CanvasGradeLink[];
 };
 
 export type CanvasResponse = {
@@ -1463,6 +1499,12 @@ export type CanvasResponse = {
     missing_users?: CanvasPerson[];
     created_accounts?: Array<{ email: string; role: "student" | "teacher"; user_id: string }>;
     creation_errors?: Array<{ email: string; role: "student" | "teacher"; error: string }>;
+    grade_links?: CanvasGradeLink[];
+    grade_link?: CanvasGradeLink;
+    jargon_items?: CanvasGradeTarget[];
+    canvas_assignments?: CanvasAssignment[];
+    results?: Array<Record<string, unknown>>;
+    errors?: Array<Record<string, unknown>>;
     configured?: Record<string, boolean>;
     missing?: string[];
     redirect_uri?: string | null;

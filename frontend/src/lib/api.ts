@@ -34,6 +34,7 @@ import type {
   GoogleClassroomPerson,
   GoogleClassroomResponse,
   CanvasCourse,
+  CanvasGradeTargets,
   CanvasIntegrationState,
   CanvasPerson,
   CanvasResponse,
@@ -806,6 +807,9 @@ export async function invokeCanvas(input: {
     | "import_course"
     | "list_mappings"
     | "disconnect"
+    | "list_grade_targets"
+    | "upsert_grade_link"
+    | "delete_grade_link"
     | "push_grades"
     | "sync";
   organizationId?: string | null;
@@ -817,6 +821,11 @@ export async function invokeCanvas(input: {
   state?: string | null;
   createMissingAccounts?: boolean;
   defaultPassword?: string | null;
+  courseMappingId?: string | null;
+  gradeLinkId?: string | null;
+  jargonKind?: "assignment" | "assessment" | null;
+  jargonId?: string | null;
+  canvasAssignmentId?: string | null;
 }) {
   const response = await fetchWithTimeout(functionUrl("canvas"), {
     method: "POST",
@@ -832,6 +841,11 @@ export async function invokeCanvas(input: {
       state: input.state || undefined,
       create_missing_accounts: input.createMissingAccounts || undefined,
       default_password: input.defaultPassword || undefined,
+      course_mapping_id: input.courseMappingId || undefined,
+      grade_link_id: input.gradeLinkId || undefined,
+      jargon_kind: input.jargonKind || undefined,
+      jargon_id: input.jargonId || undefined,
+      canvas_assignment_id: input.canvasAssignmentId || undefined,
     }),
   });
   const data = (await response.json()) as CanvasResponse;
@@ -893,6 +907,7 @@ export async function fetchCanvasMappings(
     course_mappings: data.data?.course_mappings || [],
     user_mappings: data.data?.user_mappings || [],
     sync_runs: data.data?.sync_runs || [],
+    grade_links: data.data?.grade_links || [],
   };
 }
 
@@ -956,6 +971,62 @@ export async function disconnectCanvas(accessToken: string, connectionId: string
     action: "disconnect",
     connectionId,
   });
+}
+
+export async function fetchCanvasGradeTargets(
+  accessToken: string,
+  courseMappingId: string,
+): Promise<CanvasGradeTargets> {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "list_grade_targets",
+    courseMappingId,
+  });
+  return {
+    jargon_items: data.data?.jargon_items || [],
+    canvas_assignments: data.data?.canvas_assignments || [],
+    grade_links: data.data?.grade_links || [],
+  };
+}
+
+export async function upsertCanvasGradeLink(input: {
+  accessToken: string;
+  courseMappingId: string;
+  jargonKind: "assignment" | "assessment";
+  jargonId: string;
+  canvasAssignmentId: string;
+}) {
+  const data = await invokeCanvas({
+    accessToken: input.accessToken,
+    action: "upsert_grade_link",
+    courseMappingId: input.courseMappingId,
+    jargonKind: input.jargonKind,
+    jargonId: input.jargonId,
+    canvasAssignmentId: input.canvasAssignmentId,
+  });
+  return data.data?.grade_link || null;
+}
+
+export async function deleteCanvasGradeLink(accessToken: string, gradeLinkId: string) {
+  await invokeCanvas({
+    accessToken,
+    action: "delete_grade_link",
+    gradeLinkId,
+  });
+}
+
+export async function pushCanvasGrades(input: {
+  accessToken: string;
+  gradeLinkId?: string | null;
+  courseMappingId?: string | null;
+}) {
+  const data = await invokeCanvas({
+    accessToken: input.accessToken,
+    action: "push_grades",
+    gradeLinkId: input.gradeLinkId,
+    courseMappingId: input.courseMappingId,
+  });
+  return data.data;
 }
 
 export async function fetchCurriculumAuthoringData(
