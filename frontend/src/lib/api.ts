@@ -33,6 +33,10 @@ import type {
   GoogleClassroomIntegrationState,
   GoogleClassroomPerson,
   GoogleClassroomResponse,
+  CanvasCourse,
+  CanvasIntegrationState,
+  CanvasPerson,
+  CanvasResponse,
   InterventionAlert,
   LearningSession,
   LearningTurn,
@@ -785,6 +789,161 @@ export async function importGoogleClassroomCourse(input: {
 
 export async function disconnectGoogleClassroom(accessToken: string, connectionId: string) {
   await invokeGoogleClassroom({
+    accessToken,
+    action: "disconnect",
+    connectionId,
+  });
+}
+
+export async function invokeCanvas(input: {
+  accessToken: string;
+  action:
+    | "diagnose"
+    | "start_oauth"
+    | "oauth_callback"
+    | "list_courses"
+    | "preview_roster"
+    | "import_course"
+    | "list_mappings"
+    | "disconnect"
+    | "push_grades"
+    | "sync";
+  organizationId?: string | null;
+  connectionId?: string | null;
+  baseUrl?: string | null;
+  canvasCourseId?: string | null;
+  classId?: string | null;
+  code?: string | null;
+  state?: string | null;
+}) {
+  const response = await fetchWithTimeout(functionUrl("canvas"), {
+    method: "POST",
+    headers: authHeaders(input.accessToken),
+    body: JSON.stringify({
+      action: input.action,
+      organization_id: input.organizationId || undefined,
+      connection_id: input.connectionId || undefined,
+      base_url: input.baseUrl || undefined,
+      canvas_course_id: input.canvasCourseId || undefined,
+      class_id: input.classId || undefined,
+      code: input.code || undefined,
+      state: input.state || undefined,
+    }),
+  });
+  const data = (await response.json()) as CanvasResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Canvas operation failed.");
+  }
+  return data;
+}
+
+export async function diagnoseCanvas(accessToken: string, organizationId?: string | null) {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "diagnose",
+    organizationId,
+  });
+  return data.data;
+}
+
+export async function startCanvasOAuth(
+  accessToken: string,
+  organizationId: string,
+  baseUrl: string,
+) {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "start_oauth",
+    organizationId,
+    baseUrl,
+  });
+  const authUrl = data.data?.auth_url;
+  if (!authUrl) throw new Error("Canvas OAuth response was missing a URL.");
+  return authUrl;
+}
+
+export async function completeCanvasOAuth(accessToken: string, code: string, state: string) {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "oauth_callback",
+    code,
+    state,
+  });
+  if (!data.data?.connection) {
+    throw new Error("Canvas OAuth response was missing the connection.");
+  }
+  return data.data.connection;
+}
+
+export async function fetchCanvasMappings(
+  accessToken: string,
+  organizationId?: string | null,
+): Promise<CanvasIntegrationState> {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "list_mappings",
+    organizationId,
+  });
+  return {
+    connections: data.data?.connections || [],
+    course_mappings: data.data?.course_mappings || [],
+    user_mappings: data.data?.user_mappings || [],
+    sync_runs: data.data?.sync_runs || [],
+  };
+}
+
+export async function fetchCanvasCourses(
+  accessToken: string,
+  connectionId: string,
+): Promise<CanvasCourse[]> {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "list_courses",
+    connectionId,
+  });
+  return data.data?.courses || [];
+}
+
+export async function previewCanvasRoster(
+  accessToken: string,
+  connectionId: string,
+  canvasCourseId: string,
+): Promise<{
+  course: CanvasCourse | null;
+  teachers: CanvasPerson[];
+  students: CanvasPerson[];
+}> {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "preview_roster",
+    connectionId,
+    canvasCourseId,
+  });
+  return {
+    course: data.data?.course || null,
+    teachers: data.data?.teachers || [],
+    students: data.data?.students || [],
+  };
+}
+
+export async function importCanvasCourse(input: {
+  accessToken: string;
+  connectionId: string;
+  canvasCourseId: string;
+  classId?: string | null;
+}) {
+  const data = await invokeCanvas({
+    accessToken: input.accessToken,
+    action: "import_course",
+    connectionId: input.connectionId,
+    canvasCourseId: input.canvasCourseId,
+    classId: input.classId,
+  });
+  return data.data;
+}
+
+export async function disconnectCanvas(accessToken: string, connectionId: string) {
+  await invokeCanvas({
     accessToken,
     action: "disconnect",
     connectionId,

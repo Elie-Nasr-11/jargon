@@ -1343,6 +1343,134 @@ export type GoogleClassroomResponse = {
   error?: string;
 };
 
+export type CanvasConnection = {
+  id: string;
+  organization_id: string;
+  connected_by: string;
+  base_url: string;
+  canvas_user_id: string;
+  canvas_login_id: string;
+  canvas_name: string;
+  scopes: string[];
+  status: "active" | "revoked" | "error";
+  last_error: string | null;
+  token_expires_at: string | null;
+  last_refreshed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CanvasCourse = {
+  id: string;
+  name: string;
+  course_code?: string | null;
+  workflow_state?: string | null;
+  raw?: Record<string, unknown>;
+};
+
+export type CanvasPerson = {
+  canvas_user_id: string;
+  email: string;
+  display_name: string;
+  role: "student" | "teacher";
+  user_id?: string | null;
+  matched?: boolean;
+  raw_profile?: Record<string, unknown>;
+};
+
+export type CanvasCourseMapping = {
+  id: string;
+  organization_id: string;
+  connection_id: string | null;
+  canvas_course_id: string;
+  canvas_course_name: string;
+  canvas_course_code: string | null;
+  canvas_workflow_state: string | null;
+  class_id: string | null;
+  status: "active" | "archived" | "disconnected";
+  last_synced_at: string | null;
+  raw_course: Record<string, unknown>;
+  imported_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CanvasUserMapping = {
+  id: string;
+  organization_id: string;
+  course_mapping_id: string | null;
+  canvas_course_id: string | null;
+  canvas_user_id: string;
+  email: string;
+  display_name: string;
+  role: "student" | "teacher";
+  user_id: string | null;
+  last_seen_at: string;
+  raw_profile: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CanvasSyncRun = {
+  id: string;
+  organization_id: string;
+  connection_id: string | null;
+  course_mapping_id: string | null;
+  class_id: string | null;
+  triggered_by: string | null;
+  action:
+    | "oauth_connect"
+    | "list_courses"
+    | "preview_roster"
+    | "import_course"
+    | "disconnect"
+    | "push_grades"
+    | "sync";
+  status: "success" | "partial" | "failed";
+  counts: Record<string, unknown>;
+  errors: unknown[];
+  metadata: Record<string, unknown>;
+  started_at: string;
+  completed_at: string | null;
+};
+
+export type CanvasIntegrationState = {
+  connections: CanvasConnection[];
+  course_mappings: CanvasCourseMapping[];
+  user_mappings: CanvasUserMapping[];
+  sync_runs: CanvasSyncRun[];
+};
+
+export type CanvasResponse = {
+  status: "ok" | "error";
+  data?: {
+    actor_access?: AdminActorAccess;
+    auth_url?: string;
+    base_url?: string;
+    scopes?: string[];
+    connection?: CanvasConnection;
+    connections?: CanvasConnection[];
+    course_mappings?: CanvasCourseMapping[];
+    user_mappings?: CanvasUserMapping[];
+    sync_runs?: CanvasSyncRun[];
+    courses?: CanvasCourse[];
+    course?: CanvasCourse;
+    teachers?: CanvasPerson[];
+    students?: CanvasPerson[];
+    course_mapping?: CanvasCourseMapping;
+    class_id?: string;
+    counts?: Record<string, unknown>;
+    missing_users?: CanvasPerson[];
+    configured?: Record<string, boolean>;
+    missing?: string[];
+    redirect_uri?: string | null;
+    scope_enforcement?: boolean;
+    write_scopes_enabled?: boolean;
+    next_step?: string;
+  };
+  error?: string;
+};
+
 export type AdminOpsAction =
   | "list_admin_scope"
   | "list_pilot_readiness"

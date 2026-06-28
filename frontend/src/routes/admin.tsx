@@ -49,6 +49,14 @@ import {
   completeGoogleClassroomOAuth,
   disconnectGoogleClassroom,
   diagnoseGoogleClassroom,
+  fetchCanvasCourses,
+  fetchCanvasMappings,
+  importCanvasCourse,
+  previewCanvasRoster,
+  startCanvasOAuth,
+  completeCanvasOAuth,
+  disconnectCanvas,
+  diagnoseCanvas,
   upsertConsentSettings,
 } from "@/lib/api";
 import type {
@@ -64,6 +72,9 @@ import type {
   GoogleClassroomCourse,
   GoogleClassroomIntegrationState,
   GoogleClassroomPerson,
+  CanvasCourse,
+  CanvasIntegrationState,
+  CanvasPerson,
   PilotReadiness,
   PilotRole,
   ReadinessStatus,
@@ -283,6 +294,18 @@ function AdminPage() {
     teachers: GoogleClassroomPerson[];
     students: GoogleClassroomPerson[];
   } | null>(null);
+  const [canvas, setCanvas] = useState<CanvasIntegrationState | null>(null);
+  const [canvasLoading, setCanvasLoading] = useState(false);
+  const [canvasMessage, setCanvasMessage] = useState("");
+  const [canvasBaseUrl, setCanvasBaseUrl] = useState("");
+  const [selectedCanvasConnectionId, setSelectedCanvasConnectionId] = useState("");
+  const [canvasCourses, setCanvasCourses] = useState<CanvasCourse[]>([]);
+  const [selectedCanvasCourseId, setSelectedCanvasCourseId] = useState("");
+  const [canvasRosterPreview, setCanvasRosterPreview] = useState<{
+    course: CanvasCourse | null;
+    teachers: CanvasPerson[];
+    students: CanvasPerson[];
+  } | null>(null);
   const [oauthHandled, setOauthHandled] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvRows, setCsvRows] = useState<AdminCsvImportRow[]>([]);
@@ -341,6 +364,28 @@ function AdminPage() {
     const state = params.get("state");
     if (!code || !state) return;
     setOauthHandled(true);
+    // Google and Canvas both return ?code&state to this page. A provider hint
+    // stored before redirect tells us which completion to run (defaults to Google
+    // for backward compatibility with existing connection flows).
+    const provider = window.sessionStorage.getItem("jargon_oauth_provider") || "google";
+    window.sessionStorage.removeItem("jargon_oauth_provider");
+    if (provider === "canvas") {
+      setCanvasLoading(true);
+      setCanvasMessage("Finishing Canvas connection...");
+      completeCanvasOAuth(token, code, state)
+        .then((connection) => {
+          setCanvasMessage(
+            `Connected Canvas as ${connection.canvas_login_id || connection.canvas_name}.`,
+          );
+          window.history.replaceState({}, document.title, window.location.pathname);
+          return refreshCanvasMappings(token, connection.organization_id, true);
+        })
+        .catch((error) => {
+          setCanvasMessage((error as Error).message || "Could not finish Canvas connection.");
+        })
+        .finally(() => setCanvasLoading(false));
+      return;
+    }
     setClassroomLoading(true);
     setClassroomMessage("Finishing Google Classroom connection...");
     completeGoogleClassroomOAuth(token, code, state)
@@ -360,7 +405,8 @@ function AdminPage() {
   useEffect(() => {
     if (!token || !authorized || !selectedOrgId) return;
     void refreshGoogleClassroomMappings(token, selectedOrgId, true);
-    // Classroom mappings refresh explicitly when the selected organization changes.
+    void refreshCanvasMappings(token, selectedOrgId, true);
+    // Classroom + Canvas mappings refresh explicitly when the selected org changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorized, selectedOrgId, token]);
 
@@ -464,6 +510,42 @@ function AdminPage() {
       return false;
     } finally {
       setClassroomLoading(false);
+    }
+  };
+
+  const refreshCanvasMappings = async (
+    accessToken = token,
+    organizationId = selectedOrgId,
+    silent = false,
+  ) => {
+    if (!accessToken || !organizationId) return false;
+    setCanvasLoading(true);
+    if (!silent) setCanvasMessage("");
+    try {
+      const data = await fetchCanvasMappings(accessToken, organizationId);
+      setCanvas(data);
+      const activeConnections = data.connections.filter(
+        (connection) =>
+          connection.organization_id === organizationId && connection.status === "active",
+      );
+      const nextConnection =
+        selectedCanvasConnectionId &&
+        activeConnections.some((connection) => connection.id === selectedCanvasConnectionId)
+          ? selectedCanvasConnectionId
+          : activeConnections[0]?.id || "";
+      setSelectedCanvasConnectionId(nextConnection);
+      if (!activeConnections.length) {
+        setCanvasCourses([]);
+        setSelectedCanvasCourseId("");
+        setCanvasRosterPreview(null);
+      }
+      if (!silent) setCanvasMessage("Canvas mappings refreshed.");
+      return true;
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not load Canvas data.");
+      return false;
+    } finally {
+      setCanvasLoading(false);
     }
   };
 
@@ -670,6 +752,33 @@ function AdminPage() {
       ) || null,
     [classroom, selectedGoogleCourseId, selectedOrgId],
   );
+  const activeCanvasConnections = useMemo(
+    () =>
+      (canvas?.connections || []).filter(
+        (connection) =>
+          connection.organization_id === selectedOrgId && connection.status === "active",
+      ),
+    [canvas, selectedOrgId],
+  );
+  const selectedCanvasConnection = useMemo(
+    () =>
+      activeCanvasConnections.find((connection) => connection.id === selectedCanvasConnectionId) ||
+      null,
+    [activeCanvasConnections, selectedCanvasConnectionId],
+  );
+  const selectedCanvasCourse = useMemo(
+    () => canvasCourses.find((course) => course.id === selectedCanvasCourseId) || null,
+    [canvasCourses, selectedCanvasCourseId],
+  );
+  const selectedCanvasCourseMapping = useMemo(
+    () =>
+      (canvas?.course_mappings || []).find(
+        (mapping) =>
+          mapping.organization_id === selectedOrgId &&
+          mapping.canvas_course_id === selectedCanvasCourseId,
+      ) || null,
+    [canvas, selectedCanvasCourseId, selectedOrgId],
+  );
 
   const copyLoginInstructions = async (item: ClassReadiness | null) => {
     if (!item) {
@@ -848,6 +957,145 @@ function AdminPage() {
       setClassroomMessage((error as Error).message || "Could not disconnect Google Classroom.");
     } finally {
       setClassroomLoading(false);
+    }
+  };
+
+  const connectCanvas = async () => {
+    if (!token || !selectedOrgId) {
+      setCanvasMessage("Choose an organization before connecting Canvas.");
+      return;
+    }
+    if (!canvasBaseUrl.trim()) {
+      setCanvasMessage("Enter your Canvas base URL (e.g. https://school.instructure.com).");
+      return;
+    }
+    setCanvasLoading(true);
+    setCanvasMessage("");
+    try {
+      const authUrl = await startCanvasOAuth(token, selectedOrgId, canvasBaseUrl.trim());
+      window.sessionStorage.setItem("jargon_oauth_provider", "canvas");
+      window.location.href = authUrl;
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not start Canvas OAuth.");
+      setCanvasLoading(false);
+    }
+  };
+
+  const diagnoseCanvasFn = async () => {
+    if (!token) return;
+    setCanvasLoading(true);
+    setCanvasMessage("");
+    try {
+      const data = await diagnoseCanvas(token, selectedOrgId);
+      const missing = data?.missing || [];
+      setCanvasMessage(
+        missing.length
+          ? `Canvas needs: ${missing.join(", ")}.`
+          : data?.next_step || "Canvas OAuth configuration looks ready.",
+      );
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not diagnose Canvas.");
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const loadCanvasCourses = async () => {
+    if (!token || !selectedCanvasConnectionId) {
+      setCanvasMessage("Connect Canvas first.");
+      return;
+    }
+    setCanvasLoading(true);
+    setCanvasMessage("");
+    try {
+      const courses = await fetchCanvasCourses(token, selectedCanvasConnectionId);
+      setCanvasCourses(courses);
+      setSelectedCanvasCourseId((current) =>
+        current && courses.some((course) => course.id === current) ? current : courses[0]?.id || "",
+      );
+      setCanvasRosterPreview(null);
+      setCanvasMessage(`Loaded ${courses.length} Canvas course${courses.length === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not load Canvas courses.");
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const previewCanvasRosterFn = async () => {
+    if (!token || !selectedCanvasConnectionId || !selectedCanvasCourseId) {
+      setCanvasMessage("Choose a Canvas course first.");
+      return;
+    }
+    setCanvasLoading(true);
+    setCanvasMessage("");
+    try {
+      const preview = await previewCanvasRoster(
+        token,
+        selectedCanvasConnectionId,
+        selectedCanvasCourseId,
+      );
+      setCanvasRosterPreview(preview);
+      const people = preview.teachers.length + preview.students.length;
+      const matched = [...preview.teachers, ...preview.students].filter(
+        (person) => person.matched,
+      ).length;
+      setCanvasMessage(`Previewed ${people} roster rows. ${matched} already match Jargon users.`);
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not preview Canvas roster.");
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const importCanvasCourseFn = async () => {
+    if (!token || !selectedCanvasConnectionId || !selectedCanvasCourseId) {
+      setCanvasMessage("Choose a Canvas course first.");
+      return;
+    }
+    setCanvasLoading(true);
+    setCanvasMessage("");
+    try {
+      const data = await importCanvasCourse({
+        accessToken: token,
+        connectionId: selectedCanvasConnectionId,
+        canvasCourseId: selectedCanvasCourseId,
+      });
+      await Promise.all([
+        refreshScope(token),
+        refreshReadiness(token, true),
+        refreshCanvasMappings(token, selectedOrgId, true),
+      ]);
+      const counts = data?.counts || {};
+      const missing = typeof counts.missing === "number" ? counts.missing : 0;
+      setCanvasMessage(
+        missing
+          ? `Imported course with ${missing} unmapped roster row${missing === 1 ? "" : "s"}. Seed missing accounts, then import again.`
+          : "Imported Canvas course into Jargon.",
+      );
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not import Canvas course.");
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const disconnectSelectedCanvas = async () => {
+    if (!token || !selectedCanvasConnectionId) return;
+    setCanvasLoading(true);
+    setCanvasMessage("");
+    try {
+      await disconnectCanvas(token, selectedCanvasConnectionId);
+      setSelectedCanvasConnectionId("");
+      setCanvasCourses([]);
+      setSelectedCanvasCourseId("");
+      setCanvasRosterPreview(null);
+      await refreshCanvasMappings(token, selectedOrgId, true);
+      setCanvasMessage("Canvas connection disconnected.");
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not disconnect Canvas.");
+    } finally {
+      setCanvasLoading(false);
     }
   };
 
@@ -1365,6 +1613,7 @@ function AdminPage() {
                 <WorkspaceTab value="readiness">Readiness</WorkspaceTab>
                 <WorkspaceTab value="school">School data</WorkspaceTab>
                 <WorkspaceTab value="google">Google Classroom</WorkspaceTab>
+                <WorkspaceTab value="canvas">Canvas</WorkspaceTab>
                 {isPlatformLevel ? (
                   <WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>
                 ) : null}
@@ -2192,6 +2441,296 @@ function AdminPage() {
                             {!classroom?.sync_runs.length ? (
                               <div className="text-[12px] text-muted-foreground">
                                 No Classroom sync runs yet.
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </GradientCard>
+              </WorkspacePanel>
+
+              <WorkspacePanel value="canvas">
+                <GradientCard>
+                  <div className="space-y-5 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
+                          Canvas LMS
+                        </div>
+                        <h2 className="text-[18px] font-medium text-foreground">
+                          Course and roster import
+                        </h2>
+                        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                          Connect a teacher or org-admin Canvas account for your institution,
+                          preview courses and rosters, then import matched users into Jargon
+                          classes. This is read-only: assignments, grades, and mastery stay
+                          authoritative in Jargon. Grade passback and scheduled sync arrive in later
+                          phases.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void refreshCanvasMappings()}
+                          disabled={canvasLoading || !selectedOrgId}
+                          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`h-4 w-4 ${canvasLoading ? "animate-spin" : ""}`}
+                            strokeWidth={1.6}
+                          />
+                          Refresh Canvas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void diagnoseCanvasFn()}
+                          disabled={canvasLoading}
+                          className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        >
+                          Diagnose
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void connectCanvas()}
+                          disabled={canvasLoading || !selectedOrgId || !canvasBaseUrl.trim()}
+                          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                        >
+                          <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
+                          Connect Canvas
+                        </button>
+                      </div>
+                    </div>
+
+                    {canvasMessage ? (
+                      <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                        {canvasMessage}
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="text-[14px] font-medium text-foreground">Connection</h3>
+                          <div className="mt-3 space-y-3">
+                            <Field label="Canvas base URL">
+                              <input
+                                type="url"
+                                inputMode="url"
+                                placeholder="https://school.instructure.com"
+                                value={canvasBaseUrl}
+                                onChange={(event) => setCanvasBaseUrl(event.target.value)}
+                                className="jargon-input"
+                              />
+                            </Field>
+                            <Field label="Canvas account">
+                              <select
+                                value={selectedCanvasConnectionId}
+                                onChange={(event) => {
+                                  setSelectedCanvasConnectionId(event.target.value);
+                                  setCanvasCourses([]);
+                                  setSelectedCanvasCourseId("");
+                                  setCanvasRosterPreview(null);
+                                }}
+                                className="jargon-input"
+                              >
+                                <option value="">
+                                  {activeCanvasConnections.length
+                                    ? "Choose a Canvas connection"
+                                    : "No active Canvas connection"}
+                                </option>
+                                {activeCanvasConnections.map((connection) => (
+                                  <option key={connection.id} value={connection.id}>
+                                    {connection.canvas_login_id || connection.canvas_name}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                            {selectedCanvasConnection ? (
+                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                <div className="font-medium text-foreground">
+                                  {selectedCanvasConnection.canvas_name ||
+                                    selectedCanvasConnection.canvas_login_id}
+                                </div>
+                                <div className="mt-1 break-all">
+                                  {selectedCanvasConnection.base_url}
+                                </div>
+                                <div className="mt-1">
+                                  Last refreshed{" "}
+                                  {formatDate(selectedCanvasConnection.last_refreshed_at)}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void disconnectSelectedCanvas()}
+                                  disabled={canvasLoading}
+                                  className="mt-3 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                >
+                                  Disconnect
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                Enter your institution Canvas URL, then connect a teacher or
+                                org-admin account. Canvas secrets and refresh tokens are never sent
+                                to the browser.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
+                            <button
+                              type="button"
+                              onClick={() => void loadCanvasCourses()}
+                              disabled={!selectedCanvasConnectionId || canvasLoading}
+                              className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                            >
+                              Load courses
+                            </button>
+                          </div>
+                          <div className="mt-3 space-y-3">
+                            <Field label="Canvas course">
+                              <select
+                                value={selectedCanvasCourseId}
+                                onChange={(event) => {
+                                  setSelectedCanvasCourseId(event.target.value);
+                                  setCanvasRosterPreview(null);
+                                }}
+                                className="jargon-input"
+                              >
+                                <option value="">
+                                  {canvasCourses.length ? "Choose a course" : "Load courses first"}
+                                </option>
+                                {canvasCourses.map((course) => (
+                                  <option key={course.id} value={course.id}>
+                                    {course.name}
+                                    {course.course_code ? ` (${course.course_code})` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                            {selectedCanvasCourse ? (
+                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                <div className="font-medium text-foreground">
+                                  {selectedCanvasCourse.name}
+                                </div>
+                                <div className="mt-1">
+                                  {selectedCanvasCourse.course_code || "No course code"} ·{" "}
+                                  {selectedCanvasCourse.workflow_state || "unknown state"}
+                                </div>
+                              </div>
+                            ) : null}
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void previewCanvasRosterFn()}
+                                disabled={!selectedCanvasCourseId || canvasLoading}
+                                className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                              >
+                                Preview roster
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void importCanvasCourseFn()}
+                                disabled={!selectedCanvasCourseId || canvasLoading}
+                                className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                              >
+                                Import into Jargon
+                              </button>
+                            </div>
+                            {selectedCanvasCourseMapping ? (
+                              <div className="rounded-2xl border border-success/30 bg-success/10 p-3 text-[12px] text-success">
+                                Mapped to Jargon class{" "}
+                                {scope?.classes.find(
+                                  (item) => item.id === selectedCanvasCourseMapping.class_id,
+                                )?.name ||
+                                  selectedCanvasCourseMapping.class_id ||
+                                  "unknown"}{" "}
+                                · last sync {formatDate(selectedCanvasCourseMapping.last_synced_at)}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="text-[14px] font-medium text-foreground">
+                            Roster preview
+                          </h3>
+                          {canvasRosterPreview ? (
+                            <div className="mt-3 space-y-4">
+                              <div className="grid gap-3 sm:grid-cols-4">
+                                <MiniStat
+                                  label="Teachers"
+                                  value={String(canvasRosterPreview.teachers.length)}
+                                />
+                                <MiniStat
+                                  label="Students"
+                                  value={String(canvasRosterPreview.students.length)}
+                                />
+                                <MiniStat
+                                  label="Matched"
+                                  value={String(
+                                    [
+                                      ...canvasRosterPreview.teachers,
+                                      ...canvasRosterPreview.students,
+                                    ].filter((person) => person.matched).length,
+                                  )}
+                                />
+                                <MiniStat
+                                  label="Missing"
+                                  value={String(
+                                    [
+                                      ...canvasRosterPreview.teachers,
+                                      ...canvasRosterPreview.students,
+                                    ].filter((person) => !person.matched).length,
+                                  )}
+                                />
+                              </div>
+                              <RosterPreviewTable
+                                title="Teachers"
+                                people={canvasRosterPreview.teachers}
+                              />
+                              <RosterPreviewTable
+                                title="Students"
+                                people={canvasRosterPreview.students}
+                              />
+                            </div>
+                          ) : (
+                            <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                              Preview before importing. Existing Jargon users are matched by email.
+                              Missing users are not created here; seed them through the existing
+                              roster tools and import again.
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <h3 className="text-[14px] font-medium text-foreground">
+                            Recent Canvas syncs
+                          </h3>
+                          <div className="mt-3 space-y-2">
+                            {(canvas?.sync_runs || []).slice(0, 6).map((run) => (
+                              <div
+                                key={run.id}
+                                className="border-b border-border/55 pb-2 text-[12px]"
+                              >
+                                <div className="text-foreground">
+                                  {run.action.replaceAll("_", " ")} · {run.status}
+                                </div>
+                                <div className="mt-0.5 text-muted-foreground">
+                                  {formatDate(run.started_at)} · {JSON.stringify(run.counts)}
+                                </div>
+                              </div>
+                            ))}
+                            {!canvas?.sync_runs.length ? (
+                              <div className="text-[12px] text-muted-foreground">
+                                No Canvas sync runs yet.
                               </div>
                             ) : null}
                           </div>
@@ -3188,7 +3727,14 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RosterPreviewTable({ title, people }: { title: string; people: GoogleClassroomPerson[] }) {
+type RosterPreviewPerson = {
+  display_name: string;
+  email: string;
+  role: "student" | "teacher";
+  matched?: boolean;
+};
+
+function RosterPreviewTable({ title, people }: { title: string; people: RosterPreviewPerson[] }) {
   return (
     <div>
       <h4 className="text-[12.5px] font-medium text-foreground">{title}</h4>
@@ -3202,9 +3748,9 @@ function RosterPreviewTable({ title, people }: { title: string; people: GoogleCl
             </tr>
           </thead>
           <tbody>
-            {people.map((person) => (
+            {people.map((person, index) => (
               <tr
-                key={`${person.role}-${person.google_user_id}-${person.email}`}
+                key={`${person.role}-${person.email || "noemail"}-${index}`}
                 className="border-b border-border/55"
               >
                 <td className="py-2 pl-3 pr-3 text-foreground">

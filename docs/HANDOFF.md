@@ -6,6 +6,53 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Canvas LMS integration — C1 connect+import; branch, NOT deployed)
+
+Summary: Built **Canvas C1** (connect + import), the first shippable Canvas milestone, mirroring the
+Google Classroom integration. Canvas is per-institution, so connections store a `base_url`
+(`https://school.instructure.com`) and the OAuth2 flow + all API calls run against that base. Read-only:
+Jargon stays the source of truth for grades/mastery. C2 (account creation), C3 (grade passback, tables
+already pre-declared), and C4 (scheduled sync) are scoped but not built. Doc: `docs/CANVAS_INTEGRATION.md`.
+
+Files changed:
+- New `supabase/migrations/20260628000000_canvas_integration.sql`: `canvas_connections` (+`base_url`),
+  `canvas_course_mappings`, `canvas_user_mappings`, `canvas_sync_runs` (actions incl. `push_grades`/`sync`),
+  `canvas_grade_links` (reserved for C3). RLS/grants/indexes mirror `0014` (connection table
+  service-role-only; mapping/sync/grade-link tables org-admin SELECT via `is_org_admin`).
+- New `supabase/functions/canvas/index.ts`: mirrors `google-classroom` with Canvas OAuth2
+  (`{base}/login/oauth2/auth` + `/login/oauth2/token`, refresh tokens, AES-GCM token encryption, HMAC
+  signed state carrying `base_url`), Link-header pagination, rosters via `/api/v1/courses` +
+  `/courses/:id/users?enrollment_type[]=...&include[]=email`. Actions: diagnose/start_oauth/oauth_callback/
+  list_courses/preview_roster/import_course/list_mappings/disconnect; push_grades/sync return 409 for now.
+  Secrets: `CANVAS_CLIENT_ID/SECRET/REDIRECT_URI`, `CANVAS_TOKEN_ENCRYPTION_KEY` (falls back to
+  `GOOGLE_TOKEN_ENCRYPTION_KEY`), optional `CANVAS_SCOPES`.
+- `frontend/src/lib/types.ts`: `Canvas*` types (Connection/Course/Person/CourseMapping/UserMapping/
+  SyncRun/IntegrationState/Response).
+- `frontend/src/lib/api.ts`: `invokeCanvas` dispatcher + `diagnose/start/complete OAuth`, `fetchCanvasMappings`,
+  `fetchCanvasCourses`, `previewCanvasRoster`, `importCanvasCourse`, `disconnectCanvas`.
+- `frontend/src/lib/supabase.ts`: added `"canvas"` to the `functionUrl` slug union.
+- `frontend/src/routes/admin.tsx`: new **Canvas** admin tab (base-URL field + connect→load→preview→import),
+  Canvas state/handlers/memos, and the OAuth callback effect now routes Google vs Canvas via a
+  `jargon_oauth_provider` sessionStorage hint (both providers redirect to `/admin` with `?code&state`).
+  `RosterPreviewTable` generalized to a minimal person shape so both integrations share it.
+
+Tests run: `tsc --noEmit` 0 errors; `npm run lint` 0 errors / 11 pre-existing warnings; `npm run build`
+green. Deno not in sandbox (matches the google-classroom toolchain); edge fn not Deno-checked locally.
+
+Remaining concerns / NOT done:
+- **Backend not deployed.** The migration + `canvas` edge function must be applied via Supabase (MCP
+  deploy is gated this session). Set the `CANVAS_*` secrets first. A **Canvas developer key** per
+  institution (client id/secret + redirect URI) is a hard prerequisite before C1 can actually connect;
+  functional verification can't run from the sandbox (egress).
+- Frontend is branch-only (`claude/happy-johnson-wseex8`), not yet on main.
+- Canvas `email`/`login_id` visibility depends on the connected account's Canvas permissions; roster
+  rows without an email fall to "needs seed".
+
+Suggested next task: deploy backend + secrets + dev key, verify C1 end-to-end against a Canvas test
+course, then C2 (create missing accounts on import via admin-seed) → C3 (grade passback via
+`canvas_grade_links`) → C4 (scheduled sync). Campus Live = OneRoster/CSV import upgrade + per-org link-out
+(no native API).
+
 ## Claude -> Codex / Human - 2026-06-27 (Zero-friction Phase 0 + portal polish — LIVE/branch)
 
 Context: kicked off a "zero-friction" UI simplification (master vision in

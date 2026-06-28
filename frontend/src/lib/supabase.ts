@@ -25,7 +25,8 @@ export function functionUrl(
     | "assessment-admin"
     | "voice-session"
     | "resource-processing"
-    | "google-classroom",
+    | "google-classroom"
+    | "canvas",
 ) {
   return `${supabaseUrl}/functions/v1/${slug}`;
 }
