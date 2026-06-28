@@ -14,6 +14,7 @@ import {
 import { GradientCard } from "@/components/GradientCard";
 import { ConsoleShell } from "@/components/ConsoleShell";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { RouteLoader } from "@/components/RouteLoader";
 import {
   createLessonResource,
   fetchCurriculumAuthoringData,
@@ -104,6 +105,7 @@ function CurriculumPage() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [roleOk, setRoleOk] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -117,6 +119,7 @@ function CurriculumPage() {
         navigate({ to: roleHome(role), replace: true });
         return;
       }
+      setRoleOk(true);
       const curriculum = await fetchCurriculumAuthoringData(session.user.id);
       setEmail(session.user.email || "");
       setTeacherId(session.user.id);
@@ -255,6 +258,10 @@ function CurriculumPage() {
       setPublishing(false);
     }
   };
+
+  if (!roleOk) {
+    return <RouteLoader label="Loading…" />;
+  }
 
   return (
     <ConsoleShell email={email} activeNav="curriculum">

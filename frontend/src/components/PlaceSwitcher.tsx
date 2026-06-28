@@ -55,6 +55,18 @@ export function PlaceSwitcher({ active }: { active?: Place }) {
 
   const current = DESTS.find((dest) => dest.place === active);
 
+  // With only one reachable destination (e.g. admin), there is nothing to switch
+  // to — render a plain "you are here" indicator, not an interactive switcher.
+  if (visible.length <= 1) {
+    if (!current) return null;
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface-1 px-3 py-1.5 text-[13px] font-medium text-foreground">
+        <current.icon className="h-3.5 w-3.5" strokeWidth={1.7} />
+        {current.label}
+      </span>
+    );
+  }
+
   return (
     <>
       <button

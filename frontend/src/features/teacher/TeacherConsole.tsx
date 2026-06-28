@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
@@ -29,6 +29,7 @@ import { GradientCard } from "@/components/GradientCard";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConsoleShell } from "@/components/ConsoleShell";
+import { RouteLoader } from "@/components/RouteLoader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createAssignment,
@@ -148,8 +149,11 @@ export function TeacherConsole() {
           return;
         }
         setAuth({ id: session.user.id, email: session.user.email || "" });
-      } finally {
+        // Only mark checked once the teacher role is confirmed, so the gate below
+        // never renders teacher chrome for a wrong-role user mid-redirect.
         if (alive) setAuthChecked(true);
+      } catch {
+        if (alive) navigate({ to: "/login", replace: true });
       }
     })();
     return () => {
@@ -659,6 +663,10 @@ export function TeacherConsole() {
     }
   };
 
+  if (!authChecked) {
+    return <RouteLoader label="Loading…" />;
+  }
+
   return (
     <ConsoleShell email={email} activeNav="dashboard">
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -682,12 +690,6 @@ export function TeacherConsole() {
           >
             Refresh
           </button>
-          <Link
-            to="/chat"
-            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-          >
-            Student chat
-          </Link>
         </div>
       </section>
 

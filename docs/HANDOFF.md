@@ -6,6 +6,30 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Lock down per-role nav: remove cross-portal links + no flash; LIVE on main)
+
+Summary: Follow-up to the role-gating commit — closed the gaps so each role sees ONLY its own portal with no
+nav to anything else, and shipped it to main. An audit (grep of `to="/chat|/teacher|/admin"`) found
+cross-portal affordances the first pass missed because they live in shells that don't use ConsoleShell.
+
+- Removed cross-portal links: `admin.tsx` AdminShell logo `/chat`→`/admin`; deleted the "Open teacher
+  shell" (→/teacher) button and the "Return to Jargon" (→/chat) link; `TeacherConsole.tsx` deleted the
+  "Student chat" (→/chat) button (and the now-unused `Link` import).
+- No foreign-chrome flash: new `components/RouteLoader.tsx` (neutral full-screen loader, no portal chrome).
+  `admin.tsx` renders it while booting/!authorized (was rendering AdminShell chrome); `TeacherConsole`
+  sets `authChecked` only after role===teacher confirmed and early-returns RouteLoader until then;
+  `teacher.curriculum.tsx` adds a `roleOk` gate + RouteLoader. `chat.tsx` already gated on `!email ||
+  booting` with a neutral loader (student guard keeps those unset for non-students) — no change needed.
+- `PlaceSwitcher.tsx`: when only one destination is reachable (admin), render a static "you are here"
+  label instead of an interactive switcher; teachers keep the dashboard↔curriculum switch.
+
+Net effect per role: header shows no link to any other portal; logo → own home; a direct URL to another
+portal redirects to your home with no flash of the foreign shell; admin has no switcher control.
+
+Tests: tsc 0 errors; lint 0 errors / 11 pre-existing warnings; build green. Shipped: fast-forwarded `main`
+(frontend-only, Render auto-build) so the full role-gating (prior `5cba9fd` + this) is now LIVE. The
+demo-login seeder button still needs the `admin-seed` edge fn redeployed to function.
+
 ## Claude -> Codex / Human - 2026-06-28 (Strict role-gated navigation + demo-login seeder; branch)
 
 Summary: Each user now sees and can reach ONLY their own portal. Introduced a single **primary role**
