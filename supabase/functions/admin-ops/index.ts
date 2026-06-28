@@ -325,14 +325,27 @@ function parseCsv(text: string): { headers: string[]; rows: DbRow[] } {
 }
 
 function normalizedRosterRow(row: DbRow): DbRow {
-  const email = normalizeEmail(row.email || row.email_address || row.user_email);
+  // Accept both the simple Jargon shape (email,name,role,grade) and the OneRoster
+  // users.csv shape (givenName,familyName,role,grades,email,username). parseCsv
+  // lowercases headers and turns spaces into underscores, so OneRoster columns
+  // arrive as givenname/familyname/grades/username.
+  const username = cleanText(row.username);
+  const email = normalizeEmail(row.email || row.email_address || row.user_email) ||
+    (username.includes("@") ? normalizeEmail(username) : "");
   const roleText = cleanText(row.role, "student").toLowerCase();
   const role = roleText === "teacher" ? "teacher" : "student";
+  const oneRosterName = [cleanText(row.givenname), cleanText(row.familyname)]
+    .filter(Boolean)
+    .join(" ");
+  const grades = row.grades;
+  const oneRosterGrade = Array.isArray(grades)
+    ? cleanText(grades[0])
+    : cleanText(grades);
   return {
     email,
-    name: cleanText(row.name || row.full_name || row.display_name),
+    name: cleanText(row.name || row.full_name || row.display_name) || oneRosterName,
     role,
-    grade: cleanText(row.grade || row.year || row.level),
+    grade: cleanText(row.grade || row.year || row.level) || oneRosterGrade,
   };
 }
 
@@ -1572,6 +1585,73 @@ async function handleUpsertConsentSettings(
   });
 }
 
+// Read or update per-org external links stored in
+// organization_settings.resource_settings (currently: campus_live_url). Called
+// with an empty payload to read, or with a payload key to update — merges into
+// the existing resource_settings so other keys are preserved.
+async function handleOrganizationLinks(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const organizationId = cleanId(body.organization_id);
+  if (!organizationId) throw new Error("organization_id is required.");
+  requireOrganizationAccess(access, organizationId);
+  const payload = body.payload && typeof body.payload === "object" ? body.payload as DbRow : {};
+
+  const existing = await selectFirst(
+    config,
+    `organization_settings?organization_id=eq.${encodeURIComponent(organizationId)}&select=resource_settings`,
+  );
+  const resourceSettings = existing?.resource_settings && typeof existing.resource_settings === "object"
+    ? { ...(existing.resource_settings as DbRow) }
+    : {};
+
+  let changed = false;
+  if ("campus_live_url" in payload) {
+    const raw = cleanText(payload.campus_live_url);
+    // Store a normalized https URL, or clear the key when blank/invalid.
+    let normalized = "";
+    if (raw) {
+      const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      try {
+        const url = new URL(withProtocol);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+          normalized = url.toString();
+        }
+      } catch {
+        throw new Error("Campus Live URL is invalid. Use a full link like https://www.campus.live/.");
+      }
+    }
+    if (normalized) resourceSettings.campus_live_url = normalized;
+    else delete resourceSettings.campus_live_url;
+    changed = true;
+  }
+
+  if (changed) {
+    await upsertByConflict(config, "organization_settings", "organization_id", {
+      organization_id: organizationId,
+      resource_settings: resourceSettings,
+      updated_by: actorId,
+      updated_at: new Date().toISOString(),
+    });
+    await audit(config, {
+      actorId,
+      organizationId,
+      eventType: "admin.organization_links_updated",
+      entityType: "organization_settings",
+      entityId: organizationId,
+      payload: { resource_settings: resourceSettings },
+    });
+  }
+
+  return json({
+    status: "ok",
+    data: { resource_settings: resourceSettings },
+  });
+}
+
 async function handleGenerateProgressReport(
   config: Config,
   actorId: string,
@@ -2463,6 +2543,8 @@ Deno.serve(async (req: Request) => {
       return await handleRequestDataRetention(config, actorId, actorAccess, record);
     if (action === "upsert_consent_settings")
       return await handleUpsertConsentSettings(config, actorId, actorAccess, record);
+    if (action === "organization_links")
+      return await handleOrganizationLinks(config, actorId, actorAccess, record);
     if (action === "generate_progress_report")
       return await handleGenerateProgressReport(config, actorId, actorAccess, record);
     if (action === "create_class")

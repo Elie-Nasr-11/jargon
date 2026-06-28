@@ -1526,6 +1526,7 @@ export type AdminOpsAction =
   | "export_student_archive"
   | "request_data_retention"
   | "upsert_consent_settings"
+  | "organization_links"
   | "generate_progress_report"
   | "create_class"
   | "update_class"

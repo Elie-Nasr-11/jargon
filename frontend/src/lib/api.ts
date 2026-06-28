@@ -616,6 +616,61 @@ export async function upsertConsentSettings(input: {
   return data.data.consent_settings;
 }
 
+function campusLiveUrlFromResourceSettings(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const url = (value as Record<string, unknown>).campus_live_url;
+  return typeof url === "string" ? url : "";
+}
+
+// Admin read/write of per-org external links (admin-ops, service-role scoped so
+// platform admins can manage orgs they don't belong to). Returns campus_live_url.
+export async function fetchOrganizationLinks(accessToken: string, organizationId: string) {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "organization_links",
+    organizationId,
+    payload: {},
+  });
+  return { campusLiveUrl: campusLiveUrlFromResourceSettings(data.data?.resource_settings) };
+}
+
+export async function setOrganizationLinks(input: {
+  accessToken: string;
+  organizationId: string;
+  campusLiveUrl: string;
+}) {
+  const data = await invokeAdminOps({
+    accessToken: input.accessToken,
+    action: "organization_links",
+    organizationId: input.organizationId,
+    payload: { campus_live_url: input.campusLiveUrl },
+  });
+  return { campusLiveUrl: campusLiveUrlFromResourceSettings(data.data?.resource_settings) };
+}
+
+// Member-facing read of the org's Campus Live link-out. Resolves the signed-in
+// user's organization, then reads organization_settings via RLS (members may
+// SELECT). Returns null when there is no org or no link configured.
+export async function fetchCampusLiveLink(): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const { data: memberships } = await supabase
+    .from("organization_memberships")
+    .select("organization_id")
+    .eq("user_id", session.user.id)
+    .eq("status", "active")
+    .limit(1);
+  const organizationId = memberships?.[0]?.organization_id as string | undefined;
+  if (!organizationId) return null;
+  const { data: settings } = await supabase
+    .from("organization_settings")
+    .select("resource_settings")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  const url = campusLiveUrlFromResourceSettings(settings?.resource_settings);
+  return url || null;
+}
+
 export async function generateProgressReport(input: {
   accessToken: string;
   organizationId?: string | null;

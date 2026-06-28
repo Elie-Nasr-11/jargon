@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import {
   BookOpen,
+  ExternalLink,
   GraduationCap,
   LogOut,
   Mic,
@@ -16,6 +17,7 @@ import { GradientCard } from "./GradientCard";
 import type { VoiceSettings } from "@/lib/jargon-store";
 import { useTheme } from "@/lib/theme";
 import { useConsoleAccess } from "@/hooks/useConsoleAccess";
+import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 
 export function SettingsMenu({
@@ -34,6 +36,7 @@ export function SettingsMenu({
   const navigate = useNavigate();
   const { resolved, toggle } = useTheme();
   const access = useConsoleAccess();
+  const campusLiveUrl = useCampusLiveLink();
 
   const open = () => {
     setMounted(true);
@@ -257,6 +260,19 @@ export function SettingsMenu({
                 >
                   <Shield className="h-[15px] w-[15px]" strokeWidth={1.5} /> Admin
                 </button>
+              ) : null}
+              {campusLiveUrl ? (
+                <a
+                  href={campusLiveUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={close}
+                  className="flex w-full items-center justify-between gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <ExternalLink className="h-[15px] w-[15px]" strokeWidth={1.5} /> Campus Live
+                  </span>
+                </a>
               ) : null}
               <button
                 type="button"

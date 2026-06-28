@@ -63,6 +63,8 @@ import {
   pushCanvasGrades,
   syncCanvas,
   setCanvasSyncEnabled,
+  fetchOrganizationLinks,
+  setOrganizationLinks,
   upsertConsentSettings,
 } from "@/lib/api";
 import type {
@@ -336,6 +338,7 @@ function AdminPage() {
     ai_enabled: true,
     quiz_voice_enabled: false,
   });
+  const [campusLiveUrl, setCampusLiveUrl] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -421,7 +424,11 @@ function AdminPage() {
     if (!token || !authorized || !selectedOrgId) return;
     void refreshGoogleClassroomMappings(token, selectedOrgId, true);
     void refreshCanvasMappings(token, selectedOrgId, true);
-    // Classroom + Canvas mappings refresh explicitly when the selected org changes.
+    setCampusLiveUrl("");
+    fetchOrganizationLinks(token, selectedOrgId)
+      .then((links) => setCampusLiveUrl(links.campusLiveUrl))
+      .catch(() => undefined);
+    // Classroom + Canvas mappings + org links refresh when the selected org changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorized, selectedOrgId, token]);
 
@@ -1544,6 +1551,25 @@ function AdminPage() {
     });
   };
 
+  const saveCampusLiveUrl = async () => {
+    if (!selectedOrgId) {
+      setSchoolOpsMessage("Choose an organization first.");
+      return;
+    }
+    await runSchoolOp(
+      "campus_live",
+      campusLiveUrl.trim() ? "Campus Live link saved." : "Campus Live link cleared.",
+      async () => {
+        const result = await setOrganizationLinks({
+          accessToken: token,
+          organizationId: selectedOrgId,
+          campusLiveUrl: campusLiveUrl.trim(),
+        });
+        setCampusLiveUrl(result.campusLiveUrl);
+      },
+    );
+  };
+
   const generateStudentReport = async () => {
     if (!selectedStudentId) {
       setSchoolOpsMessage("Choose a student first.");
@@ -2167,9 +2193,10 @@ function AdminPage() {
                           CSV roster import
                         </h3>
                         <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                          Paste columns `email,name,role,grade`. Existing Jargon users are mapped;
-                          missing users are marked `needs seed` and must be created through account
-                          seeding.
+                          Paste columns `email,name,role,grade`, or a OneRoster `users.csv`
+                          (`givenName,familyName,email,role,grades`) exported from Campus Live or
+                          any SIS. Existing Jargon users are mapped; missing users are marked `needs
+                          seed` and must be created through account seeding.
                         </p>
                         <textarea
                           value={csvText}
@@ -2316,6 +2343,40 @@ function AdminPage() {
                             </ConfirmButton>
                           </div>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                      <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                        <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
+                        Campus Live link-out
+                      </h3>
+                      <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                        Campus Live has no public API, so set its URL here to surface a "Campus
+                        Live" link in the Settings menu for this organization&apos;s students and
+                        teachers. Leave blank to remove it.
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-end gap-2">
+                        <div className="min-w-[260px] flex-1">
+                          <Field label="Campus Live URL">
+                            <input
+                              type="url"
+                              inputMode="url"
+                              placeholder="https://www.campus.live/"
+                              value={campusLiveUrl}
+                              onChange={(event) => setCampusLiveUrl(event.target.value)}
+                              className="jargon-input"
+                            />
+                          </Field>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void saveCampusLiveUrl()}
+                          disabled={!selectedOrgId || schoolOpsBusy === "campus_live"}
+                          className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                        >
+                          Save link
+                        </button>
                       </div>
                     </div>
 

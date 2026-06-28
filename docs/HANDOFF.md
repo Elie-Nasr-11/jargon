@@ -6,6 +6,42 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Campus Live fallback — OneRoster CSV + link-out; branch, NOT deployed)
+
+Summary: Campus Live (campus.live) has no public API, so instead of a native integration we shipped two
+provider-agnostic surfaces (also useful for any SIS). **No migration.** Doc: `docs/CAMPUS_LIVE_INTEGRATION.md`.
+
+1) **OneRoster CSV import.** The existing admin CSV roster import now also accepts a OneRoster `users.csv`
+   with no reformatting. Only `admin-ops` `normalizedRosterRow()` changed: it maps `givenName`+`familyName`
+   → name, `grades` → grade, `username` → email fallback (only if it looks like an email), in addition to
+   the existing aliases. `parseCsv` lowercases headers so the function reads `givenname`/`familyname`/`grades`.
+   Behavior otherwise unchanged (links existing users; unmatched = needs_seed; still requires an `email`
+   column; does not create accounts). Admin hint text updated.
+2) **Per-org Campus Live link-out.** Admins set a per-org URL; students+teachers in that org see a "Campus
+   Live" item in the shared Settings menu (opens in a new tab).
+   - Storage: `organization_settings.resource_settings.campus_live_url` (existing JSONB; RLS already lets
+     members SELECT, org admins write).
+   - New `admin-ops` action `organization_links` (org/platform-admin): merges/validates campus_live_url into
+     resource_settings (https-normalized; blank clears); empty payload = read. Added to `AdminOpsAction`.
+   - Frontend: `fetchOrganizationLinks`/`setOrganizationLinks` (admin path) + `fetchCampusLiveLink` (member
+     RLS read: memberships → organization_settings); `useCampusLiveLink` hook feeds `SettingsMenu` (rendered
+     for students via chat + teachers/admins via ConsoleShell, so one insertion covers all roles). Admin
+     School-data tab gained a "Campus Live link-out" card (load on org select, save via runSchoolOp).
+
+Files: `supabase/functions/admin-ops/index.ts` (normalizedRosterRow + handleOrganizationLinks + dispatch);
+`frontend/src/lib/api.ts`, `frontend/src/lib/types.ts`, `frontend/src/routes/admin.tsx`,
+`frontend/src/components/SettingsMenu.tsx`, new `frontend/src/hooks/useCampusLiveLink.ts`;
+`docs/CAMPUS_LIVE_INTEGRATION.md`.
+
+Tests run: `tsc --noEmit` 0 errors; `npm run lint` 0 errors / 11 pre-existing warnings; `npm run build`
+green. Deno not in sandbox.
+
+Remaining concerns: redeploy the `admin-ops` edge function (Supabase) — can't be exercised from the sandbox
+(egress). No migration. The member read assumes users can SELECT their own `organization_memberships` and
+their org's `organization_settings` (RLS `is_org_member`); if a self-select policy is missing the link
+simply won't appear (graceful). Frontend branch-only. **This completes the integrations plan (Canvas C1-C4
++ Campus Live).** Remaining backlog is the deferred zero-friction per-role rebuild (Phases 1-5).
+
 ## Claude -> Codex / Human - 2026-06-28 (Canvas C4 — ongoing scheduled sync; branch, NOT deployed)
 
 Summary: Added **Canvas C4**, the last Canvas phase. A `sync` action keeps imported classes + grades current
