@@ -27,7 +27,6 @@ import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/componen
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { notifyOk, notifyErr } from "@/lib/feedback";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { PlaceSwitcher } from "@/components/PlaceSwitcher";
 import { RouteLoader } from "@/components/RouteLoader";
 import {
   applyCsvRosterImport,
@@ -1774,7 +1773,7 @@ export function AdminPage() {
   }
 
   return (
-    <AdminShell email={email} home={adminHome} place={isPlatformAdmin ? "platform" : "admin"}>
+    <AdminShell email={email} home={adminHome}>
       <main className="relative z-10 mx-auto flex w-full max-w-[1240px] flex-1 flex-col gap-5 px-5 py-8">
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -4377,12 +4376,10 @@ export function AdminPage() {
 function AdminShell({
   email,
   home,
-  place,
   children,
 }: {
   email: string;
   home: "/admin" | "/platform";
-  place: "admin" | "platform";
   children?: React.ReactNode;
 }) {
   return (
@@ -4397,12 +4394,9 @@ function AdminShell({
       >
         <div className="hairline">
           <div className="mx-auto flex h-[60px] max-w-[1240px] items-center justify-between gap-2 px-3 sm:px-6">
-            <div className="flex items-center gap-4">
-              <Link to={home} className="font-serif text-[22px] tracking-tight text-foreground">
-                Jargon
-              </Link>
-              <PlaceSwitcher active={place} />
-            </div>
+            <Link to={home} className="font-serif text-[22px] tracking-tight text-foreground">
+              Jargon
+            </Link>
             {email ? <SettingsMenu email={email} /> : null}
           </div>
         </div>

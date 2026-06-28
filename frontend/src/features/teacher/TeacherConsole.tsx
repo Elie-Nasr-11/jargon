@@ -668,7 +668,7 @@ export function TeacherConsole() {
   }
 
   return (
-    <ConsoleShell email={email} activeNav="dashboard">
+    <ConsoleShell email={email}>
       <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -689,6 +689,13 @@ export function TeacherConsole() {
             className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
           >
             Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/teacher/curriculum" })}
+            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+          >
+            Curriculum
           </button>
         </div>
       </section>

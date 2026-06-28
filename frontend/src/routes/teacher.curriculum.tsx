@@ -264,7 +264,7 @@ function CurriculumPage() {
   }
 
   return (
-    <ConsoleShell email={email} activeNav="curriculum">
+    <ConsoleShell email={email}>
       <Breadcrumb
         segments={[
           { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
