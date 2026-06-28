@@ -6,6 +6,50 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Strict role-gated navigation + demo-login seeder; branch)
+
+Summary: Each user now sees and can reach ONLY their own portal. Introduced a single **primary role**
+(precedence admin > teacher > student; "student" is now a true fallback, not "anyone logged in") and used it
+to (1) gate the header nav, (2) guard every portal route with a redirect, and (3) make login + `/` land each
+role on its home. Plus a platform-admin-only one-click **demo-login seeder** so the 4 portals can be tested.
+
+Part 1 — navigation (frontend-only):
+- `lib/api.ts`: `fetchPrimaryRole(accessToken,userId)` (admin via fetchAdminScope → teacher via
+  fetchTeacherClasses → student) + `roleHome(role)`.
+- `hooks/useConsoleAccess.ts`: now resolves the single `role` (+ `home`); the `student/teacher/admin`
+  booleans are exclusive.
+- Header: `SettingsMenu` drops the always-on "Student chat" + conditional Teacher/Admin links → one
+  role-aware Home link. `ConsoleShell` logo → `roleHome`. `PlaceSwitcher` already filtered by the (now
+  exclusive) booleans, so a student sees only chat, a teacher only teacher+curriculum, an admin only admin.
+- Route guards (redirect to `roleHome` when the role doesn't match): `routes/chat.tsx` (student-only),
+  `features/teacher/TeacherConsole.tsx` (teacher-only; also covers `/teacher/class/*` which reuse it),
+  `routes/teacher.curriculum.tsx` (teacher-only), `routes/quiz.$assessmentId.tsx` (student-only),
+  `routes/admin.tsx` (non-admins now redirected instead of the soft "admins only" message).
+- Landing: `routes/index.tsx` beforeLoad + `routes/login.tsx` (pre-check + post-login) → `roleHome`.
+
+Part 2 — four test logins (one-click seeder):
+- `supabase/functions/admin-seed/index.ts`: new platform-admin-only `seed_demo_logins` action. Idempotent;
+  reuses the existing seed primitives. Creates a "Demo Org" + "Demo Class" and 3 accounts with a chosen
+  password: `demo-student@example.com` (student), `demo-teacher@example.com` (teacher),
+  `demo-admin@example.com` (org_admin). Does NOT mint a platform_admin (no escalation path) — the 4th login
+  is the caller's own account.
+- `lib/api.ts` `seedDemoLogins(accessToken, password)`; admin **Seeding** tab gained a platform-admin-only
+  "Create demo logins" card (password field, button, result list).
+
+The four logins (after running the seeder once; default password `JargonDemo123!`):
+1. Student — demo-student@example.com  2. Teacher — demo-teacher@example.com
+3. Org admin — demo-admin@example.com  4. Platform admin — your own elie.nasr11@gmail.com
+
+Tests run: `tsc --noEmit` 0 errors; `npm run lint` 0 errors / 11 pre-existing warnings; `npm run build`
+green.
+
+Remaining concerns: Part 1 is frontend-only (ships to main, Render auto-build). Part 2's "Create demo
+logins" button needs the **admin-seed edge fn redeployed** (Supabase) before it works. Precedence note: a
+user who is both org_admin and teacher resolves to admin (highest privilege). Route guards add up to two
+extra calls (fetchAdminScope + fetchTeacherClasses) on portal load — acceptable, cached via React Query in
+the nav hook. The AskUserQuestion tool failed twice this turn (permission stream); proceeded with the
+recommended defaults (precedence + seeder) — user can redirect.
+
 ## Claude -> Codex / Human - 2026-06-28 (Admin IA: consolidate all integrations under one "Integrations" tab; branch)
 
 Summary: Frontend-only IA reorg of the admin console. The separate **Google Classroom** and **Canvas**

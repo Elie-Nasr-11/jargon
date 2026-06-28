@@ -227,38 +227,27 @@ export function SettingsMenu({
                   </div>
                 </>
               ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  close();
-                  navigate({ to: "/chat" });
-                }}
-                className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
-              >
-                <BookOpen className="h-[15px] w-[15px]" strokeWidth={1.5} /> Student chat
-              </button>
-              {access.teacher ? (
+              {access.home ? (
                 <button
                   type="button"
                   onClick={() => {
                     close();
-                    navigate({ to: "/teacher" });
+                    navigate({ to: access.home! });
                   }}
                   className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
                 >
-                  <GraduationCap className="h-[15px] w-[15px]" strokeWidth={1.5} /> Teacher
-                </button>
-              ) : null}
-              {access.admin ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    close();
-                    navigate({ to: "/admin" });
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
-                >
-                  <Shield className="h-[15px] w-[15px]" strokeWidth={1.5} /> Admin
+                  {access.role === "admin" ? (
+                    <Shield className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                  ) : access.role === "teacher" ? (
+                    <GraduationCap className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                  ) : (
+                    <BookOpen className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                  )}
+                  {access.role === "admin"
+                    ? "Admin"
+                    : access.role === "teacher"
+                      ? "Teacher dashboard"
+                      : "Student chat"}
                 </button>
               ) : null}
               {campusLiveUrl ? (

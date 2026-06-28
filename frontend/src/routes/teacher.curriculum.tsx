@@ -17,8 +17,10 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import {
   createLessonResource,
   fetchCurriculumAuthoringData,
+  fetchPrimaryRole,
   getSession,
   invokeCurriculumAdmin,
+  roleHome,
 } from "@/lib/api";
 import type {
   CurriculumAuthoringData,
@@ -108,6 +110,11 @@ function CurriculumPage() {
       const session = await getSession();
       if (!session) {
         navigate({ to: "/login", replace: true });
+        return;
+      }
+      const role = await fetchPrimaryRole(session.access_token, session.user.id);
+      if (role !== "teacher") {
+        navigate({ to: roleHome(role), replace: true });
         return;
       }
       const curriculum = await fetchCurriculumAuthoringData(session.user.id);

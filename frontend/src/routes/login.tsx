@@ -5,7 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { getSession, signIn } from "@/lib/api";
+import { fetchPrimaryRole, getSession, roleHome, signIn } from "@/lib/api";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -26,8 +26,10 @@ function LoginPage() {
   useEffect(() => {
     let alive = true;
     getSession()
-      .then((session) => {
-        if (alive && session) navigate({ to: "/chat", replace: true });
+      .then(async (session) => {
+        if (!alive || !session) return;
+        const role = await fetchPrimaryRole(session.access_token, session.user.id);
+        if (alive) navigate({ to: roleHome(role), replace: true });
       })
       .catch(() => {
         // Stay on the login page; the submit action will surface auth errors.
@@ -77,14 +79,17 @@ function LoginPage() {
     setSubmitting(true);
     setMessage("");
     try {
-      await signIn(email.trim(), password);
+      const session = await signIn(email.trim(), password);
+      const role = session
+        ? await fetchPrimaryRole(session.access_token, session.user.id)
+        : "student";
       gsap.to(wrapRef.current, {
         opacity: 0,
         y: -8,
         duration: 0.35,
         ease: "power2.in",
         onComplete: () => {
-          navigate({ to: "/chat" });
+          navigate({ to: roleHome(role) });
         },
       });
     } catch (error) {

@@ -45,6 +45,8 @@ import {
   getLessonResourceThumbnailSignedUrl,
   getMentorAudio,
   getSession,
+  fetchPrimaryRole,
+  roleHome,
   invokeJargonRun,
   invokeTypedChat,
   recordResourceInteraction,
@@ -469,6 +471,11 @@ function ChatPage() {
         const session = await getSession();
         if (!session) {
           navigate({ to: "/login", replace: true });
+          return;
+        }
+        const role = await fetchPrimaryRole(session.access_token, session.user.id);
+        if (role !== "student") {
+          navigate({ to: roleHome(role), replace: true });
           return;
         }
         const [liveLessons, liveAssignments, liveAssessments] = await Promise.all([

@@ -1,10 +1,14 @@
-// Which consoles the signed-in user may access. Used to role-gate the nav so a
-// student never sees Teacher/Admin. Cached via React Query (one resolve/session).
+// The signed-in user's single effective portal. Precedence: admin > teacher >
+// student. Used to role-gate the header nav so a user only ever sees their own
+// portal. Cached via React Query (one resolve/session).
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchAdminScope, fetchTeacherClasses, getSession } from "@/lib/api";
+import { fetchAdminScope, fetchTeacherClasses, getSession, roleHome } from "@/lib/api";
+import type { PrimaryRole } from "@/lib/api";
 
 export type ConsoleAccess = {
+  role: PrimaryRole | null;
+  home: "/chat" | "/teacher" | "/admin" | null;
   student: boolean;
   teacher: boolean;
   admin: boolean;
@@ -25,24 +29,27 @@ export function useConsoleAccess(): ConsoleAccess {
   }, []);
 
   const query = useQuery({
-    queryKey: ["consoleAccess", auth?.id],
+    queryKey: ["consoleRole", auth?.id],
     enabled: Boolean(auth),
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const [classes, isAdmin] = await Promise.all([
-        fetchTeacherClasses(auth!.id).catch(() => [] as unknown[]),
-        fetchAdminScope(auth!.token)
-          .then(() => true)
-          .catch(() => false),
-      ]);
-      return { teacher: Array.isArray(classes) && classes.length > 0, admin: isAdmin };
+    queryFn: async (): Promise<PrimaryRole> => {
+      const isAdmin = await fetchAdminScope(auth!.token)
+        .then(() => true)
+        .catch(() => false);
+      if (isAdmin) return "admin";
+      const classes = await fetchTeacherClasses(auth!.id).catch(() => [] as unknown[]);
+      if (Array.isArray(classes) && classes.length > 0) return "teacher";
+      return "student";
     },
   });
 
+  const role = query.data ?? null;
   return {
-    student: Boolean(auth),
-    teacher: Boolean(query.data?.teacher),
-    admin: Boolean(query.data?.admin),
+    role,
+    home: role ? roleHome(role) : null,
+    student: role === "student",
+    teacher: role === "teacher",
+    admin: role === "admin",
     loading: Boolean(auth) && query.isPending,
   };
 }

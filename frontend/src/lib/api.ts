@@ -186,6 +186,26 @@ export async function getSession() {
   return data.session;
 }
 
+// A user's single effective portal, by precedence admin > teacher > student.
+// "student" is the fallback (any authenticated user with no admin/teacher role).
+export type PrimaryRole = "admin" | "teacher" | "student";
+
+export async function fetchPrimaryRole(accessToken: string, userId: string): Promise<PrimaryRole> {
+  const isAdmin = await fetchAdminScope(accessToken)
+    .then(() => true)
+    .catch(() => false);
+  if (isAdmin) return "admin";
+  const classes = await fetchTeacherClasses(userId).catch(() => [] as unknown[]);
+  if (Array.isArray(classes) && classes.length > 0) return "teacher";
+  return "student";
+}
+
+export function roleHome(role: PrimaryRole): "/chat" | "/teacher" | "/admin" {
+  if (role === "admin") return "/admin";
+  if (role === "teacher") return "/teacher";
+  return "/chat";
+}
+
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -422,6 +442,30 @@ export async function invokeAdminSeed(input: {
     throw new Error(data.error || "Pilot roster seed failed.");
   }
   return data;
+}
+
+// Platform-admin-only: create/reset the three demo logins (student, teacher,
+// org-admin) in a "Demo Org" so each portal can be tested. Returns the shared
+// password and the accounts.
+export async function seedDemoLogins(accessToken: string, defaultPassword?: string) {
+  const response = await fetchWithTimeout(functionUrl("admin-seed"), {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({
+      action: "seed_demo_logins",
+      default_password: defaultPassword || undefined,
+    }),
+  });
+  const data = (await response.json()) as {
+    status: "ok" | "error";
+    error?: string;
+    password?: string;
+    accounts?: Array<{ email: string; role: string; user_id: string }>;
+  };
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Could not create demo logins.");
+  }
+  return { password: data.password || "", accounts: data.accounts || [] };
 }
 
 export async function invokeAdminOps(input: {

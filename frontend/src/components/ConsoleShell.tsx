@@ -8,6 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { PlaceSwitcher } from "@/components/PlaceSwitcher";
+import { useConsoleAccess } from "@/hooks/useConsoleAccess";
 import { cn } from "@/lib/utils";
 
 export function ConsoleShell({
@@ -24,6 +25,7 @@ export function ConsoleShell({
   widthClass?: string;
   intensity?: number;
 }) {
+  const access = useConsoleAccess();
   return (
     <div
       className="relative flex min-h-screen flex-col overflow-hidden"
@@ -42,7 +44,10 @@ export function ConsoleShell({
             )}
           >
             <div className="flex items-center gap-4">
-              <Link to="/chat" className="font-serif text-[22px] tracking-tight text-foreground">
+              <Link
+                to={access.home ?? "/chat"}
+                className="font-serif text-[22px] tracking-tight text-foreground"
+              >
                 Jargon
               </Link>
               <PlaceSwitcher

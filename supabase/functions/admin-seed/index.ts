@@ -547,6 +547,87 @@ async function handleUpsertOrgClass(
   });
 }
 
+async function ensureDemoUser(
+  config: Config,
+  input: { email: string; name: string; authRole: "student" | "teacher"; password: string },
+): Promise<string> {
+  const seedUser: SeedUser = { email: input.email, name: input.name, role: input.authRole };
+  const existing = await findAuthUserByEmail(config, input.email);
+  const authUser = existing || await createAuthUser(config, seedUser, input.password);
+  const userId = String(authUser.id);
+  if (existing) await updateAuthUser(config, userId, seedUser, input.password);
+  await upsertProfile(config, userId, seedUser);
+  return userId;
+}
+
+// Platform-admin-only: create (or reset) three demo logins in a clearly-named
+// "Demo Org" so the user can test each portal — student, teacher, org-admin.
+// (The platform-admin login is the caller's own account.) Idempotent.
+async function handleSeedDemoLogins(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  if (access.level !== "platform_admin") {
+    throw new Error("Platform admin access is required to create demo logins.");
+  }
+  const password = cleanText(body.default_password) || "JargonDemo123!";
+  if (password.length < 6) {
+    throw new Error("A demo password of at least 6 characters is required.");
+  }
+
+  const organization = await upsertOrganization(config, { name: "Demo Org", slug: "demo-org" });
+  const organizationId = String(organization.id);
+  const classRow = await upsertClass(config, { name: "Demo Class" }, organizationId, actorId);
+  const classId = String(classRow.id);
+
+  const studentId = await ensureDemoUser(config, {
+    email: "demo-student@example.com",
+    name: "Demo Student",
+    authRole: "student",
+    password,
+  });
+  await upsertOrganizationMembership(config, organizationId, studentId, "student");
+  await upsertClassMembership(config, classId, studentId, "student");
+
+  const teacherId = await ensureDemoUser(config, {
+    email: "demo-teacher@example.com",
+    name: "Demo Teacher",
+    authRole: "teacher",
+    password,
+  });
+  await upsertOrganizationMembership(config, organizationId, teacherId, "teacher");
+  await upsertClassMembership(config, classId, teacherId, "teacher");
+
+  const orgAdminId = await ensureDemoUser(config, {
+    email: "demo-admin@example.com",
+    name: "Demo Admin",
+    authRole: "teacher",
+    password,
+  });
+  await upsertByConflict(config, "organization_memberships", "organization_id,user_id", {
+    organization_id: organizationId,
+    user_id: orgAdminId,
+    role: "org_admin",
+    status: "active",
+    updated_at: new Date().toISOString(),
+  });
+
+  return json({
+    status: "ok",
+    organization_id: organizationId,
+    class_id: classId,
+    password,
+    accounts: [
+      { email: "demo-student@example.com", role: "student", user_id: studentId },
+      { email: "demo-teacher@example.com", role: "teacher", user_id: teacherId },
+      { email: "demo-admin@example.com", role: "org_admin", user_id: orgAdminId },
+    ],
+    results: [],
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
@@ -575,6 +656,8 @@ Deno.serve(async (req: Request) => {
     if (action === "list_seed_batches") return await handleListSeedBatches(config, access);
     if (action === "upsert_org_class")
       return await handleUpsertOrgClass(config, String(actor.id), access, record);
+    if (action === "seed_demo_logins")
+      return await handleSeedDemoLogins(config, String(actor.id), access, record);
     return errorResponse("Unsupported admin-seed action.", 400);
   } catch (error) {
     const message = errorMessage(error);

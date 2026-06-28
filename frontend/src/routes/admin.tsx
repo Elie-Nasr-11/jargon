@@ -33,6 +33,8 @@ import {
   exportClassSnapshot,
   exportStudentArchive,
   fetchAdminScope,
+  fetchTeacherClasses,
+  roleHome,
   fetchCostModelDashboard,
   fetchGoogleClassroomCourses,
   fetchGoogleClassroomMappings,
@@ -65,6 +67,7 @@ import {
   setCanvasSyncEnabled,
   fetchOrganizationLinks,
   setOrganizationLinks,
+  seedDemoLogins,
   upsertConsentSettings,
 } from "@/lib/api";
 import type {
@@ -350,6 +353,13 @@ function AdminPage() {
     quiz_voice_enabled: false,
   });
   const [campusLiveUrl, setCampusLiveUrl] = useState("");
+  const [demoPassword, setDemoPassword] = useState("JargonDemo123!");
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoResult, setDemoResult] = useState<{
+    password: string;
+    accounts: Array<{ email: string; role: string }>;
+  } | null>(null);
+  const [demoMessage, setDemoMessage] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -361,15 +371,21 @@ function AdminPage() {
           return;
         }
         const allowed = await refreshScope(session.access_token);
-        if (allowed) {
-          void refreshReadiness(session.access_token, true);
-          void refreshCostDashboard(session.access_token, true);
-        }
         if (!alive) return;
+        if (!allowed) {
+          // Not an admin → send them to their own portal instead of showing a
+          // dead "admins only" page.
+          const classes = await fetchTeacherClasses(session.user.id).catch(() => [] as unknown[]);
+          const role = Array.isArray(classes) && classes.length > 0 ? "teacher" : "student";
+          navigate({ to: roleHome(role), replace: true });
+          return;
+        }
+        void refreshReadiness(session.access_token, true);
+        void refreshCostDashboard(session.access_token, true);
         setEmail(session.user.email || "");
         setToken(session.access_token);
-        setAuthorized(allowed);
-        setMessage(allowed ? "" : "This area is available only to admins.");
+        setAuthorized(true);
+        setMessage("");
       } catch (error) {
         if (!alive) return;
         setMessage((error as Error).message || "Could not load admin access.");
@@ -1605,6 +1621,33 @@ function AdminPage() {
         setCampusLiveUrl(result.campusLiveUrl);
       },
     );
+  };
+
+  const createDemoLogins = async () => {
+    if (!token) return;
+    if (demoPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH) {
+      setDemoMessage(`Use a password of at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    setDemoBusy(true);
+    setDemoMessage("");
+    try {
+      const result = await seedDemoLogins(token, demoPassword.trim());
+      setDemoResult({
+        password: result.password,
+        accounts: result.accounts.map((account) => ({
+          email: account.email,
+          role: account.role,
+        })),
+      });
+      setDemoMessage("Demo logins ready.");
+      notifyOk("Demo logins created.");
+    } catch (error) {
+      setDemoMessage((error as Error).message || "Could not create demo logins.");
+      notifyErr(error, "Could not create demo logins.");
+    } finally {
+      setDemoBusy(false);
+    }
   };
 
   const generateStudentReport = async () => {
@@ -3967,6 +4010,74 @@ function AdminPage() {
               {isPlatformLevel ? (
                 <WorkspacePanel value="seeding">
                   <>
+                    {isPlatformAdmin ? (
+                      <div className="mb-5">
+                        <GradientCard>
+                          <div className="space-y-4 p-5">
+                            <div>
+                              <h2 className="text-[16px] font-medium text-foreground">
+                                Create demo logins
+                              </h2>
+                              <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                                One click creates (or resets) three test accounts in a "Demo Org" so
+                                you can sign in as each role — student, teacher, and org admin. Your
+                                own account is the platform admin. All three share the password
+                                below.
+                              </p>
+                            </div>
+                            {demoMessage ? (
+                              <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                                {demoMessage}
+                              </div>
+                            ) : null}
+                            <div className="flex flex-wrap items-end gap-2">
+                              <div className="min-w-[220px]">
+                                <Field label="Demo password">
+                                  <input
+                                    type="text"
+                                    autoComplete="off"
+                                    value={demoPassword}
+                                    onChange={(event) => setDemoPassword(event.target.value)}
+                                    className="jargon-input"
+                                  />
+                                </Field>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void createDemoLogins()}
+                                disabled={
+                                  demoBusy || demoPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH
+                                }
+                                className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                              >
+                                <UserPlus className="h-4 w-4" strokeWidth={1.6} />
+                                {demoBusy ? "Creating…" : "Create demo logins"}
+                              </button>
+                            </div>
+                            {demoResult ? (
+                              <div className="rounded-2xl border border-success/30 bg-success/10 p-3 text-[12.5px]">
+                                <div className="font-medium text-success">
+                                  Logins ready — password{" "}
+                                  <span className="font-mono">{demoResult.password}</span>
+                                </div>
+                                <ul className="mt-2 space-y-1 text-foreground">
+                                  {demoResult.accounts.map((account) => (
+                                    <li key={account.email}>
+                                      <span className="text-muted-foreground">{account.role}:</span>{" "}
+                                      {account.email}
+                                    </li>
+                                  ))}
+                                  <li>
+                                    <span className="text-muted-foreground">platform_admin:</span>{" "}
+                                    your own account
+                                  </li>
+                                </ul>
+                              </div>
+                            ) : null}
+                          </div>
+                        </GradientCard>
+                      </div>
+                    ) : null}
                     <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
                       <GradientCard>
                         <div className="space-y-5 p-5">

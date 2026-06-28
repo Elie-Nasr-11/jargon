@@ -44,6 +44,8 @@ import {
   gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
   getSession,
+  fetchPrimaryRole,
+  roleHome,
   heartbeatLiveSessionViewer,
   ocrPdfPages,
   sendTeacherLiveComment,
@@ -137,6 +139,12 @@ export function TeacherConsole() {
         if (!alive) return;
         if (!session) {
           navigate({ to: "/login", replace: true });
+          return;
+        }
+        const role = await fetchPrimaryRole(session.access_token, session.user.id);
+        if (!alive) return;
+        if (role !== "teacher") {
+          navigate({ to: roleHome(role), replace: true });
           return;
         }
         setAuth({ id: session.user.id, email: session.user.email || "" });
