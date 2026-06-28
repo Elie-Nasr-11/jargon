@@ -1,0 +1,57 @@
+name: Canvas scheduled sync
+
+# C4 — Ongoing Canvas sync. Calls the `canvas` edge function's `sync` action,
+# which sweeps every active connection (refreshing rosters + re-pushing grades)
+# unless that connection has opted out (metadata.auto_sync === false).
+#
+# Auth: the Supabase gateway accepts the service-role key as a Bearer JWT, and
+# the edge function treats that exact bearer as the trusted system caller.
+#
+# Required repository secrets:
+#   SUPABASE_URL                e.g. https://<project-ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   the project's service-role key (full access — keep secret)
+
+on:
+  schedule:
+    # Daily at 07:00 UTC. Adjust the cron expression to change the cadence.
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: canvas-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Canvas sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY repository secrets are required."
+            exit 1
+          fi
+
+          response="$(mktemp)"
+          code="$(curl -sS -o "$response" -w '%{http_code}' \
+            -X POST "${SUPABASE_URL%/}/functions/v1/canvas" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"sync"}')"
+
+          echo "HTTP $code"
+          # Print the response without leaking the request (body has no secrets).
+          cat "$response"
+          echo
+
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Canvas sync returned HTTP $code"
+            exit 1
+          fi
+          if grep -q '"status":"error"' "$response"; then
+            echo "::error::Canvas sync responded with an error status"
+            exit 1
+          fi

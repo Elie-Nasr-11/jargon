@@ -61,6 +61,8 @@ import {
   upsertCanvasGradeLink,
   deleteCanvasGradeLink,
   pushCanvasGrades,
+  syncCanvas,
+  setCanvasSyncEnabled,
   upsertConsentSettings,
 } from "@/lib/api";
 import type {
@@ -1129,6 +1131,53 @@ function AdminPage() {
       setCanvasMessage("Canvas connection disconnected.");
     } catch (error) {
       setCanvasMessage((error as Error).message || "Could not disconnect Canvas.");
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const syncCanvasNow = async () => {
+    if (!token || !selectedCanvasConnectionId) {
+      setCanvasMessage("Choose a Canvas connection first.");
+      return;
+    }
+    setCanvasLoading(true);
+    setCanvasMessage("Syncing rosters and grades from Canvas...");
+    try {
+      const data = await syncCanvas(token, selectedCanvasConnectionId);
+      const counts = data?.counts || {};
+      const courses = typeof counts.courses === "number" ? counts.courses : 0;
+      const memberships = typeof counts.memberships === "number" ? counts.memberships : 0;
+      const gradesPushed = typeof counts.grades_pushed === "number" ? counts.grades_pushed : 0;
+      await Promise.all([
+        refreshScope(token),
+        refreshReadiness(token, true),
+        refreshCanvasMappings(token, selectedOrgId, true),
+      ]);
+      setCanvasMessage(
+        `Synced ${courses} course${courses === 1 ? "" : "s"} (${memberships} memberships) and pushed ${gradesPushed} grade${gradesPushed === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not sync Canvas.");
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const toggleCanvasAutoSync = async (enabled: boolean) => {
+    if (!token || !selectedCanvasConnectionId) return;
+    setCanvasLoading(true);
+    setCanvasMessage("");
+    try {
+      await setCanvasSyncEnabled(token, selectedCanvasConnectionId, enabled);
+      await refreshCanvasMappings(token, selectedOrgId, true);
+      setCanvasMessage(
+        enabled
+          ? "Scheduled auto-sync enabled for this connection."
+          : "Scheduled auto-sync disabled for this connection.",
+      );
+    } catch (error) {
+      setCanvasMessage((error as Error).message || "Could not update auto-sync.");
     } finally {
       setCanvasLoading(false);
     }
@@ -2704,14 +2753,40 @@ function AdminPage() {
                                   Last refreshed{" "}
                                   {formatDate(selectedCanvasConnection.last_refreshed_at)}
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => void disconnectSelectedCanvas()}
-                                  disabled={canvasLoading}
-                                  className="mt-3 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                                >
-                                  Disconnect
-                                </button>
+                                <label className="mt-3 flex items-center gap-2 text-[11.5px] text-foreground">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCanvasConnection.auto_sync}
+                                    onChange={(event) =>
+                                      void toggleCanvasAutoSync(event.target.checked)
+                                    }
+                                    disabled={canvasLoading}
+                                  />
+                                  <span>
+                                    Auto-sync on schedule
+                                    <span className="ml-1 text-muted-foreground">
+                                      (daily roster + grade sync)
+                                    </span>
+                                  </span>
+                                </label>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void syncCanvasNow()}
+                                    disabled={canvasLoading}
+                                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                  >
+                                    Sync now
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void disconnectSelectedCanvas()}
+                                    disabled={canvasLoading}
+                                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
+                                  >
+                                    Disconnect
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">

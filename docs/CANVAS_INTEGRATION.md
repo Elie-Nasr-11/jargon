@@ -1,8 +1,9 @@
 # Canvas LMS Integration
 
-Status: C1 (connect + import), C2 (create accounts on import), and C3 (grade
-passback) implemented, mirroring the Google Classroom spike. Built per the
-integrations plan (Canvas native, phased C1-C4 + Campus Live fallback).
+Status: C1 (connect + import), C2 (create accounts on import), C3 (grade
+passback), and C4 (ongoing scheduled sync) implemented, mirroring the Google
+Classroom spike. Built per the integrations plan (Canvas native, phased C1-C4 +
+Campus Live fallback).
 
 Canvas is per-institution, so each connection stores the institution **base URL**
 (e.g. `https://school.instructure.com`). The OAuth flow and every API call are
@@ -20,9 +21,11 @@ scoped to that base URL.
   push scores via `PUT /api/v1/courses/:id/assignments/:id/submissions/:user_id`
   (`submission[posted_grade]`). Uses the pre-declared `canvas_grade_links` table +
   `push_grades` action.
-- **C4 - Ongoing sync.** Scheduled re-sync (pg_cron / scheduled function) calling
-  the `canvas` edge function per active connection, recording each run in
-  `canvas_sync_runs` (`sync` action).
+- **C4 - Ongoing sync (done).** A daily GitHub Actions job calls the `canvas`
+  edge function's `sync` action, which sweeps every active connection to refresh
+  rosters and re-push grades, recording each run in `canvas_sync_runs` (`sync`
+  action). Includes a manual "Sync now" button and a per-connection auto-sync
+  opt-out.
 
 ## C1 + C2 Scope
 
@@ -87,7 +90,7 @@ Actions (admin or teacher with org access through the connection):
 
 Requires **grade-write permission** on the connected Canvas account (and the
 matching write scope if the developer key enforces scopes). The push is manual via
-the admin UI for now; automatic re-push is part of C4.
+the admin UI for now; automatic re-push happens via the C4 scheduled sync.
 
 ## Admin UI - Grade passback
 
@@ -96,11 +99,55 @@ link each Jargon assessment/assignment to a Canvas assignment, and push grades p
 link or all at once. Last-pushed time and push results (pushed/skipped/failed) are
 shown.
 
-## Not In C1/C2/C3
+## C4 - Ongoing Sync
+
+A `sync` action keeps imported classes and grades current after the initial
+import/push:
+
+- **What one sync does for a connection:** refresh the access token, re-pull the
+  roster for each active course mapping (link-only: reconcile memberships +
+  `canvas_user_mappings` for already-matched users; never creates classes or
+  accounts), then re-push grades for every grade link (same percentage logic as
+  C3). Each connection's run is recorded in `canvas_sync_runs` with `action='sync'`
+  and counts `{ courses, memberships, grades_pushed, grades_skipped, grades_failed }`.
+- **Manual:** a "Sync now" button on the connection card (user-authenticated,
+  scoped to that connection) — the in-sandbox/admin-testable path.
+- **Automatic (system sweep):** the `sync` action with **no** user, which iterates
+  every active connection that has not opted out.
+
+### System (scheduler) auth
+
+There is no separate cron secret. The Supabase gateway accepts the **service-role
+key as a Bearer JWT**, and the edge function treats a request whose
+`Authorization` is exactly `Bearer <SUPABASE_SERVICE_ROLE_KEY>` as the trusted
+system caller: it skips user/actor resolution and runs the cross-connection sweep.
+The service-role key grants full project access — keep it only in the scheduler's
+secret store, never in the repo, client, or logs.
+
+### Scheduler - GitHub Actions
+
+`.github/workflows/canvas-sync.yml` runs daily (07:00 UTC; `workflow_dispatch` for
+manual/test runs) and `POST`s `{"action":"sync"}` to
+`${SUPABASE_URL}/functions/v1/canvas` with the service-role key as the Bearer
+token. The step fails on a non-2xx response or a `"status":"error"` body.
+
+Required **repository secrets** (Settings → Secrets and variables → Actions):
+
+- `SUPABASE_URL` (e.g. `https://<project-ref>.supabase.co`)
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+### Auto-sync opt-out
+
+Each connection carries `metadata.auto_sync` (default true). The system sweep
+skips connections where `auto_sync === false`. Toggle it from the connection card
+("Auto-sync on schedule") — the `set_sync_enabled` action. Manual "Sync now" works
+regardless of the flag.
+
+## Not In Canvas (C1-C4)
 
 - No Canvas assignment creation.
-- No background sync/cron (C4).
 - No Canvas tokens in frontend code.
+- No realtime/webhook sync (sync is poll-based on the daily schedule + manual).
 
 ## OAuth Scopes
 
@@ -169,7 +216,8 @@ Actions:
 - `list_mappings` (includes grade links)
 - `disconnect`
 - `list_grade_targets` / `upsert_grade_link` / `delete_grade_link` / `push_grades` (C3)
-- `sync` (C4 — currently returns 409 "not enabled yet")
+- `sync` (C4 — user-scoped "Sync now", or system sweep when called with the
+  service-role key as the Bearer token) / `set_sync_enabled` (auto-sync opt-out)
 
 Deploy with JWT verification enabled. OAuth redirects return to `/admin`; the
 signed-in frontend completes the callback by sending the `code` and `state` to the
@@ -205,6 +253,10 @@ Edge Function. Because Google Classroom and Canvas both return `?code&state` to
 - Teacher sees the imported class in `/teacher`.
 - Students can still complete lessons normally.
 - `canvas_sync_runs` records the operation.
+- (C4) "Sync now" refreshes rosters + grades and writes a `'sync'` run; the daily
+  GitHub Actions workflow (or a manual "Run workflow") syncs every active,
+  opted-in connection; toggling auto-sync off makes the system sweep skip that
+  connection.
 
 ## Deploy Notes
 
@@ -212,3 +264,8 @@ Functional verification needs a live Canvas developer key + an institution base 
 and cannot run from the build sandbox (egress). Deploy the migration + edge function
 through Supabase, set the secrets above, then exercise the flow against a Canvas test
 course.
+
+For C4, redeploy the `canvas` edge function and add the GitHub Actions repository
+secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`). The C4 changes need **no
+migration** — they reuse `canvas_sync_runs.action='sync'` and
+`canvas_connections.metadata`.

@@ -566,6 +566,11 @@ async function fetchConnection(
   return connection;
 }
 
+function connectionAutoSync(row: DbRow): boolean {
+  const metadata = row.metadata && typeof row.metadata === "object" ? (row.metadata as DbRow) : {};
+  return metadata.auto_sync !== false;
+}
+
 function redactedConnection(row: DbRow): DbRow {
   return {
     id: row.id,
@@ -580,6 +585,7 @@ function redactedConnection(row: DbRow): DbRow {
     last_error: row.last_error,
     token_expires_at: row.token_expires_at,
     last_refreshed_at: row.last_refreshed_at,
+    auto_sync: connectionAutoSync(row),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -644,7 +650,7 @@ async function logSyncRun(
     connectionId?: string | null;
     courseMappingId?: string | null;
     classId?: string | null;
-    actorId: string;
+    actorId: string | null;
     action: string;
     status: "success" | "partial" | "failed";
     counts?: DbRow;
@@ -1271,6 +1277,213 @@ function gradeLinkTables(jargonKind: string): { table: string; idCol: string; sc
     : { table: "assignment_recipients", idCol: "assignment_id", scoreCol: "score" };
 }
 
+// Push every graded recipient of one Jargon item to its linked Canvas assignment.
+// Shared by manual push (handlePushGrades) and scheduled/manual sync.
+async function pushGradesForLink(
+  config: Config,
+  link: DbRow,
+  baseUrl: string,
+  accessToken: string,
+  userToCanvas: Map<string, string>,
+): Promise<{ pushed: number; skipped: number; failed: number; errors: DbRow[] }> {
+  const { table, idCol, scoreCol } = gradeLinkTables(cleanText(link.jargon_kind));
+  const recipients = await selectRows(
+    config,
+    `${table}?${idCol}=eq.${encodeURIComponent(cleanId(link.jargon_id))}&select=user_id,${scoreCol},status`,
+  );
+  let pushed = 0;
+  let skipped = 0;
+  let failed = 0;
+  const errors: DbRow[] = [];
+  for (const recipient of recipients) {
+    const rawScore = recipient[scoreCol];
+    if (typeof rawScore !== "number" || Number.isNaN(rawScore)) {
+      skipped += 1;
+      continue;
+    }
+    const userId = cleanId(recipient.user_id);
+    const canvasUserId = userId ? userToCanvas.get(userId) : undefined;
+    if (!canvasUserId) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      await canvasPutGrade(
+        baseUrl,
+        accessToken,
+        cleanId(link.canvas_course_id),
+        cleanId(link.canvas_assignment_id),
+        canvasUserId,
+        scoreToPercentString(rawScore),
+      );
+      pushed += 1;
+    } catch (error) {
+      failed += 1;
+      errors.push({ grade_link_id: cleanId(link.id), user_id: userId, error: errorMessage(error) });
+    }
+  }
+  await patchRows(
+    config,
+    `canvas_grade_links?id=eq.${encodeURIComponent(cleanId(link.id))}`,
+    { last_pushed_at: nowIso(), updated_at: nowIso() },
+  );
+  return { pushed, skipped, failed, errors };
+}
+
+// Link-only roster refresh for an existing course mapping (C4 sync): re-pull the
+// Canvas roster and reconcile memberships + user mappings for already-matched
+// Jargon users. Unlike import, it never creates classes or accounts.
+async function refreshMappingRoster(
+  config: Config,
+  mapping: DbRow,
+  baseUrl: string,
+  accessToken: string,
+  authByEmail: Map<string, DbRow>,
+): Promise<{ matched: number; missing: number; memberships: number }> {
+  const organizationId = cleanId(mapping.organization_id);
+  const canvasCourseId = cleanId(mapping.canvas_course_id);
+  const classId = cleanId(mapping.class_id);
+  const roster = await fetchCanvasCourseAndRoster(baseUrl, accessToken, canvasCourseId);
+  const people = [...roster.teachers, ...roster.students];
+  let matched = 0;
+  let missing = 0;
+  let memberships = 0;
+  for (const person of people) {
+    const email = normalizeEmail(person.email);
+    const user = email ? authByEmail.get(email) : undefined;
+    const userId = cleanId(user?.id) || null;
+    if (userId) {
+      matched += 1;
+      await ensureOrganizationMembership(config, organizationId, userId, person.role as "student" | "teacher");
+      if (classId) {
+        await ensureClassMembership(config, classId, userId, person.role as "student" | "teacher");
+      }
+      memberships += 1;
+    } else {
+      missing += 1;
+    }
+    await upsertByConflict(
+      config,
+      "canvas_user_mappings",
+      "organization_id,canvas_user_id,role",
+      {
+        organization_id: organizationId,
+        course_mapping_id: cleanId(mapping.id),
+        canvas_course_id: canvasCourseId,
+        canvas_user_id: cleanId(person.canvas_user_id) || `${person.role}:${email}`,
+        email,
+        display_name: cleanText(person.display_name),
+        role: person.role,
+        user_id: userId,
+        raw_profile: person.raw_profile || {},
+        last_seen_at: nowIso(),
+        updated_at: nowIso(),
+      },
+    );
+  }
+  await patchRows(
+    config,
+    `canvas_course_mappings?id=eq.${encodeURIComponent(cleanId(mapping.id))}`,
+    { last_synced_at: nowIso(), updated_at: nowIso() },
+  );
+  return { matched, missing, memberships };
+}
+
+// Sync one connection: refresh rosters for its active course mappings, and
+// (when includeGrades) re-push grades for its grade links. Records one
+// canvas_sync_runs row. Used by both manual sync and the scheduled sweep.
+async function syncConnection(
+  config: Config,
+  connection: DbRow,
+  options: { actorId?: string | null; includeGrades: boolean },
+): Promise<DbRow> {
+  const connectionId = cleanId(connection.id);
+  const organizationId = cleanId(connection.organization_id);
+  const counts: Record<string, number> = {
+    courses: 0,
+    memberships: 0,
+    grades_pushed: 0,
+    grades_skipped: 0,
+    grades_failed: 0,
+  };
+  const errors: DbRow[] = [];
+  let status: "success" | "partial" | "failed" = "success";
+
+  let baseUrl = "";
+  let accessToken = "";
+  try {
+    baseUrl = normalizeBaseUrl(connection.base_url);
+    accessToken = await refreshCanvasAccessToken(config, connection);
+  } catch (error) {
+    await patchRows(
+      config,
+      `canvas_connections?id=eq.${encodeURIComponent(connectionId)}`,
+      { status: "error", last_error: errorMessage(error), updated_at: nowIso() },
+    );
+    await logSyncRun(config, {
+      organizationId,
+      connectionId,
+      actorId: options.actorId || null,
+      action: "sync",
+      status: "failed",
+      counts,
+      errors: [{ error: errorMessage(error) }],
+    });
+    return { connection_id: connectionId, status: "failed", counts, errors: [{ error: errorMessage(error) }] };
+  }
+
+  const authUsers = await listAllAuthUsers(config);
+  const authByEmail = new Map(authUsers.map((user) => [normalizeEmail(user.email), user]));
+
+  const mappings = await selectRows(
+    config,
+    `canvas_course_mappings?connection_id=eq.${encodeURIComponent(connectionId)}&status=eq.active&select=*`,
+  );
+  for (const mapping of mappings) {
+    try {
+      const result = await refreshMappingRoster(config, mapping, baseUrl, accessToken, authByEmail);
+      counts.courses += 1;
+      counts.memberships += result.memberships;
+    } catch (error) {
+      status = "partial";
+      errors.push({ course_mapping_id: cleanId(mapping.id), error: errorMessage(error) });
+    }
+  }
+
+  if (options.includeGrades && mappings.length) {
+    const links = await selectRows(
+      config,
+      `canvas_grade_links?${inFilter("course_mapping_id", mappings.map((m) => cleanId(m.id)))}&select=*`,
+    );
+    const userToCanvas = links.length ? await loadCanvasUserMap(config, organizationId) : new Map<string, string>();
+    for (const link of links) {
+      try {
+        const result = await pushGradesForLink(config, link, baseUrl, accessToken, userToCanvas);
+        counts.grades_pushed += result.pushed;
+        counts.grades_skipped += result.skipped;
+        counts.grades_failed += result.failed;
+        if (result.failed) status = "partial";
+        errors.push(...result.errors);
+      } catch (error) {
+        status = "partial";
+        errors.push({ grade_link_id: cleanId(link.id), error: errorMessage(error) });
+      }
+    }
+  }
+
+  await logSyncRun(config, {
+    organizationId,
+    connectionId,
+    actorId: options.actorId || null,
+    action: "sync",
+    status,
+    counts,
+    errors,
+    metadata: { include_grades: options.includeGrades },
+  });
+  return { connection_id: connectionId, status, counts, errors };
+}
+
 async function handleListGradeTargets(
   config: Config,
   access: ActorAccess,
@@ -1514,46 +1727,15 @@ async function handlePushGrades(
       userMapCache.set(linkOrg, userToCanvas);
     }
 
-    const { table, idCol, scoreCol } = gradeLinkTables(cleanText(link.jargon_kind));
-    const recipients = await selectRows(
+    const linkResult = await pushGradesForLink(
       config,
-      `${table}?${idCol}=eq.${encodeURIComponent(cleanId(link.jargon_id))}&select=user_id,${scoreCol},status`,
+      link,
+      resolved.baseUrl,
+      resolved.accessToken,
+      userToCanvas,
     );
-    let pushed = 0;
-    let skipped = 0;
-    let failed = 0;
-    for (const recipient of recipients) {
-      const rawScore = recipient[scoreCol];
-      if (typeof rawScore !== "number" || Number.isNaN(rawScore)) {
-        skipped += 1;
-        continue;
-      }
-      const userId = cleanId(recipient.user_id);
-      const canvasUserId = userId ? userToCanvas.get(userId) : undefined;
-      if (!canvasUserId) {
-        skipped += 1;
-        continue;
-      }
-      try {
-        await canvasPutGrade(
-          resolved.baseUrl,
-          resolved.accessToken,
-          cleanId(link.canvas_course_id),
-          cleanId(link.canvas_assignment_id),
-          canvasUserId,
-          scoreToPercentString(rawScore),
-        );
-        pushed += 1;
-      } catch (error) {
-        failed += 1;
-        errors.push({ grade_link_id: cleanId(link.id), user_id: userId, error: errorMessage(error) });
-      }
-    }
-    await patchRows(
-      config,
-      `canvas_grade_links?id=eq.${encodeURIComponent(cleanId(link.id))}`,
-      { last_pushed_at: nowIso(), updated_at: nowIso() },
-    );
+    const { pushed, skipped, failed } = linkResult;
+    errors.push(...linkResult.errors);
     totalPushed += pushed;
     totalSkipped += skipped;
     totalFailed += failed;
@@ -1597,6 +1779,131 @@ async function handlePushGrades(
       counts: { links: pushedLinks, pushed: totalPushed, skipped: totalSkipped, failed: totalFailed },
       results,
       errors,
+    },
+  });
+}
+
+// C4: user-triggered "Sync now". Syncs one connection (connection_id) or every
+// active connection in an org the actor can access (organization_id).
+async function handleSync(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+) {
+  const connectionId = cleanId(body.connection_id);
+  let connections: DbRow[] = [];
+  if (connectionId) {
+    connections = [await fetchConnection(config, access, connectionId)];
+  } else {
+    const requestedOrg = cleanId(body.organization_id);
+    const filter = orgFilter(access, requestedOrg);
+    connections = await selectRows(
+      config,
+      `canvas_connections?${filter}status=eq.active&select=*`,
+    );
+  }
+  if (!connections.length) throw new Error("No active Canvas connection to sync.");
+
+  const results: DbRow[] = [];
+  for (const connection of connections) {
+    results.push(await syncConnection(config, connection, { actorId, includeGrades: true }));
+  }
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      counts: aggregateSyncCounts(results),
+      results,
+    },
+  });
+}
+
+// C4: scheduler-triggered sweep. Authenticated by the service-role key as the
+// Bearer token (see Deno.serve). Syncs every active connection that has not
+// opted out via metadata.auto_sync === false. No per-user actor.
+async function handleSystemSync(config: Config, _body: DbRow) {
+  const connections = await selectRows(
+    config,
+    `canvas_connections?status=eq.active&select=*&order=updated_at.desc&limit=500`,
+  );
+  const eligible = connections.filter(connectionAutoSync);
+  const results: DbRow[] = [];
+  for (const connection of eligible) {
+    try {
+      results.push(await syncConnection(config, connection, { actorId: null, includeGrades: true }));
+    } catch (error) {
+      results.push({
+        connection_id: cleanId(connection.id),
+        status: "failed",
+        errors: [{ error: errorMessage(error) }],
+      });
+    }
+  }
+  return json({
+    status: "ok",
+    data: {
+      system: true,
+      connections_total: connections.length,
+      connections_synced: eligible.length,
+      connections_skipped: connections.length - eligible.length,
+      counts: aggregateSyncCounts(results),
+      results,
+    },
+  });
+}
+
+function aggregateSyncCounts(results: DbRow[]): DbRow {
+  const totals: Record<string, number> = {
+    connections: results.length,
+    courses: 0,
+    memberships: 0,
+    grades_pushed: 0,
+    grades_skipped: 0,
+    grades_failed: 0,
+    failed_connections: 0,
+  };
+  for (const result of results) {
+    if (cleanText(result.status) === "failed") totals.failed_connections += 1;
+    const counts = result.counts && typeof result.counts === "object" ? (result.counts as DbRow) : {};
+    for (const key of ["courses", "memberships", "grades_pushed", "grades_skipped", "grades_failed"]) {
+      const value = counts[key];
+      if (typeof value === "number") totals[key] += value;
+    }
+  }
+  return totals;
+}
+
+// C4: toggle a connection's auto-sync opt-out (metadata.auto_sync).
+async function handleSetSyncEnabled(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+) {
+  const connection = await fetchConnection(config, access, cleanId(body.connection_id));
+  const enabled = body.enabled !== false;
+  const metadata = connection.metadata && typeof connection.metadata === "object"
+    ? (connection.metadata as DbRow)
+    : {};
+  const updated = await patchRows(
+    config,
+    `canvas_connections?id=eq.${encodeURIComponent(cleanId(connection.id))}`,
+    { metadata: { ...metadata, auto_sync: enabled }, updated_at: nowIso() },
+  );
+  await audit(config, {
+    actorId,
+    organizationId: cleanId(connection.organization_id),
+    eventType: "canvas_auto_sync_set",
+    entityType: "canvas_connection",
+    entityId: cleanId(connection.id),
+    payload: { auto_sync: enabled },
+  });
+  return json({
+    status: "ok",
+    data: {
+      actor_access: actorAccessPayload(access),
+      connection: redactedConnection(updated[0] || { ...connection, metadata: { ...metadata, auto_sync: enabled } }),
     },
   });
 }
@@ -1664,11 +1971,19 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const action = cleanText(body.action);
+
+    // System (scheduler) path: the Supabase gateway accepts the service-role key
+    // as a Bearer JWT, and we treat that exact bearer as the system caller. Only
+    // the cross-connection sweep is allowed without a user actor.
+    if (action === "sync" && config.authorization === `Bearer ${config.serviceRoleKey}`) {
+      return await handleSystemSync(config, body);
+    }
+
     const actor = await fetchCurrentUser(config);
     const actorId = cleanId(actor.id);
     const actorAccess = await fetchActorAccess(config, actorId);
 
-    const action = cleanText(body.action);
     if (action === "diagnose") {
       return json({
         status: "ok",
@@ -1708,12 +2023,10 @@ Deno.serve(async (req: Request) => {
       return await handleDeleteGradeLink(config, actorId, actorAccess, body);
     if (action === "push_grades")
       return await handlePushGrades(config, actorId, actorAccess, body);
-    if (action === "sync") {
-      return errorResponse(
-        "Canvas scheduled sync is not enabled yet. Grade passback (C3) ships first; scheduled sync (C4) follows.",
-        409,
-      );
-    }
+    if (action === "sync")
+      return await handleSync(config, actorId, actorAccess, body);
+    if (action === "set_sync_enabled")
+      return await handleSetSyncEnabled(config, actorId, actorAccess, body);
 
     return errorResponse("Unsupported Canvas action.", 400);
   } catch (error) {

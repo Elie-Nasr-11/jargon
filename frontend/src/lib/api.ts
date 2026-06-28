@@ -811,7 +811,8 @@ export async function invokeCanvas(input: {
     | "upsert_grade_link"
     | "delete_grade_link"
     | "push_grades"
-    | "sync";
+    | "sync"
+    | "set_sync_enabled";
   organizationId?: string | null;
   connectionId?: string | null;
   baseUrl?: string | null;
@@ -826,6 +827,7 @@ export async function invokeCanvas(input: {
   jargonKind?: "assignment" | "assessment" | null;
   jargonId?: string | null;
   canvasAssignmentId?: string | null;
+  enabled?: boolean;
 }) {
   const response = await fetchWithTimeout(functionUrl("canvas"), {
     method: "POST",
@@ -846,6 +848,7 @@ export async function invokeCanvas(input: {
       jargon_kind: input.jargonKind || undefined,
       jargon_id: input.jargonId || undefined,
       canvas_assignment_id: input.canvasAssignmentId || undefined,
+      enabled: input.enabled,
     }),
   });
   const data = (await response.json()) as CanvasResponse;
@@ -1027,6 +1030,29 @@ export async function pushCanvasGrades(input: {
     courseMappingId: input.courseMappingId,
   });
   return data.data;
+}
+
+export async function syncCanvas(accessToken: string, connectionId: string) {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "sync",
+    connectionId,
+  });
+  return data.data;
+}
+
+export async function setCanvasSyncEnabled(
+  accessToken: string,
+  connectionId: string,
+  enabled: boolean,
+) {
+  const data = await invokeCanvas({
+    accessToken,
+    action: "set_sync_enabled",
+    connectionId,
+    enabled,
+  });
+  return data.data?.connection || null;
 }
 
 export async function fetchCurriculumAuthoringData(

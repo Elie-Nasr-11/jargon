@@ -1356,6 +1356,7 @@ export type CanvasConnection = {
   last_error: string | null;
   token_expires_at: string | null;
   last_refreshed_at: string | null;
+  auto_sync: boolean;
   created_at: string;
   updated_at: string;
 };

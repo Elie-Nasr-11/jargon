@@ -6,6 +6,50 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Canvas C4 — ongoing scheduled sync; branch, NOT deployed)
+
+Summary: Added **Canvas C4**, the last Canvas phase. A `sync` action keeps imported classes + grades current
+after the initial import/push, driven by a daily **GitHub Actions** workflow, plus a manual "Sync now" button
+and a per-connection auto-sync opt-out. **No migration** — reuses `canvas_sync_runs.action='sync'` and
+`canvas_connections.metadata`.
+
+System auth (the C4 unknown): there's no cron-secret path in the repo. The Supabase gateway accepts the
+**service-role key as a Bearer JWT**, so the edge function treats `Authorization == "Bearer " +
+SUPABASE_SERVICE_ROLE_KEY` as the trusted system caller — it skips user/actor resolution and sweeps all
+active connections. The service-role key lives only as a GitHub Actions secret (full access; never in repo
+or logs).
+
+Edge function `supabase/functions/canvas/index.ts`:
+- Extracted reusable helpers (no behavior change to C1/C3): `pushGradesForLink` (from `handlePushGrades`) and
+  a new link-only `refreshMappingRoster` (reconciles memberships + `canvas_user_mappings` for matched users;
+  never creates classes/accounts). `handlePushGrades` now calls `pushGradesForLink`.
+- `syncConnection(connection, {actorId, includeGrades})` — refresh token (mark connection `error` on
+  failure), refresh each active course mapping's roster, re-push every grade link, write one
+  `canvas_sync_runs` row (`action:'sync'`, counts `{courses, memberships, grades_pushed, grades_skipped,
+  grades_failed}`).
+- `handleSync` (user "Sync now": `connection_id`, or org-wide), `handleSystemSync` (sweep all active,
+  skipping `metadata.auto_sync === false`), `handleSetSyncEnabled` (toggle the opt-out). Dispatch detects
+  service-role-bearer → `handleSystemSync` before `fetchCurrentUser`; 409 stub removed.
+- `redactedConnection` now exposes `auto_sync` (from `metadata.auto_sync !== false`).
+
+New `.github/workflows/canvas-sync.yml`: daily `cron: '0 7 * * *'` + `workflow_dispatch`; curls
+`{action:"sync"}` to `$SUPABASE_URL/functions/v1/canvas` with the service-role bearer; fails on non-2xx or
+`"status":"error"`. Repo secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+Frontend: `CanvasConnection.auto_sync`; `syncCanvas` + `setCanvasSyncEnabled` api helpers (+ `set_sync_enabled`
+action / `enabled` param on `invokeCanvas`); Canvas connection card gained a **"Sync now"** button + an
+**"Auto-sync on schedule"** checkbox. Existing "Recent Canvas syncs" panel surfaces the `'sync'` rows.
+
+Tests run: `tsc --noEmit` 0 errors; `npm run lint` 0 errors / 11 pre-existing warnings; `npm run build`
+green; `canvas-sync.yml` validated as YAML. Deno not in sandbox (edge fn not Deno-checked locally).
+
+Remaining concerns / deploy: redeploy the `canvas` edge fn and add the two GitHub Actions repo secrets;
+backend can't be exercised from the sandbox (egress). C4 needs no migration. Grade re-push on schedule will
+overwrite a grade a teacher changed directly in Canvas (idempotent percentage) — intended per the chosen
+"rosters + grades" scope; disable per-connection auto-sync to avoid it. **Canvas (C1-C4) is now feature-
+complete on `claude/happy-johnson-wseex8`.** Frontend still branch-only. Next remaining integration work:
+Campus Live OneRoster/CSV import upgrade + per-org link-out (no native API).
+
 ## Claude -> Codex / Human - 2026-06-28 (Canvas C3 — grade passback; branch, NOT deployed)
 
 Summary: Added **Canvas C3** grade passback on top of C1/C2. Admins/teachers can link a Jargon
