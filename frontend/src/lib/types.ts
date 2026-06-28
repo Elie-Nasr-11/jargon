@@ -1461,6 +1461,8 @@ export type CanvasResponse = {
     class_id?: string;
     counts?: Record<string, unknown>;
     missing_users?: CanvasPerson[];
+    created_accounts?: Array<{ email: string; role: "student" | "teacher"; user_id: string }>;
+    creation_errors?: Array<{ email: string; role: "student" | "teacher"; error: string }>;
     configured?: Record<string, boolean>;
     missing?: string[];
     redirect_uri?: string | null;

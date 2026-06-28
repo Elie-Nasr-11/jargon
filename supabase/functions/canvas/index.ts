@@ -980,6 +980,38 @@ async function ensureClassMembership(
   }
 }
 
+// C2: provision a Jargon Auth user for a Canvas roster row that has no match.
+// Mirrors the admin-seed account shape (email-confirmed, seeded-role metadata,
+// profile row). The admin supplies the shared temporary password.
+async function createCanvasAuthUser(
+  config: Config,
+  input: { email: string; name: string; role: "student" | "teacher" },
+  password: string,
+): Promise<DbRow> {
+  const data = await serviceFetch(config, "/auth/v1/admin/users", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      password,
+      email_confirm: true,
+      user_metadata: { name: input.name, grade: "" },
+      app_metadata: { jargon_seeded_role: input.role },
+    }),
+  });
+  if (!data || typeof data !== "object" || typeof (data as DbRow).id !== "string") {
+    throw new Error("Auth user creation returned no user id.");
+  }
+  return data as DbRow;
+}
+
+async function upsertProfile(config: Config, userId: string, name: string): Promise<void> {
+  await upsertByConflict(config, "profiles", "id", {
+    id: userId,
+    name,
+    grade: null,
+  });
+}
+
 async function handleImportCourse(
   config: Config,
   actorId: string,
@@ -992,6 +1024,18 @@ async function handleImportCourse(
   const canvasCourseId = cleanId(body.canvas_course_id);
   const requestedClassId = cleanId(body.class_id);
   if (!canvasCourseId) throw new Error("canvas_course_id is required.");
+
+  // C2: optionally create accounts for unmatched roster rows. Account creation is
+  // admin-only (platform/org admin), never for teacher-level connections, and
+  // requires a shared temporary password chosen by the admin.
+  const requestedCreate = Boolean(body.create_missing_accounts);
+  const defaultPassword = cleanText(body.default_password);
+  const canCreateAccounts = requestedCreate && access.level !== "teacher";
+  if (canCreateAccounts && defaultPassword.length < 6) {
+    throw new Error(
+      "A temporary password of at least 6 characters is required to create missing accounts.",
+    );
+  }
 
   const accessToken = await refreshCanvasAccessToken(config, connection);
   const roster = await fetchCanvasCourseAndRoster(baseUrl, accessToken, canvasCourseId);
@@ -1041,15 +1085,40 @@ async function handleImportCourse(
   const authByEmail = new Map(authUsers.map((user) => [normalizeEmail(user.email), user]));
   const people = [...roster.teachers, ...roster.students];
   let matched = 0;
+  let created = 0;
   let missing = 0;
   let memberships = 0;
+  const createdAccounts: DbRow[] = [];
+  const creationErrors: DbRow[] = [];
 
   for (const person of people) {
     const email = normalizeEmail(person.email);
-    const user = email ? authByEmail.get(email) : undefined;
+    let user = email ? authByEmail.get(email) : undefined;
+    let createdNow = false;
+    if (!user && canCreateAccounts && email.includes("@")) {
+      try {
+        const newUser = await createCanvasAuthUser(
+          config,
+          {
+            email,
+            name: cleanText(person.display_name) || email,
+            role: person.role as "student" | "teacher",
+          },
+          defaultPassword,
+        );
+        await upsertProfile(config, cleanId(newUser.id), cleanText(person.display_name) || email);
+        user = newUser;
+        authByEmail.set(email, newUser);
+        createdNow = true;
+        created += 1;
+        createdAccounts.push({ email, role: person.role, user_id: cleanId(newUser.id) });
+      } catch (error) {
+        creationErrors.push({ email, role: person.role, error: errorMessage(error) });
+      }
+    }
     const userId = cleanId(user?.id) || null;
     if (userId) {
-      matched += 1;
+      if (!createdNow) matched += 1;
       await ensureOrganizationMembership(config, organizationId, userId, person.role as "student" | "teacher");
       await ensureClassMembership(config, classId, userId, person.role as "student" | "teacher");
       memberships += 1;
@@ -1076,7 +1145,15 @@ async function handleImportCourse(
     );
   }
 
-  const status = missing ? "partial" : "success";
+  const status = missing || creationErrors.length ? "partial" : "success";
+  const counts = {
+    teachers: roster.teachers.length,
+    students: roster.students.length,
+    matched,
+    created,
+    missing,
+    memberships,
+  };
   await Promise.all([
     logSyncRun(config, {
       organizationId,
@@ -1086,14 +1163,12 @@ async function handleImportCourse(
       actorId,
       action: "import_course",
       status,
-      counts: {
-        teachers: roster.teachers.length,
-        students: roster.students.length,
-        matched,
-        missing,
-        memberships,
+      counts,
+      errors: creationErrors,
+      metadata: {
+        canvas_course_id: canvasCourseId,
+        accounts_created: canCreateAccounts,
       },
-      metadata: { canvas_course_id: canvasCourseId },
     }),
     audit(config, {
       actorId,
@@ -1102,7 +1177,7 @@ async function handleImportCourse(
       eventType: "canvas_course_imported",
       entityType: "canvas_course_mapping",
       entityId: cleanId(courseMapping.id),
-      payload: { canvas_course_id: canvasCourseId, matched, missing },
+      payload: { canvas_course_id: canvasCourseId, matched, created, missing },
     }),
   ]);
 
@@ -1112,7 +1187,9 @@ async function handleImportCourse(
       actor_access: actorAccessPayload(access),
       class_id: classId,
       course_mapping: courseMapping,
-      counts: { teachers: roster.teachers.length, students: roster.students.length, matched, missing, memberships },
+      counts,
+      created_accounts: createdAccounts,
+      creation_errors: creationErrors,
       missing_users: people.filter((person) => {
         const email = normalizeEmail(person.email);
         return !email || !authByEmail.get(email);

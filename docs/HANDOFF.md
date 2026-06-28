@@ -6,6 +6,39 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-28 (Canvas C2 — create accounts on import; branch, NOT deployed)
+
+Summary: Added **Canvas C2** on top of C1. `import_course` can now provision Jargon accounts for
+unmatched roster members instead of only linking existing users. Admin-only (rejected for teacher-level
+Canvas connections), gated behind a checkbox + a shared temporary password the admin chooses.
+
+How it works: in `supabase/functions/canvas/index.ts` `handleImportCourse` reads `create_missing_accounts`
++ `default_password`. For each roster row whose email has no Jargon user, it creates an email-confirmed
+Auth user (`/auth/v1/admin/users`) with `name` metadata + `app_metadata.jargon_seeded_role` and a
+`profiles` row — the exact shape `admin-seed` uses — then links org+class membership like a matched user.
+Counts gained `created`; response returns `created_accounts` (no passwords) + `creation_errors`; sync run
+records both. Password must be >= 6 chars (`MIN_TEMP_PASSWORD_LENGTH`), validated client- and server-side.
+Rows without a usable email stay "missing".
+
+Files changed (all on `claude/happy-johnson-wseex8`):
+- `supabase/functions/canvas/index.ts`: `createCanvasAuthUser` + `upsertProfile` helpers; import loop
+  creates accounts when enabled; new counts/created_accounts/creation_errors in response + sync run.
+- `frontend/src/lib/api.ts`: `invokeCanvas`/`importCanvasCourse` accept `createMissingAccounts` +
+  `defaultPassword`.
+- `frontend/src/lib/types.ts`: `CanvasResponse.data` gained `created_accounts` + `creation_errors`.
+- `frontend/src/routes/admin.tsx`: Canvas tab create-accounts checkbox + temp-password field (shown when
+  checked), import button relabels to "Import + create accounts" and is disabled until the password is
+  long enough; success message reports how many accounts were created.
+- `docs/CANVAS_INTEGRATION.md`: C1/C2 status + a C2 account-creation section.
+
+Tests run: `tsc --noEmit` 0 errors; `npm run lint` 0 errors / 11 pre-existing warnings; `npm run build`
+green. Deno not in sandbox (edge fn not Deno-checked locally).
+
+Remaining concerns: same as C1 — backend (migration `20260628000000` + `canvas` edge fn) still needs
+Supabase deploy + `CANVAS_*` secrets + a per-institution Canvas developer key; can't be exercised from
+the sandbox (egress). Frontend branch-only. Next: C3 grade passback (`canvas_grade_links` +
+`PUT .../submissions/:user_id`) → C4 scheduled sync; plus Campus Live OneRoster/CSV + link-out.
+
 ## Claude -> Codex / Human - 2026-06-28 (Canvas LMS integration — C1 connect+import; branch, NOT deployed)
 
 Summary: Built **Canvas C1** (connect + import), the first shippable Canvas milestone, mirroring the

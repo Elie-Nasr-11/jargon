@@ -301,6 +301,8 @@ function AdminPage() {
   const [selectedCanvasConnectionId, setSelectedCanvasConnectionId] = useState("");
   const [canvasCourses, setCanvasCourses] = useState<CanvasCourse[]>([]);
   const [selectedCanvasCourseId, setSelectedCanvasCourseId] = useState("");
+  const [canvasCreateAccounts, setCanvasCreateAccounts] = useState(false);
+  const [canvasDefaultPassword, setCanvasDefaultPassword] = useState("");
   const [canvasRosterPreview, setCanvasRosterPreview] = useState<{
     course: CanvasCourse | null;
     teachers: CanvasPerson[];
@@ -1053,6 +1055,12 @@ function AdminPage() {
       setCanvasMessage("Choose a Canvas course first.");
       return;
     }
+    if (canvasCreateAccounts && canvasDefaultPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH) {
+      setCanvasMessage(
+        `Set a temporary password of at least ${MIN_TEMP_PASSWORD_LENGTH} characters to create missing accounts.`,
+      );
+      return;
+    }
     setCanvasLoading(true);
     setCanvasMessage("");
     try {
@@ -1060,6 +1068,8 @@ function AdminPage() {
         accessToken: token,
         connectionId: selectedCanvasConnectionId,
         canvasCourseId: selectedCanvasCourseId,
+        createMissingAccounts: canvasCreateAccounts,
+        defaultPassword: canvasCreateAccounts ? canvasDefaultPassword.trim() : undefined,
       });
       await Promise.all([
         refreshScope(token),
@@ -1067,11 +1077,15 @@ function AdminPage() {
         refreshCanvasMappings(token, selectedOrgId, true),
       ]);
       const counts = data?.counts || {};
+      const created = typeof counts.created === "number" ? counts.created : 0;
       const missing = typeof counts.missing === "number" ? counts.missing : 0;
+      const createdNote = created
+        ? ` Created ${created} new account${created === 1 ? "" : "s"} with the temporary password.`
+        : "";
       setCanvasMessage(
         missing
-          ? `Imported course with ${missing} unmapped roster row${missing === 1 ? "" : "s"}. Seed missing accounts, then import again.`
-          : "Imported Canvas course into Jargon.",
+          ? `Imported course with ${missing} unmapped roster row${missing === 1 ? "" : "s"}.${createdNote} Seed remaining accounts, then import again.`
+          : `Imported Canvas course into Jargon.${createdNote}`,
       );
     } catch (error) {
       setCanvasMessage((error as Error).message || "Could not import Canvas course.");
@@ -2624,6 +2638,46 @@ function AdminPage() {
                                 </div>
                               </div>
                             ) : null}
+                            <div className="rounded-2xl border border-border/70 bg-background/55 p-3">
+                              <label className="flex items-start gap-2.5 text-[12.5px] text-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={canvasCreateAccounts}
+                                  onChange={(event) =>
+                                    setCanvasCreateAccounts(event.target.checked)
+                                  }
+                                  className="mt-0.5"
+                                />
+                                <span>
+                                  Create Jargon accounts for unmatched roster members
+                                  <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                                    Missing students/teachers get a new account with the temporary
+                                    password below. Existing users are still linked by email.
+                                  </span>
+                                </span>
+                              </label>
+                              {canvasCreateAccounts ? (
+                                <div className="mt-3">
+                                  <Field label="Temporary password for new accounts">
+                                    <input
+                                      type="text"
+                                      autoComplete="off"
+                                      placeholder={`At least ${MIN_TEMP_PASSWORD_LENGTH} characters`}
+                                      value={canvasDefaultPassword}
+                                      onChange={(event) =>
+                                        setCanvasDefaultPassword(event.target.value)
+                                      }
+                                      className="jargon-input"
+                                    />
+                                  </Field>
+                                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                                    Share this password with new users; they should change it after
+                                    first sign-in. It is sent only to the server to provision
+                                    accounts.
+                                  </p>
+                                </div>
+                              ) : null}
+                            </div>
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
@@ -2636,10 +2690,17 @@ function AdminPage() {
                               <button
                                 type="button"
                                 onClick={() => void importCanvasCourseFn()}
-                                disabled={!selectedCanvasCourseId || canvasLoading}
+                                disabled={
+                                  !selectedCanvasCourseId ||
+                                  canvasLoading ||
+                                  (canvasCreateAccounts &&
+                                    canvasDefaultPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH)
+                                }
                                 className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
                               >
-                                Import into Jargon
+                                {canvasCreateAccounts
+                                  ? "Import + create accounts"
+                                  : "Import into Jargon"}
                               </button>
                             </div>
                             {selectedCanvasCourseMapping ? (

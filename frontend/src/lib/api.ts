@@ -815,6 +815,8 @@ export async function invokeCanvas(input: {
   classId?: string | null;
   code?: string | null;
   state?: string | null;
+  createMissingAccounts?: boolean;
+  defaultPassword?: string | null;
 }) {
   const response = await fetchWithTimeout(functionUrl("canvas"), {
     method: "POST",
@@ -828,6 +830,8 @@ export async function invokeCanvas(input: {
       class_id: input.classId || undefined,
       code: input.code || undefined,
       state: input.state || undefined,
+      create_missing_accounts: input.createMissingAccounts || undefined,
+      default_password: input.defaultPassword || undefined,
     }),
   });
   const data = (await response.json()) as CanvasResponse;
@@ -931,6 +935,8 @@ export async function importCanvasCourse(input: {
   connectionId: string;
   canvasCourseId: string;
   classId?: string | null;
+  createMissingAccounts?: boolean;
+  defaultPassword?: string | null;
 }) {
   const data = await invokeCanvas({
     accessToken: input.accessToken,
@@ -938,6 +944,8 @@ export async function importCanvasCourse(input: {
     connectionId: input.connectionId,
     canvasCourseId: input.canvasCourseId,
     classId: input.classId,
+    createMissingAccounts: input.createMissingAccounts,
+    defaultPassword: input.defaultPassword,
   });
   return data.data;
 }

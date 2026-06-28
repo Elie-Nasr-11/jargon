@@ -1,7 +1,8 @@
 # Canvas LMS Integration
 
-Status: C1 (connect + import) implemented, mirroring the Google Classroom spike.
-Built per the integrations plan (Canvas native, phased C1-C4 + Campus Live fallback).
+Status: C1 (connect + import) and C2 (create accounts on import) implemented,
+mirroring the Google Classroom spike. Built per the integrations plan (Canvas
+native, phased C1-C4 + Campus Live fallback).
 
 Canvas is per-institution, so each connection stores the institution **base URL**
 (e.g. `https://school.instructure.com`). The OAuth flow and every API call are
@@ -9,10 +10,12 @@ scoped to that base URL.
 
 ## Phases
 
-- **C1 - Connect + import (this doc).** Read-only OAuth2, course/roster preview,
+- **C1 - Connect + import (done).** Read-only OAuth2, course/roster preview,
   import a Canvas course as a Jargon class, link matched existing users.
-- **C2 - Create accounts on import.** Optionally provision missing student/teacher
-  accounts via the org-scoped `admin-seed` path instead of only linking existing users.
+- **C2 - Create accounts on import (done).** Optionally provision missing
+  student/teacher accounts during import (admin-only), reusing the `admin-seed`
+  account shape (email-confirmed Auth user + profile row + seeded-role metadata),
+  instead of only linking existing users.
 - **C3 - Grade passback.** Map Jargon graded work to a Canvas assignment and push
   scores via `PUT /api/v1/courses/:id/assignments/:id/submissions/:user_id`
   (`submission[posted_grade]`). The `canvas_grade_links` table + `push_grades`
@@ -21,9 +24,10 @@ scoped to that base URL.
   the `canvas` edge function per active connection, recording each run in
   `canvas_sync_runs` (`sync` action).
 
-## C1 Scope
+## C1 + C2 Scope
 
-Canvas C1 is a read-only course and roster import path.
+Canvas C1/C2 is a read-only course and roster import path, with optional account
+provisioning.
 
 - Connect a teacher/org-admin Canvas account for an institution through OAuth2.
 - List the connected account's active Canvas courses.
@@ -31,21 +35,37 @@ Canvas C1 is a read-only course and roster import path.
 - Match roster rows to existing Jargon users by email.
 - Import a Canvas course as a Jargon class.
 - Upsert organization/class memberships for matched existing users.
+- **C2:** optionally create accounts for unmatched roster members during import.
 - Record sync runs and audit events.
 
 Jargon remains the source of truth for learning sessions, assignments, grades,
 mastery, evidence, and teacher dashboards.
 
-## Not In C1
+## C2 - Account Creation
 
-- No Canvas account creation (C2).
+When the admin checks "Create Jargon accounts for unmatched roster members" and
+supplies a shared temporary password (>= 6 chars), `import_course` provisions a
+new Jargon account for each roster row whose email has no existing Jargon user:
+
+- Email-confirmed Auth user (`/auth/v1/admin/users`) with `name` metadata and
+  `app_metadata.jargon_seeded_role`, plus a `profiles` row - the same shape the
+  `admin-seed` function uses.
+- The new user is then linked into the org + class like a matched user.
+- The response returns `created_accounts` (email/role/user_id, no passwords) and
+  `creation_errors`; the sync run records `counts.created` and per-row errors.
+
+Account creation is **admin-only**: it is rejected for teacher-level Canvas
+connections (only platform/org admins). The admin chooses the temporary password,
+so no secret is generated or returned; new users should change it after first
+sign-in. Roster rows without a usable email cannot be created and remain "missing"
+(seed them via the existing admin roster tools, then re-import).
+
+## Not In C1/C2
+
 - No Canvas assignment creation.
 - No grade passback (C3).
 - No background sync/cron (C4).
 - No Canvas tokens in frontend code.
-
-Missing Canvas roster users must be created through the existing Jargon admin
-seeding/password-reset flows, then the course can be imported again.
 
 ## OAuth Scopes
 
@@ -130,17 +150,22 @@ Edge Function. Because Google Classroom and Canvas both return `?code&state` to
 3. Connect Canvas.
 4. Load courses.
 5. Preview roster.
-6. Import selected course into Jargon.
-7. Seed missing users through existing admin roster tools if needed.
-8. Re-import to attach newly seeded users.
+6. (Optional, C2) Check "Create Jargon accounts for unmatched roster members" and
+   set a temporary password.
+7. Import selected course into Jargon.
+8. Seed any remaining users through existing admin roster tools if needed, then
+   re-import to attach them.
 
-## Acceptance (C1)
+## Acceptance (C1/C2)
 
 - Platform admin or org admin connects Canvas for an institution base URL.
 - Course list loads.
 - Roster preview shows teachers and students.
 - Existing Jargon users are matched by email.
 - Import creates or reuses a Jargon class and memberships for matched users.
+- (C2) With account creation on, unmatched roster members with valid emails get
+  new Jargon accounts (temp password) and are added to the class; `counts.created`
+  is recorded.
 - Teacher sees the imported class in `/teacher`.
 - Students can still complete lessons normally.
 - `canvas_sync_runs` records the operation.
