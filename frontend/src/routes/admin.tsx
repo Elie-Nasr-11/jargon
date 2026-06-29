@@ -2042,12 +2042,20 @@ export function AdminPage() {
                           </h3>
                           <div className="mt-3 max-h-[260px] overflow-auto pr-1">
                             <table className="min-w-[640px] w-full border-collapse text-left text-[12px]">
-                              <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                              <thead className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
                                 <tr>
-                                  <th className="py-2 pr-3 font-medium">Person</th>
-                                  <th className="py-2 pr-3 font-medium">Role</th>
-                                  <th className="py-2 pr-3 font-medium">Status</th>
-                                  <th className="py-2 font-medium">Last sign-in</th>
+                                  <th className="sticky top-0 z-[1] border-b border-border bg-background py-2 pr-3 font-medium">
+                                    Person
+                                  </th>
+                                  <th className="sticky top-0 z-[1] border-b border-border bg-background py-2 pr-3 font-medium">
+                                    Role
+                                  </th>
+                                  <th className="sticky top-0 z-[1] border-b border-border bg-background py-2 pr-3 font-medium">
+                                    Status
+                                  </th>
+                                  <th className="sticky top-0 z-[1] border-b border-border bg-background py-2 font-medium">
+                                    Last sign-in
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -2089,16 +2097,20 @@ export function AdminPage() {
                       </div>
                     )}
 
-                    <div className="overflow-x-auto">
+                    <div className="max-h-[60vh] overflow-auto">
                       <table className="min-w-[940px] w-full border-collapse text-left text-[12.5px]">
-                        <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                        <thead className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
                           <tr>
-                            <th className="py-2 pr-3 font-medium">Class</th>
-                            <th className="py-2 pr-3 font-medium">Status</th>
-                            <th className="py-2 pr-3 font-medium">Roster</th>
-                            <th className="py-2 pr-3 font-medium">Learning</th>
-                            <th className="py-2 pr-3 font-medium">Work/media</th>
-                            <th className="py-2 font-medium">Support</th>
+                            {["Class", "Status", "Roster", "Learning", "Work/media", "Support"].map(
+                              (label, i) => (
+                                <th
+                                  key={label}
+                                  className={`sticky top-0 z-[1] border-b border-border bg-background py-2 font-medium ${i < 5 ? "pr-3" : ""}`}
+                                >
+                                  {label}
+                                </th>
+                              ),
+                            )}
                           </tr>
                         </thead>
                         <tbody>

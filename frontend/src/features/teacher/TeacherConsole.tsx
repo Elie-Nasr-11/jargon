@@ -30,6 +30,7 @@ import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/componen
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConsoleShell } from "@/components/ConsoleShell";
 import { RouteLoader } from "@/components/RouteLoader";
+import { EmptyState } from "@/components/EmptyState";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createAssignment,
@@ -744,11 +745,11 @@ export function TeacherConsole() {
                           {org}
                           <span className="text-muted-foreground/60">· {items.length}</span>
                         </div>
-                        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           {items.map((item) => {
                             const attention = classAttention(dashboard, item.id);
                             return (
-                              <div key={item.id} className="w-[240px] shrink-0">
+                              <div key={item.id} className="min-w-0">
                                 <ClassButton
                                   item={item}
                                   active={item.id === selectedClassId}
@@ -3121,9 +3122,7 @@ function AssessmentManager({
                         );
                       })
                     ) : (
-                      <div className="rounded-2xl border border-border bg-background/35 p-4 text-[12.5px] text-muted-foreground">
-                        No attempts yet.
-                      </div>
+                      <EmptyState>No attempts yet.</EmptyState>
                     )}
                   </div>
                 </div>
@@ -3708,9 +3707,7 @@ function AssignmentManager({
                         );
                       })
                     ) : (
-                      <div className="rounded-2xl border border-border bg-background/35 p-4 text-[12.5px] text-muted-foreground">
-                        No submissions yet.
-                      </div>
+                      <EmptyState>No submissions yet.</EmptyState>
                     )}
                   </div>
                 </div>
@@ -3963,15 +3960,21 @@ function GradebookTable({
           <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
             <thead className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
               <tr>
-                <th className="sticky left-0 z-[1] bg-background px-3 py-1 font-medium">Student</th>
-                <th className="px-3 py-1 font-medium">Lesson status</th>
-                <th className="px-3 py-1 font-medium">Score</th>
-                <th className="px-3 py-1 font-medium">Attempts</th>
-                <th className="px-3 py-1 font-medium">Quiz</th>
-                <th className="px-3 py-1 font-medium">Evidence</th>
-                <th className="px-3 py-1 font-medium">Mastery</th>
-                <th className="px-3 py-1 font-medium">Last activity</th>
-                <th className="px-3 py-1 font-medium">Action</th>
+                <th className="sticky left-0 top-0 z-[3] bg-background px-3 py-1 font-medium">
+                  Student
+                </th>
+                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                  Lesson status
+                </th>
+                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Score</th>
+                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Attempts</th>
+                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Quiz</th>
+                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Evidence</th>
+                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Mastery</th>
+                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                  Last activity
+                </th>
+                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -4048,9 +4051,9 @@ function GradebookTable({
           </table>
         </div>
       ) : (
-        <div className="rounded-2xl border border-border bg-background/35 p-4 text-[12.5px] text-muted-foreground">
+        <EmptyState icon={UsersRound}>
           Add students to this class to populate the gradebook.
-        </div>
+        </EmptyState>
       )}
     </div>
   );
@@ -4121,9 +4124,7 @@ function LessonProgress({
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-border bg-background/35 p-4 text-[12.5px] text-muted-foreground">
-          No students are assigned to this class yet.
-        </div>
+        <EmptyState icon={UsersRound}>No students are assigned to this class yet.</EmptyState>
       )}
     </div>
   );
@@ -4254,7 +4255,7 @@ function StudentDetail({
               {sessions[0] ? statusLabel(sessions[0]) : "no session yet"}
             </p>
           </div>
-          <div className="grid grid-cols-4 gap-2 text-center text-[12px]">
+          <div className="grid grid-cols-2 gap-2 text-center text-[12px] sm:grid-cols-4">
             <MiniMetric label="Sessions" value={String(stats.sessions)} />
             <MiniMetric label="Attempts" value={String(stats.attempts)} />
             <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />

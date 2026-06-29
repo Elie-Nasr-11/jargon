@@ -1562,7 +1562,7 @@ function MessageRow({
             </span>
           ) : null}
           {code && (
-            <div className="w-full min-w-[min(420px,85vw)]">
+            <div className="w-full min-w-0 md:min-w-[420px]">
               <HistoryCodePanel code={code} onUseCode={onUseCode} />
             </div>
           )}
