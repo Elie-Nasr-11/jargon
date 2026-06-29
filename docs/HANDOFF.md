@@ -6,6 +6,44 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-29 (Curriculum authoring redesign — Phase 2: outline sidebar + IDE detail pane; branch-only)
+
+Summary: Rebuilt `frontend/src/routes/teacher.curriculum.tsx` from the old single-column
+tree-card → flat-form → preview into a persistent outline sidebar + an IDE-style detail pane on a URL
+spine. Structure (subjects/courses/units/lessons) is now managed directly via the Phase 1 actions, not
+back-filled from a lesson save. Frontend-only; relies on the Phase 1 backend being deployed for the
+create/rename/reorder/move/delete buttons to work (reads/viewing degrade gracefully until then).
+
+- Layout: two columns on lg — a sticky, scrollable **Outline** (Subject ▸ Course ▸ Unit ▸ Lesson) on the
+  left and a **detail pane** that edits whatever node is selected on the right. ConsoleShell widened to
+  1440px.
+- URL spine: `?subject=` / `?course=` / `?unit=` / `?lesson=` — exactly one is set (the selected node);
+  ancestors resolve from data for the outline + breadcrumb. The old `?lesson=` deep link (TeacherConsole's
+  "Edit in curriculum") still works.
+- Outline: per-row inline create (+ Subject at top, + on each subject/course/unit to add a child), collapse
+  toggles, and **native HTML5 drag-reorder scoped per sibling group** (a reusable `ReorderList` whose drag
+  state is isolated per group via stopPropagation, so dragging a course never bubbles to the subject list).
+  No dnd library added.
+- Detail panes: `StructureDetail` (subject/course/unit) = rename title + description, add-child, archive
+  (subject/course), and a guarded delete (disabled with a hint while children exist). `LessonDetail` reuses
+  today's blueprint editor (`BlueprintEditor`/`draftToBlueprint`/`save_lesson_blueprint`) with an
+  Edit/Preview toggle, Save/Publish/Archive, a **Move to unit** dropdown (move_lesson), and a confirm-delete.
+  The redundant structure fields were removed from the lesson form (the outline owns structure now); the
+  draft still carries subject/course/unit ids so a lesson save patches by id (never re-derives).
+- Removed the old `CurriculumTree`/`SubjectBlock`/`CourseBlock`/`UnitBlock` flat-tree components.
+
+Tests: tsc 0 errors; lint 0 errors / 12 pre-existing warnings (prettier autofixed); build green.
+
+Remaining concerns: (1) backend Phase 1 must be deployed (migration + curriculum-admin) for structure
+edits to function — flagged. (2) Pre-existing `save_lesson_blueprint` quirk unchanged: saving a lesson
+re-asserts its subject/course to status=draft (publish re-promotes) — to be cleaned up in Phase 3 when the
+lesson editor moves off the monolithic blueprint. (3) The outline shows only the selected class's org
+subjects (global seeded content has null org and isn't shown to org teachers) — intended for top-down
+authoring. Frontend-only → deploy to main on your OK.
+
+Suggested next task: Phase 3 — multi-step lesson editor over `lesson_activities`/`quiz_items` + the
+backward-compatible `chat` runtime sequencing patch (highest risk; ship on its own).
+
 ## Claude -> Codex / Human - 2026-06-29 (Curriculum authoring redesign — Phase 1: foundation; branch-only, backend deploy pending)
 
 Summary: First phase of the curriculum authoring redesign (persistent outline + IDE detail pane + multi-step
