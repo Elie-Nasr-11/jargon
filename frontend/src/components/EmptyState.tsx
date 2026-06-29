@@ -11,7 +11,7 @@ export function EmptyState({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border bg-background/35 px-4 py-8 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border bg-depth-sub px-4 py-8 text-center">
       <Icon className="h-6 w-6 text-muted-foreground/60" strokeWidth={1.5} />
       <div className="text-[13px] text-muted-foreground">{children}</div>
     </div>

@@ -1964,7 +1964,7 @@ export function AdminPage() {
 
                     {selectedClassReadiness ? (
                       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <h3 className="text-[14px] font-medium text-foreground">
@@ -2036,7 +2036,7 @@ export function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <h3 className="text-[14px] font-medium text-foreground">
                             Roster/account health
                           </h3>
@@ -2092,7 +2092,7 @@ export function AdminPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4 text-[12.5px] text-muted-foreground">
+                      <div className="rounded-2xl border border-border/80 bg-depth-sub p-4 text-[12.5px] text-muted-foreground">
                         Choose a class and refresh readiness to see launch status.
                       </div>
                     )}
@@ -2175,7 +2175,7 @@ export function AdminPage() {
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                      <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                         <h3 className="text-[14px] font-medium text-foreground">Recent errors</h3>
                         <div className="mt-3 space-y-2">
                           {(readiness?.recent_errors || []).slice(0, 5).map((event) => (
@@ -2198,7 +2198,7 @@ export function AdminPage() {
                           ) : null}
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                      <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                         <h3 className="text-[14px] font-medium text-foreground">
                           Open interventions
                         </h3>
@@ -2257,7 +2257,7 @@ export function AdminPage() {
                     ) : null}
 
                     <div className="grid gap-4">
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                      <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                         <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
                           <FileDown className="h-4 w-4" strokeWidth={1.6} />
                           Student records and reports
@@ -2329,7 +2329,7 @@ export function AdminPage() {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                    <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                       <h3 className="text-[14px] font-medium text-foreground">
                         Class consent and feature controls
                       </h3>
@@ -2447,7 +2447,7 @@ export function AdminPage() {
 
                         <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
                           <div className="space-y-4">
-                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                               <h3 className="text-[14px] font-medium text-foreground">
                                 Connection
                               </h3>
@@ -2476,7 +2476,7 @@ export function AdminPage() {
                                   </select>
                                 </Field>
                                 {selectedClassroomConnection ? (
-                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                  <div className="rounded-2xl border border-border/70 bg-depth-field p-3 text-[12.5px] text-muted-foreground">
                                     <div className="font-medium text-foreground">
                                       {selectedClassroomConnection.google_name ||
                                         selectedClassroomConnection.google_email}
@@ -2495,7 +2495,7 @@ export function AdminPage() {
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                  <div className="rounded-2xl border border-border/70 bg-depth-field p-3 text-[12.5px] text-muted-foreground">
                                     Connect Google Classroom with read-only course, roster, and
                                     profile-email scopes. Google secrets and refresh tokens are
                                     never sent to the browser.
@@ -2504,7 +2504,7 @@ export function AdminPage() {
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
                                 <button
@@ -2540,7 +2540,7 @@ export function AdminPage() {
                                   </select>
                                 </Field>
                                 {selectedGoogleCourse ? (
-                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                  <div className="rounded-2xl border border-border/70 bg-depth-field p-3 text-[12.5px] text-muted-foreground">
                                     <div className="font-medium text-foreground">
                                       {selectedGoogleCourse.name}
                                     </div>
@@ -2584,7 +2584,7 @@ export function AdminPage() {
                           </div>
 
                           <div className="space-y-4">
-                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                               <h3 className="text-[14px] font-medium text-foreground">
                                 Roster preview
                               </h3>
@@ -2628,7 +2628,7 @@ export function AdminPage() {
                                   />
                                 </div>
                               ) : (
-                                <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                                <div className="mt-3 rounded-2xl border border-border/70 bg-depth-field p-4 text-[12.5px] leading-relaxed text-muted-foreground">
                                   Preview before importing. Existing Jargon users are matched by
                                   email. Missing users are not created here; seed them through the
                                   existing roster tools and import again.
@@ -2636,7 +2636,7 @@ export function AdminPage() {
                               )}
                             </div>
 
-                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                               <h3 className="text-[14px] font-medium text-foreground">
                                 Recent Classroom syncs
                               </h3>
@@ -2728,7 +2728,7 @@ export function AdminPage() {
 
                         <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
                           <div className="space-y-4">
-                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                               <h3 className="text-[14px] font-medium text-foreground">
                                 Connection
                               </h3>
@@ -2767,7 +2767,7 @@ export function AdminPage() {
                                   </select>
                                 </Field>
                                 {selectedCanvasConnection ? (
-                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                  <div className="rounded-2xl border border-border/70 bg-depth-field p-3 text-[12.5px] text-muted-foreground">
                                     <div className="font-medium text-foreground">
                                       {selectedCanvasConnection.canvas_name ||
                                         selectedCanvasConnection.canvas_login_id}
@@ -2815,7 +2815,7 @@ export function AdminPage() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                  <div className="rounded-2xl border border-border/70 bg-depth-field p-3 text-[12.5px] text-muted-foreground">
                                     Enter your institution Canvas URL, then connect a teacher or
                                     org-admin account. Canvas secrets and refresh tokens are never
                                     sent to the browser.
@@ -2824,7 +2824,7 @@ export function AdminPage() {
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <h3 className="text-[14px] font-medium text-foreground">Courses</h3>
                                 <button
@@ -2860,7 +2860,7 @@ export function AdminPage() {
                                   </select>
                                 </Field>
                                 {selectedCanvasCourse ? (
-                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px] text-muted-foreground">
+                                  <div className="rounded-2xl border border-border/70 bg-depth-field p-3 text-[12.5px] text-muted-foreground">
                                     <div className="font-medium text-foreground">
                                       {selectedCanvasCourse.name}
                                     </div>
@@ -2870,7 +2870,7 @@ export function AdminPage() {
                                     </div>
                                   </div>
                                 ) : null}
-                                <div className="rounded-2xl border border-border/70 bg-background/55 p-3">
+                                <div className="rounded-2xl border border-border/70 bg-depth-field p-3">
                                   <label className="flex items-start gap-2.5 text-[12.5px] text-foreground">
                                     <input
                                       type="checkbox"
@@ -2954,7 +2954,7 @@ export function AdminPage() {
                           </div>
 
                           <div className="space-y-4">
-                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                               <h3 className="text-[14px] font-medium text-foreground">
                                 Roster preview
                               </h3>
@@ -2998,7 +2998,7 @@ export function AdminPage() {
                                   />
                                 </div>
                               ) : (
-                                <div className="mt-3 rounded-2xl border border-border/70 bg-background/55 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                                <div className="mt-3 rounded-2xl border border-border/70 bg-depth-field p-4 text-[12.5px] leading-relaxed text-muted-foreground">
                                   Preview before importing. Existing Jargon users are matched by
                                   email. Missing users are not created here; seed them through the
                                   existing roster tools and import again.
@@ -3006,7 +3006,7 @@ export function AdminPage() {
                               )}
                             </div>
 
-                            <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                            <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                               <h3 className="text-[14px] font-medium text-foreground">
                                 Recent Canvas syncs
                               </h3>
@@ -3034,7 +3034,7 @@ export function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <h3 className="text-[14px] font-medium text-foreground">
@@ -3095,7 +3095,7 @@ export function AdminPage() {
                           </div>
 
                           {gradeMessage ? (
-                            <div className="mt-3 rounded-2xl border border-border bg-background/55 px-3 py-2 text-[12px] text-muted-foreground">
+                            <div className="mt-3 rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12px] text-muted-foreground">
                               {gradeMessage}
                             </div>
                           ) : null}
@@ -3119,7 +3119,7 @@ export function AdminPage() {
                                     return (
                                       <div
                                         key={link.id}
-                                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/55 p-3 text-[12.5px]"
+                                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-depth-field p-3 text-[12.5px]"
                                       >
                                         <div className="min-w-0">
                                           <div className="truncate text-foreground">
@@ -3158,14 +3158,14 @@ export function AdminPage() {
                                     );
                                   })
                                 ) : (
-                                  <div className="rounded-2xl border border-border/70 bg-background/55 p-3 text-[12px] text-muted-foreground">
+                                  <div className="rounded-2xl border border-border/70 bg-depth-field p-3 text-[12px] text-muted-foreground">
                                     No grade links yet. Link a Jargon item to a Canvas assignment
                                     below.
                                   </div>
                                 )}
                               </div>
 
-                              <div className="rounded-2xl border border-border/70 bg-background/55 p-3">
+                              <div className="rounded-2xl border border-border/70 bg-depth-field p-3">
                                 <h4 className="text-[12.5px] font-medium text-foreground">
                                   Link a Jargon item
                                 </h4>
@@ -3255,7 +3255,7 @@ export function AdminPage() {
                             {schoolOpsMessage}
                           </div>
                         ) : null}
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
                             <FileSpreadsheet className="h-4 w-4" strokeWidth={1.6} />
                             CSV roster import
@@ -3365,7 +3365,7 @@ export function AdminPage() {
                             {schoolOpsMessage}
                           </div>
                         ) : null}
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <h3 className="flex items-center gap-2 text-[14px] font-medium text-foreground">
                             <ExternalLink className="h-4 w-4" strokeWidth={1.6} />
                             Campus Live link-out
@@ -3469,7 +3469,7 @@ export function AdminPage() {
                       />
                     </div>
 
-                    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                    <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="text-[14px] font-medium text-foreground">
@@ -3535,7 +3535,7 @@ export function AdminPage() {
                     />
 
                     <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                      <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                         <h3 className="text-[14px] font-medium text-foreground">
                           Recent model events
                         </h3>
@@ -3565,7 +3565,7 @@ export function AdminPage() {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                      <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                         <h3 className="text-[14px] font-medium text-foreground">Runtime errors</h3>
                         <div className="mt-3 space-y-2">
                           {(costDashboard?.recent_runtime_errors || []).slice(0, 6).map((event) => (
@@ -3666,7 +3666,7 @@ export function AdminPage() {
                           </Field>
                         </div>
 
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
                             <Plus className="h-4 w-4" strokeWidth={1.6} />
                             Create class
@@ -3693,7 +3693,7 @@ export function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
                             <Archive className="h-4 w-4" strokeWidth={1.6} />
                             Class settings
@@ -3734,7 +3734,7 @@ export function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
                             <UserPlus className="h-4 w-4" strokeWidth={1.6} />
                             Add existing user
@@ -3779,7 +3779,7 @@ export function AdminPage() {
                       </div>
 
                       <div className="space-y-4">
-                        <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                        <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <h3 className="text-[14px] font-medium text-foreground">
@@ -3945,7 +3945,7 @@ export function AdminPage() {
                         </div>
 
                         <div className="grid gap-4 lg:grid-cols-2">
-                          <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                             <h3 className="text-[14px] font-medium text-foreground">
                               Recent seed batches
                             </h3>
@@ -3969,7 +3969,7 @@ export function AdminPage() {
                             </div>
                           </div>
 
-                          <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+                          <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
                             <h3 className="text-[14px] font-medium text-foreground">
                               Recent audit events
                             </h3>
@@ -4431,7 +4431,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-border/75 bg-background/45 p-4">
+    <div className="rounded-2xl border border-border/75 bg-depth-sub p-4">
       <div className="text-[24px] font-semibold leading-none text-foreground">{value}</div>
       <div className="mt-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
         {label}
@@ -4518,7 +4518,7 @@ function MetricStat({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border/75 bg-background/45 p-4">
+    <div className="rounded-2xl border border-border/75 bg-depth-sub p-4">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
         <span className="text-[10.5px] uppercase tracking-[0.1em]">{label}</span>
@@ -4542,7 +4542,7 @@ function CostMetricTable({
   wide?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-border/80 bg-background/45 p-4">
+    <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
       <h3 className="text-[14px] font-medium text-foreground">{title}</h3>
       <div className="mt-3 overflow-x-auto">
         <table

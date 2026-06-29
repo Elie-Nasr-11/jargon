@@ -612,7 +612,7 @@ function CurriculumPage() {
       ) : data && selectedClass ? (
         <div className={`grid gap-4 ${outlineOpen ? "lg:grid-cols-[330px_minmax(0,1fr)]" : ""}`}>
           {outlineOpen ? (
-            <aside className="min-w-0 lg:sticky lg:top-[78px] lg:max-h-[calc(100vh-110px)] lg:overflow-x-hidden lg:overflow-y-auto">
+            <aside className="min-w-0 lg:sticky lg:top-[calc(var(--header-height)+1.125rem)] lg:max-h-[calc(100vh-var(--header-height)-3.125rem)] lg:overflow-x-hidden lg:overflow-y-auto">
               <Outline
                 subjects={orgSubjects}
                 coursesForSubject={coursesForSubject}

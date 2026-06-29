@@ -34,7 +34,7 @@ export function ConsoleShell({
         <div className="hairline">
           <div
             className={cn(
-              "mx-auto flex h-[60px] items-center justify-between gap-2 px-3 sm:px-6",
+              "mx-auto flex h-[var(--header-height)] items-center justify-between gap-2 px-3 sm:px-6",
               widthClass,
             )}
           >

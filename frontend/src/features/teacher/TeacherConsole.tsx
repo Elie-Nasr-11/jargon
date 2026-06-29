@@ -1151,7 +1151,7 @@ function ClassDetail({
           </WorkspaceTabList>
 
           <WorkspacePanel value="overview">
-            <div className="mt-5 rounded-3xl border border-border bg-background/35 p-4">
+            <div className="mt-5 rounded-3xl border border-border bg-depth-sub p-4">
               <div className="mb-3 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
                 Pilot readiness
               </div>
@@ -1199,7 +1199,7 @@ function ClassDetail({
                 const rows = lessons.filter((lesson) => activeLessonIds.has(lesson.id));
                 if (!rows.length) {
                   return (
-                    <div className="rounded-3xl border border-border bg-background/35 p-6 text-[13px] text-muted-foreground">
+                    <div className="rounded-3xl border border-border bg-depth-sub p-6 text-[13px] text-muted-foreground">
                       No lessons have resources, assignments, assessments, or student activity in
                       this class yet.
                     </div>
@@ -1224,7 +1224,7 @@ function ClassDetail({
                       return (
                         <div
                           key={lesson.id}
-                          className="rounded-2xl border border-border bg-background/35 p-3.5"
+                          className="rounded-2xl border border-border bg-depth-sub p-3.5"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -1849,7 +1849,7 @@ function ResourceManager({
   };
 
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h3 className="text-[15px] font-medium text-foreground">Lesson resources</h3>
@@ -2083,7 +2083,7 @@ function ResourceManager({
               return (
                 <div
                   key={resource.id}
-                  className="rounded-2xl border border-border bg-background/35 p-4"
+                  className="rounded-2xl border border-border bg-depth-sub p-4"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
@@ -2343,7 +2343,7 @@ function ResourceManager({
               );
             })
           ) : (
-            <div className="rounded-2xl border border-border bg-background/35 p-5 text-[13px] text-muted-foreground">
+            <div className="rounded-2xl border border-border bg-depth-sub p-5 text-[13px] text-muted-foreground">
               No lesson resources yet. Add a draft, then publish it when students should see it.
             </div>
           )}
@@ -2600,7 +2600,7 @@ function AssessmentManager({
   };
 
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h3 className="text-[15px] font-medium text-foreground">Lesson quizzes</h3>
@@ -2614,7 +2614,7 @@ function AssessmentManager({
       </div>
 
       <div className="grid gap-4">
-        <div className="rounded-2xl border border-border bg-background/35 p-4">
+        <div className="rounded-2xl border border-border bg-depth-sub p-4">
           <div className="text-[13px] font-medium text-foreground">Create quiz</div>
           <div className="mt-3 grid gap-3">
             <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
@@ -2894,7 +2894,7 @@ function AssessmentManager({
               return (
                 <div
                   key={assessment.id}
-                  className="rounded-2xl border border-border bg-background/35 p-4"
+                  className="rounded-2xl border border-border bg-depth-sub p-4"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
@@ -2951,7 +2951,7 @@ function AssessmentManager({
                       return (
                         <div
                           key={recipient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-background/35 px-3 py-2"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-sub px-3 py-2"
                         >
                           <div className="text-[12.5px] text-foreground">
                             {displayName(profile, recipient.user_id)}
@@ -3110,7 +3110,7 @@ function AssessmentManager({
               );
             })
           ) : (
-            <div className="rounded-2xl border border-border bg-background/35 p-5 text-[13px] text-muted-foreground">
+            <div className="rounded-2xl border border-border bg-depth-sub p-5 text-[13px] text-muted-foreground">
               No lesson quizzes yet. Create one when you need a larger checkpoint.
             </div>
           )}
@@ -3302,7 +3302,7 @@ function AssignmentManager({
   };
 
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h3 className="text-[15px] font-medium text-foreground">Assignments</h3>
@@ -3316,7 +3316,7 @@ function AssignmentManager({
       </div>
 
       <div className="grid gap-4">
-        <div className="rounded-2xl border border-border bg-background/35 p-4">
+        <div className="rounded-2xl border border-border bg-depth-sub p-4">
           <div className="text-[13px] font-medium text-foreground">Create assignment</div>
           <div className="mt-3 grid gap-3">
             <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
@@ -3490,7 +3490,7 @@ function AssignmentManager({
               return (
                 <div
                   key={assignment.id}
-                  className="rounded-2xl border border-border bg-background/35 p-4"
+                  className="rounded-2xl border border-border bg-depth-sub p-4"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
@@ -3560,7 +3560,7 @@ function AssignmentManager({
                       return (
                         <div
                           key={recipient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-background/35 px-3 py-2"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-sub px-3 py-2"
                         >
                           <div className="text-[12.5px] text-foreground">
                             {displayName(profile, recipient.user_id)}
@@ -3693,7 +3693,7 @@ function AssignmentManager({
               );
             })
           ) : (
-            <div className="rounded-2xl border border-border bg-background/35 p-5 text-[13px] text-muted-foreground">
+            <div className="rounded-2xl border border-border bg-depth-sub p-5 text-[13px] text-muted-foreground">
               No assignments yet. Create one for a lesson when students need to submit work.
             </div>
           )}
@@ -3863,7 +3863,7 @@ function AnalyticsMetric({
   detail: string;
 }) {
   return (
-    <div className="rounded-3xl border border-border bg-background/30 p-4">
+    <div className="rounded-3xl border border-border bg-depth-card p-4">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
         <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.6} />
         {label}
@@ -3905,7 +3905,7 @@ function GradebookTable({
   }, {});
 
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h3 className="text-[15px] font-medium text-foreground">Gradebook</h3>
@@ -3958,7 +3958,7 @@ function GradebookTable({
                   key={row.studentId}
                   type="button"
                   onClick={() => onSelectStudent(row.studentId)}
-                  className={`w-full rounded-2xl border border-border bg-background/35 p-3 text-left transition-colors hover:bg-muted ${
+                  className={`w-full rounded-2xl border border-border bg-depth-sub p-3 text-left transition-colors hover:bg-muted ${
                     selectedStudentId === row.studentId
                       ? "outline outline-1 outline-foreground/20"
                       : ""
@@ -4037,7 +4037,7 @@ function GradebookTable({
                     <tr
                       key={row.studentId}
                       onClick={() => onSelectStudent(row.studentId)}
-                      className={`cursor-pointer rounded-2xl border border-border bg-background/35 transition-colors hover:bg-muted ${
+                      className={`cursor-pointer rounded-2xl border border-border bg-depth-sub transition-colors hover:bg-muted ${
                         selectedStudentId === row.studentId
                           ? "outline outline-1 outline-foreground/20"
                           : ""
@@ -4125,7 +4125,7 @@ function LessonProgress({
   profilesById: Map<string, Profile>;
 }) {
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-background/30 p-4">
+    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-[15px] font-medium text-foreground">Lesson Progress</h3>
@@ -4146,7 +4146,7 @@ function LessonProgress({
               return (
                 <div
                   key={studentId}
-                  className="grid grid-cols-1 gap-3 rounded-2xl border border-border bg-background/35 p-3 sm:grid-cols-[180px_minmax(0,1fr)]"
+                  className="grid grid-cols-1 gap-3 rounded-2xl border border-border bg-depth-sub p-3 sm:grid-cols-[180px_minmax(0,1fr)]"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-[13px] font-medium text-foreground">
@@ -4318,7 +4318,7 @@ function StudentDetail({
         </div>
 
         {selectedSession ? (
-          <div className="mt-4 rounded-3xl border border-border bg-background/35 p-4">
+          <div className="mt-4 rounded-3xl border border-border bg-depth-sub p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
@@ -4691,7 +4691,7 @@ function StudentAnalyticsPanel({
     .sort((a, b) => Number(a.score || 0) - Number(b.score || 0))[0];
 
   return (
-    <div className="mt-5 rounded-3xl border border-border bg-background/30 p-4">
+    <div className="mt-5 rounded-3xl border border-border bg-depth-card p-4">
       <div className="mb-3 flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
         <BarChart3 className="h-4 w-4" strokeWidth={1.6} />
         Student analytics
@@ -4905,7 +4905,7 @@ function AssessmentRecipientChip({ status }: { status: AssessmentRecipient["stat
 
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
-    <div className="rounded-3xl border border-border bg-background/35 p-4">
+    <div className="rounded-3xl border border-border bg-depth-sub p-4">
       <div className="mb-3 flex items-center gap-2 text-[14px] font-medium text-foreground">
         <span className="text-muted-foreground">{icon}</span>
         {title}
