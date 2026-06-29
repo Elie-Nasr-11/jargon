@@ -1386,6 +1386,116 @@ async function deleteStep(config: Config, actorId: string, body: DbRow): Promise
   return json({ status: "ok", node_type: "step", id: activityId, lesson_id: lessonId });
 }
 
+// ---------------------------------------------------------------------------
+// AI authoring (Phase 4 of the curriculum authoring redesign).
+// `generate` drafts a course outline or a lesson's steps from a teacher prompt and
+// returns structured JSON — it NEVER writes. The teacher reviews and applies the
+// draft through the existing create/upsert actions (review-before-save by design).
+// ---------------------------------------------------------------------------
+
+async function callModelJson(systemPrompt: string, userPrompt: string): Promise<DbRow> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("AI authoring is not configured (OPENAI_API_KEY missing).");
+  const model = Deno.env.get("OPENAI_MODEL_DEFAULT")?.trim() || "gpt-4o-mini";
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.4,
+      response_format: { type: "json_object" },
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const message =
+      data && typeof data === "object" && data.error && typeof data.error === "object"
+        ? String((data.error as DbRow).message || "Model request failed.")
+        : "Model request failed.";
+    throw new Error(message);
+  }
+  const content = data?.choices?.[0]?.message?.content;
+  try {
+    const parsed = JSON.parse(typeof content === "string" && content ? content : "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as DbRow) : {};
+  } catch {
+    throw new Error("The model returned invalid JSON. Try again.");
+  }
+}
+
+async function generateDraft(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const mode = cleanText(body.mode);
+  const prompt = cleanText(body.prompt);
+  if (!prompt) throw new Error("prompt is required.");
+
+  if (mode === "course_outline") {
+    const organizationId = cleanText(body.organization_id);
+    if (!organizationId) throw new Error("organization_id is required.");
+    await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+    const result = await callModelJson(
+      'You are a curriculum designer. Return ONLY JSON of the form ' +
+        '{"units":[{"title":string,"lessons":[{"title":string}]}]}. ' +
+        "Use 2-5 units and 2-6 short lessons each. Titles are concise and student-facing.",
+      `Design a course outline for this brief:\n${prompt.slice(0, 2000)}`,
+    );
+    const rawUnits = Array.isArray(result.units) ? result.units : [];
+    const units = rawUnits
+      .slice(0, 8)
+      .map((unit) => {
+        const row = unit && typeof unit === "object" ? (unit as DbRow) : {};
+        const lessons = (Array.isArray(row.lessons) ? row.lessons : [])
+          .slice(0, 12)
+          .map((lesson) => ({
+            title: cleanText((lesson && typeof lesson === "object" ? (lesson as DbRow) : {}).title),
+          }))
+          .filter((lesson) => lesson.title);
+        return { title: cleanText(row.title), lessons };
+      })
+      .filter((unit) => unit.title);
+    return json({ status: "ok", mode, outline: { units } });
+  }
+
+  if (mode === "lesson_steps") {
+    const lessonId = cleanText(body.lesson_id);
+    if (!lessonId) throw new Error("lesson_id is required.");
+    const scope = await courseScopeForLesson(config, lessonId);
+    await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+    const result = await callModelJson(
+      "You design a single lesson as an ordered list of steps. Return ONLY JSON of the form " +
+        '{"steps":[{"kind":"teach"|"practice"|"checkpoint"|"reflect","title":string,"prompt":string,' +
+        '"choices":[{"id":string,"text":string}],"correct_choice_id":string}]}. ' +
+        "Use 3-6 steps. Include choices and correct_choice_id ONLY for checkpoint steps " +
+        "(2-4 choices with ids a,b,c,d). Keep prompts concrete and age-appropriate.",
+      `Draft the steps for this lesson brief:\n${prompt.slice(0, 2000)}`,
+    );
+    const rawSteps = Array.isArray(result.steps) ? result.steps : [];
+    const steps = rawSteps
+      .slice(0, 10)
+      .map((step) => {
+        const row = step && typeof step === "object" ? (step as DbRow) : {};
+        const kind = ["teach", "practice", "checkpoint", "reflect"].includes(cleanText(row.kind))
+          ? cleanText(row.kind)
+          : "practice";
+        const choices = parseChoices(row.choices);
+        return {
+          kind,
+          title: cleanText(row.title) || "Step",
+          prompt: cleanText(row.prompt),
+          choices: kind === "checkpoint" ? choices : [],
+          correct_choice_id: kind === "checkpoint" ? cleanText(row.correct_choice_id) : "",
+        };
+      })
+      .filter((step) => step.prompt || step.title);
+    return json({ status: "ok", mode, steps });
+  }
+
+  throw new Error("Unsupported generate mode.");
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
@@ -1423,6 +1533,7 @@ Deno.serve(async (req: Request) => {
     if (action === "upsert_step") return await upsertStep(config, actorId, record);
     if (action === "reorder_steps") return await reorderSteps(config, actorId, record);
     if (action === "delete_step") return await deleteStep(config, actorId, record);
+    if (action === "generate") return await generateDraft(config, actorId, record);
     return errorResponse("Unsupported curriculum-admin action.", 400);
   } catch (error) {
     const message = errorMessage(error);

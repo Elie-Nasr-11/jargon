@@ -30,6 +30,7 @@ import {
   deleteCurriculumStep,
   fetchCurriculumAuthoringData,
   fetchPrimaryRole,
+  generateCurriculumDraft,
   getSession,
   invokeCurriculumAdmin,
   moveCurriculumLesson,
@@ -47,6 +48,8 @@ import type {
   CurriculumLessonMetaInput,
   CurriculumMilestoneInput,
   CurriculumNodeType,
+  CurriculumOutlineDraft,
+  CurriculumStepDraft,
   CurriculumStepInput,
   CurriculumStepKind,
   CurriculumSubject,
@@ -360,6 +363,84 @@ function CurriculumPage() {
       await deleteCurriculumStep({ accessToken, classId, lessonId, activityId });
     });
 
+  // AI authoring: generate returns a draft to review (no write); apply uses the
+  // create/upsert actions, then refreshes via runStructureOp.
+  const generateOutline = async (prompt: string): Promise<CurriculumOutlineDraft | null> => {
+    if (!selectedClass) return null;
+    try {
+      const session = await getSession();
+      if (!session) throw new Error("Sign in to use AI authoring.");
+      const result = await generateCurriculumDraft({
+        accessToken: session.access_token,
+        classId: selectedClass.id,
+        organizationId: selectedClass.organization_id,
+        mode: "course_outline",
+        prompt,
+      });
+      return result.outline || { units: [] };
+    } catch (error) {
+      setMessage((error as Error).message || "Could not generate an outline.");
+      return null;
+    }
+  };
+
+  const applyOutline = (courseId: string, outline: CurriculumOutlineDraft) =>
+    runStructureOp(async (accessToken, classId) => {
+      const version = currentVersionForCourse(courseId);
+      if (!version) throw new Error("This course has no version to add units to.");
+      for (const unit of outline.units) {
+        const created = await createCurriculumUnit({
+          accessToken,
+          classId,
+          courseVersionId: version.id,
+          title: unit.title,
+        });
+        if (!created.id) continue;
+        for (const lesson of unit.lessons) {
+          await createCurriculumLessonStub({
+            accessToken,
+            classId,
+            unitId: created.id,
+            title: lesson.title,
+          });
+        }
+      }
+    }, "Outline applied.");
+
+  const generateSteps = async (
+    lessonId: string,
+    prompt: string,
+  ): Promise<CurriculumStepDraft[] | null> => {
+    if (!selectedClass) return null;
+    try {
+      const session = await getSession();
+      if (!session) throw new Error("Sign in to use AI authoring.");
+      const result = await generateCurriculumDraft({
+        accessToken: session.access_token,
+        classId: selectedClass.id,
+        mode: "lesson_steps",
+        prompt,
+        lessonId,
+      });
+      return result.steps || [];
+    } catch (error) {
+      setMessage((error as Error).message || "Could not generate steps.");
+      return null;
+    }
+  };
+
+  const applyStepDrafts = (lessonId: string, drafts: CurriculumStepDraft[]) =>
+    runStructureOp(async (accessToken, classId) => {
+      for (const draft of drafts) {
+        await upsertCurriculumStep({
+          accessToken,
+          classId,
+          lessonId,
+          step: stepInputFromDraft(draft),
+        });
+      }
+    }, "Steps added.");
+
   const setPublication = async (action: "publish_lesson" | "archive_lesson", lessonId: string) => {
     if (!selectedClass || !lessonId) return;
     setPublishing(true);
@@ -497,6 +578,10 @@ function CurriculumPage() {
               onDeleteStep={deleteStep}
               onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
               onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
+              onGenerateOutline={generateOutline}
+              onApplyOutline={applyOutline}
+              onGenerateSteps={generateSteps}
+              onApplySteps={applyStepDrafts}
               currentVersionForCourse={currentVersionForCourse}
               counts={{
                 coursesForSubject: (id) => coursesForSubject(id).length,
@@ -892,6 +977,10 @@ function DetailPane({
   onDeleteStep,
   onPublishLesson,
   onArchiveLesson,
+  onGenerateOutline,
+  onApplyOutline,
+  onGenerateSteps,
+  onApplySteps,
   currentVersionForCourse,
   counts,
 }: {
@@ -919,6 +1008,10 @@ function DetailPane({
   onDeleteStep: (lessonId: string, activityId: string) => void;
   onPublishLesson: (lessonId: string) => void;
   onArchiveLesson: (lessonId: string) => void;
+  onGenerateOutline: (prompt: string) => Promise<CurriculumOutlineDraft | null>;
+  onApplyOutline: (courseId: string, outline: CurriculumOutlineDraft) => void;
+  onGenerateSteps: (lessonId: string, prompt: string) => Promise<CurriculumStepDraft[] | null>;
+  onApplySteps: (lessonId: string, drafts: CurriculumStepDraft[]) => void;
   currentVersionForCourse: (courseId: string) => CurriculumCourseVersion | null;
   counts: {
     coursesForSubject: (id: string) => number;
@@ -996,6 +1089,10 @@ function DetailPane({
         onAddChild={() => onAddUnit(course.id)}
         onArchive={() => onArchive("course", course.id)}
         onDelete={() => onDelete("course", course.id)}
+        ai={{
+          onGenerate: onGenerateOutline,
+          onApply: (outline) => onApplyOutline(course.id, outline),
+        }}
       />
     );
   }
@@ -1038,6 +1135,8 @@ function DetailPane({
       onArchiveLesson={() => onArchiveLesson(lesson.id)}
       onMove={(targetUnitId) => onMoveLesson(lesson.id, targetUnitId)}
       onDelete={() => onDelete("lesson", lesson.id)}
+      onGenerateSteps={(prompt) => onGenerateSteps(lesson.id, prompt)}
+      onApplySteps={(drafts) => onApplySteps(lesson.id, drafts)}
     />
   );
 }
@@ -1066,6 +1165,7 @@ function StructureDetail({
   onAddChild,
   onArchive,
   onDelete,
+  ai,
 }: {
   kind: string;
   node: { id: string; title: string; description?: string };
@@ -1080,6 +1180,10 @@ function StructureDetail({
   onAddChild: () => void;
   onArchive?: () => void;
   onDelete: () => void;
+  ai?: {
+    onGenerate: (prompt: string) => Promise<CurriculumOutlineDraft | null>;
+    onApply: (outline: CurriculumOutlineDraft) => void;
+  };
 }) {
   const [title, setTitle] = useState(node.title);
   const [description, setDescription] = useState(node.description ?? "");
@@ -1129,6 +1233,12 @@ function StructureDetail({
             </button>
           </div>
         </div>
+
+        {ai ? (
+          <div className="mt-5">
+            <AiOutlinePanel busy={busy} onGenerate={ai.onGenerate} onApply={ai.onApply} />
+          </div>
+        ) : null}
 
         <div className="mt-6 border-t border-border pt-4">
           <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
@@ -1282,6 +1392,28 @@ function defaultStepForKind(kind: CurriculumStepKind): CurriculumStepInput {
   return base;
 }
 
+// Map an AI-drafted step (kind + free text) onto the create/upsert step payload.
+function stepInputFromDraft(draft: CurriculumStepDraft): CurriculumStepInput {
+  const config = stepKindConfig(draft.kind);
+  const isCheckpoint = draft.kind === "checkpoint";
+  const choices = (draft.choices || []).filter((choice) => choice.id && choice.text);
+  return {
+    title: draft.title || config.label,
+    stage: config.stage,
+    activity_type: config.activityType,
+    response_mode: config.responseMode,
+    prompt: draft.prompt || config.label,
+    choices: isCheckpoint ? choices : [],
+    quiz: isCheckpoint
+      ? {
+          prompt: draft.prompt || "Choose the best answer.",
+          choices,
+          correct_choice_ids: draft.correct_choice_id ? [draft.correct_choice_id] : [],
+        }
+      : undefined,
+  };
+}
+
 function LessonDetail({
   lesson,
   data,
@@ -1296,6 +1428,8 @@ function LessonDetail({
   onArchiveLesson,
   onMove,
   onDelete,
+  onGenerateSteps,
+  onApplySteps,
 }: {
   lesson: Lesson;
   data: CurriculumAuthoringData;
@@ -1310,6 +1444,8 @@ function LessonDetail({
   onArchiveLesson: () => void;
   onMove: (targetUnitId: string) => void;
   onDelete: () => void;
+  onGenerateSteps: (prompt: string) => Promise<CurriculumStepDraft[] | null>;
+  onApplySteps: (drafts: CurriculumStepDraft[]) => void;
 }) {
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1406,6 +1542,10 @@ function LessonDetail({
                     Add {config.label.toLowerCase()}
                   </button>
                 ))}
+              </div>
+
+              <div className="mt-4 border-t border-border pt-4">
+                <AiStepsPanel busy={busy} onGenerate={onGenerateSteps} onApply={onApplySteps} />
               </div>
             </section>
 
@@ -1905,6 +2045,191 @@ function ViewToggle({
     >
       {label}
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AI authoring panels — generate a draft, review it, then apply.
+// ---------------------------------------------------------------------------
+
+function AiOutlinePanel({
+  busy,
+  onGenerate,
+  onApply,
+}: {
+  busy: boolean;
+  onGenerate: (prompt: string) => Promise<CurriculumOutlineDraft | null>;
+  onApply: (outline: CurriculumOutlineDraft) => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [draft, setDraft] = useState<CurriculumOutlineDraft | null>(null);
+
+  const generate = async () => {
+    if (!prompt.trim()) return;
+    setLoading(true);
+    const result = await onGenerate(prompt.trim());
+    setDraft(result);
+    setLoading(false);
+  };
+
+  return (
+    <section className="rounded-3xl border border-border bg-background/30 p-4">
+      <div className="mb-2 flex items-center gap-2 text-[13px] font-medium text-foreground">
+        <Sparkles className="h-4 w-4" strokeWidth={1.7} />
+        Draft an outline with AI
+      </div>
+      <p className="mb-3 text-[12px] text-muted-foreground">
+        Describe the course; the draft is yours to review and edit before anything is created.
+      </p>
+      <TextArea label="Brief" value={prompt} onChange={setPrompt} />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void generate()}
+          disabled={loading || busy || !prompt.trim()}
+          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+        >
+          <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
+          {loading ? "Generating..." : "Generate"}
+        </button>
+      </div>
+
+      {draft ? (
+        <div className="mt-3 grid gap-2 rounded-2xl border border-border bg-background/40 p-3">
+          {draft.units.length === 0 ? (
+            <div className="text-[12.5px] text-muted-foreground">
+              The model did not return any units. Try a more specific brief.
+            </div>
+          ) : (
+            draft.units.map((unit, i) => (
+              <div key={i}>
+                <div className="text-[12.5px] font-medium text-foreground">{unit.title}</div>
+                <ul className="mt-0.5 ml-4 list-disc text-[12px] text-muted-foreground">
+                  {unit.lessons.map((lesson, j) => (
+                    <li key={j}>{lesson.title}</li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
+          {draft.units.length ? (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onApply(draft);
+                  setDraft(null);
+                  setPrompt("");
+                }}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-50"
+              >
+                <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
+                Apply outline
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraft(null)}
+                className="text-[12px] text-muted-foreground hover:text-foreground"
+              >
+                Discard
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AiStepsPanel({
+  busy,
+  onGenerate,
+  onApply,
+}: {
+  busy: boolean;
+  onGenerate: (prompt: string) => Promise<CurriculumStepDraft[] | null>;
+  onApply: (drafts: CurriculumStepDraft[]) => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [drafts, setDrafts] = useState<CurriculumStepDraft[] | null>(null);
+
+  const generate = async () => {
+    if (!prompt.trim()) return;
+    setLoading(true);
+    const result = await onGenerate(prompt.trim());
+    setDrafts(result);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2 text-[13px] font-medium text-foreground">
+        <Sparkles className="h-4 w-4" strokeWidth={1.7} />
+        Draft steps with AI
+      </div>
+      <p className="mb-3 text-[12px] text-muted-foreground">
+        Describe the lesson; review the steps below, then add the ones you want.
+      </p>
+      <TextArea label="Brief" value={prompt} onChange={setPrompt} />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void generate()}
+          disabled={loading || busy || !prompt.trim()}
+          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+        >
+          <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
+          {loading ? "Generating..." : "Generate"}
+        </button>
+      </div>
+
+      {drafts ? (
+        <div className="mt-3 grid gap-2 rounded-2xl border border-border bg-background/40 p-3">
+          {drafts.length === 0 ? (
+            <div className="text-[12.5px] text-muted-foreground">
+              The model did not return any steps. Try a more specific brief.
+            </div>
+          ) : (
+            drafts.map((step, i) => (
+              <div key={i} className="text-[12px]">
+                <span className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                  {step.kind}
+                </span>
+                <span className="ml-2 font-medium text-foreground">{step.title}</span>
+                <p className="mt-0.5 text-muted-foreground">{step.prompt}</p>
+              </div>
+            ))
+          )}
+          {drafts.length ? (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onApply(drafts);
+                  setDrafts(null);
+                  setPrompt("");
+                }}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-50"
+              >
+                <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
+                Add these steps
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrafts(null)}
+                className="text-[12px] text-muted-foreground hover:text-foreground"
+              >
+                Discard
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

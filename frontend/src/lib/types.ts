@@ -205,9 +205,24 @@ export type CurriculumMilestoneInput = {
   allowed_response_modes: Array<"text" | "code" | "multiple_choice" | "file">;
 };
 
+export type CurriculumOutlineDraft = {
+  units: Array<{ title: string; lessons: Array<{ title: string }> }>;
+};
+
+export type CurriculumStepDraft = {
+  kind: CurriculumStepKind;
+  title: string;
+  prompt: string;
+  choices: Array<{ id: string; text: string }>;
+  correct_choice_id: string;
+};
+
 export type CurriculumAdminResponse = {
   status: "ok" | "error";
   node_type?: CurriculumNodeType | "step";
+  mode?: string;
+  outline?: CurriculumOutlineDraft;
+  steps?: CurriculumStepDraft[];
   id?: string;
   lesson_id?: string;
   subject_id?: string;

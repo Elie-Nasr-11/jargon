@@ -6,6 +6,31 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-29 (Curriculum authoring redesign — Phase 4: AI authoring; branch-only, backend deploy pending)
+
+Summary: Final phase. Teachers can now draft a course outline or a lesson's steps with AI, review the draft,
+and apply it. Generation NEVER writes — apply uses the existing create/upsert actions, so it's
+review-before-save by construction.
+
+- `curriculum-admin` new `generate` action (server-side OpenAI call via OPENAI_API_KEY / OPENAI_MODEL_DEFAULT,
+  json_object response): `mode:"course_outline"` (org from body, assertCanAuthor) returns
+  `{outline:{units:[{title,lessons:[{title}]}]}}`; `mode:"lesson_steps"` (org from lesson) returns
+  `{steps:[{kind,title,prompt,choices,correct_choice_id}]}`. Both validate/clamp the model output before
+  returning; neither writes to the DB.
+- Frontend: a "Draft an outline with AI" panel on the course detail and a "Draft steps with AI" panel in the
+  lesson editor — prompt → Generate → review the draft → Apply (or Discard). Apply for an outline loops
+  `create_unit` + `create_lesson_stub`; apply for steps loops `upsert_step` (mapped from the draft kind). New
+  `generateCurriculumDraft` api wrapper + `CurriculumOutlineDraft`/`CurriculumStepDraft` types.
+
+Tests: tsc 0 errors; lint 0 errors / 12 pre-existing warnings; build green.
+
+Deploy: branch-only. Backend deploy is the human's: redeploy `curriculum-admin` (it now calls OpenAI; the
+same OPENAI_API_KEY the `chat` fn already uses must be set on the function). Frontend to main on your OK.
+
+This completes the four-phase curriculum authoring redesign (outline + IDE + multi-step + structure mgmt +
+AI). The whole feature is on `claude/happy-johnson-wseex8`. Backend to deploy in order: apply the Phase 1
+migration, then redeploy `curriculum-admin` and `chat`.
+
 ## Claude -> Codex / Human - 2026-06-29 (Curriculum authoring redesign — Phase 3: multi-step lessons + runtime sequencing; branch-only, backend deploy pending)
 
 Summary: Lessons are now an ordered sequence of steps, and the student `chat` runtime walks them. A step is a

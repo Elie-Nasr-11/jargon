@@ -1461,6 +1461,28 @@ export function deleteCurriculumStep(input: {
   });
 }
 
+// --- AI authoring (curriculum redesign Phase 4) ---------------------------
+// Drafts a course outline or a lesson's steps from a prompt. Returns structured
+// JSON for the teacher to review; never writes (apply uses the create/upsert actions).
+
+export function generateCurriculumDraft(input: {
+  accessToken: string;
+  classId?: string | null;
+  mode: "course_outline" | "lesson_steps";
+  prompt: string;
+  organizationId?: string;
+  lessonId?: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "generate",
+    class_id: input.classId || undefined,
+    mode: input.mode,
+    prompt: input.prompt,
+    organization_id: input.organizationId,
+    lesson_id: input.lessonId,
+  });
+}
+
 export async function fetchTeacherClasses(userId: string) {
   const { data: memberships, error: membershipsError } = await supabase
     .from("class_memberships")
