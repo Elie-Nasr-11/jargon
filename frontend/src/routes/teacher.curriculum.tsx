@@ -717,7 +717,7 @@ function Outline({
     selection?.type === type && selection.id === id;
 
   return (
-    <GradientCard>
+    <GradientCard innerClassName="!bg-depth-card">
       <div className="p-3">
         <div className="mb-2 flex items-center justify-between gap-2 px-1">
           <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -1120,7 +1120,7 @@ function DetailPane({
 }) {
   if (!selection) {
     return (
-      <GradientCard>
+      <GradientCard innerClassName="!bg-depth-card">
         <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
           <Layers3 className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
           <div className="text-[14px] text-foreground">Select a node to edit it.</div>
@@ -1244,7 +1244,7 @@ function DetailPane({
 
 function MissingNode() {
   return (
-    <GradientCard>
+    <GradientCard innerClassName="!bg-depth-card">
       <div className="p-6 text-[13px] text-muted-foreground">
         That item is no longer available. Pick another from the outline.
       </div>
@@ -1294,14 +1294,14 @@ function StructureDetail({
   const dirty = title.trim() !== node.title || (description ?? "") !== (node.description ?? "");
 
   return (
-    <GradientCard>
+    <GradientCard innerClassName="!bg-depth-card">
       <div className="p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               {kind}
             </div>
-            <h2 className="mt-1 text-[18px] font-medium text-foreground">{node.title}</h2>
+            <h2 className="mt-1 text-[20px] font-medium text-foreground">{node.title}</h2>
             {info ? <div className="mt-0.5 text-[11.5px] text-muted-foreground">{info}</div> : null}
           </div>
           {status ? (
@@ -1575,14 +1575,14 @@ function LessonDetail({
     null;
 
   return (
-    <GradientCard>
+    <GradientCard innerClassName="!bg-depth-card">
       <div className="p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               Lesson
             </div>
-            <h2 className="mt-1 truncate text-[18px] font-medium text-foreground">
+            <h2 className="mt-1 truncate text-[20px] font-medium text-foreground">
               {lesson.title}
             </h2>
           </div>
@@ -1604,7 +1604,7 @@ function LessonDetail({
 
             <section className="rounded-3xl border border-border bg-depth-sub p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
+                <div className="flex items-center gap-2 text-[15px] font-medium text-foreground">
                   <Layers3 className="h-4 w-4" strokeWidth={1.7} />
                   Steps
                 </div>
@@ -1802,7 +1802,7 @@ function LessonMetaForm({
 
   return (
     <section className="rounded-3xl border border-border bg-depth-sub p-4">
-      <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+      <div className="mb-3 flex items-center gap-2 text-[15px] font-medium text-foreground">
         <NotebookPen className="h-4 w-4" strokeWidth={1.7} />
         Lesson basics
       </div>
@@ -2104,7 +2104,7 @@ function LessonPreview({
                 </span>
                 {config.label}
               </div>
-              <div className="text-[13px] font-medium text-foreground">{activity.title}</div>
+              <div className="text-[15px] font-medium text-foreground">{activity.title}</div>
               <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
                 {activity.prompt}
               </p>
@@ -2461,7 +2461,7 @@ function AiOutlinePanel({
 
   return (
     <section className="rounded-3xl border border-border bg-depth-sub p-4">
-      <div className="mb-2 flex items-center gap-2 text-[13px] font-medium text-foreground">
+      <div className="mb-2 flex items-center gap-2 text-[15px] font-medium text-foreground">
         <Sparkles className="h-4 w-4" strokeWidth={1.7} />
         Draft an outline with AI
       </div>
@@ -2619,7 +2619,7 @@ function AiStepsPanel({
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-2 text-[13px] font-medium text-foreground">
+      <div className="mb-2 flex items-center gap-2 text-[15px] font-medium text-foreground">
         <Sparkles className="h-4 w-4" strokeWidth={1.7} />
         Draft steps with AI
       </div>
