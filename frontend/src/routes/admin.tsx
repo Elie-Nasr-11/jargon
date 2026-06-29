@@ -1842,7 +1842,7 @@ export function AdminPage() {
                           }),
                         })
                       }
-                      className="rounded-2xl border border-border bg-background/35 p-3.5 text-left transition-colors hover:bg-muted"
+                      className="rounded-2xl border border-border bg-depth-sub p-3.5 text-left transition-colors hover:bg-muted"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="text-[14px] font-medium text-foreground">

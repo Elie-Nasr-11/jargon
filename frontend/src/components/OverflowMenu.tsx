@@ -50,10 +50,7 @@ export function OverflowMenu({
               {action.separatorBefore && index > 0 ? <DropdownMenuSeparator /> : null}
               <DropdownMenuItem
                 disabled={action.disabled}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  action.onClick();
-                }}
+                onSelect={() => action.onClick()}
                 className={
                   action.tone === "danger"
                     ? "text-[12.5px] text-destructive focus:text-destructive"

@@ -2061,6 +2061,11 @@ function ResourceManager({
         </Dialog>
 
         <div className="grid content-start gap-2">
+          {resourceMessage && !formOpen ? (
+            <div className="rounded-2xl border border-border bg-depth-sub px-3 py-2 text-[12px] leading-relaxed text-muted-foreground">
+              {resourceMessage}
+            </div>
+          ) : null}
           {resources.length ? (
             resources.map((resource) => {
               const chunks = chunksByResource[resource.id] || [];
@@ -4037,13 +4042,13 @@ function GradebookTable({
                     <tr
                       key={row.studentId}
                       onClick={() => onSelectStudent(row.studentId)}
-                      className={`cursor-pointer rounded-2xl border border-border bg-depth-sub transition-colors hover:bg-muted ${
+                      className={`group cursor-pointer rounded-2xl border border-border bg-depth-sub transition-colors hover:bg-muted ${
                         selectedStudentId === row.studentId
                           ? "outline outline-1 outline-foreground/20"
                           : ""
                       }`}
                     >
-                      <td className="sticky left-0 z-[1] rounded-l-2xl border-y border-l border-border bg-background px-3 py-3">
+                      <td className="sticky left-0 z-[1] rounded-l-2xl border-y border-l border-border bg-depth-sub px-3 py-3 transition-colors group-hover:bg-muted">
                         <div className="text-[13px] font-medium text-foreground">
                           {displayName(profile, row.studentId)}
                         </div>
