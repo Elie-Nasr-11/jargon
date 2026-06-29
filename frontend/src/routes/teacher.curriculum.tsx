@@ -10,6 +10,8 @@ import {
   Layers3,
   ListChecks,
   NotebookPen,
+  PanelLeft,
+  PanelLeftClose,
   Pencil,
   Plus,
   Save,
@@ -103,6 +105,7 @@ function CurriculumPage() {
   const [publishing, setPublishing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [outlineOpen, setOutlineOpen] = useState(true);
   const [roleOk, setRoleOk] = useState(false);
 
   const selection: Selection = search.lesson
@@ -499,6 +502,20 @@ function CurriculumPage() {
               </select>
             </label>
           ) : null}
+          {data?.classes.length ? (
+            <button
+              type="button"
+              onClick={() => setOutlineOpen((value) => !value)}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+            >
+              {outlineOpen ? (
+                <PanelLeftClose className="h-4 w-4" strokeWidth={1.7} />
+              ) : (
+                <PanelLeft className="h-4 w-4" strokeWidth={1.7} />
+              )}
+              {outlineOpen ? "Hide outline" : "Show outline"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void loadData()}
@@ -535,25 +552,28 @@ function CurriculumPage() {
           </div>
         </GradientCard>
       ) : data && selectedClass ? (
-        <div className="grid gap-4 lg:grid-cols-[330px_minmax(0,1fr)]">
-          <aside className="lg:sticky lg:top-[78px] lg:max-h-[calc(100vh-110px)] lg:overflow-auto">
-            <Outline
-              subjects={orgSubjects}
-              coursesForSubject={coursesForSubject}
-              unitsForCourse={unitsForCourse}
-              lessonsForUnit={lessonsForUnit}
-              selection={selection}
-              collapsed={collapsed}
-              busy={busy}
-              onToggle={toggleCollapsed}
-              onSelect={selectNode}
-              onReorder={reorder}
-              onAddSubject={addSubject}
-              onAddCourse={addCourse}
-              onAddUnit={addUnit}
-              onAddLesson={addLesson}
-            />
-          </aside>
+        <div className={`grid gap-4 ${outlineOpen ? "lg:grid-cols-[330px_minmax(0,1fr)]" : ""}`}>
+          {outlineOpen ? (
+            <aside className="min-w-0 lg:sticky lg:top-[78px] lg:max-h-[calc(100vh-110px)] lg:overflow-x-hidden lg:overflow-y-auto">
+              <Outline
+                subjects={orgSubjects}
+                coursesForSubject={coursesForSubject}
+                unitsForCourse={unitsForCourse}
+                lessonsForUnit={lessonsForUnit}
+                selection={selection}
+                collapsed={collapsed}
+                busy={busy}
+                onToggle={toggleCollapsed}
+                onSelect={selectNode}
+                onReorder={reorder}
+                onAddSubject={addSubject}
+                onAddCourse={addCourse}
+                onAddUnit={addUnit}
+                onAddLesson={addLesson}
+                onCollapse={() => setOutlineOpen(false)}
+              />
+            </aside>
+          ) : null}
 
           <div className="min-w-0">
             <DetailPane
@@ -616,6 +636,7 @@ function Outline({
   onAddCourse,
   onAddUnit,
   onAddLesson,
+  onCollapse,
 }: {
   subjects: CurriculumSubject[];
   coursesForSubject: (subjectId: string) => CurriculumCourse[];
@@ -631,6 +652,7 @@ function Outline({
   onAddCourse: (subjectId: string) => void;
   onAddUnit: (courseId: string) => void;
   onAddLesson: (unitId: string) => void;
+  onCollapse: () => void;
 }) {
   const isSelected = (type: CurriculumNodeType, id: string) =>
     selection?.type === type && selection.id === id;
@@ -642,15 +664,26 @@ function Outline({
           <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
             Outline
           </span>
-          <button
-            type="button"
-            onClick={onAddSubject}
-            disabled={busy}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
-            Subject
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onAddSubject}
+              disabled={busy}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Subject
+            </button>
+            <button
+              type="button"
+              onClick={onCollapse}
+              aria-label="Hide outline"
+              title="Hide outline"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <PanelLeftClose className="h-4 w-4" strokeWidth={1.7} />
+            </button>
+          </div>
         </div>
 
         {subjects.length === 0 ? (
@@ -658,7 +691,7 @@ function Outline({
             No subjects yet. Create one to start building.
           </div>
         ) : (
-          <div className="grid gap-1">
+          <div className="grid min-w-0 gap-1">
             <ReorderList
               items={subjects}
               disabled={busy}
@@ -683,7 +716,7 @@ function Outline({
                       dragging={state.dragging}
                     />
                     {open ? (
-                      <div className="mt-0.5 grid gap-0.5">
+                      <div className="mt-0.5 grid min-w-0 gap-0.5">
                         <ReorderList
                           items={courses}
                           disabled={busy}
@@ -708,7 +741,7 @@ function Outline({
                                   dragging={courseState.dragging}
                                 />
                                 {courseOpen ? (
-                                  <div className="mt-0.5 grid gap-0.5">
+                                  <div className="mt-0.5 grid min-w-0 gap-0.5">
                                     <ReorderList
                                       items={units}
                                       disabled={busy}
@@ -733,7 +766,7 @@ function Outline({
                                               dragging={unitState.dragging}
                                             />
                                             {unitOpen ? (
-                                              <div className="mt-0.5 grid gap-0.5">
+                                              <div className="mt-0.5 grid min-w-0 gap-0.5">
                                                 <ReorderList
                                                   items={lessons}
                                                   disabled={busy}
@@ -816,12 +849,12 @@ function OutlineRow({
 }) {
   return (
     <div
-      className={`group flex items-center gap-1 rounded-lg pr-1 transition-colors ${
+      className={`group flex min-w-0 items-center gap-1 overflow-hidden rounded-lg pr-1 transition-colors ${
         selected ? "bg-foreground text-background" : "hover:bg-muted"
       } ${dragging ? "opacity-40" : ""}`}
       style={{ paddingLeft: `${depth * 14 + 2}px` }}
     >
-      <span className="cursor-grab text-muted-foreground/60 group-hover:text-muted-foreground">
+      <span className="shrink-0 cursor-grab text-muted-foreground/60 group-hover:text-muted-foreground">
         <GripVertical className="h-3.5 w-3.5" strokeWidth={1.6} />
       </span>
       {hasChildren ? (
@@ -915,6 +948,7 @@ function ReorderList<T extends { id: string }>({
       {items.map((item) => (
         <div
           key={item.id}
+          className="min-w-0"
           draggable={!disabled}
           onDragStart={(event) => {
             if (disabled) return;
@@ -949,7 +983,8 @@ function ReorderList<T extends { id: string }>({
 }
 
 function dropClass(state: { over: boolean }) {
-  return state.over ? "rounded-lg ring-1 ring-foreground/40" : "";
+  // min-w-0 lets nested rows shrink so their labels truncate instead of forcing width.
+  return `min-w-0 ${state.over ? "rounded-lg ring-1 ring-foreground/40" : ""}`;
 }
 
 // ---------------------------------------------------------------------------
