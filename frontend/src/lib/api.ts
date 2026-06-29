@@ -25,6 +25,7 @@ import type {
   CurriculumCourse,
   CurriculumCourseVersion,
   CurriculumMilestone,
+  CurriculumNodeType,
   CurriculumQuizItem,
   CurriculumSubject,
   CurriculumUnit,
@@ -1212,6 +1213,22 @@ export async function fetchCurriculumAuthoringData(
   };
 }
 
+async function callCurriculumAdmin(
+  accessToken: string,
+  payload: Record<string, unknown>,
+): Promise<CurriculumAdminResponse> {
+  const response = await fetchWithTimeout(functionUrl("curriculum-admin"), {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as CurriculumAdminResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Curriculum update failed.");
+  }
+  return data;
+}
+
 export async function invokeCurriculumAdmin(input: {
   accessToken: string;
   action: "save_lesson_blueprint" | "publish_lesson" | "archive_lesson";
@@ -1220,22 +1237,163 @@ export async function invokeCurriculumAdmin(input: {
   lessonId?: string | null;
   blueprint?: CurriculumBlueprint;
 }) {
-  const response = await fetchWithTimeout(functionUrl("curriculum-admin"), {
-    method: "POST",
-    headers: authHeaders(input.accessToken),
-    body: JSON.stringify({
-      action: input.action,
-      organization_id: input.organizationId,
-      class_id: input.classId || undefined,
-      lesson_id: input.lessonId || undefined,
-      blueprint: input.blueprint,
-    }),
+  return callCurriculumAdmin(input.accessToken, {
+    action: input.action,
+    organization_id: input.organizationId,
+    class_id: input.classId || undefined,
+    lesson_id: input.lessonId || undefined,
+    blueprint: input.blueprint,
   });
-  const data = (await response.json()) as CurriculumAdminResponse;
-  if (!response.ok || data.status === "error") {
-    throw new Error(data.error || "Curriculum update failed.");
-  }
-  return data;
+}
+
+// --- Structure management (curriculum redesign Phase 1) -------------------
+// Create / rename / reorder / move / archive / delete curriculum nodes directly,
+// decoupled from the monolithic lesson blueprint save. The edge function resolves
+// each node's organization from its parent and re-checks author access; rename
+// PATCHes by id so children never orphan.
+
+export function createCurriculumSubject(input: {
+  accessToken: string;
+  organizationId: string;
+  classId?: string | null;
+  title: string;
+  description?: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "create_subject",
+    organization_id: input.organizationId,
+    class_id: input.classId || undefined,
+    title: input.title,
+    description: input.description,
+  });
+}
+
+export function createCurriculumCourse(input: {
+  accessToken: string;
+  classId?: string | null;
+  subjectId: string;
+  title: string;
+  description?: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "create_course",
+    class_id: input.classId || undefined,
+    subject_id: input.subjectId,
+    title: input.title,
+    description: input.description,
+  });
+}
+
+export function createCurriculumUnit(input: {
+  accessToken: string;
+  classId?: string | null;
+  courseVersionId: string;
+  title: string;
+  description?: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "create_unit",
+    class_id: input.classId || undefined,
+    course_version_id: input.courseVersionId,
+    title: input.title,
+    description: input.description,
+  });
+}
+
+export function createCurriculumLessonStub(input: {
+  accessToken: string;
+  classId?: string | null;
+  unitId: string;
+  title: string;
+  level?: string;
+  lessonType?: CurriculumBlueprint["lesson"]["type"];
+  tutorPrompt?: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "create_lesson_stub",
+    class_id: input.classId || undefined,
+    unit_id: input.unitId,
+    title: input.title,
+    level: input.level,
+    lesson_type: input.lessonType,
+    tutor_prompt: input.tutorPrompt,
+  });
+}
+
+export function renameCurriculumNode(input: {
+  accessToken: string;
+  classId?: string | null;
+  nodeType: CurriculumNodeType;
+  id: string;
+  title: string;
+  description?: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "rename_node",
+    class_id: input.classId || undefined,
+    node_type: input.nodeType,
+    id: input.id,
+    title: input.title,
+    description: input.description,
+  });
+}
+
+export function reorderCurriculumNodes(input: {
+  accessToken: string;
+  classId?: string | null;
+  nodeType: CurriculumNodeType;
+  orderedIds: string[];
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "reorder",
+    class_id: input.classId || undefined,
+    node_type: input.nodeType,
+    ordered_ids: input.orderedIds,
+  });
+}
+
+export function moveCurriculumLesson(input: {
+  accessToken: string;
+  classId?: string | null;
+  lessonId: string;
+  targetUnitId: string;
+  position?: number;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "move_lesson",
+    class_id: input.classId || undefined,
+    lesson_id: input.lessonId,
+    target_unit_id: input.targetUnitId,
+    position: input.position,
+  });
+}
+
+export function archiveCurriculumNode(input: {
+  accessToken: string;
+  classId?: string | null;
+  nodeType: CurriculumNodeType;
+  id: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "archive_node",
+    class_id: input.classId || undefined,
+    node_type: input.nodeType,
+    id: input.id,
+  });
+}
+
+export function deleteCurriculumNode(input: {
+  accessToken: string;
+  classId?: string | null;
+  nodeType: CurriculumNodeType;
+  id: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "delete_node",
+    class_id: input.classId || undefined,
+    node_type: input.nodeType,
+    id: input.id,
+  });
 }
 
 export async function fetchTeacherClasses(userId: string) {

@@ -659,6 +659,506 @@ async function archiveLesson(config: Config, actorId: string, body: DbRow): Prom
   });
 }
 
+// ---------------------------------------------------------------------------
+// Structure management (Phase 1 of the curriculum authoring redesign).
+// First-class create / rename / reorder / move / archive / delete actions so
+// structure is managed directly instead of being back-filled from a lesson save.
+// All reuse assertCanAuthor + the service-role helpers; ids are stable once
+// created (rename PATCHes by id, never re-derives) so children never orphan.
+// ---------------------------------------------------------------------------
+
+const enc = (value: string) => encodeURIComponent(value);
+
+const NODE_TABLES: Record<string, string> = {
+  subject: "subjects",
+  course: "courses",
+  unit: "units",
+  lesson: "lessons",
+};
+
+async function selectAll(config: Config, path: string): Promise<DbRow[]> {
+  const data = await serviceFetch(config, `/rest/v1/${path}`);
+  return Array.isArray(data)
+    ? (data.filter((item) => item && typeof item === "object") as DbRow[])
+    : [];
+}
+
+// Next position within a parent (1-based). Highest existing non-null value + 1.
+async function nextPosition(
+  config: Config,
+  table: string,
+  filter: string,
+  column = "position",
+): Promise<number> {
+  const row = await selectFirst(
+    config,
+    `${table}?${filter}&select=${column}&order=${column}.desc.nullslast&limit=1`,
+  );
+  const current = Number(row?.[column] ?? 0);
+  return Number.isFinite(current) ? current + 1 : 1;
+}
+
+// Derive a stable id from a title-based base, appending a short suffix on collision
+// so a create never silently merges into an existing row.
+async function uniqueId(config: Config, table: string, base: string): Promise<string> {
+  const candidate = (base || crypto.randomUUID()).slice(0, 180);
+  const existing = await selectFirst(config, `${table}?id=eq.${enc(candidate)}&select=id&limit=1`);
+  if (!existing) return candidate;
+  return `${candidate}-${crypto.randomUUID().slice(0, 6)}`.slice(0, 180);
+}
+
+async function orgSlugFor(config: Config, organizationId: string): Promise<string> {
+  const organization = await selectFirst(
+    config,
+    `organizations?id=eq.${enc(organizationId)}&select=id,slug,name&limit=1`,
+  );
+  if (!organization) throw new Error("Organization was not found.");
+  return slugify(
+    cleanText(organization.slug) || cleanText(organization.name) || organizationId.slice(0, 8),
+  );
+}
+
+async function subjectScope(config: Config, subjectId: string) {
+  const subject = await selectFirst(
+    config,
+    `subjects?id=eq.${enc(subjectId)}&select=id,organization_id&limit=1`,
+  );
+  if (!subject) throw new Error("Subject was not found.");
+  return { subjectId: String(subject.id), organizationId: cleanText(subject.organization_id) };
+}
+
+async function courseScope(config: Config, courseId: string) {
+  const course = await selectFirst(
+    config,
+    `courses?id=eq.${enc(courseId)}&select=id,subject_id,organization_id&limit=1`,
+  );
+  if (!course) throw new Error("Course was not found.");
+  return {
+    courseId: String(course.id),
+    subjectId: cleanText(course.subject_id),
+    organizationId: cleanText(course.organization_id),
+  };
+}
+
+async function courseVersionScope(config: Config, courseVersionId: string) {
+  const version = await selectFirst(
+    config,
+    `course_versions?id=eq.${enc(courseVersionId)}&select=id,course_id&limit=1`,
+  );
+  if (!version) throw new Error("Course version was not found.");
+  const course = await courseScope(config, cleanText(version.course_id));
+  return { courseVersionId: String(version.id), ...course };
+}
+
+async function unitScope(config: Config, unitId: string) {
+  const unit = await selectFirst(
+    config,
+    `units?id=eq.${enc(unitId)}&select=id,title,course_version_id&limit=1`,
+  );
+  if (!unit) throw new Error("Unit was not found.");
+  const version = await courseVersionScope(config, cleanText(unit.course_version_id));
+  return { unitId: String(unit.id), unitTitle: cleanText(unit.title), ...version };
+}
+
+async function organizationForNode(config: Config, nodeType: string, id: string): Promise<string> {
+  if (nodeType === "subject") return (await subjectScope(config, id)).organizationId;
+  if (nodeType === "course") return (await courseScope(config, id)).organizationId;
+  if (nodeType === "unit") return (await unitScope(config, id)).organizationId;
+  if (nodeType === "lesson") return (await courseScopeForLesson(config, id)).organizationId;
+  throw new Error("Unsupported node type.");
+}
+
+async function createSubject(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const organizationId = cleanText(body.organization_id);
+  if (!organizationId) throw new Error("organization_id is required.");
+  await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+  const title = cleanText(body.title);
+  if (!title) throw new Error("Subject title is required.");
+  const orgSlug = await orgSlugFor(config, organizationId);
+  const id = await uniqueId(config, "subjects", safeId(orgSlug, title));
+  const position = await nextPosition(config, "subjects", `organization_id=eq.${enc(organizationId)}`);
+  await insertRow(config, "subjects", {
+    id,
+    organization_id: organizationId,
+    title,
+    description: cleanText(body.description),
+    status: "draft",
+    position,
+    created_by: actorId,
+    updated_at: new Date().toISOString(),
+  });
+  return json({ status: "ok", node_type: "subject", id, position, organization_id: organizationId });
+}
+
+async function createCourse(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const subjectId = cleanText(body.subject_id);
+  if (!subjectId) throw new Error("subject_id is required.");
+  const scope = await subjectScope(config, subjectId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+  const title = cleanText(body.title);
+  if (!title) throw new Error("Course title is required.");
+  const id = await uniqueId(config, "courses", safeId(subjectId, title));
+  const courseVersionId = await uniqueId(config, "course_versions", safeId(id, "v1"));
+  const position = await nextPosition(config, "courses", `subject_id=eq.${enc(subjectId)}`);
+  const now = new Date().toISOString();
+  await insertRow(config, "courses", {
+    id,
+    subject_id: subjectId,
+    organization_id: scope.organizationId || null,
+    title,
+    description: cleanText(body.description),
+    status: "draft",
+    position,
+    created_by: actorId,
+    updated_at: now,
+  });
+  await insertRow(config, "course_versions", {
+    id: courseVersionId,
+    course_id: id,
+    version_label: "v1",
+    status: "draft",
+    is_current: true,
+    content_schema_version: 1,
+    updated_at: now,
+  });
+  return json({
+    status: "ok",
+    node_type: "course",
+    id,
+    position,
+    subject_id: subjectId,
+    course_version_id: courseVersionId,
+  });
+}
+
+async function createUnit(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const courseVersionId = cleanText(body.course_version_id);
+  if (!courseVersionId) throw new Error("course_version_id is required.");
+  const scope = await courseVersionScope(config, courseVersionId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+  const title = cleanText(body.title);
+  if (!title) throw new Error("Unit title is required.");
+  const position = await nextPosition(config, "units", `course_version_id=eq.${enc(courseVersionId)}`);
+  const id = await uniqueId(config, "units", safeId(courseVersionId, String(position), title));
+  await insertRow(config, "units", {
+    id,
+    course_version_id: courseVersionId,
+    position,
+    title,
+    description: cleanText(body.description),
+    updated_at: new Date().toISOString(),
+  });
+  return json({
+    status: "ok",
+    node_type: "unit",
+    id,
+    position,
+    course_version_id: courseVersionId,
+    course_id: scope.courseId,
+  });
+}
+
+async function createLessonStub(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const unitId = cleanText(body.unit_id);
+  if (!unitId) throw new Error("unit_id is required.");
+  const scope = await unitScope(config, unitId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+  const title = cleanText(body.title) || "Untitled lesson";
+  const level = cleanText(body.level, "Any level");
+  const lessonType = isLessonType(body.lesson_type) ? body.lesson_type : "discussion";
+  const responseMode: ResponseMode = lessonType === "code"
+    ? "code"
+    : lessonType === "multiple_choice"
+      ? "multiple_choice"
+      : "text";
+
+  const lessonId = await uniqueId(config, "lessons", safeId(unitId, title));
+  const milestoneId = `${lessonId}-milestone-1`;
+  const activityId = `${lessonId}-activity-1`;
+  const position = await nextLessonPosition(config);
+  const unitPosition = await nextPosition(config, "lessons", `unit_id=eq.${enc(unitId)}`, "unit_position");
+  const now = new Date().toISOString();
+
+  await insertRow(config, "lessons", {
+    id: lessonId,
+    position,
+    unit_position: unitPosition,
+    title,
+    module: scope.unitTitle || "Lesson",
+    level,
+    tutor_prompt:
+      cleanText(body.tutor_prompt) || "Introduce this lesson and guide the learner step by step.",
+    sample_code: "",
+    expected_output: null,
+    unit_id: unitId,
+    author_user_id: actorId,
+    publication_status: "draft",
+    curriculum_metadata: {
+      course_id: scope.courseId,
+      course_version_id: scope.courseVersionId,
+      lesson_type: lessonType,
+      class_id: cleanText(body.class_id) || null,
+    },
+    milestone_id: milestoneId,
+  });
+
+  await upsertByConflict(config, "milestones", "id", {
+    id: milestoneId,
+    lesson_id: lessonId,
+    position: 1,
+    title,
+    objective: "Describe what the learner should be able to do.",
+    level,
+    skill_keys: [],
+    expected_evidence: {},
+    completion_rules: { requires: ["activity_complete"], min_score: 1 },
+    allowed_response_modes: [responseMode],
+    updated_at: now,
+  });
+
+  await upsertByConflict(config, "lesson_activities", "id", {
+    id: activityId,
+    lesson_id: lessonId,
+    milestone_id: milestoneId,
+    position: 1,
+    title: "Practice",
+    activity_type: lessonType,
+    stage: "practice",
+    prompt: "Add a prompt for learners.",
+    response_mode: responseMode,
+    starter_code: "",
+    expected_output: null,
+    choices: [],
+    rubric: {},
+    skill_keys: [],
+    pass_score: 1,
+  });
+
+  return json({
+    status: "ok",
+    node_type: "lesson",
+    id: lessonId,
+    lesson_id: lessonId,
+    unit_id: unitId,
+    milestone_id: milestoneId,
+    activity_id: activityId,
+    position,
+    unit_position: unitPosition,
+  });
+}
+
+async function renameNode(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const nodeType = cleanText(body.node_type);
+  const id = cleanText(body.id);
+  const title = cleanText(body.title);
+  if (!id) throw new Error("id is required.");
+  if (!title) throw new Error("title is required.");
+  const table = NODE_TABLES[nodeType];
+  if (!table) throw new Error("Unsupported node type.");
+  const organizationId = await organizationForNode(config, nodeType, id);
+  await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+
+  const patch: DbRow = { title };
+  // lessons carry no updated_at / description columns; the others do.
+  if (nodeType !== "lesson") {
+    patch.updated_at = new Date().toISOString();
+    if (body.description !== undefined) patch.description = cleanText(body.description);
+  } else {
+    patch.module = cleanText(body.module) || undefined;
+  }
+  await patchRows(config, `${table}?id=eq.${enc(id)}`, patch);
+  return json({ status: "ok", node_type: nodeType, id });
+}
+
+function requireAllPresent(rows: DbRow[], ids: string[], label: string): void {
+  const found = new Set(rows.map((row) => cleanText(row.id)));
+  for (const id of ids) {
+    if (!found.has(id)) throw new Error(`${label} list contains an unknown id.`);
+  }
+}
+
+// Validate that every id in a reorder belongs to the same parent (so a caller can't
+// mix in another org's nodes via the service-role write path) and resolve the org.
+async function reorderScope(config: Config, nodeType: string, ids: string[]): Promise<string> {
+  const idList = ids.map(enc).join(",");
+  if (nodeType === "subject") {
+    const rows = await selectAll(config, `subjects?id=in.(${idList})&select=id,organization_id`);
+    requireAllPresent(rows, ids, "Subject");
+    if (new Set(rows.map((r) => cleanText(r.organization_id))).size > 1) {
+      throw new Error("Subjects belong to different organizations.");
+    }
+    return cleanText(rows[0].organization_id);
+  }
+  if (nodeType === "course") {
+    const rows = await selectAll(config, `courses?id=in.(${idList})&select=id,subject_id,organization_id`);
+    requireAllPresent(rows, ids, "Course");
+    if (new Set(rows.map((r) => cleanText(r.subject_id))).size > 1) {
+      throw new Error("Courses belong to different subjects.");
+    }
+    return cleanText(rows[0].organization_id);
+  }
+  if (nodeType === "unit") {
+    const rows = await selectAll(config, `units?id=in.(${idList})&select=id,course_version_id`);
+    requireAllPresent(rows, ids, "Unit");
+    if (new Set(rows.map((r) => cleanText(r.course_version_id))).size > 1) {
+      throw new Error("Units belong to different course versions.");
+    }
+    return (await courseVersionScope(config, cleanText(rows[0].course_version_id))).organizationId;
+  }
+  if (nodeType === "lesson") {
+    const rows = await selectAll(config, `lessons?id=in.(${idList})&select=id,unit_id`);
+    requireAllPresent(rows, ids, "Lesson");
+    if (new Set(rows.map((r) => cleanText(r.unit_id))).size > 1) {
+      throw new Error("Lessons belong to different units.");
+    }
+    return (await unitScope(config, cleanText(rows[0].unit_id))).organizationId;
+  }
+  throw new Error("Unsupported node type.");
+}
+
+async function reorderNodes(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const nodeType = cleanText(body.node_type);
+  // Not cleanStringArray: that caps at 24, which would truncate a large reorder and
+  // (for units) leave stragglers at colliding positions. Reorders must cover the full set.
+  const orderedIds = Array.isArray(body.ordered_ids)
+    ? (body.ordered_ids as unknown[]).map((item) => cleanText(item)).filter(Boolean)
+    : [];
+  if (!NODE_TABLES[nodeType]) throw new Error("Unsupported node type.");
+  if (!orderedIds.length) throw new Error("ordered_ids is required.");
+  if (new Set(orderedIds).size !== orderedIds.length) {
+    throw new Error("ordered_ids contains duplicates.");
+  }
+
+  const organizationId = await reorderScope(config, nodeType, orderedIds);
+  await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+
+  const now = new Date().toISOString();
+  if (nodeType === "unit") {
+    // units have unique(course_version_id, position): two-pass via negative offsets
+    // so no transient collision while shuffling. Assumes orderedIds covers the unit set.
+    for (let i = 0; i < orderedIds.length; i++) {
+      await patchRows(config, `units?id=eq.${enc(orderedIds[i])}`, { position: -(i + 1), updated_at: now });
+    }
+    for (let i = 0; i < orderedIds.length; i++) {
+      await patchRows(config, `units?id=eq.${enc(orderedIds[i])}`, { position: i + 1, updated_at: now });
+    }
+  } else {
+    const column = nodeType === "lesson" ? "unit_position" : "position";
+    for (let i = 0; i < orderedIds.length; i++) {
+      const patch: DbRow = { [column]: i + 1 };
+      if (nodeType !== "lesson") patch.updated_at = now;
+      await patchRows(config, `${NODE_TABLES[nodeType]}?id=eq.${enc(orderedIds[i])}`, patch);
+    }
+  }
+  return json({ status: "ok", node_type: nodeType, ordered_ids: orderedIds });
+}
+
+async function moveLesson(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  const targetUnitId = cleanText(body.target_unit_id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  if (!targetUnitId) throw new Error("target_unit_id is required.");
+
+  const sourceScope = await courseScopeForLesson(config, lessonId);
+  const targetScope = await unitScope(config, targetUnitId);
+  await assertCanAuthor(config, actorId, sourceScope.organizationId, cleanText(body.class_id));
+  if (targetScope.organizationId !== sourceScope.organizationId) {
+    await assertCanAuthor(config, actorId, targetScope.organizationId, cleanText(body.class_id));
+  }
+
+  const unitPosition = body.position !== undefined && body.position !== null
+    ? Math.max(1, Math.round(Number(body.position) || 1))
+    : await nextPosition(config, "lessons", `unit_id=eq.${enc(targetUnitId)}`, "unit_position");
+
+  const lesson = await selectFirst(
+    config,
+    `lessons?id=eq.${enc(lessonId)}&select=id,curriculum_metadata&limit=1`,
+  );
+  const metadata = lesson?.curriculum_metadata && typeof lesson.curriculum_metadata === "object"
+    ? lesson.curriculum_metadata as DbRow
+    : {};
+
+  await patchRows(config, `lessons?id=eq.${enc(lessonId)}`, {
+    unit_id: targetUnitId,
+    unit_position: unitPosition,
+    module: targetScope.unitTitle || metadata.module || "Lesson",
+    curriculum_metadata: {
+      ...metadata,
+      course_id: targetScope.courseId,
+      course_version_id: targetScope.courseVersionId,
+    },
+  });
+
+  return json({
+    status: "ok",
+    node_type: "lesson",
+    id: lessonId,
+    lesson_id: lessonId,
+    unit_id: targetUnitId,
+    unit_position: unitPosition,
+  });
+}
+
+async function archiveNode(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const nodeType = cleanText(body.node_type);
+  const id = cleanText(body.id);
+  if (!id) throw new Error("id is required.");
+  const organizationId = await organizationForNode(config, nodeType, id);
+  await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+
+  const now = new Date().toISOString();
+  if (nodeType === "subject" || nodeType === "course") {
+    await patchRows(config, `${NODE_TABLES[nodeType]}?id=eq.${enc(id)}`, {
+      status: "archived",
+      updated_at: now,
+    });
+  } else if (nodeType === "lesson") {
+    await patchRows(config, `lessons?id=eq.${enc(id)}`, { publication_status: "archived" });
+    await patchRows(config, `quiz_items?lesson_id=eq.${enc(id)}`, { status: "archived", updated_at: now });
+  } else {
+    throw new Error("Only subjects, courses, and lessons can be archived.");
+  }
+  return json({ status: "ok", node_type: nodeType, id });
+}
+
+async function deleteNode(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const nodeType = cleanText(body.node_type);
+  const id = cleanText(body.id);
+  if (!id) throw new Error("id is required.");
+  const organizationId = await organizationForNode(config, nodeType, id);
+  await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+
+  // Leaf-only + history-safe deletes: refuse anything that would orphan published
+  // lessons or cascade away learner activity. Populated nodes use archive instead.
+  if (nodeType === "subject") {
+    const child = await selectFirst(config, `courses?subject_id=eq.${enc(id)}&select=id&limit=1`);
+    if (child) throw new Error("Remove this subject's courses before deleting it.");
+    await serviceFetch(config, `/rest/v1/subjects?id=eq.${enc(id)}`, { method: "DELETE" });
+  } else if (nodeType === "course") {
+    const versions = await selectAll(config, `course_versions?course_id=eq.${enc(id)}&select=id`);
+    const versionIds = versions.map((row) => cleanText(row.id)).filter(Boolean);
+    if (versionIds.length) {
+      const unit = await selectFirst(
+        config,
+        `units?course_version_id=in.(${versionIds.map(enc).join(",")})&select=id&limit=1`,
+      );
+      if (unit) throw new Error("Remove this course's units before deleting it.");
+    }
+    await serviceFetch(config, `/rest/v1/courses?id=eq.${enc(id)}`, { method: "DELETE" });
+  } else if (nodeType === "unit") {
+    const lesson = await selectFirst(config, `lessons?unit_id=eq.${enc(id)}&select=id&limit=1`);
+    if (lesson) throw new Error("Remove this unit's lessons before deleting it.");
+    await serviceFetch(config, `/rest/v1/units?id=eq.${enc(id)}`, { method: "DELETE" });
+  } else if (nodeType === "lesson") {
+    const session = await selectFirst(config, `learning_sessions?lesson_id=eq.${enc(id)}&select=id&limit=1`);
+    if (session) throw new Error("This lesson has learner activity. Archive it instead of deleting.");
+    await serviceFetch(config, `/rest/v1/lessons?id=eq.${enc(id)}`, { method: "DELETE" });
+  } else {
+    throw new Error("Unsupported node type.");
+  }
+  return json({ status: "ok", node_type: nodeType, id });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
@@ -679,19 +1179,38 @@ Deno.serve(async (req: Request) => {
     }
     const record = body as DbRow;
     const action = cleanText(record.action);
-    if (action === "save_lesson_blueprint") return await saveLessonBlueprint(config, String(actor.id), record);
-    if (action === "publish_lesson") return await publishLesson(config, String(actor.id), record);
-    if (action === "archive_lesson") return await archiveLesson(config, String(actor.id), record);
+    const actorId = String(actor.id);
+    if (action === "save_lesson_blueprint") return await saveLessonBlueprint(config, actorId, record);
+    if (action === "publish_lesson") return await publishLesson(config, actorId, record);
+    if (action === "archive_lesson") return await archiveLesson(config, actorId, record);
+    if (action === "create_subject") return await createSubject(config, actorId, record);
+    if (action === "create_course") return await createCourse(config, actorId, record);
+    if (action === "create_unit") return await createUnit(config, actorId, record);
+    if (action === "create_lesson_stub") return await createLessonStub(config, actorId, record);
+    if (action === "rename_node") return await renameNode(config, actorId, record);
+    if (action === "reorder") return await reorderNodes(config, actorId, record);
+    if (action === "move_lesson") return await moveLesson(config, actorId, record);
+    if (action === "archive_node") return await archiveNode(config, actorId, record);
+    if (action === "delete_node") return await deleteNode(config, actorId, record);
     return errorResponse("Unsupported curriculum-admin action.", 400);
   } catch (error) {
     const message = errorMessage(error);
-    const status = message.includes("access") || message.includes("author")
+    const lower = message.toLowerCase();
+    const status = lower.includes("access") || lower.includes("author")
       ? 403
-      : message.includes("Authentication") || message.includes("authenticated")
+      : lower.includes("authentication") || lower.includes("authenticated")
         ? 401
-        : message.includes("required") || message.includes("not found") || message.includes("does not match")
-          ? 400
-          : 500;
+        : lower.includes("before deleting") || lower.includes("instead of deleting")
+          ? 409
+          : lower.includes("required") ||
+              lower.includes("not found") ||
+              lower.includes("does not match") ||
+              lower.includes("unsupported") ||
+              lower.includes("unknown id") ||
+              lower.includes("belong to different") ||
+              lower.includes("can be archived")
+            ? 400
+            : 500;
     return errorResponse(message, status);
   }
 });

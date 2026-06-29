@@ -8,6 +8,7 @@ export type Lesson = {
   level: string;
   expected_output: string | null;
   unit_id?: string | null;
+  unit_position?: number | null;
   author_user_id?: string | null;
   publication_status?: "draft" | "published" | "archived";
   curriculum_metadata?: Record<string, unknown>;
@@ -43,6 +44,7 @@ export type CurriculumSubject = {
   title: string;
   description: string;
   status: CurriculumStatus;
+  position: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -55,6 +57,7 @@ export type CurriculumCourse = {
   title: string;
   description: string;
   status: CurriculumStatus;
+  position: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -162,12 +165,22 @@ export type CurriculumBlueprint = {
   resource_ids?: string[];
 };
 
+export type CurriculumNodeType = "subject" | "course" | "unit" | "lesson";
+
 export type CurriculumAdminResponse = {
   status: "ok" | "error";
+  node_type?: CurriculumNodeType;
+  id?: string;
   lesson_id?: string;
   subject_id?: string;
   course_id?: string;
+  course_version_id?: string;
   unit_id?: string;
+  milestone_id?: string;
+  activity_id?: string;
+  position?: number;
+  unit_position?: number;
+  ordered_ids?: string[];
   error?: string;
 };
 

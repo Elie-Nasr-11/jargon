@@ -6,6 +6,54 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-29 (Curriculum authoring redesign — Phase 1: foundation; branch-only, backend deploy pending)
+
+Summary: First phase of the curriculum authoring redesign (persistent outline + IDE detail pane + multi-step
+lessons + first-class structure management + AI authoring). Phase 1 is the runtime-safe foundation only:
+additive ordering columns + new direct structure-management actions on `curriculum-admin`, plus the frontend
+api/type plumbing. NO UI behavior change yet (the outline/IDE rebuild is Phase 2).
+
+- Migration `supabase/migrations/20260629000000_curriculum_authoring.sql` (additive, backfilled): adds
+  `subjects.position`, `courses.position`, and `lessons.unit_position` (per-unit lesson order, distinct from
+  the global `lessons.position` spine the runtime still uses), backfills each to current title/spine order,
+  and adds `(organization_id, position)` / `(subject_id, position)` / `(unit_id, unit_position)` indexes.
+  Student runtime untouched.
+- `supabase/functions/curriculum-admin/index.ts`: new actions, all reusing `assertCanAuthor` + the
+  service-role helpers, each resolving the node's organization from its PARENT (so a teacher can't write
+  outside their org via the service path):
+  - `create_subject` / `create_course` / `create_unit` / `create_lesson_stub` — ids derived from titles via
+    `safeId()` but made collision-proof by `uniqueId()` (appends a short suffix if taken, so a create never
+    silently merges). `create_course` also creates its `v1` course_version (is_current=true).
+    `create_lesson_stub` writes a valid, runnable draft lesson + milestone-1 + activity-1.
+  - `rename_node` — PATCHes by id (never re-derives), so renaming never orphans children (the key
+    correctness catch). Lessons carry only `title`/`module` (no updated_at/description columns).
+  - `reorder` — sets per-parent positions; validates every id shares one parent (anti cross-org) and that
+    the list has no duplicates; `units` use a two-pass negative-offset shuffle to dodge the
+    unique(course_version_id, position) constraint. Caller must send the FULL ordered set for the parent.
+  - `move_lesson` — re-parents a lesson to a target unit (updates unit_id, unit_position, module, and the
+    denormalized course_id/course_version_id in curriculum_metadata).
+  - `archive_node` (subject/course → status=archived; lesson → publication_status=archived) and
+    `delete_node` (leaf-only + history-safe: refuses to delete a node with children, or a lesson with any
+    `learning_sessions`, so published lessons never orphan and learner data is never cascaded away — use
+    archive instead).
+- Frontend `lib/types.ts`: `position` on CurriculumSubject/Course, `unit_position` on Lesson, new
+  `CurriculumNodeType`, and an extended `CurriculumAdminResponse`. `lib/api.ts`: extracted
+  `callCurriculumAdmin()` + typed wrappers (`createCurriculumSubject/Course/Unit/LessonStub`,
+  `renameCurriculumNode`, `reorderCurriculumNodes`, `moveCurriculumLesson`,
+  `archiveCurriculumNode`, `deleteCurriculumNode`). `invokeCurriculumAdmin` unchanged for callers.
+
+Tests: `npx tsc --noEmit` 0 errors; `npm run lint` 0 errors / 12 pre-existing warnings; `npm run build`
+green. Edge fn not Deno-checkable in sandbox (no deno); reviewed by hand.
+
+Remaining concerns / deploy: branch-only (`claude/happy-johnson-wseex8`). Backend deploy is the human's:
+**apply the migration BEFORE redeploying the `curriculum-admin` edge fn** (the new create actions write the
+`position`/`unit_position` columns). No frontend behavior changes yet, so no main deploy is needed for
+Phase 1 — the new wrappers are dormant until Phase 2 wires the UI.
+
+Suggested next task: Phase 2 — rebuild `frontend/src/routes/teacher.curriculum.tsx` into the persistent
+outline sidebar + IDE detail pane on a URL spine (`?course=&unit=&lesson=`), using these structure actions
+for create/rename/reorder/drag/move/archive/delete; lessons still edited with today's blueprint fields.
+
 ## Claude -> Codex / Human - 2026-06-28 (Separate platform vs org admin portals + remove page titles from profile menu; LIVE)
 
 Summary: Platform admin and org admin are now genuinely separate portals, and the redundant page-title link
