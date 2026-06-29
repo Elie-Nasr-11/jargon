@@ -899,7 +899,7 @@ async function createLessonStub(config: Config, actorId: string, body: DbRow): P
       lesson_type: lessonType,
       class_id: cleanText(body.class_id) || null,
     },
-    milestone_id: milestoneId,
+    // milestone_id is set after the milestone row exists (lessons_milestone_id_fkey).
   });
 
   await upsertByConflict(config, "milestones", "id", {
@@ -915,6 +915,9 @@ async function createLessonStub(config: Config, actorId: string, body: DbRow): P
     allowed_response_modes: [responseMode],
     updated_at: now,
   });
+
+  // Point the lesson at its milestone now that the milestone exists.
+  await patchRows(config, `lessons?id=eq.${enc(lessonId)}`, { milestone_id: milestoneId });
 
   await upsertByConflict(config, "lesson_activities", "id", {
     id: activityId,
