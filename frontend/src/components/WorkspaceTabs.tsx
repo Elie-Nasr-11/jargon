@@ -62,7 +62,7 @@ export function WorkspaceTabList({
   className?: string;
 }) {
   return (
-    <div className="no-scrollbar -mx-1 mb-1 overflow-x-auto px-1">
+    <div className="no-scrollbar -mx-1 mt-4 mb-2 overflow-x-auto px-1 py-0.5">
       <TabsList
         className={cn(
           "inline-flex h-auto w-max flex-nowrap items-center gap-1 rounded-pill border border-border bg-surface-1 p-1 backdrop-blur-md",
