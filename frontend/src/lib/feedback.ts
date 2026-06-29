@@ -3,6 +3,9 @@
 // inline field errors for text capture. Mounted once via <Toaster/> in __root.
 import { toast } from "sonner";
 
+// How long an Undo affordance stays actionable (toast duration + deferred-commit window).
+export const UNDO_WINDOW_MS = 6000;
+
 export function notifyOk(message: string) {
   if (message) toast.success(message);
 }
@@ -13,7 +16,11 @@ export function notifyErr(error: unknown, fallback = "Something went wrong.") {
   toast.error(message || fallback);
 }
 
-// Optional undo affordance for reversible mutations (e.g. status changes).
-export function notifyUndo(message: string, onUndo: () => void) {
-  toast.success(message, { action: { label: "Undo", onClick: onUndo } });
+// Undo affordance for reversible mutations. The toast stays up for the whole
+// undo window so the action button is reachable for as long as it's valid.
+export function notifyUndo(message: string, onUndo: () => void, durationMs = UNDO_WINDOW_MS) {
+  toast.success(message, {
+    action: { label: "Undo", onClick: onUndo },
+    duration: durationMs,
+  });
 }

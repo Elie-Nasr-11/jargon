@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   Archive,
@@ -65,6 +65,8 @@ import type {
   LessonResource,
 } from "@/lib/types";
 import { extractPdfTextChunksFromUrl } from "@/lib/pdf-extract";
+import { notifyErr } from "@/lib/feedback";
+import { useUndoable } from "@/hooks/useUndoable";
 
 type ResponseMode = LessonActivity["response_mode"];
 type LessonKind = CurriculumLessonMetaInput["lesson_type"];
@@ -124,12 +126,24 @@ function CurriculumPage() {
   const [data, setData] = useState<CurriculumAuthoringData | null>(null);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [message, setMessage] = useState("");
-  const [publishing, setPublishing] = useState(false);
+  const [publishing] = useState(false);
   const [busy, setBusy] = useState(false);
   // Outline nodes are collapsed by default; this set holds the EXPANDED ids.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [outlineOpen, setOutlineOpen] = useState(true);
   const [roleOk, setRoleOk] = useState(false);
+  const undoable = useUndoable();
+  // Deferred-undo ops (delete/publish) hold their optimistic change here so a
+  // background refetch (from a create/AI-apply) doesn't resurrect a row that's
+  // mid-undo-window. Each transform is removed when the op commits or is undone.
+  const pendingReapply = useRef<
+    Map<string, (d: CurriculumAuthoringData) => CurriculumAuthoringData>
+  >(new Map());
+  const applyPending = useCallback((d: CurriculumAuthoringData) => {
+    let next = d;
+    for (const fn of pendingReapply.current.values()) next = fn(next);
+    return next;
+  }, []);
 
   const selection: Selection = search.lesson
     ? { type: "lesson", id: search.lesson }
@@ -289,8 +303,9 @@ function CurriculumPage() {
   const refresh = useCallback(async () => {
     const session = await getSession();
     if (!session) return;
-    setData(await fetchCurriculumAuthoringData(session.user.id));
-  }, []);
+    const fresh = await fetchCurriculumAuthoringData(session.user.id);
+    setData(applyPending(fresh));
+  }, [applyPending]);
 
   // Optimistic mutation: apply the change to local state immediately, persist in
   // the background, and only resync (rolling back) if it fails. No global "busy"
@@ -339,7 +354,7 @@ function CurriculumPage() {
           const session = await getSession();
           if (!session) throw new Error("Sign in to edit curriculum.");
           const result = await run(session.access_token, classId);
-          setData(await fetchCurriculumAuthoringData(session.user.id));
+          setData(applyPending(await fetchCurriculumAuthoringData(session.user.id)));
           const sel = opts?.select?.(result);
           if (sel) selectNode(sel.type, sel.id);
           if (opts?.successMessage) setMessage(opts.successMessage);
@@ -351,7 +366,7 @@ function CurriculumPage() {
         }
       })();
     },
-    [selectedClass, selectNode, refresh],
+    [selectedClass, selectNode, refresh, applyPending],
   );
 
   const selectFromId =
@@ -429,15 +444,45 @@ function CurriculumPage() {
     );
 
   const deleteNode = (nodeType: CurriculumNodeType, id: string) => {
-    // Drop selection up front if the node (or an ancestor) being removed is selected.
-    if (selection && data && collectRemovedIds(data, nodeType, id).has(selection.id)) {
-      clearSelection();
-    }
-    optimistic(
-      (d) => cascadeRemove(d, nodeType, id),
-      (accessToken, classId) => deleteCurriculumNode({ accessToken, classId, nodeType, id }),
-      { successMessage: "Deleted." },
-    );
+    if (!selectedClass || !data) return;
+    const classId = selectedClass.id;
+    const removed = collectRemovedRows(data, nodeType, id); // captured for Undo
+    const restoreSelection =
+      selection && collectRemovedIds(data, nodeType, id).has(selection.id) ? selection : null;
+    const key = `delete-node:${id}`;
+    const transform = (d: CurriculumAuthoringData) => cascadeRemove(d, nodeType, id);
+    undoable({
+      key,
+      message: `${nodeLabel(nodeType)} deleted.`,
+      optimistic: () => {
+        pendingReapply.current.set(key, transform);
+        setData((d) => (d ? transform(d) : d));
+        if (restoreSelection) clearSelection();
+      },
+      revert: () => {
+        pendingReapply.current.delete(key);
+        setData((d) => (d ? mergeRows(d, removed) : d));
+        if (restoreSelection) selectNode(restoreSelection.type, restoreSelection.id);
+      },
+      commit: () => {
+        pendingReapply.current.delete(key);
+        void (async () => {
+          try {
+            const session = await getSession();
+            if (!session) throw new Error("Sign in to edit curriculum.");
+            await deleteCurriculumNode({
+              accessToken: session.access_token,
+              classId,
+              nodeType,
+              id,
+            });
+          } catch (error) {
+            notifyErr(error, "Could not delete.");
+            await refresh();
+          }
+        })();
+      },
+    });
   };
 
   const moveLesson = (lessonId: string, targetUnitId: string) =>
@@ -495,16 +540,56 @@ function CurriculumPage() {
         reorderCurriculumSteps({ accessToken, classId, lessonId, orderedIds }),
     );
 
-  const deleteStep = (lessonId: string, activityId: string) =>
-    optimistic(
-      (d) => ({
-        ...d,
-        activities: d.activities.filter((a) => a.id !== activityId),
-        quizzes: d.quizzes.filter((q) => q.activity_id !== activityId),
-      }),
-      (accessToken, classId) =>
-        deleteCurriculumStep({ accessToken, classId, lessonId, activityId }),
-    );
+  const deleteStep = (lessonId: string, activityId: string) => {
+    if (!selectedClass || !data) return;
+    const classId = selectedClass.id;
+    const removedActivity = data.activities.find((a) => a.id === activityId);
+    const removedQuizzes = data.quizzes.filter((q) => q.activity_id === activityId);
+    const key = `delete-step:${activityId}`;
+    const transform = (d: CurriculumAuthoringData) => ({
+      ...d,
+      activities: d.activities.filter((a) => a.id !== activityId),
+      quizzes: d.quizzes.filter((q) => q.activity_id !== activityId),
+    });
+    undoable({
+      key,
+      message: "Step deleted.",
+      optimistic: () => {
+        pendingReapply.current.set(key, transform);
+        setData((d) => (d ? transform(d) : d));
+      },
+      revert: () => {
+        pendingReapply.current.delete(key);
+        setData((d) =>
+          d
+            ? {
+                ...d,
+                activities: removedActivity ? [...d.activities, removedActivity] : d.activities,
+                quizzes: [...d.quizzes, ...removedQuizzes],
+              }
+            : d,
+        );
+      },
+      commit: () => {
+        pendingReapply.current.delete(key);
+        void (async () => {
+          try {
+            const session = await getSession();
+            if (!session) throw new Error("Sign in to edit curriculum.");
+            await deleteCurriculumStep({
+              accessToken: session.access_token,
+              classId,
+              lessonId,
+              activityId,
+            });
+          } catch (error) {
+            notifyErr(error, "Could not delete step.");
+            await refresh();
+          }
+        })();
+      },
+    });
+  };
 
   // AI authoring: generate returns a draft to review (no write); apply uses the
   // create/upsert actions, then refreshes via reloading(). The course/lesson id
@@ -603,26 +688,51 @@ function CurriculumPage() {
       { successMessage: "Steps added." },
     );
 
-  const setPublication = async (action: "publish_lesson" | "archive_lesson", lessonId: string) => {
-    if (!selectedClass || !lessonId) return;
-    setPublishing(true);
-    try {
-      const session = await getSession();
-      if (!session) throw new Error("Sign in to update publishing.");
-      await invokeCurriculumAdmin({
-        accessToken: session.access_token,
-        action,
-        organizationId: selectedClass.organization_id,
-        classId: selectedClass.id,
-        lessonId,
+  const setPublication = (action: "publish_lesson" | "archive_lesson", lessonId: string) => {
+    if (!selectedClass || !lessonId || !data) return;
+    const organizationId = selectedClass.organization_id;
+    const classId = selectedClass.id;
+    const prevStatus = data.lessons.find((l) => l.id === lessonId)?.publication_status ?? "draft";
+    const nextStatus = action === "publish_lesson" ? "published" : "archived";
+    const key = `publish:${lessonId}`;
+    const statusTransform =
+      (status: Lesson["publication_status"]) => (d: CurriculumAuthoringData) => ({
+        ...d,
+        lessons: d.lessons.map((l) =>
+          l.id === lessonId ? { ...l, publication_status: status } : l,
+        ),
       });
-      setMessage(action === "publish_lesson" ? "Lesson published." : "Lesson archived.");
-      await loadData();
-    } catch (error) {
-      setMessage((error as Error).message || "Could not update publication status.");
-    } finally {
-      setPublishing(false);
-    }
+    undoable({
+      key,
+      message: action === "publish_lesson" ? "Lesson published." : "Lesson archived.",
+      optimistic: () => {
+        pendingReapply.current.set(key, statusTransform(nextStatus));
+        setData((d) => (d ? statusTransform(nextStatus)(d) : d));
+      },
+      revert: () => {
+        pendingReapply.current.delete(key);
+        setData((d) => (d ? statusTransform(prevStatus)(d) : d));
+      },
+      commit: () => {
+        pendingReapply.current.delete(key);
+        void (async () => {
+          try {
+            const session = await getSession();
+            if (!session) throw new Error("Sign in to update publishing.");
+            await invokeCurriculumAdmin({
+              accessToken: session.access_token,
+              action,
+              organizationId,
+              classId,
+              lessonId,
+            });
+          } catch (error) {
+            notifyErr(error, "Could not update publication status.");
+            await refresh();
+          }
+        })();
+      },
+    });
   };
 
   if (!roleOk) {
@@ -2854,6 +2964,55 @@ function byPositionThenTitle(
 
 function lessonOrder(lesson: Lesson) {
   return lesson.unit_position ?? lesson.position ?? Number.MAX_SAFE_INTEGER;
+}
+
+function nodeLabel(nodeType: CurriculumNodeType): string {
+  return nodeType.charAt(0).toUpperCase() + nodeType.slice(1);
+}
+
+// The actual rows removed by a cascading delete, captured so Undo can re-insert them.
+function collectRemovedRows(
+  data: CurriculumAuthoringData,
+  nodeType: CurriculumNodeType,
+  id: string,
+): Partial<CurriculumAuthoringData> {
+  const ids = collectRemovedIds(data, nodeType, id);
+  const lessonIds = new Set(data.lessons.filter((l) => ids.has(l.id)).map((l) => l.id));
+  return {
+    subjects: data.subjects.filter((s) => ids.has(s.id)),
+    courses: data.courses.filter((c) => ids.has(c.id)),
+    // Versions aren't selectable so they're not in `ids`; capture by removed course.
+    courseVersions: data.courseVersions.filter((v) => ids.has(v.course_id)),
+    units: data.units.filter((u) => ids.has(u.id)),
+    lessons: data.lessons.filter((l) => ids.has(l.id)),
+    milestones: data.milestones.filter((m) => lessonIds.has(m.lesson_id)),
+    activities: data.activities.filter((a) => lessonIds.has(a.lesson_id)),
+    quizzes: data.quizzes.filter((q) => lessonIds.has(q.lesson_id)),
+  };
+}
+
+// Re-insert previously-removed rows (skipping any ids that already exist) — the
+// inverse of cascadeRemove, used by Undo.
+function mergeRows(
+  data: CurriculumAuthoringData,
+  removed: Partial<CurriculumAuthoringData>,
+): CurriculumAuthoringData {
+  const merge = <T extends { id: string }>(current: T[], add?: T[]): T[] => {
+    if (!add || !add.length) return current;
+    const present = new Set(current.map((row) => row.id));
+    return [...current, ...add.filter((row) => !present.has(row.id))];
+  };
+  return {
+    ...data,
+    subjects: merge(data.subjects, removed.subjects),
+    courses: merge(data.courses, removed.courses),
+    courseVersions: merge(data.courseVersions, removed.courseVersions),
+    units: merge(data.units, removed.units),
+    lessons: merge(data.lessons, removed.lessons),
+    milestones: merge(data.milestones, removed.milestones),
+    activities: merge(data.activities, removed.activities),
+    quizzes: merge(data.quizzes, removed.quizzes),
+  };
 }
 
 // --- Optimistic local mutations -------------------------------------------

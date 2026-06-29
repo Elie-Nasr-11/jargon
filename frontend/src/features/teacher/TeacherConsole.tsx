@@ -32,6 +32,8 @@ import { ConsoleShell } from "@/components/ConsoleShell";
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { OverflowMenu } from "@/components/OverflowMenu";
+import { notifyUndo } from "@/lib/feedback";
+import { useUndoable } from "@/hooks/useUndoable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createAssignment,
@@ -443,7 +445,12 @@ export function TeacherConsole() {
     }
   };
 
-  const setAssignmentStatus = async (assignmentId: string, status: AssignmentStatus) => {
+  const setAssignmentStatus = async (
+    assignmentId: string,
+    status: AssignmentStatus,
+    isUndo = false,
+  ) => {
+    const prev = dashboard?.assignments.find((a) => a.id === assignmentId)?.status;
     try {
       const updated = await updateAssignmentStatus(assignmentId, status);
       setDashboard((current) =>
@@ -456,6 +463,14 @@ export function TeacherConsole() {
             }
           : current,
       );
+      if (!isUndo && prev && prev !== status) {
+        const label =
+          status === "assigned" ? "assigned" : status === "draft" ? "moved to draft" : "archived";
+        notifyUndo(
+          `Assignment ${label}.`,
+          () => void setAssignmentStatus(assignmentId, prev, true),
+        );
+      }
     } catch (error) {
       setMessage((error as Error).message || "Could not update assignment.");
     }
@@ -536,7 +551,12 @@ export function TeacherConsole() {
     }
   };
 
-  const setAssessmentStatus = async (assessmentId: string, status: AssessmentStatus) => {
+  const setAssessmentStatus = async (
+    assessmentId: string,
+    status: AssessmentStatus,
+    isUndo = false,
+  ) => {
+    const prev = dashboard?.assessments.find((a) => a.id === assessmentId)?.status;
     try {
       const updated = await updateAssessmentStatus(assessmentId, status);
       if (!updated) return;
@@ -550,6 +570,14 @@ export function TeacherConsole() {
             }
           : current,
       );
+      if (!isUndo && prev && prev !== status) {
+        const label =
+          status === "published" ? "published" : status === "draft" ? "moved to draft" : "archived";
+        notifyUndo(
+          `Assessment ${label}.`,
+          () => void setAssessmentStatus(assessmentId, prev, true),
+        );
+      }
     } catch (error) {
       setMessage((error as Error).message || "Could not update assessment.");
     }
@@ -1547,6 +1575,7 @@ function ResourceManager({
   const [assetsByResource, setAssetsByResource] = useState<Record<string, ResourcePageAsset[]>>({});
   const [chunkDrafts, setChunkDrafts] = useState<Record<string, string>>({});
   const [formOpen, setFormOpen] = useState(false);
+  const undoable = useUndoable();
 
   useEffect(() => {
     setDraft(defaultResourceForm(classSummary, lessons));
@@ -1619,10 +1648,24 @@ function ResourceManager({
     }
   };
 
-  const setStatus = async (resource: LessonResource, status: LessonResourceStatus) => {
+  const setStatus = async (
+    resource: LessonResource,
+    status: LessonResourceStatus,
+    isUndo = false,
+  ) => {
+    const prev = resource.status;
     try {
       const updated = await updateLessonResource(resource.id, { status });
       onUpdateResource(updated);
+      if (!isUndo && prev !== status) {
+        const label =
+          status === "published"
+            ? "published"
+            : status === "archived"
+              ? "archived"
+              : "moved to draft";
+        notifyUndo(`Resource ${label}.`, () => void setStatus(updated, prev, true));
+      }
     } catch (error) {
       setResourceMessage((error as Error).message || "Could not update resource status.");
     }
@@ -1807,45 +1850,81 @@ function ResourceManager({
     }
   };
 
-  const setChunkStatus = async (
+  const patchChunkStatus = (resourceId: string, chunkId: string, status: ResourceTextChunkStatus) =>
+    setChunksByResource((current) => ({
+      ...current,
+      [resourceId]: (current[resourceId] || []).map((existing) =>
+        existing.id === chunkId ? { ...existing, status } : existing,
+      ),
+    }));
+
+  const setChunkStatus = (
     resource: LessonResource,
     chunk: ResourceTextChunk,
     status: Extract<ResourceTextChunkStatus, "approved" | "rejected">,
   ) => {
-    try {
-      setChunkBusyId(chunk.id);
-      const updated =
-        status === "approved"
-          ? await approveResourceChunks(resource.id, [chunk.id])
-          : await rejectResourceChunks(resource.id, [chunk.id]);
-      setChunksByResource((current) => ({
-        ...current,
-        [resource.id]: (current[resource.id] || []).map((existing) =>
-          existing.id === chunk.id ? updated[0] || existing : existing,
-        ),
-      }));
-      setResourceMessage(status === "approved" ? "Chunk approved." : "Chunk rejected.");
-    } catch (error) {
-      setResourceMessage((error as Error).message || "Could not update chunk status.");
-    } finally {
-      setChunkBusyId("");
-    }
+    const prev = chunk.status;
+    undoable({
+      key: `chunk-status:${chunk.id}`,
+      message: status === "approved" ? "Chunk approved." : "Chunk rejected.",
+      optimistic: () => patchChunkStatus(resource.id, chunk.id, status),
+      revert: () => patchChunkStatus(resource.id, chunk.id, prev),
+      commit: () => {
+        void (async () => {
+          try {
+            const updated =
+              status === "approved"
+                ? await approveResourceChunks(resource.id, [chunk.id])
+                : await rejectResourceChunks(resource.id, [chunk.id]);
+            if (updated[0]) {
+              setChunksByResource((current) => ({
+                ...current,
+                [resource.id]: (current[resource.id] || []).map((existing) =>
+                  existing.id === chunk.id ? updated[0] : existing,
+                ),
+              }));
+            }
+          } catch (error) {
+            setResourceMessage((error as Error).message || "Could not update chunk status.");
+            patchChunkStatus(resource.id, chunk.id, prev); // resync on failure
+          }
+        })();
+      },
+    });
   };
 
-  const removeChunk = async (resource: LessonResource, chunk: ResourceTextChunk) => {
-    try {
-      setChunkBusyId(chunk.id);
-      await deleteResourceChunks(resource.id, [chunk.id]);
-      setChunksByResource((current) => ({
-        ...current,
-        [resource.id]: (current[resource.id] || []).filter((existing) => existing.id !== chunk.id),
-      }));
-      setResourceMessage("Chunk deleted.");
-    } catch (error) {
-      setResourceMessage((error as Error).message || "Could not delete chunk.");
-    } finally {
-      setChunkBusyId("");
-    }
+  const removeChunk = (resource: LessonResource, chunk: ResourceTextChunk) => {
+    const list = chunksByResource[resource.id] || [];
+    const index = list.findIndex((existing) => existing.id === chunk.id);
+    const reinsert = () =>
+      setChunksByResource((current) => {
+        const arr = [...(current[resource.id] || [])];
+        if (arr.some((existing) => existing.id === chunk.id)) return current;
+        arr.splice(index < 0 ? arr.length : index, 0, chunk);
+        return { ...current, [resource.id]: arr };
+      });
+    undoable({
+      key: `chunk-delete:${chunk.id}`,
+      message: "Chunk deleted.",
+      optimistic: () =>
+        setChunksByResource((current) => ({
+          ...current,
+          [resource.id]: (current[resource.id] || []).filter(
+            (existing) => existing.id !== chunk.id,
+          ),
+        })),
+      revert: reinsert,
+      commit: () => {
+        void (async () => {
+          try {
+            await deleteResourceChunks(resource.id, [chunk.id]);
+          } catch (error) {
+            setResourceMessage((error as Error).message || "Could not delete chunk.");
+            reinsert(); // resync on failure
+          }
+        })();
+      },
+    });
   };
 
   return (
