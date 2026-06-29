@@ -54,6 +54,7 @@ import type {
   CurriculumMilestoneInput,
   CurriculumNodeType,
   CurriculumOutlineDraft,
+  CurriculumQuizItem,
   CurriculumStepDraft,
   CurriculumStepInput,
   CurriculumStepKind,
@@ -280,86 +281,133 @@ function CurriculumPage() {
   }, [selection?.type, selection?.id, data]);
 
   // --- Mutations ------------------------------------------------------------
-  // Each runs an admin action then refreshes; create flows select the new node so
-  // the teacher lands in its detail pane to keep building top-down.
+  // Edits/deletes/reorders apply optimistically (instant; resync only on error).
+  // Structural creates and bulk AI applies run + refetch via reloading(), which
+  // also selects the new node so the teacher lands in its detail pane.
 
-  const runStructureOp = useCallback(
-    async (
-      op: (
-        accessToken: string,
-        classId: string,
-      ) => Promise<void | { select?: { type: CurriculumNodeType; id: string } }>,
-      successMessage?: string,
+  // Lightweight refetch (no role/nav recheck) used to resync after a failed op.
+  const refresh = useCallback(async () => {
+    const session = await getSession();
+    if (!session) return;
+    setData(await fetchCurriculumAuthoringData(session.user.id));
+  }, []);
+
+  // Optimistic mutation: apply the change to local state immediately, persist in
+  // the background, and only resync (rolling back) if it fails. No global "busy"
+  // freeze and no full refetch on success — this is what makes edits feel instant.
+  const optimistic = useCallback(
+    (
+      apply: (current: CurriculumAuthoringData) => CurriculumAuthoringData,
+      run: (accessToken: string, classId: string) => Promise<unknown>,
+      opts?: { successMessage?: string; onSuccess?: (result: unknown) => void },
     ) => {
       if (!selectedClass) return;
-      setBusy(true);
-      try {
-        const session = await getSession();
-        if (!session) throw new Error("Sign in to edit curriculum.");
-        const outcome = await op(session.access_token, selectedClass.id);
-        await loadData();
-        if (outcome?.select) selectNode(outcome.select.type, outcome.select.id);
-        if (successMessage) setMessage(successMessage);
-      } catch (error) {
-        setMessage((error as Error).message || "Could not update curriculum.");
-      } finally {
-        setBusy(false);
-      }
+      const classId = selectedClass.id;
+      setData((prev) => (prev ? apply(prev) : prev));
+      void (async () => {
+        try {
+          const session = await getSession();
+          if (!session) throw new Error("Sign in to edit curriculum.");
+          const result = await run(session.access_token, classId);
+          opts?.onSuccess?.(result);
+          if (opts?.successMessage) setMessage(opts.successMessage);
+        } catch (error) {
+          setMessage((error as Error).message || "Could not update curriculum.");
+          await refresh(); // resync to server truth
+        }
+      })();
     },
-    [selectedClass, loadData, selectNode],
+    [selectedClass, refresh],
   );
 
-  const addSubject = () =>
-    runStructureOp(async (accessToken, classId) => {
+  // For ops we don't reconstruct locally (structural creates, bulk AI applies):
+  // run + refetch, surfacing progress via `busy` but never freezing the whole tree
+  // for the optimistic ops above (they leave `busy` false).
+  const reloading = useCallback(
+    (
+      run: (accessToken: string, classId: string) => Promise<unknown>,
+      opts?: {
+        successMessage?: string;
+        select?: (result: unknown) => { type: CurriculumNodeType; id: string } | null;
+      },
+    ) => {
       if (!selectedClass) return;
-      const result = await createCurriculumSubject({
-        accessToken,
-        classId,
-        organizationId: selectedClass.organization_id,
-        title: "New subject",
-      });
-      return result.id ? { select: { type: "subject", id: result.id } } : undefined;
-    });
+      const classId = selectedClass.id;
+      setBusy(true);
+      void (async () => {
+        try {
+          const session = await getSession();
+          if (!session) throw new Error("Sign in to edit curriculum.");
+          const result = await run(session.access_token, classId);
+          setData(await fetchCurriculumAuthoringData(session.user.id));
+          const sel = opts?.select?.(result);
+          if (sel) selectNode(sel.type, sel.id);
+          if (opts?.successMessage) setMessage(opts.successMessage);
+        } catch (error) {
+          setMessage((error as Error).message || "Could not update curriculum.");
+          await refresh();
+        } finally {
+          setBusy(false);
+        }
+      })();
+    },
+    [selectedClass, selectNode, refresh],
+  );
+
+  const selectFromId =
+    (type: CurriculumNodeType) =>
+    (result: unknown): { type: CurriculumNodeType; id: string } | null => {
+      const id = (result as { id?: string } | null)?.id;
+      return id ? { type, id } : null;
+    };
+
+  const addSubject = () =>
+    reloading(
+      (accessToken, classId) =>
+        createCurriculumSubject({
+          accessToken,
+          classId,
+          organizationId: selectedClass!.organization_id,
+          title: "New subject",
+        }),
+      { select: selectFromId("subject") },
+    );
 
   const addCourse = (subjectId: string) =>
-    runStructureOp(async (accessToken, classId) => {
-      const result = await createCurriculumCourse({
-        accessToken,
-        classId,
-        subjectId,
-        title: "New course",
-      });
-      return result.id ? { select: { type: "course", id: result.id } } : undefined;
-    });
+    reloading(
+      (accessToken, classId) =>
+        createCurriculumCourse({ accessToken, classId, subjectId, title: "New course" }),
+      { select: selectFromId("course") },
+    );
 
   const addUnit = (courseId: string) =>
-    runStructureOp(async (accessToken, classId) => {
-      const version = currentVersionForCourse(courseId);
-      if (!version) throw new Error("This course has no version to add a unit to.");
-      const result = await createCurriculumUnit({
-        accessToken,
-        classId,
-        courseVersionId: version.id,
-        title: "New unit",
-      });
-      return result.id ? { select: { type: "unit", id: result.id } } : undefined;
-    });
+    reloading(
+      (accessToken, classId) => {
+        const version = currentVersionForCourse(courseId);
+        if (!version) throw new Error("This course has no version to add a unit to.");
+        return createCurriculumUnit({
+          accessToken,
+          classId,
+          courseVersionId: version.id,
+          title: "New unit",
+        });
+      },
+      { select: selectFromId("unit") },
+    );
 
   const addLesson = (unitId: string) =>
-    runStructureOp(async (accessToken, classId) => {
-      const result = await createCurriculumLessonStub({
-        accessToken,
-        classId,
-        unitId,
-        title: "New lesson",
-      });
-      return result.id ? { select: { type: "lesson", id: result.id } } : undefined;
-    });
+    reloading(
+      (accessToken, classId) =>
+        createCurriculumLessonStub({ accessToken, classId, unitId, title: "New lesson" }),
+      { select: selectFromId("lesson") },
+    );
 
   const reorder = (nodeType: CurriculumNodeType, orderedIds: string[]) =>
-    runStructureOp(async (accessToken, classId) => {
-      await reorderCurriculumNodes({ accessToken, classId, nodeType, orderedIds });
-    });
+    optimistic(
+      (d) => reorderNodesLocal(d, nodeType, orderedIds),
+      (accessToken, classId) =>
+        reorderCurriculumNodes({ accessToken, classId, nodeType, orderedIds }),
+    );
 
   const renameNode = (
     nodeType: CurriculumNodeType,
@@ -367,52 +415,99 @@ function CurriculumPage() {
     title: string,
     description?: string,
   ) =>
-    runStructureOp(async (accessToken, classId) => {
-      await renameCurriculumNode({ accessToken, classId, nodeType, id, title, description });
-    }, "Saved.");
+    optimistic(
+      (d) => renameNodeLocal(d, nodeType, id, title, description),
+      (accessToken, classId) =>
+        renameCurriculumNode({ accessToken, classId, nodeType, id, title, description }),
+      { successMessage: "Saved." },
+    );
 
   const archiveNode = (nodeType: CurriculumNodeType, id: string) =>
-    runStructureOp(async (accessToken, classId) => {
-      await archiveCurriculumNode({ accessToken, classId, nodeType, id });
-    }, "Archived.");
+    reloading(
+      (accessToken, classId) => archiveCurriculumNode({ accessToken, classId, nodeType, id }),
+      { successMessage: "Archived." },
+    );
 
-  const deleteNode = (nodeType: CurriculumNodeType, id: string) =>
-    runStructureOp(async (accessToken, classId) => {
-      await deleteCurriculumNode({ accessToken, classId, nodeType, id });
+  const deleteNode = (nodeType: CurriculumNodeType, id: string) => {
+    // Drop selection up front if the node (or an ancestor) being removed is selected.
+    if (selection && data && collectRemovedIds(data, nodeType, id).has(selection.id)) {
       clearSelection();
-    });
+    }
+    optimistic(
+      (d) => cascadeRemove(d, nodeType, id),
+      (accessToken, classId) => deleteCurriculumNode({ accessToken, classId, nodeType, id }),
+      { successMessage: "Deleted." },
+    );
+  };
 
   const moveLesson = (lessonId: string, targetUnitId: string) =>
-    runStructureOp(async (accessToken, classId) => {
-      await moveCurriculumLesson({ accessToken, classId, lessonId, targetUnitId });
-    }, "Lesson moved.");
+    optimistic(
+      (d) => ({
+        ...d,
+        lessons: d.lessons.map((l) => (l.id === lessonId ? { ...l, unit_id: targetUnitId } : l)),
+      }),
+      (accessToken, classId) =>
+        moveCurriculumLesson({ accessToken, classId, lessonId, targetUnitId }),
+      { successMessage: "Lesson moved." },
+    );
 
   const saveLessonMeta = (
     lessonId: string,
     meta: CurriculumLessonMetaInput,
     milestone: CurriculumMilestoneInput,
   ) =>
-    runStructureOp(async (accessToken, classId) => {
-      await saveCurriculumLessonMeta({ accessToken, classId, lessonId, meta, milestone });
-    }, "Lesson saved.");
+    reloading(
+      (accessToken, classId) =>
+        saveCurriculumLessonMeta({ accessToken, classId, lessonId, meta, milestone }),
+      { successMessage: "Lesson saved." },
+    );
 
-  const upsertStep = (lessonId: string, step: CurriculumStepInput) =>
-    runStructureOp(async (accessToken, classId) => {
-      await upsertCurriculumStep({ accessToken, classId, lessonId, step });
-    });
+  const upsertStep = (lessonId: string, step: CurriculumStepInput) => {
+    if (step.id) {
+      // Editing an existing step: patch the activity (and its quiz) in place.
+      optimistic(
+        (d) => patchStepLocal(d, lessonId, step),
+        (accessToken, classId) => upsertCurriculumStep({ accessToken, classId, lessonId, step }),
+      );
+      return;
+    }
+    // Adding a new step: insert a placeholder immediately, then swap in the real
+    // id the server assigns so further edits target the right row.
+    const tempId = `temp-step-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    optimistic(
+      (d) => insertStepLocal(d, lessonId, step, tempId),
+      (accessToken, classId) => upsertCurriculumStep({ accessToken, classId, lessonId, step }),
+      {
+        onSuccess: (result) => {
+          const realId = (result as { id?: string } | null)?.id;
+          if (realId && realId !== tempId) {
+            setData((prev) => (prev ? swapStepId(prev, tempId, realId) : prev));
+          }
+        },
+      },
+    );
+  };
 
   const reorderSteps = (lessonId: string, orderedIds: string[]) =>
-    runStructureOp(async (accessToken, classId) => {
-      await reorderCurriculumSteps({ accessToken, classId, lessonId, orderedIds });
-    });
+    optimistic(
+      (d) => reorderStepsLocal(d, orderedIds),
+      (accessToken, classId) =>
+        reorderCurriculumSteps({ accessToken, classId, lessonId, orderedIds }),
+    );
 
   const deleteStep = (lessonId: string, activityId: string) =>
-    runStructureOp(async (accessToken, classId) => {
-      await deleteCurriculumStep({ accessToken, classId, lessonId, activityId });
-    });
+    optimistic(
+      (d) => ({
+        ...d,
+        activities: d.activities.filter((a) => a.id !== activityId),
+        quizzes: d.quizzes.filter((q) => q.activity_id !== activityId),
+      }),
+      (accessToken, classId) =>
+        deleteCurriculumStep({ accessToken, classId, lessonId, activityId }),
+    );
 
   // AI authoring: generate returns a draft to review (no write); apply uses the
-  // create/upsert actions, then refreshes via runStructureOp. The course/lesson id
+  // create/upsert actions, then refreshes via reloading(). The course/lesson id
   // gives the model subject-wide context; args carry reference material + refine feedback.
   const generateOutline = async (
     courseId: string,
@@ -442,27 +537,30 @@ function CurriculumPage() {
   };
 
   const applyOutline = (courseId: string, outline: CurriculumOutlineDraft) =>
-    runStructureOp(async (accessToken, classId) => {
-      const version = currentVersionForCourse(courseId);
-      if (!version) throw new Error("This course has no version to add units to.");
-      for (const unit of outline.units) {
-        const created = await createCurriculumUnit({
-          accessToken,
-          classId,
-          courseVersionId: version.id,
-          title: unit.title,
-        });
-        if (!created.id) continue;
-        for (const lesson of unit.lessons) {
-          await createCurriculumLessonStub({
+    reloading(
+      async (accessToken, classId) => {
+        const version = currentVersionForCourse(courseId);
+        if (!version) throw new Error("This course has no version to add units to.");
+        for (const unit of outline.units) {
+          const created = await createCurriculumUnit({
             accessToken,
             classId,
-            unitId: created.id,
-            title: lesson.title,
+            courseVersionId: version.id,
+            title: unit.title,
           });
+          if (!created.id) continue;
+          for (const lesson of unit.lessons) {
+            await createCurriculumLessonStub({
+              accessToken,
+              classId,
+              unitId: created.id,
+              title: lesson.title,
+            });
+          }
         }
-      }
-    }, "Outline applied.");
+      },
+      { successMessage: "Outline applied." },
+    );
 
   const generateSteps = async (
     lessonId: string,
@@ -491,16 +589,19 @@ function CurriculumPage() {
   };
 
   const applyStepDrafts = (lessonId: string, drafts: CurriculumStepDraft[]) =>
-    runStructureOp(async (accessToken, classId) => {
-      for (const draft of drafts) {
-        await upsertCurriculumStep({
-          accessToken,
-          classId,
-          lessonId,
-          step: stepInputFromDraft(draft),
-        });
-      }
-    }, "Steps added.");
+    reloading(
+      async (accessToken, classId) => {
+        for (const draft of drafts) {
+          await upsertCurriculumStep({
+            accessToken,
+            classId,
+            lessonId,
+            step: stepInputFromDraft(draft),
+          });
+        }
+      },
+      { successMessage: "Steps added." },
+    );
 
   const setPublication = async (action: "publish_lesson" | "archive_lesson", lessonId: string) => {
     if (!selectedClass || !lessonId) return;
@@ -2753,6 +2854,263 @@ function byPositionThenTitle(
 
 function lessonOrder(lesson: Lesson) {
   return lesson.unit_position ?? lesson.position ?? Number.MAX_SAFE_INTEGER;
+}
+
+// --- Optimistic local mutations -------------------------------------------
+// Pure transforms over the in-memory CurriculumAuthoringData so structure edits
+// reflect instantly; the network call persists the same change in the background.
+
+// Every node id removed when deleting a subject/course/unit/lesson (cascades down
+// the hierarchy). Used to drop the right rows and to clear a stale selection.
+function collectRemovedIds(
+  data: CurriculumAuthoringData,
+  nodeType: CurriculumNodeType,
+  id: string,
+): Set<string> {
+  const subjectIds = new Set<string>();
+  const courseIds = new Set<string>();
+  const versionIds = new Set<string>();
+  const unitIds = new Set<string>();
+  const lessonIds = new Set<string>();
+
+  if (nodeType === "subject") subjectIds.add(id);
+  if (nodeType === "course") courseIds.add(id);
+  if (nodeType === "unit") unitIds.add(id);
+  if (nodeType === "lesson") lessonIds.add(id);
+
+  if (subjectIds.size)
+    for (const c of data.courses) if (subjectIds.has(c.subject_id)) courseIds.add(c.id);
+  if (courseIds.size)
+    for (const v of data.courseVersions) if (courseIds.has(v.course_id)) versionIds.add(v.id);
+  if (versionIds.size)
+    for (const u of data.units) if (versionIds.has(u.course_version_id)) unitIds.add(u.id);
+  if (unitIds.size)
+    for (const l of data.lessons) if (l.unit_id && unitIds.has(l.unit_id)) lessonIds.add(l.id);
+
+  return new Set<string>([...subjectIds, ...courseIds, ...unitIds, ...lessonIds]);
+}
+
+function cascadeRemove(
+  data: CurriculumAuthoringData,
+  nodeType: CurriculumNodeType,
+  id: string,
+): CurriculumAuthoringData {
+  const subjectIds = new Set<string>();
+  const courseIds = new Set<string>();
+  const versionIds = new Set<string>();
+  const unitIds = new Set<string>();
+  const lessonIds = new Set<string>();
+
+  if (nodeType === "subject") subjectIds.add(id);
+  if (nodeType === "course") courseIds.add(id);
+  if (nodeType === "unit") unitIds.add(id);
+  if (nodeType === "lesson") lessonIds.add(id);
+
+  if (subjectIds.size)
+    for (const c of data.courses) if (subjectIds.has(c.subject_id)) courseIds.add(c.id);
+  if (courseIds.size)
+    for (const v of data.courseVersions) if (courseIds.has(v.course_id)) versionIds.add(v.id);
+  if (versionIds.size)
+    for (const u of data.units) if (versionIds.has(u.course_version_id)) unitIds.add(u.id);
+  if (unitIds.size)
+    for (const l of data.lessons) if (l.unit_id && unitIds.has(l.unit_id)) lessonIds.add(l.id);
+
+  return {
+    ...data,
+    subjects: data.subjects.filter((s) => !subjectIds.has(s.id)),
+    courses: data.courses.filter((c) => !courseIds.has(c.id)),
+    courseVersions: data.courseVersions.filter((v) => !versionIds.has(v.id)),
+    units: data.units.filter((u) => !unitIds.has(u.id)),
+    lessons: data.lessons.filter((l) => !lessonIds.has(l.id)),
+    milestones: data.milestones.filter((m) => !lessonIds.has(m.lesson_id)),
+    activities: data.activities.filter((a) => !lessonIds.has(a.lesson_id)),
+    quizzes: data.quizzes.filter((q) => !lessonIds.has(q.lesson_id)),
+  };
+}
+
+function reorderNodesLocal(
+  data: CurriculumAuthoringData,
+  nodeType: CurriculumNodeType,
+  orderedIds: string[],
+): CurriculumAuthoringData {
+  const pos = new Map(orderedIds.map((id, i) => [id, i + 1]));
+  if (nodeType === "subject")
+    return {
+      ...data,
+      subjects: data.subjects.map((s) => (pos.has(s.id) ? { ...s, position: pos.get(s.id)! } : s)),
+    };
+  if (nodeType === "course")
+    return {
+      ...data,
+      courses: data.courses.map((c) => (pos.has(c.id) ? { ...c, position: pos.get(c.id)! } : c)),
+    };
+  if (nodeType === "unit")
+    return {
+      ...data,
+      units: data.units.map((u) => (pos.has(u.id) ? { ...u, position: pos.get(u.id)! } : u)),
+    };
+  return {
+    ...data,
+    lessons: data.lessons.map((l) => (pos.has(l.id) ? { ...l, unit_position: pos.get(l.id)! } : l)),
+  };
+}
+
+function renameNodeLocal(
+  data: CurriculumAuthoringData,
+  nodeType: CurriculumNodeType,
+  id: string,
+  title: string,
+  description?: string,
+): CurriculumAuthoringData {
+  const withDesc = description !== undefined;
+  if (nodeType === "subject")
+    return {
+      ...data,
+      subjects: data.subjects.map((s) =>
+        s.id === id ? { ...s, title, ...(withDesc ? { description } : {}) } : s,
+      ),
+    };
+  if (nodeType === "course")
+    return {
+      ...data,
+      courses: data.courses.map((c) =>
+        c.id === id ? { ...c, title, ...(withDesc ? { description } : {}) } : c,
+      ),
+    };
+  if (nodeType === "unit")
+    return {
+      ...data,
+      units: data.units.map((u) =>
+        u.id === id ? { ...u, title, ...(withDesc ? { description } : {}) } : u,
+      ),
+    };
+  return {
+    ...data,
+    lessons: data.lessons.map((l) => (l.id === id ? { ...l, title } : l)),
+  };
+}
+
+// Map a step input onto a lesson_activities row, mirroring the edge function's
+// defaults so the optimistic row matches what the server will persist.
+function activityFromStepInput(
+  lessonId: string,
+  step: CurriculumStepInput,
+  position: number,
+  id: string,
+): LessonActivity {
+  return {
+    id,
+    lesson_id: lessonId,
+    position,
+    title: step.title || "Step",
+    activity_type: step.activity_type,
+    stage: step.stage,
+    prompt: step.prompt || "Add a prompt for learners.",
+    response_mode: step.response_mode,
+    starter_code: step.starter_code || "",
+    expected_output: step.expected_output || null,
+    choices: step.choices || [],
+    rubric: {},
+    skill_keys: step.skill_keys || [],
+    pass_score: step.pass_score && step.pass_score > 0 ? step.pass_score : 1,
+  };
+}
+
+function quizFromStepInput(
+  activityId: string,
+  lessonId: string,
+  step: CurriculumStepInput,
+  position: number,
+): CurriculumQuizItem | null {
+  if (step.response_mode !== "multiple_choice" || !step.quiz) return null;
+  const choices = step.quiz.choices || [];
+  const correct = step.quiz.correct_choice_ids || [];
+  if (choices.length < 2 || !correct.length) return null;
+  const now = new Date().toISOString();
+  return {
+    id: `${activityId}-quiz`,
+    lesson_id: lessonId,
+    milestone_id: null,
+    activity_id: activityId,
+    position,
+    prompt: step.quiz.prompt || step.prompt || "Choose the best answer.",
+    question_type: "multiple_choice",
+    choices,
+    correct_choice_ids: correct,
+    rubric: {},
+    skill_keys: step.skill_keys || [],
+    status: "draft",
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function nextStepPosition(data: CurriculumAuthoringData, lessonId: string): number {
+  const positions = data.activities.filter((a) => a.lesson_id === lessonId).map((a) => a.position);
+  return positions.length ? Math.max(...positions) + 1 : 1;
+}
+
+function insertStepLocal(
+  data: CurriculumAuthoringData,
+  lessonId: string,
+  step: CurriculumStepInput,
+  tempId: string,
+): CurriculumAuthoringData {
+  const position = nextStepPosition(data, lessonId);
+  const activity = activityFromStepInput(lessonId, step, position, tempId);
+  const quiz = quizFromStepInput(tempId, lessonId, step, position);
+  return {
+    ...data,
+    activities: [...data.activities, activity],
+    quizzes: quiz ? [...data.quizzes, quiz] : data.quizzes,
+  };
+}
+
+function patchStepLocal(
+  data: CurriculumAuthoringData,
+  lessonId: string,
+  step: CurriculumStepInput,
+): CurriculumAuthoringData {
+  const id = step.id!;
+  const position = data.activities.find((a) => a.id === id)?.position ?? 1;
+  const activity = activityFromStepInput(lessonId, step, position, id);
+  const quiz = quizFromStepInput(id, lessonId, step, position);
+  return {
+    ...data,
+    activities: data.activities.map((a) => (a.id === id ? activity : a)),
+    // Replace this step's quiz to match the edit (removing it when no longer a checkpoint).
+    quizzes: [...data.quizzes.filter((q) => q.activity_id !== id), ...(quiz ? [quiz] : [])],
+  };
+}
+
+function swapStepId(
+  data: CurriculumAuthoringData,
+  tempId: string,
+  realId: string,
+): CurriculumAuthoringData {
+  return {
+    ...data,
+    activities: data.activities.map((a) => (a.id === tempId ? { ...a, id: realId } : a)),
+    quizzes: data.quizzes.map((q) =>
+      q.activity_id === tempId ? { ...q, id: `${realId}-quiz`, activity_id: realId } : q,
+    ),
+  };
+}
+
+function reorderStepsLocal(
+  data: CurriculumAuthoringData,
+  orderedIds: string[],
+): CurriculumAuthoringData {
+  const pos = new Map(orderedIds.map((id, i) => [id, i + 1]));
+  return {
+    ...data,
+    activities: data.activities.map((a) =>
+      pos.has(a.id) ? { ...a, position: pos.get(a.id)! } : a,
+    ),
+    quizzes: data.quizzes.map((q) =>
+      q.activity_id && pos.has(q.activity_id) ? { ...q, position: pos.get(q.activity_id)! } : q,
+    ),
+  };
 }
 
 function reorderArray(ids: string[], srcId: string, targetId: string): string[] {
