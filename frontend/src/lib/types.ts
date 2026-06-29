@@ -167,9 +167,47 @@ export type CurriculumBlueprint = {
 
 export type CurriculumNodeType = "subject" | "course" | "unit" | "lesson";
 
+// A lesson step is stored as a `lesson_activities` row (+ a `quiz_items` row for
+// checkpoints). The kind is a UI grouping derived from stage/response_mode.
+export type CurriculumStepKind = "teach" | "practice" | "checkpoint" | "reflect";
+
+export type CurriculumStepInput = {
+  id?: string;
+  title: string;
+  stage: "intro" | "teach" | "practice" | "assessment" | "review";
+  activity_type: "discussion" | "code" | "multiple_choice" | "reflection" | "file";
+  response_mode: "text" | "code" | "multiple_choice" | "file";
+  prompt: string;
+  starter_code?: string;
+  expected_output?: string;
+  choices?: Array<{ id: string; text: string }>;
+  skill_keys?: string[];
+  pass_score?: number;
+  quiz?: {
+    prompt: string;
+    choices: Array<{ id: string; text: string }>;
+    correct_choice_ids: string[];
+  };
+};
+
+export type CurriculumLessonMetaInput = {
+  title: string;
+  level: string;
+  lesson_type: "discussion" | "code" | "reflection" | "multiple_choice" | "file";
+  tutor_prompt: string;
+  sample_code?: string;
+};
+
+export type CurriculumMilestoneInput = {
+  title?: string;
+  objective: string;
+  skill_keys: string[];
+  allowed_response_modes: Array<"text" | "code" | "multiple_choice" | "file">;
+};
+
 export type CurriculumAdminResponse = {
   status: "ok" | "error";
-  node_type?: CurriculumNodeType;
+  node_type?: CurriculumNodeType | "step";
   id?: string;
   lesson_id?: string;
   subject_id?: string;

@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   Archive,
+  BookOpen,
   Check,
   ChevronRight,
   Eye,
-  FilePlus2,
   GripVertical,
   Layers3,
+  ListChecks,
   NotebookPen,
   Pencil,
   Plus,
-  Send,
+  Save,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
@@ -24,8 +26,8 @@ import {
   createCurriculumLessonStub,
   createCurriculumSubject,
   createCurriculumUnit,
-  createLessonResource,
   deleteCurriculumNode,
+  deleteCurriculumStep,
   fetchCurriculumAuthoringData,
   fetchPrimaryRole,
   getSession,
@@ -33,24 +35,28 @@ import {
   moveCurriculumLesson,
   renameCurriculumNode,
   reorderCurriculumNodes,
+  reorderCurriculumSteps,
   roleHome,
+  saveCurriculumLessonMeta,
+  upsertCurriculumStep,
 } from "@/lib/api";
 import type {
   CurriculumAuthoringData,
-  CurriculumBlueprint,
   CurriculumCourse,
   CurriculumCourseVersion,
+  CurriculumLessonMetaInput,
+  CurriculumMilestoneInput,
   CurriculumNodeType,
+  CurriculumStepInput,
+  CurriculumStepKind,
   CurriculumSubject,
   CurriculumUnit,
   Lesson,
-  LessonResource,
-  LessonResourceType,
+  LessonActivity,
 } from "@/lib/types";
 
-type LessonKind = CurriculumBlueprint["lesson"]["type"];
-type ResponseMode = CurriculumBlueprint["activity"]["response_mode"];
-type ActivityStage = CurriculumBlueprint["activity"]["stage"];
+type ResponseMode = LessonActivity["response_mode"];
+type LessonKind = CurriculumLessonMetaInput["lesson_type"];
 
 type Selection = { type: CurriculumNodeType; id: string } | null;
 
@@ -59,45 +65,6 @@ type CurriculumSearch = {
   course?: string;
   unit?: string;
   lesson?: string;
-};
-
-type DraftState = {
-  lessonId: string;
-  subjectId: string;
-  subjectTitle: string;
-  subjectDescription: string;
-  courseId: string;
-  courseTitle: string;
-  courseDescription: string;
-  unitId: string;
-  unitTitle: string;
-  unitPosition: string;
-  lessonTitle: string;
-  lessonLevel: string;
-  lessonType: LessonKind;
-  tutorPrompt: string;
-  sampleCode: string;
-  milestoneTitle: string;
-  milestoneObjective: string;
-  skillKeys: string;
-  allowedModes: ResponseMode[];
-  activityTitle: string;
-  activityStage: ActivityStage;
-  activityPrompt: string;
-  activityResponseMode: ResponseMode;
-  starterCode: string;
-  expectedOutput: string;
-  rubricNotes: string;
-  quizPrompt: string;
-  quizChoices: Array<{ id: string; text: string }>;
-  quizCorrectChoiceId: string;
-  resourceIds: string[];
-  newResourceTitle: string;
-  newResourceDescription: string;
-  newResourceInstructions: string;
-  newResourceType: LessonResourceType;
-  newResourceUrl: string;
-  newResourceFile: File | null;
 };
 
 export const Route = createFileRoute("/teacher/curriculum")({
@@ -127,12 +94,9 @@ function CurriculumPage() {
   const search = useSearch({ strict: false }) as CurriculumSearch;
   const [booting, setBooting] = useState(true);
   const [email, setEmail] = useState("");
-  const [teacherId, setTeacherId] = useState("");
   const [data, setData] = useState<CurriculumAuthoringData | null>(null);
   const [selectedClassId, setSelectedClassId] = useState("");
-  const [draft, setDraft] = useState<DraftState>(() => defaultDraft());
   const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -163,7 +127,6 @@ function CurriculumPage() {
       setRoleOk(true);
       const curriculum = await fetchCurriculumAuthoringData(session.user.id);
       setEmail(session.user.email || "");
-      setTeacherId(session.user.id);
       setData(curriculum);
       setSelectedClassId((current) => current || curriculum.classes[0]?.id || "");
     } catch (error) {
@@ -181,16 +144,6 @@ function CurriculumPage() {
     () => data?.classes.find((item) => item.id === selectedClassId) || null,
     [data, selectedClassId],
   );
-
-  const visibleResources = useMemo(() => {
-    if (!data || !selectedClass) return [];
-    return data.resources.filter(
-      (resource) =>
-        resource.status !== "archived" &&
-        (!resource.class_id || resource.class_id === selectedClass.id) &&
-        (!resource.organization_id || resource.organization_id === selectedClass.organization_id),
-    );
-  }, [data, selectedClass]);
 
   const lessonsById = useMemo(() => {
     const map = new Map<string, Lesson>();
@@ -275,18 +228,7 @@ function CurriculumPage() {
       return next;
     });
 
-  // Load the lesson named by ?lesson= into the editor when it changes.
-  useEffect(() => {
-    if (!data || !search.lesson || draft.lessonId === search.lesson) return;
-    const lesson = data.lessons.find((item) => item.id === search.lesson);
-    if (lesson) setDraft(draftFromLesson(lesson, data));
-  }, [data, search.lesson, draft.lessonId]);
-
-  const setField = <K extends keyof DraftState>(key: K, value: DraftState[K]) => {
-    setDraft((current) => ({ ...current, [key]: value }));
-  };
-
-  // --- Structure mutations --------------------------------------------------
+  // --- Mutations ------------------------------------------------------------
   // Each runs an admin action then refreshes; create flows select the new node so
   // the teacher lands in its detail pane to keep building top-down.
 
@@ -305,11 +247,10 @@ function CurriculumPage() {
         if (!session) throw new Error("Sign in to edit curriculum.");
         const outcome = await op(session.access_token, selectedClass.id);
         await loadData();
-        // Select after the refresh so the new node's detail pane renders with data present.
         if (outcome?.select) selectNode(outcome.select.type, outcome.select.id);
         if (successMessage) setMessage(successMessage);
       } catch (error) {
-        setMessage((error as Error).message || "Could not update curriculum structure.");
+        setMessage((error as Error).message || "Could not update curriculum.");
       } finally {
         setBusy(false);
       }
@@ -395,70 +336,32 @@ function CurriculumPage() {
       await moveCurriculumLesson({ accessToken, classId, lessonId, targetUnitId });
     }, "Lesson moved.");
 
-  // --- Lesson blueprint (today's fields) ------------------------------------
+  const saveLessonMeta = (
+    lessonId: string,
+    meta: CurriculumLessonMetaInput,
+    milestone: CurriculumMilestoneInput,
+  ) =>
+    runStructureOp(async (accessToken, classId) => {
+      await saveCurriculumLessonMeta({ accessToken, classId, lessonId, meta, milestone });
+    }, "Lesson saved.");
 
-  const saveBlueprint = async () => {
-    if (!selectedClass || !teacherId) return;
-    setSaving(true);
-    try {
-      const session = await getSession();
-      if (!session) throw new Error("Sign in to save curriculum.");
-      const blueprint = draftToBlueprint(draft);
-      const saved = await invokeCurriculumAdmin({
-        accessToken: session.access_token,
-        action: "save_lesson_blueprint",
-        organizationId: selectedClass.organization_id,
-        classId: selectedClass.id,
-        lessonId: draft.lessonId || undefined,
-        blueprint,
-      });
+  const upsertStep = (lessonId: string, step: CurriculumStepInput) =>
+    runStructureOp(async (accessToken, classId) => {
+      await upsertCurriculumStep({ accessToken, classId, lessonId, step });
+    });
 
-      if (hasNewResourceDraft(draft) && saved.lesson_id) {
-        await createLessonResource({
-          teacherId,
-          organizationId: selectedClass.organization_id,
-          classId: selectedClass.id,
-          lessonId: saved.lesson_id,
-          title: draft.newResourceTitle.trim(),
-          description: draft.newResourceDescription.trim(),
-          studentInstructions: draft.newResourceInstructions.trim(),
-          teacherNotes: "",
-          resourceType: draft.newResourceType,
-          sourceType: draft.newResourceFile ? "upload" : "external_url",
-          status: "draft",
-          visibility: "class_private",
-          displayMode: "card",
-          externalUrl: draft.newResourceUrl.trim(),
-          file: draft.newResourceFile,
-        });
-      }
+  const reorderSteps = (lessonId: string, orderedIds: string[]) =>
+    runStructureOp(async (accessToken, classId) => {
+      await reorderCurriculumSteps({ accessToken, classId, lessonId, orderedIds });
+    });
 
-      setDraft((current) => ({
-        ...current,
-        lessonId: saved.lesson_id || current.lessonId,
-        subjectId: saved.subject_id || current.subjectId,
-        courseId: saved.course_id || current.courseId,
-        unitId: saved.unit_id || current.unitId,
-        newResourceTitle: "",
-        newResourceDescription: "",
-        newResourceInstructions: "",
-        newResourceUrl: "",
-        newResourceFile: null,
-      }));
-      setMessage("Lesson saved as curriculum draft.");
-      await loadData();
-    } catch (error) {
-      setMessage((error as Error).message || "Could not save lesson.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const deleteStep = (lessonId: string, activityId: string) =>
+    runStructureOp(async (accessToken, classId) => {
+      await deleteCurriculumStep({ accessToken, classId, lessonId, activityId });
+    });
 
-  const setPublication = async (action: "publish_lesson" | "archive_lesson") => {
-    if (!selectedClass || !draft.lessonId) {
-      setMessage("Save the lesson before publishing or archiving it.");
-      return;
-    }
+  const setPublication = async (action: "publish_lesson" | "archive_lesson", lessonId: string) => {
+    if (!selectedClass || !lessonId) return;
     setPublishing(true);
     try {
       const session = await getSession();
@@ -468,7 +371,7 @@ function CurriculumPage() {
         action,
         organizationId: selectedClass.organization_id,
         classId: selectedClass.id,
-        lessonId: draft.lessonId,
+        lessonId,
       });
       setMessage(action === "publish_lesson" ? "Lesson published." : "Lesson archived.");
       await loadData();
@@ -576,14 +479,10 @@ function CurriculumPage() {
               key={selection ? `${selection.type}:${selection.id}` : "empty"}
               selection={selection}
               data={data}
-              draft={draft}
-              resources={visibleResources}
               lessonsById={lessonsById}
               orgUnits={orgUnits}
               busy={busy}
-              saving={saving}
               publishing={publishing}
-              onField={setField}
               onAddSubject={addSubject}
               onRename={renameNode}
               onArchive={archiveNode}
@@ -592,9 +491,12 @@ function CurriculumPage() {
               onAddUnit={addUnit}
               onAddLesson={addLesson}
               onMoveLesson={moveLesson}
-              onSaveLesson={() => void saveBlueprint()}
-              onPublishLesson={() => void setPublication("publish_lesson")}
-              onArchiveLesson={() => void setPublication("archive_lesson")}
+              onSaveLessonMeta={saveLessonMeta}
+              onUpsertStep={upsertStep}
+              onReorderSteps={reorderSteps}
+              onDeleteStep={deleteStep}
+              onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
+              onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
               currentVersionForCourse={currentVersionForCourse}
               counts={{
                 coursesForSubject: (id) => coursesForSubject(id).length,
@@ -972,14 +874,10 @@ function dropClass(state: { over: boolean }) {
 function DetailPane({
   selection,
   data,
-  draft,
-  resources,
   lessonsById,
   orgUnits,
   busy,
-  saving,
   publishing,
-  onField,
   onAddSubject,
   onRename,
   onArchive,
@@ -988,7 +886,10 @@ function DetailPane({
   onAddUnit,
   onAddLesson,
   onMoveLesson,
-  onSaveLesson,
+  onSaveLessonMeta,
+  onUpsertStep,
+  onReorderSteps,
+  onDeleteStep,
   onPublishLesson,
   onArchiveLesson,
   currentVersionForCourse,
@@ -996,14 +897,10 @@ function DetailPane({
 }: {
   selection: Selection;
   data: CurriculumAuthoringData;
-  draft: DraftState;
-  resources: LessonResource[];
   lessonsById: Map<string, Lesson>;
   orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
   busy: boolean;
-  saving: boolean;
   publishing: boolean;
-  onField: <K extends keyof DraftState>(key: K, value: DraftState[K]) => void;
   onAddSubject: () => void;
   onRename: (type: CurriculumNodeType, id: string, title: string, description?: string) => void;
   onArchive: (type: CurriculumNodeType, id: string) => void;
@@ -1012,9 +909,16 @@ function DetailPane({
   onAddUnit: (courseId: string) => void;
   onAddLesson: (unitId: string) => void;
   onMoveLesson: (lessonId: string, targetUnitId: string) => void;
-  onSaveLesson: () => void;
-  onPublishLesson: () => void;
-  onArchiveLesson: () => void;
+  onSaveLessonMeta: (
+    lessonId: string,
+    meta: CurriculumLessonMetaInput,
+    milestone: CurriculumMilestoneInput,
+  ) => void;
+  onUpsertStep: (lessonId: string, step: CurriculumStepInput) => void;
+  onReorderSteps: (lessonId: string, orderedIds: string[]) => void;
+  onDeleteStep: (lessonId: string, activityId: string) => void;
+  onPublishLesson: (lessonId: string) => void;
+  onArchiveLesson: (lessonId: string) => void;
   currentVersionForCourse: (courseId: string) => CurriculumCourseVersion | null;
   counts: {
     coursesForSubject: (id: string) => number;
@@ -1122,17 +1026,16 @@ function DetailPane({
   return (
     <LessonDetail
       lesson={lesson}
-      draft={draft}
-      resources={resources}
-      lessonsById={lessonsById}
+      data={data}
       orgUnits={orgUnits}
       busy={busy}
-      saving={saving}
       publishing={publishing}
-      onField={onField}
-      onSave={onSaveLesson}
-      onPublish={onPublishLesson}
-      onArchive={onArchiveLesson}
+      onSaveMeta={(meta, milestone) => onSaveLessonMeta(lesson.id, meta, milestone)}
+      onUpsertStep={(step) => onUpsertStep(lesson.id, step)}
+      onReorderSteps={(ids) => onReorderSteps(lesson.id, ids)}
+      onDeleteStep={(activityId) => onDeleteStep(lesson.id, activityId)}
+      onPublish={() => onPublishLesson(lesson.id)}
+      onArchiveLesson={() => onArchiveLesson(lesson.id)}
       onMove={(targetUnitId) => onMoveLesson(lesson.id, targetUnitId)}
       onDelete={() => onDelete("lesson", lesson.id)}
     />
@@ -1284,40 +1187,147 @@ function StructureDetail({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Lesson detail — lesson-level meta + an ordered, multi-step content editor.
+// ---------------------------------------------------------------------------
+
+const STEP_KINDS: Array<{
+  kind: CurriculumStepKind;
+  label: string;
+  stage: CurriculumStepInput["stage"];
+  activityType: CurriculumStepInput["activity_type"];
+  responseMode: ResponseMode;
+  icon: ReactNode;
+  promptLabel: string;
+}> = [
+  {
+    kind: "teach",
+    label: "Teach",
+    stage: "teach",
+    activityType: "discussion",
+    responseMode: "text",
+    icon: <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />,
+    promptLabel: "What the mentor explains",
+  },
+  {
+    kind: "practice",
+    label: "Practice",
+    stage: "practice",
+    activityType: "discussion",
+    responseMode: "text",
+    icon: <NotebookPen className="h-3.5 w-3.5" strokeWidth={1.7} />,
+    promptLabel: "Practice prompt",
+  },
+  {
+    kind: "checkpoint",
+    label: "Checkpoint",
+    stage: "assessment",
+    activityType: "multiple_choice",
+    responseMode: "multiple_choice",
+    icon: <ListChecks className="h-3.5 w-3.5" strokeWidth={1.7} />,
+    promptLabel: "Question",
+  },
+  {
+    kind: "reflect",
+    label: "Reflect",
+    stage: "review",
+    activityType: "reflection",
+    responseMode: "text",
+    icon: <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />,
+    promptLabel: "Reflection prompt",
+  },
+];
+
+function stepKindConfig(kind: CurriculumStepKind) {
+  return STEP_KINDS.find((item) => item.kind === kind) || STEP_KINDS[1];
+}
+
+function kindOfActivity(activity: LessonActivity): CurriculumStepKind {
+  if (activity.response_mode === "multiple_choice") return "checkpoint";
+  if (activity.stage === "teach" || activity.stage === "intro") return "teach";
+  if (activity.stage === "review" || activity.activity_type === "reflection") return "reflect";
+  return "practice";
+}
+
+function defaultStepForKind(kind: CurriculumStepKind): CurriculumStepInput {
+  const config = stepKindConfig(kind);
+  const base: CurriculumStepInput = {
+    title: config.label,
+    stage: config.stage,
+    activity_type: config.activityType,
+    response_mode: config.responseMode,
+    prompt:
+      kind === "teach"
+        ? "Explain the idea simply, then ask the learner a quick question to check they followed."
+        : kind === "checkpoint"
+          ? "Which option is correct?"
+          : kind === "reflect"
+            ? "What is one thing you understood, and one thing that is still unclear?"
+            : "Try this, then explain your thinking.",
+  };
+  if (kind === "checkpoint") {
+    base.choices = [
+      { id: "a", text: "Option A" },
+      { id: "b", text: "Option B" },
+    ];
+    base.quiz = {
+      prompt: "Which option is correct?",
+      choices: [
+        { id: "a", text: "Option A" },
+        { id: "b", text: "Option B" },
+      ],
+      correct_choice_ids: ["a"],
+    };
+  }
+  return base;
+}
+
 function LessonDetail({
   lesson,
-  draft,
-  resources,
-  lessonsById,
+  data,
   orgUnits,
   busy,
-  saving,
   publishing,
-  onField,
-  onSave,
+  onSaveMeta,
+  onUpsertStep,
+  onReorderSteps,
+  onDeleteStep,
   onPublish,
-  onArchive,
+  onArchiveLesson,
   onMove,
   onDelete,
 }: {
   lesson: Lesson;
-  draft: DraftState;
-  resources: LessonResource[];
-  lessonsById: Map<string, Lesson>;
+  data: CurriculumAuthoringData;
   orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
   busy: boolean;
-  saving: boolean;
   publishing: boolean;
-  onField: <K extends keyof DraftState>(key: K, value: DraftState[K]) => void;
-  onSave: () => void;
+  onSaveMeta: (meta: CurriculumLessonMetaInput, milestone: CurriculumMilestoneInput) => void;
+  onUpsertStep: (step: CurriculumStepInput) => void;
+  onReorderSteps: (orderedIds: string[]) => void;
+  onDeleteStep: (activityId: string) => void;
   onPublish: () => void;
-  onArchive: () => void;
+  onArchiveLesson: () => void;
   onMove: (targetUnitId: string) => void;
   onDelete: () => void;
 }) {
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const ready = Boolean(draft.lessonId);
+
+  const steps = useMemo(
+    () =>
+      data.activities
+        .filter((activity) => activity.lesson_id === lesson.id)
+        .sort((a, b) => a.position - b.position),
+    [data.activities, lesson.id],
+  );
+  const milestone = useMemo(
+    () => data.milestones.find((item) => item.lesson_id === lesson.id) || null,
+    [data.milestones, lesson.id],
+  );
+  const quizFor = (activityId: string) =>
+    data.quizzes.find((quiz) => quiz.activity_id === activityId && quiz.status !== "archived") ||
+    null;
 
   return (
     <GradientCard>
@@ -1341,28 +1351,69 @@ function LessonDetail({
           </div>
         </div>
 
-        {view === "edit" ? (
-          <>
-            <BlueprintEditor
-              draft={draft}
-              resources={resources}
-              lessonsById={lessonsById}
-              onField={onField}
-            />
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                {saving ? "Saving..." : "Save draft"}
-              </button>
+        {view === "preview" ? (
+          <LessonPreview lesson={lesson} milestone={milestone} steps={steps} quizFor={quizFor} />
+        ) : (
+          <div className="grid gap-5">
+            <LessonMetaForm lesson={lesson} milestone={milestone} busy={busy} onSave={onSaveMeta} />
+
+            <section className="rounded-3xl border border-border bg-background/30 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
+                  <Layers3 className="h-4 w-4" strokeWidth={1.7} />
+                  Steps
+                </div>
+                <span className="text-[11.5px] text-muted-foreground">
+                  {steps.length} step{steps.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              {steps.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border px-3 py-6 text-center text-[12.5px] text-muted-foreground">
+                  No steps yet. Add the first one below.
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <ReorderList items={steps} disabled={busy} onReorder={onReorderSteps}>
+                    {(activity, state) => (
+                      <div className={dropClass(state)}>
+                        <StepCard
+                          activity={activity}
+                          index={steps.indexOf(activity)}
+                          quiz={quizFor(activity.id)}
+                          busy={busy}
+                          dragging={state.dragging}
+                          canDelete={steps.length > 1}
+                          onSave={onUpsertStep}
+                          onDelete={() => onDeleteStep(activity.id)}
+                        />
+                      </div>
+                    )}
+                  </ReorderList>
+                </div>
+              )}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {STEP_KINDS.map((config) => (
+                  <button
+                    key={config.kind}
+                    type="button"
+                    onClick={() => onUpsertStep(defaultStepForKind(config.kind))}
+                    disabled={busy}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                  >
+                    {config.icon}
+                    Add {config.label.toLowerCase()}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={onPublish}
-                disabled={publishing || !ready}
+                disabled={publishing}
                 className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
@@ -1370,8 +1421,8 @@ function LessonDetail({
               </button>
               <button
                 type="button"
-                onClick={onArchive}
-                disabled={publishing || !ready}
+                onClick={onArchiveLesson}
+                disabled={publishing}
                 className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
@@ -1379,7 +1430,7 @@ function LessonDetail({
               </button>
             </div>
 
-            <div className="mt-6 border-t border-border pt-4">
+            <div className="border-t border-border pt-4">
               <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                 Organize
               </div>
@@ -1404,7 +1455,7 @@ function LessonDetail({
                   </select>
                 </label>
                 {confirmDelete ? (
-                  <div className="inline-flex items-center gap-2">
+                  <div className="inline-flex items-center gap-2 self-end">
                     <button
                       type="button"
                       onClick={onDelete}
@@ -1438,12 +1489,400 @@ function LessonDetail({
                 Lessons with learner activity can be archived but not deleted.
               </p>
             </div>
-          </>
-        ) : (
-          <PreviewPanel draft={draft} resources={resources} />
+          </div>
         )}
       </div>
     </GradientCard>
+  );
+}
+
+function LessonMetaForm({
+  lesson,
+  milestone,
+  busy,
+  onSave,
+}: {
+  lesson: Lesson;
+  milestone: CurriculumAuthoringData["milestones"][number] | null;
+  busy: boolean;
+  onSave: (meta: CurriculumLessonMetaInput, milestone: CurriculumMilestoneInput) => void;
+}) {
+  const initialType = parseLessonKind(lesson.curriculum_metadata?.lesson_type) || "discussion";
+  const [title, setTitle] = useState(lesson.title);
+  const [level, setLevel] = useState(lesson.level || "Any level");
+  const [lessonType, setLessonType] = useState<LessonKind>(initialType);
+  const [tutorPrompt, setTutorPrompt] = useState(lesson.tutor_prompt || "");
+  const [objective, setObjective] = useState(milestone?.objective || "");
+  const [skillKeys, setSkillKeys] = useState((milestone?.skill_keys || []).join(", "));
+  const [allowedModes, setAllowedModes] = useState<ResponseMode[]>(
+    milestone?.allowed_response_modes?.length ? milestone.allowed_response_modes : ["text"],
+  );
+
+  const toggleMode = (mode: ResponseMode) => {
+    setAllowedModes((current) => {
+      const next = current.includes(mode)
+        ? current.filter((item) => item !== mode)
+        : [...current, mode];
+      return next.length ? next : ["text"];
+    });
+  };
+
+  const save = () => {
+    onSave(
+      {
+        title: title.trim() || "Untitled lesson",
+        level: level.trim() || "Any level",
+        lesson_type: lessonType,
+        tutor_prompt: tutorPrompt.trim(),
+      },
+      {
+        objective: objective.trim(),
+        skill_keys: skillKeys
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        allowed_response_modes: allowedModes,
+      },
+    );
+  };
+
+  return (
+    <section className="rounded-3xl border border-border bg-background/30 p-4">
+      <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
+        <NotebookPen className="h-4 w-4" strokeWidth={1.7} />
+        Lesson basics
+      </div>
+      <div className="grid gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TextInput label="Lesson title" value={title} onChange={setTitle} />
+          <TextInput label="Level" value={level} onChange={setLevel} />
+          <SelectInput
+            label="Lesson type"
+            value={lessonType}
+            options={["discussion", "code", "reflection", "multiple_choice", "file"]}
+            onChange={(value) => setLessonType(value as LessonKind)}
+          />
+        </div>
+        <TextArea label="Mentor prompt" value={tutorPrompt} onChange={setTutorPrompt} />
+        <TextArea label="Lesson objective" value={objective} onChange={setObjective} />
+        <TextInput label="Skill keys (comma separated)" value={skillKeys} onChange={setSkillKeys} />
+        <div className="grid gap-2">
+          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            Allowed answer modes
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(["text", "code", "multiple_choice", "file"] as ResponseMode[]).map((mode) => (
+              <button
+                type="button"
+                key={mode}
+                onClick={() => toggleMode(mode)}
+                className={`rounded-full border px-3 py-1.5 text-[11.5px] transition-colors ${
+                  allowedModes.includes(mode)
+                    ? "border-foreground/25 bg-foreground text-background"
+                    : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <button
+            type="button"
+            onClick={save}
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
+            {busy ? "Saving..." : "Save lesson basics"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StepCard({
+  activity,
+  index,
+  quiz,
+  busy,
+  dragging,
+  canDelete,
+  onSave,
+  onDelete,
+}: {
+  activity: LessonActivity;
+  index: number;
+  quiz: CurriculumAuthoringData["quizzes"][number] | null;
+  busy: boolean;
+  dragging: boolean;
+  canDelete: boolean;
+  onSave: (step: CurriculumStepInput) => void;
+  onDelete: () => void;
+}) {
+  const kind = kindOfActivity(activity);
+  const config = stepKindConfig(kind);
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(activity.title);
+  const [prompt, setPrompt] = useState(activity.prompt);
+  const [practiceMode, setPracticeMode] = useState<ResponseMode>(
+    activity.response_mode === "code" ? "code" : "text",
+  );
+  const [starterCode, setStarterCode] = useState(activity.starter_code || "");
+  const [expectedOutput, setExpectedOutput] = useState(activity.expected_output || "");
+  const initialChoices = quiz?.choices?.length
+    ? quiz.choices
+    : (activity.choices || [])
+        .map((choice) => ({ id: choice.id || "", text: choice.text || choice.label || "" }))
+        .filter((choice) => choice.id);
+  const [choices, setChoices] = useState<Array<{ id: string; text: string }>>(
+    initialChoices.length
+      ? initialChoices
+      : [
+          { id: "a", text: "" },
+          { id: "b", text: "" },
+        ],
+  );
+  const [correctId, setCorrectId] = useState(
+    quiz?.correct_choice_ids?.[0] || choices[0]?.id || "a",
+  );
+
+  const updateChoice = (i: number, patch: Partial<{ id: string; text: string }>) =>
+    setChoices((current) =>
+      current.map((choice, idx) => (idx === i ? { ...choice, ...patch } : choice)),
+    );
+
+  const save = () => {
+    const isCode = kind === "practice" && practiceMode === "code";
+    const cleaned = choices
+      .map((choice) => ({ id: choice.id.trim(), text: choice.text.trim() }))
+      .filter((choice) => choice.id && choice.text);
+    const step: CurriculumStepInput = {
+      id: activity.id,
+      title: title.trim() || config.label,
+      stage: config.stage,
+      activity_type:
+        kind === "checkpoint" ? "multiple_choice" : isCode ? "code" : config.activityType,
+      response_mode: kind === "checkpoint" ? "multiple_choice" : isCode ? "code" : "text",
+      prompt: prompt.trim(),
+      starter_code: isCode ? starterCode : "",
+      expected_output: isCode ? expectedOutput : "",
+      choices: kind === "checkpoint" ? cleaned : [],
+      quiz:
+        kind === "checkpoint"
+          ? {
+              prompt: prompt.trim() || "Choose the best answer.",
+              choices: cleaned,
+              correct_choice_ids: correctId ? [correctId] : [],
+            }
+          : undefined,
+    };
+    onSave(step);
+    setOpen(false);
+  };
+
+  return (
+    <div
+      className={`rounded-2xl border border-border bg-background/40 ${dragging ? "opacity-40" : ""}`}
+    >
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <span className="cursor-grab text-muted-foreground/60">
+          <GripVertical className="h-4 w-4" strokeWidth={1.6} />
+        </span>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-[11px] text-muted-foreground">
+          {index + 1}
+        </span>
+        <span className="text-muted-foreground">{config.icon}</span>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
+            {activity.title}
+          </span>
+          <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+            {config.label}
+          </span>
+          <ChevronRight
+            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+            strokeWidth={1.7}
+          />
+        </button>
+      </div>
+
+      {open ? (
+        <div className="grid gap-3 border-t border-border p-3">
+          <TextInput label="Step title" value={title} onChange={setTitle} />
+          <TextArea label={config.promptLabel} value={prompt} onChange={setPrompt} />
+
+          {kind === "practice" ? (
+            <SelectInput
+              label="Answer mode"
+              value={practiceMode}
+              options={["text", "code"]}
+              onChange={(value) => setPracticeMode(value as ResponseMode)}
+            />
+          ) : null}
+
+          {kind === "practice" && practiceMode === "code" ? (
+            <>
+              <TextArea label="Starter code" value={starterCode} onChange={setStarterCode} />
+              <TextArea
+                label="Expected output"
+                value={expectedOutput}
+                onChange={setExpectedOutput}
+              />
+            </>
+          ) : null}
+
+          {kind === "checkpoint" ? (
+            <div className="grid gap-2">
+              <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Choices
+              </div>
+              {choices.map((choice, i) => (
+                <div key={i} className="grid gap-2 sm:grid-cols-[56px_minmax(0,1fr)_90px]">
+                  <input
+                    value={choice.id}
+                    onChange={(event) => updateChoice(i, { id: event.target.value })}
+                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                  />
+                  <input
+                    value={choice.text}
+                    onChange={(event) => updateChoice(i, { text: event.target.value })}
+                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCorrectId(choice.id)}
+                    className={`rounded-full border px-3 py-1.5 text-[11.5px] ${
+                      correctId === choice.id
+                        ? "border-success/35 text-success"
+                        : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    Correct
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setChoices((current) => [
+                    ...current,
+                    { id: String.fromCharCode(97 + current.length), text: "" },
+                  ])
+                }
+                className="justify-self-start text-[12px] text-muted-foreground hover:text-foreground"
+              >
+                + Add choice
+              </button>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={save}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            >
+              <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
+              {busy ? "Saving..." : "Save step"}
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={busy || !canDelete}
+              title={canDelete ? undefined : "A lesson needs at least one step."}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+              Delete step
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LessonPreview({
+  lesson,
+  milestone,
+  steps,
+  quizFor,
+}: {
+  lesson: Lesson;
+  milestone: CurriculumAuthoringData["milestones"][number] | null;
+  steps: LessonActivity[];
+  quizFor: (activityId: string) => CurriculumAuthoringData["quizzes"][number] | null;
+}) {
+  return (
+    <div className="grid gap-4">
+      <div className="mb-1 flex items-center gap-2 text-[15px] font-medium text-foreground">
+        <Eye className="h-4 w-4" strokeWidth={1.7} />
+        Student walkthrough
+      </div>
+      <div>
+        <h2 className="font-serif text-[26px] leading-tight text-foreground">{lesson.title}</h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+          {milestone?.objective || "Add a lesson objective to preview the target."}
+        </p>
+      </div>
+      {steps.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-background/40 p-4 text-[12.5px] text-muted-foreground">
+          No steps yet.
+        </div>
+      ) : (
+        steps.map((activity, index) => {
+          const kind = kindOfActivity(activity);
+          const config = stepKindConfig(kind);
+          const quiz = quizFor(activity.id);
+          return (
+            <div
+              key={activity.id}
+              className="rounded-2xl border border-border bg-background/40 p-4"
+            >
+              <div className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-border text-[10px]">
+                  {index + 1}
+                </span>
+                {config.label}
+              </div>
+              <div className="text-[13px] font-medium text-foreground">{activity.title}</div>
+              <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                {activity.prompt}
+              </p>
+              {kind === "checkpoint" && quiz?.choices?.length ? (
+                <div className="mt-3 grid gap-1.5">
+                  {quiz.choices.map((choice) => (
+                    <div
+                      key={choice.id}
+                      className={`rounded-xl border px-3 py-2 text-[12.5px] ${
+                        quiz.correct_choice_ids?.includes(choice.id)
+                          ? "border-success/35 text-success"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      {choice.id}. {choice.text}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {kind === "practice" && activity.response_mode === "code" && activity.starter_code ? (
+                <pre className="mt-3 overflow-auto rounded-xl border border-border bg-background/60 p-3 text-[12px] text-foreground">
+                  {activity.starter_code}
+                </pre>
+              ) : null}
+            </div>
+          );
+        })
+      )}
+    </div>
   );
 }
 
@@ -1470,7 +1909,7 @@ function ViewToggle({
 }
 
 // ---------------------------------------------------------------------------
-// Ordering + breadcrumb helpers.
+// Ordering, parsing + breadcrumb helpers.
 // ---------------------------------------------------------------------------
 
 function byPositionThenTitle(
@@ -1493,6 +1932,12 @@ function reorderArray(ids: string[], srcId: string, targetId: string): string[] 
   if (targetIndex < 0) return ids;
   next.splice(targetIndex, 0, srcId);
   return next;
+}
+
+function parseLessonKind(value: unknown): LessonKind | null {
+  return ["discussion", "code", "reflection", "multiple_choice", "file"].includes(String(value))
+    ? (value as LessonKind)
+    : null;
 }
 
 function buildBreadcrumb({
@@ -1555,554 +2000,8 @@ function nodePath(selection: NonNullable<Selection>, data: CurriculumAuthoringDa
 }
 
 // ---------------------------------------------------------------------------
-// Lesson blueprint editing (today's fields) — reused as-is by LessonDetail.
+// Small inputs.
 // ---------------------------------------------------------------------------
-
-function defaultDraft(): DraftState {
-  return {
-    lessonId: "",
-    subjectId: "",
-    subjectTitle: "Logic Foundations",
-    subjectDescription: "Structured lessons for clear thinking across subjects.",
-    courseId: "",
-    courseTitle: "Clear Thinking",
-    courseDescription:
-      "A teacher-authored path for claims, reasons, evidence, and careful explanation.",
-    unitId: "",
-    unitTitle: "Claims, Reasons, Evidence",
-    unitPosition: "1",
-    lessonTitle: "What Makes a Good Reason?",
-    lessonLevel: "Any level",
-    lessonType: "discussion",
-    tutorPrompt:
-      "Guide the student to understand that a good reason explains why a claim makes sense. Keep the conversation short, concrete, age-aware, and focused on one reasoning move at a time.",
-    sampleCode: "",
-    milestoneTitle: "Connect A Claim To A Reason",
-    milestoneObjective:
-      "The student can identify a claim and give a reason that explains why the claim makes sense.",
-    skillKeys: "logic.claims,logic.reasons,logic.evidence",
-    allowedModes: ["text"],
-    activityTitle: "Reasoning discussion",
-    activityStage: "practice",
-    activityPrompt:
-      "Tell me one thing you believe is true about school, games, or everyday life. What is one reason someone else should believe it too?",
-    activityResponseMode: "text",
-    starterCode: "",
-    expectedOutput: "",
-    rubricNotes: "Pass when the student states a claim and gives a reason that supports it.",
-    quizPrompt:
-      "Which option gives the best reason for the claim: Reading every day helps you learn?",
-    quizChoices: [
-      { id: "a", text: "Because reading every day is a thing people do." },
-      {
-        id: "b",
-        text: "Because daily reading gives your brain more practice with words and ideas.",
-      },
-      { id: "c", text: "Because books exist in many places." },
-    ],
-    quizCorrectChoiceId: "b",
-    resourceIds: [],
-    newResourceTitle: "",
-    newResourceDescription: "",
-    newResourceInstructions: "",
-    newResourceType: "link",
-    newResourceUrl: "",
-    newResourceFile: null,
-  };
-}
-
-function draftFromLesson(lesson: Lesson, data: CurriculumAuthoringData): DraftState {
-  const unit = data.units.find((item) => item.id === lesson.unit_id) || null;
-  const version = unit
-    ? data.courseVersions.find((item) => item.id === unit.course_version_id) || null
-    : null;
-  const course = version
-    ? data.courses.find((item) => item.id === version.course_id) || null
-    : null;
-  const subject = course
-    ? data.subjects.find((item) => item.id === course.subject_id) || null
-    : null;
-  const milestone = data.milestones.find((item) => item.lesson_id === lesson.id) || null;
-  const activity = data.activities.find((item) => item.lesson_id === lesson.id) || null;
-  const quiz =
-    data.quizzes.find((item) => item.lesson_id === lesson.id && item.status !== "archived") || null;
-  const metadata = lesson.curriculum_metadata || {};
-  const lessonType =
-    parseLessonKind(metadata.lesson_type) ||
-    parseLessonKind(activity?.activity_type) ||
-    "discussion";
-
-  return {
-    ...defaultDraft(),
-    lessonId: lesson.id,
-    subjectId: subject?.id || "",
-    subjectTitle: subject?.title || "Untitled subject",
-    subjectDescription: subject?.description || "",
-    courseId: course?.id || "",
-    courseTitle: course?.title || "Untitled course",
-    courseDescription: course?.description || "",
-    unitId: unit?.id || "",
-    unitTitle: unit?.title || lesson.module || "Unit",
-    unitPosition: String(unit?.position || 1),
-    lessonTitle: lesson.title,
-    lessonLevel: lesson.level || "Any level",
-    lessonType,
-    tutorPrompt: lesson.tutor_prompt || "",
-    sampleCode: lesson.sample_code || "",
-    milestoneTitle: milestone?.title || "",
-    milestoneObjective: milestone?.objective || "",
-    skillKeys: (milestone?.skill_keys || []).join(","),
-    allowedModes: milestone?.allowed_response_modes?.length
-      ? milestone.allowed_response_modes
-      : [activity?.response_mode || "text"],
-    activityTitle: activity?.title || "",
-    activityStage: parseActivityStage(activity?.stage) || "practice",
-    activityPrompt: activity?.prompt || "",
-    activityResponseMode: activity?.response_mode || "text",
-    starterCode: activity?.starter_code || lesson.sample_code || "",
-    expectedOutput: activity?.expected_output || lesson.expected_output || "",
-    rubricNotes:
-      typeof activity?.rubric?.notes === "string"
-        ? activity.rubric.notes
-        : "Pass when the student shows the target idea in their own words.",
-    quizPrompt: quiz?.prompt || "",
-    quizChoices: quiz?.choices?.length ? quiz.choices : defaultDraft().quizChoices,
-    quizCorrectChoiceId: quiz?.correct_choice_ids?.[0] || defaultDraft().quizCorrectChoiceId,
-    resourceIds: data.resources
-      .filter((resource) => resource.lesson_id === lesson.id && resource.status !== "archived")
-      .map((resource) => resource.id),
-  };
-}
-
-function parseLessonKind(value: unknown): LessonKind | null {
-  return ["discussion", "code", "reflection", "multiple_choice", "file"].includes(String(value))
-    ? (value as LessonKind)
-    : null;
-}
-
-function parseActivityStage(value: unknown): ActivityStage | null {
-  return ["intro", "teach", "practice", "assessment", "review"].includes(String(value))
-    ? (value as ActivityStage)
-    : null;
-}
-
-function draftToBlueprint(draft: DraftState): CurriculumBlueprint {
-  const choices = draft.quizChoices
-    .map((choice) => ({ id: choice.id.trim(), text: choice.text.trim() }))
-    .filter((choice) => choice.id && choice.text);
-  return {
-    subject: {
-      id: draft.subjectId || undefined,
-      title: draft.subjectTitle.trim(),
-      description: draft.subjectDescription.trim(),
-    },
-    course: {
-      id: draft.courseId || undefined,
-      title: draft.courseTitle.trim(),
-      description: draft.courseDescription.trim(),
-    },
-    unit: {
-      id: draft.unitId || undefined,
-      title: draft.unitTitle.trim(),
-      position: Math.max(1, Math.round(Number(draft.unitPosition) || 1)),
-    },
-    lesson: {
-      id: draft.lessonId || undefined,
-      title: draft.lessonTitle.trim(),
-      level: draft.lessonLevel.trim() || "Any level",
-      type: draft.lessonType,
-      tutor_prompt: draft.tutorPrompt.trim(),
-      sample_code: draft.sampleCode.trim(),
-    },
-    milestone: {
-      title: draft.milestoneTitle.trim(),
-      objective: draft.milestoneObjective.trim(),
-      skill_keys: draft.skillKeys
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      allowed_response_modes: draft.allowedModes,
-    },
-    activity: {
-      title: draft.activityTitle.trim(),
-      stage: draft.activityStage,
-      prompt: draft.activityPrompt.trim(),
-      response_mode: draft.activityResponseMode,
-      starter_code: draft.starterCode.trim(),
-      expected_output: draft.expectedOutput.trim(),
-      rubric: { notes: draft.rubricNotes.trim() },
-    },
-    quiz:
-      draft.quizPrompt.trim() && choices.length >= 2 && draft.quizCorrectChoiceId
-        ? {
-            prompt: draft.quizPrompt.trim(),
-            choices,
-            correct_choice_ids: [draft.quizCorrectChoiceId],
-          }
-        : undefined,
-    resource_ids: draft.resourceIds,
-  };
-}
-
-function hasNewResourceDraft(draft: DraftState) {
-  return Boolean(
-    draft.newResourceTitle.trim() && (draft.newResourceFile || draft.newResourceUrl.trim()),
-  );
-}
-
-function BlueprintEditor({
-  draft,
-  resources,
-  lessonsById,
-  onField,
-}: {
-  draft: DraftState;
-  resources: LessonResource[];
-  lessonsById: Map<string, Lesson>;
-  onField: <K extends keyof DraftState>(key: K, value: DraftState[K]) => void;
-}) {
-  const toggleMode = (mode: ResponseMode) => {
-    const exists = draft.allowedModes.includes(mode);
-    const next = exists
-      ? draft.allowedModes.filter((item) => item !== mode)
-      : [...draft.allowedModes, mode];
-    onField("allowedModes", next.length ? next : ["text"]);
-  };
-
-  const updateChoice = (index: number, patch: Partial<{ id: string; text: string }>) => {
-    onField(
-      "quizChoices",
-      draft.quizChoices.map((choice, choiceIndex) =>
-        choiceIndex === index ? { ...choice, ...patch } : choice,
-      ),
-    );
-  };
-
-  const toggleResource = (resourceId: string) => {
-    onField(
-      "resourceIds",
-      draft.resourceIds.includes(resourceId)
-        ? draft.resourceIds.filter((id) => id !== resourceId)
-        : [...draft.resourceIds, resourceId],
-    );
-  };
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-[12.5px] text-muted-foreground">
-          Save drafts freely. Publish only when students should see the lesson.
-        </p>
-        {draft.lessonId ? (
-          <span className="rounded-full border border-border px-3 py-1 text-[11.5px] text-muted-foreground">
-            {lessonsById.get(draft.lessonId)?.publication_status || "draft"}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="grid gap-4">
-        <EditorSection title="Lesson" icon={<NotebookPen className="h-4 w-4" strokeWidth={1.7} />}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput
-              label="Lesson title"
-              value={draft.lessonTitle}
-              onChange={(value) => onField("lessonTitle", value)}
-            />
-            <TextInput
-              label="Level"
-              value={draft.lessonLevel}
-              onChange={(value) => onField("lessonLevel", value)}
-            />
-            <SelectInput
-              label="Lesson type"
-              value={draft.lessonType}
-              options={["discussion", "code", "reflection", "multiple_choice", "file"]}
-              onChange={(value) => onField("lessonType", value as LessonKind)}
-            />
-            <SelectInput
-              label="Activity response"
-              value={draft.activityResponseMode}
-              options={["text", "code", "multiple_choice", "file"]}
-              onChange={(value) => onField("activityResponseMode", value as ResponseMode)}
-            />
-          </div>
-          <TextArea
-            label="Mentor prompt"
-            value={draft.tutorPrompt}
-            onChange={(value) => onField("tutorPrompt", value)}
-          />
-          <TextArea
-            label="Optional starter code"
-            value={draft.sampleCode}
-            onChange={(value) => onField("sampleCode", value)}
-          />
-        </EditorSection>
-
-        <EditorSection
-          title="Milestone and activity"
-          icon={<Layers3 className="h-4 w-4" strokeWidth={1.7} />}
-        >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput
-              label="Milestone title"
-              value={draft.milestoneTitle}
-              onChange={(value) => onField("milestoneTitle", value)}
-            />
-            <TextInput
-              label="Skill keys"
-              value={draft.skillKeys}
-              onChange={(value) => onField("skillKeys", value)}
-            />
-          </div>
-          <TextArea
-            label="Milestone objective"
-            value={draft.milestoneObjective}
-            onChange={(value) => onField("milestoneObjective", value)}
-          />
-          <div className="grid gap-2">
-            <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Allowed answer modes
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(["text", "code", "multiple_choice", "file"] as ResponseMode[]).map((mode) => (
-                <button
-                  type="button"
-                  key={mode}
-                  onClick={() => toggleMode(mode)}
-                  className={`rounded-full border px-3 py-1.5 text-[11.5px] transition-colors ${
-                    draft.allowedModes.includes(mode)
-                      ? "border-foreground/25 bg-foreground text-background"
-                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput
-              label="Activity title"
-              value={draft.activityTitle}
-              onChange={(value) => onField("activityTitle", value)}
-            />
-            <SelectInput
-              label="Stage"
-              value={draft.activityStage}
-              options={["intro", "teach", "practice", "assessment", "review"]}
-              onChange={(value) => onField("activityStage", value as ActivityStage)}
-            />
-          </div>
-          <TextArea
-            label="Student prompt"
-            value={draft.activityPrompt}
-            onChange={(value) => onField("activityPrompt", value)}
-          />
-          <TextArea
-            label="Rubric / pass notes"
-            value={draft.rubricNotes}
-            onChange={(value) => onField("rubricNotes", value)}
-          />
-        </EditorSection>
-
-        <EditorSection
-          title="Quiz checkpoint"
-          icon={<Send className="h-4 w-4" strokeWidth={1.7} />}
-        >
-          <TextArea
-            label="MCQ prompt"
-            value={draft.quizPrompt}
-            onChange={(value) => onField("quizPrompt", value)}
-          />
-          <div className="grid gap-2">
-            {draft.quizChoices.map((choice, index) => (
-              <div key={index} className="grid gap-2 sm:grid-cols-[64px_minmax(0,1fr)_90px]">
-                <input
-                  value={choice.id}
-                  onChange={(event) => updateChoice(index, { id: event.target.value })}
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
-                />
-                <input
-                  value={choice.text}
-                  onChange={(event) => updateChoice(index, { text: event.target.value })}
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => onField("quizCorrectChoiceId", choice.id)}
-                  className={`rounded-full border px-3 py-1.5 text-[11.5px] ${
-                    draft.quizCorrectChoiceId === choice.id
-                      ? "border-success/35 text-success"
-                      : "border-border text-muted-foreground"
-                  }`}
-                >
-                  Correct
-                </button>
-              </div>
-            ))}
-          </div>
-        </EditorSection>
-
-        <EditorSection title="Resources" icon={<FilePlus2 className="h-4 w-4" strokeWidth={1.7} />}>
-          <div className="grid gap-2">
-            <div className="text-[12.5px] text-muted-foreground">
-              Attach existing resources, or create one new draft resource while saving.
-            </div>
-            {resources.length ? (
-              <div className="grid gap-2">
-                {resources.map((resource) => (
-                  <label
-                    key={resource.id}
-                    className="flex items-center gap-2 text-[12.5px] text-foreground"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={draft.resourceIds.includes(resource.id)}
-                      onChange={() => toggleResource(resource.id)}
-                      className="h-4 w-4 accent-foreground"
-                    />
-                    <span className="min-w-0 truncate">
-                      {resource.title} · {resource.resource_type} · {resource.status}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-border bg-background/35 p-3 text-[12.5px] text-muted-foreground">
-                No reusable resources yet.
-              </div>
-            )}
-          </div>
-
-          <div className="mt-3 grid gap-3 rounded-2xl border border-border bg-background/35 p-3">
-            <div className="text-[12px] font-medium text-foreground">New draft resource</div>
-            <TextInput
-              label="Title"
-              value={draft.newResourceTitle}
-              onChange={(value) => onField("newResourceTitle", value)}
-            />
-            <TextArea
-              label="Student instructions"
-              value={draft.newResourceInstructions}
-              onChange={(value) => onField("newResourceInstructions", value)}
-            />
-            <SelectInput
-              label="Type"
-              value={draft.newResourceType}
-              options={["link", "youtube", "pdf", "video", "audio", "image", "document"]}
-              onChange={(value) => onField("newResourceType", value as LessonResourceType)}
-            />
-            <TextInput
-              label="External URL"
-              value={draft.newResourceUrl}
-              onChange={(value) => onField("newResourceUrl", value)}
-            />
-            <input
-              type="file"
-              onChange={(event) => onField("newResourceFile", event.target.files?.[0] || null)}
-              className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
-            />
-          </div>
-        </EditorSection>
-      </div>
-    </div>
-  );
-}
-
-function PreviewPanel({ draft, resources }: { draft: DraftState; resources: LessonResource[] }) {
-  const attached = resources.filter((resource) => draft.resourceIds.includes(resource.id));
-  return (
-    <div>
-      <div className="mb-4 flex items-center gap-2 text-[15px] font-medium text-foreground">
-        <Eye className="h-4 w-4" strokeWidth={1.7} />
-        Student preview
-      </div>
-      <div className="grid gap-4">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-            {draft.subjectTitle} / {draft.unitTitle}
-          </div>
-          <h2 className="font-serif mt-2 text-[28px] leading-tight text-foreground">
-            {draft.lessonTitle || "Untitled lesson"}
-          </h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-            {draft.milestoneObjective || "Add an objective to preview the lesson target."}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border bg-background/40 p-4">
-          <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-            Mentor asks
-          </div>
-          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-            {draft.activityPrompt || "The activity prompt will appear here."}
-          </p>
-        </div>
-        {draft.quizPrompt ? (
-          <div className="rounded-2xl border border-border bg-background/40 p-4">
-            <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Checkpoint
-            </div>
-            <p className="text-[13px] text-foreground">{draft.quizPrompt}</p>
-            <div className="mt-3 grid gap-2">
-              {draft.quizChoices.map((choice) => (
-                <div
-                  key={choice.id}
-                  className="rounded-xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground"
-                >
-                  {choice.id}. {choice.text}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        <div className="rounded-2xl border border-border bg-background/40 p-4">
-          <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-            Resources
-          </div>
-          {attached.length ? (
-            <div className="grid gap-2">
-              {attached.map((resource) => (
-                <div
-                  key={resource.id}
-                  className="rounded-xl border border-border bg-background/45 px-3 py-2"
-                >
-                  <div className="text-[12.5px] text-foreground">{resource.title}</div>
-                  <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                    {resource.resource_type} · {resource.status}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-[12.5px] text-muted-foreground">
-              No existing resources attached yet.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EditorSection({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-3xl border border-border bg-background/30 p-4">
-      <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
-        {icon}
-        {title}
-      </div>
-      <div className="grid gap-3">{children}</div>
-    </section>
-  );
-}
 
 function TextInput({
   label,

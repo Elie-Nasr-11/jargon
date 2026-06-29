@@ -1159,6 +1159,233 @@ async function deleteNode(config: Config, actorId: string, body: DbRow): Promise
   return json({ status: "ok", node_type: nodeType, id });
 }
 
+// ---------------------------------------------------------------------------
+// Multi-step lessons (Phase 3 of the curriculum authoring redesign).
+// A lesson's content is an ordered sequence of steps; each step is a
+// `lesson_activities` row (ordered by position), and a checkpoint step also gets a
+// `quiz_items` row. The lesson keeps ONE milestone (lesson-level goal). These run
+// alongside the legacy `save_lesson_blueprint`; the runtime walks the ordered
+// activities (see the `chat` edge function).
+// ---------------------------------------------------------------------------
+
+function parseChoices(value: unknown): Array<{ id: string; text: string }> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((choice) => {
+      const row = choice && typeof choice === "object" ? (choice as DbRow) : {};
+      return { id: cleanText(row.id), text: cleanText(row.text) };
+    })
+    .filter((choice) => choice.id && choice.text)
+    .slice(0, 8);
+}
+
+async function lessonMilestoneId(config: Config, lessonId: string): Promise<string | null> {
+  const existing = await selectFirst(
+    config,
+    `milestones?lesson_id=eq.${enc(lessonId)}&order=position.asc&limit=1&select=id`,
+  );
+  return existing ? String(existing.id) : null;
+}
+
+async function saveLessonMeta(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+
+  const meta = body.meta && typeof body.meta === "object" ? (body.meta as DbRow) : {};
+  const title = cleanText(meta.title);
+  const tutorPrompt = cleanText(meta.tutor_prompt);
+  if (!title) throw new Error("Lesson title is required.");
+  if (!tutorPrompt) throw new Error("Mentor prompt is required.");
+  const level = cleanText(meta.level, "Any level");
+  const lessonType = isLessonType(meta.lesson_type) ? meta.lesson_type : "discussion";
+
+  const lessonRow = await selectFirst(
+    config,
+    `lessons?id=eq.${enc(lessonId)}&select=id,curriculum_metadata&limit=1`,
+  );
+  const metadata =
+    lessonRow?.curriculum_metadata && typeof lessonRow.curriculum_metadata === "object"
+      ? (lessonRow.curriculum_metadata as DbRow)
+      : {};
+
+  // Patch lesson-level fields only — never touches subject/course status or activities.
+  await patchRows(config, `lessons?id=eq.${enc(lessonId)}`, {
+    title,
+    level,
+    tutor_prompt: tutorPrompt,
+    sample_code: cleanText(meta.sample_code),
+    curriculum_metadata: { ...metadata, lesson_type: lessonType },
+  });
+
+  // Single lesson-level milestone (update existing or create milestone-1).
+  const milestone = body.milestone && typeof body.milestone === "object" ? (body.milestone as DbRow) : {};
+  const existingMilestoneId = await lessonMilestoneId(config, lessonId);
+  const milestoneId = existingMilestoneId || `${lessonId}-milestone-1`;
+  const allowedModes = cleanStringArray(milestone.allowed_response_modes).filter(isResponseMode) as ResponseMode[];
+  await upsertByConflict(config, "milestones", "id", {
+    id: milestoneId,
+    lesson_id: lessonId,
+    position: 1,
+    title: cleanText(milestone.title) || title,
+    objective: cleanText(milestone.objective) || "Describe what the learner should be able to do.",
+    level,
+    skill_keys: cleanStringArray(milestone.skill_keys),
+    allowed_response_modes: allowedModes.length ? allowedModes : ["text"],
+    updated_at: new Date().toISOString(),
+  });
+  await patchRows(config, `lessons?id=eq.${enc(lessonId)}`, { milestone_id: milestoneId });
+
+  return json({ status: "ok", lesson_id: lessonId, milestone_id: milestoneId });
+}
+
+async function upsertStep(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+
+  const step = body.step && typeof body.step === "object" ? (body.step as DbRow) : {};
+  const title = cleanText(step.title) || "Step";
+  const stage = isStage(step.stage) ? step.stage : "practice";
+  const responseMode: ResponseMode = isResponseMode(step.response_mode) ? step.response_mode : "text";
+  const activityType: LessonType = isLessonType(step.activity_type)
+    ? step.activity_type
+    : responseMode === "code"
+      ? "code"
+      : responseMode === "multiple_choice"
+        ? "multiple_choice"
+        : "discussion";
+
+  const milestoneId = await lessonMilestoneId(config, lessonId);
+
+  let activityId = cleanText(step.id);
+  let position: number;
+  if (activityId) {
+    const existing = await selectFirst(
+      config,
+      `lesson_activities?id=eq.${enc(activityId)}&lesson_id=eq.${enc(lessonId)}&select=id,position&limit=1`,
+    );
+    if (!existing) throw new Error("Step was not found.");
+    position = Number(existing.position) || 1;
+  } else {
+    position = await nextPosition(config, "lesson_activities", `lesson_id=eq.${enc(lessonId)}`);
+    activityId = await uniqueId(config, "lesson_activities", safeId(lessonId, "step", String(position)));
+  }
+
+  const passScore = Number(step.pass_score) > 0 ? Number(step.pass_score) : 1;
+  await upsertByConflict(config, "lesson_activities", "id", {
+    id: activityId,
+    lesson_id: lessonId,
+    milestone_id: milestoneId,
+    position,
+    title,
+    activity_type: activityType,
+    stage,
+    prompt: cleanText(step.prompt) || "Add a prompt for learners.",
+    response_mode: responseMode,
+    starter_code: cleanText(step.starter_code),
+    expected_output: cleanText(step.expected_output) || null,
+    choices: parseChoices(step.choices),
+    rubric:
+      step.rubric && typeof step.rubric === "object" && !Array.isArray(step.rubric)
+        ? (step.rubric as DbRow)
+        : {},
+    skill_keys: cleanStringArray(step.skill_keys),
+    pass_score: passScore,
+  });
+
+  // Checkpoint step: upsert its quiz_item. Otherwise archive any quiz so the runtime
+  // (which only loads published quizzes) stops treating this step as an assessment.
+  const quiz = step.quiz && typeof step.quiz === "object" ? (step.quiz as DbRow) : null;
+  const quizChoices = quiz ? parseChoices(quiz.choices) : [];
+  const correct = quiz ? cleanStringArray(quiz.correct_choice_ids) : [];
+  if (responseMode === "multiple_choice" && quiz && quizChoices.length >= 2 && correct.length) {
+    await upsertByConflict(config, "quiz_items", "id", {
+      id: `${activityId}-quiz`,
+      lesson_id: lessonId,
+      milestone_id: milestoneId,
+      activity_id: activityId,
+      position,
+      prompt: cleanText(quiz.prompt) || cleanText(step.prompt) || "Choose the best answer.",
+      question_type: "multiple_choice",
+      choices: quizChoices,
+      correct_choice_ids: correct,
+      rubric: {},
+      skill_keys: cleanStringArray(step.skill_keys),
+      status: "draft",
+      updated_at: new Date().toISOString(),
+    });
+  } else {
+    await patchRows(config, `quiz_items?activity_id=eq.${enc(activityId)}`, {
+      status: "archived",
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  return json({ status: "ok", node_type: "step", id: activityId, lesson_id: lessonId, position });
+}
+
+async function reorderSteps(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+
+  const orderedIds = Array.isArray(body.ordered_ids)
+    ? (body.ordered_ids as unknown[]).map((item) => cleanText(item)).filter(Boolean)
+    : [];
+  if (!orderedIds.length) throw new Error("ordered_ids is required.");
+  if (new Set(orderedIds).size !== orderedIds.length) {
+    throw new Error("ordered_ids contains duplicates.");
+  }
+  const rows = await selectAll(
+    config,
+    `lesson_activities?id=in.(${orderedIds.map(enc).join(",")})&select=id,lesson_id`,
+  );
+  requireAllPresent(rows, orderedIds, "Step");
+  if (rows.some((row) => cleanText(row.lesson_id) !== lessonId)) {
+    throw new Error("Steps belong to a different lesson.");
+  }
+
+  const now = new Date().toISOString();
+  // lesson_activities has no unique(lesson_id, position) constraint -> direct assignment.
+  for (let i = 0; i < orderedIds.length; i++) {
+    await patchRows(config, `lesson_activities?id=eq.${enc(orderedIds[i])}`, { position: i + 1 });
+    await patchRows(config, `quiz_items?activity_id=eq.${enc(orderedIds[i])}`, {
+      position: i + 1,
+      updated_at: now,
+    });
+  }
+  return json({ status: "ok", lesson_id: lessonId, ordered_ids: orderedIds });
+}
+
+async function deleteStep(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  const activityId = cleanText(body.activity_id) || cleanText(body.id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  if (!activityId) throw new Error("activity_id is required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+
+  const all = await selectAll(config, `lesson_activities?lesson_id=eq.${enc(lessonId)}&select=id`);
+  if (all.length <= 1) throw new Error("A lesson needs at least one step.");
+
+  // Archive the linked quiz (preserve any attempts via the FK set-null) then delete the
+  // activity. lesson_attempts.activity_id + learning_sessions.current_activity_id are
+  // ON DELETE SET NULL, so learner history survives and any active cursor falls back to
+  // the first step.
+  await patchRows(config, `quiz_items?activity_id=eq.${enc(activityId)}`, {
+    status: "archived",
+    updated_at: new Date().toISOString(),
+  });
+  await serviceFetch(config, `/rest/v1/lesson_activities?id=eq.${enc(activityId)}`, {
+    method: "DELETE",
+  });
+  return json({ status: "ok", node_type: "step", id: activityId, lesson_id: lessonId });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
@@ -1192,6 +1419,10 @@ Deno.serve(async (req: Request) => {
     if (action === "move_lesson") return await moveLesson(config, actorId, record);
     if (action === "archive_node") return await archiveNode(config, actorId, record);
     if (action === "delete_node") return await deleteNode(config, actorId, record);
+    if (action === "save_lesson_meta") return await saveLessonMeta(config, actorId, record);
+    if (action === "upsert_step") return await upsertStep(config, actorId, record);
+    if (action === "reorder_steps") return await reorderSteps(config, actorId, record);
+    if (action === "delete_step") return await deleteStep(config, actorId, record);
     return errorResponse("Unsupported curriculum-admin action.", 400);
   } catch (error) {
     const message = errorMessage(error);
@@ -1208,6 +1439,9 @@ Deno.serve(async (req: Request) => {
               lower.includes("unsupported") ||
               lower.includes("unknown id") ||
               lower.includes("belong to different") ||
+              lower.includes("different lesson") ||
+              lower.includes("duplicate") ||
+              lower.includes("at least one") ||
               lower.includes("can be archived")
             ? 400
             : 500;

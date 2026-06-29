@@ -24,9 +24,12 @@ import type {
   CurriculumBlueprint,
   CurriculumCourse,
   CurriculumCourseVersion,
+  CurriculumLessonMetaInput,
   CurriculumMilestone,
+  CurriculumMilestoneInput,
   CurriculumNodeType,
   CurriculumQuizItem,
+  CurriculumStepInput,
   CurriculumSubject,
   CurriculumUnit,
   JargonRunResponse,
@@ -1393,6 +1396,68 @@ export function deleteCurriculumNode(input: {
     class_id: input.classId || undefined,
     node_type: input.nodeType,
     id: input.id,
+  });
+}
+
+// --- Multi-step lessons (curriculum redesign Phase 3) ---------------------
+// Lesson-level fields + the single milestone (no activity/quiz, no structure
+// re-derivation) and ordered steps over lesson_activities/quiz_items.
+
+export function saveCurriculumLessonMeta(input: {
+  accessToken: string;
+  classId?: string | null;
+  lessonId: string;
+  meta: CurriculumLessonMetaInput;
+  milestone: CurriculumMilestoneInput;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "save_lesson_meta",
+    class_id: input.classId || undefined,
+    lesson_id: input.lessonId,
+    meta: input.meta,
+    milestone: input.milestone,
+  });
+}
+
+export function upsertCurriculumStep(input: {
+  accessToken: string;
+  classId?: string | null;
+  lessonId: string;
+  step: CurriculumStepInput;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "upsert_step",
+    class_id: input.classId || undefined,
+    lesson_id: input.lessonId,
+    step: input.step,
+  });
+}
+
+export function reorderCurriculumSteps(input: {
+  accessToken: string;
+  classId?: string | null;
+  lessonId: string;
+  orderedIds: string[];
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "reorder_steps",
+    class_id: input.classId || undefined,
+    lesson_id: input.lessonId,
+    ordered_ids: input.orderedIds,
+  });
+}
+
+export function deleteCurriculumStep(input: {
+  accessToken: string;
+  classId?: string | null;
+  lessonId: string;
+  activityId: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "delete_step",
+    class_id: input.classId || undefined,
+    lesson_id: input.lessonId,
+    activity_id: input.activityId,
   });
 }
 

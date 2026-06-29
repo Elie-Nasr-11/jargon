@@ -6,6 +6,54 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-29 (Curriculum authoring redesign — Phase 3: multi-step lessons + runtime sequencing; branch-only, backend deploy pending)
+
+Summary: Lessons are now an ordered sequence of steps, and the student `chat` runtime walks them. A step is a
+`lesson_activities` row (ordered by `position`); a checkpoint step also has a `quiz_items` row. The lesson
+keeps ONE milestone (lesson-level goal). NO new DB column was needed — the runtime already tracks
+`learning_sessions.current_activity_id`, so advancement just points the cursor at the next activity.
+
+- `chat` edge fn (runtime advancement, backward-compatible): after computing `finalFlow`, if the current
+  activity is finished (`stage==="complete"`/`nextAction==="complete"`) AND a later activity exists
+  (`position > current`), the session advances to that next activity (`current_activity_id=next`,
+  `stage="intro"`, `status="active"`, retry/rescue reset) instead of completing; the completing turn's
+  envelope is rewritten to a "continue to the next part" transition (`stage=review`, `next_action=reply`)
+  so the client keeps the session open, and the completion event is suppressed. A single-activity lesson
+  has no next step → `advancing=false` → byte-for-byte unchanged behavior. (loadContext already loaded the
+  activity at `current_activity_id`, so no read change was needed.)
+- `curriculum-admin` new actions (reuse assertCanAuthor via courseScopeForLesson):
+  - `save_lesson_meta` — lesson-level fields + the single milestone ONLY; never touches activities/quizzes
+    or subject/course status (this fixes the old save_lesson_blueprint status-revert clobber for the new
+    editor) and updates the EXISTING milestone (resolved by lesson, not a hardcoded id).
+  - `upsert_step` — create/update a `lesson_activities` row (ids collision-proofed; position = max+1 on
+    create, preserved on edit). A checkpoint upserts its `quiz_items` row (`${activityId}-quiz`); a
+    non-checkpoint archives any quiz so the runtime stops treating it as an assessment.
+  - `reorder_steps` — direct 1..N position assignment (lesson_activities has no unique(position) constraint)
+    + realigns quiz_items.position; validates same-lesson + no duplicates.
+  - `delete_step` — refuses the last step; archives the quiz then deletes the activity. lesson_attempts and
+    learning_sessions reference activity_id ON DELETE SET NULL, so learner history survives and any live
+    cursor falls back to the first step.
+- Frontend: rebuilt `LessonDetail` (teacher.curriculum.tsx) into a lesson-basics form (save_lesson_meta) +
+  an ordered, drag-reorderable **Steps** editor (Teach / Practice / Checkpoint / Reflect kinds, each an
+  expandable card; add/edit/delete via the step actions) + a step-by-step student-walkthrough Preview +
+  Publish/Archive/Move/Delete. Removed the old single-activity blueprint form (`DraftState`,
+  `BlueprintEditor`, `draftToBlueprint`, the resource-attach panel — resources are managed in the teacher
+  console). New `lib/api.ts` wrappers (`saveCurriculumLessonMeta`, `upsertCurriculumStep`,
+  `reorderCurriculumSteps`, `deleteCurriculumStep`) + `lib/types.ts` step/meta input types.
+
+Tests: tsc 0 errors; lint 0 errors / 12 pre-existing warnings; build green. Edge fns not Deno-checkable in
+sandbox — reviewed by hand + an adversarial review agent.
+
+Remaining concerns / deploy: branch-only. Backend deploy is the human's: **redeploy `curriculum-admin` AND
+`chat`** (and Phase 1's migration must already be applied). The runtime change is the only edit that touches
+the live student path; it's guarded so single-step lessons are unaffected. End-to-end after deploy: author a
+2–3 step lesson, run it as a student (each step advances; the last completes + records mastery), and confirm
+an existing single-activity lesson still runs identically. A checkpoint added to an already-published lesson
+needs a re-publish for its quiz to go live (publish promotes quiz_items). Frontend deploy to main on your OK.
+
+Suggested next task: Phase 4 — AI authoring (`generate` action drafting a course outline / lesson steps from
+a prompt, review-before-save).
+
 ## Claude -> Codex / Human - 2026-06-29 (Curriculum authoring redesign — Phase 2: outline sidebar + IDE detail pane; branch-only)
 
 Summary: Rebuilt `frontend/src/routes/teacher.curriculum.tsx` from the old single-column

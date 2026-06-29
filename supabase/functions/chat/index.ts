@@ -1385,6 +1385,26 @@ async function handleTypedRequest(
       answer,
       assessment,
     );
+
+    // Multi-step lessons: if the current activity is finished but later activities
+    // remain (ordered by position), advance the session to the next activity instead
+    // of completing the lesson. A single-activity lesson has no next step, so this is
+    // a no-op and the runtime behaves exactly as before.
+    const finishedCurrentActivity =
+      finalFlow.stage === "complete" || finalFlow.nextAction === "complete";
+    let advanceToActivityId: string | null = null;
+    if (finishedCurrentActivity && context.activity) {
+      const currentPosition = Number(context.activity.position ?? 0);
+      const nextActivity = await loadFirst(
+        config,
+        `lesson_activities?lesson_id=eq.${encodeURIComponent(lessonId)}&position=gt.${currentPosition}&order=position.asc&limit=1&select=id`,
+      );
+      if (nextActivity && typeof nextActivity.id === "string") {
+        advanceToActivityId = nextActivity.id;
+      }
+    }
+    const advancing = Boolean(advanceToActivityId);
+
     const envelope = makeEnvelope({
       ...(parsed as Partial<Envelope>),
       session_id: sessionId,
@@ -1405,6 +1425,17 @@ async function handleTypedRequest(
               context.quiz,
             ),
     });
+
+    if (advancing) {
+      // Turn the completing turn into a "continue to the next part" transition so the
+      // client keeps the session open; the student's next message starts the next step.
+      envelope.stage = "review";
+      envelope.response_mode = "text";
+      envelope.next_action = "reply";
+      envelope.choices = [];
+      envelope.reply =
+        `${envelope.reply}\n\nThat completes this part — send a message when you're ready for the next part.`.trim();
+    }
 
     await insertRow(config, "learning_turns", {
       session_id: sessionId,
@@ -1481,21 +1512,26 @@ async function handleTypedRequest(
 
     const retryIncrement = envelope.next_action === "retry" ? 1 : 0;
     const rescueIncrement = envelope.next_action === "rescue" ? 1 : 0;
-    const nextStatus = sessionStatus(finalFlow);
+    const nextStatus = advancing ? "active" : sessionStatus(finalFlow);
     await patchRows(
       config,
       `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`,
       {
-        current_activity_id:
-          typeof context.activity?.id === "string" ? context.activity.id : null,
-        stage: envelope.stage,
+        // When advancing, point the cursor at the next activity and reset to its intro;
+        // otherwise keep the current activity (unchanged single-step behavior).
+        current_activity_id: advancing
+          ? advanceToActivityId
+          : typeof context.activity?.id === "string"
+            ? context.activity.id
+            : null,
+        stage: advancing ? "intro" : envelope.stage,
         status: nextStatus,
         score:
           typeof assessment?.score === "number"
             ? Math.max(Number(session.score || 0), assessment.score)
             : Number(session.score || 0),
-        retry_count: Number(session.retry_count || 0) + retryIncrement,
-        rescue_count: Number(session.rescue_count || 0) + rescueIncrement,
+        retry_count: advancing ? 0 : Number(session.retry_count || 0) + retryIncrement,
+        rescue_count: advancing ? 0 : Number(session.rescue_count || 0) + rescueIncrement,
         updated_at: new Date().toISOString(),
       },
     );
@@ -1510,7 +1546,7 @@ async function handleTypedRequest(
         payload: { from_stage: currentStage, to_stage: envelope.stage, next_action: envelope.next_action },
       });
     }
-    if (envelope.next_action === "complete" || nextStatus === "complete") {
+    if (!advancing && (envelope.next_action === "complete" || nextStatus === "complete")) {
       await recordRuntimeEvent(config, {
         userId,
         sessionId,
