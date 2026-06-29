@@ -732,6 +732,24 @@ function flowFor(
   const weakAction: NextAction =
     retryCount > 0 || rescueCount > 0 ? "rescue" : "retry";
 
+  // Stage "intro" means this activity has not been presented yet: present it and move to
+  // practice, never grade — whether or not this turn carried an answer. This keeps a fresh
+  // session and a session that just advanced to the next step symmetric (the advancing
+  // turn tells the student to "send a message", and that message lands here at intro).
+  if (currentStage === "intro") {
+    return {
+      stage: "practice",
+      responseMode: activityMode,
+      nextAction:
+        activityMode === "code"
+          ? "run_code"
+          : activityMode === "multiple_choice"
+            ? "choose"
+            : "reply",
+      choices: activityMode === "multiple_choice" ? quizChoices : [],
+    };
+  }
+
   if (!answer) {
     const mode = activityMode;
     return {
@@ -910,6 +928,9 @@ async function loadContext(
         `milestones?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
       );
 
+  // Quiz must be scoped to the CURRENT activity. For multi-step lessons a lesson-wide
+  // fallback would pull another step's checkpoint onto this step; only fall back to a
+  // quiz that isn't bound to any activity (legacy single-activity lessons).
   const quiz = activity?.id
     ? ((await loadFirst(
         config,
@@ -917,11 +938,11 @@ async function loadContext(
       )) ??
       (await loadFirst(
         config,
-        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=position.asc&limit=1&select=*`,
+        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
       )))
     : await loadFirst(
         config,
-        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=position.asc&limit=1&select=*`,
+        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
       );
 
   const [
