@@ -45,6 +45,14 @@
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
 
+  /* nested-card depth ramp: master card (--surface) > subcard (depth-sub) >
+     field (depth-field). Mixing surface toward background steps each level back
+     toward the page color, which auto-inverts per theme (in dark the page is
+     near-black so deeper reads darker; in light it's near-white so deeper reads
+     lighter). */
+  --color-depth-sub: var(--depth-sub);
+  --color-depth-field: var(--depth-field);
+
   /* radius scale (opt-in: rounded-control / rounded-card / rounded-pill) */
   --radius-control: 14px;
   --radius-card: 18px;
@@ -103,6 +111,12 @@
   --surface-1: color-mix(in oklab, var(--background) 40%, transparent);
   --surface-2: color-mix(in oklab, var(--background) 62%, transparent);
   --surface-3: color-mix(in oklab, var(--background) 82%, transparent);
+
+  /* nested-card depth ramp (opaque). References --surface/--background so it
+     re-resolves per theme. Subcards sit a step toward the page; fields a step
+     further. */
+  --depth-sub: color-mix(in oklab, var(--surface) 62%, var(--background));
+  --depth-field: color-mix(in oklab, var(--surface) 22%, var(--background));
 
   /* focus ring */
   --ring: rgba(10, 10, 10, 0.34);

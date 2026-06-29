@@ -550,7 +550,7 @@ function CurriculumPage() {
               <select
                 value={selectedClassId}
                 onChange={(event) => setSelectedClassId(event.target.value)}
-                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
               >
                 {data.classes.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -1602,7 +1602,7 @@ function LessonDetail({
           <div className="grid gap-5">
             <LessonMetaForm lesson={lesson} milestone={milestone} busy={busy} onSave={onSaveMeta} />
 
-            <section className="rounded-3xl border border-border bg-background/30 p-4">
+            <section className="rounded-3xl border border-border bg-depth-sub p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
                   <Layers3 className="h-4 w-4" strokeWidth={1.7} />
@@ -1699,7 +1699,7 @@ function LessonDetail({
                       }
                     }}
                     disabled={busy}
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                    className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
                   >
                     {orgUnits.map(({ unit, courseTitle }) => (
                       <option key={unit.id} value={unit.id}>
@@ -1801,7 +1801,7 @@ function LessonMetaForm({
   };
 
   return (
-    <section className="rounded-3xl border border-border bg-background/30 p-4">
+    <section className="rounded-3xl border border-border bg-depth-sub p-4">
       <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-foreground">
         <NotebookPen className="h-4 w-4" strokeWidth={1.7} />
         Lesson basics
@@ -1939,7 +1939,7 @@ function StepCard({
 
   return (
     <div
-      className={`rounded-2xl border border-border bg-background/40 ${dragging ? "opacity-40" : ""}`}
+      className={`rounded-2xl border border-border bg-depth-field ${dragging ? "opacity-40" : ""}`}
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <span className="cursor-grab text-muted-foreground/60">
@@ -2002,12 +2002,12 @@ function StepCard({
                   <input
                     value={choice.id}
                     onChange={(event) => updateChoice(i, { id: event.target.value })}
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                    className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] text-foreground outline-none"
                   />
                   <input
                     value={choice.text}
                     onChange={(event) => updateChoice(i, { text: event.target.value })}
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                    className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] text-foreground outline-none"
                   />
                   <button
                     type="button"
@@ -2088,7 +2088,7 @@ function LessonPreview({
         </p>
       </div>
       {steps.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-background/40 p-4 text-[12.5px] text-muted-foreground">
+        <div className="rounded-2xl border border-border bg-depth-sub p-4 text-[12.5px] text-muted-foreground">
           No steps yet.
         </div>
       ) : (
@@ -2097,10 +2097,7 @@ function LessonPreview({
           const config = stepKindConfig(kind);
           const quiz = quizFor(activity.id);
           return (
-            <div
-              key={activity.id}
-              className="rounded-2xl border border-border bg-background/40 p-4"
-            >
+            <div key={activity.id} className="rounded-2xl border border-border bg-depth-sub p-4">
               <div className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full border border-border text-[10px]">
                   {index + 1}
@@ -2128,7 +2125,7 @@ function LessonPreview({
                 </div>
               ) : null}
               {kind === "practice" && activity.response_mode === "code" && activity.starter_code ? (
-                <pre className="mt-3 overflow-auto rounded-xl border border-border bg-background/60 p-3 text-[12px] text-foreground">
+                <pre className="mt-3 overflow-auto rounded-xl border border-border bg-depth-field p-3 text-[12px] text-foreground">
                   {activity.starter_code}
                 </pre>
               ) : null}
@@ -2180,7 +2177,7 @@ function diffStatuses(prev: string[] | null, next: string[]): ItemStatus[] {
 function statusRing(status: ItemStatus): string {
   if (status === "added") return "border-success/45 bg-success/5";
   if (status === "changed") return "border-amber-400/60 bg-amber-400/10";
-  return "border-border";
+  return "border-border bg-depth-sub";
 }
 
 function statusLabel(status: ItemStatus): string | null {
@@ -2278,7 +2275,7 @@ function AiReferenceInput({
       .join(" · ") || "optional";
 
   return (
-    <div className="rounded-2xl border border-border bg-background/30 p-3">
+    <div className="rounded-2xl border border-border bg-depth-sub p-3">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -2308,7 +2305,7 @@ function AiReferenceInput({
                 void handleFiles(event.target.files);
                 event.target.value = "";
               }}
-              className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12px] text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
+              className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12px] text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
             />
             {extracting ? (
               <span className="text-[11px] text-muted-foreground">Reading files…</span>
@@ -2387,7 +2384,7 @@ function RefineBox({
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder={placeholder}
-        className="rounded-xl border border-border bg-background/70 px-3 py-2 text-[12px] text-foreground outline-none placeholder:text-muted-foreground"
+        className="rounded-xl border border-border bg-depth-field px-3 py-2 text-[12px] text-foreground outline-none placeholder:text-muted-foreground"
       />
       <div className="flex items-center gap-2">
         <button
@@ -2463,7 +2460,7 @@ function AiOutlinePanel({
   };
 
   return (
-    <section className="rounded-3xl border border-border bg-background/30 p-4">
+    <section className="rounded-3xl border border-border bg-depth-sub p-4">
       <div className="mb-2 flex items-center gap-2 text-[13px] font-medium text-foreground">
         <Sparkles className="h-4 w-4" strokeWidth={1.7} />
         Draft an outline with AI
@@ -2489,7 +2486,7 @@ function AiOutlinePanel({
       </div>
 
       {draft ? (
-        <div className="mt-3 grid gap-2 rounded-2xl border border-border bg-background/40 p-3">
+        <div className="mt-3 grid gap-2 rounded-2xl border border-border bg-depth-field p-3">
           {draft.units.length === 0 ? (
             <div className="text-[12.5px] text-muted-foreground">
               The model did not return any units. Try a more specific brief.
@@ -2647,7 +2644,7 @@ function AiStepsPanel({
       </div>
 
       {drafts ? (
-        <div className="mt-3 grid gap-2 rounded-2xl border border-border bg-background/40 p-3">
+        <div className="mt-3 grid gap-2 rounded-2xl border border-border bg-depth-field p-3">
           {drafts.length === 0 ? (
             <div className="text-[12.5px] text-muted-foreground">
               The model did not return any steps. Try a more specific brief.
@@ -2850,7 +2847,7 @@ function TextInput({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+        className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
       />
     </label>
   );
@@ -2871,7 +2868,7 @@ function TextArea({
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-[82px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+        className="min-h-[82px] rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
       />
     </label>
   );
@@ -2894,7 +2891,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+        className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
       >
         {options.map((option) => (
           <option key={option} value={option}>
