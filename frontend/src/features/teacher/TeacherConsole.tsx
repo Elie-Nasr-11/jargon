@@ -31,6 +31,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConsoleShell } from "@/components/ConsoleShell";
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
+import { OverflowMenu } from "@/components/OverflowMenu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createAssignment,
@@ -2141,7 +2142,7 @@ function ResourceManager({
                         </p>
                       ) : null}
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => editResource(resource)}
@@ -2157,94 +2158,76 @@ function ResourceManager({
                         <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.6} />
                         {openingId === resource.id ? "Opening..." : "Open"}
                       </button>
+                      <OverflowMenu
+                        actions={[
+                          {
+                            label: "Set to draft",
+                            onClick: () => void setStatus(resource, "draft"),
+                            disabled: resource.status === "draft",
+                          },
+                          {
+                            label: "Publish",
+                            onClick: () => void setStatus(resource, "published"),
+                            disabled: resource.status === "published",
+                          },
+                          {
+                            label: "Archive",
+                            icon: Archive,
+                            onClick: () => void setStatus(resource, "archived"),
+                            disabled: resource.status === "archived",
+                          },
+                          canExtractPdf && {
+                            label:
+                              processingId === resource.id
+                                ? "Rendering..."
+                                : "Generate page previews",
+                            icon: FileText,
+                            onClick: () => void generatePagePreviews(resource),
+                            disabled: processingId === resource.id,
+                            separatorBefore: true,
+                          },
+                          canExtractPdf && {
+                            label:
+                              processingId === resource.id ? "Extracting..." : "Extract PDF text",
+                            icon: FileSearch,
+                            onClick: () => void extractChunks(resource),
+                            disabled: processingId === resource.id,
+                          },
+                          canExtractPdf && {
+                            label:
+                              processingId === resource.id ? "Running OCR..." : "OCR scanned pages",
+                            icon: FileSearch,
+                            onClick: () => void ocrPdfResource(resource),
+                            disabled: processingId === resource.id,
+                          },
+                          canTranscribeMedia && {
+                            label:
+                              processingId === resource.id
+                                ? "Transcribing..."
+                                : resource.resource_type === "video"
+                                  ? "Transcribe video"
+                                  : "Transcribe audio",
+                            icon: FileSearch,
+                            onClick: () => void transcribeResource(resource),
+                            disabled: processingId === resource.id,
+                            separatorBefore: true,
+                          },
+                          {
+                            label: reviewOpen
+                              ? "Hide review"
+                              : chunkBusyId === resource.id
+                                ? "Loading..."
+                                : "Review text",
+                            icon: FileSearch,
+                            onClick: () => {
+                              if (reviewOpen) setReviewingId("");
+                              else void loadChunks(resource, true);
+                            },
+                            separatorBefore: true,
+                          },
+                        ]}
+                      />
                     </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void setStatus(resource, "draft")}
-                      disabled={resource.status === "draft"}
-                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                    >
-                      Draft
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void setStatus(resource, "published")}
-                      disabled={resource.status === "published"}
-                      className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
-                    >
-                      Publish
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void setStatus(resource, "archived")}
-                      disabled={resource.status === "archived"}
-                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                    >
-                      Archive
-                    </button>
-                    {canExtractPdf ? (
-                      <button
-                        type="button"
-                        onClick={() => void generatePagePreviews(resource)}
-                        disabled={processingId === resource.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/35 px-3 py-1.5 text-[11.5px] text-cyan-500 transition-colors hover:bg-cyan-500/10 disabled:opacity-45"
-                      >
-                        <FileText className="h-3.5 w-3.5" strokeWidth={1.6} />
-                        {processingId === resource.id ? "Rendering..." : "Generate page previews"}
-                      </button>
-                    ) : null}
-                    {canExtractPdf ? (
-                      <button
-                        type="button"
-                        onClick={() => void extractChunks(resource)}
-                        disabled={processingId === resource.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-info/35 px-3 py-1.5 text-[11.5px] text-info transition-colors hover:bg-info/10 disabled:opacity-45"
-                      >
-                        <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
-                        {processingId === resource.id ? "Extracting..." : "Extract PDF text"}
-                      </button>
-                    ) : null}
-                    {canExtractPdf ? (
-                      <button
-                        type="button"
-                        onClick={() => void ocrPdfResource(resource)}
-                        disabled={processingId === resource.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/35 px-3 py-1.5 text-[11.5px] text-purple-500 transition-colors hover:bg-purple-500/10 disabled:opacity-45"
-                      >
-                        <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
-                        {processingId === resource.id ? "Running OCR..." : "OCR scanned pages"}
-                      </button>
-                    ) : null}
-                    {canTranscribeMedia ? (
-                      <button
-                        type="button"
-                        onClick={() => void transcribeResource(resource)}
-                        disabled={processingId === resource.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-info/35 px-3 py-1.5 text-[11.5px] text-info transition-colors hover:bg-info/10 disabled:opacity-45"
-                      >
-                        <FileSearch className="h-3.5 w-3.5" strokeWidth={1.6} />
-                        {processingId === resource.id
-                          ? "Transcribing..."
-                          : resource.resource_type === "video"
-                            ? "Transcribe video"
-                            : "Transcribe audio"}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        reviewOpen ? setReviewingId("") : void loadChunks(resource, true)
-                      }
-                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
-                    >
-                      {reviewOpen
-                        ? "Hide review"
-                        : chunkBusyId === resource.id
-                          ? "Loading..."
-                          : "Review text"}
-                    </button>
                   </div>
 
                   {reviewOpen ? (
@@ -2934,7 +2917,7 @@ function AssessmentManager({
                         {assessment.instructions || "No instructions."}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => onSetAssessmentStatus(assessment.id, "published")}
@@ -2944,23 +2927,21 @@ function AssessmentManager({
                         <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                         Publish
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onSetAssessmentStatus(assessment.id, "draft")}
-                        disabled={assessment.status === "draft"}
-                        className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                      >
-                        Draft
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSetAssessmentStatus(assessment.id, "archived")}
-                        disabled={assessment.status === "archived"}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                      >
-                        <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
-                        Archive
-                      </button>
+                      <OverflowMenu
+                        actions={[
+                          {
+                            label: "Set to draft",
+                            onClick: () => onSetAssessmentStatus(assessment.id, "draft"),
+                            disabled: assessment.status === "draft",
+                          },
+                          {
+                            label: "Archive",
+                            icon: Archive,
+                            onClick: () => onSetAssessmentStatus(assessment.id, "archived"),
+                            disabled: assessment.status === "archived",
+                          },
+                        ]}
+                      />
                     </div>
                   </div>
 
@@ -3545,7 +3526,7 @@ function AssignmentManager({
                         </div>
                       ) : null}
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => onSetAssignmentStatus(assignment.id, "assigned")}
@@ -3555,23 +3536,21 @@ function AssignmentManager({
                         <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                         Assign
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onSetAssignmentStatus(assignment.id, "draft")}
-                        disabled={assignment.status === "draft"}
-                        className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                      >
-                        Draft
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSetAssignmentStatus(assignment.id, "archived")}
-                        disabled={assignment.status === "archived"}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                      >
-                        <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
-                        Archive
-                      </button>
+                      <OverflowMenu
+                        actions={[
+                          {
+                            label: "Set to draft",
+                            onClick: () => onSetAssignmentStatus(assignment.id, "draft"),
+                            disabled: assignment.status === "draft",
+                          },
+                          {
+                            label: "Archive",
+                            icon: Archive,
+                            onClick: () => onSetAssignmentStatus(assignment.id, "archived"),
+                            disabled: assignment.status === "archived",
+                          },
+                        ]}
+                      />
                     </div>
                   </div>
 
@@ -3956,100 +3935,175 @@ function GradebookTable({
       </div>
 
       {rows.length ? (
-        <div className="max-h-[58vh] overflow-auto pb-1">
-          <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
-            <thead className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              <tr>
-                <th className="sticky left-0 top-0 z-[3] bg-background px-3 py-1 font-medium">
-                  Student
-                </th>
-                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
-                  Lesson status
-                </th>
-                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Score</th>
-                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Attempts</th>
-                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Quiz</th>
-                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Evidence</th>
-                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Mastery</th>
-                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
-                  Last activity
-                </th>
-                <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const profile = profilesById.get(row.studentId) || null;
-                return (
-                  <tr
-                    key={row.studentId}
-                    onClick={() => onSelectStudent(row.studentId)}
-                    className={`cursor-pointer rounded-2xl border border-border bg-background/35 transition-colors hover:bg-muted ${
-                      selectedStudentId === row.studentId
-                        ? "outline outline-1 outline-foreground/20"
-                        : ""
-                    }`}
-                  >
-                    <td className="sticky left-0 z-[1] rounded-l-2xl border-y border-l border-border bg-background px-3 py-3">
+        <>
+          {/* On phones the wide table can't fit; show one stacked card per student. */}
+          <div className="grid gap-2 md:hidden">
+            {rows.map((row) => {
+              const profile = profilesById.get(row.studentId) || null;
+              const cardStats: { label: string; value: ReactNode }[] = [
+                { label: "Score", value: row.scoreLabel },
+                { label: "Attempts", value: row.attempts },
+                { label: "Quiz", value: row.quizAttempts },
+                { label: "Evidence", value: row.evidence },
+                { label: "Mastery", value: row.mastery },
+                {
+                  label: "Last activity",
+                  value: row.latestSession
+                    ? formatDateTime(row.latestSession.updated_at)
+                    : "No activity",
+                },
+              ];
+              return (
+                <button
+                  key={row.studentId}
+                  type="button"
+                  onClick={() => onSelectStudent(row.studentId)}
+                  className={`w-full rounded-2xl border border-border bg-background/35 p-3 text-left transition-colors hover:bg-muted ${
+                    selectedStudentId === row.studentId
+                      ? "outline outline-1 outline-foreground/20"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
                       <div className="text-[13px] font-medium text-foreground">
                         {displayName(profile, row.studentId)}
                       </div>
-                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                      <div className="mt-0.5 text-[11.5px] text-muted-foreground">
                         {profile?.grade || "Grade not set"}
                       </div>
-                    </td>
-                    <td className="border-y border-border px-3 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11.5px] ${row.statusClass}`}
-                        >
-                          {row.statusLabel}
-                        </span>
-                        {row.needsAttention ? (
-                          <span className="rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-[11.5px] text-warning">
-                            Needs attention
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full border px-2.5 py-1 text-[11.5px] ${row.statusClass}`}
+                    >
+                      {row.statusLabel}
+                    </span>
+                  </div>
+                  {row.needsAttention ? (
+                    <span className="mt-2 inline-block rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-[11.5px] text-warning">
+                      Needs attention
+                    </span>
+                  ) : null}
+                  {row.lessonDetail ? (
+                    <div className="mt-1 text-[11.5px] text-muted-foreground">
+                      {row.lessonDetail}
+                    </div>
+                  ) : null}
+                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                    {cardStats.map((stat) => (
+                      <div key={stat.label}>
+                        <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                          {stat.label}
+                        </div>
+                        <div className="mt-0.5 text-[12.5px] text-foreground">{stat.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="hidden max-h-[58vh] overflow-auto pb-1 md:block">
+            <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
+              <thead className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <tr>
+                  <th className="sticky left-0 top-0 z-[3] bg-background px-3 py-1 font-medium">
+                    Student
+                  </th>
+                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                    Lesson status
+                  </th>
+                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Score</th>
+                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                    Attempts
+                  </th>
+                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Quiz</th>
+                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                    Evidence
+                  </th>
+                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                    Mastery
+                  </th>
+                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                    Last activity
+                  </th>
+                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const profile = profilesById.get(row.studentId) || null;
+                  return (
+                    <tr
+                      key={row.studentId}
+                      onClick={() => onSelectStudent(row.studentId)}
+                      className={`cursor-pointer rounded-2xl border border-border bg-background/35 transition-colors hover:bg-muted ${
+                        selectedStudentId === row.studentId
+                          ? "outline outline-1 outline-foreground/20"
+                          : ""
+                      }`}
+                    >
+                      <td className="sticky left-0 z-[1] rounded-l-2xl border-y border-l border-border bg-background px-3 py-3">
+                        <div className="text-[13px] font-medium text-foreground">
+                          {displayName(profile, row.studentId)}
+                        </div>
+                        <div className="mt-1 text-[11.5px] text-muted-foreground">
+                          {profile?.grade || "Grade not set"}
+                        </div>
+                      </td>
+                      <td className="border-y border-border px-3 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[11.5px] ${row.statusClass}`}
+                          >
+                            {row.statusLabel}
                           </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 text-[11.5px] text-muted-foreground">
-                        {row.lessonDetail}
-                      </div>
-                    </td>
-                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-foreground">
-                      {row.scoreLabel}
-                    </td>
-                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
-                      {row.attempts}
-                    </td>
-                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
-                      {row.quizAttempts}
-                    </td>
-                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
-                      {row.evidence}
-                    </td>
-                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
-                      {row.mastery}
-                    </td>
-                    <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
-                      {row.latestSession
-                        ? formatDateTime(row.latestSession.updated_at)
-                        : "No activity"}
-                    </td>
-                    <td className="rounded-r-2xl border-y border-r border-border px-3 py-3">
-                      <button
-                        type="button"
-                        onClick={() => onSelectStudent(row.studentId)}
-                        className="rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted"
-                      >
-                        Inspect
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                          {row.needsAttention ? (
+                            <span className="rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-[11.5px] text-warning">
+                              Needs attention
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 text-[11.5px] text-muted-foreground">
+                          {row.lessonDetail}
+                        </div>
+                      </td>
+                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-foreground">
+                        {row.scoreLabel}
+                      </td>
+                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                        {row.attempts}
+                      </td>
+                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                        {row.quizAttempts}
+                      </td>
+                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                        {row.evidence}
+                      </td>
+                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                        {row.mastery}
+                      </td>
+                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                        {row.latestSession
+                          ? formatDateTime(row.latestSession.updated_at)
+                          : "No activity"}
+                      </td>
+                      <td className="rounded-r-2xl border-y border-r border-border px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => onSelectStudent(row.studentId)}
+                          className="rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted"
+                        >
+                          Inspect
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <EmptyState icon={UsersRound}>
           Add students to this class to populate the gradebook.
@@ -4085,14 +4139,14 @@ function LessonProgress({
       </div>
 
       {studentIds.length ? (
-        <div className="overflow-x-auto pb-1">
-          <div className="grid min-w-[760px] gap-2">
+        <div className="pb-1">
+          <div className="grid gap-2">
             {studentIds.map((studentId) => {
               const profile = profilesById.get(studentId) || null;
               return (
                 <div
                   key={studentId}
-                  className="grid grid-cols-[180px_minmax(0,1fr)] gap-3 rounded-2xl border border-border bg-background/35 p-3"
+                  className="grid grid-cols-1 gap-3 rounded-2xl border border-border bg-background/35 p-3 sm:grid-cols-[180px_minmax(0,1fr)]"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-[13px] font-medium text-foreground">
