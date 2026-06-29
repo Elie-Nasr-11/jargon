@@ -3,8 +3,10 @@
 // inline field errors for text capture. Mounted once via <Toaster/> in __root.
 import { toast } from "sonner";
 
-// How long an Undo affordance stays actionable (toast duration + deferred-commit window).
-export const UNDO_WINDOW_MS = 6000;
+// How long an Undo affordance stays actionable (toast duration + deferred-commit
+// window). The toast stays up the whole time unless the teacher dismisses it
+// (close button / swipe), which the <Toaster/> in __root enables.
+export const UNDO_WINDOW_MS = 60000;
 
 export function notifyOk(message: string) {
   if (message) toast.success(message);
