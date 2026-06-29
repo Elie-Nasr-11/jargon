@@ -125,7 +125,8 @@ function CurriculumPage() {
   const [message, setMessage] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  // Outline nodes are collapsed by default; this set holds the EXPANDED ids.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [outlineOpen, setOutlineOpen] = useState(true);
   const [roleOk, setRoleOk] = useState(false);
 
@@ -247,13 +248,36 @@ function CurriculumPage() {
     navigate({ to: "/teacher/curriculum", search: {} });
   }, [navigate]);
 
-  const toggleCollapsed = (id: string) =>
-    setCollapsed((current) => {
+  const toggleExpanded = (id: string) =>
+    setExpanded((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+
+  // Auto-expand the ancestors of the selected node so it's visible in the otherwise
+  // collapsed tree (covers deep links and freshly-created child nodes).
+  useEffect(() => {
+    if (!selection || !data) return;
+    const path = nodePath(selection, data);
+    const ancestorIds = [path.subject?.id, path.course?.id, path.unit?.id].filter(
+      (id): id is string => Boolean(id) && id !== selection.id,
+    );
+    if (!ancestorIds.length) return;
+    setExpanded((current) => {
+      let changed = false;
+      const next = new Set(current);
+      for (const id of ancestorIds) {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection?.type, selection?.id, data]);
 
   // --- Mutations ------------------------------------------------------------
   // Each runs an admin action then refreshes; create flows select the new node so
@@ -595,9 +619,9 @@ function CurriculumPage() {
                 unitsForCourse={unitsForCourse}
                 lessonsForUnit={lessonsForUnit}
                 selection={selection}
-                collapsed={collapsed}
+                expanded={expanded}
                 busy={busy}
-                onToggle={toggleCollapsed}
+                onToggle={toggleExpanded}
                 onSelect={selectNode}
                 onReorder={reorder}
                 onAddSubject={addSubject}
@@ -662,7 +686,7 @@ function Outline({
   unitsForCourse,
   lessonsForUnit,
   selection,
-  collapsed,
+  expanded,
   busy,
   onToggle,
   onSelect,
@@ -678,7 +702,7 @@ function Outline({
   unitsForCourse: (courseId: string) => CurriculumUnit[];
   lessonsForUnit: (unitId: string) => Lesson[];
   selection: Selection;
-  collapsed: Set<string>;
+  expanded: Set<string>;
   busy: boolean;
   onToggle: (id: string) => void;
   onSelect: (type: CurriculumNodeType, id: string) => void;
@@ -733,7 +757,7 @@ function Outline({
               onReorder={(ids) => onReorder("subject", ids)}
             >
               {(subject, state) => {
-                const open = !collapsed.has(subject.id);
+                const open = expanded.has(subject.id);
                 const courses = coursesForSubject(subject.id);
                 return (
                   <div className={dropClass(state)}>
@@ -758,7 +782,7 @@ function Outline({
                           onReorder={(ids) => onReorder("course", ids)}
                         >
                           {(course, courseState) => {
-                            const courseOpen = !collapsed.has(course.id);
+                            const courseOpen = expanded.has(course.id);
                             const units = unitsForCourse(course.id);
                             return (
                               <div className={dropClass(courseState)}>
@@ -783,7 +807,7 @@ function Outline({
                                       onReorder={(ids) => onReorder("unit", ids)}
                                     >
                                       {(unit, unitState) => {
-                                        const unitOpen = !collapsed.has(unit.id);
+                                        const unitOpen = expanded.has(unit.id);
                                         const lessons = lessonsForUnit(unit.id);
                                         return (
                                           <div className={dropClass(unitState)}>
