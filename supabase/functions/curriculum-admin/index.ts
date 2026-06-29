@@ -1430,70 +1430,216 @@ async function callModelJson(systemPrompt: string, userPrompt: string): Promise<
   }
 }
 
+function clampText(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+async function currentVersionIdForCourse(config: Config, courseId: string): Promise<string> {
+  const rows = await selectAll(
+    config,
+    `course_versions?course_id=eq.${enc(courseId)}&select=id,is_current,updated_at&order=is_current.desc,updated_at.desc&limit=1`,
+  );
+  return rows[0] ? cleanText(rows[0].id) : "";
+}
+
+// Compact summary of everything under the course's SUBJECT, so generated outlines fit
+// the existing curriculum instead of duplicating it.
+async function courseOutlineContext(
+  config: Config,
+  courseId: string,
+): Promise<{ organizationId: string; text: string }> {
+  const scope = await courseScope(config, courseId);
+  const subject = await selectFirst(
+    config,
+    `subjects?id=eq.${enc(scope.subjectId)}&select=title,description&limit=1`,
+  );
+  const courses = await selectAll(
+    config,
+    `courses?subject_id=eq.${enc(scope.subjectId)}&select=id,title&order=position.asc.nullslast,title.asc`,
+  );
+  const versionId = await currentVersionIdForCourse(config, courseId);
+  let unitsText = "";
+  if (versionId) {
+    const units = await selectAll(
+      config,
+      `units?course_version_id=eq.${enc(versionId)}&select=id,title,position&order=position.asc`,
+    );
+    const unitIds = units.map((u) => cleanText(u.id)).filter(Boolean);
+    const lessons = unitIds.length
+      ? await selectAll(
+          config,
+          `lessons?unit_id=in.(${unitIds.map(enc).join(",")})&select=unit_id,title,unit_position&order=unit_position.asc.nullslast`,
+        )
+      : [];
+    unitsText = units
+      .map((u) => {
+        const ls = lessons
+          .filter((l) => cleanText(l.unit_id) === cleanText(u.id))
+          .map((l) => cleanText(l.title))
+          .filter(Boolean);
+        return `- ${cleanText(u.title)}${ls.length ? `: ${ls.join("; ")}` : " (no lessons yet)"}`;
+      })
+      .join("\n");
+  }
+  const otherCourses = courses.map((c) => cleanText(c.title)).filter(Boolean);
+  const lines = [
+    subject
+      ? `Subject: ${cleanText(subject.title)}${cleanText(subject.description) ? ` — ${cleanText(subject.description)}` : ""}`
+      : "",
+    otherCourses.length ? `Courses already in this subject: ${otherCourses.join(", ")}` : "",
+    unitsText ? `This course's current units and lessons:\n${unitsText}` : "This course has no units yet.",
+  ].filter(Boolean);
+  return { organizationId: scope.organizationId, text: clampText(lines.join("\n"), 3000) };
+}
+
+// Compact summary of the lesson, its unit siblings, and its current steps.
+async function lessonStepsContext(
+  config: Config,
+  lessonId: string,
+): Promise<{ organizationId: string; text: string }> {
+  const scope = await courseScopeForLesson(config, lessonId);
+  const subject = await selectFirst(config, `subjects?id=eq.${enc(scope.subjectId)}&select=title&limit=1`);
+  const course = await selectFirst(config, `courses?id=eq.${enc(scope.courseId)}&select=title&limit=1`);
+  const unit = await selectFirst(config, `units?id=eq.${enc(scope.unitId)}&select=title&limit=1`);
+  const lesson = await selectFirst(
+    config,
+    `lessons?id=eq.${enc(lessonId)}&select=title,tutor_prompt&limit=1`,
+  );
+  const siblings = await selectAll(
+    config,
+    `lessons?unit_id=eq.${enc(scope.unitId)}&select=title,unit_position&order=unit_position.asc.nullslast`,
+  );
+  const steps = await selectAll(
+    config,
+    `lesson_activities?lesson_id=eq.${enc(lessonId)}&select=title,stage,response_mode,position&order=position.asc`,
+  );
+  const siblingTitles = siblings.map((s) => cleanText(s.title)).filter(Boolean);
+  const stepLines = steps
+    .map((s) => `- [${cleanText(s.stage)}/${cleanText(s.response_mode)}] ${cleanText(s.title)}`)
+    .join("\n");
+  const lines = [
+    subject ? `Subject: ${cleanText(subject.title)}` : "",
+    course ? `Course: ${cleanText(course.title)}` : "",
+    unit ? `Unit: ${cleanText(unit.title)}` : "",
+    lesson ? `Lesson: ${cleanText(lesson.title)}` : "",
+    cleanText(lesson?.tutor_prompt) ? `Mentor prompt: ${clampText(cleanText(lesson?.tutor_prompt), 600)}` : "",
+    siblingTitles.length ? `Other lessons in this unit: ${siblingTitles.join(", ")}` : "",
+    stepLines ? `This lesson's current steps:\n${stepLines}` : "This lesson has no steps yet.",
+  ].filter(Boolean);
+  return { organizationId: scope.organizationId, text: clampText(lines.join("\n"), 3000) };
+}
+
+function parseOutlineUnits(result: DbRow) {
+  const rawUnits = Array.isArray(result.units) ? result.units : [];
+  return rawUnits
+    .slice(0, 8)
+    .map((unit) => {
+      const row = unit && typeof unit === "object" ? (unit as DbRow) : {};
+      const lessons = (Array.isArray(row.lessons) ? row.lessons : [])
+        .slice(0, 12)
+        .map((lesson) => ({
+          title: cleanText((lesson && typeof lesson === "object" ? (lesson as DbRow) : {}).title),
+        }))
+        .filter((lesson) => lesson.title);
+      return { title: cleanText(row.title), lessons };
+    })
+    .filter((unit) => unit.title);
+}
+
+function parseStepDrafts(result: DbRow) {
+  const rawSteps = Array.isArray(result.steps) ? result.steps : [];
+  return rawSteps
+    .slice(0, 10)
+    .map((step) => {
+      const row = step && typeof step === "object" ? (step as DbRow) : {};
+      const kind = ["teach", "practice", "checkpoint", "reflect"].includes(cleanText(row.kind))
+        ? cleanText(row.kind)
+        : "practice";
+      const choices = parseChoices(row.choices);
+      return {
+        kind,
+        title: cleanText(row.title) || "Step",
+        prompt: cleanText(row.prompt),
+        choices: kind === "checkpoint" ? choices : [],
+        correct_choice_id: kind === "checkpoint" ? cleanText(row.correct_choice_id) : "",
+      };
+    })
+    .filter((step) => step.prompt || step.title);
+}
+
 async function generateDraft(config: Config, actorId: string, body: DbRow): Promise<Response> {
   const mode = cleanText(body.mode);
   const prompt = cleanText(body.prompt);
-  if (!prompt) throw new Error("prompt is required.");
+  const referenceText = clampText(cleanText(body.reference_text), 8000);
+  const feedback = cleanText(body.feedback);
+  const target = cleanText(body.target);
+  const hasCurrent = Boolean(body.current && typeof body.current === "object");
+  const isRefine = hasCurrent && Boolean(feedback);
+  const currentJson = hasCurrent ? clampText(JSON.stringify(body.current), 6000) : "";
 
   if (mode === "course_outline") {
-    const organizationId = cleanText(body.organization_id);
+    const courseId = cleanText(body.course_id);
+    let organizationId = cleanText(body.organization_id);
+    let contextText = "";
+    if (courseId) {
+      const ctx = await courseOutlineContext(config, courseId);
+      organizationId = ctx.organizationId;
+      contextText = ctx.text;
+    }
     if (!organizationId) throw new Error("organization_id is required.");
     await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
-    const result = await callModelJson(
-      'You are a curriculum designer. Return ONLY JSON of the form ' +
-        '{"units":[{"title":string,"lessons":[{"title":string}]}]}. ' +
-        "Use 2-5 units and 2-6 short lessons each. Titles are concise and student-facing.",
-      `Design a course outline for this brief:\n${prompt.slice(0, 2000)}`,
-    );
-    const rawUnits = Array.isArray(result.units) ? result.units : [];
-    const units = rawUnits
-      .slice(0, 8)
-      .map((unit) => {
-        const row = unit && typeof unit === "object" ? (unit as DbRow) : {};
-        const lessons = (Array.isArray(row.lessons) ? row.lessons : [])
-          .slice(0, 12)
-          .map((lesson) => ({
-            title: cleanText((lesson && typeof lesson === "object" ? (lesson as DbRow) : {}).title),
-          }))
-          .filter((lesson) => lesson.title);
-        return { title: cleanText(row.title), lessons };
-      })
-      .filter((unit) => unit.title);
-    return json({ status: "ok", mode, outline: { units } });
+    if (!isRefine && !prompt) throw new Error("prompt is required.");
+
+    const system =
+      "You are a curriculum designer. Return ONLY JSON of the form " +
+      '{"units":[{"title":string,"lessons":[{"title":string}]}]}. ' +
+      "Use 2-5 units and 2-6 short, student-facing lesson titles each. Fit the existing " +
+      "curriculum context: do not duplicate existing units/lessons; match the level and style. " +
+      "If reference material is provided, ground the outline in it.";
+    const parts: string[] = [];
+    if (contextText) parts.push(`Existing curriculum context:\n${contextText}`);
+    if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
+    if (isRefine) {
+      parts.push(`Current draft outline (JSON):\n${currentJson}`);
+      parts.push(
+        `Revise the draft per this feedback${target ? ` (which targets ${target})` : ""}: ${feedback}\n` +
+          "Change only what the feedback asks; keep everything else identical. Return the full updated outline.",
+      );
+    } else {
+      parts.push(`Design a course outline for this brief:\n${clampText(prompt, 2000)}`);
+    }
+    const result = await callModelJson(system, parts.join("\n\n"));
+    return json({ status: "ok", mode, outline: { units: parseOutlineUnits(result) } });
   }
 
   if (mode === "lesson_steps") {
     const lessonId = cleanText(body.lesson_id);
     if (!lessonId) throw new Error("lesson_id is required.");
-    const scope = await courseScopeForLesson(config, lessonId);
-    await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
-    const result = await callModelJson(
+    const ctx = await lessonStepsContext(config, lessonId);
+    await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
+    if (!isRefine && !prompt) throw new Error("prompt is required.");
+
+    const system =
       "You design a single lesson as an ordered list of steps. Return ONLY JSON of the form " +
-        '{"steps":[{"kind":"teach"|"practice"|"checkpoint"|"reflect","title":string,"prompt":string,' +
-        '"choices":[{"id":string,"text":string}],"correct_choice_id":string}]}. ' +
-        "Use 3-6 steps. Include choices and correct_choice_id ONLY for checkpoint steps " +
-        "(2-4 choices with ids a,b,c,d). Keep prompts concrete and age-appropriate.",
-      `Draft the steps for this lesson brief:\n${prompt.slice(0, 2000)}`,
-    );
-    const rawSteps = Array.isArray(result.steps) ? result.steps : [];
-    const steps = rawSteps
-      .slice(0, 10)
-      .map((step) => {
-        const row = step && typeof step === "object" ? (step as DbRow) : {};
-        const kind = ["teach", "practice", "checkpoint", "reflect"].includes(cleanText(row.kind))
-          ? cleanText(row.kind)
-          : "practice";
-        const choices = parseChoices(row.choices);
-        return {
-          kind,
-          title: cleanText(row.title) || "Step",
-          prompt: cleanText(row.prompt),
-          choices: kind === "checkpoint" ? choices : [],
-          correct_choice_id: kind === "checkpoint" ? cleanText(row.correct_choice_id) : "",
-        };
-      })
-      .filter((step) => step.prompt || step.title);
-    return json({ status: "ok", mode, steps });
+      '{"steps":[{"kind":"teach"|"practice"|"checkpoint"|"reflect","title":string,"prompt":string,' +
+      '"choices":[{"id":string,"text":string}],"correct_choice_id":string}]}. ' +
+      "Use 3-6 steps. Include choices and correct_choice_id ONLY for checkpoint steps " +
+      "(2-4 choices with ids a,b,c,d). Keep prompts concrete and age-appropriate. Fit the lesson " +
+      "context. If reference material is provided, ground the steps in it.";
+    const parts: string[] = [];
+    if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
+    if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
+    if (isRefine) {
+      parts.push(`Current draft steps (JSON):\n${currentJson}`);
+      parts.push(
+        `Revise the draft per this feedback${target ? ` (which targets ${target})` : ""}: ${feedback}\n` +
+          "Change only what the feedback asks; keep everything else identical. Return the full updated steps array.",
+      );
+    } else {
+      parts.push(`Draft the steps for this lesson brief:\n${clampText(prompt, 2000)}`);
+    }
+    const result = await callModelJson(system, parts.join("\n\n"));
+    return json({ status: "ok", mode, steps: parseStepDrafts(result) });
   }
 
   throw new Error("Unsupported generate mode.");

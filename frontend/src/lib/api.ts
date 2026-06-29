@@ -28,7 +28,9 @@ import type {
   CurriculumMilestone,
   CurriculumMilestoneInput,
   CurriculumNodeType,
+  CurriculumOutlineDraft,
   CurriculumQuizItem,
+  CurriculumStepDraft,
   CurriculumStepInput,
   CurriculumSubject,
   CurriculumUnit,
@@ -1469,9 +1471,14 @@ export function generateCurriculumDraft(input: {
   accessToken: string;
   classId?: string | null;
   mode: "course_outline" | "lesson_steps";
-  prompt: string;
+  prompt?: string;
   organizationId?: string;
   lessonId?: string;
+  courseId?: string;
+  referenceText?: string;
+  current?: CurriculumOutlineDraft | CurriculumStepDraft[];
+  feedback?: string;
+  target?: string;
 }) {
   return callCurriculumAdmin(input.accessToken, {
     action: "generate",
@@ -1480,6 +1487,11 @@ export function generateCurriculumDraft(input: {
     prompt: input.prompt,
     organization_id: input.organizationId,
     lesson_id: input.lessonId,
+    course_id: input.courseId,
+    reference_text: input.referenceText || undefined,
+    current: input.current,
+    feedback: input.feedback || undefined,
+    target: input.target || undefined,
   });
 }
 

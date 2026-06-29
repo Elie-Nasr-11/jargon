@@ -9,14 +9,17 @@ import {
   GripVertical,
   Layers3,
   ListChecks,
+  MessageSquare,
   NotebookPen,
   PanelLeft,
   PanelLeftClose,
+  Paperclip,
   Pencil,
   Plus,
   Save,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
 import { ConsoleShell } from "@/components/ConsoleShell";
@@ -58,12 +61,30 @@ import type {
   CurriculumUnit,
   Lesson,
   LessonActivity,
+  LessonResource,
 } from "@/lib/types";
+import { extractPdfTextChunksFromUrl } from "@/lib/pdf-extract";
 
 type ResponseMode = LessonActivity["response_mode"];
 type LessonKind = CurriculumLessonMetaInput["lesson_type"];
 
 type Selection = { type: CurriculumNodeType; id: string } | null;
+
+// AI generation request shapes (initial generate + per-item refine).
+type OutlineGenArgs = {
+  prompt: string;
+  referenceText: string;
+  current?: CurriculumOutlineDraft;
+  feedback?: string;
+  target?: string;
+};
+type StepsGenArgs = {
+  prompt: string;
+  referenceText: string;
+  current?: CurriculumStepDraft[];
+  feedback?: string;
+  target?: string;
+};
 
 type CurriculumSearch = {
   subject?: string;
@@ -367,8 +388,12 @@ function CurriculumPage() {
     });
 
   // AI authoring: generate returns a draft to review (no write); apply uses the
-  // create/upsert actions, then refreshes via runStructureOp.
-  const generateOutline = async (prompt: string): Promise<CurriculumOutlineDraft | null> => {
+  // create/upsert actions, then refreshes via runStructureOp. The course/lesson id
+  // gives the model subject-wide context; args carry reference material + refine feedback.
+  const generateOutline = async (
+    courseId: string,
+    args: OutlineGenArgs,
+  ): Promise<CurriculumOutlineDraft | null> => {
     if (!selectedClass) return null;
     try {
       const session = await getSession();
@@ -377,8 +402,13 @@ function CurriculumPage() {
         accessToken: session.access_token,
         classId: selectedClass.id,
         organizationId: selectedClass.organization_id,
+        courseId,
         mode: "course_outline",
-        prompt,
+        prompt: args.prompt,
+        referenceText: args.referenceText,
+        current: args.current,
+        feedback: args.feedback,
+        target: args.target,
       });
       return result.outline || { units: [] };
     } catch (error) {
@@ -412,7 +442,7 @@ function CurriculumPage() {
 
   const generateSteps = async (
     lessonId: string,
-    prompt: string,
+    args: StepsGenArgs,
   ): Promise<CurriculumStepDraft[] | null> => {
     if (!selectedClass) return null;
     try {
@@ -422,8 +452,12 @@ function CurriculumPage() {
         accessToken: session.access_token,
         classId: selectedClass.id,
         mode: "lesson_steps",
-        prompt,
         lessonId,
+        prompt: args.prompt,
+        referenceText: args.referenceText,
+        current: args.current,
+        feedback: args.feedback,
+        target: args.target,
       });
       return result.steps || [];
     } catch (error) {
@@ -582,6 +616,7 @@ function CurriculumPage() {
               data={data}
               lessonsById={lessonsById}
               orgUnits={orgUnits}
+              resources={data.resources}
               busy={busy}
               publishing={publishing}
               onAddSubject={addSubject}
@@ -996,6 +1031,7 @@ function DetailPane({
   data,
   lessonsById,
   orgUnits,
+  resources,
   busy,
   publishing,
   onAddSubject,
@@ -1023,6 +1059,7 @@ function DetailPane({
   data: CurriculumAuthoringData;
   lessonsById: Map<string, Lesson>;
   orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
+  resources: LessonResource[];
   busy: boolean;
   publishing: boolean;
   onAddSubject: () => void;
@@ -1043,9 +1080,12 @@ function DetailPane({
   onDeleteStep: (lessonId: string, activityId: string) => void;
   onPublishLesson: (lessonId: string) => void;
   onArchiveLesson: (lessonId: string) => void;
-  onGenerateOutline: (prompt: string) => Promise<CurriculumOutlineDraft | null>;
+  onGenerateOutline: (
+    courseId: string,
+    args: OutlineGenArgs,
+  ) => Promise<CurriculumOutlineDraft | null>;
   onApplyOutline: (courseId: string, outline: CurriculumOutlineDraft) => void;
-  onGenerateSteps: (lessonId: string, prompt: string) => Promise<CurriculumStepDraft[] | null>;
+  onGenerateSteps: (lessonId: string, args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
   onApplySteps: (lessonId: string, drafts: CurriculumStepDraft[]) => void;
   currentVersionForCourse: (courseId: string) => CurriculumCourseVersion | null;
   counts: {
@@ -1125,7 +1165,8 @@ function DetailPane({
         onArchive={() => onArchive("course", course.id)}
         onDelete={() => onDelete("course", course.id)}
         ai={{
-          onGenerate: onGenerateOutline,
+          resources,
+          onGenerate: (args) => onGenerateOutline(course.id, args),
           onApply: (outline) => onApplyOutline(course.id, outline),
         }}
       />
@@ -1170,7 +1211,8 @@ function DetailPane({
       onArchiveLesson={() => onArchiveLesson(lesson.id)}
       onMove={(targetUnitId) => onMoveLesson(lesson.id, targetUnitId)}
       onDelete={() => onDelete("lesson", lesson.id)}
-      onGenerateSteps={(prompt) => onGenerateSteps(lesson.id, prompt)}
+      resources={resources}
+      onGenerateSteps={(args) => onGenerateSteps(lesson.id, args)}
       onApplySteps={(drafts) => onApplySteps(lesson.id, drafts)}
     />
   );
@@ -1216,7 +1258,8 @@ function StructureDetail({
   onArchive?: () => void;
   onDelete: () => void;
   ai?: {
-    onGenerate: (prompt: string) => Promise<CurriculumOutlineDraft | null>;
+    resources: LessonResource[];
+    onGenerate: (args: OutlineGenArgs) => Promise<CurriculumOutlineDraft | null>;
     onApply: (outline: CurriculumOutlineDraft) => void;
   };
 }) {
@@ -1271,7 +1314,12 @@ function StructureDetail({
 
         {ai ? (
           <div className="mt-5">
-            <AiOutlinePanel busy={busy} onGenerate={ai.onGenerate} onApply={ai.onApply} />
+            <AiOutlinePanel
+              busy={busy}
+              resources={ai.resources}
+              onGenerate={ai.onGenerate}
+              onApply={ai.onApply}
+            />
           </div>
         ) : null}
 
@@ -1453,6 +1501,7 @@ function LessonDetail({
   lesson,
   data,
   orgUnits,
+  resources,
   busy,
   publishing,
   onSaveMeta,
@@ -1469,6 +1518,7 @@ function LessonDetail({
   lesson: Lesson;
   data: CurriculumAuthoringData;
   orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
+  resources: LessonResource[];
   busy: boolean;
   publishing: boolean;
   onSaveMeta: (meta: CurriculumLessonMetaInput, milestone: CurriculumMilestoneInput) => void;
@@ -1479,7 +1529,7 @@ function LessonDetail({
   onArchiveLesson: () => void;
   onMove: (targetUnitId: string) => void;
   onDelete: () => void;
-  onGenerateSteps: (prompt: string) => Promise<CurriculumStepDraft[] | null>;
+  onGenerateSteps: (args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
   onApplySteps: (drafts: CurriculumStepDraft[]) => void;
 }) {
   const [view, setView] = useState<"edit" | "preview">("edit");
@@ -1580,7 +1630,12 @@ function LessonDetail({
               </div>
 
               <div className="mt-4 border-t border-border pt-4">
-                <AiStepsPanel busy={busy} onGenerate={onGenerateSteps} onApply={onApplySteps} />
+                <AiStepsPanel
+                  busy={busy}
+                  resources={resources}
+                  onGenerate={onGenerateSteps}
+                  onApply={onApplySteps}
+                />
               </div>
             </section>
 
@@ -2084,27 +2139,302 @@ function ViewToggle({
 }
 
 // ---------------------------------------------------------------------------
-// AI authoring panels — generate a draft, review it, then apply.
+// AI authoring panels — generate a draft (with subject context + attached docs),
+// review it, refine specific parts (changes highlighted), then apply.
 // ---------------------------------------------------------------------------
+
+type ItemStatus = "added" | "changed" | "same";
+
+// Compare item signatures by index; used to highlight what a refine changed.
+function diffStatuses(prev: string[] | null, next: string[]): ItemStatus[] {
+  return next.map((sig, i) => {
+    if (!prev || prev[i] === undefined) return prev ? "added" : "same";
+    return prev[i] === sig ? "same" : "changed";
+  });
+}
+
+function statusRing(status: ItemStatus): string {
+  if (status === "added") return "border-success/45 bg-success/5";
+  if (status === "changed") return "border-amber-400/60 bg-amber-400/10";
+  return "border-border";
+}
+
+function statusLabel(status: ItemStatus): string | null {
+  if (status === "added") return "new";
+  if (status === "changed") return "changed";
+  return null;
+}
+
+function resourceReferenceText(resource: LessonResource): string {
+  return [resource.description, resource.student_instructions, resource.transcript_text]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join("\n")
+    .trim();
+}
+
+function combineReference(
+  paste: string,
+  docs: Array<{ name: string; text: string }>,
+  pickedResources: Array<{ title: string; text: string }>,
+): string {
+  const sections: string[] = [];
+  if (paste.trim()) sections.push(`[Pasted notes]\n${paste.trim()}`);
+  for (const doc of docs)
+    if (doc.text.trim()) sections.push(`[Document: ${doc.name}]\n${doc.text.trim()}`);
+  for (const res of pickedResources) {
+    if (res.text.trim()) sections.push(`[Resource: ${res.title}]\n${res.text.trim()}`);
+  }
+  return sections.join("\n\n");
+}
+
+function AiReferenceInput({
+  resources,
+  busy,
+  onChange,
+}: {
+  resources: LessonResource[];
+  busy: boolean;
+  onChange: (referenceText: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [docs, setDocs] = useState<Array<{ name: string; text: string }>>([]);
+  const [resourceIds, setResourceIds] = useState<string[]>([]);
+  const [extracting, setExtracting] = useState(false);
+
+  const usableResources = useMemo(
+    () => resources.filter((resource) => resourceReferenceText(resource).length > 0),
+    [resources],
+  );
+
+  useEffect(() => {
+    const picked = usableResources
+      .filter((resource) => resourceIds.includes(resource.id))
+      .map((resource) => ({ title: resource.title, text: resourceReferenceText(resource) }));
+    onChange(combineReference(paste, docs, picked));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paste, docs, resourceIds, usableResources]);
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    setExtracting(true);
+    const added: Array<{ name: string; text: string }> = [];
+    for (const file of Array.from(files)) {
+      try {
+        let text = "";
+        if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+          const url = URL.createObjectURL(file);
+          try {
+            const chunks = await extractPdfTextChunksFromUrl(url);
+            text = chunks.map((chunk) => chunk.chunk_text).join(" ");
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          text = await file.text();
+        }
+        if (text.trim()) added.push({ name: file.name, text: text.trim().slice(0, 20000) });
+      } catch {
+        // Skip files we can't read.
+      }
+    }
+    setDocs((current) => [...current, ...added]);
+    setExtracting(false);
+  };
+
+  const summary =
+    [
+      paste.trim() ? "notes" : "",
+      docs.length ? `${docs.length} file${docs.length === 1 ? "" : "s"}` : "",
+      resourceIds.length
+        ? `${resourceIds.length} resource${resourceIds.length === 1 ? "" : "s"}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || "optional";
+
+  return (
+    <div className="rounded-2xl border border-border bg-background/30 p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center gap-2 text-[12px] font-medium text-foreground"
+      >
+        <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
+        Reference material
+        <span className="text-[11px] font-normal text-muted-foreground">{summary}</span>
+        <ChevronRight
+          className={`ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+          strokeWidth={1.7}
+        />
+      </button>
+      {open ? (
+        <div className="mt-3 grid gap-3">
+          <TextArea label="Paste source text" value={paste} onChange={setPaste} />
+          <div className="grid gap-1">
+            <span className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Upload files (.txt, .md, .pdf)
+            </span>
+            <input
+              type="file"
+              multiple
+              accept=".txt,.md,.markdown,.pdf,text/plain,application/pdf"
+              disabled={busy || extracting}
+              onChange={(event) => {
+                void handleFiles(event.target.files);
+                event.target.value = "";
+              }}
+              className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12px] text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
+            />
+            {extracting ? (
+              <span className="text-[11px] text-muted-foreground">Reading files…</span>
+            ) : null}
+            {docs.length ? (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {docs.map((doc, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground"
+                  >
+                    <span className="max-w-[160px] truncate">{doc.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setDocs((current) => current.filter((_, idx) => idx !== i))}
+                      aria-label="Remove file"
+                      className="hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" strokeWidth={1.8} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {usableResources.length ? (
+            <div className="grid gap-1">
+              <span className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Use existing resources
+              </span>
+              <div className="grid max-h-40 gap-1 overflow-auto">
+                {usableResources.map((resource) => (
+                  <label
+                    key={resource.id}
+                    className="flex items-center gap-2 text-[12px] text-foreground"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={resourceIds.includes(resource.id)}
+                      onChange={() =>
+                        setResourceIds((current) =>
+                          current.includes(resource.id)
+                            ? current.filter((id) => id !== resource.id)
+                            : [...current, resource.id],
+                        )
+                      }
+                      className="h-3.5 w-3.5 accent-foreground"
+                    />
+                    <span className="min-w-0 truncate">{resource.title}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RefineBox({
+  loading,
+  placeholder,
+  onSubmit,
+  onCancel,
+}: {
+  loading: boolean;
+  placeholder: string;
+  onSubmit: (feedback: string) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState("");
+  return (
+    <div className="mt-2 grid gap-1.5">
+      <input
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder={placeholder}
+        className="rounded-xl border border-border bg-background/70 px-3 py-2 text-[12px] text-foreground outline-none placeholder:text-muted-foreground"
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onSubmit(text.trim())}
+          disabled={loading || !text.trim()}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+        >
+          <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
+          {loading ? "Refining…" : "Refine"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-[12px] text-muted-foreground hover:text-foreground"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function AiOutlinePanel({
   busy,
+  resources,
   onGenerate,
   onApply,
 }: {
   busy: boolean;
-  onGenerate: (prompt: string) => Promise<CurriculumOutlineDraft | null>;
+  resources: LessonResource[];
+  onGenerate: (args: OutlineGenArgs) => Promise<CurriculumOutlineDraft | null>;
   onApply: (outline: CurriculumOutlineDraft) => void;
 }) {
   const [prompt, setPrompt] = useState("");
+  const [referenceText, setReferenceText] = useState("");
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<CurriculumOutlineDraft | null>(null);
+  const [statuses, setStatuses] = useState<ItemStatus[]>([]);
+  const [refineFor, setRefineFor] = useState<number | null>(null);
+
+  const sigOf = (unit: CurriculumOutlineDraft["units"][number]) => JSON.stringify(unit);
 
   const generate = async () => {
     if (!prompt.trim()) return;
     setLoading(true);
-    const result = await onGenerate(prompt.trim());
-    setDraft(result);
+    const result = await onGenerate({ prompt: prompt.trim(), referenceText });
+    if (result) {
+      setDraft(result);
+      setStatuses(result.units.map(() => "same"));
+      setRefineFor(null);
+    }
+    setLoading(false);
+  };
+
+  const refine = async (index: number, feedback: string) => {
+    if (!draft || !feedback) return;
+    setLoading(true);
+    const prevSigs = draft.units.map(sigOf);
+    const result = await onGenerate({
+      prompt,
+      referenceText,
+      current: draft,
+      feedback,
+      target: `Unit "${draft.units[index]?.title || index + 1}"`,
+    });
+    if (result) {
+      setStatuses(diffStatuses(prevSigs, result.units.map(sigOf)));
+      setDraft(result);
+      setRefineFor(null);
+    }
     setLoading(false);
   };
 
@@ -2115,9 +2445,13 @@ function AiOutlinePanel({
         Draft an outline with AI
       </div>
       <p className="mb-3 text-[12px] text-muted-foreground">
-        Describe the course; the draft is yours to review and edit before anything is created.
+        Describe the course. The AI sees the rest of this subject and any reference material you
+        attach. Refine individual units before anything is created.
       </p>
       <TextArea label="Brief" value={prompt} onChange={setPrompt} />
+      <div className="mt-3">
+        <AiReferenceInput resources={resources} busy={busy} onChange={setReferenceText} />
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -2126,7 +2460,7 @@ function AiOutlinePanel({
           className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
-          {loading ? "Generating..." : "Generate"}
+          {loading ? "Working…" : draft ? "Regenerate" : "Generate"}
         </button>
       </div>
 
@@ -2137,16 +2471,45 @@ function AiOutlinePanel({
               The model did not return any units. Try a more specific brief.
             </div>
           ) : (
-            draft.units.map((unit, i) => (
-              <div key={i}>
-                <div className="text-[12.5px] font-medium text-foreground">{unit.title}</div>
-                <ul className="mt-0.5 ml-4 list-disc text-[12px] text-muted-foreground">
-                  {unit.lessons.map((lesson, j) => (
-                    <li key={j}>{lesson.title}</li>
-                  ))}
-                </ul>
-              </div>
-            ))
+            draft.units.map((unit, i) => {
+              const status = statuses[i] || "same";
+              return (
+                <div key={i} className={`rounded-xl border p-2.5 ${statusRing(status)}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-foreground">
+                      {unit.title}
+                    </span>
+                    {statusLabel(status) ? (
+                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                        {statusLabel(status)}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setRefineFor(refineFor === i ? null : i)}
+                      title="Refine this unit"
+                      aria-label="Refine this unit"
+                      className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    </button>
+                  </div>
+                  <ul className="mt-1 ml-4 list-disc text-[12px] text-muted-foreground">
+                    {unit.lessons.map((lesson, j) => (
+                      <li key={j}>{lesson.title}</li>
+                    ))}
+                  </ul>
+                  {refineFor === i ? (
+                    <RefineBox
+                      loading={loading}
+                      placeholder="e.g. add a hands-on lesson, make it easier…"
+                      onSubmit={(feedback) => void refine(i, feedback)}
+                      onCancel={() => setRefineFor(null)}
+                    />
+                  ) : null}
+                </div>
+              );
+            })
           )}
           {draft.units.length ? (
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -2155,6 +2518,7 @@ function AiOutlinePanel({
                 onClick={() => {
                   onApply(draft);
                   setDraft(null);
+                  setStatuses([]);
                   setPrompt("");
                 }}
                 disabled={busy}
@@ -2165,7 +2529,10 @@ function AiOutlinePanel({
               </button>
               <button
                 type="button"
-                onClick={() => setDraft(null)}
+                onClick={() => {
+                  setDraft(null);
+                  setStatuses([]);
+                }}
                 className="text-[12px] text-muted-foreground hover:text-foreground"
               >
                 Discard
@@ -2180,22 +2547,52 @@ function AiOutlinePanel({
 
 function AiStepsPanel({
   busy,
+  resources,
   onGenerate,
   onApply,
 }: {
   busy: boolean;
-  onGenerate: (prompt: string) => Promise<CurriculumStepDraft[] | null>;
+  resources: LessonResource[];
+  onGenerate: (args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
   onApply: (drafts: CurriculumStepDraft[]) => void;
 }) {
   const [prompt, setPrompt] = useState("");
+  const [referenceText, setReferenceText] = useState("");
   const [loading, setLoading] = useState(false);
   const [drafts, setDrafts] = useState<CurriculumStepDraft[] | null>(null);
+  const [statuses, setStatuses] = useState<ItemStatus[]>([]);
+  const [refineFor, setRefineFor] = useState<number | null>(null);
+
+  const sigOf = (step: CurriculumStepDraft) => JSON.stringify(step);
 
   const generate = async () => {
     if (!prompt.trim()) return;
     setLoading(true);
-    const result = await onGenerate(prompt.trim());
-    setDrafts(result);
+    const result = await onGenerate({ prompt: prompt.trim(), referenceText });
+    if (result) {
+      setDrafts(result);
+      setStatuses(result.map(() => "same"));
+      setRefineFor(null);
+    }
+    setLoading(false);
+  };
+
+  const refine = async (index: number, feedback: string) => {
+    if (!drafts || !feedback) return;
+    setLoading(true);
+    const prevSigs = drafts.map(sigOf);
+    const result = await onGenerate({
+      prompt,
+      referenceText,
+      current: drafts,
+      feedback,
+      target: `Step ${index + 1}: "${drafts[index]?.title || ""}"`,
+    });
+    if (result) {
+      setStatuses(diffStatuses(prevSigs, result.map(sigOf)));
+      setDrafts(result);
+      setRefineFor(null);
+    }
     setLoading(false);
   };
 
@@ -2206,9 +2603,13 @@ function AiStepsPanel({
         Draft steps with AI
       </div>
       <p className="mb-3 text-[12px] text-muted-foreground">
-        Describe the lesson; review the steps below, then add the ones you want.
+        Describe the lesson. The AI sees the lesson context and any reference material you attach.
+        Refine individual steps, then add them.
       </p>
       <TextArea label="Brief" value={prompt} onChange={setPrompt} />
+      <div className="mt-3">
+        <AiReferenceInput resources={resources} busy={busy} onChange={setReferenceText} />
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -2217,7 +2618,7 @@ function AiStepsPanel({
           className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
-          {loading ? "Generating..." : "Generate"}
+          {loading ? "Working…" : drafts ? "Regenerate" : "Generate"}
         </button>
       </div>
 
@@ -2228,15 +2629,58 @@ function AiStepsPanel({
               The model did not return any steps. Try a more specific brief.
             </div>
           ) : (
-            drafts.map((step, i) => (
-              <div key={i} className="text-[12px]">
-                <span className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                  {step.kind}
-                </span>
-                <span className="ml-2 font-medium text-foreground">{step.title}</span>
-                <p className="mt-0.5 text-muted-foreground">{step.prompt}</p>
-              </div>
-            ))
+            drafts.map((step, i) => {
+              const status = statuses[i] || "same";
+              return (
+                <div key={i} className={`rounded-xl border p-2.5 ${statusRing(status)}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                      {step.kind}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-foreground">
+                      {step.title}
+                    </span>
+                    {statusLabel(status) ? (
+                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                        {statusLabel(status)}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setRefineFor(refineFor === i ? null : i)}
+                      title="Refine this step"
+                      aria-label="Refine this step"
+                      className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    </button>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-[12px] text-muted-foreground">
+                    {step.prompt}
+                  </p>
+                  {step.kind === "checkpoint" && step.choices.length ? (
+                    <ul className="mt-1 ml-4 list-disc text-[11.5px] text-muted-foreground">
+                      {step.choices.map((choice) => (
+                        <li
+                          key={choice.id}
+                          className={choice.id === step.correct_choice_id ? "text-success" : ""}
+                        >
+                          {choice.text}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {refineFor === i ? (
+                    <RefineBox
+                      loading={loading}
+                      placeholder="e.g. make this a code task, harder, clearer wording…"
+                      onSubmit={(feedback) => void refine(i, feedback)}
+                      onCancel={() => setRefineFor(null)}
+                    />
+                  ) : null}
+                </div>
+              );
+            })
           )}
           {drafts.length ? (
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -2245,6 +2689,7 @@ function AiStepsPanel({
                 onClick={() => {
                   onApply(drafts);
                   setDrafts(null);
+                  setStatuses([]);
                   setPrompt("");
                 }}
                 disabled={busy}
@@ -2255,7 +2700,10 @@ function AiStepsPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setDrafts(null)}
+                onClick={() => {
+                  setDrafts(null);
+                  setStatuses([]);
+                }}
                 className="text-[12px] text-muted-foreground hover:text-foreground"
               >
                 Discard
