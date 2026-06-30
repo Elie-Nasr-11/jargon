@@ -364,7 +364,9 @@ body {
   width: 100%;
   border-radius: var(--radius-control);
   border: 1px solid var(--border);
-  background: color-mix(in oklab, var(--background) 72%, transparent);
+  /* background-color (not the `background` shorthand) so it never resets the
+     <select> chevron's background-image/repeat/position/size set in the rule below. */
+  background-color: color-mix(in oklab, var(--background) 72%, transparent);
   padding: 0.68rem 0.8rem;
   color: var(--foreground);
   font-size: 13px;
@@ -379,7 +381,7 @@ body {
 }
 .jargon-input:focus {
   border-color: color-mix(in oklab, var(--foreground) 45%, var(--border));
-  background: color-mix(in oklab, var(--background) 88%, transparent);
+  background-color: color-mix(in oklab, var(--background) 88%, transparent);
 }
 
 /* Native <select> dropdowns: replace the browser's edge-flush arrow with a
@@ -409,11 +411,13 @@ select {
   }
 }
 
-/* One consistent, crisp keyboard focus ring across every interactive element.
-   :where() keeps specificity at 0 so component/utility focus styles still win
-   where they exist (e.g. shadcn focus-visible:ring-*). */
+/* Keyboard focus ring for clickable controls. Form fields (input/textarea/select)
+   are intentionally excluded: browsers treat a mouse *click* on them as
+   :focus-visible, which popped a grey ring on every click — they instead get a
+   subtle border-color change on focus. :where() keeps specificity at 0 so
+   component/utility focus styles still win where they exist. */
 @layer base {
-  :where(a, button, [role="button"], input, textarea, select, summary, [tabindex]):focus-visible {
+  :where(a, button, [role="button"], summary, [tabindex]):focus-visible {
     outline: none;
     box-shadow:
       0 0 0 2px var(--background),
