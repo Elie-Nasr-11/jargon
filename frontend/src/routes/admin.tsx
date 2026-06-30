@@ -3266,6 +3266,42 @@ export function AdminPage() {
                             any SIS. Existing Jargon users are mapped; missing users are marked
                             `needs seed` and must be created through account seeding.
                           </p>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                              Templates
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadTextFile(
+                                  "jargon-roster-template.csv",
+                                  "email,name,role,grade,password\n" +
+                                    "teacher@example.com,Teacher Name,teacher,,TempPass123\n" +
+                                    "student@example.com,Student Name,student,Grade 5,TempPass123\n",
+                                  "text/csv;charset=utf-8",
+                                )
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted"
+                            >
+                              <Download className="h-3.5 w-3.5" strokeWidth={1.6} /> CSV template
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadTextFile(
+                                  "jargon-oneroster-users-template.csv",
+                                  "givenName,familyName,email,role,grades\n" +
+                                    "Alex,Rivera,alex.rivera@example.com,student,5\n" +
+                                    "Jordan,Lee,jordan.lee@example.com,teacher,\n",
+                                  "text/csv;charset=utf-8",
+                                )
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted"
+                            >
+                              <Download className="h-3.5 w-3.5" strokeWidth={1.6} /> OneRoster
+                              template
+                            </button>
+                          </div>
                           <textarea
                             value={csvText}
                             onChange={(event) => setCsvText(event.target.value)}
@@ -4001,9 +4037,9 @@ export function AdminPage() {
 
               {isPlatformLevel ? (
                 <WorkspacePanel value="seeding">
-                  <>
+                  <div className="space-y-5">
                     {isPlatformAdmin ? (
-                      <div className="mb-5">
+                      <div>
                         <GradientCard>
                           <div className="space-y-4 p-5">
                             <div>
@@ -4374,7 +4410,7 @@ export function AdminPage() {
                         </div>
                       </GradientCard>
                     )}
-                  </>
+                  </div>
                 </WorkspacePanel>
               ) : null}
             </Tabs>
