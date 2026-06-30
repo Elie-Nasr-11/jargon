@@ -43,25 +43,35 @@ const HELP_REQUEST_OPTIONS = new Set(["hint", "show_me_how", "explain"]);
 const CHAT_RATE_LIMIT_WINDOW_MS = 60_000;
 const CHAT_RATE_LIMIT_MAX = 30;
 
-const SYSTEM_PROMPT = `You are the Jargon Mentor, a warm, curious, firm logic coach for school children.
+const SYSTEM_PROMPT = `You are the Jargon Mentor, a warm, curious, firm tutor for school children.
 
-Your job is to guide a structured course conversation, not to act like an open-ended chat box.
-Teach logical thought through this bridge:
-natural speech -> baby Jargon -> Jargon pseudocode -> Python bridge when the learner is ready.
+You teach through a real back-and-forth conversation — diagnosing what the student needs and adapting — not by
+reading a script. The lesson teaches logical thinking through the bridge: natural speech -> baby Jargon ->
+Jargon pseudocode -> Python bridge when the learner is ready.
 
-Rules:
-- Stay on the current lesson goal. If the student drifts, briefly acknowledge and redirect.
-- Never give the full solution before the student has made a clear attempt.
-- Keep responses short, concrete, and age-appropriate.
-- Ask one useful question or give one next action at a time.
-- Treat code execution as deterministic: Jargon runs through the engine, not imagination.
-- Python is a comparison bridge only in v1; do not claim to execute Python.
-- File mode exists in the contract but is deferred; do not ask students to upload files yet.
-- Prefer retry and rescue paths over failure language.
-- Do not use emojis.
-- If mentor_preferences are provided, follow them.
+Every turn, FIRST read the student's latest message and respond to what they actually said:
+- Acknowledge what they got right, by name. Build on their words.
+- If they already answered correctly or completely, CONFIRM it, add one sentence of consolidation, and move
+  forward. Do NOT ask the same thing again — recognizing understanding and progressing is required.
+- Never repeat a question you have already asked (your recent questions are listed for you). Vary and advance.
+- If they say something incorrect, correct that specific point clearly and kindly.
+- Respond to their intent: "I don't understand" -> explain the exact sticking point simply with a concrete
+  example (don't re-ask the same question); a request to summarize -> summarize what you've covered;
+  frustration or "didn't we discuss this" -> acknowledge it and move on or summarize; a breakthrough ("oh!")
+  -> celebrate briefly and advance.
+- The recommended teaching move (provided below) is guidance, not a script — follow the student's real need.
 
-For typed course requests, return only valid JSON matching this shape:
+Hard rules (always):
+- Stay on the current lesson goal; if the student drifts, briefly acknowledge and redirect.
+- Keep responses short, concrete, and age-appropriate. Do not use emojis.
+- Treat code execution as deterministic: Jargon runs through the engine, not imagination. Python is a
+  comparison bridge only; do not claim to execute Python. Do not ask students to upload files.
+- Honor the integrity policy and help ceiling you are given.
+
+Set "understanding" to reflect whether the student's words show they understand THIS step's objective:
+demonstrated=true only when their explanation/answer is essentially correct and complete.
+
+Return only valid JSON matching this shape:
 {
   "status": "ok",
   "reply": "student-facing mentor message",
@@ -70,6 +80,7 @@ For typed course requests, return only valid JSON matching this shape:
   "choices": [],
   "exercise": null,
   "assessment": null,
+  "understanding": { "demonstrated": false, "level": "none | partial | solid", "note": "" },
   "next_action": "reply | run_code | choose | retry | rescue | continue | complete",
   "guardrail": { "redirected": false, "reason": null }
 }`;
@@ -152,6 +163,15 @@ type Assessment = {
   passed?: boolean;
   feedback?: string;
   source: "orchestrator" | "mentor";
+};
+
+// The mentor's judgment of whether the student's words show they understand the
+// current step's objective. Drives advancement for free-text / explanation work
+// (where there is no deterministic grade).
+type Understanding = {
+  demonstrated: boolean;
+  level: "none" | "partial" | "solid";
+  note: string;
 };
 
 type FlowDecision = {
@@ -528,29 +548,54 @@ async function loadOrCreateSession(
   });
 }
 
-async function callOpenAI(
+// --- Model-agnostic LLM gateway ----------------------------------------------
+// One entry point (`callModel`) the tutor uses; the provider/model/temperature are
+// configured via env so Jargon's value stays in the governance layer, not a model.
+// Defaults to OpenAI so production behavior is unchanged unless TUTOR_PROVIDER flips.
+
+function modelFor(route: ModelRoute): string {
+  // Prefer TUTOR_MODEL_*; fall back to the legacy OPENAI_MODEL_* then sane defaults.
+  const def = envText("TUTOR_MODEL_DEFAULT", envText("OPENAI_MODEL_DEFAULT", "gpt-4o-mini"));
+  const strong = envText("TUTOR_MODEL_STRONG", envText("OPENAI_MODEL_GRADING", "gpt-4o"));
+  if (route === "grading") return envText("TUTOR_MODEL_GRADING", strong);
+  if (route === "rescue") return envText("TUTOR_MODEL_RESCUE", strong);
+  if (route === "resource_context") return envText("TUTOR_MODEL_RESOURCE_CONTEXT", strong);
+  return def;
+}
+
+function temperatureFor(route: ModelRoute): number {
+  // Conversation wants variety (a key fix for the flat re-asking); grading / extraction
+  // want determinism.
+  if (route === "grading" || route === "resource_context") return 0.2;
+  if (route === "rescue") return 0.4;
+  const raw = Number(envText("TUTOR_TEMPERATURE_DEFAULT", "0.6"));
+  return Number.isFinite(raw) ? Math.max(0, Math.min(1.2, raw)) : 0.6;
+}
+
+async function callModel(
   messages: unknown[],
   jsonMode: boolean,
   route: ModelRoute = "default",
 ): Promise<OpenAIResult> {
+  const provider = envText("TUTOR_PROVIDER", "openai").toLowerCase();
+  const model = modelFor(route);
+  const temperature = temperatureFor(route);
+  if (provider === "anthropic") {
+    return await callAnthropic(messages, jsonMode, route, model, temperature);
+  }
+  return await callOpenAIChat(messages, jsonMode, route, model, temperature);
+}
+
+async function callOpenAIChat(
+  messages: unknown[],
+  jsonMode: boolean,
+  route: ModelRoute,
+  model: string,
+  temperature: number,
+): Promise<OpenAIResult> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
-  const defaultModel = envText("OPENAI_MODEL_DEFAULT", "gpt-4o-mini");
-  const strongModel = envText("OPENAI_MODEL_GRADING", "gpt-4o");
-  const model =
-    route === "grading"
-      ? envText("OPENAI_MODEL_GRADING", strongModel)
-      : route === "rescue"
-        ? envText("OPENAI_MODEL_RESCUE", strongModel)
-        : route === "resource_context"
-          ? envText("OPENAI_MODEL_RESOURCE_CONTEXT", strongModel)
-          : defaultModel;
-
-  const body: DbRow = {
-    model,
-    messages,
-    temperature: 0.35,
-  };
+  const body: DbRow = { model, messages, temperature };
   if (jsonMode) body.response_format = { type: "json_object" };
 
   const startedAt = Date.now();
@@ -577,6 +622,77 @@ async function callOpenAI(
     inputTokens: Number(usage.prompt_tokens || 0),
     outputTokens: Number(usage.completion_tokens || 0),
     cachedTokens: Number(promptDetails.cached_tokens || 0),
+    latencyMs: Date.now() - startedAt,
+  };
+}
+
+function extractJsonObject(text: string): string {
+  const t = (text || "").trim();
+  const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const inner = fenced ? fenced[1].trim() : t;
+  const start = inner.indexOf("{");
+  const end = inner.lastIndexOf("}");
+  return start >= 0 && end > start ? inner.slice(start, end + 1) : inner;
+}
+
+async function callAnthropic(
+  messages: unknown[],
+  jsonMode: boolean,
+  route: ModelRoute,
+  model: string,
+  temperature: number,
+): Promise<OpenAIResult> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
+  const rows = messages as DbRow[];
+  // Anthropic takes `system` as a top-level param, not a message role.
+  let system = rows
+    .filter((m) => m.role === "system")
+    .map((m) => String(m.content || ""))
+    .join("\n\n");
+  if (jsonMode) {
+    system = `${system}\n\nRespond with ONLY a single valid JSON object and nothing else.`;
+  }
+  const convo = rows
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content || ""),
+    }));
+
+  const startedAt = Date.now();
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      system,
+      messages: convo.length ? convo : [{ role: "user", content: "Begin." }],
+      max_tokens: 2048,
+      temperature,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || res.statusText);
+  const blocks = Array.isArray(data?.content) ? data.content : [];
+  let content = blocks
+    .filter((b: DbRow) => b?.type === "text")
+    .map((b: DbRow) => String(b.text || ""))
+    .join("");
+  if (jsonMode) content = extractJsonObject(content);
+  const usage = data?.usage && typeof data.usage === "object" ? data.usage : {};
+  return {
+    content,
+    model: typeof data?.model === "string" ? data.model : model,
+    route,
+    inputTokens: Number(usage.input_tokens || 0),
+    outputTokens: Number(usage.output_tokens || 0),
+    cachedTokens: Number(usage.cache_read_input_tokens || 0),
     latencyMs: Date.now() - startedAt,
   };
 }
@@ -710,6 +826,23 @@ function parsedAssessment(value: unknown): Assessment | null {
     passed: passed ?? undefined,
     feedback: typeof raw.feedback === "string" ? raw.feedback : undefined,
     source: "mentor",
+  };
+}
+
+function parsedUnderstanding(value: unknown): Understanding | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as DbRow;
+  const demonstrated = raw.demonstrated === true;
+  const levelRaw = String(raw.level || "");
+  const level = (["none", "partial", "solid"].includes(levelRaw)
+    ? levelRaw
+    : demonstrated
+      ? "solid"
+      : "none") as Understanding["level"];
+  return {
+    demonstrated,
+    level,
+    note: typeof raw.note === "string" ? raw.note : "",
   };
 }
 
@@ -905,6 +1038,7 @@ function selectTeachingMove(
   helpRequest: string,
   requestedRung: number,
   isIntro: boolean,
+  intent: string,
 ): { move: TeachingMove; hintRung: number } {
   const wantRank = MODE_HELP_WANT[mode] ?? 3;
   const ceil = Math.min(HELP_RANK[policy.helpCeiling] ?? 3, wantRank);
@@ -914,6 +1048,14 @@ function selectTeachingMove(
   // so PRESENT the task — don't let attempt-first gating turn the lesson opener into an
   // interrogation. (Applies even if the turn carried a message, mirroring flowFor.)
   if (isIntro && !helpRequest) return { move: "present", hintRung: 0 };
+
+  // Confused student: never recommend another socratic re-ask — explain the gap (or
+  // diagnose if a worked explanation isn't allowed). This was the core rigidity bug.
+  if (intent === "confused" && !helpRequest) {
+    return ceil >= HELP_RANK.guided
+      ? { move: "explain", hintRung: 0 }
+      : { move: "diagnose", hintRung: 0 };
+  }
 
   // Integrity gate: attempt-first required and nothing attempted yet -> never model
   // or hand over a path; diagnose, or give one gentle hint if explicitly asked.
@@ -972,6 +1114,54 @@ function selectTeachingMove(
   return { move: "diagnose", hintRung: 0 };
 }
 
+// Lightweight intent read of the student's latest message. The prompt does the
+// nuance; this just lets us bias the recommended move and surface the signal.
+const INTENT_PATTERNS: { intent: string; re: RegExp }[] = [
+  {
+    intent: "frustrated",
+    re: /(did\s?n'?t we|already (said|asked|discussed|covered|went over)|keep asking|going in circles|same (thing|question))/i,
+  },
+  {
+    intent: "wants_summary",
+    re: /(summar(y|ize|ise)|recap|go over (what|everything|it again)|what (did|have) we (do|cover|discuss|go))/i,
+  },
+  {
+    intent: "confused",
+    re: /(not sure|do\s?n'?t (get|understand|know)|confus(ed|ing)|i'?m lost|no idea|makes no sense|what do you mean)/i,
+  },
+  {
+    intent: "breakthrough",
+    re: /(\boh+!+|\bi (get|got) it\b|makes sense now|now i (see|get|understand)|\bi see\b|aha\b)/i,
+  },
+];
+
+function detectIntent(text: string): string {
+  const t = (text || "").trim();
+  if (!t) return "none";
+  for (const { intent, re } of INTENT_PATTERNS) {
+    if (re.test(t)) return intent;
+  }
+  return "none";
+}
+
+// The mentor's own recent questions (most-recent first) so the prompt can tell it
+// NOT to repeat them — the single biggest cause of the rigid re-asking.
+function mentorQuestionsFromTurns(turns: DbRow[]): string[] {
+  const out: string[] = [];
+  for (const turn of turns) {
+    if (String(turn.role) !== "mentor") continue;
+    const content = String(turn.content || "").trim();
+    if (!content) continue;
+    const questions = content.match(/[^.!?\n]*\?/g);
+    const text = (questions && questions.length ? questions[questions.length - 1] : content)
+      .trim()
+      .slice(0, 160);
+    if (text && !out.includes(text)) out.push(text);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
 function pedagogyPromptBlock(
   move: TeachingMove,
   diagnosis: StudentDiagnosis,
@@ -980,26 +1170,39 @@ function pedagogyPromptBlock(
   hintRung: number,
   answersForbidden: boolean,
   misconceptions: DbRow[],
+  recentQuestions: string[],
+  intent: string,
 ): string {
   const integrity = answersForbidden
-    ? "INTEGRITY: do NOT provide the full or final answer / complete solution to the assigned task this turn — guide only."
+    ? "INTEGRITY (hard): do NOT provide the full or final answer / complete solution to the assigned task this turn — guide only."
     : "INTEGRITY: reveal a full solution only if it genuinely helps after the student's own attempt; otherwise prefer guidance.";
   const known = misconceptions.length
-    ? `Known recurring misconceptions for this student: ${misconceptions
+    ? `This student has previously shown these misconceptions: ${misconceptions
         .map((m) => `${String(m.skill_key)} — ${String(m.pattern)}`)
-        .join("; ")}. Watch for these and address them.`
+        .join("; ")}. If it resurfaces, correct it directly.`
     : "";
+  const askedBefore = recentQuestions.length
+    ? `You have ALREADY asked these recently — do NOT ask them again; either accept the student's answer and move on, or ask something genuinely new:\n${recentQuestions
+        .map((q) => `  • ${q}`)
+        .join("\n")}`
+    : "";
+  const intentLine =
+    intent && intent !== "none"
+      ? `Detected student intent: ${intent}. Respond to THIS first (see the intent rules above) before any recommended move.`
+      : "";
   return [
-    "PEDAGOGY (set by Jargon's tutor policy — follow it exactly):",
-    `Teaching move for THIS turn: ${move}. ${MOVE_GUIDANCE[move]}`,
+    "PEDAGOGY GUIDANCE (a recommendation — adapt to the student's actual message):",
+    `Recommended move: ${move}. ${MOVE_GUIDANCE[move]}`,
     move === "hint"
-      ? `Hint rung: ${hintRung} of 4 (1 = gentle nudge, 4 = very revealing but still not the full answer).`
+      ? `This is hint rung ${hintRung} of 4 (1 = gentle nudge, 4 = very revealing but still not the full answer). Make it MORE revealing than any earlier hint this session.`
       : "",
+    intentLine,
     `Student: level=${diagnosis.level}, likely difficulty=${diagnosis.difficulty}, grade band=${diagnosis.gradeBand}. Calibrate vocabulary and sentence length to the grade band.`,
     `Mentor mode: ${mode}. Help ceiling: ${policy.helpCeiling} — never exceed it.`,
     integrity,
     known,
-    'Always end with a check for understanding or one clear next action. If you identify a recurring conceptual error, add a top-level "misconception": { "skill_key": "<skill>", "pattern": "<short description>", "hint": "<how to fix>" } to your JSON.',
+    askedBefore,
+    'Set "understanding".demonstrated=true the moment the student\'s answer is essentially correct and complete, then confirm and move on instead of asking again. If you spot a recurring conceptual error, add a top-level "misconception": { "skill_key": "...", "pattern": "...", "hint": "..." } to your JSON.',
   ]
     .filter(Boolean)
     .join("\n");
@@ -1109,6 +1312,8 @@ function flowFor(
   quiz: DbRow | null,
   answer: DbRow | null,
   assessment: Assessment | null,
+  understanding: Understanding | null,
+  conversationDepth: number,
 ): FlowDecision {
   const activityMode = responseMode(activity?.response_mode, "code");
   const quizChoices = Array.isArray(quiz?.choices)
@@ -1203,19 +1408,39 @@ function flowFor(
   }
 
   if (answer.mode === "text" || answer.mode === "file") {
-    return quiz
-      ? {
-          stage: "assessment",
-          responseMode: "multiple_choice",
-          nextAction: "choose",
-          choices: quizChoices,
-        }
-      : {
-          stage: "complete",
-          responseMode: "text",
-          nextAction: "complete",
-          choices: [],
-        };
+    if (quiz) {
+      return {
+        stage: "assessment",
+        responseMode: "multiple_choice",
+        nextAction: "choose",
+        choices: quizChoices,
+      };
+    }
+    // If the activity is already complete (e.g. a code activity whose code passed
+    // earlier), a further text turn is a wrap-up chat — stay complete.
+    if (currentStage === "complete") {
+      return { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
+    }
+    // Explanation/discussion activity: complete only when the mentor judges the
+    // student has demonstrated understanding (or after a stuck cap), instead of the
+    // old behavior of blind-completing on the first text turn or looping forever.
+    if (activityMode === "text") {
+      const demonstrated = understanding?.demonstrated === true;
+      const stuck = conversationDepth >= 6;
+      if (demonstrated || stuck) {
+        return { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
+      }
+      return { stage: "practice", responseMode: "text", nextAction: "reply", choices: [] };
+    }
+    // Text side-message on a code/multiple-choice activity: keep guiding the student
+    // toward the real attempt (do NOT blind-complete the activity).
+    return {
+      stage: currentStage === "intro" ? "practice" : currentStage,
+      responseMode: activityMode,
+      nextAction:
+        activityMode === "multiple_choice" ? "choose" : activityMode === "code" ? "run_code" : "reply",
+      choices: activityMode === "multiple_choice" ? quizChoices : [],
+    };
   }
 
   return {
@@ -1346,7 +1571,7 @@ async function loadContext(
   ] = await Promise.all([
     loadMany(
       config,
-      `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=8&select=role,stage,response_mode,content,payload,created_at`,
+      `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=12&select=role,stage,response_mode,content,payload,created_at`,
     ),
     loadMany(
       config,
@@ -1603,7 +1828,7 @@ async function handleLegacyRequest(
     chatHistory.unshift({ role: "system", content: SYSTEM_PROMPT });
 
   try {
-    const reply = await callOpenAI(chatHistory, false, "default");
+    const reply = await callModel(chatHistory, false, "default");
     return json({ reply: reply.content || "No response." });
   } catch (err) {
     return json({ reply: `Error: ${errorMessage(err)}` }, 500);
@@ -1664,6 +1889,8 @@ async function handleTypedRequest(
     ? String(body.help_request)
     : "";
   const requestedRung = Number(body.hint_rung) || 0;
+  const intent = detectIntent(content);
+  const recentQuestions = mentorQuestionsFromTurns(context.recentTurns);
   const priorActivityAttempts = context.recentAttempts.filter(
     (a) => String(a.activity_id || "") === String(context.activity?.id || ""),
   ).length;
@@ -1688,10 +1915,16 @@ async function handleTypedRequest(
     helpRequest,
     requestedRung,
     currentStage === "intro",
+    intent,
   );
   const answersForbidden =
     helpPolicy.finalAnswerPolicy === "never" ||
     (helpPolicy.finalAnswerPolicy === "after_attempt" && !hasAttempt);
+  // How long the current back-and-forth has run (student turns in the recent window) —
+  // a backstop so an explanation activity concludes instead of looping forever.
+  const conversationDepth = context.recentTurns.filter(
+    (t) => String(t.role) === "student",
+  ).length;
 
   try {
     if (await isChatRateLimited(config, userId, sessionId)) {
@@ -1735,6 +1968,8 @@ async function handleTypedRequest(
       context.quiz,
       answer,
       orchestratorAssessment,
+      null,
+      conversationDepth,
     );
     const systemContent = `${SYSTEM_PROMPT}\n\n${pedagogyPromptBlock(
       teaching.move,
@@ -1744,6 +1979,8 @@ async function handleTypedRequest(
       teaching.hintRung,
       answersForbidden,
       context.misconceptions,
+      recentQuestions,
+      intent,
     )}`;
     const messages = [
       { role: "system", content: systemContent },
@@ -1801,6 +2038,8 @@ async function handleTypedRequest(
             answers_forbidden_this_turn: answersForbidden,
           },
           known_misconceptions: context.misconceptions,
+          student_intent: intent,
+          recent_mentor_questions: recentQuestions,
           latest_answer: answer,
           deterministic_assessment: orchestratorAssessment,
           orchestrator_flow: draftFlow,
@@ -1814,6 +2053,7 @@ async function handleTypedRequest(
             "choices",
             "exercise",
             "assessment",
+            "understanding",
             "next_action",
             "guardrail",
           ],
@@ -1827,7 +2067,7 @@ async function handleTypedRequest(
       orchestratorAssessment,
       context,
     );
-    const openAIResult = await callOpenAI(messages, true, modelRouting.route);
+    const openAIResult = await callModel(messages, true, modelRouting.route);
     await recordModelUsage(
       config,
       userId,
@@ -1861,6 +2101,7 @@ async function handleTypedRequest(
       orchestratorAssessment,
       parsedAssessment(parsed.assessment),
     );
+    const understanding = parsedUnderstanding(parsed.understanding);
     const finalFlow = flowFor(
       currentStage,
       session,
@@ -1868,6 +2109,8 @@ async function handleTypedRequest(
       context.quiz,
       answer,
       assessment,
+      understanding,
+      conversationDepth,
     );
 
     // Multi-step lessons: if the current activity is finished but later activities
