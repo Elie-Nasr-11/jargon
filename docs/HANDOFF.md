@@ -6,6 +6,58 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-06-30 (Tutor v1.1 — adaptive conversation + understanding-advance + model-agnostic LLM; DEPLOYED)
+
+Summary: v1 made the tutor pedagogy-aware but a real session was rigid and looped — it repeated near-verbatim
+questions, ignored the student's actual message (a breakthrough, an "I don't understand", an explicit "give me
+a summary"), never recognized a correct free-text explanation (so an explanation activity never advanced), and
+didn't correct stated misconceptions. v1.1 fixes the conversation layer while keeping the integrity gates HARD.
+
+- Understanding-based advancement (fixes the loop): the mentor now returns a structured
+  `understanding {demonstrated, level, note}` in the JSON envelope, separate from graded `assessment`. For a
+  free-text/explanation activity, `flowFor` completes ONLY when `understanding.demonstrated === true` (or after
+  a stuck cap of `conversationDepth >= 4`); an incomplete explanation keeps conversing instead of looping or
+  blind-completing. `conversationDepth` is ACTIVITY-scoped (`priorActivityAttempts`, resets on advance) — not
+  session-scoped — so a later step in a multi-step lesson can't complete prematurely.
+- Advisory move + behavioral rules (fixes rigidity): the selected teaching move is now a RECOMMENDATION in the
+  prompt, not a lock. Hard rules force the model to acknowledge the latest message, NEVER repeat a question it
+  already asked (its own recent questions are extracted from `recentTurns` and passed in an `askedBefore`
+  block), correct stated misconceptions, and respond to intent/meta-requests. Integrity clauses stay mandatory.
+- Lightweight intent signal: server-side `detectIntent` (frustrated / confused / wants_summary / breakthrough)
+  biases `selectTeachingMove` away from another Socratic re-ask when confused/stuck, and is surfaced in the
+  prompt for the model to act on.
+- Model-agnostic LLM gateway (the user's chosen path to better dynamism): `callOpenAI` is replaced by
+  `callModel(messages, jsonMode, route)` which dispatches by `TUTOR_PROVIDER` (default `openai`) to
+  `callOpenAIChat` or `callAnthropic`. Per-route model + temperature via `TUTOR_MODEL_*` /
+  `TUTOR_TEMPERATURE_DEFAULT` (legacy `OPENAI_MODEL_*` still honored as fallback). Conversation temperature
+  raised 0.35 -> 0.6; grading/extraction stay deterministic (0.2). OpenAI remains the default, so production
+  behavior is unchanged unless `TUTOR_PROVIDER=anthropic` (then `ANTHROPIC_API_KEY` is required).
+
+Adversarial review (the Deno fn isn't locally type-checkable) found 6 confirmed defects, all fixed before
+deploy: (1/2) session-scoped depth -> activity-scoped + cap 6->4; (3) Anthropic rejected `temperature` ->
+omitted; (4) `modelFor` dropped legacy RESCUE/RESOURCE_CONTEXT env fallbacks -> restored; (5) Anthropic
+max_tokens 2048 truncation -> 4096 + throw on `stop_reason==="max_tokens"`; (6) provider telemetry hardcoded
+"openai" -> threaded the resolved provider through `OpenAIResult` and both adapters into `model_usage_events`.
+
+Files changed: `supabase/functions/chat/index.ts` only (backend-only; no migration — reuses the v1
+`20260630000000_tutor_pedagogy.sql` schema). Frontend untouched in v1.1.
+
+Tests run: frontend tsc 0 errors / lint 0 errors (12 pre-existing warnings) / build green (sanity — backend
+change). Backend is Deno (not locally type-checked) → validated via the adversarial multi-agent review.
+
+Deploy: DONE. Commits `02f1137` (v1.1) + `c293203` (review fixes) on `claude/happy-johnson-wseex8`; the push
+triggered `.github/workflows/deploy-backend.yml` run #5 (commit `c293203`) — GREEN: migrations applied
+(idempotent) + `chat` (and `curriculum-admin`) edge functions deployed. Live to students on OpenAI default.
+
+Remaining concerns: the Anthropic adapter is dormant (untested against a live key from this sandbox — egress
+blocked); flip `TUTOR_PROVIDER=anthropic` + set `ANTHROPIC_API_KEY` to exercise it, and watch the first turn's
+`stop_reason`. Understanding-based advancement leans on the model honestly setting `understanding.demonstrated`
+— worth spot-checking a few real transcripts (a correct explanation should affirm+advance, not re-ask).
+
+Suggested next task: collect 3–4 fresh transcripts (a clean explanation completion, a code-only lesson, an MCQ
+lesson, a "show me how" flow) as regression fixtures; then consider the deferred items — spaced review across
+sessions, rubric partial-credit grading, and the teacher independence/misconception dashboard UI.
+
 ## Claude -> Codex / Human - 2026-06-29 (Curriculum authoring redesign — Phase 4: AI authoring; branch-only, backend deploy pending)
 
 Summary: Final phase. Teachers can now draft a course outline or a lesson's steps with AI, review the draft,
