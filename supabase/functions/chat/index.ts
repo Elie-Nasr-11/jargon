@@ -145,6 +145,7 @@ type OpenAIResult = {
   content: string;
   model: string;
   route: ModelRoute;
+  provider: string;
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
@@ -466,7 +467,7 @@ async function recordModelUsage(
       user_id: userId,
       session_id: sessionId,
       lesson_id: lessonId,
-      provider: "openai",
+      provider: usage.provider || "openai",
       model: usage.model,
       task_type: taskType,
       input_tokens: usage.inputTokens,
@@ -558,8 +559,10 @@ function modelFor(route: ModelRoute): string {
   const def = envText("TUTOR_MODEL_DEFAULT", envText("OPENAI_MODEL_DEFAULT", "gpt-4o-mini"));
   const strong = envText("TUTOR_MODEL_STRONG", envText("OPENAI_MODEL_GRADING", "gpt-4o"));
   if (route === "grading") return envText("TUTOR_MODEL_GRADING", strong);
-  if (route === "rescue") return envText("TUTOR_MODEL_RESCUE", strong);
-  if (route === "resource_context") return envText("TUTOR_MODEL_RESOURCE_CONTEXT", strong);
+  if (route === "rescue") return envText("TUTOR_MODEL_RESCUE", envText("OPENAI_MODEL_RESCUE", strong));
+  if (route === "resource_context") {
+    return envText("TUTOR_MODEL_RESOURCE_CONTEXT", envText("OPENAI_MODEL_RESOURCE_CONTEXT", strong));
+  }
   return def;
 }
 
@@ -619,6 +622,7 @@ async function callOpenAIChat(
     content: data?.choices?.[0]?.message?.content || "",
     model: typeof data?.model === "string" ? data.model : model,
     route,
+    provider: "openai",
     inputTokens: Number(usage.prompt_tokens || 0),
     outputTokens: Number(usage.completion_tokens || 0),
     cachedTokens: Number(promptDetails.cached_tokens || 0),
@@ -661,6 +665,10 @@ async function callAnthropic(
     }));
 
   const startedAt = Date.now();
+  // Note: temperature is intentionally omitted — current Claude models reject it (HTTP
+  // 400); we steer variety via the prompt instead. `temperature` is accepted here only
+  // to keep the adapter signature uniform with the OpenAI path.
+  void temperature;
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -672,13 +680,15 @@ async function callAnthropic(
       model,
       system,
       messages: convo.length ? convo : [{ role: "user", content: "Begin." }],
-      max_tokens: 2048,
-      temperature,
+      max_tokens: 4096,
     }),
   });
 
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || res.statusText);
+  if (data?.stop_reason === "max_tokens") {
+    throw new Error("Anthropic reply was truncated at max_tokens; raise max_tokens.");
+  }
   const blocks = Array.isArray(data?.content) ? data.content : [];
   let content = blocks
     .filter((b: DbRow) => b?.type === "text")
@@ -690,6 +700,7 @@ async function callAnthropic(
     content,
     model: typeof data?.model === "string" ? data.model : model,
     route,
+    provider: "anthropic",
     inputTokens: Number(usage.input_tokens || 0),
     outputTokens: Number(usage.output_tokens || 0),
     cachedTokens: Number(usage.cache_read_input_tokens || 0),
@@ -1426,7 +1437,9 @@ function flowFor(
     // old behavior of blind-completing on the first text turn or looping forever.
     if (activityMode === "text") {
       const demonstrated = understanding?.demonstrated === true;
-      const stuck = conversationDepth >= 6;
+      // conversationDepth = prior attempts on THIS activity, so >=4 means the student
+      // has gone several rounds here without demonstrating — conclude rather than loop.
+      const stuck = conversationDepth >= 4;
       if (demonstrated || stuck) {
         return { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
       }
@@ -1920,11 +1933,11 @@ async function handleTypedRequest(
   const answersForbidden =
     helpPolicy.finalAnswerPolicy === "never" ||
     (helpPolicy.finalAnswerPolicy === "after_attempt" && !hasAttempt);
-  // How long the current back-and-forth has run (student turns in the recent window) —
-  // a backstop so an explanation activity concludes instead of looping forever.
-  const conversationDepth = context.recentTurns.filter(
-    (t) => String(t.role) === "student",
-  ).length;
+  // How many attempts the student has already made ON THIS activity — a backstop so an
+  // explanation activity concludes instead of looping. Scoped to the current activity
+  // (via activity_id) and it naturally resets when the session advances to the next
+  // step, so a prior activity's turns can't prematurely complete a later one.
+  const conversationDepth = priorActivityAttempts;
 
   try {
     if (await isChatRateLimited(config, userId, sessionId)) {
