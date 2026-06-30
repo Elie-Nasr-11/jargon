@@ -778,7 +778,7 @@ export function TeacherConsole() {
                           {items.map((item) => {
                             const attention = classAttention(dashboard, item.id);
                             return (
-                              <div key={item.id} className="min-w-0">
+                              <div key={item.id} className="min-w-0 h-full">
                                 <ClassButton
                                   item={item}
                                   active={item.id === selectedClassId}
@@ -990,7 +990,7 @@ function ClassButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-3xl border p-4 text-left transition-colors ${
+      className={`flex h-full w-full flex-col rounded-3xl border p-4 text-left transition-colors ${
         active
           ? "border-foreground/25 bg-background/80"
           : "border-border bg-background/45 hover:bg-muted"
@@ -1013,7 +1013,7 @@ function ClassButton({
         </span>
       </div>
       {attention ? (
-        <div className="mt-3">
+        <div className="mt-auto pt-3">
           {attention.tone === "danger" ? (
             <span className="inline-flex items-center gap-1.5 rounded-pill border border-danger/40 bg-danger/12 px-2.5 py-1 text-[11px] text-danger">
               <AlertTriangle className="h-3 w-3" strokeWidth={2} /> {attention.alerts} alert
