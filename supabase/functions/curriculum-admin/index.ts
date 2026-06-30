@@ -1204,6 +1204,24 @@ async function saveLessonMeta(config: Config, actorId: string, body: DbRow): Pro
   const level = cleanText(meta.level, "Any level");
   const lessonType = isLessonType(meta.lesson_type) ? meta.lesson_type : "discussion";
 
+  // Tutor-behavior policy (the school-governance controls). Only written when the
+  // client sends a field, so clients that don't yet know about these leave them as-is.
+  const HELP_CEILINGS = ["clarify", "hints", "guided", "worked_example", "feedback", "study"];
+  const FINAL_ANSWER_POLICIES = ["never", "after_attempt", "allowed"];
+  const policyPatch: DbRow = {};
+  if (HELP_CEILINGS.includes(String(meta.help_ceiling))) {
+    policyPatch.help_ceiling = String(meta.help_ceiling);
+  }
+  if (FINAL_ANSWER_POLICIES.includes(String(meta.final_answer_policy))) {
+    policyPatch.final_answer_policy = String(meta.final_answer_policy);
+  }
+  if (typeof meta.require_attempt_first === "boolean") {
+    policyPatch.require_attempt_first = meta.require_attempt_first;
+  }
+  if (meta.tutor_tone !== undefined) policyPatch.tutor_tone = cleanText(meta.tutor_tone) || null;
+  if (meta.tutor_pace !== undefined) policyPatch.tutor_pace = cleanText(meta.tutor_pace) || null;
+  if (meta.grade_band !== undefined) policyPatch.grade_band = cleanText(meta.grade_band) || null;
+
   const lessonRow = await selectFirst(
     config,
     `lessons?id=eq.${enc(lessonId)}&select=id,curriculum_metadata&limit=1`,
@@ -1220,6 +1238,7 @@ async function saveLessonMeta(config: Config, actorId: string, body: DbRow): Pro
     tutor_prompt: tutorPrompt,
     sample_code: cleanText(meta.sample_code),
     curriculum_metadata: { ...metadata, lesson_type: lessonType },
+    ...policyPatch,
   });
 
   // Single lesson-level milestone (update existing or create milestone-1).

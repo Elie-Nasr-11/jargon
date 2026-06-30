@@ -2908,6 +2908,8 @@ export async function invokeTypedChat(input: {
   sessionId?: string | null;
   answer?: TypedChatAnswer;
   mentorPreferences: MentorPreferences;
+  helpRequest?: "hint" | "show_me_how" | "explain";
+  hintRung?: number;
 }) {
   const response = await fetchWithTimeout(functionUrl("chat"), {
     method: "POST",
@@ -2917,6 +2919,8 @@ export async function invokeTypedChat(input: {
       session_id: input.sessionId || undefined,
       answer: input.answer,
       mentor_preferences: input.mentorPreferences,
+      help_request: input.helpRequest || undefined,
+      hint_rung: input.hintRung || undefined,
     }),
   });
   const data = (await response.json()) as TypedChatEnvelope;

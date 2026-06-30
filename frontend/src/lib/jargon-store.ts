@@ -1,5 +1,6 @@
 // UI-only persistence for the imported tutor shell.
 // Auth, lessons, sessions, runs, and mentor replies come from Supabase.
+import type { MentorMode } from "./types";
 
 export type Lesson = {
   id: string;
@@ -22,12 +23,14 @@ export type MentorConfig = {
   tone: "Friendly" | "Direct" | "Socratic";
   verbosity: "Concise" | "Balanced" | "Detailed";
   difficulty: "Gentle" | "Standard" | "Challenging";
+  mode: MentorMode;
 };
 
 export const DEFAULT_MENTOR: MentorConfig = {
   tone: "Socratic",
   verbosity: "Balanced",
   difficulty: "Standard",
+  mode: "guide",
 };
 
 export type VoiceSettings = {

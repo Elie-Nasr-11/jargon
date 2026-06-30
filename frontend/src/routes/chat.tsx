@@ -9,6 +9,8 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Lightbulb,
+  LifeBuoy,
   Mic,
   MicOff,
   Paperclip,
@@ -65,6 +67,7 @@ import type {
   LessonActivity,
   LessonChatResource,
   LiveSessionViewer,
+  MentorMode,
   MentorPreferences,
   StudentAssignmentBundle,
   StudentAssessmentBundle,
@@ -134,7 +137,69 @@ function mentorToPreferences(mentor: MentorConfig): MentorPreferences {
         : mentor.difficulty === "Challenging"
           ? "high"
           : "medium",
+    mode: mentor.mode,
   };
+}
+
+const MODE_OPTIONS: { value: MentorMode; label: string; hint: string }[] = [
+  { value: "explain", label: "Explain it", hint: "Teach me the idea clearly" },
+  { value: "guide", label: "Guide me", hint: "Help me work it out — don't just give the answer" },
+  { value: "quiz", label: "Quiz me", hint: "Test my recall and understanding" },
+  { value: "check", label: "Check my work", hint: "Give feedback on what I did" },
+  { value: "write", label: "Help me write", hint: "Plan and improve my writing (no ghostwriting)" },
+  { value: "challenge", label: "Challenge me", hint: "Push me with something harder" },
+];
+
+// Student-facing teaching-mode picker + help actions, just above the composer.
+function MentorModeBar({
+  mode,
+  onModeChange,
+  onHint,
+  onShowMeHow,
+  disabled,
+}: {
+  mode: MentorMode;
+  onModeChange: (mode: MentorMode) => void;
+  onHint: () => void;
+  onShowMeHow: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="no-scrollbar mb-2 flex items-center gap-1.5 overflow-x-auto pb-1">
+      {MODE_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          title={option.hint}
+          onClick={() => onModeChange(option.value)}
+          className={`shrink-0 rounded-pill border px-3 py-1.5 text-[12px] transition-colors ${
+            mode === option.value
+              ? "border-foreground/30 bg-foreground text-background"
+              : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+      <span className="mx-1 h-5 w-px shrink-0 bg-border" />
+      <button
+        type="button"
+        onClick={onHint}
+        disabled={disabled}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+      >
+        <Lightbulb className="h-3.5 w-3.5" strokeWidth={1.7} /> Hint
+      </button>
+      <button
+        type="button"
+        onClick={onShowMeHow}
+        disabled={disabled}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+      >
+        <LifeBuoy className="h-3.5 w-3.5" strokeWidth={1.7} /> Show me how
+      </button>
+    </div>
+  );
 }
 
 function lessonSubtitle(lesson: Lesson) {
@@ -333,6 +398,7 @@ function ChatPage() {
   const [lessonId, setLessonId] = useState<string>("lesson1");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [mentor, setMentor] = useState<MentorConfig>(DEFAULT_MENTOR);
+  const [hintRung, setHintRung] = useState(0);
   const [voice, setVoice] = useState<VoiceSettings>(DEFAULT_VOICE);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [sending, setSending] = useState(false);
@@ -606,6 +672,7 @@ function ChatPage() {
     options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
   ): Promise<TypedChatEnvelope | null> => {
     if (!accessToken) return null;
+    setHintRung(0); // a fresh attempt resets the hint ladder
     addMsg({
       id: uid(),
       role: "user",
@@ -654,6 +721,47 @@ function ChatPage() {
     options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
   ) => {
     await submitTextAnswer(text, options);
+  };
+
+  // Quick-action help requests (Hint climbs the ladder; "show me how" asks for a
+  // worked example) — routed through the tutor's integrity policy on the backend.
+  const sendHelpRequest = async (kind: "hint" | "show_me_how") => {
+    if (!accessToken || sending) return;
+    const nextRung = kind === "hint" ? hintRung + 1 : hintRung;
+    if (kind === "hint") setHintRung(nextRung);
+    addMsg({
+      id: uid(),
+      role: "user",
+      text: kind === "hint" ? "Can I get a hint?" : "I'm stuck — can you show me how?",
+    });
+    setSending(true);
+    const thinkingId = uid();
+    setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
+    try {
+      const envelope = await invokeTypedChat({
+        accessToken,
+        lessonId,
+        sessionId,
+        mentorPreferences: mentorToPreferences(mentor),
+        helpRequest: kind,
+        hintRung: kind === "hint" ? nextRung : undefined,
+      });
+      setSessionId(envelope.session_id);
+      setLearningSession((previous) =>
+        previous
+          ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
+          : previous,
+      );
+      replaceThinking(thinkingId, envelopeMessage(envelope));
+    } catch (error) {
+      replaceThinking(thinkingId, {
+        id: uid(),
+        role: "bot",
+        text: (error as Error).message || "The mentor could not answer.",
+      });
+    } finally {
+      setSending(false);
+    }
   };
 
   const sendChoice = async (choice: ChatChoice) => {
@@ -908,6 +1016,13 @@ function ChatPage() {
             onSubmitAssignment={submitStudentAssignment}
           />
           <AssessmentDock lessonId={lessonId} bundle={assessments} />
+          <MentorModeBar
+            mode={mentor.mode}
+            onModeChange={(mode) => updateMentor({ ...mentor, mode })}
+            onHint={() => void sendHelpRequest("hint")}
+            onShowMeHow={() => void sendHelpRequest("show_me_how")}
+            disabled={sending}
+          />
           <Composer
             ref={composerRef}
             key={lessonId}

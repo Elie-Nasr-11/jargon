@@ -17,6 +17,13 @@ export type Lesson = {
   course_title?: string | null;
   unit_title?: string | null;
   curriculum_group?: string | null;
+  // Tutor-behavior policy (set in the curriculum studio).
+  help_ceiling?: LessonHelpCeiling | null;
+  require_attempt_first?: boolean | null;
+  final_answer_policy?: LessonFinalAnswerPolicy | null;
+  tutor_tone?: string | null;
+  tutor_pace?: string | null;
+  grade_band?: string | null;
 };
 
 export type LessonActivity = {
@@ -196,6 +203,13 @@ export type CurriculumLessonMetaInput = {
   lesson_type: "discussion" | "code" | "reflection" | "multiple_choice" | "file";
   tutor_prompt: string;
   sample_code?: string;
+  // Tutor-behavior policy (optional; omitted keeps the lesson's current values).
+  help_ceiling?: LessonHelpCeiling;
+  require_attempt_first?: boolean;
+  final_answer_policy?: LessonFinalAnswerPolicy;
+  tutor_tone?: string;
+  tutor_pace?: string;
+  grade_band?: string;
 };
 
 export type CurriculumMilestoneInput = {
@@ -921,11 +935,24 @@ export type AdminClass = {
   updated_at: string;
 };
 
+export type MentorMode = "explain" | "guide" | "quiz" | "check" | "write" | "challenge";
+
 export type MentorPreferences = {
   pace: "brief" | "balanced" | "guided";
   tone: "neutral" | "encouraging";
   hint_level: "low" | "medium" | "high";
+  mode: MentorMode;
 };
+
+// Teacher "help-level" + integrity policy that governs the tutor for a lesson.
+export type LessonHelpCeiling =
+  | "clarify"
+  | "hints"
+  | "guided"
+  | "worked_example"
+  | "feedback"
+  | "study";
+export type LessonFinalAnswerPolicy = "never" | "after_attempt" | "allowed";
 
 export type TypedChatAnswer = {
   mode: "text" | "code" | "multiple_choice" | "file";

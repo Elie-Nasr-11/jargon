@@ -1982,6 +1982,17 @@ function LessonMetaForm({
   const [allowedModes, setAllowedModes] = useState<ResponseMode[]>(
     milestone?.allowed_response_modes?.length ? milestone.allowed_response_modes : ["text"],
   );
+  // Tutor-behavior policy (school-governance controls).
+  const [helpCeiling, setHelpCeiling] = useState<string>(lesson.help_ceiling || "guided");
+  const [requireAttemptFirst, setRequireAttemptFirst] = useState<boolean>(
+    lesson.require_attempt_first !== false,
+  );
+  const [finalAnswerPolicy, setFinalAnswerPolicy] = useState<string>(
+    lesson.final_answer_policy || "after_attempt",
+  );
+  const [tutorTone, setTutorTone] = useState<string>(lesson.tutor_tone || "");
+  const [tutorPace, setTutorPace] = useState<string>(lesson.tutor_pace || "");
+  const [gradeBand, setGradeBand] = useState<string>(lesson.grade_band || "");
 
   const toggleMode = (mode: ResponseMode) => {
     setAllowedModes((current) => {
@@ -1999,6 +2010,12 @@ function LessonMetaForm({
         level: level.trim() || "Any level",
         lesson_type: lessonType,
         tutor_prompt: tutorPrompt.trim(),
+        help_ceiling: helpCeiling as CurriculumLessonMetaInput["help_ceiling"],
+        require_attempt_first: requireAttemptFirst,
+        final_answer_policy: finalAnswerPolicy as CurriculumLessonMetaInput["final_answer_policy"],
+        tutor_tone: tutorTone,
+        tutor_pace: tutorPace,
+        grade_band: gradeBand,
       },
       {
         objective: objective.trim(),
@@ -2051,6 +2068,59 @@ function LessonMetaForm({
               </button>
             ))}
           </div>
+        </div>
+        <div className="grid gap-3 rounded-2xl border border-border bg-depth-field p-3">
+          <div>
+            <div className="text-[13px] font-medium text-foreground">Tutor behavior</div>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              Govern how much help the mentor may give and whether it must see an attempt first. The
+              student's chosen mode can ask for help only up to the ceiling.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SelectInput
+              label="Help ceiling"
+              value={helpCeiling}
+              options={["clarify", "hints", "guided", "worked_example", "feedback", "study"]}
+              onChange={setHelpCeiling}
+            />
+            <SelectInput
+              label="Final answer"
+              value={finalAnswerPolicy}
+              options={["never", "after_attempt", "allowed"]}
+              onChange={setFinalAnswerPolicy}
+            />
+            <SelectInput
+              label="Grade band"
+              value={gradeBand || "auto"}
+              options={["auto", "lower", "middle", "upper"]}
+              onChange={(value) => setGradeBand(value === "auto" ? "" : value)}
+            />
+            <SelectInput
+              label="Default tone"
+              value={tutorTone || "default"}
+              options={["default", "encouraging", "neutral", "direct"]}
+              onChange={(value) => setTutorTone(value === "default" ? "" : value)}
+            />
+            <SelectInput
+              label="Default pace"
+              value={tutorPace || "default"}
+              options={["default", "brief", "balanced", "guided"]}
+              onChange={(value) => setTutorPace(value === "default" ? "" : value)}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setRequireAttemptFirst((current) => !current)}
+            className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
+              requireAttemptFirst
+                ? "border-foreground/25 bg-foreground text-background"
+                : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            {requireAttemptFirst ? <Check className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
+            Require an attempt before the mentor helps
+          </button>
         </div>
         <div>
           <button

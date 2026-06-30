@@ -31,6 +31,15 @@ const NEXT_ACTIONS = new Set([
 const PACE_OPTIONS = new Set(["brief", "balanced", "guided"]);
 const TONE_OPTIONS = new Set(["neutral", "encouraging"]);
 const HINT_LEVEL_OPTIONS = new Set(["low", "medium", "high"]);
+const MENTOR_MODE_OPTIONS = new Set([
+  "explain",
+  "guide",
+  "quiz",
+  "check",
+  "write",
+  "challenge",
+]);
+const HELP_REQUEST_OPTIONS = new Set(["hint", "show_me_how", "explain"]);
 const CHAT_RATE_LIMIT_WINDOW_MS = 60_000;
 const CHAT_RATE_LIMIT_MAX = 30;
 
@@ -305,7 +314,10 @@ function normalizeMentorPreferences(
   const hintLevel = HINT_LEVEL_OPTIONS.has(String(prefs.hint_level))
     ? String(prefs.hint_level)
     : "medium";
-  return { pace, tone, hint_level: hintLevel };
+  const mode = MENTOR_MODE_OPTIONS.has(String(prefs.mode))
+    ? String(prefs.mode)
+    : "guide";
+  return { pace, tone, hint_level: hintLevel, mode };
 }
 
 function restConfig(req: Request): SupabaseConfig {
@@ -715,6 +727,367 @@ function mergeAssessment(
   };
 }
 
+// --- Pedagogy decision layer -------------------------------------------------
+// Sits between context-load and the LLM call: diagnose the learner, resolve the
+// teacher's help ceiling against the student's chosen mode, and pick ONE teaching
+// move. Pure + deterministic (no extra model round-trip). It shapes the system
+// prompt + user payload so the model executes a *chosen* move under a *known*
+// integrity ceiling instead of inferring all pedagogy from one generic prompt.
+
+type TeachingMove =
+  | "diagnose"
+  | "explain"
+  | "model"
+  | "hint"
+  | "scaffold"
+  | "socratic"
+  | "correct"
+  | "retrieve"
+  | "extend"
+  | "reflect";
+
+type StudentDiagnosis = {
+  level: "beginner" | "emerging" | "capable" | "advanced";
+  difficulty:
+    | "conceptual"
+    | "procedural"
+    | "careless"
+    | "confidence"
+    | "none"
+    | "unknown";
+  gradeBand: "lower" | "middle" | "upper" | "unknown";
+};
+
+type HelpPolicy = {
+  helpCeiling: string;
+  requireAttemptFirst: boolean;
+  finalAnswerPolicy: "never" | "after_attempt" | "allowed";
+  tone: string;
+  pace: string;
+};
+
+const HELP_RANK: Record<string, number> = {
+  clarify: 1,
+  hints: 2,
+  guided: 3,
+  worked_example: 4,
+  feedback: 5,
+  study: 6,
+};
+// The help level each student mode *wants* (clamped down to the teacher ceiling).
+const MODE_HELP_WANT: Record<string, number> = {
+  explain: 4,
+  guide: 3,
+  quiz: 2,
+  check: 5,
+  write: 5,
+  challenge: 2,
+};
+
+const MOVE_GUIDANCE: Record<TeachingMove, string> = {
+  diagnose:
+    "DIAGNOSE first: ask ONE short question to pinpoint where the student is stuck (the idea, the method, the wording, or just getting started). Do not explain or solve yet.",
+  explain:
+    "EXPLAIN directly and simply, calibrated to the grade band, using one concrete example or analogy, then immediately check understanding with a quick question or tiny task.",
+  model:
+    "MODEL with a WORKED EXAMPLE on a SIMILAR (not the assigned) item: show the steps and your thinking, then ask the student to try the assigned one themselves. Never hand over the assigned answer.",
+  hint: "Give exactly ONE hint at the requested rung, then stop and ask the student to try. Do not reveal the full solution.",
+  scaffold:
+    "SCAFFOLD: name only the NEXT single step, ask the student to do just that step, then wait.",
+  socratic:
+    "Ask ONE guiding question that leads the student toward the next step. Do not give the answer; let them reason.",
+  correct:
+    "Acknowledge what is right first, then point to the ONE specific step that is wrong and why in a sentence, and ask the student to fix just that.",
+  retrieve:
+    "RETRIEVAL PRACTICE: ask a short recall/application question that targets a weak skill. Do not show the answer first; respond after the student answers.",
+  extend:
+    "EXTEND: the student is solid — pose a harder variant, an edge case, or a 'why' question that stretches them.",
+  reflect:
+    "Ask the student to explain HOW they solved it or what strategy helped, to consolidate the learning, and name the strategy.",
+};
+
+function gradeBandFor(
+  grade: unknown,
+  lessonBand: unknown,
+): StudentDiagnosis["gradeBand"] {
+  const explicit = String(lessonBand || "").toLowerCase();
+  if (explicit === "lower" || explicit === "middle" || explicit === "upper") {
+    return explicit;
+  }
+  const digits = String(grade || "").replace(/[^0-9]/g, "");
+  if (digits) {
+    const n = Number.parseInt(digits, 10);
+    if (Number.isFinite(n)) {
+      if (n <= 5) return "lower";
+      if (n <= 8) return "middle";
+      return "upper";
+    }
+  }
+  return "unknown";
+}
+
+function diagnoseStudent(
+  context: Awaited<ReturnType<typeof loadContext>>,
+  session: DbRow,
+  skills: string[],
+  answer: DbRow | null,
+  assessment: Assessment | null,
+): StudentDiagnosis {
+  const relevant = context.mastery.filter((m) =>
+    skills.includes(String(m.skill_key)),
+  );
+  const pool = relevant.length ? relevant : context.mastery;
+  const avg = pool.length
+    ? pool.reduce((sum, m) => sum + Number(m.score || 0), 0) / pool.length
+    : 0;
+  const retry = Number(session.retry_count || 0);
+  const rescue = Number(session.rescue_count || 0);
+
+  let level: StudentDiagnosis["level"];
+  if (pool.length === 0) level = "beginner";
+  else if (avg < 0.4) level = "beginner";
+  else if (avg < 0.7) level = "emerging";
+  else if (avg < 0.9) level = "capable";
+  else level = "advanced";
+  if (rescue >= 2 && level === "advanced") level = "capable";
+
+  let difficulty: StudentDiagnosis["difficulty"] = "unknown";
+  if (!answer) difficulty = "unknown";
+  else if (assessment?.passed === true) difficulty = "none";
+  else if (answer.mode === "code") {
+    difficulty = runHasErrors(answer.run_result)
+      ? "procedural"
+      : retry >= 1
+        ? "conceptual"
+        : "careless";
+  } else {
+    difficulty = retry >= 1 ? "conceptual" : "careless";
+  }
+  if (difficulty !== "none" && difficulty !== "unknown" && rescue >= 1) {
+    difficulty = "conceptual";
+  }
+
+  return {
+    level,
+    difficulty,
+    gradeBand: gradeBandFor(context.profile?.grade, context.lesson?.grade_band),
+  };
+}
+
+function resolveHelpPolicy(lesson: DbRow | null): HelpPolicy {
+  const ceiling = String(lesson?.help_ceiling || "guided");
+  const helpCeiling = HELP_RANK[ceiling] ? ceiling : "guided";
+  const finalAnswerRaw = String(lesson?.final_answer_policy || "after_attempt");
+  const finalAnswerPolicy = (
+    ["never", "after_attempt", "allowed"].includes(finalAnswerRaw)
+      ? finalAnswerRaw
+      : "after_attempt"
+  ) as HelpPolicy["finalAnswerPolicy"];
+  return {
+    helpCeiling,
+    requireAttemptFirst: lesson?.require_attempt_first !== false,
+    finalAnswerPolicy,
+    tone: String(lesson?.tutor_tone || ""),
+    pace: String(lesson?.tutor_pace || ""),
+  };
+}
+
+function selectTeachingMove(
+  diagnosis: StudentDiagnosis,
+  policy: HelpPolicy,
+  mode: string,
+  answer: DbRow | null,
+  assessment: Assessment | null,
+  hasAttempt: boolean,
+  helpRequest: string,
+  requestedRung: number,
+): { move: TeachingMove; hintRung: number } {
+  const wantRank = MODE_HELP_WANT[mode] ?? 3;
+  const ceil = Math.min(HELP_RANK[policy.helpCeiling] ?? 3, wantRank);
+  const rung = Math.max(1, Math.min(4, requestedRung || 1));
+
+  // Integrity gate: attempt-first required and nothing attempted yet -> never model
+  // or hand over a path; diagnose, or give one gentle hint if explicitly asked.
+  if (policy.requireAttemptFirst && !hasAttempt && assessment?.passed !== true) {
+    if (helpRequest === "hint") return { move: "hint", hintRung: Math.min(rung, 2) };
+    return { move: "diagnose", hintRung: 0 };
+  }
+
+  // Explicit student help requests (Hint / Show-me-how).
+  if (helpRequest === "hint") return { move: "hint", hintRung: rung };
+  if (helpRequest === "show_me_how") {
+    return ceil >= HELP_RANK.worked_example
+      ? { move: "model", hintRung: rung }
+      : { move: "hint", hintRung: Math.max(2, rung) };
+  }
+
+  // Mode-led bias.
+  if (mode === "quiz") return { move: "retrieve", hintRung: 0 };
+  if (mode === "check") return { move: "correct", hintRung: 0 };
+  if (mode === "write") return { move: "scaffold", hintRung: 0 };
+  if (mode === "challenge") {
+    return {
+      move: assessment?.passed === true ? "extend" : "socratic",
+      hintRung: 0,
+    };
+  }
+
+  // Outcome-led for guide / explain.
+  if (assessment?.passed === true) {
+    return diagnosis.level === "advanced"
+      ? { move: "extend", hintRung: 0 }
+      : { move: "reflect", hintRung: 0 };
+  }
+  if (!hasAttempt && !answer) {
+    return mode === "explain" && ceil >= HELP_RANK.guided
+      ? { move: "explain", hintRung: 0 }
+      : { move: "diagnose", hintRung: 0 };
+  }
+  if (diagnosis.difficulty === "procedural") {
+    return ceil >= HELP_RANK.worked_example
+      ? { move: "model", hintRung: rung }
+      : { move: "scaffold", hintRung: rung };
+  }
+  if (diagnosis.difficulty === "conceptual") {
+    if (mode === "explain" && ceil >= HELP_RANK.worked_example) {
+      return { move: "explain", hintRung: 0 };
+    }
+    return ceil >= HELP_RANK.guided
+      ? { move: "socratic", hintRung: rung }
+      : { move: "hint", hintRung: rung };
+  }
+  if (diagnosis.difficulty === "careless") return { move: "correct", hintRung: rung };
+  if (diagnosis.difficulty === "confidence") {
+    return { move: "hint", hintRung: Math.max(1, rung) };
+  }
+  return { move: "diagnose", hintRung: 0 };
+}
+
+function pedagogyPromptBlock(
+  move: TeachingMove,
+  diagnosis: StudentDiagnosis,
+  policy: HelpPolicy,
+  mode: string,
+  hintRung: number,
+  answersForbidden: boolean,
+  misconceptions: DbRow[],
+): string {
+  const integrity = answersForbidden
+    ? "INTEGRITY: do NOT provide the full or final answer / complete solution to the assigned task this turn — guide only."
+    : "INTEGRITY: reveal a full solution only if it genuinely helps after the student's own attempt; otherwise prefer guidance.";
+  const known = misconceptions.length
+    ? `Known recurring misconceptions for this student: ${misconceptions
+        .map((m) => `${String(m.skill_key)} — ${String(m.pattern)}`)
+        .join("; ")}. Watch for these and address them.`
+    : "";
+  return [
+    "PEDAGOGY (set by Jargon's tutor policy — follow it exactly):",
+    `Teaching move for THIS turn: ${move}. ${MOVE_GUIDANCE[move]}`,
+    move === "hint"
+      ? `Hint rung: ${hintRung} of 4 (1 = gentle nudge, 4 = very revealing but still not the full answer).`
+      : "",
+    `Student: level=${diagnosis.level}, likely difficulty=${diagnosis.difficulty}, grade band=${diagnosis.gradeBand}. Calibrate vocabulary and sentence length to the grade band.`,
+    `Mentor mode: ${mode}. Help ceiling: ${policy.helpCeiling} — never exceed it.`,
+    integrity,
+    known,
+    'Always end with a check for understanding or one clear next action. If you identify a recurring conceptual error, add a top-level "misconception": { "skill_key": "<skill>", "pattern": "<short description>", "hint": "<how to fix>" } to your JSON.',
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function confidenceFor(
+  assessment: Assessment | null,
+  session: DbRow,
+  hintRung: number,
+): number {
+  if (!assessment) return 0.5;
+  const retry = Number(session.retry_count || 0);
+  const rescue = Number(session.rescue_count || 0);
+  if (assessment.passed === true) {
+    return Math.max(
+      0.55,
+      Math.min(0.95, 0.9 - 0.12 * retry - 0.18 * rescue - 0.05 * hintRung),
+    );
+  }
+  return Math.max(0.2, Math.min(0.5, 0.45 - 0.05 * retry));
+}
+
+function independenceFor(
+  assessment: Assessment | null,
+  attemptedBeforeHelp: boolean,
+  hintRung: number,
+): number {
+  const solved = assessment?.passed === true ? 1 : 0;
+  const ownSteam = attemptedBeforeHelp ? 1 : 0;
+  const lowHelp = 1 - Math.min(1, hintRung / 4);
+  return Math.max(0, Math.min(1, 0.5 * solved + 0.3 * ownSteam + 0.2 * lowHelp));
+}
+
+function gateFinalAnswer(
+  reply: string,
+  answersForbidden: boolean,
+  expectedOutput: string,
+): string {
+  if (!answersForbidden || !expectedOutput || !reply.includes(expectedOutput)) {
+    return reply;
+  }
+  // Light deterministic backstop: redact verbatim expected output that leaked.
+  const redacted = reply
+    .split("\n")
+    .filter((line) => !line.includes(expectedOutput))
+    .join("\n")
+    .trim();
+  return `${redacted}\n\nTry it yourself first — make an attempt and I'll check it with you.`.trim();
+}
+
+async function upsertMisconception(
+  config: SupabaseConfig,
+  userId: string,
+  organizationId: string | null,
+  raw: unknown,
+): Promise<void> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return;
+  const m = raw as DbRow;
+  const skillKey = String(m.skill_key || "").trim();
+  const pattern = String(m.pattern || "")
+    .trim()
+    .slice(0, 280);
+  if (!skillKey || !pattern) return;
+  const hint = typeof m.hint === "string" ? m.hint.slice(0, 280) : null;
+  const existing = await loadFirst(
+    config,
+    `student_misconceptions?user_id=eq.${encodeURIComponent(userId)}&skill_key=eq.${encodeURIComponent(skillKey)}&pattern=eq.${encodeURIComponent(pattern)}&select=id,occurrences&limit=1`,
+  );
+  const now = new Date().toISOString();
+  if (existing && typeof existing.id === "string") {
+    await patchRows(
+      config,
+      `student_misconceptions?id=eq.${encodeURIComponent(existing.id)}`,
+      {
+        occurrences: Number(existing.occurrences || 1) + 1,
+        hint: hint ?? undefined,
+        status: "active",
+        last_seen_at: now,
+        updated_at: now,
+      },
+    );
+  } else {
+    await insertRow(config, "student_misconceptions", {
+      user_id: userId,
+      organization_id: organizationId,
+      skill_key: skillKey,
+      pattern,
+      hint,
+      occurrences: 1,
+      status: "active",
+      first_seen_at: now,
+      last_seen_at: now,
+      updated_at: now,
+    });
+  }
+}
+
 function flowFor(
   currentStage: Stage,
   session: DbRow,
@@ -893,10 +1266,12 @@ async function loadContext(
   resources: DbRow[];
   resourceChunks: DbRow[];
   resourceInteractions: DbRow[];
+  profile: DbRow | null;
+  misconceptions: DbRow[];
 }> {
   const lesson = await loadFirst(
     config,
-    `lessons?id=eq.${encodeURIComponent(lessonId)}&publication_status=eq.published&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id`,
+    `lessons?id=eq.${encodeURIComponent(lessonId)}&publication_status=eq.published&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id,help_ceiling,require_attempt_first,final_answer_policy,tutor_tone,tutor_pace,grade_band`,
   );
 
   let activity: DbRow | null = null;
@@ -945,12 +1320,15 @@ async function loadContext(
         `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
       );
 
+  const ctxSkills = [...skillKeysFor(activity, milestone, quiz)];
   const [
     recentTurns,
     recentAttempts,
     mastery,
     resources,
     resourceInteractions,
+    profile,
+    misconceptions,
   ] = await Promise.all([
     loadMany(
       config,
@@ -971,6 +1349,14 @@ async function loadContext(
     loadMany(
       config,
       `resource_interactions?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&order=created_at.desc&limit=20&select=resource_id,event_type,progress_seconds,progress_percent,created_at`,
+    ),
+    loadFirst(
+      config,
+      `profiles?id=eq.${encodeURIComponent(userId)}&select=name,grade&limit=1`,
+    ),
+    loadMany(
+      config,
+      `student_misconceptions?user_id=eq.${encodeURIComponent(userId)}&status=eq.active${ctxSkills.length ? `&skill_key=${inFilter(ctxSkills)}` : ""}&order=last_seen_at.desc&limit=8&select=skill_key,pattern,hint,occurrences`,
     ),
   ]);
   const resourceIds = uniqueStrings(
@@ -996,6 +1382,8 @@ async function loadContext(
     resources,
     resourceChunks,
     resourceInteractions,
+    profile,
+    misconceptions,
   };
 }
 
@@ -1055,6 +1443,10 @@ async function writeEvidenceAndMastery(
   assessment: Assessment | null,
   skills: string[],
   milestone: DbRow | null,
+  confidence: number,
+  teachingMove: string,
+  hintRung: number,
+  attemptedBeforeHelp: boolean,
 ): Promise<void> {
   if (
     !answer ||
@@ -1082,10 +1474,13 @@ async function writeEvidenceAndMastery(
     },
     skill_keys: skills,
     score: assessment.score,
-    confidence: assessment.passed === true ? 0.85 : 0.45,
+    confidence,
     rubric_result: assessment,
     notes: assessment.feedback || "",
     created_by: userId,
+    teaching_move: teachingMove || null,
+    hint_rung: hintRung || null,
+    attempted_before_help: attemptedBeforeHelp,
   });
 
   for (const skill of skills) {
@@ -1119,7 +1514,7 @@ async function writeEvidenceAndMastery(
       attempt_count: nextAttemptCount,
       score: nextScore,
       latest_score: assessment.score,
-      confidence: assessment.passed === true ? 0.85 : 0.45,
+      confidence,
       last_seen_at: new Date().toISOString(),
       last_practiced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -1249,6 +1644,40 @@ async function handleTypedRequest(
     context.quiz,
   );
 
+  // --- Pedagogy decision (diagnose -> policy -> teaching move) ---------------
+  const mentorMode = mentorPreferences?.mode || "guide";
+  const helpRequest = HELP_REQUEST_OPTIONS.has(String(body.help_request))
+    ? String(body.help_request)
+    : "";
+  const requestedRung = Number(body.hint_rung) || 0;
+  const priorActivityAttempts = context.recentAttempts.filter(
+    (a) => String(a.activity_id || "") === String(context.activity?.id || ""),
+  ).length;
+  const hasAttempt = priorActivityAttempts > 0 || Boolean(answer);
+  const attemptedBeforeHelp =
+    Boolean(answer) && Number(session.rescue_count || 0) === 0;
+  const diagnosis = diagnoseStudent(
+    context,
+    session,
+    skillKeys,
+    answer,
+    orchestratorAssessment,
+  );
+  const helpPolicy = resolveHelpPolicy(context.lesson);
+  const teaching = selectTeachingMove(
+    diagnosis,
+    helpPolicy,
+    mentorMode,
+    answer,
+    orchestratorAssessment,
+    hasAttempt,
+    helpRequest,
+    requestedRung,
+  );
+  const answersForbidden =
+    helpPolicy.finalAnswerPolicy === "never" ||
+    (helpPolicy.finalAnswerPolicy === "after_attempt" && !hasAttempt);
+
   try {
     if (await isChatRateLimited(config, userId, sessionId)) {
       await recordRuntimeEvent(config, {
@@ -1292,8 +1721,17 @@ async function handleTypedRequest(
       answer,
       orchestratorAssessment,
     );
+    const systemContent = `${SYSTEM_PROMPT}\n\n${pedagogyPromptBlock(
+      teaching.move,
+      diagnosis,
+      helpPolicy,
+      mentorMode,
+      teaching.hintRung,
+      answersForbidden,
+      context.misconceptions,
+    )}`;
     const messages = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: systemContent },
       {
         role: "user",
         content: JSON.stringify({
@@ -1338,6 +1776,16 @@ async function handleTypedRequest(
             rescue_count: session.rescue_count || 0,
           },
           mentor_preferences: mentorPreferences,
+          student_model: diagnosis,
+          teaching_move: teaching.move,
+          hint_rung: teaching.hintRung,
+          help_policy: {
+            help_ceiling: helpPolicy.helpCeiling,
+            final_answer_policy: helpPolicy.finalAnswerPolicy,
+            require_attempt_first: helpPolicy.requireAttemptFirst,
+            answers_forbidden_this_turn: answersForbidden,
+          },
+          known_misconceptions: context.misconceptions,
           latest_answer: answer,
           deterministic_assessment: orchestratorAssessment,
           orchestrator_flow: draftFlow,
@@ -1447,6 +1895,14 @@ async function handleTypedRequest(
             ),
     });
 
+    // Deterministic integrity backstop: if a full answer isn't allowed this turn,
+    // redact any verbatim expected output the model may have leaked.
+    envelope.reply = gateFinalAnswer(
+      envelope.reply,
+      answersForbidden,
+      expectedOutputFor(context.lesson, context.activity),
+    );
+
     if (advancing) {
       // Turn the completing turn into a "continue to the next part" transition so the
       // client keeps the session open; the student's next message starts the next step.
@@ -1456,6 +1912,11 @@ async function handleTypedRequest(
       envelope.choices = [];
       envelope.reply =
         `${envelope.reply}\n\nThat completes this part — send a message when you're ready for the next part.`.trim();
+    }
+
+    // Misconception memory: persist any recurring conceptual error the mentor flagged.
+    if (parsed.misconception) {
+      await upsertMisconception(config, userId, null, parsed.misconception);
     }
 
     await insertRow(config, "learning_turns", {
@@ -1520,6 +1981,10 @@ async function handleTypedRequest(
         assessment,
         skillKeys,
         context.milestone,
+        confidenceFor(assessment, session, teaching.hintRung),
+        teaching.move,
+        teaching.hintRung,
+        attemptedBeforeHelp,
       );
       await maybeWriteRecommendation(
         config,
@@ -1534,6 +1999,18 @@ async function handleTypedRequest(
     const retryIncrement = envelope.next_action === "retry" ? 1 : 0;
     const rescueIncrement = envelope.next_action === "rescue" ? 1 : 0;
     const nextStatus = advancing ? "active" : sessionStatus(finalFlow);
+
+    // Rolling independence signal (only updated on real attempts).
+    let nextIndependence: number | undefined;
+    if (answer) {
+      const turnInd = independenceFor(
+        assessment,
+        attemptedBeforeHelp,
+        teaching.hintRung,
+      );
+      const prior = numberOrNull(session.independence_score);
+      nextIndependence = prior === null ? turnInd : 0.7 * prior + 0.3 * turnInd;
+    }
     await patchRows(
       config,
       `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`,
@@ -1554,6 +2031,10 @@ async function handleTypedRequest(
         retry_count: advancing ? 0 : Number(session.retry_count || 0) + retryIncrement,
         rescue_count: advancing ? 0 : Number(session.rescue_count || 0) + rescueIncrement,
         updated_at: new Date().toISOString(),
+        mentor_mode: mentorMode,
+        ...(nextIndependence !== undefined
+          ? { independence_score: nextIndependence }
+          : {}),
       },
     );
 

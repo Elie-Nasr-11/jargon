@@ -50,22 +50,27 @@ jobs:
         with:
           version: latest
 
-      - name: Apply curriculum migration (Management API; idempotent)
+      - name: Apply additive migrations (Management API; idempotent)
         run: |
-          body="$(jq -Rs '{query: .}' supabase/migrations/20260629000000_curriculum_authoring.sql)"
-          resp="$(mktemp)"
-          code="$(curl -sS -o "$resp" -w '%{http_code}' \
-            -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
-            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --data-raw "$body")"
-          echo "HTTP $code"
-          cat "$resp"; echo
-          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
-            echo "::error::Migration query failed (HTTP $code)."
-            exit 1
-          fi
-          echo "Migration applied."
+          for f in \
+            supabase/migrations/20260629000000_curriculum_authoring.sql \
+            supabase/migrations/20260630000000_tutor_pedagogy.sql ; do
+            echo "Applying $f"
+            body="$(jq -Rs '{query: .}' "$f")"
+            resp="$(mktemp)"
+            code="$(curl -sS -o "$resp" -w '%{http_code}' \
+              -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data-raw "$body")"
+            echo "HTTP $code"
+            cat "$resp"; echo
+            if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+              echo "::error::Migration query failed for $f (HTTP $code)."
+              exit 1
+            fi
+            echo "Applied $f."
+          done
 
       - name: Deploy edge functions (curriculum-admin, chat)
         run: |
