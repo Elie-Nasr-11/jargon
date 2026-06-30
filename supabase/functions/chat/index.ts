@@ -735,6 +735,7 @@ function mergeAssessment(
 // integrity ceiling instead of inferring all pedagogy from one generic prompt.
 
 type TeachingMove =
+  | "present"
   | "diagnose"
   | "explain"
   | "model"
@@ -785,6 +786,8 @@ const MODE_HELP_WANT: Record<string, number> = {
 };
 
 const MOVE_GUIDANCE: Record<TeachingMove, string> = {
+  present:
+    "PRESENT this step: introduce the task in a sentence or two at the student's grade level and invite them to make their first attempt. Don't pre-empt their thinking, give away the answer, or interrogate them yet.",
   diagnose:
     "DIAGNOSE first: ask ONE short question to pinpoint where the student is stuck (the idea, the method, the wording, or just getting started). Do not explain or solve yet.",
   explain:
@@ -901,10 +904,16 @@ function selectTeachingMove(
   hasAttempt: boolean,
   helpRequest: string,
   requestedRung: number,
+  isIntro: boolean,
 ): { move: TeachingMove; hintRung: number } {
   const wantRank = MODE_HELP_WANT[mode] ?? 3;
   const ceil = Math.min(HELP_RANK[policy.helpCeiling] ?? 3, wantRank);
   const rung = Math.max(1, Math.min(4, requestedRung || 1));
+
+  // Intro/presentation turn: the orchestrator presents the activity and never grades,
+  // so PRESENT the task — don't let attempt-first gating turn the lesson opener into an
+  // interrogation. (Applies even if the turn carried a message, mirroring flowFor.)
+  if (isIntro && !helpRequest) return { move: "present", hintRung: 0 };
 
   // Integrity gate: attempt-first required and nothing attempted yet -> never model
   // or hand over a path; diagnose, or give one gentle hint if explicitly asked.
@@ -1029,15 +1038,20 @@ function gateFinalAnswer(
   answersForbidden: boolean,
   expectedOutput: string,
 ): string {
-  if (!answersForbidden || !expectedOutput || !reply.includes(expectedOutput)) {
-    return reply;
+  if (!answersForbidden) return reply;
+  const needle = (expectedOutput || "").trim();
+  // Narrow, conservative backstop: only act on a DISTINCTIVE expected output (a
+  // multi-line program output block) so we never corrupt legitimate guidance that
+  // merely mentions a short value like "4" or "True". The prompt-level move gating
+  // is the primary integrity mechanism; this only catches a blatant verbatim leak.
+  const distinctive = needle.length >= 12 && needle.includes("\n");
+  if (!distinctive || !reply.includes(needle)) return reply;
+  // Replace the whole verbatim block (handles multi-line, which a per-line filter missed).
+  const redacted = reply.split(needle).join("…").trim();
+  if (redacted.length < 12) {
+    // Redaction would gut the reply — send a clean nudge instead of a corrupted message.
+    return "Let's not jump to the full answer yet — make your own attempt and I'll check it with you.";
   }
-  // Light deterministic backstop: redact verbatim expected output that leaked.
-  const redacted = reply
-    .split("\n")
-    .filter((line) => !line.includes(expectedOutput))
-    .join("\n")
-    .trim();
   return `${redacted}\n\nTry it yourself first — make an attempt and I'll check it with you.`.trim();
 }
 
@@ -1673,6 +1687,7 @@ async function handleTypedRequest(
     hasAttempt,
     helpRequest,
     requestedRung,
+    currentStage === "intro",
   );
   const answersForbidden =
     helpPolicy.finalAnswerPolicy === "never" ||
@@ -2008,7 +2023,10 @@ async function handleTypedRequest(
         attemptedBeforeHelp,
         teaching.hintRung,
       );
-      const prior = numberOrNull(session.independence_score);
+      // PostgREST serializes `numeric` as a string, so read it tolerantly (the rest
+      // of this file reads numeric session columns via Number() for the same reason).
+      const priorRaw = Number(session.independence_score);
+      const prior = Number.isFinite(priorRaw) ? priorRaw : null;
       nextIndependence = prior === null ? turnInd : 0.7 * prior + 0.3 * turnInd;
     }
     await patchRows(

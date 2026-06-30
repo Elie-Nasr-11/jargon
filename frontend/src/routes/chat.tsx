@@ -769,6 +769,7 @@ function ChatPage() {
     const selected = choiceLabel(choice);
     const selectedValue = choiceValue(choice);
     if (!selectedValue) return;
+    setHintRung(0); // a fresh attempt resets the hint ladder
 
     addMsg({ id: uid(), role: "user", text: `Selected: ${selected}` });
     setSending(true);
@@ -827,6 +828,7 @@ function ChatPage() {
       lang,
     });
     if (!accessToken) return;
+    setHintRung(0); // a fresh attempt resets the hint ladder
 
     setSending(true);
     const thinkingId = uid();

@@ -74,7 +74,7 @@ function write(k: string, v: unknown) {
 export const store = {
   getLessonId: () => read<string>(KEYS.lesson, LESSONS[0].id),
   setLessonId: (id: string) => write(KEYS.lesson, id),
-  getMentor: () => read<MentorConfig>(KEYS.mentor, DEFAULT_MENTOR),
+  getMentor: () => ({ ...DEFAULT_MENTOR, ...read<Partial<MentorConfig>>(KEYS.mentor, {}) }),
   setMentor: (m: MentorConfig) => write(KEYS.mentor, m),
   getVoice: () => ({ ...DEFAULT_VOICE, ...read<Partial<VoiceSettings>>(KEYS.voice, {}) }),
   setVoice: (v: VoiceSettings) => write(KEYS.voice, v),
