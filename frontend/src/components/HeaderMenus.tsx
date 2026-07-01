@@ -422,18 +422,24 @@ function CollapsibleSection({
   );
 }
 
-// A compact, nestable disclosure for the Subject > Unit > Lesson tree. `level` only tweaks the
-// label styling (0 = subject, 1 = unit); the CSS grid 0fr->1fr collapse animates the height.
+// A compact, nestable disclosure for the Subject > Unit > Lesson tree. `level` tweaks the label
+// styling (0 = subject, 1 = unit). When `active` (this section holds the current lesson) it stays
+// visibly marked — an accent dot + foreground label — even collapsed, and shows `activeHint` (the
+// current lesson's name) as a subtitle so you can locate the lesson without expanding.
 function Disclosure({
   label,
   right,
   level = 0,
+  active = false,
+  activeHint,
   defaultOpen = false,
   children,
 }: {
   label: ReactNode;
   right?: ReactNode;
   level?: 0 | 1;
+  active?: boolean;
+  activeHint?: string;
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
@@ -444,24 +450,40 @@ function Disclosure({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`flex w-full items-center gap-2 rounded-md py-2 pr-1 text-left transition-colors hover:bg-muted/50 ${
-          level === 0 ? "pl-1" : "pl-2.5"
-        }`}
+        className={`flex w-full items-center gap-2 rounded-md py-2 pr-1.5 text-left transition-colors ${
+          active ? "bg-muted/40" : "hover:bg-muted/50"
+        } ${level === 0 ? "pl-1.5" : "pl-2"}`}
       >
         <ChevronDown
-          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-300 ${
+          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-300 ${
             open ? "rotate-180" : ""
-          }`}
+          } ${active ? "text-foreground" : "text-muted-foreground"}`}
           strokeWidth={1.8}
         />
-        <span
-          className={`min-w-0 flex-1 truncate ${
-            level === 0
-              ? "text-[11px] font-medium uppercase tracking-[0.11em] text-muted-foreground"
-              : "text-[13.5px] font-medium tracking-tight text-foreground/90"
-          }`}
-        >
-          {label}
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span
+              className={`min-w-0 truncate ${
+                level === 0
+                  ? `text-[11px] font-semibold uppercase tracking-[0.11em] ${
+                      active ? "text-foreground" : "text-muted-foreground"
+                    }`
+                  : `text-[13.5px] font-medium tracking-tight ${
+                      active ? "text-foreground" : "text-foreground/80"
+                    }`
+              }`}
+            >
+              {label}
+            </span>
+            {active ? (
+              <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-foreground" />
+            ) : null}
+          </span>
+          {active && !open && activeHint ? (
+            <span className="mt-0.5 block truncate text-[11.5px] font-normal normal-case tracking-normal text-muted-foreground">
+              {activeHint}
+            </span>
+          ) : null}
         </span>
         {right}
       </button>
@@ -531,24 +553,30 @@ function LessonRow({
       type="button"
       data-lesson-id={lesson.id}
       onClick={() => onSelect(lesson.id)}
-      className={`group flex w-full items-start gap-2.5 rounded-md py-2 pl-3 pr-1 text-left transition-colors hover:bg-muted/60 ${
-        active ? "bg-muted/50" : ""
+      className={`group relative flex w-full items-center gap-2.5 rounded-md py-2 pl-3 pr-2 text-left transition-colors ${
+        active ? "bg-muted" : "hover:bg-muted/60"
       }`}
     >
-      <span
-        className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${
-          active ? "bg-foreground" : "bg-border"
-        }`}
-      />
-      <span className="min-w-0 flex-1">
+      {active ? (
         <span
-          className={`block text-[13.5px] font-medium tracking-tight ${
-            active ? "text-foreground" : "text-foreground/85"
-          }`}
-        >
-          {lesson.title}
-        </span>
+          aria-hidden
+          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-foreground"
+        />
+      ) : (
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-border" />
+      )}
+      <span
+        className={`min-w-0 flex-1 truncate text-[13.5px] tracking-tight ${
+          active ? "font-semibold text-foreground" : "font-medium text-foreground/85"
+        }`}
+      >
+        {lesson.title}
       </span>
+      {active ? (
+        <span className="shrink-0 text-[9.5px] uppercase tracking-[0.08em] text-muted-foreground">
+          Current
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -565,7 +593,7 @@ function LessonsPanel({
   bare?: boolean;
 }) {
   const tree = buildLessonTree(lessons);
-  // The subject/unit that hold the active lesson, so we open a path straight to it.
+  // The subject/unit that hold the active lesson (so we open + highlight a path straight to it).
   let activeSubject: string | null = null;
   let activeUnit: string | null = null;
   for (const subject of tree) {
@@ -576,10 +604,12 @@ function LessonsPanel({
       }
     }
   }
+  const activeTitle = lessons.find((l) => l.id === activeId)?.title;
   const singleSubject = tree.length <= 1;
 
   const renderUnits = (subject: LessonTree[number]) => {
     const hasRealUnits = subject.units.some((u) => u.name !== null);
+    const isActiveSubject = subject.name === activeSubject;
     if (!hasRealUnits) {
       // No unit structure — list the lessons directly under the subject.
       return (
@@ -594,25 +624,31 @@ function LessonsPanel({
     }
     return (
       <div className="space-y-0.5">
-        {subject.units.map((unit) => (
-          <Disclosure
-            key={unit.name ?? "__nounit__"}
-            level={1}
-            label={unit.name ?? "Lessons"}
-            right={
-              <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                {unit.items.length}
-              </span>
-            }
-            defaultOpen={subject.name === activeSubject && unit.name === activeUnit}
-          >
-            <div className="space-y-0.5 pl-2">
-              {unit.items.map((l) => (
-                <LessonRow key={l.id} lesson={l} active={l.id === activeId} onSelect={onSelect} />
-              ))}
-            </div>
-          </Disclosure>
-        ))}
+        {subject.units.map((unit) => {
+          const isActiveUnit = isActiveSubject && unit.name === activeUnit;
+          return (
+            <Disclosure
+              key={unit.name ?? "__nounit__"}
+              level={1}
+              label={unit.name ?? "Lessons"}
+              active={isActiveUnit}
+              activeHint={activeTitle}
+              right={
+                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                  {unit.items.length}
+                </span>
+              }
+              defaultOpen={isActiveUnit}
+            >
+              {/* Rail groups the lessons under their unit. */}
+              <div className="ml-[9px] space-y-0.5 border-l border-border/70 pl-2">
+                {unit.items.map((l) => (
+                  <LessonRow key={l.id} lesson={l} active={l.id === activeId} onSelect={onSelect} />
+                ))}
+              </div>
+            </Disclosure>
+          );
+        })}
       </div>
     );
   };
@@ -621,7 +657,7 @@ function LessonsPanel({
     <div>
       {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Lessons</h3>}
       <p className="mt-1 text-[13px] text-muted-foreground">Browse subjects, units, and lessons.</p>
-      <div className="mt-4 space-y-0.5">
+      <div className="mt-4 space-y-1">
         {singleSubject
           ? tree[0] && renderUnits(tree[0])
           : tree.map((subject) => (
@@ -629,9 +665,14 @@ function LessonsPanel({
                 key={subject.name}
                 level={0}
                 label={subject.name}
+                active={subject.name === activeSubject}
+                activeHint={activeTitle}
                 defaultOpen={subject.name === activeSubject}
               >
-                {renderUnits(subject)}
+                {/* Rail groups the units under their subject. */}
+                <div className="ml-[9px] mt-0.5 border-l border-border/70 pl-1.5">
+                  {renderUnits(subject)}
+                </div>
               </Disclosure>
             ))}
       </div>
