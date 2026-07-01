@@ -90,6 +90,9 @@
   --grad-4: #8fa4ef; /* periwinkle / purple */
   --grad-5: #72b8f5; /* blue */
 
+  /* single-hue accent for "current" markers (from the rainbow — magenta reads on light) */
+  --accent-text: #c4498b;
+
   /* code palettes */
   --code-background: #eef0f6;
   --code-foreground: #1f2026;
@@ -176,6 +179,9 @@
   --warning: #e3a949;
   --danger: #f0716f;
   --info: #6ea8f0;
+
+  /* accent for "current" markers (brighter pink reads on dark) */
+  --accent-text: #f585bb;
 
   /* focus ring (dark) */
   --ring: rgba(245, 245, 247, 0.4);

@@ -422,68 +422,48 @@ function CollapsibleSection({
   );
 }
 
-// A compact, nestable disclosure for the Subject > Unit > Lesson tree. `level` tweaks the label
-// styling (0 = subject, 1 = unit). When `active` (this section holds the current lesson) it stays
-// visibly marked — an accent dot + foreground label — even collapsed, and shows `activeHint` (the
-// current lesson's name) as a subtitle so you can locate the lesson without expanding.
+// Accent color used to mark the current lesson / unit / subject (the only cue — no bars, dots,
+// tags, indentation, or weight changes).
+const ACCENT = "text-[color:var(--accent-text)]";
+
+// A flat, nestable disclosure. Every row is styled the same; `active` (this section holds the
+// current lesson) simply recolors the label to the accent. `plain` uses full-strength foreground
+// (for the Progress "Other lessons" header) instead of the slightly-muted default.
 function Disclosure({
   label,
   right,
-  level = 0,
   active = false,
-  activeHint,
+  plain = false,
   defaultOpen = false,
   children,
 }: {
   label: ReactNode;
   right?: ReactNode;
-  level?: 0 | 1;
   active?: boolean;
-  activeHint?: string;
+  plain?: boolean;
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const labelColor = active ? ACCENT : plain ? "text-foreground" : "text-foreground/70";
   return (
     <div>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`flex w-full items-center gap-2 rounded-md py-2 pr-1.5 text-left transition-colors ${
-          active ? "bg-muted/40" : "hover:bg-muted/50"
-        } ${level === 0 ? "pl-1.5" : "pl-2"}`}
+        className="flex w-full items-center gap-2 rounded-md py-2 pl-1.5 pr-1.5 text-left transition-colors hover:bg-muted/40"
       >
         <ChevronDown
           className={`h-3.5 w-3.5 shrink-0 transition-transform duration-300 ${
             open ? "rotate-180" : ""
-          } ${active ? "text-foreground" : "text-muted-foreground"}`}
+          } ${active ? ACCENT : "text-muted-foreground"}`}
           strokeWidth={1.8}
         />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
-            <span
-              className={`min-w-0 truncate ${
-                level === 0
-                  ? `text-[11px] font-semibold uppercase tracking-[0.11em] ${
-                      active ? "text-foreground" : "text-muted-foreground"
-                    }`
-                  : `text-[13.5px] font-medium tracking-tight ${
-                      active ? "text-foreground" : "text-foreground/80"
-                    }`
-              }`}
-            >
-              {label}
-            </span>
-            {active ? (
-              <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-foreground" />
-            ) : null}
-          </span>
-          {active && !open && activeHint ? (
-            <span className="mt-0.5 block truncate text-[11.5px] font-normal normal-case tracking-normal text-muted-foreground">
-              {activeHint}
-            </span>
-          ) : null}
+        <span
+          className={`min-w-0 flex-1 truncate text-[13.5px] font-medium tracking-tight ${labelColor}`}
+        >
+          {label}
         </span>
         {right}
       </button>
@@ -553,30 +533,15 @@ function LessonRow({
       type="button"
       data-lesson-id={lesson.id}
       onClick={() => onSelect(lesson.id)}
-      className={`group relative flex w-full items-center gap-2.5 rounded-md py-2 pl-3 pr-2 text-left transition-colors ${
-        active ? "bg-muted" : "hover:bg-muted/60"
-      }`}
+      className="flex w-full items-center rounded-md py-2 pl-[22px] pr-1.5 text-left transition-colors hover:bg-muted/40"
     >
-      {active ? (
-        <span
-          aria-hidden
-          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-foreground"
-        />
-      ) : (
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-border" />
-      )}
       <span
-        className={`min-w-0 flex-1 truncate text-[13.5px] tracking-tight ${
-          active ? "font-semibold text-foreground" : "font-medium text-foreground/85"
+        className={`min-w-0 flex-1 truncate text-[13.5px] font-medium tracking-tight ${
+          active ? ACCENT : "text-foreground/70"
         }`}
       >
         {lesson.title}
       </span>
-      {active ? (
-        <span className="shrink-0 text-[9.5px] uppercase tracking-[0.08em] text-muted-foreground">
-          Current
-        </span>
-      ) : null}
     </button>
   );
 }
@@ -604,7 +569,6 @@ function LessonsPanel({
       }
     }
   }
-  const activeTitle = lessons.find((l) => l.id === activeId)?.title;
   const singleSubject = tree.length <= 1;
 
   const renderUnits = (subject: LessonTree[number]) => {
@@ -613,7 +577,7 @@ function LessonsPanel({
     if (!hasRealUnits) {
       // No unit structure — list the lessons directly under the subject.
       return (
-        <div className="space-y-0.5 pl-1">
+        <div className="space-y-0.5">
           {subject.units
             .flatMap((u) => u.items)
             .map((l) => (
@@ -629,10 +593,8 @@ function LessonsPanel({
           return (
             <Disclosure
               key={unit.name ?? "__nounit__"}
-              level={1}
               label={unit.name ?? "Lessons"}
               active={isActiveUnit}
-              activeHint={activeTitle}
               right={
                 <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                   {unit.items.length}
@@ -640,8 +602,7 @@ function LessonsPanel({
               }
               defaultOpen={isActiveUnit}
             >
-              {/* Rail groups the lessons under their unit. */}
-              <div className="ml-[9px] space-y-0.5 border-l border-border/70 pl-2">
+              <div className="space-y-0.5">
                 {unit.items.map((l) => (
                   <LessonRow key={l.id} lesson={l} active={l.id === activeId} onSelect={onSelect} />
                 ))}
@@ -657,22 +618,17 @@ function LessonsPanel({
     <div>
       {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Lessons</h3>}
       <p className="mt-1 text-[13px] text-muted-foreground">Browse subjects, units, and lessons.</p>
-      <div className="mt-4 space-y-1">
+      <div className="mt-4 space-y-0.5">
         {singleSubject
           ? tree[0] && renderUnits(tree[0])
           : tree.map((subject) => (
               <Disclosure
                 key={subject.name}
-                level={0}
                 label={subject.name}
                 active={subject.name === activeSubject}
-                activeHint={activeTitle}
                 defaultOpen={subject.name === activeSubject}
               >
-                {/* Rail groups the units under their subject. */}
-                <div className="ml-[9px] mt-0.5 border-l border-border/70 pl-1.5">
-                  {renderUnits(subject)}
-                </div>
+                {renderUnits(subject)}
               </Disclosure>
             ))}
       </div>
@@ -751,7 +707,7 @@ function LessonMilestones({
           />
         ))}
       </div>
-      <div className="mb-3 text-[11.5px] text-muted-foreground">
+      <div className="mb-3 text-[11.5px] text-foreground">
         Step {arc.step} of {arc.total}
       </div>
       <ol className="space-y-1.5">
@@ -779,33 +735,21 @@ function LessonMilestones({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span
-                    className={`min-w-0 flex-1 ${
-                      s.state === "current"
-                        ? "font-medium text-foreground"
-                        : s.state === "done"
-                          ? "text-foreground/80"
-                          : "text-muted-foreground"
+                    className={`min-w-0 flex-1 text-foreground ${
+                      s.state === "current" ? "font-medium" : ""
                     }`}
                   >
                     {s.title}
                   </span>
                   {kind ? (
-                    <span className="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[9.5px] uppercase tracking-[0.06em] text-muted-foreground">
-                      {kind}
-                    </span>
+                    <span className="shrink-0 text-[10px] text-foreground/70">{kind}</span>
                   ) : null}
                   {s.state === "current" ? (
-                    <span className="shrink-0 text-[9.5px] uppercase tracking-[0.08em] text-muted-foreground">
-                      now
-                    </span>
+                    <span className="shrink-0 text-[10px] text-foreground/70">Now</span>
                   ) : null}
                 </span>
                 {desc ? (
-                  <span
-                    className={`mt-0.5 block text-[11.5px] leading-snug ${
-                      s.state === "current" ? "text-muted-foreground" : "text-muted-foreground/75"
-                    }`}
-                  >
+                  <span className="mt-0.5 block text-[11.5px] leading-snug text-foreground/70">
                     {clampOneLine(desc)}
                   </span>
                 ) : null}
@@ -834,7 +778,7 @@ function SimpleProgress({ progress }: { progress: number }) {
       <div className="mt-4 h-[5px] w-full overflow-hidden rounded-full bg-muted">
         <div ref={barRef} className="h-full rounded-full bg-foreground" />
       </div>
-      <div className="mt-1 flex justify-between text-[11.5px] text-muted-foreground">
+      <div className="mt-1 flex justify-between text-[11.5px] text-foreground/70">
         <span>{Math.round(progress * 100)}% complete</span>
         <span>{Math.max(0, Math.round((1 - progress) * 24))} min left</span>
       </div>
@@ -860,7 +804,7 @@ function ProgressPanel({
   return (
     <div>
       {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Progress</h3>}
-      <p className="mt-1 text-[13px] text-muted-foreground">{active?.title}</p>
+      <p className="mt-1 text-[13px] text-foreground">{active?.title}</p>
 
       {lessonArc && lessonArc.total > 1 ? (
         <LessonMilestones arc={lessonArc} activities={activities} />
@@ -870,7 +814,7 @@ function ProgressPanel({
 
       {others.length > 0 && (
         <div className="mt-5 border-t border-border pt-2">
-          <Disclosure level={0} label={`Other lessons (${others.length})`}>
+          <Disclosure plain label={`Other lessons (${others.length})`}>
             <div className="mt-1 space-y-2">
               {others.map((l) => (
                 <div key={l.id} className="flex items-center gap-3 py-1">
@@ -881,7 +825,7 @@ function ProgressPanel({
                       style={{ width: `${Math.round(l.progress * 100)}%` }}
                     />
                   </span>
-                  <span className="w-8 text-right text-[11.5px] tabular-nums text-muted-foreground">
+                  <span className="w-8 text-right text-[11.5px] tabular-nums text-foreground/70">
                     {Math.round(l.progress * 100)}%
                   </span>
                 </div>
