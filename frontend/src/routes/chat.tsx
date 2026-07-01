@@ -173,11 +173,14 @@ function lessonSubtitle(lesson: Lesson) {
   );
 }
 
-// A slim "Step N of M" strip under the header + an expandable roadmap of the lesson steps
-// (done / current / upcoming), so the student sees the arc the mentor is guiding them through.
+// A floating "Step N of M" pill under the header + an expandable roadmap of the lesson steps
+// (done / current / upcoming). Compact by default; grows to full width on hover (or while the
+// roadmap is open), and a click toggles the roadmap.
 function LessonProgress({ arc }: { arc: LessonArc }) {
   const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
   if (arc.total <= 1) return null;
+  const expanded = hover || open;
   const steps: { step: number; title: string; state: "done" | "current" | "upcoming" }[] = [
     ...arc.completed.map((s) => ({ ...s, state: "done" as const })),
     ...(arc.current
@@ -190,10 +193,15 @@ function LessonProgress({ arc }: { arc: LessonArc }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
         aria-expanded={open}
-        className="pointer-events-auto flex w-full items-center gap-3 rounded-full border border-border bg-background/75 px-3.5 py-2 text-left shadow-sm backdrop-blur-md transition-colors hover:bg-muted/50"
+        className={`pointer-events-auto mx-auto flex w-full items-center rounded-full border border-border bg-background/75 text-left shadow-sm backdrop-blur-md transition-all duration-300 ease-out hover:bg-muted/50 ${
+          expanded ? "gap-3 px-3.5 py-2" : "gap-2 px-3 py-1.5"
+        }`}
+        style={{ maxWidth: expanded ? 720 : 170 }}
       >
-        <span className="flex flex-1 items-center gap-1" aria-hidden>
+        <span className="flex min-w-0 flex-1 items-center gap-1" aria-hidden>
           {Array.from({ length: arc.total }).map((_, i) => (
             <span
               key={i}
@@ -207,8 +215,8 @@ function LessonProgress({ arc }: { arc: LessonArc }) {
             />
           ))}
         </span>
-        <span className="shrink-0 text-[12px] font-medium text-foreground">
-          Step {arc.step} of {arc.total}
+        <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-foreground">
+          {expanded ? `Step ${arc.step} of ${arc.total}` : `${arc.step}/${arc.total}`}
         </span>
         <ChevronDown
           className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
@@ -1008,9 +1016,10 @@ function ChatPage() {
 
       {/* Floating overlay just below the header — takes no layout space, so the chat history
           keeps its full height and simply scrolls beneath it. Clicks outside the pill fall
-          through (pointer-events re-enabled inside LessonProgress). */}
+          through (pointer-events re-enabled inside LessonProgress). z sits above the chat (10)
+          but below the header (20) so the nav dropdowns paint over it. */}
       {lessonArc ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[61px] z-20">
+        <div className="pointer-events-none absolute inset-x-0 top-[61px] z-[15]">
           <LessonProgress arc={lessonArc} />
         </div>
       ) : null}

@@ -426,14 +426,19 @@ function CollapsibleSection({
 // tags, indentation, or weight changes).
 const ACCENT = "text-[color:var(--accent-text)]";
 
+// Indentation ladder for the Subject > Unit > Lesson tree: each level steps in by 18px.
+const INDENT_PER_LEVEL = 18;
+
 // A flat, nestable disclosure. Every row is styled the same; `active` (this section holds the
-// current lesson) simply recolors the label to the accent. `plain` uses full-strength foreground
-// (for the Progress "Other lessons" header) instead of the slightly-muted default.
+// current lesson) simply recolors the label to the accent. `depth` only indents the row.
+// `plain` uses full-strength foreground (for the Progress "Other lessons" header) instead of
+// the slightly-muted default.
 function Disclosure({
   label,
   right,
   active = false,
   plain = false,
+  depth = 0,
   defaultOpen = false,
   children,
 }: {
@@ -441,6 +446,7 @@ function Disclosure({
   right?: ReactNode;
   active?: boolean;
   plain?: boolean;
+  depth?: number;
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
@@ -452,7 +458,8 @@ function Disclosure({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 rounded-md py-2 pl-1.5 pr-1.5 text-left transition-colors hover:bg-muted/40"
+        className="flex w-full items-center gap-2 rounded-md py-2 pr-1.5 text-left transition-colors hover:bg-muted/40"
+        style={{ paddingLeft: 6 + depth * INDENT_PER_LEVEL }}
       >
         <ChevronDown
           className={`h-3.5 w-3.5 shrink-0 transition-transform duration-300 ${
@@ -522,10 +529,12 @@ function buildLessonTree(lessons: Lesson[]): LessonTree {
 function LessonRow({
   lesson,
   active,
+  depth = 1,
   onSelect,
 }: {
   lesson: Lesson;
   active: boolean;
+  depth?: number;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -533,7 +542,9 @@ function LessonRow({
       type="button"
       data-lesson-id={lesson.id}
       onClick={() => onSelect(lesson.id)}
-      className="flex w-full items-center rounded-md py-2 pl-[22px] pr-1.5 text-left transition-colors hover:bg-muted/40"
+      className="flex w-full items-center rounded-md py-2 pr-1.5 text-left transition-colors hover:bg-muted/40"
+      // 28px baseline clears the parent disclosure's chevron; each depth steps in from there.
+      style={{ paddingLeft: 28 + depth * INDENT_PER_LEVEL }}
     >
       <span
         className={`min-w-0 flex-1 truncate text-[13.5px] font-medium tracking-tight ${
@@ -571,7 +582,9 @@ function LessonsPanel({
   }
   const singleSubject = tree.length <= 1;
 
-  const renderUnits = (subject: LessonTree[number]) => {
+  // baseDepth: 0 when units render at the top level (single subject), 1 when nested under a
+  // subject disclosure. Lessons sit one level deeper than their parent.
+  const renderUnits = (subject: LessonTree[number], baseDepth: number) => {
     const hasRealUnits = subject.units.some((u) => u.name !== null);
     const isActiveSubject = subject.name === activeSubject;
     if (!hasRealUnits) {
@@ -581,7 +594,13 @@ function LessonsPanel({
           {subject.units
             .flatMap((u) => u.items)
             .map((l) => (
-              <LessonRow key={l.id} lesson={l} active={l.id === activeId} onSelect={onSelect} />
+              <LessonRow
+                key={l.id}
+                lesson={l}
+                active={l.id === activeId}
+                depth={baseDepth}
+                onSelect={onSelect}
+              />
             ))}
         </div>
       );
@@ -595,6 +614,7 @@ function LessonsPanel({
               key={unit.name ?? "__nounit__"}
               label={unit.name ?? "Lessons"}
               active={isActiveUnit}
+              depth={baseDepth}
               right={
                 <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                   {unit.items.length}
@@ -604,7 +624,13 @@ function LessonsPanel({
             >
               <div className="space-y-0.5">
                 {unit.items.map((l) => (
-                  <LessonRow key={l.id} lesson={l} active={l.id === activeId} onSelect={onSelect} />
+                  <LessonRow
+                    key={l.id}
+                    lesson={l}
+                    active={l.id === activeId}
+                    depth={baseDepth + 1}
+                    onSelect={onSelect}
+                  />
                 ))}
               </div>
             </Disclosure>
@@ -620,15 +646,16 @@ function LessonsPanel({
       <p className="mt-1 text-[13px] text-muted-foreground">Browse subjects, units, and lessons.</p>
       <div className="mt-4 space-y-0.5">
         {singleSubject
-          ? tree[0] && renderUnits(tree[0])
+          ? tree[0] && renderUnits(tree[0], 0)
           : tree.map((subject) => (
               <Disclosure
                 key={subject.name}
                 label={subject.name}
                 active={subject.name === activeSubject}
+                depth={0}
                 defaultOpen={subject.name === activeSubject}
               >
-                {renderUnits(subject)}
+                {renderUnits(subject, 1)}
               </Disclosure>
             ))}
       </div>
@@ -741,12 +768,7 @@ function LessonMilestones({
                   >
                     {s.title}
                   </span>
-                  {kind ? (
-                    <span className="shrink-0 text-[10px] text-foreground/70">{kind}</span>
-                  ) : null}
-                  {s.state === "current" ? (
-                    <span className="shrink-0 text-[10px] text-foreground/70">Now</span>
-                  ) : null}
+                  {kind ? <span className={`shrink-0 text-[10px] ${ACCENT}`}>{kind}</span> : null}
                 </span>
                 {desc ? (
                   <span className="mt-0.5 block text-[11.5px] leading-snug text-foreground/70">
