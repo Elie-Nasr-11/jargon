@@ -67,6 +67,18 @@ Every turn, FIRST read the student's latest message and respond to what they act
   sticking point in plain words with a concrete example, then check in.
 - The recommended teaching move (provided below) is guidance, not a script — follow the student's real need.
 
+Guide the lesson arc (when "lesson_arc" is present it tells you step N of M, what's DONE, and what's NEXT):
+- Situate the student. When this step builds on an earlier one, connect them ("now that you've got loops,
+  ...") ; when you wrap a step, name what's coming ("nice — next we'll ..."). Reference the arc naturally;
+  do NOT recite the whole list or announce the step number every turn.
+- Add context to transitions. Prefer "Now that we've done X, let's ..." or "Before we get to Y, let's first
+  ..." over a bare "let's do another exercise." Make each move feel like a deliberate step toward the goal.
+- Do NOT jump ahead: teach only the CURRENT step; you may PREVIEW the next step's title but never do its work
+  or reveal its answer early.
+
+Shape each turn: acknowledge the student's message -> do the current step's work (teach / check / correct) ->
+situate it in the arc when it helps -> end with exactly ONE clear next action.
+
 Hard rules (always):
 - Stay on the current lesson goal; if the student drifts, briefly acknowledge and redirect.
 - Do NOT invent requirements the objective does not state. Never demand a particular topic, a "positive"
@@ -1718,6 +1730,7 @@ async function loadContext(
 ): Promise<{
   lesson: DbRow | null;
   activity: DbRow | null;
+  activities: DbRow[];
   milestone: DbRow | null;
   quiz: DbRow | null;
   recentTurns: DbRow[];
@@ -1782,6 +1795,7 @@ async function loadContext(
 
   const ctxSkills = [...skillKeysFor(activity, milestone, quiz)];
   const [
+    allActivities,
     recentTurns,
     recentAttempts,
     mastery,
@@ -1790,6 +1804,11 @@ async function loadContext(
     profile,
     misconceptions,
   ] = await Promise.all([
+    // The full ordered step list, for lesson-arc awareness (step N of M, what's next).
+    loadMany(
+      config,
+      `lesson_activities?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&select=id,position,title,prompt,stage,response_mode,skill_keys`,
+    ),
     loadMany(
       config,
       `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=12&select=role,stage,response_mode,content,payload,created_at`,
@@ -1834,6 +1853,7 @@ async function loadContext(
   return {
     lesson,
     activity,
+    activities: allActivities,
     milestone,
     quiz,
     recentTurns,
@@ -1844,6 +1864,54 @@ async function loadContext(
     resourceInteractions,
     profile,
     misconceptions,
+  };
+}
+
+type ArcStep = { step: number; title: string };
+type LessonArc = {
+  step: number;
+  total: number;
+  current: { title: string; prompt: string } | null;
+  completed: ArcStep[];
+  upcoming: ArcStep[];
+  next: ArcStep | null;
+};
+
+// Build the lesson-arc view (step N of M, what's done, what's next) so the mentor can
+// situate each turn instead of treating the current activity in isolation. Null for
+// single-step lessons (no arc to narrate). Upcoming steps expose TITLES only — not their
+// full prompts/answers — so the mentor can preview without jumping ahead or leaking.
+function buildLessonArc(
+  activities: DbRow[],
+  currentActivity: DbRow | null,
+): LessonArc | null {
+  if (!Array.isArray(activities) || activities.length <= 1) return null;
+  const sorted = [...activities].sort(
+    (a, b) => Number(a.position ?? 0) - Number(b.position ?? 0),
+  );
+  const titleOf = (a: DbRow, i: number) =>
+    String(a.title || `Step ${i + 1}`);
+  const currentId = currentActivity?.id ? String(currentActivity.id) : "";
+  let idx = sorted.findIndex((a) => String(a.id) === currentId);
+  if (idx < 0) idx = 0;
+  const completed = sorted
+    .slice(0, idx)
+    .map((a, i) => ({ step: i + 1, title: titleOf(a, i) }));
+  const upcoming = sorted
+    .slice(idx + 1)
+    .map((a, i) => ({ step: idx + 2 + i, title: titleOf(a, idx + 1 + i) }));
+  return {
+    step: idx + 1,
+    total: sorted.length,
+    current: currentActivity
+      ? {
+          title: titleOf(currentActivity, idx),
+          prompt: String(currentActivity.prompt || ""),
+        }
+      : null,
+    completed,
+    upcoming,
+    next: upcoming[0] || null,
   };
 }
 
@@ -2266,6 +2334,9 @@ async function handleTypedRequest(
           }
         : orchestratorAssessment;
 
+    // Lesson-arc view (step N of M, done, next) so the mentor can situate this turn.
+    const lessonArc = buildLessonArc(context.activities, context.activity);
+
     const draftFlow = flowFor(
       currentStage,
       session,
@@ -2307,6 +2378,7 @@ async function handleTypedRequest(
             "Return only the typed JSON envelope. The orchestrator owns records, final stage/action, and resource cards; you own concise student-facing wording. If lesson_resources are present, invite the student to open one. If approved_resource_chunks are present, you may use them as teacher-approved context and cite PDF/document chunks by resource title/page and audio/video chunks by resource title/time range. Do not claim a resource was viewed unless resource_interactions proves it.",
           lesson: context.lesson,
           activity: context.activity,
+          lesson_arc: lessonArc,
           milestone: context.milestone,
           quiz_item: context.quiz,
           recent_turns: context.recentTurns,
@@ -2489,8 +2561,23 @@ async function handleTypedRequest(
       envelope.response_mode = "text";
       envelope.next_action = "reply";
       envelope.choices = [];
-      envelope.reply =
-        `${envelope.reply}\n\nThat completes this part — send a message when you're ready for the next part.`.trim();
+      // Situate the hand-off in the lesson arc: what just finished, progress, what's next.
+      // Name the NEXT title from the activity actually being advanced to (advanceToActivityId),
+      // not lessonArc.next, so the two can't disagree if two steps share a position.
+      const nextTitle = advanceToActivityId
+        ? String(
+            context.activities.find(
+              (a) => String(a.id) === advanceToActivityId,
+            )?.title || "",
+          )
+        : "";
+      const arcSuffix =
+        lessonArc && nextTitle
+          ? `That completes ${
+              lessonArc.current ? `"${lessonArc.current.title}"` : "this part"
+            } — step ${lessonArc.step} of ${lessonArc.total} done. Next up: "${nextTitle}". Send a message when you're ready.`
+          : "That completes this part — send a message when you're ready for the next part.";
+      envelope.reply = `${envelope.reply}\n\n${arcSuffix}`.trim();
     }
 
     // Misconception memory: persist any recurring conceptual error the mentor flagged.

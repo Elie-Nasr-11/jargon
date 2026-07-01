@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Tutor v1.4: the guided arc — lesson-arc awareness + situated turns)
+
+Summary: First step of a larger "make the tutor feel structured/guided/engaged" effort (two Explore agents
+mapped the current state: the mentor was context-blind to the lesson arc AND unaware of assignments/quizzes/
+assessments, which live in separate UI docks; checkpoints are three disconnected systems). This ships
+workstream 1+2 — lesson-arc awareness so the mentor can situate every turn.
+
+Backend (chat/index.ts, backend-only):
+- `loadContext` now also loads the full ORDERED activity list (id,position,title,prompt,stage,response_mode,
+  skill_keys) into a new `activities` field (no expected_output/choices/starter_code — no answer leakage).
+- `buildLessonArc(activities, currentActivity)` computes {step, total, current:{title,prompt}, completed[],
+  upcoming[] (TITLES only), next}; null for single-step lessons. Injected into the mentor payload as
+  `lesson_arc`.
+- The advance transition message is now situated: "That completes '<title>' — step N of M done. Next up:
+  '<next title>'." (falls back to the generic line when there's no arc).
+- SYSTEM_PROMPT gained a "Guide the lesson arc" section (situate turns, add context to transitions — "now
+  that we've done X, let's…" / "before we get to Y, let's first…" — preview the next step's title but never
+  do its work early) + a "Shape each turn" line (acknowledge → do the current step → situate → ONE next action).
+
+Files: `supabase/functions/chat/index.ts` only. No migration, no frontend change (workstream 3 = visible
+"step X of Y" UI, and workstream 4 = mentor-aware checkpoints, are deferred/next).
+Tests: backend Deno (not locally type-checked) validated via adversarial review; self-verified the Promise.all
+destructure alignment (highest silent-failure risk).
+Remaining concerns: the arc's "completed" is inferred from position < current cursor (forward-only advance) —
+correct given the runtime never moves the cursor back. Next candidates: visible progress UI (step X of Y /
+roadmap), and making the mentor aware of pending assignments/assessments + tightening checkpoint mechanics.
+
 ## Claude -> Codex / Human - 2026-07-01 (Tutor v1.3: open-ended code grading + lively tutor text)
 
 Summary: A real transcript showed the tutor trapping a student on an OPEN-ENDED code task ("change the
