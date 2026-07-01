@@ -619,6 +619,10 @@ export type LearningSession = {
   score: number;
   retry_count: number;
   rescue_count: number;
+  // Sticky "the lesson's activities are done" flag. The runtime holds a lesson at
+  // status "active" with this true while gated on required checkpoints, so it — not
+  // status === "complete" — is the real "activities finished" signal.
+  activities_complete: boolean;
   created_at: string;
   updated_at: string;
 };

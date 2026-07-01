@@ -5590,10 +5590,14 @@ function lessonProgressStatus(
   return "Not started";
 }
 
-// Mirrors the chat runtime's completion gate: a required checkpoint blocks the lesson
+// Tracks the chat runtime's completion gate: a required checkpoint blocks the lesson
 // only while its recipient row is still `assigned` (and the parent is live —
 // assignment status `assigned` / assessment status `published`). Anything past `assigned`
 // no longer gates, matching loadPendingCheckpoints in supabase/functions/chat/index.ts.
+// Caveat: the runtime fails CLOSED (an unreadable checkpoint read holds the lesson open
+// via pendingCheckpointsOk); the gradebook has no such signal, so if the checkpoint tables
+// were unreadable at chat time the live lesson stays gated while this view reflects the
+// teacher's current (successful) data load rather than that transient runtime state.
 function requiredCheckpointStatus(
   dashboard: TeacherDashboardData,
   studentId: string,
@@ -5625,8 +5629,11 @@ function requiredCheckpointStatus(
 type UnifiedLessonStatus = LessonProgressStatus | "Checkpoints due";
 
 // The honest lesson status the student is actually subject to: activities AND required
-// checkpoints. When activities are done but required checkpoints remain, the lesson is
-// held open — surfaced as "Checkpoints due" rather than a misleading "Complete".
+// checkpoints. Key subtlety: when activities are done but a required checkpoint remains,
+// the runtime holds the session at status "active" with a sticky `activities_complete`
+// flag (NOT status "complete") — so we key "activities finished" off that flag, and only
+// off status "complete" for genuinely-finished lessons. That lets us surface the held-open
+// state as "Checkpoints due" rather than a misleading "Active" or "Complete".
 function unifiedLessonStatus(
   dashboard: TeacherDashboardData,
   studentId: string,
@@ -5638,10 +5645,30 @@ function unifiedLessonStatus(
 } {
   const activities = lessonProgressStatus(dashboard.sessions, studentId, lessonId);
   const checkpoints = requiredCheckpointStatus(dashboard, studentId, lessonId);
-  if (activities === "Complete" && checkpoints.outstanding > 0) {
-    return { status: "Checkpoints due", activities, checkpoints };
+  // Sticky across sessions (mirrors lessonProgressStatus's own `.some` completion): once a
+  // session marked the activities done, treat activities as done even if a newer session is
+  // active. `status === "complete"` implies activities were done too.
+  const activitiesDone =
+    activities === "Complete" ||
+    dashboard.sessions.some(
+      (session) =>
+        session.user_id === studentId &&
+        session.lesson_id === lessonId &&
+        session.activities_complete === true,
+    );
+
+  let status: UnifiedLessonStatus;
+  if (activities === "Complete" || (activitiesDone && checkpoints.outstanding === 0)) {
+    // Fully complete, or all activities + required checkpoints done (runtime flips the
+    // session to "complete" on the student's next visit).
+    status = "Complete";
+  } else if (activitiesDone && checkpoints.outstanding > 0) {
+    // Steps finished but required checkpoints still block completion — the actionable state.
+    status = "Checkpoints due";
+  } else {
+    status = activities; // Active / Retry / Not started
   }
-  return { status: activities, activities, checkpoints };
+  return { status, activities, checkpoints };
 }
 
 function unifiedStatusClass(status: UnifiedLessonStatus) {
