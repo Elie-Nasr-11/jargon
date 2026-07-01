@@ -740,6 +740,7 @@ export type Assignment = {
   source: "teacher" | "mentor_recommendation" | "system";
   status: AssignmentStatus;
   requires_teacher_approval: boolean;
+  required: boolean;
   due_at: string | null;
   created_at: string;
   updated_at: string;
@@ -812,6 +813,7 @@ export type Assessment = {
   grading_mode: AssessmentGradingMode;
   result_release_policy: AssessmentResultReleasePolicy;
   attempt_limit: number;
+  required: boolean;
   due_at: string | null;
   created_at: string;
   updated_at: string;

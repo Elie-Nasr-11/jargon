@@ -2376,6 +2376,7 @@ export async function createAssignment(input: {
   instructions: string;
   dueAt?: string | null;
   status: Extract<AssignmentStatus, "draft" | "assigned">;
+  required?: boolean;
   recipientIds: string[];
   resourceIds: string[];
 }) {
@@ -2394,6 +2395,7 @@ export async function createAssignment(input: {
     source: "teacher",
     status: input.status,
     requires_teacher_approval: false,
+    required: input.required === true,
     due_at: input.dueAt || null,
   });
   if (assignmentError) throw assignmentError;

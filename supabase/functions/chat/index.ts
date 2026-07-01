@@ -1734,27 +1734,30 @@ type PendingCheckpoint = {
   kind: "assignment" | "assessment";
   title: string;
   due_at: string | null;
+  required: boolean;
 };
 
 // Assignments/assessments live in separate UI docks the mentor never sees. Load the ones
 // assigned to THIS student for THIS lesson that they haven't finished, so the mentor can
 // point them there. Best-effort: any failure returns [] and the turn proceeds normally.
+// Returns null (not []) on any load failure, so the completion gate can stay fail-closed
+// (don't complete a gated lesson when we couldn't confirm whether required work remains).
 async function loadPendingCheckpoints(
   config: SupabaseConfig,
   userId: string,
   lessonId: string,
-): Promise<PendingCheckpoint[]> {
+): Promise<PendingCheckpoint[] | null> {
   try {
     const lid = encodeURIComponent(lessonId);
     const uid = encodeURIComponent(userId);
     const [assignments, assessments] = await Promise.all([
       loadMany(
         config,
-        `assignments?lesson_id=eq.${lid}&status=eq.assigned&select=id,title,due_at&limit=20`,
+        `assignments?lesson_id=eq.${lid}&status=eq.assigned&select=id,title,due_at,required&limit=20`,
       ),
       loadMany(
         config,
-        `assessments?lesson_id=eq.${lid}&status=eq.published&select=id,title,due_at&limit=20`,
+        `assessments?lesson_id=eq.${lid}&status=eq.published&select=id,title,due_at,required&limit=20`,
       ),
     ]);
     const aIds = uniqueStrings(assignments.map((a) => String(a.id || "")));
@@ -1784,6 +1787,7 @@ async function loadPendingCheckpoints(
           kind: "assignment",
           title: String(a.title || "Assignment"),
           due_at: typeof a.due_at === "string" ? a.due_at : null,
+          required: a.required === true,
         });
       }
     }
@@ -1793,12 +1797,13 @@ async function loadPendingCheckpoints(
           kind: "assessment",
           title: String(a.title || "Assessment"),
           due_at: typeof a.due_at === "string" ? a.due_at : null,
+          required: a.required === true,
         });
       }
     }
     return out.slice(0, 6);
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -1822,6 +1827,7 @@ async function loadContext(
   profile: DbRow | null;
   misconceptions: DbRow[];
   pendingCheckpoints: PendingCheckpoint[];
+  pendingCheckpointsOk: boolean;
 }> {
   // Kicked off concurrently; awaited near the return.
   const checkpointsPromise = loadPendingCheckpoints(config, userId, lessonId);
@@ -1933,7 +1939,7 @@ async function loadContext(
       )
     : [];
 
-  const pendingCheckpoints = await checkpointsPromise;
+  const pendingResult = await checkpointsPromise;
 
   return {
     lesson,
@@ -1949,7 +1955,8 @@ async function loadContext(
     resourceInteractions,
     profile,
     misconceptions,
-    pendingCheckpoints,
+    pendingCheckpoints: pendingResult ?? [],
+    pendingCheckpointsOk: pendingResult !== null,
   };
 }
 
@@ -2671,6 +2678,51 @@ async function handleTypedRequest(
         buildLessonArc(context.activities, nextActivityRow) ?? envelope.lesson_arc;
     }
 
+    // Unified completion gate (checkpoint unification P1): a lesson is complete only when its
+    // activities AND all REQUIRED checkpoints (assignments/assessments the teacher marked
+    // required) are done. `activities_complete` (persisted) tracks "activities done" so the
+    // gate can hold the lesson open and re-check when the student returns.
+    const requiredRemaining = context.pendingCheckpoints.filter((c) => c.required);
+    const checkpointsOk = context.pendingCheckpointsOk;
+    const activitiesDoneThisTurn =
+      !advancing &&
+      (finalFlow.stage === "complete" || finalFlow.nextAction === "complete");
+    const activitiesComplete =
+      activitiesDoneThisTurn || session.activities_complete === true;
+    // Complete only with a CONFIDENT read that no required work remains — fail-closed: a
+    // transient checkpoint-load failure keeps the lesson open and re-checks next turn.
+    const unifiedComplete =
+      activitiesComplete && checkpointsOk && requiredRemaining.length === 0;
+    if (activitiesDoneThisTurn && !unifiedComplete) {
+      // Finished the steps but the lesson isn't done yet — hold it open instead of
+      // celebrating completion (required work remains, or we couldn't confirm it's clear).
+      envelope.stage = "review";
+      envelope.response_mode = "text";
+      envelope.next_action = "reply";
+      envelope.choices = [];
+      if (requiredRemaining.length > 0) {
+        const list = requiredRemaining.map((c) => `"${c.title}"`).join(", ");
+        const many = requiredRemaining.length > 1;
+        envelope.reply =
+          `${envelope.reply}\n\nYou've finished all the steps — great work! To complete the lesson, there ${
+            many ? "are still required items" : "is one required item"
+          } to do: ${list}. Open ${many ? "them" : "it"} from the panel above the message box.`.trim();
+      }
+    } else if (
+      activitiesComplete &&
+      !activitiesDoneThisTurn &&
+      unifiedComplete &&
+      session.status !== "complete"
+    ) {
+      // Re-completion: the student finished the required checkpoints since last time.
+      envelope.stage = "complete";
+      envelope.response_mode = "text";
+      envelope.next_action = "complete";
+      envelope.choices = [];
+      envelope.reply =
+        `${envelope.reply}\n\nThat's everything for this lesson — you've completed all the required work. Nicely done!`.trim();
+    }
+
     // Misconception memory: persist any recurring conceptual error the mentor flagged.
     if (parsed.misconception) {
       await upsertMisconception(config, userId, null, parsed.misconception);
@@ -2755,7 +2807,16 @@ async function handleTypedRequest(
 
     const retryIncrement = envelope.next_action === "retry" ? 1 : 0;
     const rescueIncrement = envelope.next_action === "rescue" ? 1 : 0;
-    const nextStatus = advancing ? "active" : sessionStatus(finalFlow);
+    // Gate the status: complete only when activities AND required checkpoints are confidently
+    // done; if activities are done but something's outstanding (or unconfirmed), stay active;
+    // otherwise the normal flow.
+    const nextStatus = advancing
+      ? "active"
+      : unifiedComplete
+        ? "complete"
+        : activitiesComplete
+          ? "active"
+          : sessionStatus(finalFlow);
 
     // Rolling independence signal (only updated on real attempts).
     let nextIndependence: number | undefined;
@@ -2784,6 +2845,8 @@ async function handleTypedRequest(
             : null,
         stage: advancing ? "intro" : envelope.stage,
         status: nextStatus,
+        // Sticky: once the activities are done it stays done, even while gated on checkpoints.
+        activities_complete: advancing ? false : activitiesComplete,
         score:
           typeof assessment?.score === "number"
             ? Math.max(Number(session.score || 0), assessment.score)

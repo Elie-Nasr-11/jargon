@@ -6,6 +6,35 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Checkpoint unification P1a: gated lesson completion + assignment "required")
+
+Summary: Workstream 4 "unify the checkpoints" — the user chose the FULL data-model merge with teacher-chosen
+required checkpoints, sequenced value-first. This is Phase 1a: a lesson is now complete only when its
+activities AND all REQUIRED checkpoints are done. (The actual three-table merge is later phases; this delivers
+the gated-completion value on top of the existing tables.)
+
+Migration (20260701000000_checkpoint_required.sql, idempotent, wired into deploy-backend.yml's loop):
+`assignments.required`, `assessments.required`, `learning_sessions.activities_complete` (all bool default false).
+
+Backend (chat/index.ts): `loadPendingCheckpoints` now selects `required`. The handler computes
+`requiredRemaining` (pending checkpoints with required=true), `activitiesDoneThisTurn`, and `activitiesComplete`
+(this turn OR the sticky `session.activities_complete`), then GATES the session status: activities done +
+required remaining => stay 'active' (NOT complete); done + none => 'complete'; else the normal flow. On the
+gating turn the envelope becomes a "finish the required work: X — open it from the panel above" message; when
+the student returns after finishing it, a re-completion branch fires once (status 'complete' + "you've
+completed all the required work"). `activities_complete` is persisted (sticky; reset only on advance).
+
+Teacher (frontend): a "Required for lesson completion" checkbox on the assignment create form
+(AssignmentManager) → `createAssignment` inserts `required`. `Assignment.required`/`Assessment.required` added
+to types.
+
+Files: chat/index.ts, the migration, deploy-backend.yml, types.ts, api.ts, TeacherConsole.tsx. Tests: frontend
+tsc 0 / lint 0 / build green; backend Deno via review.
+DEFERRED to P1b (kept small/safe): the ASSESSMENT required toggle (needs the assessment-admin edge fn) and the
+teacher GRADEBOOK unified-status view (completion logic is spread across the huge TeacherConsole file — a
+separate change). Later phases (2–4): the actual checkpoints/items/recipients table merge (expand → dual-write
+→ migrate reads → contract).
+
 ## Claude -> Codex / Human - 2026-07-01 (Tutor v1.6: mentor-aware pending checkpoints)
 
 Summary: Workstream 4, first (high-value) slice. Assignments/assessments live in separate UI docks the mentor

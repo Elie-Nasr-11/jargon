@@ -415,6 +415,7 @@ export function TeacherConsole() {
         instructions: input.instructions,
         dueAt: input.dueAt || null,
         status: input.status,
+        required: input.required,
         recipientIds: input.recipientIds,
         resourceIds: input.resourceIds,
       });
@@ -2445,6 +2446,7 @@ type AssignmentFormValues = {
   instructions: string;
   dueAt: string;
   status: Extract<AssignmentStatus, "draft" | "assigned">;
+  required: boolean;
   recipientIds: string[];
   resourceIds: string[];
 };
@@ -3217,6 +3219,7 @@ function defaultAssignmentForm(
     instructions: "",
     dueAt: "",
     status: "assigned",
+    required: false,
     recipientIds: studentIds,
     resourceIds: [],
   };
@@ -3472,6 +3475,21 @@ function AssignmentManager({
                 </select>
               </label>
             </div>
+
+            <label className="flex items-start gap-2.5 rounded-2xl border border-border bg-background/40 p-3">
+              <input
+                type="checkbox"
+                checked={draft.required}
+                onChange={(event) => setField("required", event.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-foreground"
+              />
+              <span className="text-[12.5px] text-foreground">
+                Required for lesson completion
+                <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                  Students can't finish the lesson until they complete this assignment.
+                </span>
+              </span>
+            </label>
 
             <div className="rounded-2xl border border-border bg-background/40 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
