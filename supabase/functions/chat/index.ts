@@ -1766,12 +1766,13 @@ async function loadPendingCheckpoints(
     );
     const ids = uniqueStrings(live.map((c) => String(c.id || "")));
     if (!ids.length) return [];
-    // A student only has a recipient row for work assigned to them; status "assigned" = not
-    // yet finished (started/submitted/returned/complete = past pending). So a pending
-    // checkpoint = an assigned recipient row.
+    // A student only has a recipient row for work assigned to them. A required checkpoint gates
+    // the lesson until the student COMPLETES it: any recipient status other than "complete"
+    // (assigned/started/submitted/returned) is still pending — so merely opening a required quiz
+    // no longer un-gates the lesson.
     const recips = await loadMany(
       config,
-      `checkpoint_recipients?user_id=eq.${uid}&checkpoint_id=${inFilter(ids)}&status=eq.assigned&select=checkpoint_id`,
+      `checkpoint_recipients?user_id=eq.${uid}&checkpoint_id=${inFilter(ids)}&status=neq.complete&select=checkpoint_id`,
     );
     const pending = new Set(recips.map((r) => String(r.checkpoint_id)));
     const out: PendingCheckpoint[] = [];

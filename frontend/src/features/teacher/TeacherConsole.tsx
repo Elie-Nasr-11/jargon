@@ -5590,11 +5590,45 @@ function lessonProgressStatus(
   return "Not started";
 }
 
+// Per-dashboard index so the gradebook doesn't rescan dashboard.checkpoints +
+// dashboard.checkpointRecipients on every (student, lesson) cell. Built once per dashboard
+// object (WeakMap keyed on the fetch result) and reused across all cells and re-renders;
+// evicted automatically when a new fetch replaces the dashboard. Collapses requiredCheckpointStatus
+// from O(checkpoints + recipients) per call to O(required checkpoints for the lesson).
+type CheckpointIndex = {
+  requiredByLesson: Map<string, string[]>; // lesson_id -> required+live checkpoint ids
+  recipientStatus: Map<string, string>; // `${user_id}::${checkpoint_id}` -> status
+};
+const checkpointIndexCache = new WeakMap<TeacherDashboardData, CheckpointIndex>();
+
+function checkpointIndexFor(dashboard: TeacherDashboardData): CheckpointIndex {
+  const cached = checkpointIndexCache.get(dashboard);
+  if (cached) return cached;
+  const requiredByLesson = new Map<string, string[]>();
+  for (const c of dashboard.checkpoints) {
+    const live =
+      (c.kind === "assignment" && c.status === "assigned") ||
+      (c.kind === "assessment" && c.status === "published");
+    if (c.required && c.lesson_id && live) {
+      const arr = requiredByLesson.get(c.lesson_id);
+      if (arr) arr.push(c.id);
+      else requiredByLesson.set(c.lesson_id, [c.id]);
+    }
+  }
+  const recipientStatus = new Map<string, string>();
+  for (const r of dashboard.checkpointRecipients) {
+    recipientStatus.set(`${r.user_id}::${r.checkpoint_id}`, r.status);
+  }
+  const index = { requiredByLesson, recipientStatus };
+  checkpointIndexCache.set(dashboard, index);
+  return index;
+}
+
 // Reads the SAME unified `checkpoints` source as the chat runtime's completion gate
 // (loadPendingCheckpoints in supabase/functions/chat/index.ts) — so the gradebook and the
-// gate can't drift. A required checkpoint blocks the lesson only while its recipient row is
-// still `assigned` (and the parent is live — assignment status `assigned` / assessment status
-// `published`). Anything past `assigned` no longer gates.
+// gate can't drift. A required checkpoint gates the lesson until the student COMPLETES it: any
+// recipient status other than `complete` (assigned/started/submitted/returned) is still
+// outstanding (parent must be live — assignment `assigned` / assessment `published`).
 // Caveat: the runtime fails CLOSED (an unreadable checkpoint read holds the lesson open via
 // pendingCheckpointsOk); the gradebook has no such signal, so if the checkpoint tables were
 // unreadable at chat time the live lesson stays gated while this view reflects the teacher's
@@ -5604,22 +5638,17 @@ function requiredCheckpointStatus(
   studentId: string,
   lessonId: string,
 ): { total: number; outstanding: number } {
-  const requiredCheckpointIds = new Set(
-    dashboard.checkpoints
-      .filter(
-        (c) =>
-          c.required &&
-          c.lesson_id === lessonId &&
-          ((c.kind === "assignment" && c.status === "assigned") ||
-            (c.kind === "assessment" && c.status === "published")),
-      )
-      .map((c) => c.id),
-  );
-  const recipients = dashboard.checkpointRecipients.filter(
-    (r) => r.user_id === studentId && requiredCheckpointIds.has(r.checkpoint_id),
-  );
-  const total = recipients.length;
-  const outstanding = recipients.filter((r) => r.status === "assigned").length;
+  const index = checkpointIndexFor(dashboard);
+  const ids = index.requiredByLesson.get(lessonId);
+  if (!ids || !ids.length) return { total: 0, outstanding: 0 };
+  let total = 0;
+  let outstanding = 0;
+  for (const checkpointId of ids) {
+    const status = index.recipientStatus.get(`${studentId}::${checkpointId}`);
+    if (status === undefined) continue; // not assigned to this student
+    total += 1;
+    if (status !== "complete") outstanding += 1;
+  }
   return { total, outstanding };
 }
 
