@@ -97,6 +97,19 @@ function authHeaders(accessToken: string) {
   };
 }
 
+// Long-lived surfaces (the chat page) capture an access token at bootstrap, but tokens
+// expire after ~an hour; a stale one makes the edge gateway reject every call ("Chat
+// request failed."). Resolve the CURRENT session token at call time — supabase-js keeps
+// it refreshed — falling back to the caller's token.
+async function freshAccessToken(fallback: string): Promise<string> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -2945,7 +2958,7 @@ export async function invokeTypedChat(input: {
 }) {
   const response = await fetchWithTimeout(functionUrl("chat"), {
     method: "POST",
-    headers: authHeaders(input.accessToken),
+    headers: authHeaders(await freshAccessToken(input.accessToken)),
     body: JSON.stringify({
       lesson_id: input.lessonId,
       session_id: input.sessionId || undefined,
@@ -2973,7 +2986,7 @@ export async function createRealtimeVoiceSession(input: {
     functionUrl("voice-session"),
     {
       method: "POST",
-      headers: authHeaders(input.accessToken),
+      headers: authHeaders(await freshAccessToken(input.accessToken)),
       body: JSON.stringify({
         action: "realtime_session",
         sdp: input.sdp,
@@ -3012,7 +3025,7 @@ export async function getMentorAudio(input: {
     functionUrl("voice-session"),
     {
       method: "POST",
-      headers: authHeaders(input.accessToken),
+      headers: authHeaders(await freshAccessToken(input.accessToken)),
       body: JSON.stringify({
         action: "mentor_audio",
         text: input.text,
@@ -3048,7 +3061,7 @@ export async function invokeJargonRun(input: {
     functionUrl("run"),
     {
       method: "POST",
-      headers: authHeaders(input.accessToken),
+      headers: authHeaders(await freshAccessToken(input.accessToken)),
       body: JSON.stringify({
         code: input.code,
         answers: input.answers,

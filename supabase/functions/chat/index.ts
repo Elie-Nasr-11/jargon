@@ -1854,26 +1854,34 @@ async function loadContext(
         `milestones?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
       );
 
-  // Quiz must be scoped to the CURRENT activity. For multi-step lessons a lesson-wide
-  // fallback would pull another step's checkpoint onto this step; only fall back to a
-  // quiz that isn't bound to any activity (legacy single-activity lessons).
-  const quiz = activity?.id
-    ? ((await loadFirst(
+  // The full ordered step list — needed both for lesson-arc awareness and to scope the
+  // quiz fallback below.
+  const allActivities = await loadMany(
+    config,
+    `lesson_activities?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&select=id,position,title,prompt,stage,response_mode,skill_keys`,
+  );
+
+  // Quiz must be scoped to the CURRENT activity. The lesson-level (activity_id null)
+  // fallback exists ONLY for legacy single-activity lessons — on a multi-step lesson it
+  // would glue one unbound quiz onto EVERY step (stale choices on every reply, steps that
+  // can never advance past a quiz they don't own).
+  const activityQuiz = activity?.id
+    ? await loadFirst(
         config,
         `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=eq.${encodeURIComponent(String(activity.id))}&status=eq.published&order=position.asc&limit=1&select=*`,
-      )) ??
-      (await loadFirst(
-        config,
-        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
-      )))
-    : await loadFirst(
-        config,
-        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
-      );
+      )
+    : null;
+  const quiz =
+    activityQuiz ??
+    (allActivities.length <= 1
+      ? await loadFirst(
+          config,
+          `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
+        )
+      : null);
 
   const ctxSkills = [...skillKeysFor(activity, milestone, quiz)];
   const [
-    allActivities,
     recentTurns,
     recentAttempts,
     mastery,
@@ -1882,11 +1890,6 @@ async function loadContext(
     profile,
     misconceptions,
   ] = await Promise.all([
-    // The full ordered step list, for lesson-arc awareness (step N of M, what's next).
-    loadMany(
-      config,
-      `lesson_activities?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&select=id,position,title,prompt,stage,response_mode,skill_keys`,
-    ),
     loadMany(
       config,
       `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=12&select=role,stage,response_mode,content,payload,created_at`,
