@@ -6,6 +6,41 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Checkpoint unification P1b: assessment required toggle + unified gradebook)
+
+Summary: Completes Phase 1 of the checkpoint unification. Two pieces.
+
+1) Assessment "required for lesson completion" toggle, mirroring the P1a assignment one. A checkbox on the
+quiz create form (AssessmentManager) flows draft.required -> saveAssessment -> createAssessment (api.ts) ->
+assessment-admin `create_assessment`, which now inserts `assessments.required`. The chat gate already reads
+`assessments.required` via loadPendingCheckpoints. IMPORTANT deploy fix: deploy-backend.yml did NOT cover
+`assessment-admin` (not in trigger paths, not deployed) — added both so the edge fn actually ships. Backend
+deploy run for 8f8e0dc is green (assessment-admin + chat + curriculum-admin deployed; migrations re-applied).
+
+2) Teacher gradebook UNIFIED status. New helpers `requiredCheckpointStatus` + `unifiedLessonStatus` in
+TeacherConsole.tsx track the runtime completion gate: a required checkpoint blocks the lesson only while its
+recipient row is still `assigned` (parent live: assignment status assigned / assessment status published).
+The Gradebook and Lesson Progress grid now show the honest status the student is subject to — "Checkpoints
+due" (warning) when activities are done but required checkpoints remain — plus an "N required outstanding"
+detail + needs-attention flag.
+
+Adversarial review (2 agents) verdicts: assessment-required flow SHIP (boolean-safe through every hop, no
+regressions); gate-consistency found one must-fix and one doc-fix, both applied:
+- (d, must-fix) The runtime holds a gated lesson at session status "active" with a persisted
+  `activities_complete=true` (NOT status "complete"), so keying the badge off lessonProgressStatus
+  (status==="complete") meant it never fired in its primary case. FIX: exposed `activities_complete` on the
+  frontend LearningSession type (already returned by select("*")) and derive "activities finished" from it
+  (sticky across sessions). Now the held-open state correctly surfaces as "Checkpoints due".
+- (c, doc) The gradebook can't reproduce the runtime's fail-closed checkpoint read (pendingCheckpointsOk);
+  softened the "mirrors" comment to say it reflects the teacher's current data, not that transient state.
+
+Files: assessment-admin/index.ts, deploy-backend.yml, api.ts, types.ts (LearningSession.activities_complete +
+Assessment.required already had it), TeacherConsole.tsx. Tests: frontend tsc 0 / lint 0 / build green.
+Deploy: backend green (8f8e0dc run). Frontend awaiting `main` FF (assessment toggle + unified gradebook).
+Next: after P1b frontend lands on main, Phase 2-4 = the actual checkpoints/items/recipients table merge
+(expand -> dual-write -> migrate reads -> contract). A shared source of truth for the gate logic (backend +
+gradebook currently reimplement it) would be worth extracting during that merge.
+
 ## Claude -> Codex / Human - 2026-07-01 (Checkpoint unification P1a: gated lesson completion + assignment "required")
 
 Summary: Workstream 4 "unify the checkpoints" — the user chose the FULL data-model merge with teacher-chosen
