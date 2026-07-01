@@ -266,18 +266,24 @@ async function createRealtimeSession(config: Config, user: DbRow, body: DbRow): 
     tool_choice: "auto",
   };
 
-  // /v1/realtime/calls wants `sdp` as a plain multipart FIELD (a file part with a filename is
-  // reported "not found"; but Deno's native FormData string field arrived empty at OpenAI).
-  // Build the multipart body by hand so the SDP is written verbatim as the `sdp` field, with a
-  // guaranteed trailing CRLF.
+  // /v1/realtime/calls wants two plain multipart FIELDS, each with its own Content-Type, exactly
+  // as the documented curl (`-F "sdp=<offer.sdp;type=application/sdp"` +
+  // `-F 'session={...};type=application/json'`) and OpenAI's own codex client build them:
+  //   sdp     -> Content-Type: application/sdp   (the raw offer, verbatim)
+  //   session -> Content-Type: application/json  (the session config JSON)
+  // A file part (Content-Disposition with a filename) is rejected "field 'sdp' not found", and a
+  // bare field with no Content-Type is what previously arrived mangled/empty. The boundary is a
+  // random token that cannot appear in an SDP offer, so client input can't corrupt the framing.
   const sdpBody = sdp.endsWith("\n") ? sdp : `${sdp}\r\n`;
   const boundary = `----jargonvoice${crypto.randomUUID().replace(/-/g, "")}`;
   const multipartBody =
     `--${boundary}\r\n` +
-    `Content-Disposition: form-data; name="sdp"\r\n\r\n` +
+    `Content-Disposition: form-data; name="sdp"\r\n` +
+    `Content-Type: application/sdp\r\n\r\n` +
     `${sdpBody}` +
     `\r\n--${boundary}\r\n` +
-    `Content-Disposition: form-data; name="session"\r\n\r\n` +
+    `Content-Disposition: form-data; name="session"\r\n` +
+    `Content-Type: application/json\r\n\r\n` +
     `${JSON.stringify(sessionConfig)}` +
     `\r\n--${boundary}--\r\n`;
 
