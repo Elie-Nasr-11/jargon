@@ -79,6 +79,12 @@ Guide the lesson arc (when "lesson_arc" is present it tells you step N of M, wha
 Shape each turn: acknowledge the student's message -> do the current step's work (teach / check / correct) ->
 situate it in the arc when it helps -> end with exactly ONE clear next action.
 
+Pending work ("pending_checkpoints" lists assignments/assessments assigned to THIS student for this lesson
+that they haven't finished): when it's relevant — as the lesson wraps, or if the student asks what's next or
+whether they're done — point them to it warmly ("there's an assignment, 'Signals practice', to try — open it
+from the panel above the message box"). Mention a due date if there is one. Don't bring it up every turn, and
+never invent checkpoints that aren't listed.
+
 Hard rules (always):
 - Stay on the current lesson goal; if the student drifts, briefly acknowledge and redirect.
 - Do NOT invent requirements the objective does not state. Never demand a particular topic, a "positive"
@@ -1724,6 +1730,78 @@ function skillKeysFor(
   ]);
 }
 
+type PendingCheckpoint = {
+  kind: "assignment" | "assessment";
+  title: string;
+  due_at: string | null;
+};
+
+// Assignments/assessments live in separate UI docks the mentor never sees. Load the ones
+// assigned to THIS student for THIS lesson that they haven't finished, so the mentor can
+// point them there. Best-effort: any failure returns [] and the turn proceeds normally.
+async function loadPendingCheckpoints(
+  config: SupabaseConfig,
+  userId: string,
+  lessonId: string,
+): Promise<PendingCheckpoint[]> {
+  try {
+    const lid = encodeURIComponent(lessonId);
+    const uid = encodeURIComponent(userId);
+    const [assignments, assessments] = await Promise.all([
+      loadMany(
+        config,
+        `assignments?lesson_id=eq.${lid}&status=eq.assigned&select=id,title,due_at&limit=20`,
+      ),
+      loadMany(
+        config,
+        `assessments?lesson_id=eq.${lid}&status=eq.published&select=id,title,due_at&limit=20`,
+      ),
+    ]);
+    const aIds = uniqueStrings(assignments.map((a) => String(a.id || "")));
+    const sIds = uniqueStrings(assessments.map((a) => String(a.id || "")));
+    // A student only has a recipient row for work assigned to them; status "assigned" = not
+    // yet finished ("complete" = done). So a pending checkpoint = an assigned recipient row.
+    const [aRecips, sRecips] = await Promise.all([
+      aIds.length
+        ? loadMany(
+            config,
+            `assignment_recipients?user_id=eq.${uid}&assignment_id=${inFilter(aIds)}&status=eq.assigned&select=assignment_id`,
+          )
+        : Promise.resolve([] as DbRow[]),
+      sIds.length
+        ? loadMany(
+            config,
+            `assessment_recipients?user_id=eq.${uid}&assessment_id=${inFilter(sIds)}&status=eq.assigned&select=assessment_id`,
+          )
+        : Promise.resolve([] as DbRow[]),
+    ]);
+    const aPending = new Set(aRecips.map((r) => String(r.assignment_id)));
+    const sPending = new Set(sRecips.map((r) => String(r.assessment_id)));
+    const out: PendingCheckpoint[] = [];
+    for (const a of assignments) {
+      if (aPending.has(String(a.id))) {
+        out.push({
+          kind: "assignment",
+          title: String(a.title || "Assignment"),
+          due_at: typeof a.due_at === "string" ? a.due_at : null,
+        });
+      }
+    }
+    for (const a of assessments) {
+      if (sPending.has(String(a.id))) {
+        out.push({
+          kind: "assessment",
+          title: String(a.title || "Assessment"),
+          due_at: typeof a.due_at === "string" ? a.due_at : null,
+        });
+      }
+    }
+    return out.slice(0, 6);
+  } catch {
+    return [];
+  }
+}
+
 async function loadContext(
   config: SupabaseConfig,
   userId: string,
@@ -1743,7 +1821,10 @@ async function loadContext(
   resourceInteractions: DbRow[];
   profile: DbRow | null;
   misconceptions: DbRow[];
+  pendingCheckpoints: PendingCheckpoint[];
 }> {
+  // Kicked off concurrently; awaited near the return.
+  const checkpointsPromise = loadPendingCheckpoints(config, userId, lessonId);
   const lesson = await loadFirst(
     config,
     `lessons?id=eq.${encodeURIComponent(lessonId)}&publication_status=eq.published&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id,help_ceiling,require_attempt_first,final_answer_policy,tutor_tone,tutor_pace,grade_band`,
@@ -1852,6 +1933,8 @@ async function loadContext(
       )
     : [];
 
+  const pendingCheckpoints = await checkpointsPromise;
+
   return {
     lesson,
     activity,
@@ -1866,6 +1949,7 @@ async function loadContext(
     resourceInteractions,
     profile,
     misconceptions,
+    pendingCheckpoints,
   };
 }
 
@@ -2428,6 +2512,7 @@ async function handleTypedRequest(
             answers_forbidden_this_turn: answersForbidden,
           },
           known_misconceptions: context.misconceptions,
+          pending_checkpoints: context.pendingCheckpoints,
           student_intent: intent,
           recent_mentor_questions: recentQuestions,
           understanding_check: gradedUnderstanding,

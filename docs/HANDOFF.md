@@ -6,6 +6,28 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Tutor v1.6: mentor-aware pending checkpoints)
+
+Summary: Workstream 4, first (high-value) slice. Assignments/assessments live in separate UI docks the mentor
+never saw; now it knows about the ones assigned to the student for the current lesson and can point them there
+("there's an assignment, 'X', to try — open it from the panel above"). Backend-only.
+
+- New `loadPendingCheckpoints(config, userId, lessonId)`: loads `assignments` (status='assigned') and
+  `assessments` (status='published') for the lesson, then the student's recipient rows with status='assigned'
+  (pending; 'complete' = done), returns `{kind, title, due_at}[]` (capped 6). Wrapped in try/catch → returns
+  [] on any error so it can never break a turn. Wired into `loadContext` (kicked off concurrently, awaited
+  near the return) as `pendingCheckpoints`.
+- Injected into the mentor payload as `pending_checkpoints` + a SYSTEM_PROMPT paragraph: mention pending work
+  when relevant (lesson wrap / "what's next" / "am I done"), route to the dock, note due dates, don't nag,
+  never invent checkpoints not listed.
+
+Schema (verified live): recipient status 'assigned' = pending, 'complete' = done; assignments.status
+'assigned' = published, assessments.status 'published'. Live data present (13 assignments/assessments, 192
+recipients each). Files: `supabase/functions/chat/index.ts` only. No migration, no frontend change.
+Remaining in workstream 4 (deferred, bigger): unify the three fragmented checkpoint systems (in-lesson quiz /
+assignments / assessments) into a coherent, gated completion model; optionally surface pending work in the
+chat header too. This slice is just "mentor awareness + routing."
+
 ## Claude -> Codex / Human - 2026-07-01 (Tutor v1.5: visible lesson progress — Step N of M + roadmap)
 
 Summary: Workstream 3 of the structured/guided effort — the student now SEES the arc the mentor narrates. A
