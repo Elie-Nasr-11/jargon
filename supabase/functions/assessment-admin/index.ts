@@ -324,6 +324,7 @@ async function createAssessment(config: Config, userId: string, body: DbRow): Pr
     grading_mode: gradingMode,
     result_release_policy: releasePolicy,
     attempt_limit: attemptLimit,
+    required: body.required === true,
     due_at: cleanText(body.due_at) || null,
   });
   const assessmentId = cleanId(assessment.id);

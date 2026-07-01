@@ -2711,6 +2711,7 @@ export async function createAssessment(input: {
   gradingMode: AssessmentGradingMode;
   resultReleasePolicy: AssessmentResultReleasePolicy;
   attemptLimit: number;
+  required?: boolean;
   recipientIds: string[];
   items: Array<{
     quizItemId?: string;
@@ -2736,6 +2737,7 @@ export async function createAssessment(input: {
     grading_mode: input.gradingMode,
     result_release_policy: input.resultReleasePolicy,
     attempt_limit: input.attemptLimit,
+    required: input.required === true,
     recipient_ids: input.recipientIds,
     items: input.items.map((item) => ({
       quiz_item_id: item.quizItemId || undefined,

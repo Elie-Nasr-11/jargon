@@ -21,6 +21,7 @@ on:
     paths:
       - "supabase/functions/curriculum-admin/**"
       - "supabase/functions/chat/**"
+      - "supabase/functions/assessment-admin/**"
       - "supabase/migrations/**"
       - ".github/workflows/deploy-backend.yml"
 
@@ -73,7 +74,8 @@ jobs:
             echo "Applied $f."
           done
 
-      - name: Deploy edge functions (curriculum-admin, chat)
+      - name: Deploy edge functions (curriculum-admin, chat, assessment-admin)
         run: |
           supabase functions deploy curriculum-admin --project-ref "$PROJECT_REF"
           supabase functions deploy chat --project-ref "$PROJECT_REF"
+          supabase functions deploy assessment-admin --project-ref "$PROJECT_REF"

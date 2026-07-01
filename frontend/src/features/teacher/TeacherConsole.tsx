@@ -520,6 +520,7 @@ export function TeacherConsole() {
         gradingMode: input.gradingMode,
         resultReleasePolicy: input.resultReleasePolicy,
         attemptLimit: input.attemptLimit,
+        required: input.required,
         recipientIds: input.recipientIds,
         items: input.items,
       });
@@ -2474,6 +2475,7 @@ type AssessmentFormValues = {
   gradingMode: AssessmentGradingMode;
   resultReleasePolicy: AssessmentResultReleasePolicy;
   attemptLimit: number;
+  required: boolean;
   recipientIds: string[];
   items: AssessmentFormQuestion[];
 };
@@ -2510,6 +2512,7 @@ function defaultAssessmentForm(
     gradingMode: "mixed",
     resultReleasePolicy: "after_review",
     attemptLimit: 1,
+    required: false,
     recipientIds: studentIds,
     items: [defaultAssessmentQuestion(), { ...defaultAssessmentQuestion() }],
   };
@@ -2773,6 +2776,21 @@ function AssessmentManager({
                 />
               </label>
             </div>
+
+            <label className="flex items-start gap-2.5 rounded-2xl border border-border bg-background/40 p-3">
+              <input
+                type="checkbox"
+                checked={draft.required}
+                onChange={(event) => setField("required", event.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-foreground"
+              />
+              <span className="text-[12.5px] text-foreground">
+                Required for lesson completion
+                <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                  Students can't finish the lesson until they complete this quiz.
+                </span>
+              </span>
+            </label>
 
             <div className="rounded-2xl border border-border bg-background/40 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -4260,16 +4278,19 @@ function LessonProgress({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {lessons.map((lesson) => {
-                      const status = lessonProgressStatus(dashboard.sessions, studentId, lesson.id);
+                      const unified = unifiedLessonStatus(dashboard, studentId, lesson.id);
+                      const { total, outstanding } = unified.checkpoints;
+                      const checkpointNote =
+                        total > 0 ? ` (${total - outstanding}/${total} required)` : "";
                       return (
                         <span
                           key={`${studentId}-${lesson.id}`}
-                          className={`rounded-full border px-2.5 py-1 text-[11.5px] ${lessonStatusClass(
-                            status,
+                          className={`rounded-full border px-2.5 py-1 text-[11.5px] ${unifiedStatusClass(
+                            unified.status,
                           )}`}
-                          title={`${lesson.title}: ${status}`}
+                          title={`${lesson.title}: ${unified.status}${checkpointNote}`}
                         >
-                          {lesson.title} · {status}
+                          {lesson.title} · {unified.status}
                         </span>
                       );
                     })}
@@ -5449,19 +5470,22 @@ function gradebookRowForStudent(
     );
 
   if (selectedLesson) {
-    const progress = lessonProgressStatus(dashboard.sessions, studentId, selectedLesson);
+    const unified = unifiedLessonStatus(dashboard, studentId, selectedLesson);
+    const { total, outstanding } = unified.checkpoints;
+    const checkpointDetail = total > 0 ? ` • ${total - outstanding}/${total} required done` : "";
     return {
       studentId,
-      statusLabel: progress,
-      statusClass: lessonStatusClass(progress),
-      lessonDetail: lessonName(lessonsById, selectedLesson),
+      statusLabel: unified.status,
+      statusClass: unifiedStatusClass(unified.status),
+      lessonDetail: `${lessonName(lessonsById, selectedLesson)}${checkpointDetail}`,
       scoreLabel: latestSession ? formatScore(latestSession.score) : "n/a",
       attempts: attempts.length,
       quizAttempts: quizAttempts.length,
       evidence: evidence.length,
       mastery: mastery.length,
       latestSession,
-      needsAttention: progress === "Retry" || failedSignals,
+      needsAttention:
+        unified.status === "Retry" || unified.status === "Checkpoints due" || failedSignals,
     };
   }
 
@@ -5473,6 +5497,21 @@ function gradebookRowForStudent(
     ? completedSessions.reduce((sum, session) => sum + Number(session.score || 0), 0) /
       completedSessions.length
     : null;
+  const outstandingRequired = lessons.reduce(
+    (sum, lesson) => sum + requiredCheckpointStatus(dashboard, studentId, lesson.id).outstanding,
+    0,
+  );
+  const detailBase = activeCount
+    ? `${activeCount} active lesson${activeCount === 1 ? "" : "s"}`
+    : completedCount
+      ? completedLessonNames.join(", ")
+      : "No lessons started";
+  const requiredNote =
+    outstandingRequired > 0
+      ? ` • ${outstandingRequired} required checkpoint${
+          outstandingRequired === 1 ? "" : "s"
+        } outstanding`
+      : "";
 
   return {
     studentId,
@@ -5481,18 +5520,14 @@ function gradebookRowForStudent(
       completedCount > 0
         ? "border-success/40 bg-success/12 text-success"
         : "border-border bg-background/45 text-muted-foreground",
-    lessonDetail: activeCount
-      ? `${activeCount} active lesson${activeCount === 1 ? "" : "s"}`
-      : completedCount
-        ? completedLessonNames.join(", ")
-        : "No lessons started",
+    lessonDetail: `${detailBase}${requiredNote}`,
     scoreLabel: averageCompleteScore === null ? "n/a" : `${formatScore(averageCompleteScore)} avg`,
     attempts: attempts.length,
     quizAttempts: quizAttempts.length,
     evidence: evidence.length,
     mastery: mastery.length,
     latestSession,
-    needsAttention: failedSignals,
+    needsAttention: failedSignals || outstandingRequired > 0,
   };
 }
 
@@ -5553,6 +5588,67 @@ function lessonProgressStatus(
     return "Active";
   }
   return "Not started";
+}
+
+// Mirrors the chat runtime's completion gate: a required checkpoint blocks the lesson
+// only while its recipient row is still `assigned` (and the parent is live —
+// assignment status `assigned` / assessment status `published`). Anything past `assigned`
+// no longer gates, matching loadPendingCheckpoints in supabase/functions/chat/index.ts.
+function requiredCheckpointStatus(
+  dashboard: TeacherDashboardData,
+  studentId: string,
+  lessonId: string,
+): { total: number; outstanding: number } {
+  const requiredAssignmentIds = new Set(
+    dashboard.assignments
+      .filter((a) => a.required && a.status === "assigned" && a.lesson_id === lessonId)
+      .map((a) => a.id),
+  );
+  const requiredAssessmentIds = new Set(
+    dashboard.assessments
+      .filter((a) => a.required && a.status === "published" && a.lesson_id === lessonId)
+      .map((a) => a.id),
+  );
+  const assignmentRecipients = dashboard.assignmentRecipients.filter(
+    (r) => r.user_id === studentId && requiredAssignmentIds.has(r.assignment_id),
+  );
+  const assessmentRecipients = dashboard.assessmentRecipients.filter(
+    (r) => r.user_id === studentId && requiredAssessmentIds.has(r.assessment_id),
+  );
+  const total = assignmentRecipients.length + assessmentRecipients.length;
+  const outstanding =
+    assignmentRecipients.filter((r) => r.status === "assigned").length +
+    assessmentRecipients.filter((r) => r.status === "assigned").length;
+  return { total, outstanding };
+}
+
+type UnifiedLessonStatus = LessonProgressStatus | "Checkpoints due";
+
+// The honest lesson status the student is actually subject to: activities AND required
+// checkpoints. When activities are done but required checkpoints remain, the lesson is
+// held open — surfaced as "Checkpoints due" rather than a misleading "Complete".
+function unifiedLessonStatus(
+  dashboard: TeacherDashboardData,
+  studentId: string,
+  lessonId: string,
+): {
+  status: UnifiedLessonStatus;
+  activities: LessonProgressStatus;
+  checkpoints: { total: number; outstanding: number };
+} {
+  const activities = lessonProgressStatus(dashboard.sessions, studentId, lessonId);
+  const checkpoints = requiredCheckpointStatus(dashboard, studentId, lessonId);
+  if (activities === "Complete" && checkpoints.outstanding > 0) {
+    return { status: "Checkpoints due", activities, checkpoints };
+  }
+  return { status: activities, activities, checkpoints };
+}
+
+function unifiedStatusClass(status: UnifiedLessonStatus) {
+  if (status === "Checkpoints due") {
+    return "border-warning/40 bg-warning/12 text-warning";
+  }
+  return lessonStatusClass(status);
 }
 
 function lessonStatusClass(status: LessonProgressStatus) {
