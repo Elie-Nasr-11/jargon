@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
+import { Menu, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { LESSONS, type Lesson, type MentorConfig } from "@/lib/jargon-store";
@@ -33,9 +34,11 @@ export function HeaderMenus({
   const panelRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const sizerRef = useRef<HTMLDivElement>(null);
-  const sheetRef = useRef<HTMLDivElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
   const isOpenRef = useRef(false);
+  const [drawerMounted, setDrawerMounted] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const drawerBackdropRef = useRef<HTMLDivElement>(null);
 
   const cancelClose = () => {
     if (closeTimer.current) {
@@ -60,6 +63,11 @@ export function HeaderMenus({
     cancelClose();
     setActiveKey((prev) => (prev === k ? null : k));
   };
+  const openDrawer = () => {
+    setDrawerMounted(true);
+    setDrawerOpen(true);
+  };
+  const closeDrawer = () => setDrawerOpen(false);
 
   // Outside tap + Escape close
   useEffect(() => {
@@ -67,7 +75,6 @@ export function HeaderMenus({
     const onPointer = (e: PointerEvent) => {
       const t = e.target as Node;
       if (wrapRef.current?.contains(t)) return;
-      if (sheetRef.current?.contains(t)) return;
       close();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -151,50 +158,41 @@ export function HeaderMenus({
     });
   }, [activeKey, contentKey, isTouch]);
 
-  // Mobile sheet animation
+  // Mobile drawer: slide in/out from the right.
   useEffect(() => {
-    if (!isTouch) return;
-    const sheet = sheetRef.current;
-    const backdrop = backdropRef.current;
-    if (activeKey) {
-      if (!contentKey) {
-        setContentKey(activeKey);
-        return;
-      }
-      if (sheet && backdrop) {
-        gsap.killTweensOf([sheet, backdrop]);
-        gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" });
-        gsap.fromTo(sheet, { y: "100%" }, { y: "0%", duration: 0.32, ease: "power3.out" });
-      }
-    } else if (sheet && backdrop && contentKey) {
-      gsap.killTweensOf([sheet, backdrop]);
+    if (!drawerMounted) return;
+    const drawer = drawerRef.current;
+    const backdrop = drawerBackdropRef.current;
+    if (!drawer || !backdrop) return;
+    gsap.killTweensOf([drawer, backdrop]);
+    if (drawerOpen) {
+      gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" });
+      gsap.fromTo(drawer, { x: "100%" }, { x: "0%", duration: 0.34, ease: "power3.out" });
+    } else {
       gsap.to(backdrop, { opacity: 0, duration: 0.18, ease: "power2.in" });
-      gsap.to(sheet, {
-        y: "100%",
-        duration: 0.22,
+      gsap.to(drawer, {
+        x: "100%",
+        duration: 0.24,
         ease: "power2.in",
-        onComplete: () => setContentKey(null),
+        onComplete: () => setDrawerMounted(false),
       });
     }
-  }, [activeKey, contentKey, isTouch]);
+  }, [drawerOpen, drawerMounted]);
 
-  // When swapping content within mobile sheet, just swap (no morph needed)
+  // Escape closes the drawer; lock body scroll while it's open.
   useEffect(() => {
-    if (!isTouch) return;
-    if (activeKey && contentKey && activeKey !== contentKey) {
-      setContentKey(activeKey);
-    }
-  }, [activeKey, contentKey, isTouch]);
-
-  // Lock body scroll while mobile sheet is open
-  useEffect(() => {
-    if (!isTouch || !activeKey) return;
-    const prev = document.body.style.overflow;
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeDrawer();
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
     };
-  }, [isTouch, activeKey]);
+  }, [drawerOpen]);
 
   const items: { key: MenuKey; label: string }[] = [
     { key: "lessons", label: "Lessons" },
@@ -226,20 +224,35 @@ export function HeaderMenus({
       onMouseLeave={isTouch ? undefined : leave}
       onMouseEnter={isTouch ? undefined : cancelClose}
     >
-      {items.map((it) => (
+      {/* Desktop: three hover buttons. Mobile: a single drawer trigger. */}
+      {!isTouch &&
+        items.map((it) => (
+          <button
+            key={it.key}
+            type="button"
+            onMouseEnter={() => enter(it.key)}
+            onFocus={() => enter(it.key)}
+            onClick={() => toggle(it.key)}
+            className={`relative inline-flex items-center rounded-full px-3.5 py-1.5 text-[13.5px] tracking-tight transition-colors ${
+              activeKey === it.key
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {it.label}
+          </button>
+        ))}
+      {isTouch && (
         <button
-          key={it.key}
           type="button"
-          onMouseEnter={isTouch ? undefined : () => enter(it.key)}
-          onFocus={isTouch ? undefined : () => enter(it.key)}
-          onClick={() => toggle(it.key)}
-          className={`relative inline-flex min-h-[44px] items-center rounded-full px-3 text-[14px] tracking-tight transition-colors sm:min-h-0 sm:px-3.5 sm:py-1.5 sm:text-[13.5px] ${
-            activeKey === it.key ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
+          aria-label="Menu"
+          onClick={openDrawer}
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-[14px] tracking-tight text-muted-foreground transition-colors hover:text-foreground"
         >
-          {it.label}
+          <Menu className="h-[18px] w-[18px]" strokeWidth={1.6} />
+          Menu
         </button>
-      ))}
+      )}
 
       {/* Desktop dropdown */}
       {!isTouch && (
@@ -270,12 +283,12 @@ export function HeaderMenus({
         </div>
       )}
 
-      {/* Mobile bottom sheet */}
-      {isTouch && contentKey && (
+      {/* Mobile drawer — one panel with all three titled sections. */}
+      {isTouch && drawerMounted && (
         <>
           <div
-            ref={backdropRef}
-            onClick={close}
+            ref={drawerBackdropRef}
+            onClick={closeDrawer}
             className="fixed inset-0 z-40"
             style={{
               background: "color-mix(in oklab, var(--background) 55%, rgba(0,0,0,0.45))",
@@ -283,38 +296,37 @@ export function HeaderMenus({
             }}
           />
           <div
-            ref={sheetRef}
-            className="fixed inset-x-0 bottom-0 z-50"
-            style={{ transform: "translateY(100%)" }}
+            ref={drawerRef}
+            className="fixed inset-y-0 right-0 z-50 w-[min(90vw,390px)] p-2 pb-[max(env(safe-area-inset-bottom),8px)]"
+            style={{ transform: "translateX(100%)" }}
           >
-            <div className="mx-auto w-full max-w-[640px] px-2 pb-[max(env(safe-area-inset-bottom),12px)]">
-              <GradientCard>
-                <div className="flex flex-col" style={{ maxHeight: "78vh" }}>
-                  <div className="flex justify-center pt-2.5">
-                    <span className="h-1 w-10 rounded-full bg-muted-foreground/40" />
-                  </div>
-                  <div className="flex items-center gap-1 px-3 pt-2">
-                    {items.map((it) => (
-                      <button
-                        key={it.key}
-                        type="button"
-                        onClick={() => setActiveKey(it.key)}
-                        className={`min-h-[40px] flex-1 rounded-full px-3 text-[13px] transition-colors ${
-                          activeKey === it.key
-                            ? "bg-foreground text-background"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {it.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="min-h-0 overflow-y-auto px-5 pb-5 pt-3">
-                    {renderPanelBody(contentKey)}
-                  </div>
-                </div>
-              </GradientCard>
-            </div>
+            <GradientCard className="h-full" innerClassName="flex h-full flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 pb-1 pt-3.5">
+                <span className="font-serif text-[20px] tracking-tight">Menu</span>
+                <button
+                  type="button"
+                  onClick={closeDrawer}
+                  aria-label="Close menu"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-[18px] w-[18px]" strokeWidth={1.6} />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-2">
+                <LessonsPanel
+                  activeId={activeLessonId}
+                  lessons={lessons}
+                  onSelect={(id) => {
+                    onSelectLesson(id);
+                    closeDrawer();
+                  }}
+                />
+                <div className="my-7 h-px bg-border" />
+                <ProgressPanel activeId={activeLessonId} lessons={lessons} />
+                <div className="my-7 h-px bg-border" />
+                <MentorPanel mentor={mentor} onChange={onMentorChange} />
+              </div>
+            </GradientCard>
           </div>
         </>
       )}
