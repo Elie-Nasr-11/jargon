@@ -6,6 +6,45 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Checkpoint unification Phases 2-4: the data-model merge)
+
+Summary: Completed the checkpoint unification data-model merge (expand -> dual-write -> migrate reads)
+on top of Phase 1's gated completion. The three fragmented checkpoint systems now have ONE unified read
+model, and the completion gate + teacher gradebook read from it.
+
+Phase 2 (expand) — 20260701120000_checkpoints_unified.sql: new checkpoints / checkpoint_items /
+checkpoint_recipients tables, superset of assignments + assessments. RLS = faithful per-kind union of the
+legacy policies via new can_manage_checkpoint / is_checkpoint_recipient helpers; student self-update gated
+to kind='assignment' (assessment progress stays edge-fn-written). legacy_id back-ref + unique(kind,legacy_id).
+
+Phase 3 (dual-write + backfill) — 20260701130000_checkpoints_dualwrite.sql: 5 SECURITY DEFINER triggers on
+assignments/assessments/their items+recipients upsert-mirror into the checkpoint tables (bypass RLS, cover
+EVERY writer incl. edge fns + student self-update, atomic). Lossless idempotent backfill (parents-first).
+Re-runs on every deploy = reconciliation. Verified: backfill exact (26 checkpoints / 3 items / 386
+recipients, 0 mismatches/orphans); trigger INSERT/UPDATE/DELETE round-trips mirror + clean up.
+
+Phase 4 (migrate reads): chat loadPendingCheckpoints + teacher gradebook requiredCheckpointStatus now read
+the unified checkpoints/checkpoint_recipients (one source, no gate/gradebook logic drift). Behavior-equivalent
+to the legacy two-table read — verified on 384 real recipiencies (symmetric diff 0) + required path
+blocks-when-assigned / unblocks-when-done. Also fixed a latent bug the review caught: the old unsorted
+slice(0,6) in loadPendingCheckpoints could drop a required item ahead of a non-required one and wrongly open
+the gate — now required-first sorted before slicing. fetchTeacherDashboard loads checkpoints +
+checkpoint_recipients (RLS lets teachers read their class's via can_manage_checkpoint).
+
+Files: 2 migrations, deploy-backend.yml (both migrations wired in + Supabase CLI pinned to 2.109.0 after a
+transient setup-cli rate-limit), chat/index.ts, api.ts, types.ts, TeacherConsole.tsx. Tests: frontend tsc 0 /
+lint 0 / build green; 4 adversarial reviews across P3+P4, all SHIP, all findings applied. Applied+verified via
+Supabase MCP throughout.
+
+NOT DONE (deliberately out of scope — a separate, larger initiative): the physical CONTRACT — dropping the
+legacy assignments/assessments tables and unifying the attempts/submissions subsystems (assessment_attempts/
+assessment_item_attempts/assignment_submissions still key off assignment_id/assessment_id, and the student-
+facing quiz/assignment pages + grading flows write them). The legacy tables remain the write-of-record and
+dual-write to checkpoints; checkpoints is the unified READ model for gating + the gradebook. A future
+initiative can migrate the authoring UIs to write checkpoints directly, unify attempts/submissions, then drop
+the legacy tables. Also worth extracting a single shared source of truth for the gate predicate (backend +
+gradebook currently re-implement the same "required + live-status + recipient assigned" logic).
+
 ## Claude -> Codex / Human - 2026-07-01 (Checkpoint unification P1b: assessment required toggle + unified gradebook)
 
 Summary: Completes Phase 1 of the checkpoint unification. Two pieces.
