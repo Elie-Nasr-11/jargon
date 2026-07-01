@@ -2982,7 +2982,9 @@ export async function createRealtimeVoiceSession(input: {
         voice: input.voice,
       }),
     },
-    20000,
+    // Heavier than mentor_audio (auth + external OpenAI SDP negotiation + edge cold start):
+    // give the handshake more room so a slow mobile network isn't aborted mid-negotiation.
+    35000,
   );
   const data = (await response.json()) as {
     status: "ok" | "error";

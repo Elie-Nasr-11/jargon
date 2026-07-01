@@ -1112,6 +1112,10 @@ function RealtimeVoicePanel({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const submittedCallIdsRef = useRef<Set<string>>(new Set());
   const startedRef = useRef(false);
+  // Mirror `status` into a ref so event-handler closures (data-channel close, connect timeout)
+  // read the live value instead of the stale one captured at handler-creation time.
+  const statusRef = useRef<"idle" | "connecting" | "live" | "error">("idle");
+  const connectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const supported =
     typeof window !== "undefined" &&
     "RTCPeerConnection" in window &&
@@ -1119,12 +1123,17 @@ function RealtimeVoicePanel({
 
   const stop = useCallback(
     (nextMessage = "Live voice stopped.") => {
+      if (connectTimerRef.current) {
+        clearTimeout(connectTimerRef.current);
+        connectTimerRef.current = null;
+      }
       channelRef.current?.close();
       pcRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.srcObject = null;
+        audioRef.current.remove();
       }
       channelRef.current = null;
       pcRef.current = null;
@@ -1138,14 +1147,24 @@ function RealtimeVoicePanel({
     [onVoiceEvent],
   );
 
+  // Keep the status ref in sync for closures that outlive a render.
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   useEffect(() => {
     return () => {
+      if (connectTimerRef.current) {
+        clearTimeout(connectTimerRef.current);
+        connectTimerRef.current = null;
+      }
       channelRef.current?.close();
       pcRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.srcObject = null;
+        audioRef.current.remove();
       }
     };
   }, []);
@@ -1168,7 +1187,6 @@ function RealtimeVoicePanel({
 
   const submitRealtimeTurn = async (callId: string, args: Record<string, unknown>) => {
     if (submittedCallIdsRef.current.has(callId)) return;
-    submittedCallIdsRef.current.add(callId);
     const text =
       typeof args.text === "string" && args.text.trim()
         ? args.text.trim()
@@ -1177,12 +1195,14 @@ function RealtimeVoicePanel({
           : lastTranscript.trim();
     const confidence = typeof args.confidence === "number" ? args.confidence : null;
     if (!text) {
+      // Do NOT mark the call as submitted — a later completed call with the same id must still run.
       sendToolResult(callId, {
         status: "error",
         reply: "I did not catch that. Please say it one more time.",
       });
       return;
     }
+    submittedCallIdsRef.current.add(callId);
     setLastTranscript(text);
     setMessage("Sending your spoken answer to Jargon...");
     void onVoiceEvent({
@@ -1228,7 +1248,14 @@ function RealtimeVoicePanel({
       const name = String(item.name || "");
       const callId = String(item.call_id || item.callId || "");
       const rawArgs = item.arguments;
-      if (name !== "submit_voice_turn" || !callId || typeof rawArgs !== "string") continue;
+      const itemStatus = String(item.status || "");
+      if (name !== "submit_voice_turn" || !callId) continue;
+      // Only act on a COMPLETED call with fully-buffered arguments. The streaming shapes
+      // (response.output_item.added / .delta) carry an absent or empty/partial `arguments`
+      // string; firing on those would submit an empty turn AND lock the callId so the real
+      // completed call is then ignored.
+      if (typeof rawArgs !== "string" || rawArgs.trim() === "") continue;
+      if (itemType === "function_call" && itemStatus && itemStatus !== "completed") continue;
       try {
         void submitRealtimeTurn(callId, JSON.parse(rawArgs) as Record<string, unknown>);
       } catch {
@@ -1240,6 +1267,10 @@ function RealtimeVoicePanel({
 
   const handleRealtimeEvent = (event: RealtimeEvent) => {
     if (event.type === "session.created") {
+      if (connectTimerRef.current) {
+        clearTimeout(connectTimerRef.current);
+        connectTimerRef.current = null;
+      }
       setStatus("live");
       setMessage("Live voice is listening.");
       void onVoiceEvent({ event_type: "voice_session_ready", input_modality: "audio_session" });
@@ -1266,16 +1297,51 @@ function RealtimeVoicePanel({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const pc = new RTCPeerConnection();
+      const pc = new RTCPeerConnection({
+        // A public STUN server helps ICE traverse mobile-carrier NAT; harmless when the
+        // realtime endpoint already offers a directly-reachable candidate.
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      });
       pcRef.current = pc;
 
+      // Remote Mentor audio. iOS Safari (WebKit) will NOT play a WebRTC MediaStream from a
+      // detached element via the `autoplay` attribute — the element must be in the DOM,
+      // marked playsInline, and have .play() called (which succeeds here because start() runs
+      // inside the user's tap gesture). Mirrors the working read-aloud path.
       const audio = document.createElement("audio");
       audio.autoplay = true;
+      audio.setAttribute("playsinline", "true");
+      (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+      audio.style.display = "none";
+      document.body.appendChild(audio);
       audioRef.current = audio;
       pc.ontrack = (event) => {
         audio.srcObject = event.streams[0];
+        void audio.play().catch(() => {
+          // Autoplay can still be blocked in rare cases; the session is otherwise live.
+        });
       };
       stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
+
+      // Drive "live" off the actual transport state (robust regardless of the app-layer
+      // session.created event name), and recover from a failed/lost connection instead of
+      // sitting on "connecting"/"live" forever.
+      pc.onconnectionstatechange = () => {
+        if (pcRef.current !== pc) return;
+        const state = pc.connectionState;
+        if (state === "connected") {
+          if (connectTimerRef.current) {
+            clearTimeout(connectTimerRef.current);
+            connectTimerRef.current = null;
+          }
+          setStatus("live");
+          setMessage("Live voice is listening.");
+        } else if (state === "failed") {
+          stop("Live voice connection lost.");
+          setStatus("error");
+          setMessage("Live voice connection lost. Tap Retry.");
+        }
+      };
 
       const channel = pc.createDataChannel("oai-events");
       channelRef.current = channel;
@@ -1290,7 +1356,10 @@ function RealtimeVoicePanel({
         setMessage("Live voice is warming up...");
       });
       channel.addEventListener("close", () => {
-        if (status === "live") setMessage("Live voice closed.");
+        if (statusRef.current === "live") {
+          setStatus("error");
+          setMessage("Live voice closed. Tap Retry.");
+        }
       });
 
       const offer = await pc.createOffer();
@@ -1303,8 +1372,17 @@ function RealtimeVoicePanel({
         sdp: offer.sdp || "",
       });
       await pc.setRemoteDescription({ type: "answer", sdp: realtime.sdp });
-      setStatus("live");
-      setMessage("Live voice is listening.");
+      // Stay in "connecting" until the peer connection actually reaches "connected"
+      // (or session.created arrives). Arm a timeout so a handshake that never connects
+      // surfaces a recoverable error rather than a stuck "connecting" state.
+      setMessage("Connecting to the Mentor...");
+      connectTimerRef.current = setTimeout(() => {
+        if (statusRef.current !== "live") {
+          stop("Live voice could not connect.");
+          setStatus("error");
+          setMessage("Live voice could not connect. Tap Retry.");
+        }
+      }, 15000);
     } catch (error) {
       void onVoiceEvent({
         event_type: "voice_session_failed",
