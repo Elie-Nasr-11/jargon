@@ -57,7 +57,8 @@ jobs:
             supabase/migrations/20260629000000_curriculum_authoring.sql \
             supabase/migrations/20260630000000_tutor_pedagogy.sql \
             supabase/migrations/20260701000000_checkpoint_required.sql \
-            supabase/migrations/20260701120000_checkpoints_unified.sql ; do
+            supabase/migrations/20260701120000_checkpoints_unified.sql \
+            supabase/migrations/20260701130000_checkpoints_dualwrite.sql ; do
             echo "Applying $f"
             body="$(jq -Rs '{query: .}' "$f")"
             resp="$(mktemp)"
