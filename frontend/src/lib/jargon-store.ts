@@ -8,6 +8,13 @@ export type Lesson = {
   subtitle: string;
   group?: string;
   progress: number; // 0..1
+  // Curriculum hierarchy for the header nav (optional; the demo LESSONS omit them and
+  // fall back to a single "Lessons" group).
+  subjectTitle?: string;
+  courseTitle?: string;
+  unitTitle?: string;
+  unitPosition?: number;
+  position?: number;
 };
 
 export const LESSONS: Lesson[] = [

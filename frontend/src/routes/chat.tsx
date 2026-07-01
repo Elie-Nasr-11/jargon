@@ -266,6 +266,16 @@ function mapLessons(
       lesson.id === activeLessonId && learningSession
         ? (stageProgress[learningSession.stage] ?? 0)
         : 0,
+    subjectTitle:
+      lesson.subject_title ||
+      lesson.course_title ||
+      lesson.curriculum_group ||
+      lesson.module ||
+      undefined,
+    courseTitle: lesson.course_title || undefined,
+    unitTitle: lesson.unit_title || undefined,
+    unitPosition: lesson.unit_position ?? undefined,
+    position: lesson.position ?? undefined,
   }));
 }
 
@@ -982,6 +992,7 @@ function ChatPage() {
               <HeaderMenus
                 activeLessonId={lessonId}
                 lessons={menuLessons}
+                lessonArc={lessonArc}
                 onSelectLesson={selectLesson}
                 mentor={mentor}
                 onMentorChange={updateMentor}

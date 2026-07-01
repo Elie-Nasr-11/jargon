@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import gsap from "gsap";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { Check, ChevronDown, Menu, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { LESSONS, type Lesson, type MentorConfig } from "@/lib/jargon-store";
+import type { LessonArc } from "@/lib/types";
 
 type MenuKey = "lessons" | "progress" | "mentor";
 
@@ -17,12 +18,14 @@ const WIDTHS: Record<MenuKey, number> = {
 export function HeaderMenus({
   activeLessonId,
   lessons = LESSONS,
+  lessonArc = null,
   onSelectLesson,
   mentor,
   onMentorChange,
 }: {
   activeLessonId: string;
   lessons?: Lesson[];
+  lessonArc?: LessonArc | null;
   onSelectLesson: (id: string) => void;
   mentor: MentorConfig;
   onMentorChange: (m: MentorConfig) => void;
@@ -213,7 +216,9 @@ export function HeaderMenus({
           }}
         />
       )}
-      {k === "progress" && <ProgressPanel activeId={activeLessonId} lessons={lessons} />}
+      {k === "progress" && (
+        <ProgressPanel activeId={activeLessonId} lessons={lessons} lessonArc={lessonArc} />
+      )}
       {k === "mentor" && <MentorPanel mentor={mentor} onChange={onMentorChange} />}
     </>
   );
@@ -276,7 +281,9 @@ export function HeaderMenus({
           <div ref={sizerRef}>
             <GradientCard>
               <div ref={innerRef} style={{ willChange: "transform, opacity" }}>
-                <div className="p-5">{renderPanelBody(contentKey)}</div>
+                <div className="max-h-[68vh] overflow-y-auto overscroll-contain p-5">
+                  {renderPanelBody(contentKey)}
+                </div>
               </div>
             </GradientCard>
           </div>
@@ -331,7 +338,12 @@ export function HeaderMenus({
                     />
                   </CollapsibleSection>
                   <CollapsibleSection title="Progress">
-                    <ProgressPanel bare activeId={activeLessonId} lessons={lessons} />
+                    <ProgressPanel
+                      bare
+                      activeId={activeLessonId}
+                      lessons={lessons}
+                      lessonArc={lessonArc}
+                    />
                   </CollapsibleSection>
                   <CollapsibleSection title="Mentor">
                     <MentorPanel bare mentor={mentor} onChange={onMentorChange} />
@@ -385,6 +397,137 @@ function CollapsibleSection({
   );
 }
 
+// A compact, nestable disclosure for the Subject > Unit > Lesson tree. `level` only tweaks the
+// label styling (0 = subject, 1 = unit); the CSS grid 0fr->1fr collapse animates the height.
+function Disclosure({
+  label,
+  right,
+  level = 0,
+  defaultOpen = false,
+  children,
+}: {
+  label: ReactNode;
+  right?: ReactNode;
+  level?: 0 | 1;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={`flex w-full items-center gap-2 rounded-md py-2 pr-1 text-left transition-colors hover:bg-muted/50 ${
+          level === 0 ? "pl-1" : "pl-2.5"
+        }`}
+      >
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-300 ${
+            open ? "rotate-180" : ""
+          }`}
+          strokeWidth={1.8}
+        />
+        <span
+          className={`min-w-0 flex-1 truncate ${
+            level === 0
+              ? "text-[11px] font-medium uppercase tracking-[0.11em] text-muted-foreground"
+              : "text-[13.5px] font-medium tracking-tight text-foreground/90"
+          }`}
+        >
+          {label}
+        </span>
+        {right}
+      </button>
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden">
+          <div className="pb-1">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type LessonTree = { name: string; units: { name: string | null; items: Lesson[] }[] }[];
+
+// Group the flat lessons into Subject > Unit > Lesson, preserving first-seen subject order and
+// sorting units by unit_position and lessons by position. A missing unit title yields a null-named
+// unit so the renderer can flatten it.
+function buildLessonTree(lessons: Lesson[]): LessonTree {
+  const subjects: {
+    name: string;
+    order: number;
+    units: Map<string, { name: string | null; pos: number; items: Lesson[] }>;
+  }[] = [];
+  const subjectIndex = new Map<string, number>();
+  for (const l of lessons) {
+    const subjectName = l.subjectTitle || l.group || "Lessons";
+    const unitKey = l.unitTitle || " nounit";
+    let si = subjectIndex.get(subjectName);
+    if (si === undefined) {
+      si = subjects.length;
+      subjectIndex.set(subjectName, si);
+      subjects.push({ name: subjectName, order: si, units: new Map() });
+    }
+    const subj = subjects[si];
+    let unit = subj.units.get(unitKey);
+    if (!unit) {
+      unit = { name: l.unitTitle || null, pos: l.unitPosition ?? subj.units.size, items: [] };
+      subj.units.set(unitKey, unit);
+    }
+    unit.items.push(l);
+  }
+  return subjects.map((s) => ({
+    name: s.name,
+    units: Array.from(s.units.values())
+      .sort((a, b) => a.pos - b.pos)
+      .map((u) => ({
+        name: u.name,
+        items: [...u.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+      })),
+  }));
+}
+
+function LessonRow({
+  lesson,
+  active,
+  onSelect,
+}: {
+  lesson: Lesson;
+  active: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-lesson-id={lesson.id}
+      onClick={() => onSelect(lesson.id)}
+      className={`group flex w-full items-start gap-2.5 rounded-md py-2 pl-3 pr-1 text-left transition-colors hover:bg-muted/60 ${
+        active ? "bg-muted/50" : ""
+      }`}
+    >
+      <span
+        className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${
+          active ? "bg-foreground" : "bg-border"
+        }`}
+      />
+      <span className="min-w-0 flex-1">
+        <span
+          className={`block text-[13.5px] font-medium tracking-tight ${
+            active ? "text-foreground" : "text-foreground/85"
+          }`}
+        >
+          {lesson.title}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function LessonsPanel({
   activeId,
   lessons,
@@ -396,141 +539,213 @@ function LessonsPanel({
   onSelect: (id: string) => void;
   bare?: boolean;
 }) {
-  const listRef = useRef<HTMLDivElement>(null);
-  const indicatorRef = useRef<HTMLDivElement>(null);
-  const didMount = useRef(false);
-
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    const ind = indicatorRef.current;
-    if (!list || !ind) return;
-    const row = Array.from(list.querySelectorAll<HTMLElement>("[data-lesson-id]")).find(
-      (item) => item.dataset.lessonId === activeId,
-    );
-    if (!row) return;
-    const props = {
-      y: row.offsetTop + 6,
-      height: row.offsetHeight - 12,
-    };
-    if (!didMount.current) {
-      gsap.set(ind, props);
-      didMount.current = true;
-    } else {
-      gsap.to(ind, { ...props, duration: 0.38, ease: "power3.out" });
+  const tree = buildLessonTree(lessons);
+  // The subject/unit that hold the active lesson, so we open a path straight to it.
+  let activeSubject: string | null = null;
+  let activeUnit: string | null = null;
+  for (const subject of tree) {
+    for (const unit of subject.units) {
+      if (unit.items.some((l) => l.id === activeId)) {
+        activeSubject = subject.name;
+        activeUnit = unit.name;
+      }
     }
-  }, [activeId, lessons]);
+  }
+  const singleSubject = tree.length <= 1;
+
+  const renderUnits = (subject: LessonTree[number]) => {
+    const hasRealUnits = subject.units.some((u) => u.name !== null);
+    if (!hasRealUnits) {
+      // No unit structure — list the lessons directly under the subject.
+      return (
+        <div className="space-y-0.5 pl-1">
+          {subject.units
+            .flatMap((u) => u.items)
+            .map((l) => (
+              <LessonRow key={l.id} lesson={l} active={l.id === activeId} onSelect={onSelect} />
+            ))}
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-0.5">
+        {subject.units.map((unit) => (
+          <Disclosure
+            key={unit.name ?? "__nounit__"}
+            level={1}
+            label={unit.name ?? "Lessons"}
+            right={
+              <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                {unit.items.length}
+              </span>
+            }
+            defaultOpen={subject.name === activeSubject && unit.name === activeUnit}
+          >
+            <div className="space-y-0.5 pl-2">
+              {unit.items.map((l) => (
+                <LessonRow key={l.id} lesson={l} active={l.id === activeId} onSelect={onSelect} />
+              ))}
+            </div>
+          </Disclosure>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div>
       {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Lessons</h3>}
-      <p className="mt-1 text-[13px] text-muted-foreground">Pick the thread to follow.</p>
-      <div ref={listRef} className="relative mt-5">
-        <div
-          ref={indicatorRef}
-          aria-hidden
-          className="pointer-events-none absolute left-1 top-0 w-[3px] rounded-full bg-foreground"
-          style={{
-            height: 24,
-            willChange: "transform, height",
-          }}
-        />
-        {groupLessons(lessons).map((group) => (
-          <div key={group.name} className="mt-2 first:mt-0">
-            <div className="pb-1 pl-5 text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
-              {group.name}
-            </div>
-            {group.items.map((l) => {
-              const active = l.id === activeId;
-              return (
-                <button
-                  key={l.id}
-                  type="button"
-                  data-lesson-id={l.id}
-                  onClick={() => onSelect(l.id)}
-                  className="group relative flex w-full items-start gap-3 rounded-md py-3 pl-5 pr-1 text-left transition-colors hover:bg-muted/60 sm:py-2"
-                >
-                  <span className="flex-1">
-                    <span
-                      className={`block text-[14.5px] font-medium tracking-tight transition-colors ${
-                        active ? "text-foreground" : "text-foreground/85"
-                      }`}
-                    >
-                      {l.title}
-                    </span>
-                    <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted-foreground">
-                      {l.subtitle}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
+      <p className="mt-1 text-[13px] text-muted-foreground">Browse subjects, units, and lessons.</p>
+      <div className="mt-4 space-y-0.5">
+        {singleSubject
+          ? tree[0] && renderUnits(tree[0])
+          : tree.map((subject) => (
+              <Disclosure
+                key={subject.name}
+                level={0}
+                label={subject.name}
+                defaultOpen={subject.name === activeSubject}
+              >
+                {renderUnits(subject)}
+              </Disclosure>
+            ))}
       </div>
     </div>
   );
 }
 
-function groupLessons(lessons: Lesson[]) {
-  const groups = new Map<string, Lesson[]>();
-  for (const lesson of lessons) {
-    const key = lesson.group || lesson.subtitle.split(" · ")[0] || "Lessons";
-    groups.set(key, [...(groups.get(key) || []), lesson]);
-  }
-  return Array.from(groups.entries()).map(([name, items]) => ({ name, items }));
+// The step-by-step milestone list for the current lesson (done / current / upcoming), the primary
+// content of the Progress panel.
+function LessonMilestones({ arc }: { arc: LessonArc }) {
+  const steps: { step: number; title: string; state: "done" | "current" | "upcoming" }[] = [
+    ...arc.completed.map((s) => ({ ...s, state: "done" as const })),
+    ...(arc.current
+      ? [{ step: arc.step, title: arc.current.title, state: "current" as const }]
+      : []),
+    ...arc.upcoming.map((s) => ({ ...s, state: "upcoming" as const })),
+  ];
+  return (
+    <div className="mt-4">
+      <div className="mb-2 flex items-center gap-1" aria-hidden>
+        {Array.from({ length: arc.total }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-1.5 flex-1 rounded-full ${
+              i < arc.step - 1
+                ? "bg-foreground/35"
+                : i === arc.step - 1
+                  ? "bg-foreground"
+                  : "bg-border"
+            }`}
+          />
+        ))}
+      </div>
+      <div className="mb-3 text-[11.5px] text-muted-foreground">
+        Step {arc.step} of {arc.total}
+      </div>
+      <ol className="space-y-0.5">
+        {steps.map((s) => (
+          <li key={s.step} className="flex items-center gap-2.5 py-1 text-[13px]">
+            <span
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                s.state === "done"
+                  ? "bg-success/15 text-success"
+                  : s.state === "current"
+                    ? "bg-foreground text-background"
+                    : "border border-border text-muted-foreground"
+              }`}
+            >
+              {s.state === "done" ? <Check className="h-3 w-3" strokeWidth={3} /> : s.step}
+            </span>
+            <span
+              className={
+                s.state === "current" ? "font-medium text-foreground" : "text-muted-foreground"
+              }
+            >
+              {s.title}
+            </span>
+            {s.state === "current" ? (
+              <span className="ml-auto text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                now
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
-function ProgressPanel({
-  activeId,
-  lessons,
-  bare,
-}: {
-  activeId: string;
-  lessons: Lesson[];
-  bare?: boolean;
-}) {
-  const active = lessons.find((l) => l.id === activeId) ?? lessons[0] ?? LESSONS[0];
+// Fallback when there's no multi-step arc (single-activity lesson): a simple progress bar.
+function SimpleProgress({ progress }: { progress: number }) {
   const barRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!barRef.current) return;
     gsap.fromTo(
       barRef.current,
       { width: 0 },
-      { width: `${Math.round(active.progress * 100)}%`, duration: 0.9, ease: "power3.out" },
+      { width: `${Math.round(progress * 100)}%`, duration: 0.9, ease: "power3.out" },
     );
-  }, [active.id, active.progress]);
+  }, [progress]);
   return (
-    <div>
-      {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Progress</h3>}
-      <p className="mt-1 text-[13px] text-muted-foreground">{active.title}</p>
+    <>
       <div className="mt-4 h-[5px] w-full overflow-hidden rounded-full bg-muted">
         <div ref={barRef} className="h-full rounded-full bg-foreground" />
       </div>
       <div className="mt-1 flex justify-between text-[11.5px] text-muted-foreground">
-        <span>{Math.round(active.progress * 100)}% complete</span>
-        <span>{Math.max(0, Math.round((1 - active.progress) * 24))} min left</span>
+        <span>{Math.round(progress * 100)}% complete</span>
+        <span>{Math.max(0, Math.round((1 - progress) * 24))} min left</span>
       </div>
+    </>
+  );
+}
 
-      <div className="mt-5 space-y-2">
-        {lessons
-          .filter((l) => l.id !== active.id)
-          .map((l) => (
-            <div key={l.id} className="flex items-center gap-3 py-1">
-              <span className="flex-1 truncate text-[13px] text-foreground">{l.title}</span>
-              <span className="h-[3px] w-20 overflow-hidden rounded-full bg-muted">
-                <span
-                  className="block h-full bg-foreground"
-                  style={{
-                    width: `${Math.round(l.progress * 100)}%`,
-                  }}
-                />
-              </span>
-              <span className="w-8 text-right text-[11.5px] tabular-nums text-muted-foreground">
-                {Math.round(l.progress * 100)}%
-              </span>
+function ProgressPanel({
+  activeId,
+  lessons,
+  lessonArc,
+  bare,
+}: {
+  activeId: string;
+  lessons: Lesson[];
+  lessonArc?: LessonArc | null;
+  bare?: boolean;
+}) {
+  const active = lessons.find((l) => l.id === activeId) ?? lessons[0] ?? LESSONS[0];
+  const others = lessons.filter((l) => l.id !== active?.id);
+  return (
+    <div>
+      {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Progress</h3>}
+      <p className="mt-1 text-[13px] text-muted-foreground">{active?.title}</p>
+
+      {lessonArc && lessonArc.total > 1 ? (
+        <LessonMilestones arc={lessonArc} />
+      ) : (
+        <SimpleProgress progress={active?.progress ?? 0} />
+      )}
+
+      {others.length > 0 && (
+        <div className="mt-5 border-t border-border pt-2">
+          <Disclosure level={0} label={`Other lessons (${others.length})`}>
+            <div className="mt-1 space-y-2">
+              {others.map((l) => (
+                <div key={l.id} className="flex items-center gap-3 py-1">
+                  <span className="flex-1 truncate text-[13px] text-foreground">{l.title}</span>
+                  <span className="h-[3px] w-20 overflow-hidden rounded-full bg-muted">
+                    <span
+                      className="block h-full bg-foreground"
+                      style={{ width: `${Math.round(l.progress * 100)}%` }}
+                    />
+                  </span>
+                  <span className="w-8 text-right text-[11.5px] tabular-nums text-muted-foreground">
+                    {Math.round(l.progress * 100)}%
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-      </div>
+          </Disclosure>
+        </div>
+      )}
     </div>
   );
 }
