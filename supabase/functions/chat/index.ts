@@ -55,6 +55,9 @@ Every turn, FIRST read the student's latest message and respond to what they act
   student's idea over complimenting it.
 - If they already answered correctly or completely, CONFIRM it, add one sentence of consolidation, and move
   forward. Do NOT ask the same thing again — recognizing understanding and progressing is required.
+- Credit the student's LATEST message only: when you acknowledge, confirm, or quote their answer, use the
+  words from THIS message — never attribute an earlier turn's answer to the current one (if they now said
+  "a wheel moves a car", do not congratulate them for "scissors and cutting").
 - Never repeat a question you have already asked, in ANY rewording (your recent questions are listed for you),
   and never re-ask something the student has already answered correctly. Vary and advance.
 - If they say something incorrect, correct that specific point clearly and kindly.
@@ -2038,12 +2041,41 @@ function resourceForEnvelope(resource: DbRow): LessonChatResource {
   };
 }
 
+// Students ask for resources mid-conversation ("can you show the PDF?") — detect the request and
+// attach the matching card(s), instead of the old behavior of only attaching one on the opening turn
+// (which left the mentor advertising resources it could never hand over).
+const RESOURCE_REQUEST_RE =
+  /\b(open|show|give|send|share|see|view|find|where|link|pull up|watch|read)\b[\s\S]{0,60}\b(pdf|video|resource|file|worksheet|slides?|doc(ument)?|card|link)\b|\b(pdf|video|worksheet|resource)\b/i;
+
 function resourcesForResponse(
   resources: DbRow[],
   answer: DbRow | null,
+  studentText = "",
 ): LessonChatResource[] {
-  if (answer || resources.length === 0) return [];
-  return [resourceForEnvelope(resources[0])];
+  if (resources.length === 0) return [];
+  // Opening turn (no answer yet): surface the first resource, as before.
+  if (!answer) return [resourceForEnvelope(resources[0])];
+  const text = studentText.toLowerCase();
+  if (!text || !RESOURCE_REQUEST_RE.test(text)) return [];
+  // Prefer a title match ("the Smoke Purpose PDF"), then a type match ("the video"), else all.
+  const titleMatches = resources.filter((resource) => {
+    const title = String(resource.title || "").toLowerCase();
+    if (!title) return false;
+    if (text.includes(title)) return true;
+    return title
+      .split(/\s+/)
+      .some((word) => word.length >= 5 && text.includes(word));
+  });
+  const typeMatches = resources.filter((resource) => {
+    const type = String(resource.resource_type || "").toLowerCase();
+    return type.length > 2 && text.includes(type);
+  });
+  const chosen = titleMatches.length
+    ? titleMatches
+    : typeMatches.length
+      ? typeMatches
+      : resources;
+  return chosen.slice(0, 3).map(resourceForEnvelope);
 }
 
 async function writeEvidenceAndMastery(
@@ -2443,6 +2475,22 @@ async function handleTypedRequest(
     const codeMetDirective = gradedCode?.demonstrated
       ? `\n\nCODE CHECK: The student's code runs and accomplishes the objective. Affirm warmly in ONE sentence and CONCLUDE this step — do NOT demand a specific wording, topic, or that it match an example.`
       : "";
+    // Resource cards attached to THIS reply (opening turn, or the student asked for one).
+    const attachedResources = resourcesForResponse(
+      context.resources,
+      answer,
+      content,
+    );
+    const resourceDirective =
+      answer && attachedResources.length
+        ? `\n\nRESOURCE NOTE: The student asked for a resource. The card(s) ${attachedResources
+            .map((resource) => `"${resource.title}"`)
+            .join(", ")} are attached below your reply — tell them to tap Open on the card. Do not say you can't share it, and do not ignore the request.`
+        : "";
+    const postCompletionDirective =
+      currentStage === "complete" && answer
+        ? `\n\nPOST-COMPLETION: This lesson is already complete. The student's message is follow-up conversation — answer it directly and briefly (a question, a resource request, a reflection). Do NOT repeat your earlier congratulations or closing summary.`
+        : "";
     const systemContent = `${SYSTEM_PROMPT}\n\n${pedagogyPromptBlock(
       teaching.move,
       diagnosis,
@@ -2453,7 +2501,7 @@ async function handleTypedRequest(
       context.misconceptions,
       recentQuestions,
       intent,
-    )}${understandingDirective}${timeoutDirective}${codeMetDirective}`;
+    )}${understandingDirective}${timeoutDirective}${codeMetDirective}${resourceDirective}${postCompletionDirective}`;
     const messages = [
       { role: "system", content: systemContent },
       {
@@ -2619,7 +2667,7 @@ async function handleTypedRequest(
       response_mode: finalFlow.responseMode,
       choices: finalFlow.choices,
       assessment,
-      resources: resourcesForResponse(context.resources, answer),
+      resources: attachedResources,
       lesson_arc: lessonArc,
       next_action: finalFlow.nextAction,
       reply:
