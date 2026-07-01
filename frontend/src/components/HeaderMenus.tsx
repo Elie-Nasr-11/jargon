@@ -4,7 +4,7 @@ import gsap from "gsap";
 import { Check, ChevronDown, Menu, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { useIsTouch } from "@/hooks/useIsTouch";
-import { LESSONS, type Lesson, type MentorConfig } from "@/lib/jargon-store";
+import { LESSONS, type Lesson, type MentorConfig, type VoiceSettings } from "@/lib/jargon-store";
 import type { LessonArc } from "@/lib/types";
 
 type MenuKey = "lessons" | "progress" | "mentor";
@@ -22,6 +22,8 @@ export function HeaderMenus({
   onSelectLesson,
   mentor,
   onMentorChange,
+  voice,
+  onVoiceChange,
 }: {
   activeLessonId: string;
   lessons?: Lesson[];
@@ -29,6 +31,8 @@ export function HeaderMenus({
   onSelectLesson: (id: string) => void;
   mentor: MentorConfig;
   onMentorChange: (m: MentorConfig) => void;
+  voice?: VoiceSettings;
+  onVoiceChange?: (v: VoiceSettings) => void;
 }) {
   const isTouch = useIsTouch();
   const [activeKey, setActiveKey] = useState<MenuKey | null>(null);
@@ -219,7 +223,14 @@ export function HeaderMenus({
       {k === "progress" && (
         <ProgressPanel activeId={activeLessonId} lessons={lessons} lessonArc={lessonArc} />
       )}
-      {k === "mentor" && <MentorPanel mentor={mentor} onChange={onMentorChange} />}
+      {k === "mentor" && (
+        <MentorPanel
+          mentor={mentor}
+          onChange={onMentorChange}
+          voice={voice}
+          onVoiceChange={onVoiceChange}
+        />
+      )}
     </>
   );
 
@@ -346,7 +357,13 @@ export function HeaderMenus({
                     />
                   </CollapsibleSection>
                   <CollapsibleSection title="Mentor">
-                    <MentorPanel bare mentor={mentor} onChange={onMentorChange} />
+                    <MentorPanel
+                      bare
+                      mentor={mentor}
+                      onChange={onMentorChange}
+                      voice={voice}
+                      onVoiceChange={onVoiceChange}
+                    />
                   </CollapsibleSection>
                 </div>
               </GradientCard>
@@ -750,13 +767,30 @@ function ProgressPanel({
   );
 }
 
+const VOICE_OPTIONS: { label: string; value: VoiceSettings["voiceName"] }[] = [
+  { label: "Marin", value: "marin" },
+  { label: "Cedar", value: "cedar" },
+  { label: "Coral", value: "coral" },
+  { label: "Nova", value: "nova" },
+  { label: "Shimmer", value: "shimmer" },
+];
+const SPEED_OPTIONS: { label: string; value: VoiceSettings["readAloudRate"] }[] = [
+  { label: "Slow", value: 0.85 },
+  { label: "Normal", value: 1 },
+  { label: "Fast", value: 1.2 },
+];
+
 function MentorPanel({
   mentor,
   onChange,
+  voice,
+  onVoiceChange,
   bare,
 }: {
   mentor: MentorConfig;
   onChange: (m: MentorConfig) => void;
+  voice?: VoiceSettings;
+  onVoiceChange?: (v: VoiceSettings) => void;
   bare?: boolean;
 }) {
   const groups: {
@@ -768,6 +802,8 @@ function MentorPanel({
     { key: "verbosity", label: "Verbosity", options: ["Concise", "Balanced", "Detailed"] },
     { key: "difficulty", label: "Difficulty", options: ["Gentle", "Standard", "Challenging"] },
   ];
+  const voiceLabel = VOICE_OPTIONS.find((o) => o.value === voice?.voiceName)?.label ?? "Marin";
+  const speedLabel = SPEED_OPTIONS.find((o) => o.value === voice?.readAloudRate)?.label ?? "Normal";
   return (
     <div>
       {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Mentor</h3>}
@@ -782,6 +818,28 @@ function MentorPanel({
             onSelect={(opt) => onChange({ ...mentor, [g.key]: opt } as MentorConfig)}
           />
         ))}
+        {voice && onVoiceChange ? (
+          <>
+            <MentorGroup
+              label="Voice"
+              options={VOICE_OPTIONS.map((o) => o.label)}
+              value={voiceLabel}
+              onSelect={(opt) => {
+                const match = VOICE_OPTIONS.find((o) => o.label === opt);
+                if (match) onVoiceChange({ ...voice, voiceName: match.value });
+              }}
+            />
+            <MentorGroup
+              label="Reading speed"
+              options={SPEED_OPTIONS.map((o) => o.label)}
+              value={speedLabel}
+              onSelect={(opt) => {
+                const match = SPEED_OPTIONS.find((o) => o.label === opt);
+                if (match) onVoiceChange({ ...voice, readAloudRate: match.value });
+              }}
+            />
+          </>
+        ) : null}
       </div>
     </div>
   );

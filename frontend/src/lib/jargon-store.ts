@@ -83,6 +83,14 @@ export const store = {
   setLessonId: (id: string) => write(KEYS.lesson, id),
   getMentor: () => ({ ...DEFAULT_MENTOR, ...read<Partial<MentorConfig>>(KEYS.mentor, {}) }),
   setMentor: (m: MentorConfig) => write(KEYS.mentor, m),
-  getVoice: () => ({ ...DEFAULT_VOICE, ...read<Partial<VoiceSettings>>(KEYS.voice, {}) }),
+  getVoice: () => ({
+    ...DEFAULT_VOICE,
+    ...read<Partial<VoiceSettings>>(KEYS.voice, {}),
+    // Dictation, read-aloud, and live voice are always on now (their toggles were removed from the
+    // UI) — coerce any previously-saved "off" back on so every consumer sees them enabled.
+    dictationEnabled: true,
+    readAloudEnabled: true,
+    realtimeEnabled: true,
+  }),
   setVoice: (v: VoiceSettings) => write(KEYS.voice, v),
 };

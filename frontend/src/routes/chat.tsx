@@ -996,8 +996,10 @@ function ChatPage() {
                 onSelectLesson={selectLesson}
                 mentor={mentor}
                 onMentorChange={updateMentor}
+                voice={voice}
+                onVoiceChange={updateVoice}
               />
-              <SettingsMenu email={email} voice={voice} onVoiceChange={updateVoice} />
+              <SettingsMenu email={email} />
             </div>
           </div>
         </div>
