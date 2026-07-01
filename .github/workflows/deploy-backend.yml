@@ -56,7 +56,8 @@ jobs:
           for f in \
             supabase/migrations/20260629000000_curriculum_authoring.sql \
             supabase/migrations/20260630000000_tutor_pedagogy.sql \
-            supabase/migrations/20260701000000_checkpoint_required.sql ; do
+            supabase/migrations/20260701000000_checkpoint_required.sql \
+            supabase/migrations/20260701120000_checkpoints_unified.sql ; do
             echo "Applying $f"
             body="$(jq -Rs '{query: .}' "$f")"
             resp="$(mktemp)"
