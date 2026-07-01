@@ -993,6 +993,7 @@ function ChatPage() {
                 activeLessonId={lessonId}
                 lessons={menuLessons}
                 lessonArc={lessonArc}
+                activities={activities}
                 onSelectLesson={selectLesson}
                 mentor={mentor}
                 onMentorChange={updateMentor}

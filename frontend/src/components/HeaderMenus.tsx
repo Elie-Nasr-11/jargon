@@ -5,7 +5,7 @@ import { Check, ChevronDown, Menu, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { LESSONS, type Lesson, type MentorConfig, type VoiceSettings } from "@/lib/jargon-store";
-import type { LessonArc } from "@/lib/types";
+import type { LessonActivity, LessonArc } from "@/lib/types";
 
 type MenuKey = "lessons" | "progress" | "mentor";
 
@@ -19,6 +19,7 @@ export function HeaderMenus({
   activeLessonId,
   lessons = LESSONS,
   lessonArc = null,
+  activities = [],
   onSelectLesson,
   mentor,
   onMentorChange,
@@ -28,6 +29,7 @@ export function HeaderMenus({
   activeLessonId: string;
   lessons?: Lesson[];
   lessonArc?: LessonArc | null;
+  activities?: LessonActivity[];
   onSelectLesson: (id: string) => void;
   mentor: MentorConfig;
   onMentorChange: (m: MentorConfig) => void;
@@ -221,7 +223,12 @@ export function HeaderMenus({
         />
       )}
       {k === "progress" && (
-        <ProgressPanel activeId={activeLessonId} lessons={lessons} lessonArc={lessonArc} />
+        <ProgressPanel
+          activeId={activeLessonId}
+          lessons={lessons}
+          lessonArc={lessonArc}
+          activities={activities}
+        />
       )}
       {k === "mentor" && (
         <MentorPanel
@@ -354,6 +361,7 @@ export function HeaderMenus({
                       activeId={activeLessonId}
                       lessons={lessons}
                       lessonArc={lessonArc}
+                      activities={activities}
                     />
                   </CollapsibleSection>
                   <CollapsibleSection title="Mentor">
@@ -631,9 +639,54 @@ function LessonsPanel({
   );
 }
 
+// Friendly label for a lesson step, derived from its stage (falling back to activity type).
+const STAGE_LABELS: Record<string, string> = {
+  intro: "Warm-up",
+  teach: "Teach",
+  practice: "Practice",
+  assessment: "Checkpoint",
+  review: "Review",
+  complete: "Wrap-up",
+};
+const TYPE_LABELS: Record<string, string> = {
+  discussion: "Discuss",
+  code: "Code",
+  multiple_choice: "Quiz",
+  reflection: "Reflect",
+  file: "Upload",
+};
+function stepKind(activity?: LessonActivity): string | null {
+  if (!activity) return null;
+  return STAGE_LABELS[activity.stage] || TYPE_LABELS[activity.activity_type] || null;
+}
+function clampOneLine(text: string, max = 90): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
 // The step-by-step milestone list for the current lesson (done / current / upcoming), the primary
-// content of the Progress panel.
-function LessonMilestones({ arc }: { arc: LessonArc }) {
+// content of the Progress panel. Enriched per step from the lesson's activities: a stage/type chip
+// and a one-line description, so every milestone shows what it actually is.
+function LessonMilestones({
+  arc,
+  activities = [],
+}: {
+  arc: LessonArc;
+  activities?: LessonActivity[];
+}) {
+  const sorted = [...activities].sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
+  // Match an arc step to its activity: prefer a unique title match, else fall back to position index
+  // (deriveLessonArc and the backend both number steps in position order).
+  const titleCounts = new Map<string, number>();
+  for (const a of sorted) titleCounts.set(a.title, (titleCounts.get(a.title) ?? 0) + 1);
+  const activityForStep = (step: number, title: string): LessonActivity | undefined => {
+    if (title && titleCounts.get(title) === 1) {
+      const byTitle = sorted.find((a) => a.title === title);
+      if (byTitle) return byTitle;
+    }
+    return sorted[step - 1];
+  };
+
   const steps: { step: number; title: string; state: "done" | "current" | "upcoming" }[] = [
     ...arc.completed.map((s) => ({ ...s, state: "done" as const })),
     ...(arc.current
@@ -660,34 +713,65 @@ function LessonMilestones({ arc }: { arc: LessonArc }) {
       <div className="mb-3 text-[11.5px] text-muted-foreground">
         Step {arc.step} of {arc.total}
       </div>
-      <ol className="space-y-0.5">
-        {steps.map((s) => (
-          <li key={s.step} className="flex items-center gap-2.5 py-1 text-[13px]">
-            <span
-              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
-                s.state === "done"
-                  ? "bg-success/15 text-success"
-                  : s.state === "current"
-                    ? "bg-foreground text-background"
-                    : "border border-border text-muted-foreground"
-              }`}
-            >
-              {s.state === "done" ? <Check className="h-3 w-3" strokeWidth={3} /> : s.step}
-            </span>
-            <span
-              className={
-                s.state === "current" ? "font-medium text-foreground" : "text-muted-foreground"
-              }
-            >
-              {s.title}
-            </span>
-            {s.state === "current" ? (
-              <span className="ml-auto text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                now
+      <ol className="space-y-1.5">
+        {steps.map((s) => {
+          const activity = activityForStep(s.step, s.title);
+          const kind = stepKind(activity);
+          // Show the current step's live prompt from the arc; otherwise the activity's prompt.
+          const desc =
+            s.state === "current" && arc.current?.prompt
+              ? arc.current.prompt
+              : activity?.prompt || "";
+          return (
+            <li key={s.step} className="flex items-start gap-2.5 text-[13px]">
+              <span
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                  s.state === "done"
+                    ? "bg-success/15 text-success"
+                    : s.state === "current"
+                      ? "bg-foreground text-background"
+                      : "border border-border text-muted-foreground"
+                }`}
+              >
+                {s.state === "done" ? <Check className="h-3 w-3" strokeWidth={3} /> : s.step}
               </span>
-            ) : null}
-          </li>
-        ))}
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`min-w-0 flex-1 ${
+                      s.state === "current"
+                        ? "font-medium text-foreground"
+                        : s.state === "done"
+                          ? "text-foreground/80"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {s.title}
+                  </span>
+                  {kind ? (
+                    <span className="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[9.5px] uppercase tracking-[0.06em] text-muted-foreground">
+                      {kind}
+                    </span>
+                  ) : null}
+                  {s.state === "current" ? (
+                    <span className="shrink-0 text-[9.5px] uppercase tracking-[0.08em] text-muted-foreground">
+                      now
+                    </span>
+                  ) : null}
+                </span>
+                {desc ? (
+                  <span
+                    className={`mt-0.5 block text-[11.5px] leading-snug ${
+                      s.state === "current" ? "text-muted-foreground" : "text-muted-foreground/75"
+                    }`}
+                  >
+                    {clampOneLine(desc)}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
@@ -721,11 +805,13 @@ function ProgressPanel({
   activeId,
   lessons,
   lessonArc,
+  activities = [],
   bare,
 }: {
   activeId: string;
   lessons: Lesson[];
   lessonArc?: LessonArc | null;
+  activities?: LessonActivity[];
   bare?: boolean;
 }) {
   const active = lessons.find((l) => l.id === activeId) ?? lessons[0] ?? LESSONS[0];
@@ -736,7 +822,7 @@ function ProgressPanel({
       <p className="mt-1 text-[13px] text-muted-foreground">{active?.title}</p>
 
       {lessonArc && lessonArc.total > 1 ? (
-        <LessonMilestones arc={lessonArc} />
+        <LessonMilestones arc={lessonArc} activities={activities} />
       ) : (
         <SimpleProgress progress={active?.progress ?? 0} />
       )}
