@@ -474,15 +474,6 @@ function ProgressPanel({ activeId, lessons }: { activeId: string; lessons: Lesso
   );
 }
 
-const MENTOR_MODES: { value: MentorConfig["mode"]; label: string }[] = [
-  { value: "explain", label: "Explain it" },
-  { value: "guide", label: "Guide me" },
-  { value: "quiz", label: "Quiz me" },
-  { value: "check", label: "Check my work" },
-  { value: "write", label: "Help me write" },
-  { value: "challenge", label: "Challenge me" },
-];
-
 function MentorPanel({
   mentor,
   onChange,
@@ -504,25 +495,6 @@ function MentorPanel({
       <h3 className="font-serif text-[22px] leading-tight tracking-tight">Mentor</h3>
       <p className="mt-1 text-[13px] text-muted-foreground">Shape how the tutor talks back.</p>
       <div className="mt-5 space-y-4">
-        <div>
-          <div className="mb-2 text-[12px] font-medium text-foreground">Mode</div>
-          <div className="flex flex-wrap gap-1.5">
-            {MENTOR_MODES.map((m) => (
-              <button
-                key={m.value}
-                type="button"
-                onClick={() => onChange({ ...mentor, mode: m.value })}
-                className={`rounded-pill border px-3 py-1.5 text-[12.5px] transition-colors ${
-                  mentor.mode === m.value
-                    ? "border-foreground/30 bg-foreground text-background"
-                    : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-        </div>
         {groups.map((g) => (
           <MentorGroup
             key={g.key as string}

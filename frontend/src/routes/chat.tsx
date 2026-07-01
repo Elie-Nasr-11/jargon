@@ -3,21 +3,19 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import {
   AlertCircle,
+  AudioLines,
   Check,
   ClipboardList,
   Code2,
   Copy,
   ExternalLink,
   FileText,
-  Lightbulb,
-  LifeBuoy,
-  Mic,
-  MicOff,
   Paperclip,
   Pause,
   Play,
   RotateCcw,
   Send,
+  Square,
   Volume2,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
@@ -67,7 +65,6 @@ import type {
   LessonActivity,
   LessonChatResource,
   LiveSessionViewer,
-  MentorMode,
   MentorPreferences,
   StudentAssignmentBundle,
   StudentAssessmentBundle,
@@ -139,67 +136,6 @@ function mentorToPreferences(mentor: MentorConfig): MentorPreferences {
           : "medium",
     mode: mentor.mode,
   };
-}
-
-const MODE_OPTIONS: { value: MentorMode; label: string; hint: string }[] = [
-  { value: "explain", label: "Explain it", hint: "Teach me the idea clearly" },
-  { value: "guide", label: "Guide me", hint: "Help me work it out — don't just give the answer" },
-  { value: "quiz", label: "Quiz me", hint: "Test my recall and understanding" },
-  { value: "check", label: "Check my work", hint: "Give feedback on what I did" },
-  { value: "write", label: "Help me write", hint: "Plan and improve my writing (no ghostwriting)" },
-  { value: "challenge", label: "Challenge me", hint: "Push me with something harder" },
-];
-
-// Student-facing teaching-mode picker + help actions, just above the composer.
-function MentorModeBar({
-  mode,
-  onModeChange,
-  onHint,
-  onShowMeHow,
-  disabled,
-}: {
-  mode: MentorMode;
-  onModeChange: (mode: MentorMode) => void;
-  onHint: () => void;
-  onShowMeHow: () => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="no-scrollbar mb-2 flex items-center gap-1.5 overflow-x-auto pb-1">
-      {MODE_OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          title={option.hint}
-          onClick={() => onModeChange(option.value)}
-          className={`shrink-0 rounded-pill border px-3 py-1.5 text-[12px] transition-colors ${
-            mode === option.value
-              ? "border-foreground/30 bg-foreground text-background"
-              : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-      <span className="mx-1 h-5 w-px shrink-0 bg-border" />
-      <button
-        type="button"
-        onClick={onHint}
-        disabled={disabled}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-      >
-        <Lightbulb className="h-3.5 w-3.5" strokeWidth={1.7} /> Hint
-      </button>
-      <button
-        type="button"
-        onClick={onShowMeHow}
-        disabled={disabled}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-      >
-        <LifeBuoy className="h-3.5 w-3.5" strokeWidth={1.7} /> Show me how
-      </button>
-    </div>
-  );
 }
 
 function lessonSubtitle(lesson: Lesson) {
@@ -398,7 +334,6 @@ function ChatPage() {
   const [lessonId, setLessonId] = useState<string>("lesson1");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [mentor, setMentor] = useState<MentorConfig>(DEFAULT_MENTOR);
-  const [hintRung, setHintRung] = useState(0);
   const [voice, setVoice] = useState<VoiceSettings>(DEFAULT_VOICE);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [sending, setSending] = useState(false);
@@ -423,6 +358,8 @@ function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerWrapRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<ComposerHandle>(null);
+  // When true, the live-voice panel replaces the composer input row.
+  const [voiceMode, setVoiceMode] = useState(false);
 
   const currentLesson = useMemo(
     () => lessons.find((lesson) => lesson.id === lessonId) || null,
@@ -672,7 +609,6 @@ function ChatPage() {
     options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
   ): Promise<TypedChatEnvelope | null> => {
     if (!accessToken) return null;
-    setHintRung(0); // a fresh attempt resets the hint ladder
     addMsg({
       id: uid(),
       role: "user",
@@ -723,54 +659,11 @@ function ChatPage() {
     await submitTextAnswer(text, options);
   };
 
-  // Quick-action help requests (Hint climbs the ladder; "show me how" asks for a
-  // worked example) — routed through the tutor's integrity policy on the backend.
-  const sendHelpRequest = async (kind: "hint" | "show_me_how") => {
-    if (!accessToken || sending) return;
-    const nextRung = kind === "hint" ? hintRung + 1 : hintRung;
-    if (kind === "hint") setHintRung(nextRung);
-    addMsg({
-      id: uid(),
-      role: "user",
-      text: kind === "hint" ? "Can I get a hint?" : "I'm stuck — can you show me how?",
-    });
-    setSending(true);
-    const thinkingId = uid();
-    setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
-    try {
-      const envelope = await invokeTypedChat({
-        accessToken,
-        lessonId,
-        sessionId,
-        mentorPreferences: mentorToPreferences(mentor),
-        helpRequest: kind,
-        hintRung: kind === "hint" ? nextRung : undefined,
-      });
-      setSessionId(envelope.session_id);
-      setLearningSession((previous) =>
-        previous
-          ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
-          : previous,
-      );
-      replaceThinking(thinkingId, envelopeMessage(envelope));
-    } catch (error) {
-      replaceThinking(thinkingId, {
-        id: uid(),
-        role: "bot",
-        text: (error as Error).message || "The mentor could not answer.",
-      });
-    } finally {
-      setSending(false);
-    }
-  };
-
   const sendChoice = async (choice: ChatChoice) => {
     if (!accessToken) return;
     const selected = choiceLabel(choice);
     const selectedValue = choiceValue(choice);
     if (!selectedValue) return;
-    setHintRung(0); // a fresh attempt resets the hint ladder
-
     addMsg({ id: uid(), role: "user", text: `Selected: ${selected}` });
     setSending(true);
     const thinkingId = uid();
@@ -828,8 +721,6 @@ function ChatPage() {
       lang,
     });
     if (!accessToken) return;
-    setHintRung(0); // a fresh attempt resets the hint ladder
-
     setSending(true);
     const thinkingId = uid();
     setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
@@ -1018,39 +909,41 @@ function ChatPage() {
             onSubmitAssignment={submitStudentAssignment}
           />
           <AssessmentDock lessonId={lessonId} bundle={assessments} />
-          <MentorModeBar
-            mode={mentor.mode}
-            onModeChange={(mode) => updateMentor({ ...mentor, mode })}
-            onHint={() => void sendHelpRequest("hint")}
-            onShowMeHow={() => void sendHelpRequest("show_me_how")}
-            disabled={sending}
-          />
-          <Composer
-            ref={composerRef}
-            key={lessonId}
-            initialCode={starterCode}
-            initialLanguage="jargon"
-            onSendText={sendUser}
-            onRunCode={runCode}
-            onSendCodeResult={sendCodeResult}
-            voice={voice}
-            onVoiceEvent={handleVoiceEvent}
-            sending={sending}
-          />
-          <RealtimeVoicePanel
-            accessToken={accessToken || ""}
-            lessonId={lessonId}
-            sessionId={sessionId}
-            voice={voice}
-            disabled={sending}
-            onVoiceEvent={handleVoiceEvent}
-            onSubmitVoiceTurn={async (text, confidence) =>
-              submitTextAnswer(text, {
-                inputModality: "audio_session",
-                transcriptConfidence: confidence ?? null,
-              })
-            }
-          />
+          {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
+              imperative handle for "Use this code" — survives entering/leaving voice mode. */}
+          <div className={voiceMode ? "hidden" : undefined}>
+            <Composer
+              ref={composerRef}
+              key={lessonId}
+              initialCode={starterCode}
+              initialLanguage="jargon"
+              onSendText={sendUser}
+              onRunCode={runCode}
+              onSendCodeResult={sendCodeResult}
+              voice={voice}
+              onVoiceEvent={handleVoiceEvent}
+              sending={sending}
+              canStartVoice={voice.realtimeEnabled}
+              onStartVoice={() => setVoiceMode(true)}
+            />
+          </div>
+          {voiceMode ? (
+            <RealtimeVoicePanel
+              accessToken={accessToken || ""}
+              lessonId={lessonId}
+              sessionId={sessionId}
+              voice={voice}
+              autoStart
+              onClose={() => setVoiceMode(false)}
+              onVoiceEvent={handleVoiceEvent}
+              onSubmitVoiceTurn={async (text, confidence) =>
+                submitTextAnswer(text, {
+                  inputModality: "audio_session",
+                  transcriptConfidence: confidence ?? null,
+                })
+              }
+            />
+          ) : null}
         </div>
       </main>
     </div>
@@ -1072,7 +965,8 @@ function RealtimeVoicePanel({
   lessonId,
   sessionId,
   voice,
-  disabled,
+  autoStart,
+  onClose,
   onVoiceEvent,
   onSubmitVoiceTurn,
 }: {
@@ -1080,7 +974,8 @@ function RealtimeVoicePanel({
   lessonId: string;
   sessionId: string | null;
   voice: VoiceSettings;
-  disabled: boolean;
+  autoStart?: boolean;
+  onClose?: () => void;
   onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
   onSubmitVoiceTurn: (
     text: string,
@@ -1095,6 +990,7 @@ function RealtimeVoicePanel({
   const channelRef = useRef<RTCDataChannel | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const submittedCallIdsRef = useRef<Set<string>>(new Set());
+  const startedRef = useRef(false);
   const supported =
     typeof window !== "undefined" &&
     "RTCPeerConnection" in window &&
@@ -1132,8 +1028,6 @@ function RealtimeVoicePanel({
       }
     };
   }, []);
-
-  if (!voice.realtimeEnabled) return null;
 
   const sendToolResult = (callId: string, output: Record<string, unknown>) => {
     const channel = channelRef.current;
@@ -1291,56 +1185,83 @@ function RealtimeVoicePanel({
       setStatus("live");
       setMessage("Live voice is listening.");
     } catch (error) {
-      setStatus("error");
-      setMessage((error as Error).message || "Live voice could not start.");
       void onVoiceEvent({
         event_type: "voice_session_failed",
         input_modality: "audio_session",
         payload: { error: (error as Error).message || "unknown" },
       });
+      // Tear down first (stop() resets status to idle), THEN surface the error so the
+      // error state isn't immediately overwritten.
       stop("Live voice could not start.");
+      setStatus("error");
+      setMessage((error as Error).message || "Live voice could not start.");
     }
   };
 
-  const live = status === "live" || status === "connecting";
+  // One-shot auto-start when the panel opens (the student already opted in by tapping the
+  // voice button, so we don't make them press Start again).
+  useEffect(() => {
+    if (autoStart && !startedRef.current) {
+      startedRef.current = true;
+      void start();
+    }
+    // `start` is intentionally excluded — this must run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   return (
-    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-background/55 px-3 py-2 text-[12.5px] text-muted-foreground">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 text-foreground">
-          <span
-            className={`h-2 w-2 rounded-full ${
-              status === "live"
-                ? "bg-success"
-                : status === "connecting"
-                  ? "bg-warning"
-                  : status === "error"
-                    ? "bg-danger"
-                    : "bg-muted-foreground/50"
-            }`}
-          />
-          <span className="font-medium">Live voice</span>
-          <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-            {voice.voiceName}
-          </span>
-        </div>
-        <div className="mt-0.5 truncate">
-          {message || "Talk with Mentor out loud. Spoken answers auto-submit to the lesson."}
+    <div className="mt-2 flex items-center justify-between gap-3 rounded-3xl border border-border bg-background/70 px-4 py-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+            status === "live"
+              ? "bg-success/15 text-success"
+              : status === "error"
+                ? "bg-danger/15 text-danger"
+                : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {status === "live" && (
+            <span className="absolute inset-0 animate-ping rounded-full bg-success/30" />
+          )}
+          <AudioLines className="h-4 w-4" strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
+            Live voice
+            <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              {voice.voiceName}
+            </span>
+          </div>
+          <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
+            {message || "Talk with the Mentor out loud — your spoken answers submit automatically."}
+          </div>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={() => (live ? stop() : void start())}
-        disabled={disabled || status === "connecting" || !accessToken}
-        className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-      >
-        {live ? (
-          <MicOff className="h-3.5 w-3.5" strokeWidth={1.8} />
-        ) : (
-          <Mic className="h-3.5 w-3.5" strokeWidth={1.8} />
-        )}
-        {live ? "Stop" : "Start"}
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        {status === "idle" || status === "error" ? (
+          <button
+            type="button"
+            onClick={() => void start()}
+            disabled={!accessToken}
+            className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <AudioLines className="h-3.5 w-3.5" strokeWidth={1.8} /> Retry
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            stop();
+            onClose?.();
+          }}
+          aria-label="Close voice mode"
+          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+        >
+          <Square className="h-3.5 w-3.5" strokeWidth={2} fill="currentColor" />{" "}
+          {status === "live" || status === "connecting" ? "Stop" : "Close"}
+        </button>
+      </div>
     </div>
   );
 }

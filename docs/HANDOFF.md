@@ -6,6 +6,54 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Tutor v1.2 loop-closure + chat UX: hidden pedagogy controls + ChatGPT-style voice)
+
+Summary: Bundled change (shipped together at the user's request). Two parts.
+
+PART A — Tutor v1.2 (backend `chat/index.ts`): fixes residual issues from a fresh transcript on deployed v1.1.
+- Deterministic loop-closure: a dedicated `checkUnderstanding` grader (its own cheap `"understanding"` model
+  route, temp 0.2) judges whether a free-text explanation demonstrates the step objective and HARD-GATES
+  completion (`understanding = gradedUnderstanding ?? mentor-self-report`) — the conversation model can no
+  longer loop by affirming-but-never-completing. Runs on text-answer turns (skips only an explicit summary
+  request); records its own model usage.
+- Reliable confusion handling: broadened the `confused` INTENT regex to colloquial phrasings ("didn't figure
+  out", "no clue", "over my head", …) minus high-false-positive fragments ("not really"/"can't tell"), plus a
+  hard SYSTEM_PROMPT rule to explain-not-praise on any confusion wording.
+- Timeout is infra, not a student error: `runTimedOut` (guards `ok===true`, matches only real sentinels
+  "took too long"/"timed out") → `assessAnswer` returns null (no failed-attempt ding) + a kind prompt note.
+- De-formulaic tone (don't open every turn with praise).
+
+PART B — Chat UX (per the user's request):
+- Hid all student-facing pedagogy controls (the 6 Mentor Modes + Hint + "Show me how") from `chat.tsx`
+  (`MentorModeBar` removed) and `HeaderMenus.tsx` (mode picker removed); kept tone/verbosity/difficulty. Mode
+  still defaults to "guide" and flows to the backend unchanged. To preserve help pedagogy without buttons, the
+  backend now INFERS help from typed text (`detectHelpRequest` → hint/show_me_how) with an escalating rung
+  derived from recent turns (`deriveHintRung`).
+- ChatGPT-style voice: removed the always-on bottom `RealtimeVoicePanel` bar. The composer's send button, when
+  the textbox is empty, becomes a sound-wave (AudioLines) voice-mode button (gated on `realtimeEnabled`);
+  activating it auto-starts the live session and replaces the input row with a fuller in-composer voice panel
+  (status + Stop/Close + Retry). The mic/dictation button is unchanged. Composer is HIDDEN (not unmounted)
+  during voice so code edits + composerRef survive.
+
+Adversarial review (2 rounds, ~4 agents): caught and FIXED a HIGH-severity integrity regression — an inferred
+help request typed as a text answer counted as an "attempt" (`Boolean(answer)`), so "just tell me the answer"
+as a first message bypassed attempt-first + final-answer gating; fixed by excluding an inferred-help-only text
+turn from `hasAttempt`/`attemptedBeforeHelp` and inferring help from text answers only. Also fixed: a
+hint-vs-conclude prompt conflict (tightened HINT_RE + told the model to ignore hint recs when understanding is
+demonstrated), a voice autostart with no retry (added Retry + fixed the error-status overwrite), and the
+Composer-unmount data-loss/composerRef no-op (hide instead of unmount). v1.2 review round earlier also fixed 4
+items (activity-scoped depth confirmation, Anthropic temp/max_tokens, provider telemetry, timeout false-positive).
+
+Files changed: `supabase/functions/chat/index.ts`, `frontend/src/routes/chat.tsx`,
+`frontend/src/components/Composer.tsx`, `frontend/src/components/HeaderMenus.tsx`. No migration.
+Tests run: frontend tsc 0 / lint 0 (12 pre-existing warnings) / build green; backend Deno validated via the
+adversarial multi-agent review.
+Remaining concerns: the Anthropic adapter is still dormant/untested from the sandbox. The understanding grader
+adds one cheap model call per text-explanation turn (accepted). Worth spot-checking a few live transcripts for
+the loop-closure + the new voice flow (esp. mic-permission-denied → Retry).
+Suggested next task: collect regression transcripts (clean completion, code-only, MCQ, help-request, voice
+session); consider the deferred items (spaced review, rubric partial-credit, teacher dashboards).
+
 ## Claude -> Codex / Human - 2026-06-30 (Tutor v1.1 — adaptive conversation + understanding-advance + model-agnostic LLM; DEPLOYED)
 
 Summary: v1 made the tutor pedagogy-aware but a real session was rigid and looped — it repeated near-verbatim

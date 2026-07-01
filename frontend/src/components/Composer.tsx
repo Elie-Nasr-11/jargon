@@ -10,7 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import gsap from "gsap";
-import { Code2, Mic, MicOff, Send, Play, X } from "lucide-react";
+import { AudioLines, Code2, Mic, MicOff, Send, Play, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import {
@@ -152,6 +152,9 @@ type ComposerProps = {
   initialCode?: string;
   initialLanguage?: Lang;
   sending: boolean;
+  // When the textbox is empty, the send button becomes a voice-mode toggle.
+  canStartVoice?: boolean;
+  onStartVoice?: () => void;
 };
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
@@ -164,6 +167,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     initialCode,
     initialLanguage = "jargon",
     sending,
+    canStartVoice,
+    onStartVoice,
   },
   ref,
 ) {
@@ -519,6 +524,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }));
 
   const run = async () => {
+    // In-flight lock: never start a run while a tutor turn is still pending. Two rapid
+    // runs (e.g. a timeout then a retry) could otherwise each fire a turn whose responses
+    // resolve out of order, landing a stale reply after the newer one.
+    if (running || sending) return;
     setRunning(true);
     try {
       const result = onRunCode
@@ -596,14 +605,35 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     <Mic className="h-[15px] w-[15px]" strokeWidth={1.8} />
                   )}
                 </button>
-                <button
-                  onClick={send}
-                  disabled={sending || !text.trim()}
-                  aria-label="Send"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
-                >
-                  <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
-                </button>
+                {text.trim() ? (
+                  <button
+                    onClick={send}
+                    disabled={sending}
+                    aria-label="Send"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
+                  >
+                    <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
+                  </button>
+                ) : canStartVoice && onStartVoice ? (
+                  <button
+                    type="button"
+                    onClick={onStartVoice}
+                    disabled={sending}
+                    aria-label="Start voice mode"
+                    title="Talk with the Mentor out loud"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
+                  >
+                    <AudioLines className="h-[15px] w-[15px]" strokeWidth={1.8} />
+                  </button>
+                ) : (
+                  <button
+                    disabled
+                    aria-label="Send"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background opacity-30"
+                  >
+                    <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
+                  </button>
+                )}
               </div>
               {dictating || voiceError || dictationConfidence !== null ? (
                 <div className="px-10 text-[11.5px] text-muted-foreground">
@@ -639,10 +669,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   </button>
                   <button
                     onClick={run}
-                    disabled={running}
+                    disabled={running || sending}
                     className={`flex min-h-8 min-w-[58px] items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-opacity disabled:opacity-100 ${
                       running ? "bg-transparent text-foreground" : "bg-foreground text-background"
-                    }`}
+                    } ${sending && !running ? "opacity-50" : ""}`}
                   >
                     {running ? (
                       <span aria-label="Running" className="run-bounce-loader">

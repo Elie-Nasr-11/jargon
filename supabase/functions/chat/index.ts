@@ -50,15 +50,21 @@ reading a script. The lesson teaches logical thinking through the bridge: natura
 Jargon pseudocode -> Python bridge when the learner is ready.
 
 Every turn, FIRST read the student's latest message and respond to what they actually said:
-- Acknowledge what they got right, by name. Build on their words.
+- Acknowledge what they got right, by name, and build on their words. Vary how you acknowledge — do NOT open
+  every turn with praise. Praise only when it is genuinely earned and keep it brief; prefer building on the
+  student's idea over complimenting it.
 - If they already answered correctly or completely, CONFIRM it, add one sentence of consolidation, and move
   forward. Do NOT ask the same thing again — recognizing understanding and progressing is required.
-- Never repeat a question you have already asked (your recent questions are listed for you). Vary and advance.
+- Never repeat a question you have already asked, in ANY rewording (your recent questions are listed for you),
+  and never re-ask something the student has already answered correctly. Vary and advance.
 - If they say something incorrect, correct that specific point clearly and kindly.
 - Respond to their intent: "I don't understand" -> explain the exact sticking point simply with a concrete
   example (don't re-ask the same question); a request to summarize -> summarize what you've covered;
   frustration or "didn't we discuss this" -> acknowledge it and move on or summarize; a breakthrough ("oh!")
   -> celebrate briefly and advance.
+- If the student signals in ANY wording that they don't understand or didn't get it (e.g. "I didn't figure it
+  out", "not really", "I'm lost", "no clue"), do NOT praise or ask a new question — FIRST explain the specific
+  sticking point in plain words with a concrete example, then check in.
 - The recommended teaching move (provided below) is guidance, not a script — follow the student's real need.
 
 Hard rules (always):
@@ -152,7 +158,12 @@ type OpenAIResult = {
   latencyMs: number;
 };
 
-type ModelRoute = "default" | "grading" | "rescue" | "resource_context";
+type ModelRoute =
+  | "default"
+  | "grading"
+  | "rescue"
+  | "resource_context"
+  | "understanding";
 type ModelUsageTaskType =
   | "mentor_turn"
   | "grading"
@@ -563,13 +574,21 @@ function modelFor(route: ModelRoute): string {
   if (route === "resource_context") {
     return envText("TUTOR_MODEL_RESOURCE_CONTEXT", envText("OPENAI_MODEL_RESOURCE_CONTEXT", strong));
   }
+  // The understanding-check is a cheap, high-volume grader — default to the small model
+  // (deterministic via temperatureFor) and let ops tune it independently.
+  if (route === "understanding") return envText("TUTOR_MODEL_UNDERSTANDING", def);
   return def;
 }
 
 function temperatureFor(route: ModelRoute): number {
   // Conversation wants variety (a key fix for the flat re-asking); grading / extraction
   // want determinism.
-  if (route === "grading" || route === "resource_context") return 0.2;
+  if (
+    route === "grading" ||
+    route === "resource_context" ||
+    route === "understanding"
+  )
+    return 0.2;
   if (route === "rescue") return 0.4;
   const raw = Number(envText("TUTOR_TEMPERATURE_DEFAULT", "0.6"));
   return Number.isFinite(raw) ? Math.max(0, Math.min(1.2, raw)) : 0.6;
@@ -765,6 +784,32 @@ function runHasErrors(runResult: unknown): boolean {
   return Array.isArray(raw.errors) && raw.errors.length > 0;
 }
 
+// A runtime TIMEOUT is an infrastructure hiccup, not the student's mistake. We detect it
+// so the tutor can reassure and ask for a re-run instead of grading it as a failed attempt.
+function runTimedOut(runResult: unknown): boolean {
+  if (!runResult || typeof runResult !== "object") return false;
+  const raw = runResult as DbRow;
+  // A timeout is always a FAILED run — a successful run whose output merely contains the
+  // word "timeout" (e.g. a program that prints it) must never be misread as an infra hiccup.
+  if (raw.ok === true) return false;
+  if (
+    typeof raw.status === "string" &&
+    /^\s*(timeout|timed[_ ]out)\s*$/i.test(raw.status)
+  ) {
+    return true;
+  }
+  const out =
+    typeof raw.output === "string"
+      ? raw.output
+      : Array.isArray(raw.output)
+        ? raw.output.join("\n")
+        : "";
+  // Match only the real timeout sentinels — "took too long to answer" (client abort) and
+  // "timed out after …ms" (engine). A loose `time.?out` would wrongly catch failed runs
+  // whose output merely contains "runtime output" / "sometime out" and excuse a real bug.
+  return /took too long|timed out/i.test(out);
+}
+
 function expectedOutputFor(
   lesson: DbRow | null,
   activity: DbRow | null,
@@ -792,6 +837,9 @@ function assessAnswer(
 ): Assessment | null {
   if (!answer) return null;
   if (answer.mode === "code") {
+    // A timeout is infra, not the student — don't record it as a failed attempt. Returning
+    // null leaves the turn ungraded (no mastery ding); the prompt reassures + asks to re-run.
+    if (runTimedOut(answer.run_result)) return null;
     const expected = expectedOutputFor(lesson, activity);
     const lines = outputLines(answer.run_result);
     const joined = lines.join("\n").trim();
@@ -855,6 +903,62 @@ function parsedUnderstanding(value: unknown): Understanding | null {
     level,
     note: typeof raw.note === "string" ? raw.note : "",
   };
+}
+
+// Dedicated understanding grader for free-text explanation activities. A SEPARATE,
+// deterministic model call that ONLY judges whether the student's words demonstrate the
+// step's objective — decoupled from the conversation so the tutor can't loop by affirming
+// but never setting demonstrated. Its verdict hard-gates completion. Returns null on any
+// error, so the caller falls back to the mentor's self-report + the stuck cap.
+async function checkUnderstanding(
+  config: SupabaseConfig,
+  userId: string,
+  sessionId: string,
+  lessonId: string,
+  activity: DbRow | null,
+  milestone: DbRow | null,
+  studentText: string,
+  recentTurns: DbRow[],
+): Promise<Understanding | null> {
+  const text = (studentText || "").trim();
+  if (!text) return null;
+  const objective = [
+    milestone?.objective ? `Objective: ${String(milestone.objective)}` : "",
+    activity?.prompt ? `Task/prompt: ${String(activity.prompt)}` : "",
+    activity?.expected_output
+      ? `Expected idea: ${String(activity.expected_output)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const recent = recentTurns
+    .slice(0, 4)
+    .reverse()
+    .map((t) => `${String(t.role)}: ${String(t.content || "").slice(0, 200)}`)
+    .join("\n");
+  const system =
+    "You are a strict but fair grader for a children's tutoring app. Given the step's " +
+    "objective and the student's latest explanation, judge ONLY whether the student's own " +
+    "words demonstrate understanding of THIS objective. Do not credit vague, circular, or " +
+    "off-topic answers. Return ONLY a JSON object: " +
+    '{"demonstrated": boolean, "level": "none|partial|solid", "note": "one short phrase ' +
+    'naming what is still missing, or empty when solid"}.';
+  const userMsg = `${objective || "Objective: explain the concept in the student's own words."}\n\nRecent conversation:\n${recent}\n\nStudent's latest explanation:\n${text}`;
+  try {
+    const result = await callModel(
+      [
+        { role: "system", content: system },
+        { role: "user", content: userMsg },
+      ],
+      true,
+      "understanding",
+    );
+    // Record the extra grader call so cost/usage telemetry isn't undercounted (best-effort).
+    await recordModelUsage(config, userId, sessionId, lessonId, result, "grading");
+    return parsedUnderstanding(JSON.parse(extractJsonObject(result.content)));
+  } catch {
+    return null;
+  }
 }
 
 function mergeAssessment(
@@ -1138,7 +1242,7 @@ const INTENT_PATTERNS: { intent: string; re: RegExp }[] = [
   },
   {
     intent: "confused",
-    re: /(not sure|do\s?n'?t (get|understand|know)|confus(ed|ing)|i'?m lost|no idea|makes no sense|what do you mean)/i,
+    re: /(not sure|do\s?n'?t (get|understand|know|follow)|did\s?n'?t (get|understand|figure|follow)|can'?t (figure|understand)|confus(ed|ing)|i'?m lost|lost me|no idea|no clue|over my head|makes no sense|still (do\s?n'?t|dont)|what do you mean)/i,
   },
   {
     intent: "breakthrough",
@@ -1153,6 +1257,32 @@ function detectIntent(text: string): string {
     if (re.test(t)) return intent;
   }
   return "none";
+}
+
+// The student no longer has Hint / "Show me how" buttons; instead the tutor infers a help
+// request from what they type, so the hint-ladder and worked-example paths still fire.
+const SHOW_ME_HOW_RE =
+  /(show me how|walk me through|do it for me|just tell me|give me the answer|how (do|would) i (start|do this|write this)|can you (do|write) it)/i;
+const HINT_RE =
+  /\b((a|another|any|one|the next|more) hints?|give me a hint|need a hint|can i get a hint|a clue|nudge|point me|get me started|where (do|should) i (start|begin)|i'?m stuck|i am stuck|feeling stuck|a bit stuck|help me start)\b/i;
+
+function detectHelpRequest(text: string): string {
+  const t = (text || "").trim();
+  if (!t) return "";
+  if (SHOW_ME_HOW_RE.test(t)) return "show_me_how";
+  if (HINT_RE.test(t)) return "hint";
+  return "";
+}
+
+// Escalate the hint rung from the conversation itself (no client-sent rung anymore): each
+// prior help-ish student turn on the record makes the next hint one notch more revealing.
+function deriveHintRung(turns: DbRow[]): number {
+  let priorHelp = 0;
+  for (const turn of turns) {
+    if (String(turn.role) !== "student") continue;
+    if (detectHelpRequest(String(turn.content || ""))) priorHelp += 1;
+  }
+  return Math.min(4, priorHelp + 1);
 }
 
 // The mentor's own recent questions (most-recent first) so the prompt can tell it
@@ -1193,7 +1323,7 @@ function pedagogyPromptBlock(
         .join("; ")}. If it resurfaces, correct it directly.`
     : "";
   const askedBefore = recentQuestions.length
-    ? `You have ALREADY asked these recently — do NOT ask them again; either accept the student's answer and move on, or ask something genuinely new:\n${recentQuestions
+    ? `You have ALREADY asked these recently — do NOT ask them again, and do NOT ask a reworded version of the same thing. If the student has already answered the point, accept it and move on; otherwise ask something genuinely new:\n${recentQuestions
         .map((q) => `  • ${q}`)
         .join("\n")}`
     : "";
@@ -1898,18 +2028,29 @@ async function handleTypedRequest(
 
   // --- Pedagogy decision (diagnose -> policy -> teaching move) ---------------
   const mentorMode = mentorPreferences?.mode || "guide";
-  const helpRequest = HELP_REQUEST_OPTIONS.has(String(body.help_request))
+  // Prefer an explicit client help_request (legacy), else infer it from the student's words
+  // now that the Hint / "Show me how" buttons are gone.
+  const clientHelpRequest = HELP_REQUEST_OPTIONS.has(String(body.help_request))
     ? String(body.help_request)
     : "";
-  const requestedRung = Number(body.hint_rung) || 0;
+  // Infer a help request from a typed message only (code/MCQ answers are real attempts).
+  const inferredHelp =
+    !clientHelpRequest && answer?.mode === "text" ? detectHelpRequest(content) : "";
+  const helpRequest = clientHelpRequest || inferredHelp;
+  const requestedRung =
+    Number(body.hint_rung) ||
+    (helpRequest === "hint" ? deriveHintRung(context.recentTurns) : 0);
   const intent = detectIntent(content);
   const recentQuestions = mentorQuestionsFromTurns(context.recentTurns);
   const priorActivityAttempts = context.recentAttempts.filter(
     (a) => String(a.activity_id || "") === String(context.activity?.id || ""),
   ).length;
-  const hasAttempt = priorActivityAttempts > 0 || Boolean(answer);
+  // A typed help request is NOT itself an attempt — otherwise "just tell me the answer" as a
+  // first message would satisfy attempt-first and switch off the no-final-answer gate.
+  const hasAttempt =
+    priorActivityAttempts > 0 || (Boolean(answer) && !inferredHelp);
   const attemptedBeforeHelp =
-    Boolean(answer) && Number(session.rescue_count || 0) === 0;
+    Boolean(answer) && !inferredHelp && Number(session.rescue_count || 0) === 0;
   const diagnosis = diagnoseStudent(
     context,
     session,
@@ -1974,6 +2115,38 @@ async function handleTypedRequest(
       });
     }
 
+    // v1.2 loop-closer: for a free-text explanation turn, a dedicated grader judges whether
+    // the student demonstrated the objective; its verdict hard-gates completion below and is
+    // surfaced to the mentor so the reply matches. Skipped for pure confusion/meta messages
+    // (not an explanation attempt) and whenever there is no gradeable text.
+    const activityMode = responseMode(context.activity?.response_mode, "code");
+    // Only true text answers carry the student's words; a "file" answer's content is a
+    // placeholder, so grading it would judge garbage — leave those to the mentor path.
+    const isTextExplanation =
+      answer?.mode === "text" &&
+      activityMode === "text" &&
+      !context.quiz &&
+      currentStage !== "intro" &&
+      currentStage !== "complete" &&
+      // Only skip an explicit summary request; do NOT gate on confused/frustrated, so a
+      // misread intent can never suppress grading a genuinely correct explanation.
+      intent !== "wants_summary";
+    const gradedUnderstanding = isTextExplanation
+      ? await checkUnderstanding(
+          config,
+          userId,
+          sessionId,
+          lessonId,
+          context.activity,
+          context.milestone,
+          content,
+          context.recentTurns,
+        )
+      : null;
+    const runtimeTimedOut = Boolean(
+      answer?.mode === "code" && runTimedOut(answer.run_result),
+    );
+
     const draftFlow = flowFor(
       currentStage,
       session,
@@ -1981,9 +2154,17 @@ async function handleTypedRequest(
       context.quiz,
       answer,
       orchestratorAssessment,
-      null,
+      gradedUnderstanding,
       conversationDepth,
     );
+    const understandingDirective = gradedUnderstanding
+      ? gradedUnderstanding.demonstrated
+        ? `\n\nUNDERSTANDING CHECK: The student HAS demonstrated understanding of this step (level=${gradedUnderstanding.level}). Affirm warmly in ONE sentence and CONCLUDE this step — do NOT ask another question about it, and IGNORE any hint/help recommendation above (they already understand).`
+        : `\n\nUNDERSTANDING CHECK: The student has NOT yet fully demonstrated understanding (level=${gradedUnderstanding.level})${gradedUnderstanding.note ? `; still missing: ${gradedUnderstanding.note}` : ""}. Address that specific gap in plain words — do not merely re-ask a question they already answered.`
+      : "";
+    const timeoutDirective = runtimeTimedOut
+      ? `\n\nRUNTIME NOTE: The code runner TIMED OUT — an infrastructure hiccup, NOT the student's mistake. Reassure them briefly (it's on us, not their code) and ask them to run it again; do not critique their code for this.`
+      : "";
     const systemContent = `${SYSTEM_PROMPT}\n\n${pedagogyPromptBlock(
       teaching.move,
       diagnosis,
@@ -1994,7 +2175,7 @@ async function handleTypedRequest(
       context.misconceptions,
       recentQuestions,
       intent,
-    )}`;
+    )}${understandingDirective}${timeoutDirective}`;
     const messages = [
       { role: "system", content: systemContent },
       {
@@ -2053,6 +2234,8 @@ async function handleTypedRequest(
           known_misconceptions: context.misconceptions,
           student_intent: intent,
           recent_mentor_questions: recentQuestions,
+          understanding_check: gradedUnderstanding,
+          runtime_timeout: runtimeTimedOut,
           latest_answer: answer,
           deterministic_assessment: orchestratorAssessment,
           orchestrator_flow: draftFlow,
@@ -2114,7 +2297,10 @@ async function handleTypedRequest(
       orchestratorAssessment,
       parsedAssessment(parsed.assessment),
     );
-    const understanding = parsedUnderstanding(parsed.understanding);
+    // The dedicated grader is authoritative for text completion (it hard-gates the loop);
+    // the mentor's self-reported understanding is only the fallback when no grader ran.
+    const understanding =
+      gradedUnderstanding ?? parsedUnderstanding(parsed.understanding);
     const finalFlow = flowFor(
       currentStage,
       session,
