@@ -5655,13 +5655,16 @@ function unifiedLessonStatus(
     );
 
   let status: UnifiedLessonStatus;
-  if (activities === "Complete" || (activitiesDone && checkpoints.outstanding === 0)) {
+  if (activitiesDone && checkpoints.outstanding > 0) {
+    // Steps finished but required checkpoints still block completion — the actionable state.
+    // Checked FIRST (before "Complete") so a required checkpoint added/reset AFTER an earlier
+    // session already reached status "complete" still surfaces here — matching the runtime,
+    // which re-holds the lesson open on the student's next turn.
+    status = "Checkpoints due";
+  } else if (activities === "Complete" || (activitiesDone && checkpoints.outstanding === 0)) {
     // Fully complete, or all activities + required checkpoints done (runtime flips the
     // session to "complete" on the student's next visit).
     status = "Complete";
-  } else if (activitiesDone && checkpoints.outstanding > 0) {
-    // Steps finished but required checkpoints still block completion — the actionable state.
-    status = "Checkpoints due";
   } else {
     status = activities; // Active / Retry / Not started
   }
