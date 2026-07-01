@@ -191,7 +191,7 @@ function LessonProgress({ arc }: { arc: LessonArc }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-3 rounded-full border border-border bg-background/60 px-3.5 py-2 text-left transition-colors hover:bg-muted/50"
+        className="pointer-events-auto flex w-full items-center gap-3 rounded-full border border-border bg-background/75 px-3.5 py-2 text-left shadow-sm backdrop-blur-md transition-colors hover:bg-muted/50"
       >
         <span className="flex flex-1 items-center gap-1" aria-hidden>
           {Array.from({ length: arc.total }).map((_, i) => (
@@ -218,7 +218,7 @@ function LessonProgress({ arc }: { arc: LessonArc }) {
         />
       </button>
       {open ? (
-        <ol className="mt-2 space-y-0.5 rounded-2xl border border-border bg-background/70 p-2">
+        <ol className="pointer-events-auto mt-2 space-y-0.5 rounded-2xl border border-border bg-background/85 p-2 shadow-sm backdrop-blur-md">
           {steps.map((s) => (
             <li key={s.step} className="flex items-center gap-2.5 px-2 py-1.5 text-[13px]">
               <span
@@ -1006,7 +1006,14 @@ function ChatPage() {
         </div>
       </header>
 
-      {lessonArc ? <LessonProgress arc={lessonArc} /> : null}
+      {/* Floating overlay just below the header — takes no layout space, so the chat history
+          keeps its full height and simply scrolls beneath it. Clicks outside the pill fall
+          through (pointer-events re-enabled inside LessonProgress). */}
+      {lessonArc ? (
+        <div className="pointer-events-none absolute inset-x-0 top-[61px] z-20">
+          <LessonProgress arc={lessonArc} />
+        </div>
+      ) : null}
 
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
         {activeLiveViewers.length ? (
