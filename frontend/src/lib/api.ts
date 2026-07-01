@@ -18,6 +18,8 @@ import type {
   AssessmentRecipient,
   AssessmentResultReleasePolicy,
   AssessmentStatus,
+  Checkpoint,
+  CheckpointRecipient,
   CostModelDashboard,
   CurriculumAdminResponse,
   CurriculumAuthoringData,
@@ -1565,6 +1567,8 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
       assessmentRecipients: [],
       assessmentAttempts: [],
       assessmentItemAttempts: [],
+      checkpoints: [],
+      checkpointRecipients: [],
     };
   }
 
@@ -1602,6 +1606,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     modelUsageEventsResult,
     assignmentsResult,
     assessmentsResult,
+    checkpointsResult,
   ] = await Promise.all([
     profileIds.length
       ? supabase.from("profiles").select("id,name,grade").in("id", profileIds)
@@ -1713,6 +1718,14 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .order("updated_at", { ascending: false })
           .limit(250)
       : Promise.resolve({ data: [], error: null }),
+    classIds.length
+      ? supabase
+          .from("checkpoints")
+          .select("*")
+          .in("class_id", classIds)
+          .order("updated_at", { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   for (const result of [
@@ -1731,6 +1744,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     modelUsageEventsResult,
     assignmentsResult,
     assessmentsResult,
+    checkpointsResult,
   ]) {
     if (result.error) throw result.error;
   }
@@ -1738,8 +1752,10 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
   const sessions = (sessionsResult.data || []) as LearningSession[];
   const assignments = (assignmentsResult.data || []) as Assignment[];
   const assessments = (assessmentsResult.data || []) as Assessment[];
+  const checkpoints = (checkpointsResult.data || []) as Checkpoint[];
   const assignmentIds = uniqueStrings(assignments.map((assignment) => assignment.id));
   const assessmentIds = uniqueStrings(assessments.map((assessment) => assessment.id));
+  const checkpointIds = uniqueStrings(checkpoints.map((checkpoint) => checkpoint.id));
   const sessionIds = uniqueStrings(sessions.map((session) => session.id));
   const [
     { data: turnRows, error: turnsError },
@@ -1750,6 +1766,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assessmentItemsResult,
     assessmentRecipientsResult,
     assessmentAttemptsResult,
+    checkpointRecipientsResult,
   ] = await Promise.all([
     sessionIds.length
       ? supabase
@@ -1815,6 +1832,14 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .order("updated_at", { ascending: false })
           .limit(1000)
       : Promise.resolve({ data: [], error: null }),
+    checkpointIds.length
+      ? supabase
+          .from("checkpoint_recipients")
+          .select("*")
+          .in("checkpoint_id", checkpointIds)
+          .order("updated_at", { ascending: false })
+          .limit(2000)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (turnsError) throw turnsError;
   for (const result of [
@@ -1825,6 +1850,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assessmentItemsResult,
     assessmentRecipientsResult,
     assessmentAttemptsResult,
+    checkpointRecipientsResult,
   ]) {
     if (result.error) throw result.error;
   }
@@ -1870,6 +1896,8 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assessmentRecipients: (assessmentRecipientsResult.data || []) as AssessmentRecipient[],
     assessmentAttempts,
     assessmentItemAttempts: (assessmentItemAttemptRows || []) as AssessmentItemAttempt[],
+    checkpoints,
+    checkpointRecipients: (checkpointRecipientsResult.data || []) as CheckpointRecipient[],
   };
 }
 

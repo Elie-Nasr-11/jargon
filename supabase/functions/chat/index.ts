@@ -1739,9 +1739,12 @@ type PendingCheckpoint = {
 
 // Assignments/assessments live in separate UI docks the mentor never sees. Load the ones
 // assigned to THIS student for THIS lesson that they haven't finished, so the mentor can
-// point them there. Best-effort: any failure returns [] and the turn proceeds normally.
-// Returns null (not []) on any load failure, so the completion gate can stay fail-closed
-// (don't complete a gated lesson when we couldn't confirm whether required work remains).
+// point them there. Reads the UNIFIED `checkpoints` table (checkpoint unification Phase 4):
+// dual-write triggers keep it in sync with assignments + assessments, so one query replaces
+// the old two-table read. The per-kind status filters (assignment 'assigned', assessment
+// 'published') and recipient 'assigned' filter are identical to the legacy gate — the mirror
+// preserves status verbatim. Returns null (not []) on any load failure, so the completion gate
+// stays fail-closed (don't complete a gated lesson when we couldn't confirm remaining work).
 async function loadPendingCheckpoints(
   config: SupabaseConfig,
   userId: string,
@@ -1750,57 +1753,42 @@ async function loadPendingCheckpoints(
   try {
     const lid = encodeURIComponent(lessonId);
     const uid = encodeURIComponent(userId);
-    const [assignments, assessments] = await Promise.all([
-      loadMany(
-        config,
-        `assignments?lesson_id=eq.${lid}&status=eq.assigned&select=id,title,due_at,required&limit=20`,
-      ),
-      loadMany(
-        config,
-        `assessments?lesson_id=eq.${lid}&status=eq.published&select=id,title,due_at,required&limit=20`,
-      ),
-    ]);
-    const aIds = uniqueStrings(assignments.map((a) => String(a.id || "")));
-    const sIds = uniqueStrings(assessments.map((a) => String(a.id || "")));
+    const checkpoints = await loadMany(
+      config,
+      `checkpoints?lesson_id=eq.${lid}&select=id,kind,title,due_at,required,status&limit=60`,
+    );
+    // Live/assignable per kind: assignment status 'assigned', assessment status 'published'
+    // (filtered in code rather than a PostgREST `or` filter — a lesson has few checkpoints).
+    const live = checkpoints.filter(
+      (c) =>
+        (c.kind === "assignment" && c.status === "assigned") ||
+        (c.kind === "assessment" && c.status === "published"),
+    );
+    const ids = uniqueStrings(live.map((c) => String(c.id || "")));
+    if (!ids.length) return [];
     // A student only has a recipient row for work assigned to them; status "assigned" = not
-    // yet finished ("complete" = done). So a pending checkpoint = an assigned recipient row.
-    const [aRecips, sRecips] = await Promise.all([
-      aIds.length
-        ? loadMany(
-            config,
-            `assignment_recipients?user_id=eq.${uid}&assignment_id=${inFilter(aIds)}&status=eq.assigned&select=assignment_id`,
-          )
-        : Promise.resolve([] as DbRow[]),
-      sIds.length
-        ? loadMany(
-            config,
-            `assessment_recipients?user_id=eq.${uid}&assessment_id=${inFilter(sIds)}&status=eq.assigned&select=assessment_id`,
-          )
-        : Promise.resolve([] as DbRow[]),
-    ]);
-    const aPending = new Set(aRecips.map((r) => String(r.assignment_id)));
-    const sPending = new Set(sRecips.map((r) => String(r.assessment_id)));
+    // yet finished (started/submitted/returned/complete = past pending). So a pending
+    // checkpoint = an assigned recipient row.
+    const recips = await loadMany(
+      config,
+      `checkpoint_recipients?user_id=eq.${uid}&checkpoint_id=${inFilter(ids)}&status=eq.assigned&select=checkpoint_id`,
+    );
+    const pending = new Set(recips.map((r) => String(r.checkpoint_id)));
     const out: PendingCheckpoint[] = [];
-    for (const a of assignments) {
-      if (aPending.has(String(a.id))) {
+    for (const c of live) {
+      if (pending.has(String(c.id))) {
+        const kind = c.kind === "assessment" ? "assessment" : "assignment";
         out.push({
-          kind: "assignment",
-          title: String(a.title || "Assignment"),
-          due_at: typeof a.due_at === "string" ? a.due_at : null,
-          required: a.required === true,
+          kind,
+          title: String(c.title || (kind === "assessment" ? "Assessment" : "Assignment")),
+          due_at: typeof c.due_at === "string" ? c.due_at : null,
+          required: c.required === true,
         });
       }
     }
-    for (const a of assessments) {
-      if (sPending.has(String(a.id))) {
-        out.push({
-          kind: "assessment",
-          title: String(a.title || "Assessment"),
-          due_at: typeof a.due_at === "string" ? a.due_at : null,
-          required: a.required === true,
-        });
-      }
-    }
+    // Required-first so the display cap can never drop a required item ahead of a non-required
+    // one (which would wrongly open the completion gate).
+    out.sort((a, b) => Number(b.required) - Number(a.required));
     return out.slice(0, 6);
   } catch {
     return null;

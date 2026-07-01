@@ -850,6 +850,50 @@ export type AssessmentRecipient = {
   updated_at: string;
 };
 
+// Unified checkpoint model (checkpoint unification): dual-write triggers keep these in sync
+// with assignments + assessments. `kind` discriminates; assignment-only / assessment-only
+// fields coexist. Read by the completion gate + teacher gradebook.
+export type CheckpointKind = "assignment" | "assessment";
+export type Checkpoint = {
+  id: string;
+  kind: CheckpointKind;
+  organization_id: string | null;
+  class_id: string | null;
+  course_id: string | null;
+  lesson_id: string | null;
+  milestone_id: string | null;
+  title: string;
+  instructions: string;
+  created_by: string | null;
+  source: string;
+  status: string;
+  required: boolean;
+  requires_teacher_approval: boolean;
+  grading_mode: string | null;
+  result_release_policy: string | null;
+  attempt_limit: number | null;
+  due_at: string | null;
+  legacy_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type CheckpointRecipient = {
+  id: string;
+  checkpoint_id: string;
+  user_id: string;
+  status: string;
+  score: number | null;
+  final_score: number | null;
+  feedback: string | null;
+  assigned_at: string;
+  started_at: string | null;
+  submitted_at: string | null;
+  returned_at: string | null;
+  completed_at: string | null;
+  legacy_id: string | null;
+  updated_at: string;
+};
+
 export type AssessmentAttempt = {
   id: string;
   assessment_id: string;
@@ -1723,6 +1767,8 @@ export type TeacherDashboardData = {
   assessmentRecipients: AssessmentRecipient[];
   assessmentAttempts: AssessmentAttempt[];
   assessmentItemAttempts: AssessmentItemAttempt[];
+  checkpoints: Checkpoint[];
+  checkpointRecipients: CheckpointRecipient[];
 };
 
 export type StudentAssignmentBundle = {

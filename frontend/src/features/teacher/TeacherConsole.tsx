@@ -5590,39 +5590,36 @@ function lessonProgressStatus(
   return "Not started";
 }
 
-// Tracks the chat runtime's completion gate: a required checkpoint blocks the lesson
-// only while its recipient row is still `assigned` (and the parent is live —
-// assignment status `assigned` / assessment status `published`). Anything past `assigned`
-// no longer gates, matching loadPendingCheckpoints in supabase/functions/chat/index.ts.
-// Caveat: the runtime fails CLOSED (an unreadable checkpoint read holds the lesson open
-// via pendingCheckpointsOk); the gradebook has no such signal, so if the checkpoint tables
-// were unreadable at chat time the live lesson stays gated while this view reflects the
-// teacher's current (successful) data load rather than that transient runtime state.
+// Reads the SAME unified `checkpoints` source as the chat runtime's completion gate
+// (loadPendingCheckpoints in supabase/functions/chat/index.ts) — so the gradebook and the
+// gate can't drift. A required checkpoint blocks the lesson only while its recipient row is
+// still `assigned` (and the parent is live — assignment status `assigned` / assessment status
+// `published`). Anything past `assigned` no longer gates.
+// Caveat: the runtime fails CLOSED (an unreadable checkpoint read holds the lesson open via
+// pendingCheckpointsOk); the gradebook has no such signal, so if the checkpoint tables were
+// unreadable at chat time the live lesson stays gated while this view reflects the teacher's
+// current (successful) data load rather than that transient runtime state.
 function requiredCheckpointStatus(
   dashboard: TeacherDashboardData,
   studentId: string,
   lessonId: string,
 ): { total: number; outstanding: number } {
-  const requiredAssignmentIds = new Set(
-    dashboard.assignments
-      .filter((a) => a.required && a.status === "assigned" && a.lesson_id === lessonId)
-      .map((a) => a.id),
+  const requiredCheckpointIds = new Set(
+    dashboard.checkpoints
+      .filter(
+        (c) =>
+          c.required &&
+          c.lesson_id === lessonId &&
+          ((c.kind === "assignment" && c.status === "assigned") ||
+            (c.kind === "assessment" && c.status === "published")),
+      )
+      .map((c) => c.id),
   );
-  const requiredAssessmentIds = new Set(
-    dashboard.assessments
-      .filter((a) => a.required && a.status === "published" && a.lesson_id === lessonId)
-      .map((a) => a.id),
+  const recipients = dashboard.checkpointRecipients.filter(
+    (r) => r.user_id === studentId && requiredCheckpointIds.has(r.checkpoint_id),
   );
-  const assignmentRecipients = dashboard.assignmentRecipients.filter(
-    (r) => r.user_id === studentId && requiredAssignmentIds.has(r.assignment_id),
-  );
-  const assessmentRecipients = dashboard.assessmentRecipients.filter(
-    (r) => r.user_id === studentId && requiredAssessmentIds.has(r.assessment_id),
-  );
-  const total = assignmentRecipients.length + assessmentRecipients.length;
-  const outstanding =
-    assignmentRecipients.filter((r) => r.status === "assigned").length +
-    assessmentRecipients.filter((r) => r.status === "assigned").length;
+  const total = recipients.length;
+  const outstanding = recipients.filter((r) => r.status === "assigned").length;
   return { total, outstanding };
 }
 
