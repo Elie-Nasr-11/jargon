@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { GradientCard } from "./GradientCard";
+import { useIsTouch } from "@/hooks/useIsTouch";
 import { LESSONS, type Lesson, type MentorConfig } from "@/lib/jargon-store";
 
 type MenuKey = "lessons" | "progress" | "mentor";
@@ -10,28 +11,6 @@ const WIDTHS: Record<MenuKey, number> = {
   progress: 380,
   mentor: 380,
 };
-
-const TOUCH_QUERY = "(pointer: coarse), (max-width: 639px)";
-
-function useIsTouch() {
-  // Resolve synchronously on the first render (client-only SPA) so mobile never paints the
-  // desktop hover-dropdown first — that flash let a tap open the 380px panel via synthetic
-  // mouseenter and instantly close it via mouseleave, and positioned it off-screen.
-  const [touch, setTouch] = useState(() =>
-    typeof window !== "undefined" && window.matchMedia
-      ? window.matchMedia(TOUCH_QUERY).matches
-      : false,
-  );
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia(TOUCH_QUERY);
-    const update = () => setTouch(mq.matches);
-    update();
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
-  }, []);
-  return touch;
-}
 
 export function HeaderMenus({
   activeLessonId,
