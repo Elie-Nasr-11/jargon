@@ -6,6 +6,34 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Checkpoint unification: drift/inefficiency review + follow-ups)
+
+Reviewed the whole unification for drift + inefficiencies (3 parallel review agents + a full DB field-parity
+sweep). Result: the SQL/data layer is TIGHT — 0 drift on every mirrored column, 0 unmirrored recipients, 0
+orphans; trigger<->backfill<->schema mappings all agree; RLS parity preserved for student/teacher/org-admin;
+the gate got faster (4 queries -> 2); index coverage complete. Findings were all in the TS consumers, mostly
+latent. Applied fixes:
+
+1. (correctness) unifiedLessonStatus now evaluates "Checkpoints due" BEFORE "Complete" — a required checkpoint
+   added/reset after an earlier session already reached status 'complete' now surfaces (matching the runtime,
+   which re-holds the lesson open next turn) instead of showing a stale "Complete".
+2. (product, user-chosen) Gate until COMPLETE: a required checkpoint blocks the lesson until the student
+   COMPLETES it — any recipient status != 'complete' (assigned/started/submitted/returned) is outstanding.
+   Before, merely starting a required quiz un-gated it. Backend chat gate filter status=eq.assigned ->
+   status=neq.complete; gradebook mirrors it. NOTE: teacher-graded required work stays gated until the teacher
+   grades it to 'complete' — intended, but flag if that latency is undesirable (could relax to 'submitted').
+3. (perf, user-chosen) Memoized the gradebook checkpoint lookups: requiredCheckpointStatus was
+   O(students x lessons x (checkpoints+recipients)) rescanning per cell; now a per-dashboard WeakMap-cached
+   index (requiredByLesson + recipientStatus maps) built once, O(required-per-lesson) per cell.
+
+NOT applied (documented, deferred): trigger self-heal for the child `cp_id is null` silent-skip (reviewers
+split LOW vs HIGH; my analysis: unreachable under FK-cascade + parent-first ordering, 0 actual drops,
+reconciled by the every-deploy backfill); checkpoint_items delete-mirroring (no editor/reader yet); dropping
+the 2 unused indexes (checkpoints kind/org) + unused mirrored columns (cleanup at contract); narrowing the
+dashboard select("*") (skipped — breaks Checkpoint-type honesty for negligible payload at this scale). The
+gate predicate is still re-implemented in backend + frontend (can't share across Deno/React) — kept in sync by
+convention + cross-referencing comments.
+
 ## Claude -> Codex / Human - 2026-07-01 (Checkpoint unification Phases 2-4: the data-model merge)
 
 Summary: Completed the checkpoint unification data-model merge (expand -> dual-write -> migrate reads)
