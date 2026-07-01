@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import gsap from "gsap";
-import { Menu, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { LESSONS, type Lesson, type MentorConfig } from "@/lib/jargon-store";
@@ -319,18 +319,23 @@ export function HeaderMenus({
                   </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-1">
-                  <LessonsPanel
-                    activeId={activeLessonId}
-                    lessons={lessons}
-                    onSelect={(id) => {
-                      onSelectLesson(id);
-                      closeDrawer();
-                    }}
-                  />
-                  <div className="my-7 h-px bg-border" />
-                  <ProgressPanel activeId={activeLessonId} lessons={lessons} />
-                  <div className="my-7 h-px bg-border" />
-                  <MentorPanel mentor={mentor} onChange={onMentorChange} />
+                  <CollapsibleSection title="Lessons" defaultOpen>
+                    <LessonsPanel
+                      bare
+                      activeId={activeLessonId}
+                      lessons={lessons}
+                      onSelect={(id) => {
+                        onSelectLesson(id);
+                        closeDrawer();
+                      }}
+                    />
+                  </CollapsibleSection>
+                  <CollapsibleSection title="Progress">
+                    <ProgressPanel bare activeId={activeLessonId} lessons={lessons} />
+                  </CollapsibleSection>
+                  <CollapsibleSection title="Mentor">
+                    <MentorPanel bare mentor={mentor} onChange={onMentorChange} />
+                  </CollapsibleSection>
                 </div>
               </GradientCard>
             </div>
@@ -341,14 +346,55 @@ export function HeaderMenus({
   );
 }
 
+function CollapsibleSection({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 py-4 text-left"
+      >
+        <span className="font-serif text-[22px] leading-tight tracking-tight">{title}</span>
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300 ${
+            open ? "rotate-180" : ""
+          }`}
+          strokeWidth={1.6}
+        />
+      </button>
+      {/* CSS-only collapse: grid rows 0fr -> 1fr animates height with the content clipped. */}
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden">
+          <div className="pb-5">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LessonsPanel({
   activeId,
   lessons,
   onSelect,
+  bare,
 }: {
   activeId: string;
   lessons: Lesson[];
   onSelect: (id: string) => void;
+  bare?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const indicatorRef = useRef<HTMLDivElement>(null);
@@ -376,7 +422,7 @@ function LessonsPanel({
 
   return (
     <div>
-      <h3 className="font-serif text-[22px] leading-tight tracking-tight">Lessons</h3>
+      {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Lessons</h3>}
       <p className="mt-1 text-[13px] text-muted-foreground">Pick the thread to follow.</p>
       <div ref={listRef} className="relative mt-5">
         <div
@@ -434,7 +480,15 @@ function groupLessons(lessons: Lesson[]) {
   return Array.from(groups.entries()).map(([name, items]) => ({ name, items }));
 }
 
-function ProgressPanel({ activeId, lessons }: { activeId: string; lessons: Lesson[] }) {
+function ProgressPanel({
+  activeId,
+  lessons,
+  bare,
+}: {
+  activeId: string;
+  lessons: Lesson[];
+  bare?: boolean;
+}) {
   const active = lessons.find((l) => l.id === activeId) ?? lessons[0] ?? LESSONS[0];
   const barRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -447,7 +501,7 @@ function ProgressPanel({ activeId, lessons }: { activeId: string; lessons: Lesso
   }, [active.id, active.progress]);
   return (
     <div>
-      <h3 className="font-serif text-[22px] leading-tight tracking-tight">Progress</h3>
+      {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Progress</h3>}
       <p className="mt-1 text-[13px] text-muted-foreground">{active.title}</p>
       <div className="mt-4 h-[5px] w-full overflow-hidden rounded-full bg-muted">
         <div ref={barRef} className="h-full rounded-full bg-foreground" />
@@ -484,9 +538,11 @@ function ProgressPanel({ activeId, lessons }: { activeId: string; lessons: Lesso
 function MentorPanel({
   mentor,
   onChange,
+  bare,
 }: {
   mentor: MentorConfig;
   onChange: (m: MentorConfig) => void;
+  bare?: boolean;
 }) {
   const groups: {
     key: keyof MentorConfig;
@@ -499,7 +555,7 @@ function MentorPanel({
   ];
   return (
     <div>
-      <h3 className="font-serif text-[22px] leading-tight tracking-tight">Mentor</h3>
+      {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Mentor</h3>}
       <p className="mt-1 text-[13px] text-muted-foreground">Shape how the tutor talks back.</p>
       <div className="mt-5 space-y-4">
         {groups.map((g) => (
