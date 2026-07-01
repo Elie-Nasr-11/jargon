@@ -30,6 +30,13 @@ to types.
 
 Files: chat/index.ts, the migration, deploy-backend.yml, types.ts, api.ts, TeacherConsole.tsx. Tests: frontend
 tsc 0 / lint 0 / build green; backend Deno via review.
+
+SHIPPED 2026-07-01: backend deploy run green (migration applied — confirmed the three columns exist in the DB;
+`chat` fn deployed). Frontend fast-forwarded to `main` (f4c34cf..65895ca) → Render rebuilding. A late
+adversarial-review fix (F1) made `loadPendingCheckpoints` fail-CLOSED: it returns `null` on a transient load
+error (not `[]`), `loadContext` exposes `pendingCheckpointsOk`, and `unifiedComplete` now requires a confident
+checkpoint read — so a load hiccup keeps the lesson active and self-corrects next turn instead of wrongly
+flipping a gated lesson to complete.
 DEFERRED to P1b (kept small/safe): the ASSESSMENT required toggle (needs the assessment-admin edge fn) and the
 teacher GRADEBOOK unified-status view (completion logic is spread across the huge TeacherConsole file — a
 separate change). Later phases (2–4): the actual checkpoints/items/recipients table merge (expand → dual-write
