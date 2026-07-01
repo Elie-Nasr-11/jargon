@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import {
@@ -2076,6 +2076,30 @@ function formatChatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+// Minimal inline markdown for tutor prose: **bold** -> emphasized key term. Everything else
+// stays plain text (newlines preserved by the parent's whitespace-pre-wrap).
+function renderInline(text: string): ReactNode[] {
+  return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, i) => {
+    const bold = part.match(/^\*\*([^*\n]+)\*\*$/);
+    if (bold) {
+      return (
+        <b key={i} className="font-semibold text-foreground">
+          {bold[1]}
+        </b>
+      );
+    }
+    return <Fragment key={i}>{part}</Fragment>;
+  });
+}
+
+// A short affirming lead sentence ending in "!" ("Nice work!") becomes the shiny headline.
+function splitOpeningBeat(text: string): { beat: string | null; rest: string } {
+  const lead = text.replace(/^\s+/, "");
+  const match = lead.match(/^([^\n.!?]{1,64}!)(?:\s+|$)/);
+  if (match) return { beat: match[1], rest: lead.slice(match[0].length) };
+  return { beat: null, rest: text };
+}
+
 function MessageContent({
   text,
   onUseCode,
@@ -2084,6 +2108,7 @@ function MessageContent({
   onUseCode: (code: ChatCodeBlock) => void;
 }) {
   const segments = parseFencedBlocks(text);
+  let beatConsumed = false;
 
   return (
     <div className="space-y-3">
@@ -2099,12 +2124,24 @@ function MessageContent({
         }
 
         if (!segment.text.trim()) return null;
+
+        // Only the first prose segment can carry the opening beat.
+        let beat: string | null = null;
+        let body = segment.text;
+        if (!beatConsumed) {
+          beatConsumed = true;
+          const split = splitOpeningBeat(segment.text);
+          beat = split.beat;
+          body = split.rest;
+        }
+
         return (
           <div
             key={`${segment.kind}-${index}`}
             className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground"
           >
-            {segment.text}
+            {beat ? <span className="tutor-beat">{beat.replace(/\*\*/g, "")}</span> : null}
+            {body.trim() ? renderInline(body) : null}
           </div>
         );
       })}

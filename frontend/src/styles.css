@@ -260,6 +260,47 @@ body {
   }
 }
 
+/* Tutor "opening beat" — an affirming lead sentence rendered as a shiny serif headline. */
+.tutor-beat {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  line-height: 1.15;
+  letter-spacing: -0.005em;
+  margin-bottom: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--grad-1),
+    var(--grad-2),
+    var(--grad-3),
+    var(--grad-4),
+    var(--grad-5)
+  );
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation:
+    grad-shift 9s linear infinite,
+    beat-rise 0.5s ease-out both;
+}
+@keyframes beat-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tutor-beat {
+    animation: none;
+    background-position: 0% 50%;
+  }
+}
+
 /* Reference active-dot indicator */
 .dot-indicator {
   width: 4px;

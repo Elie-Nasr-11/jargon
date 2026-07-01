@@ -6,6 +6,51 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Tutor v1.3: open-ended code grading + lively tutor text)
+
+Summary: A real transcript showed the tutor trapping a student on an OPEN-ENDED code task ("change the
+starter into another everyday process") — every original answer was rejected and the tutor invented a
+"be positive" rule. Root cause: `assessAnswer` grades code by exact substring match against
+`activity.expected_output`, which was mis-authored to the STARTER example ("Gather ingredients / Mix /
+Serve"), so no original answer ever passed and `flowFor`'s code branch never completed. Fixed three ways:
+
+CONTENT (already live, via Supabase MCP): cleared the mis-set `expected_output` on the two trapped lessons —
+`coding1` ("Turn a Process Into Code") and the identical `lesson1` ("hammer -> hammers nails") — at both the
+activity and lesson level. With it null, a clean run passes immediately.
+
+RUNTIME (chat/index.ts): a `checkCodeObjective` semantic grader — when a code run is CLEAN but fails the
+strict match, a separate model call (route "understanding") judges whether the code meets the OBJECTIVE and,
+if so, upgrades the assessment so the activity completes. The judge decides open-ended vs. exact from the
+task wording and LEANS STRICT when unsure (so exact-output tasks aren't leniently passed). A judge-based pass
+is capped at score 0.8 → "developing", NOT the "secure" tier (the server never re-executes the code and
+run_result is client-supplied, so it earns solid-but-unverified credit). Also: a SYSTEM_PROMPT rule against
+inventing requirements the objective doesn't state (no "positive"/topic/wording/match-example demands) and to
+acknowledge when the student is right.
+
+LIVELINESS (chat.tsx + styles.css + a prompt nudge): tutor messages now render the opening affirmation (a
+short sentence ending in "!") as a large animated-gradient Instrument Serif headline (`.tutor-beat`, reusing
+the app's existing rainbow gradient) and support minimal `**bold**` markdown for key concept terms. The model
+is nudged to open with a short "!" affirmation and bold 1-3 terms. Reduced-motion freezes the shine; shine is
+on the opening line only (body stays readable); no XSS (React text children, no dangerouslySetInnerHTML).
+
+Adversarial review (2 rounds, ~18 agents): round 1 found 7 issues in the grading change — a HIGH mastery-mint
+from unexecuted client code (→ capped to "developing"), a HIGH stuck-cap quiz-skip + forced/wrong-completion
+(→ removed the code stuck-cap entirely), a lenient-exact-repro path (→ judge decides, leans strict), a
+contradictory payload (→ fixed). Round 2 confirmed 2 LOW: a keyword gate re-looped open-ended tasks without
+cue words (→ removed the keyword gate; the JUDGE now decides intent), and a cosmetic `**` in the headline
+(→ stripped). All fixed.
+
+Files: `supabase/functions/chat/index.ts`, `frontend/src/routes/chat.tsx`, `frontend/src/styles.css`
+(+ the live DB content fix). Tests: frontend tsc 0 / lint 0 (12 pre-existing warnings) / build green; backend
+Deno validated via the two review rounds.
+Remaining concerns: run_result is client-supplied and the server does not re-execute code — a determined
+student can fabricate a clean run to complete an open-ended task at "developing" mastery (pre-existing
+property, now capped; a full fix is server-side execution / signed run results, out of scope). Open-ended
+code tasks should ideally be authored with an EMPTY expected_output (then the strict path passes clean runs
+with no judge needed). Spot-check a live transcript for the loop fix + the new headline/bold rendering.
+Suggested next task: audit remaining lessons for mis-set expected_output on open-ended prompts; consider
+server-side code execution for trustworthy code mastery.
+
 ## Claude -> Codex / Human - 2026-07-01 (Tutor v1.2 loop-closure + chat UX: hidden pedagogy controls + ChatGPT-style voice)
 
 Summary: Bundled change (shipped together at the user's request). Two parts.

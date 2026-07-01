@@ -69,10 +69,22 @@ Every turn, FIRST read the student's latest message and respond to what they act
 
 Hard rules (always):
 - Stay on the current lesson goal; if the student drifts, briefly acknowledge and redirect.
+- Do NOT invent requirements the objective does not state. Never demand a particular topic, a "positive"
+  outcome, specific wording, or that the answer match a shown example — unless the objective explicitly asks
+  for it. When a task says to write their OWN example, ANY correct, on-topic answer is acceptable; accept it
+  and move on. An example given in the task is one model answer, never the only right answer.
+- If the student correctly points out their answer already met the task, acknowledge that plainly and move
+  forward — do not deflect or restate the same demand.
 - Keep responses short, concrete, and age-appropriate. Do not use emojis.
 - Treat code execution as deterministic: Jargon runs through the engine, not imagination. Python is a
   comparison bridge only; do not claim to execute Python. Do not ask students to upload files.
 - Honor the integrity policy and help ceiling you are given.
+
+Presentation (the client styles your text):
+- When you affirm, make the OPENING sentence short and punchy and end it with "!" (e.g. "Nice work!",
+  "Exactly right!") — it is rendered as a headline. Keep it genuine; skip it when there's nothing to affirm.
+- Emphasize 1-3 key concept words inline with **double asterisks** (rendered bold), e.g. a **list**, the
+  **index**. Do not over-emphasize — most words stay plain.
 
 Set "understanding" to reflect whether the student's words show they understand THIS step's objective:
 demonstrated=true only when their explanation/answer is essentially correct and complete.
@@ -961,6 +973,69 @@ async function checkUnderstanding(
   }
 }
 
+// Semantic grader for CODE activities: when a run is clean but doesn't match the (possibly
+// wrong or starter-derived) expected_output, judge whether the code accomplishes the
+// OBJECTIVE. The judge decides open-ended vs. exact from the task text (it reads intent far
+// better than a keyword gate) and is told to lean STRICT when unsure, so exact-output tasks
+// aren't leniently passed. This lets open-ended "write your own …" tasks complete instead of
+// looping forever on an exact-output gate. Returns null on error (falls back to strict match).
+async function checkCodeObjective(
+  config: SupabaseConfig,
+  userId: string,
+  sessionId: string,
+  lessonId: string,
+  activity: DbRow | null,
+  milestone: DbRow | null,
+  code: string,
+  output: string,
+  recentTurns: DbRow[],
+): Promise<Understanding | null> {
+  const src = (code || "").trim();
+  const out = (output || "").trim();
+  if (!src && !out) return null;
+  const objective = [
+    milestone?.objective ? `Objective: ${String(milestone.objective)}` : "",
+    activity?.prompt ? `Task/prompt: ${String(activity.prompt)}` : "",
+    activity?.expected_output
+      ? `Target/expected output (this may be either the REQUIRED result, or just a starter example — decide from the task wording): ${String(activity.expected_output)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const recent = recentTurns
+    .slice(0, 4)
+    .reverse()
+    .map((t) => `${String(t.role)}: ${String(t.content || "").slice(0, 160)}`)
+    .join("\n");
+  const system =
+    "You are a strict but fair grader for a children's coding exercise. Decide whether the " +
+    "student's code ACCOMPLISHES THE OBJECTIVE. First judge the task's TYPE from its wording:\n" +
+    "- OPEN-ENDED (invites the student's OWN or a DIFFERENT answer, e.g. 'write your own three " +
+    "ordered steps', 'change it to another process', 'make up an example'): ANY correct, on-topic " +
+    "answer counts — do NOT require a specific topic, wording, or that it match the target output.\n" +
+    "- EXACT (asks for a SPECIFIC result / a particular output): the student's output must match " +
+    "that target output.\n" +
+    "- If you are UNSURE which, and a target output is provided, LEAN STRICT: require the output " +
+    "to match it. Return ONLY a JSON object: " +
+    '{"demonstrated": boolean, "level": "none|partial|solid", "note": "one short phrase naming ' +
+    'what is missing, or empty when it meets the objective"}.';
+  const userMsg = `${objective || "Objective: write code that accomplishes the task."}\n\nRecent conversation:\n${recent}\n\nStudent's code:\n${src.slice(0, 1200)}\n\nProgram output:\n${out.slice(0, 800)}`;
+  try {
+    const result = await callModel(
+      [
+        { role: "system", content: system },
+        { role: "user", content: userMsg },
+      ],
+      true,
+      "understanding",
+    );
+    await recordModelUsage(config, userId, sessionId, lessonId, result, "grading");
+    return parsedUnderstanding(JSON.parse(extractJsonObject(result.content)));
+  } catch {
+    return null;
+  }
+}
+
 function mergeAssessment(
   orchestrator: Assessment | null,
   mentor: Assessment | null,
@@ -1514,6 +1589,9 @@ function flowFor(
             choices: [],
           };
     }
+    // No auto-complete backstop here: open-ended tasks complete via the semantic code judge,
+    // and an exact-output task must keep requiring the right output (looping-with-escalating-
+    // help is correct there). Auto-completing clean-but-wrong runs would pass wrong answers.
     return {
       stage: "practice",
       responseMode: "code",
@@ -2147,13 +2225,54 @@ async function handleTypedRequest(
       answer?.mode === "code" && runTimedOut(answer.run_result),
     );
 
+    // Semantic code grading: if a code run ran cleanly but the orchestrator's exact-output
+    // match failed (e.g. an open-ended "write your own …" task whose expected_output is just
+    // the starter example), judge whether the code meets the OBJECTIVE. A "met" verdict
+    // upgrades the strict-match failure to a pass so the activity can complete instead of
+    // looping on the fixed output forever.
+    const codeRanClean = Boolean(
+      answer?.mode === "code" &&
+        !runtimeTimedOut &&
+        !runHasErrors(answer.run_result),
+    );
+    const codeNeedsJudge =
+      codeRanClean &&
+      orchestratorAssessment?.passed === false &&
+      currentStage !== "intro" &&
+      currentStage !== "complete";
+    const gradedCode = codeNeedsJudge
+      ? await checkCodeObjective(
+          config,
+          userId,
+          sessionId,
+          lessonId,
+          context.activity,
+          context.milestone,
+          typeof answer?.code === "string" ? answer.code : "",
+          outputLines(answer?.run_result).join("\n"),
+          context.recentTurns,
+        )
+      : null;
+    // A judge-based pass COMPLETES the activity (unblocks the loop) but is capped below the
+    // "secure" mastery tier (< 0.85): the server never re-executed the code and run_result is
+    // client-supplied, so an open-ended judgement earns solid-but-not-verified credit only.
+    const effectiveOrchestratorAssessment: Assessment | null =
+      gradedCode?.demonstrated
+        ? {
+            score: 0.8,
+            passed: true,
+            feedback: "Your code accomplishes the task.",
+            source: "orchestrator",
+          }
+        : orchestratorAssessment;
+
     const draftFlow = flowFor(
       currentStage,
       session,
       context.activity,
       context.quiz,
       answer,
-      orchestratorAssessment,
+      effectiveOrchestratorAssessment,
       gradedUnderstanding,
       conversationDepth,
     );
@@ -2165,6 +2284,9 @@ async function handleTypedRequest(
     const timeoutDirective = runtimeTimedOut
       ? `\n\nRUNTIME NOTE: The code runner TIMED OUT — an infrastructure hiccup, NOT the student's mistake. Reassure them briefly (it's on us, not their code) and ask them to run it again; do not critique their code for this.`
       : "";
+    const codeMetDirective = gradedCode?.demonstrated
+      ? `\n\nCODE CHECK: The student's code runs and accomplishes the objective. Affirm warmly in ONE sentence and CONCLUDE this step — do NOT demand a specific wording, topic, or that it match an example.`
+      : "";
     const systemContent = `${SYSTEM_PROMPT}\n\n${pedagogyPromptBlock(
       teaching.move,
       diagnosis,
@@ -2175,7 +2297,7 @@ async function handleTypedRequest(
       context.misconceptions,
       recentQuestions,
       intent,
-    )}${understandingDirective}${timeoutDirective}`;
+    )}${understandingDirective}${timeoutDirective}${codeMetDirective}`;
     const messages = [
       { role: "system", content: systemContent },
       {
@@ -2237,7 +2359,7 @@ async function handleTypedRequest(
           understanding_check: gradedUnderstanding,
           runtime_timeout: runtimeTimedOut,
           latest_answer: answer,
-          deterministic_assessment: orchestratorAssessment,
+          deterministic_assessment: effectiveOrchestratorAssessment,
           orchestrator_flow: draftFlow,
           skill_keys: skillKeys,
           pass_threshold: passThreshold(context.activity, context.quiz),
@@ -2294,7 +2416,7 @@ async function handleTypedRequest(
     }
 
     const assessment = mergeAssessment(
-      orchestratorAssessment,
+      effectiveOrchestratorAssessment,
       parsedAssessment(parsed.assessment),
     );
     // The dedicated grader is authoritative for text completion (it hard-gates the loop);
