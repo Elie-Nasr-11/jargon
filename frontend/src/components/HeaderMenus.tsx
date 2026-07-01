@@ -11,11 +11,20 @@ const WIDTHS: Record<MenuKey, number> = {
   mentor: 380,
 };
 
+const TOUCH_QUERY = "(pointer: coarse), (max-width: 639px)";
+
 function useIsTouch() {
-  const [touch, setTouch] = useState(false);
+  // Resolve synchronously on the first render (client-only SPA) so mobile never paints the
+  // desktop hover-dropdown first — that flash let a tap open the 380px panel via synthetic
+  // mouseenter and instantly close it via mouseleave, and positioned it off-screen.
+  const [touch, setTouch] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia(TOUCH_QUERY).matches
+      : false,
+  );
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(hover: none), (max-width: 639px)");
+    const mq = window.matchMedia(TOUCH_QUERY);
     const update = () => setTouch(mq.matches);
     update();
     mq.addEventListener?.("change", update);

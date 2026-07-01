@@ -31,7 +31,11 @@ export function SettingsMenu({
   };
   const close = () => setVisible(false);
 
+  // Only listen for outside taps while the menu is open, and register AFTER the opening
+  // click has settled — so the very tap that opens the menu can't also be read as an
+  // "outside" pointerdown and close it again on touch.
   useEffect(() => {
+    if (!visible) return;
     const onDoc = (e: PointerEvent) => {
       if (!wrapRef.current?.contains(e.target as Node)) close();
     };
@@ -44,7 +48,7 @@ export function SettingsMenu({
       document.removeEventListener("pointerdown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, []);
+  }, [visible]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -85,7 +89,10 @@ export function SettingsMenu({
           style={{ width: "min(320px, calc(100vw - 16px))" }}
         >
           <GradientCard>
-            <div className="p-4">
+            {/* Cap to the viewport and scroll internally so the tall (voice) variant can't be
+                clipped by an overflow-hidden ancestor (the chat surface) or run off the bottom
+                of a phone screen — otherwise Log out / lower items became unreachable. */}
+            <div className="max-h-[calc(100dvh-84px)] overflow-y-auto overscroll-contain p-4">
               <div className="flex items-center gap-3 px-1 pb-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-[12px] text-muted-foreground">
                   {email.slice(0, 1).toUpperCase()}
