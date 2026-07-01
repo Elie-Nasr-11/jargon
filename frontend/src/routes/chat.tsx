@@ -949,7 +949,7 @@ function ChatPage() {
   if (!email || booting) {
     return (
       <div
-        className="relative flex h-screen min-h-0 flex-col overflow-hidden"
+        className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden"
         style={{ background: "var(--background)" }}
       >
         <AmbientCanvas intensity={0.35} />

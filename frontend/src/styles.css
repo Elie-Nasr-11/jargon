@@ -425,6 +425,19 @@ body {
   background-color: color-mix(in oklab, var(--background) 88%, transparent);
 }
 
+/* Touch devices: keep every focusable form field at >=16px so mobile Safari does
+   NOT zoom the viewport when the field is focused — that focus-zoom (and its partial
+   un-zoom on blur) is what makes the page lurch as the on-screen keyboard opens and
+   closes. Unlayered element selectors so this wins over Tailwind's text-[..] utilities
+   (which are in the `utilities` cascade layer). Desktop density is unchanged. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Native <select> dropdowns: replace the browser's edge-flush arrow with a
    custom chevron that sits inset from the rounded corner, and reserve right
    padding so the value text never collides with it. The chevron color is set
