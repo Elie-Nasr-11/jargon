@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import gsap from "gsap";
 import { Menu, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
@@ -245,12 +246,11 @@ export function HeaderMenus({
       {isTouch && (
         <button
           type="button"
-          aria-label="Menu"
+          aria-label="Open menu"
           onClick={openDrawer}
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-[14px] tracking-tight text-muted-foreground transition-colors hover:text-foreground"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
         >
-          <Menu className="h-[18px] w-[18px]" strokeWidth={1.6} />
-          Menu
+          <Menu className="h-[20px] w-[20px]" strokeWidth={1.6} />
         </button>
       )}
 
@@ -283,53 +283,60 @@ export function HeaderMenus({
         </div>
       )}
 
-      {/* Mobile drawer — one panel with all three titled sections. */}
-      {isTouch && drawerMounted && (
-        <>
-          <div
-            ref={drawerBackdropRef}
-            onClick={closeDrawer}
-            className="fixed inset-0 z-40"
-            style={{
-              background: "color-mix(in oklab, var(--background) 55%, rgba(0,0,0,0.45))",
-              opacity: 0,
-            }}
-          />
-          <div
-            ref={drawerRef}
-            className="fixed inset-y-0 right-0 z-50 w-[min(90vw,390px)] p-2 pb-[max(env(safe-area-inset-bottom),8px)]"
-            style={{ transform: "translateX(100%)" }}
-          >
-            <GradientCard className="h-full" innerClassName="flex h-full flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-4 pb-1 pt-3.5">
-                <span className="font-serif text-[20px] tracking-tight">Menu</span>
-                <button
-                  type="button"
-                  onClick={closeDrawer}
-                  aria-label="Close menu"
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <X className="h-[18px] w-[18px]" strokeWidth={1.6} />
-                </button>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-2">
-                <LessonsPanel
-                  activeId={activeLessonId}
-                  lessons={lessons}
-                  onSelect={(id) => {
-                    onSelectLesson(id);
-                    closeDrawer();
-                  }}
-                />
-                <div className="my-7 h-px bg-border" />
-                <ProgressPanel activeId={activeLessonId} lessons={lessons} />
-                <div className="my-7 h-px bg-border" />
-                <MentorPanel mentor={mentor} onChange={onMentorChange} />
-              </div>
-            </GradientCard>
-          </div>
-        </>
-      )}
+      {/* Mobile drawer — one panel with all three titled sections. Portaled to <body> so it
+          escapes the header's backdrop-filter, which would otherwise be the fixed drawer's
+          containing block and collapse it to the header's height. */}
+      {isTouch &&
+        drawerMounted &&
+        createPortal(
+          <>
+            <div
+              ref={drawerBackdropRef}
+              onClick={closeDrawer}
+              className="fixed inset-0 z-[100]"
+              style={{
+                background: "color-mix(in oklab, var(--background) 55%, rgba(0,0,0,0.45))",
+                opacity: 0,
+              }}
+            />
+            <div
+              ref={drawerRef}
+              className="fixed inset-y-0 right-0 z-[101] w-[min(90vw,390px)] p-2 pb-[max(env(safe-area-inset-bottom),8px)]"
+              style={{ transform: "translateX(100%)" }}
+            >
+              <GradientCard
+                className="h-full"
+                innerClassName="flex h-full flex-col overflow-hidden"
+              >
+                <div className="flex items-center justify-end px-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={closeDrawer}
+                    aria-label="Close menu"
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="h-[18px] w-[18px]" strokeWidth={1.6} />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-1">
+                  <LessonsPanel
+                    activeId={activeLessonId}
+                    lessons={lessons}
+                    onSelect={(id) => {
+                      onSelectLesson(id);
+                      closeDrawer();
+                    }}
+                  />
+                  <div className="my-7 h-px bg-border" />
+                  <ProgressPanel activeId={activeLessonId} lessons={lessons} />
+                  <div className="my-7 h-px bg-border" />
+                  <MentorPanel mentor={mentor} onChange={onMentorChange} />
+                </div>
+              </GradientCard>
+            </div>
+          </>,
+          document.body,
+        )}
     </nav>
   );
 }

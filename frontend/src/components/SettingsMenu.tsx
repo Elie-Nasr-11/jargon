@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import { ExternalLink, LogOut, Mic, Moon, Settings, Sun, Volume2 } from "lucide-react";
@@ -283,36 +284,40 @@ export function SettingsMenu({
         </div>
       )}
 
-      {/* Mobile bottom sheet — fixed, so it can never open off-screen or get clipped. */}
-      {mounted && isTouch && (
-        <>
-          <div
-            ref={backdropRef}
-            onClick={close}
-            className="fixed inset-0 z-40"
-            style={{
-              background: "color-mix(in oklab, var(--background) 55%, rgba(0,0,0,0.45))",
-              opacity: 0,
-            }}
-          />
-          <div
-            ref={sheetRef}
-            className="fixed inset-x-0 bottom-0 z-50"
-            style={{ transform: "translateY(100%)" }}
-          >
-            <div className="mx-auto w-full max-w-[640px] px-2 pb-[max(env(safe-area-inset-bottom),12px)]">
-              <GradientCard>
-                <div className="flex flex-col" style={{ maxHeight: "82vh" }}>
-                  <div className="flex justify-center pt-2.5">
-                    <span className="h-1 w-10 rounded-full bg-muted-foreground/40" />
+      {/* Mobile bottom sheet — portaled to <body> so it escapes the header's backdrop-filter
+          (which would otherwise be the fixed sheet's containing block and mis-position it). */}
+      {mounted &&
+        isTouch &&
+        createPortal(
+          <>
+            <div
+              ref={backdropRef}
+              onClick={close}
+              className="fixed inset-0 z-[100]"
+              style={{
+                background: "color-mix(in oklab, var(--background) 55%, rgba(0,0,0,0.45))",
+                opacity: 0,
+              }}
+            />
+            <div
+              ref={sheetRef}
+              className="fixed inset-x-0 bottom-0 z-[101]"
+              style={{ transform: "translateY(100%)" }}
+            >
+              <div className="mx-auto w-full max-w-[640px] px-2 pb-[max(env(safe-area-inset-bottom),12px)]">
+                <GradientCard>
+                  <div className="flex flex-col" style={{ maxHeight: "82vh" }}>
+                    <div className="flex justify-center pt-2.5">
+                      <span className="h-1 w-10 rounded-full bg-muted-foreground/40" />
+                    </div>
+                    <div className="min-h-0 overflow-y-auto overscroll-contain p-4">{content}</div>
                   </div>
-                  <div className="min-h-0 overflow-y-auto overscroll-contain p-4">{content}</div>
-                </div>
-              </GradientCard>
+                </GradientCard>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>,
+          document.body,
+        )}
     </div>
   );
 }

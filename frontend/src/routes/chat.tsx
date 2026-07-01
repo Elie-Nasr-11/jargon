@@ -976,14 +976,18 @@ function ChatPage() {
         <div className="hairline">
           <div className="mx-auto flex h-[60px] max-w-[1200px] items-center justify-between gap-2 px-3 sm:px-6">
             <div className="font-serif text-[22px] tracking-tight">Jargon</div>
-            <HeaderMenus
-              activeLessonId={lessonId}
-              lessons={menuLessons}
-              onSelectLesson={selectLesson}
-              mentor={mentor}
-              onMentorChange={updateMentor}
-            />
-            <SettingsMenu email={email} voice={voice} onVoiceChange={updateVoice} />
+            {/* On mobile, group the menu + settings on the right (logo left). `sm:contents`
+                dissolves this wrapper on desktop so the nav keeps its centered position. */}
+            <div className="flex items-center gap-1 sm:contents">
+              <HeaderMenus
+                activeLessonId={lessonId}
+                lessons={menuLessons}
+                onSelectLesson={selectLesson}
+                mentor={mentor}
+                onMentorChange={updateMentor}
+              />
+              <SettingsMenu email={email} voice={voice} onVoiceChange={updateVoice} />
+            </div>
           </div>
         </div>
       </header>
