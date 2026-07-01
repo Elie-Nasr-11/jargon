@@ -319,7 +319,7 @@ export function HeaderMenus({
                   </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-1">
-                  <CollapsibleSection title="Lessons" defaultOpen>
+                  <CollapsibleSection title="Lessons">
                     <LessonsPanel
                       bare
                       activeId={activeLessonId}
