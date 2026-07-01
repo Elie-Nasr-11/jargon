@@ -3905,3 +3905,73 @@ Live activation:
 - Supabase CLI deploy was blocked locally because no `SUPABASE_ACCESS_TOKEN` is configured.
 - Let Render deploy the frontend bundle from GitHub `main`.
 - Smoke `/admin` CSV preview/apply, archive/report export, consent settings, Google diagnose, Voice diagnose, and draft curriculum import from approved media chunks.
+
+## Claude -> Codex / Human - 2026-07-01 14:10
+
+Status: Done — live-voice fix shipped (backend v5 + frontend on main)
+
+Task: "Fix the audio chat" — the live voice (WebRTC ↔ OpenAI Realtime) feature had never
+worked end to end.
+
+Summary:
+
+- Root cause chain (fixed layer by layer against OpenAI's exact errors):
+  1. `voice-session` edge function was never deployed → wired it into `deploy-backend.yml`.
+  2. SDP handshake to `/v1/realtime/calls` failed ("unmarshal SDP: EOF", then "field 'sdp'
+     not found"): Deno `FormData` mangled the offer. Hand-built the multipart with `sdp` and
+     `session` as plain fields, each with its own Content-Type (`application/sdp` /
+     `application/json`) — matching OpenAI's documented curl and their codex WebRTC client.
+     Validated by round-tripping the exact body through a standard WHATWG multipart parser.
+- Adversarial multi-agent review of the whole path (backend session config, WebRTC lifecycle,
+  submit_voice_turn governance loop, cross-layer contract) surfaced 8 distinct real defects;
+  all fixed:
+  - Backend: a telemetry/DB write failure after OpenAI's 201 discarded a working answer SDP and
+    returned 500 → wrapped best-effort writes in try/catch; always return the SDP.
+  - Frontend (iOS-critical): remote Mentor `<audio>` was detached from the DOM and never
+    `.play()`'d → append to DOM, `playsInline`, play in the user gesture (iOS Safari was silent).
+  - Frontend: no connection-state monitoring → drive "live" off `pc.connectionState`, recover on
+    `failed`, add a STUN server + a 15s connect timeout.
+  - Frontend: `maybeHandleFunctionCall` fired on streaming `.added/.delta` shapes (empty args) →
+    only act on a completed call with non-empty args; don't reserve the callId until confirmed.
+  - Frontend: stale-status closure in the data-channel `close` handler → mirror status via a ref.
+  - Governance: firmed up the realtime instructions so the model must route every answer through
+    `submit_voice_turn` and never self-grades.
+  - API: realtime handshake fetch timeout 20s → 35s for slow mobile / edge cold start.
+
+Files changed:
+
+- `supabase/functions/voice-session/index.ts` (multipart + content-types + telemetry try/catch +
+  instructions)
+- `frontend/src/routes/chat.tsx` (RealtimeVoicePanel: audio playback, connection recovery,
+  function-call guard, status ref)
+- `frontend/src/lib/api.ts` (`createRealtimeVoiceSession` timeout)
+- `.github/workflows/deploy-backend.yml` (voice-session added to triggers + deploy step)
+
+Tests run:
+
+- Frontend: `npx tsc --noEmit` 0 errors; `npm run lint` 0 errors (12 pre-existing warnings, none
+  in chat.tsx); `npm run build` green.
+- Multipart round-trip validation via a standard parser (sdp non-empty field; session parses JSON).
+- `deno check` not available locally (deno not installed) → covered by the adversarial review.
+
+Live activation:
+
+- `voice-session` deployed to `qztpieiizmiayzjhezwh` at **version 5** via the Supabase Management
+  API (the CLI path hit a transient Supabase "Failed to set function store" 500 twice; the direct
+  Management-API deploy succeeded). The `deploy-backend.yml` run for 5cf56d8 shows red only because
+  of that CLI blip — the function is deployed correctly.
+- Frontend fast-forwarded to `main` (5cf56d8) → Render auto-build.
+
+Remaining concerns:
+
+- The realtime model default is `gpt-realtime-2` (env `OPENAI_REALTIME_MODEL`). If a live retry
+  fails, the backend now records OpenAI's exact error to `voice_interaction_events`
+  (`voice_session_failed`) — check there first; a wrong model name would surface as a clear 4xx.
+- Live mic behavior can only be verified on a real device (sandbox has no mic / egress).
+
+Suggested next task:
+
+- User re-tests live voice on device; if it still errors, pull the latest `voice_session_failed`
+  row's `payload.error` and fix the next layer (most likely the model name or a session-config
+  field). Optional follow-ups the user floated: ElevenLabs read-aloud TTS; set an explicit
+  `OPENAI_REALTIME_MODEL` secret.
