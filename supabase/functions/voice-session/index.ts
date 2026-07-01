@@ -266,14 +266,20 @@ async function createRealtimeSession(config: Config, user: DbRow, body: DbRow): 
     tool_choice: "auto",
   };
 
-  // OpenAI's /v1/realtime/calls reads `sdp` as an application/sdp part (the curl form is
-  // `-F sdp=@offer.sdp`). Sending it as a plain string field made OpenAI see an empty/
-  // unterminated offer ("failed to unmarshal SDP: EOF"), so send it as a file part with a
-  // guaranteed trailing newline instead.
+  // /v1/realtime/calls wants `sdp` as a plain multipart FIELD (a file part with a filename is
+  // reported "not found"; but Deno's native FormData string field arrived empty at OpenAI).
+  // Build the multipart body by hand so the SDP is written verbatim as the `sdp` field, with a
+  // guaranteed trailing CRLF.
   const sdpBody = sdp.endsWith("\n") ? sdp : `${sdp}\r\n`;
-  const form = new FormData();
-  form.set("sdp", new Blob([sdpBody], { type: "application/sdp" }), "offer.sdp");
-  form.set("session", JSON.stringify(sessionConfig));
+  const boundary = `----jargonvoice${crypto.randomUUID().replace(/-/g, "")}`;
+  const multipartBody =
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="sdp"\r\n\r\n` +
+    `${sdpBody}` +
+    `\r\n--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="session"\r\n\r\n` +
+    `${JSON.stringify(sessionConfig)}` +
+    `\r\n--${boundary}--\r\n`;
 
   const startedAt = Date.now();
   const res = await fetch("https://api.openai.com/v1/realtime/calls", {
@@ -281,8 +287,9 @@ async function createRealtimeSession(config: Config, user: DbRow, body: DbRow): 
     headers: {
       Authorization: `Bearer ${config.openAiKey}`,
       "OpenAI-Safety-Identifier": await safetyId(userId),
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
     },
-    body: form,
+    body: multipartBody,
   });
   const answerSdp = await res.text();
   const latencyMs = Date.now() - startedAt;
