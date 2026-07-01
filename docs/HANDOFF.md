@@ -6,6 +6,27 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-01 (Tutor v1.5: visible lesson progress — Step N of M + roadmap)
+
+Summary: Workstream 3 of the structured/guided effort — the student now SEES the arc the mentor narrates. A
+slim "Step N of M" strip under the chat header with a segmented bar; tap to expand a roadmap (done ✓ / current
+/ upcoming step titles). Hidden for single-step lessons.
+
+Backend (chat/index.ts): the already-computed `lessonArc` is now RETURNED in the chat envelope (added
+`lesson_arc?` to the `Envelope` type + `makeEnvelope` default + the envelope construction, placed AFTER the
+`...parsed` spread so the server value wins over any model-supplied field). On an advancing turn the envelope's
+`lesson_arc` is rebuilt from the next activity so progress advances in sync with the "next up: …" hand-off.
+Frontend (chat.tsx + types.ts): new `LessonArc`/`LessonArcStep` types; `TypedChatEnvelope.lesson_arc?`; a
+client `deriveLessonArc(activities, currentActivityId)` (mirrors the backend, for immediate/resume display
+from the already-fetched activities + session cursor); a `LessonProgress` component; `lessonArc` state set on
+load (derive) and updated from each envelope's `lesson_arc` (4 sites, authoritative).
+
+Files: `supabase/functions/chat/index.ts`, `frontend/src/routes/chat.tsx`, `frontend/src/lib/types.ts`. No
+migration. Tests: frontend tsc 0 / lint 0 (12 pre-existing warnings) / build green; backend Deno via review.
+Remaining concerns: progress reflects the runtime cursor (forward-only). Still open in the effort: workstream
+4 — make the mentor aware of pending quizzes/assignments/assessments + tighten those three fragmented
+checkpoint systems.
+
 ## Claude -> Codex / Human - 2026-07-01 (Tutor v1.4: the guided arc — lesson-arc awareness + situated turns)
 
 Summary: First step of a larger "make the tutor feel structured/guided/engaged" effort (two Explore agents

@@ -964,6 +964,16 @@ export type TypedChatAnswer = {
   transcript_confidence?: number | null;
 };
 
+export type LessonArcStep = { step: number; title: string };
+export type LessonArc = {
+  step: number;
+  total: number;
+  current: { title: string; prompt?: string } | null;
+  completed: LessonArcStep[];
+  upcoming: LessonArcStep[];
+  next: LessonArcStep | null;
+};
+
 export type TypedChatEnvelope = {
   status: "ok" | "error";
   reply: string;
@@ -975,6 +985,7 @@ export type TypedChatEnvelope = {
   exercise: Record<string, unknown> | null;
   assessment: Record<string, unknown> | null;
   resources?: LessonChatResource[];
+  lesson_arc?: LessonArc | null;
   next_action: "reply" | "run_code" | "choose" | "retry" | "rescue" | "continue" | "complete";
   guardrail: {
     redirected: boolean;

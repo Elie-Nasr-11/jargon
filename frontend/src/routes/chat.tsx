@@ -5,6 +5,7 @@ import {
   AlertCircle,
   AudioLines,
   Check,
+  ChevronDown,
   ClipboardList,
   Code2,
   Copy,
@@ -63,6 +64,7 @@ import type {
   LearningTurn,
   Lesson,
   LessonActivity,
+  LessonArc,
   LessonChatResource,
   LiveSessionViewer,
   MentorPreferences,
@@ -138,10 +140,115 @@ function mentorToPreferences(mentor: MentorConfig): MentorPreferences {
   };
 }
 
+// Client-side lesson arc from the fetched activities + the session cursor, so progress shows
+// immediately on load / resume. Per-turn envelopes carry an authoritative lesson_arc that
+// supersedes this. Null for single-step lessons (nothing to show).
+function deriveLessonArc(
+  activities: LessonActivity[],
+  currentActivityId: string | null,
+): LessonArc | null {
+  if (!Array.isArray(activities) || activities.length <= 1) return null;
+  const sorted = [...activities].sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
+  const titleOf = (a: LessonActivity, i: number) => a.title || `Step ${i + 1}`;
+  let idx = sorted.findIndex((a) => a.id === currentActivityId);
+  if (idx < 0) idx = 0;
+  const completed = sorted.slice(0, idx).map((a, i) => ({ step: i + 1, title: titleOf(a, i) }));
+  const upcoming = sorted
+    .slice(idx + 1)
+    .map((a, i) => ({ step: idx + 2 + i, title: titleOf(a, idx + 1 + i) }));
+  return {
+    step: idx + 1,
+    total: sorted.length,
+    current: { title: titleOf(sorted[idx], idx) },
+    completed,
+    upcoming,
+    next: upcoming[0] || null,
+  };
+}
+
 function lessonSubtitle(lesson: Lesson) {
   const path = [lesson.course_title, lesson.unit_title].filter(Boolean).join(" · ");
   return (
     [path || lesson.module, lesson.level].filter(Boolean).join(" · ") || lesson.tutor_prompt || ""
+  );
+}
+
+// A slim "Step N of M" strip under the header + an expandable roadmap of the lesson steps
+// (done / current / upcoming), so the student sees the arc the mentor is guiding them through.
+function LessonProgress({ arc }: { arc: LessonArc }) {
+  const [open, setOpen] = useState(false);
+  if (arc.total <= 1) return null;
+  const steps: { step: number; title: string; state: "done" | "current" | "upcoming" }[] = [
+    ...arc.completed.map((s) => ({ ...s, state: "done" as const })),
+    ...(arc.current
+      ? [{ step: arc.step, title: arc.current.title, state: "current" as const }]
+      : []),
+    ...arc.upcoming.map((s) => ({ ...s, state: "upcoming" as const })),
+  ];
+  return (
+    <div className="mx-auto w-full max-w-[760px] px-5 pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 rounded-full border border-border bg-background/60 px-3.5 py-2 text-left transition-colors hover:bg-muted/50"
+      >
+        <span className="flex flex-1 items-center gap-1" aria-hidden>
+          {Array.from({ length: arc.total }).map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 flex-1 rounded-full ${
+                i < arc.step - 1
+                  ? "bg-foreground/35"
+                  : i === arc.step - 1
+                    ? "bg-foreground"
+                    : "bg-border"
+              }`}
+            />
+          ))}
+        </span>
+        <span className="shrink-0 text-[12px] font-medium text-foreground">
+          Step {arc.step} of {arc.total}
+        </span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+          strokeWidth={2}
+        />
+      </button>
+      {open ? (
+        <ol className="mt-2 space-y-0.5 rounded-2xl border border-border bg-background/70 p-2">
+          {steps.map((s) => (
+            <li key={s.step} className="flex items-center gap-2.5 px-2 py-1.5 text-[13px]">
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                  s.state === "done"
+                    ? "bg-success/15 text-success"
+                    : s.state === "current"
+                      ? "bg-foreground text-background"
+                      : "border border-border text-muted-foreground"
+                }`}
+              >
+                {s.state === "done" ? <Check className="h-3 w-3" strokeWidth={3} /> : s.step}
+              </span>
+              <span
+                className={
+                  s.state === "current" ? "font-medium text-foreground" : "text-muted-foreground"
+                }
+              >
+                {s.title}
+              </span>
+              {s.state === "current" ? (
+                <span className="ml-auto text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                  now
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
   );
 }
 
@@ -331,6 +438,7 @@ function ChatPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [activities, setActivities] = useState<LessonActivity[]>([]);
   const [learningSession, setLearningSession] = useState<LearningSession | null>(null);
+  const [lessonArc, setLessonArc] = useState<LessonArc | null>(null);
   const [lessonId, setLessonId] = useState<string>("lesson1");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [mentor, setMentor] = useState<MentorConfig>(DEFAULT_MENTOR);
@@ -419,6 +527,7 @@ function ChatPage() {
   ) => {
     setSurfaceError("");
     setSending(true);
+    setLessonArc(null); // clear immediately so no stale strip flashes during the fetch
     try {
       const [lessonActivities, latest] = await Promise.all([
         fetchLessonActivities(nextLessonId),
@@ -427,6 +536,8 @@ function ChatPage() {
       setActivities(lessonActivities);
       setLearningSession(latest);
       setSessionId(latest?.id || null);
+      // Show progress immediately (envelopes will supersede with the authoritative arc).
+      setLessonArc(deriveLessonArc(lessonActivities, latest?.current_activity_id || null));
 
       if (latest) {
         const [turns, comments] = await Promise.all([
@@ -456,6 +567,7 @@ function ChatPage() {
           ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
           : null,
       );
+      if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
       setMsgs([envelopeMessage(envelope)]);
     } catch (error) {
       const message = (error as Error).message || "Could not load the live lesson.";
@@ -638,6 +750,7 @@ function ChatPage() {
           ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
           : previous,
       );
+      if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
       replaceThinking(thinkingId, envelopeMessage(envelope));
       return envelope;
     } catch (error) {
@@ -682,6 +795,7 @@ function ChatPage() {
           ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
           : previous,
       );
+      if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
       replaceThinking(thinkingId, envelopeMessage(envelope));
     } catch (error) {
       replaceThinking(thinkingId, {
@@ -742,6 +856,7 @@ function ChatPage() {
           ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
           : previous,
       );
+      if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
       replaceThinking(thinkingId, envelopeMessage(envelope));
     } catch (error) {
       replaceThinking(thinkingId, {
@@ -872,6 +987,8 @@ function ChatPage() {
           </div>
         </div>
       </header>
+
+      {lessonArc ? <LessonProgress arc={lessonArc} /> : null}
 
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
         {activeLiveViewers.length ? (

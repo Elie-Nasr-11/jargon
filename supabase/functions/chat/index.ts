@@ -143,6 +143,7 @@ type Envelope = {
   exercise: unknown | null;
   assessment: unknown | null;
   resources?: LessonChatResource[];
+  lesson_arc?: LessonArc | null;
   next_action: NextAction;
   guardrail: { redirected: boolean; reason: string | null };
 };
@@ -268,6 +269,7 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     exercise: partial.exercise ?? null,
     assessment: partial.assessment ?? null,
     resources: Array.isArray(partial.resources) ? partial.resources : [],
+    lesson_arc: partial.lesson_arc ?? null,
     next_action: nextAction(partial.next_action),
     guardrail: {
       redirected: partial.guardrail?.redirected === true,
@@ -2534,6 +2536,7 @@ async function handleTypedRequest(
       choices: finalFlow.choices,
       assessment,
       resources: resourcesForResponse(context.resources, answer),
+      lesson_arc: lessonArc,
       next_action: finalFlow.nextAction,
       reply:
         typeof parsed.reply === "string" && parsed.reply.trim()
@@ -2562,15 +2565,14 @@ async function handleTypedRequest(
       envelope.next_action = "reply";
       envelope.choices = [];
       // Situate the hand-off in the lesson arc: what just finished, progress, what's next.
-      // Name the NEXT title from the activity actually being advanced to (advanceToActivityId),
-      // not lessonArc.next, so the two can't disagree if two steps share a position.
-      const nextTitle = advanceToActivityId
-        ? String(
-            context.activities.find(
-              (a) => String(a.id) === advanceToActivityId,
-            )?.title || "",
-          )
-        : "";
+      // Use the activity actually being advanced to (advanceToActivityId), so the "next"
+      // title and the progress step can't disagree if two steps share a position.
+      const nextActivityRow = advanceToActivityId
+        ? context.activities.find(
+            (a) => String(a.id) === advanceToActivityId,
+          ) || null
+        : null;
+      const nextTitle = nextActivityRow ? String(nextActivityRow.title || "") : "";
       const arcSuffix =
         lessonArc && nextTitle
           ? `That completes ${
@@ -2578,6 +2580,10 @@ async function handleTypedRequest(
             } — step ${lessonArc.step} of ${lessonArc.total} done. Next up: "${nextTitle}". Send a message when you're ready.`
           : "That completes this part — send a message when you're ready for the next part.";
       envelope.reply = `${envelope.reply}\n\n${arcSuffix}`.trim();
+      // Advance the progress indicator in sync with the hand-off (the session cursor just
+      // moved to the next activity), so the client shows the new step immediately.
+      envelope.lesson_arc =
+        buildLessonArc(context.activities, nextActivityRow) ?? envelope.lesson_arc;
     }
 
     // Misconception memory: persist any recurring conceptual error the mentor flagged.
