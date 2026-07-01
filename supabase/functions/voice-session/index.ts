@@ -10,7 +10,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const REALTIME_MODEL = Deno.env.get("OPENAI_REALTIME_MODEL") || "gpt-realtime";
+const REALTIME_MODEL = Deno.env.get("OPENAI_REALTIME_MODEL") || "gpt-realtime-2";
 const TTS_MODEL = Deno.env.get("OPENAI_TTS_MODEL") || "gpt-4o-mini-tts";
 const TRANSCRIBE_MODEL = Deno.env.get("OPENAI_TRANSCRIBE_MODEL") || "gpt-4o-mini-transcribe";
 const AUDIO_BUCKET = "mentor-audio-cache";
@@ -266,8 +266,13 @@ async function createRealtimeSession(config: Config, user: DbRow, body: DbRow): 
     tool_choice: "auto",
   };
 
+  // OpenAI's /v1/realtime/calls reads `sdp` as an application/sdp part (the curl form is
+  // `-F sdp=@offer.sdp`). Sending it as a plain string field made OpenAI see an empty/
+  // unterminated offer ("failed to unmarshal SDP: EOF"), so send it as a file part with a
+  // guaranteed trailing newline instead.
+  const sdpBody = sdp.endsWith("\n") ? sdp : `${sdp}\r\n`;
   const form = new FormData();
-  form.set("sdp", sdp);
+  form.set("sdp", new Blob([sdpBody], { type: "application/sdp" }), "offer.sdp");
   form.set("session", JSON.stringify(sessionConfig));
 
   const startedAt = Date.now();
