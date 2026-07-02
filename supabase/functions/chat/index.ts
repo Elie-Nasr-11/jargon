@@ -2026,7 +2026,7 @@ async function loadContext(
     ),
     loadMany(
       config,
-      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=5&select=id,title,description,resource_type,display_mode,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata`,
+      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=5&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata`,
     ),
     loadMany(
       config,

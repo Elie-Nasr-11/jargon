@@ -6,6 +6,23 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-02 (HOTFIX: lesson_resources.display_mode does not exist)
+
+Summary: Phase D added display_mode to the lesson_resources select in loadContext assuming the
+column existed — it never has (the old B13 note "display_mode never selected" was wrong: it is a
+LessonChatResource WIRE-TYPE field with no backing column; resourceForEnvelope always coerced the
+missing value to "card"). PostgREST rejected the whole wave-1 query, so every typed chat turn
+500ed from the Phase D deploy until this fix. Fix: removed display_mode from the select (exact
+pre-D column list); resourceForEnvelope untouched (still defaults "card"). If teachers ever
+author display modes, add the column via migration FIRST.
+Files changed: supabase/functions/chat/index.ts (one line), docs/HANDOFF.md.
+Tests run: node --experimental-strip-types --check; python3 -m unittest
+tests.test_supabase_chat_function (12 OK). Verified live schema via information_schema before
+and confirmed the first post-deploy turn against runtime_events after.
+Remaining concerns: none for this fix; lesson learned recorded — never add a column to a select
+without checking information_schema (the adversarial review lenses checked trimmed selects
+against consumers but not ADDED columns against the schema).
+
 ## Claude -> Codex / Human - 2026-07-02 (Tutor v2.0 Phase D: latency + cleanup — DONE)
 
 Summary: A tutor turn's I/O collapsed from ~9 serial reads + ~7 serial writes to two parallel
