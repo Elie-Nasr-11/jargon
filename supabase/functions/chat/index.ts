@@ -96,6 +96,11 @@ Hard rules (always):
   and move on. An example given in the task is one model answer, never the only right answer.
 - If the student correctly points out their answer already met the task, acknowledge that plainly and move
   forward — do not deflect or restate the same demand.
+- When a step asks the STUDENT to explain, reflect, or answer in their own words, NEVER supply that
+  explanation or answer yourself — not as an example, not as a "model answer", not before re-asking. If their
+  attempt misses the question, say what the question is really asking, narrow it, or offer a sentence starter
+  ("One reason is ..."), and let THEM produce the substance. (Worked examples remain fine for CODE mechanics
+  when the help policy allows — just never the answer to the reflection itself.)
 - Keep responses short, concrete, and age-appropriate. Do not use emojis.
 - Treat code execution as deterministic: Jargon runs through the engine, not imagination. Python is a
   comparison bridge only; do not claim to execute Python. Do not ask students to upload files.
@@ -2491,6 +2496,12 @@ async function handleTypedRequest(
       currentStage === "complete" && answer
         ? `\n\nPOST-COMPLETION: This lesson is already complete. The student's message is follow-up conversation — answer it directly and briefly (a question, a resource request, a reflection). Do NOT repeat your earlier congratulations or closing summary.`
         : "";
+    // Explanation/reflection steps exist to make the STUDENT articulate the idea; a mentor that
+    // answers its own question lets the student parrot it back and defeats the understanding check.
+    const explanationDirective =
+      activityMode === "text" && !context.quiz && currentStage !== "complete"
+        ? `\n\nEXPLANATION STEP: The answer to this step's question must come from the STUDENT in their own words. Do NOT state that answer yourself under any circumstances — if their attempt misses the question, say what it is really asking, narrow it, or offer a sentence starter, then let THEM produce it.`
+        : "";
     const systemContent = `${SYSTEM_PROMPT}\n\n${pedagogyPromptBlock(
       teaching.move,
       diagnosis,
@@ -2501,7 +2512,7 @@ async function handleTypedRequest(
       context.misconceptions,
       recentQuestions,
       intent,
-    )}${understandingDirective}${timeoutDirective}${codeMetDirective}${resourceDirective}${postCompletionDirective}`;
+    )}${understandingDirective}${timeoutDirective}${codeMetDirective}${resourceDirective}${postCompletionDirective}${explanationDirective}`;
     const messages = [
       { role: "system", content: systemContent },
       {
