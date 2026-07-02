@@ -96,11 +96,14 @@ Hard rules (always):
   and move on. An example given in the task is one model answer, never the only right answer.
 - If the student correctly points out their answer already met the task, acknowledge that plainly and move
   forward — do not deflect or restate the same demand.
-- When a step asks the STUDENT to explain, reflect, or answer in their own words, NEVER supply that
-  explanation or answer yourself — not as an example, not as a "model answer", not before re-asking. If their
-  attempt misses the question, say what the question is really asking, narrow it, or offer a sentence starter
-  ("One reason is ..."), and let THEM produce the substance. (Worked examples remain fine for CODE mechanics
-  when the help policy allows — just never the answer to the reflection itself.)
+- When a step asks the STUDENT to explain, reflect, or answer in their own words, do NOT hand them this
+  step's target answer or its substance before they have produced it — not directly, not as a "model
+  answer", and not as a thin analogy they can just restate. You MAY and SHOULD still: correct a wrong claim,
+  say what the question is really asking, explain any term or background it uses, narrow it, or offer a
+  sentence starter ("One reason is ..."). If a genuinely lost student still can't get there after that, teach
+  the underlying idea simply with a fresh concrete example — but let THEM form the step's own conclusion.
+  (Worked examples for CODE mechanics remain fine under the help policy; this rule is only about not
+  answering the reflection for them.)
 - Keep responses short, concrete, and age-appropriate. Do not use emojis.
 - Treat code execution as deterministic: Jargon runs through the engine, not imagination. Python is a
   comparison bridge only; do not claim to execute Python. Do not ask students to upload files.
@@ -1257,6 +1260,7 @@ function selectTeachingMove(
   requestedRung: number,
   isIntro: boolean,
   intent: string,
+  isTextStep: boolean,
 ): { move: TeachingMove; hintRung: number } {
   const wantRank = MODE_HELP_WANT[mode] ?? 3;
   const ceil = Math.min(HELP_RANK[policy.helpCeiling] ?? 3, wantRank);
@@ -1285,6 +1289,9 @@ function selectTeachingMove(
   // Explicit student help requests (Hint / Show-me-how).
   if (helpRequest === "hint") return { move: "hint", hintRung: rung };
   if (helpRequest === "show_me_how") {
+    // A worked example on a text explanation/reflection step would hand the student a
+    // near-answer to restate; scaffold the next step instead. Code steps still model.
+    if (isTextStep) return { move: "scaffold", hintRung: Math.max(2, rung) };
     return ceil >= HELP_RANK.worked_example
       ? { move: "model", hintRung: rung }
       : { move: "hint", hintRung: Math.max(2, rung) };
@@ -1313,7 +1320,7 @@ function selectTeachingMove(
       : { move: "diagnose", hintRung: 0 };
   }
   if (diagnosis.difficulty === "procedural") {
-    return ceil >= HELP_RANK.worked_example
+    return ceil >= HELP_RANK.worked_example && !isTextStep
       ? { move: "model", hintRung: rung }
       : { move: "scaffold", hintRung: rung };
   }
@@ -2327,6 +2334,10 @@ async function handleTypedRequest(
     orchestratorAssessment,
   );
   const helpPolicy = resolveHelpPolicy(context.lesson);
+  // A free-text explanation/reflection step (not a code or quiz step). Used to keep the teaching
+  // move off worked-examples here (they'd hand the student the answer to restate).
+  const activityMode = responseMode(context.activity?.response_mode, "code");
+  const isTextStep = activityMode === "text" && !context.quiz;
   const teaching = selectTeachingMove(
     diagnosis,
     helpPolicy,
@@ -2338,6 +2349,7 @@ async function handleTypedRequest(
     requestedRung,
     currentStage === "intro",
     intent,
+    isTextStep,
   );
   const answersForbidden =
     helpPolicy.finalAnswerPolicy === "never" ||
@@ -2387,7 +2399,6 @@ async function handleTypedRequest(
     // the student demonstrated the objective; its verdict hard-gates completion below and is
     // surfaced to the mentor so the reply matches. Skipped for pure confusion/meta messages
     // (not an explanation attempt) and whenever there is no gradeable text.
-    const activityMode = responseMode(context.activity?.response_mode, "code");
     // Only true text answers carry the student's words; a "file" answer's content is a
     // placeholder, so grading it would judge garbage — leave those to the mentor path.
     const isTextExplanation =
@@ -2498,10 +2509,20 @@ async function handleTypedRequest(
         : "";
     // Explanation/reflection steps exist to make the STUDENT articulate the idea; a mentor that
     // answers its own question lets the student parrot it back and defeats the understanding check.
-    const explanationDirective =
-      activityMode === "text" && !context.quiz && currentStage !== "complete"
-        ? `\n\nEXPLANATION STEP: The answer to this step's question must come from the STUDENT in their own words. Do NOT state that answer yourself under any circumstances — if their attempt misses the question, say what it is really asking, narrow it, or offer a sentence starter, then let THEM produce it.`
-        : "";
+    // Three cases: (a) grader already passed — stay silent, understandingDirective owns the turn;
+    // (b) the step is concluding after the student struggled (stuck cap) without demonstrating —
+    // let the mentor state the idea plainly so they leave with it; (c) otherwise — don't pre-answer.
+    const textStepTurn =
+      activityMode === "text" && !context.quiz && currentStage !== "complete";
+    const stepConcluding =
+      draftFlow.nextAction === "complete" || draftFlow.stage === "complete";
+    const explanationDirective = !textStepTurn
+      ? ""
+      : gradedUnderstanding?.demonstrated
+        ? ""
+        : stepConcluding
+          ? `\n\nEXPLANATION STEP (CONCLUDING): The student has worked at this several times without fully landing it and the step is now wrapping up. Give them the idea plainly in one or two sentences so they leave with it, then close warmly. This is the one time you state the answer — because they are done trying, not instead of trying.`
+          : `\n\nEXPLANATION STEP: The answer must come from the STUDENT in their own words — do NOT hand them this step's conclusion before they produce it. You may correct a wrong claim, clarify what the question is asking, narrow it, or give a sentence starter. If they are genuinely lost, teach the underlying idea with a fresh concrete example, but let them form the conclusion.`;
     const systemContent = `${SYSTEM_PROMPT}\n\n${pedagogyPromptBlock(
       teaching.move,
       diagnosis,
