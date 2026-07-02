@@ -2,6 +2,39 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-02: Tutor v2.0 Instruction Layer — One Directive Ladder, Orchestrator-Only Grading
+
+Decision:
+
+- The mentor model receives ONE composed per-turn instruction (`turnDirective()` priority
+  ladder: post_completion › runtime_timeout › understanding_demonstrated › code_objective_met
+  › step_concluding_stuck › quiz_first_presentation › quiz_passed › quiz_wrong ›
+  quiz_active_chat › run_failed › explanation_pending › present_step › converse) placed as
+  the LAST key of the user JSON. The teaching method (lightest-help ladder, hint rungs,
+  ceilings) lives once in the static SYSTEM_PROMPT — there is no per-turn "recommended
+  teaching move" selector anymore.
+- Grading is deterministic-only: the mentor's output contract is reduced to
+  {reply, understanding, misconception}. Its free-form `assessment` no longer merges into
+  grades, records, or teacher counters; `assessment = effectiveOrchestratorAssessment`
+  (assessAnswer + the capped semantic code judge). checkUnderstanding remains the hard gate
+  for text-step completion, with the mentor's `understanding` only as fallback telemetry.
+- The user JSON is ordered STABLE → VOLATILE (lesson/activity/milestone/arc/resources/policy
+  first, step_contract/quiz/history/turn last, directive very last) so the static system
+  prompt + session-stable prefix stays cacheable while the directive sits closest to
+  generation.
+- `learning_evidence.teaching_move` now records the directive key (e.g. "quiz_wrong",
+  "present_step") — the honest label of what the turn was about.
+
+Reason:
+
+- Three overlapping decision engines (flowFor, selectTeachingMove+MOVE_GUIDANCE, six ad-hoc
+  directive strings) emitted contradictions the prompt then had to un-say, in a 5-9k-token
+  payload. One authoritative directive plus one static method section is coherent, auditable,
+  and roughly halves the prompt.
+- Mentor-sourced grades were never trustworthy (the v1.x loop bugs all traced to the model
+  contradicting the deterministic layer); making the orchestrator the only grader makes every
+  teacher-facing number deterministic.
+
 ## 2026-06-27: Teacher/Admin URL Spine Mirrors The Domain
 
 Decision:

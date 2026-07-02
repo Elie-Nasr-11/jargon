@@ -45,92 +45,98 @@ const CHAT_RATE_LIMIT_MAX = 30;
 
 const SYSTEM_PROMPT = `You are the Jargon Mentor, a warm, curious, firm tutor for school children.
 
-You teach through a real back-and-forth conversation — diagnosing what the student needs and adapting — not by
-reading a script. The lesson teaches logical thinking through the bridge: natural speech -> baby Jargon ->
-Jargon pseudocode -> Python bridge when the learner is ready.
+You teach through a real back-and-forth conversation — diagnosing what the student needs and adapting — never
+by reading a script. The lesson teaches logical thinking through a language bridge:
+natural speech -> baby Jargon -> Jargon pseudocode -> Python bridge when the learner is ready.
+Code runs deterministically through the Jargon engine; Python is a comparison bridge only — never claim to
+execute it, and never ask the student to upload files.
 
-Every turn, FIRST read the student's latest message and respond to what they actually said:
-- Acknowledge what they got right, by name, and build on their words. Vary how you acknowledge — do NOT open
-  every turn with praise. Praise only when it is genuinely earned and keep it brief; prefer building on the
-  student's idea over complimenting it.
+Each turn you receive one JSON payload: "directive" is the orchestrator's authoritative read of this turn —
+follow it, adapting its wording to the conversation. "turn" is the student's latest message plus grading
+facts; "policy" is the teacher's help policy; "student" is who you're teaching; "history" is the recent
+conversation, oldest first.
+
+CONVERSATION CRAFT — every turn:
+- Read the student's latest message FIRST and respond to what it actually says. Credit ONLY this latest
+  message — never attribute an earlier turn's answer to it (if they now said "a wheel moves a car", do not
+  congratulate them for "scissors and cutting").
 - If they already answered correctly or completely, CONFIRM it, add one sentence of consolidation, and move
-  forward. Do NOT ask the same thing again — recognizing understanding and progressing is required.
-- Credit the student's LATEST message only: when you acknowledge, confirm, or quote their answer, use the
-  words from THIS message — never attribute an earlier turn's answer to the current one (if they now said
-  "a wheel moves a car", do not congratulate them for "scissors and cutting").
-- Never repeat a question you have already asked, in ANY rewording (your recent questions are listed for you),
-  and never re-ask something the student has already answered correctly. Vary and advance.
-- If they say something incorrect, correct that specific point clearly and kindly.
-- Respond to their intent: "I don't understand" -> explain the exact sticking point simply with a concrete
-  example (don't re-ask the same question); a request to summarize -> summarize what you've covered;
-  frustration or "didn't we discuss this" -> acknowledge it and move on or summarize; a breakthrough ("oh!")
-  -> celebrate briefly and advance.
-- If the student signals in ANY wording that they don't understand or didn't get it (e.g. "I didn't figure it
-  out", "not really", "I'm lost", "no clue"), do NOT praise or ask a new question — FIRST explain the specific
-  sticking point in plain words with a concrete example, then check in.
-- The recommended teaching move (provided below) is guidance, not a script — follow the student's real need.
+  forward — recognizing understanding and progressing is required.
+- Never repeat a question you already asked, in ANY rewording (student.recent_questions lists them), and
+  never re-ask what they already answered correctly. Vary your openings; do not open every turn with praise —
+  praise briefly and only when earned, and prefer building on their idea over complimenting it.
+- Confusion in ANY wording ("not really", "no clue", "I'm lost", "I didn't figure it out"): do NOT praise or
+  ask a new question — FIRST explain the specific sticking point plainly with one concrete example, then
+  check in.
+- A summary request -> summarize what you've covered. Frustration ("didn't we discuss this") -> acknowledge
+  it and change tactic. A breakthrough ("oh, I get it") -> affirm briefly and move on.
+- If they say something incorrect, correct that specific point clearly and kindly. If a known misconception
+  from student.misconceptions resurfaces, correct it directly.
+- Shape: acknowledge their message -> do this step's work -> situate in the arc when it helps -> end with
+  exactly ONE clear next action.
 
-Guide the lesson arc (when "lesson_arc" is present it tells you step N of M, what's DONE, and what's NEXT):
-- Situate the student. When this step builds on an earlier one, connect them ("now that you've got loops,
-  ...") ; when you wrap a step, name what's coming ("nice — next we'll ..."). Reference the arc naturally;
-  do NOT recite the whole list or announce the step number every turn.
-- Add context to transitions. Prefer "Now that we've done X, let's ..." or "Before we get to Y, let's first
-  ..." over a bare "let's do another exercise." Make each move feel like a deliberate step toward the goal.
-- Do NOT jump ahead: teach only the CURRENT step; you may PREVIEW the next step's title but never do its work
-  or reveal its answer early.
+TEACHING METHOD — always the LIGHTEST help that unblocks, escalating in this order:
+1. One pointed question that exposes the student's thinking.
+2. ONE hint at the given rung (turn.hint_rung, 1-4): each rung strictly more revealing than the last; rung 4
+   is very revealing but still never the full answer.
+3. Name the next single step and ask them to do just that.
+4. A worked example on a SIMILAR item — never the assigned one — then they try the assigned one themselves.
+Never exceed policy.help_ceiling (clarify < hints < guided < worked_example < feedback < study). When
+policy.require_attempt_first is true, give no substantive help before a real attempt — a help request is NOT
+an attempt; ask one short question that gets an attempt going. When policy.answers_forbidden_this_turn is
+true, never give the final answer or complete solution this turn.
 
-Shape each turn: acknowledge the student's message -> do the current step's work (teach / check / correct) ->
-situate it in the arc when it helps -> end with exactly ONE clear next action.
+Explanation / reflection steps: the STUDENT must produce the conclusion in their own words. Never answer your
+own reflection question, and never hand them the target answer — not directly, not as a "model answer", not
+as a thin analogy they can restate. You MAY correct a wrong claim, explain what the question is really
+asking, narrow it, or offer a sentence starter ("One reason is ..."). If a genuinely lost student still can't
+get there, teach the underlying idea with a fresh concrete example — but let THEM form the conclusion.
+(Worked examples for CODE mechanics stay fine under the help policy; this rule is about the reflection
+itself.) Only when the directive says the step is concluding after a struggle do you state the idea plainly
+ONCE, then close warmly.
 
-Pending work ("pending_checkpoints" lists assignments/assessments assigned to THIS student for this lesson
-that they haven't finished): when it's relevant — as the lesson wraps, or if the student asks what's next or
-whether they're done — point them to it warmly ("there's an assignment, 'Signals practice', to try — open it
-from the panel above the message box"). Mention a due date if there is one. Don't bring it up every turn, and
-never invent checkpoints that aren't listed.
+Quiz steps: while options are on screen the student answers by tapping them — point at the options, do not
+re-read or re-narrate them (introduce the question briefly only when the directive says it is the first
+presentation). Wrong choice -> brief targeted feedback on why that choice fails, then point back at the
+options.
 
-Hard rules (always):
+Code steps: a failed run gets the lightest help that unblocks the ONE thing to fix. A runtime timeout is our
+infrastructure hiccup, never the student's mistake — reassure them it's on us and ask them to run it again;
+never grade or critique timed-out code. When the grade says the code accomplishes the objective, affirm once
+and conclude — do not demand rewording, a specific topic, or a match to a shown example.
+
+Never invent requirements the task does not state. When a task asks for the student's OWN example, ANY
+correct on-topic answer is acceptable — accept it and move on; a shown example is one model answer, never the
+only one. If the student correctly points out their answer already met the task, acknowledge that plainly and
+progress — do not restate the same demand.
+
+GOVERNANCE:
+- The lesson arc ("arc": step N of M, done, next): situate naturally ("now that you've got loops, ..."),
+  connect steps at hand-offs, and preview only the NEXT step's title — never do a later step's work or reveal
+  its answer early. Don't recite the whole list or announce the step number every turn.
+- "checkpoints" lists unfinished assignments/assessments docked above the message box. When relevant (the
+  lesson wraps, or they ask what's next) point the student to one warmly by title — they open it from the
+  panel above the message box; mention a due date if present. Nudge, don't block; never invent one.
+- "resources": when the directive says card(s) are attached below your reply, tell the student to tap Open on
+  the card — never say you can't share it. Never claim a resource was viewed unless resource_interactions
+  proves it. Cite document chunks by resource title/page and audio/video chunks by title/time range.
+- After the lesson is complete, answer follow-ups directly and briefly; never repeat congratulations.
 - Stay on the current lesson goal; if the student drifts, briefly acknowledge and redirect.
-- Do NOT invent requirements the objective does not state. Never demand a particular topic, a "positive"
-  outcome, specific wording, or that the answer match a shown example — unless the objective explicitly asks
-  for it. When a task says to write their OWN example, ANY correct, on-topic answer is acceptable; accept it
-  and move on. An example given in the task is one model answer, never the only right answer.
-- If the student correctly points out their answer already met the task, acknowledge that plainly and move
-  forward — do not deflect or restate the same demand.
-- When a step asks the STUDENT to explain, reflect, or answer in their own words, do NOT hand them this
-  step's target answer or its substance before they have produced it — not directly, not as a "model
-  answer", and not as a thin analogy they can just restate. You MAY and SHOULD still: correct a wrong claim,
-  say what the question is really asking, explain any term or background it uses, narrow it, or offer a
-  sentence starter ("One reason is ..."). If a genuinely lost student still can't get there after that, teach
-  the underlying idea simply with a fresh concrete example — but let THEM form the step's own conclusion.
-  (Worked examples for CODE mechanics remain fine under the help policy; this rule is only about not
-  answering the reflection for them.)
-- Keep responses short, concrete, and age-appropriate. Do not use emojis.
-- Treat code execution as deterministic: Jargon runs through the engine, not imagination. Python is a
-  comparison bridge only; do not claim to execute Python. Do not ask students to upload files.
-- Honor the integrity policy and help ceiling you are given.
+- policy.mentor_mode, policy.tone and policy.pace bias your approach; the directive always wins.
 
-Presentation (the client styles your text):
-- When you affirm, make the OPENING sentence short and punchy and end it with "!" (e.g. "Nice work!",
-  "Exactly right!") — it is rendered as a headline. Keep it genuine; skip it when there's nothing to affirm.
-- Emphasize 1-3 key concept words inline with **double asterisks** (rendered bold), e.g. a **list**, the
-  **index**. Do not over-emphasize — most words stay plain.
+STYLE: short, concrete replies with vocabulary matched to student.grade_band. No emojis. When you affirm,
+open with a short punchy sentence ending in "!" ("Exactly right!") — it renders as a headline; skip it when
+nothing is earned. Emphasize 1-3 key concept words with **double asterisks**; most words stay plain.
 
-Set "understanding" to reflect whether the student's words show they understand THIS step's objective:
-demonstrated=true only when their explanation/answer is essentially correct and complete.
-
-Return only valid JSON matching this shape:
+OUTPUT — return ONLY this JSON object, nothing else:
 {
-  "status": "ok",
   "reply": "student-facing mentor message",
-  "stage": "intro | teach | practice | assessment | review | complete",
-  "response_mode": "text | code | multiple_choice | file",
-  "choices": [],
-  "exercise": null,
-  "assessment": null,
   "understanding": { "demonstrated": false, "level": "none | partial | solid", "note": "" },
-  "next_action": "reply | run_code | choose | retry | rescue | continue | complete",
-  "guardrail": { "redirected": false, "reason": null }
-}`;
+  "misconception": null
+}
+Set understanding.demonstrated=true ONLY when the student's own words in the LATEST message are essentially
+correct and complete for THIS step's objective. When you spot a recurring conceptual error worth remembering,
+set "misconception" to { "skill_key": "...", "pattern": "...", "hint": "..." }; otherwise keep it null.`;
 
 type Stage =
   | "intro"
@@ -223,17 +229,8 @@ type OpenAIResult = {
   latencyMs: number;
 };
 
-type ModelRoute =
-  | "default"
-  | "grading"
-  | "rescue"
-  | "resource_context"
-  | "understanding";
-type ModelUsageTaskType =
-  | "mentor_turn"
-  | "grading"
-  | "rescue"
-  | "summarization";
+type ModelRoute = "default" | "understanding";
+type ModelUsageTaskType = "mentor_turn" | "grading";
 
 type Assessment = {
   score?: number;
@@ -641,37 +638,23 @@ async function loadOrCreateSession(
 // configured via env so Jargon's value stays in the governance layer, not a model.
 // Defaults to OpenAI so production behavior is unchanged unless TUTOR_PROVIDER flips.
 
+// Two routes only (v2.0): the student-facing conversation runs on a STRONG model (it
+// writes every word the student reads); the understanding-check graders stay pinned to a
+// cheap literal so flipping the conversation model can never silently make the
+// high-volume graders expensive.
 function modelFor(route: ModelRoute): string {
-  // Prefer TUTOR_MODEL_*; fall back to the legacy OPENAI_MODEL_* then sane defaults.
-  // v2.0: the student-facing conversation runs on a STRONG model by default (it writes every
-  // word the student reads); the graders stay pinned to a cheap literal so flipping the
-  // conversation model can never silently make the high-volume graders expensive.
-  const def = envText(
+  if (route === "understanding") {
+    return envText("TUTOR_MODEL_UNDERSTANDING", "gpt-4o-mini");
+  }
+  return envText(
     "TUTOR_MODEL_CONVERSATION",
     envText("TUTOR_MODEL_DEFAULT", envText("OPENAI_MODEL_DEFAULT", "gpt-4o")),
   );
-  const strong = envText("TUTOR_MODEL_STRONG", envText("OPENAI_MODEL_GRADING", "gpt-4o"));
-  if (route === "grading") return envText("TUTOR_MODEL_GRADING", strong);
-  if (route === "rescue") return envText("TUTOR_MODEL_RESCUE", envText("OPENAI_MODEL_RESCUE", strong));
-  if (route === "resource_context") {
-    return envText("TUTOR_MODEL_RESOURCE_CONTEXT", envText("OPENAI_MODEL_RESOURCE_CONTEXT", strong));
-  }
-  // The understanding-check is a cheap, high-volume grader — pinned to the small model
-  // (deterministic via temperatureFor), independent of the conversation default.
-  if (route === "understanding") return envText("TUTOR_MODEL_UNDERSTANDING", "gpt-4o-mini");
-  return def;
 }
 
 function temperatureFor(route: ModelRoute): number {
-  // Conversation wants variety (a key fix for the flat re-asking); grading / extraction
-  // want determinism.
-  if (
-    route === "grading" ||
-    route === "resource_context" ||
-    route === "understanding"
-  )
-    return 0.2;
-  if (route === "rescue") return 0.4;
+  // Conversation wants variety (a key fix for the flat re-asking); grading wants determinism.
+  if (route === "understanding") return 0.2;
   const raw = Number(envText("TUTOR_TEMPERATURE_DEFAULT", "0.6"));
   return Number.isFinite(raw) ? Math.max(0, Math.min(1.2, raw)) : 0.6;
 }
@@ -809,20 +792,6 @@ async function callAnthropic(
   };
 }
 
-function modelRouteFor(
-  flow: FlowDecision,
-  _answer: DbRow | null,
-  _assessment: Assessment | null,
-  _context: Awaited<ReturnType<typeof loadContext>>,
-): { route: ModelRoute; taskType: ModelUsageTaskType } {
-  // v2.0: the mentor reply is ALWAYS a conversation turn. Grading is deterministic code
-  // (assessAnswer/checkUnderstanding/code judge), so routing gradeable turns to the
-  // temp-0.2 "grading" model only flattened the mentor's voice on exactly the engaged
-  // turns; resource-context turns are ordinary conversation with extra context.
-  if (flow.nextAction === "rescue") return { route: "rescue", taskType: "rescue" };
-  return { route: "default", taskType: "mentor_turn" };
-}
-
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? (value.filter((item) => typeof item === "string") as string[])
@@ -921,16 +890,6 @@ function expectedOutputFor(
   ).trim();
 }
 
-function passThreshold(activity: DbRow | null, quiz: DbRow | null): number {
-  const activityThreshold = numberOrNull(activity?.pass_score);
-  if (activityThreshold !== null) return activityThreshold;
-  const rubric =
-    quiz?.rubric && typeof quiz.rubric === "object"
-      ? (quiz.rubric as DbRow)
-      : null;
-  return numberOrNull(rubric?.pass_threshold) ?? 1;
-}
-
 function assessAnswer(
   answer: DbRow | null,
   lesson: DbRow | null,
@@ -972,22 +931,33 @@ function assessAnswer(
     };
   }
 
-  return null;
-}
-
-function parsedAssessment(value: unknown): Assessment | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const raw = value as DbRow;
-  const score = numberOrNull(raw.score);
-  const passed = boolOrNull(raw.passed);
-  if (score === null && passed === null && typeof raw.feedback !== "string")
+  if (answer.mode === "multiple_choice") {
+    // Legacy MCQ activity with no bound (published) quiz row: no correct-answer data is
+    // available, so deterministic-only grading would brick the step. Record the tap as a
+    // pass so the step can conclude — but only when the tapped choice actually belongs
+    // to this activity's own choices (junk or foreign choice ids stay ungraded).
+    const ownChoices = Array.isArray(activity?.choices)
+      ? (activity.choices as unknown[])
+      : [];
+    const tapped = String(answer.choice_id || "");
+    const known = ownChoices.some(
+      (choice) =>
+        choice &&
+        typeof choice === "object" &&
+        String((choice as DbRow).id || "") === tapped,
+    );
+    if (tapped && known) {
+      return {
+        score: 1,
+        passed: true,
+        feedback: "Answer recorded.",
+        source: "orchestrator",
+      };
+    }
     return null;
-  return {
-    score: score ?? undefined,
-    passed: passed ?? undefined,
-    feedback: typeof raw.feedback === "string" ? raw.feedback : undefined,
-    source: "mentor",
-  };
+  }
+
+  return null;
 }
 
 function parsedUnderstanding(value: unknown): Understanding | null {
@@ -1126,39 +1096,11 @@ async function checkCodeObjective(
   }
 }
 
-function mergeAssessment(
-  orchestrator: Assessment | null,
-  mentor: Assessment | null,
-): Assessment | null {
-  if (!orchestrator && !mentor) return null;
-  if (!orchestrator) return mentor;
-  if (!mentor) return orchestrator;
-  return {
-    ...mentor,
-    ...orchestrator,
-    feedback: mentor.feedback || orchestrator.feedback,
-  };
-}
-
-// --- Pedagogy decision layer -------------------------------------------------
-// Sits between context-load and the LLM call: diagnose the learner, resolve the
-// teacher's help ceiling against the student's chosen mode, and pick ONE teaching
-// move. Pure + deterministic (no extra model round-trip). It shapes the system
-// prompt + user payload so the model executes a *chosen* move under a *known*
-// integrity ceiling instead of inferring all pedagogy from one generic prompt.
-
-type TeachingMove =
-  | "present"
-  | "diagnose"
-  | "explain"
-  | "model"
-  | "hint"
-  | "scaffold"
-  | "socratic"
-  | "correct"
-  | "retrieve"
-  | "extend"
-  | "reflect";
+// --- Pedagogy signals --------------------------------------------------------
+// Pure + deterministic signals fed to the model: who the student is (diagnosis),
+// the teacher's help policy, detected intent/help requests, and the mentor's own
+// recent questions. The per-turn teaching instruction itself is composed by
+// turnDirective(); the method (lightest-help ladder) lives in the SYSTEM_PROMPT.
 
 type StudentDiagnosis = {
   level: "beginner" | "emerging" | "capable" | "advanced";
@@ -1187,39 +1129,6 @@ const HELP_RANK: Record<string, number> = {
   worked_example: 4,
   feedback: 5,
   study: 6,
-};
-// The help level each student mode *wants* (clamped down to the teacher ceiling).
-const MODE_HELP_WANT: Record<string, number> = {
-  explain: 4,
-  guide: 3,
-  quiz: 2,
-  check: 5,
-  write: 5,
-  challenge: 2,
-};
-
-const MOVE_GUIDANCE: Record<TeachingMove, string> = {
-  present:
-    "PRESENT this step: introduce the task in a sentence or two at the student's grade level and invite them to make their first attempt. Don't pre-empt their thinking, give away the answer, or interrogate them yet.",
-  diagnose:
-    "DIAGNOSE first: ask ONE short question to pinpoint where the student is stuck (the idea, the method, the wording, or just getting started). Do not explain or solve yet.",
-  explain:
-    "EXPLAIN directly and simply, calibrated to the grade band, using one concrete example or analogy, then immediately check understanding with a quick question or tiny task.",
-  model:
-    "MODEL with a WORKED EXAMPLE on a SIMILAR (not the assigned) item: show the steps and your thinking, then ask the student to try the assigned one themselves. Never hand over the assigned answer.",
-  hint: "Give exactly ONE hint at the requested rung, then stop and ask the student to try. Do not reveal the full solution.",
-  scaffold:
-    "SCAFFOLD: name only the NEXT single step, ask the student to do just that step, then wait.",
-  socratic:
-    "Ask ONE guiding question that leads the student toward the next step. Do not give the answer; let them reason.",
-  correct:
-    "Acknowledge what is right first, then point to the ONE specific step that is wrong and why in a sentence, and ask the student to fix just that.",
-  retrieve:
-    "RETRIEVAL PRACTICE: ask a short recall/application question that targets a weak skill. Do not show the answer first; respond after the student answers.",
-  extend:
-    "EXTEND: the student is solid — pose a harder variant, an edge case, or a 'why' question that stretches them.",
-  reflect:
-    "Ask the student to explain HOW they solved it or what strategy helped, to consolidate the learning, and name the strategy.",
 };
 
 function gradeBandFor(
@@ -1308,98 +1217,8 @@ function resolveHelpPolicy(lesson: DbRow | null): HelpPolicy {
   };
 }
 
-function selectTeachingMove(
-  diagnosis: StudentDiagnosis,
-  policy: HelpPolicy,
-  mode: string,
-  answer: DbRow | null,
-  assessment: Assessment | null,
-  hasAttempt: boolean,
-  helpRequest: string,
-  requestedRung: number,
-  isIntro: boolean,
-  intent: string,
-  isTextStep: boolean,
-): { move: TeachingMove; hintRung: number } {
-  const wantRank = MODE_HELP_WANT[mode] ?? 3;
-  const ceil = Math.min(HELP_RANK[policy.helpCeiling] ?? 3, wantRank);
-  const rung = Math.max(1, Math.min(4, requestedRung || 1));
-
-  // Presentation turn (the step hasn't been shown yet): the orchestrator presents the
-  // activity and never grades, so PRESENT the task — don't let attempt-first gating turn
-  // the lesson opener into an interrogation. (Applies even if the turn carried a message.)
-  if (isIntro && !helpRequest) return { move: "present", hintRung: 0 };
-
-  // Confused student: never recommend another socratic re-ask — explain the gap (or
-  // diagnose if a worked explanation isn't allowed). This was the core rigidity bug.
-  if (intent === "confused" && !helpRequest) {
-    return ceil >= HELP_RANK.guided
-      ? { move: "explain", hintRung: 0 }
-      : { move: "diagnose", hintRung: 0 };
-  }
-
-  // Integrity gate: attempt-first required and nothing attempted yet -> never model
-  // or hand over a path; diagnose, or give one gentle hint if explicitly asked.
-  if (policy.requireAttemptFirst && !hasAttempt && assessment?.passed !== true) {
-    if (helpRequest === "hint") return { move: "hint", hintRung: Math.min(rung, 2) };
-    return { move: "diagnose", hintRung: 0 };
-  }
-
-  // Explicit student help requests (Hint / Show-me-how).
-  if (helpRequest === "hint") return { move: "hint", hintRung: rung };
-  if (helpRequest === "show_me_how") {
-    // A worked example on a text explanation/reflection step would hand the student a
-    // near-answer to restate; scaffold the next step instead. Code steps still model.
-    if (isTextStep) return { move: "scaffold", hintRung: Math.max(2, rung) };
-    return ceil >= HELP_RANK.worked_example
-      ? { move: "model", hintRung: rung }
-      : { move: "hint", hintRung: Math.max(2, rung) };
-  }
-
-  // Mode-led bias.
-  if (mode === "quiz") return { move: "retrieve", hintRung: 0 };
-  if (mode === "check") return { move: "correct", hintRung: 0 };
-  if (mode === "write") return { move: "scaffold", hintRung: 0 };
-  if (mode === "challenge") {
-    return {
-      move: assessment?.passed === true ? "extend" : "socratic",
-      hintRung: 0,
-    };
-  }
-
-  // Outcome-led for guide / explain.
-  if (assessment?.passed === true) {
-    return diagnosis.level === "advanced"
-      ? { move: "extend", hintRung: 0 }
-      : { move: "reflect", hintRung: 0 };
-  }
-  if (!hasAttempt && !answer) {
-    return mode === "explain" && ceil >= HELP_RANK.guided
-      ? { move: "explain", hintRung: 0 }
-      : { move: "diagnose", hintRung: 0 };
-  }
-  if (diagnosis.difficulty === "procedural") {
-    return ceil >= HELP_RANK.worked_example && !isTextStep
-      ? { move: "model", hintRung: rung }
-      : { move: "scaffold", hintRung: rung };
-  }
-  if (diagnosis.difficulty === "conceptual") {
-    if (mode === "explain" && ceil >= HELP_RANK.worked_example) {
-      return { move: "explain", hintRung: 0 };
-    }
-    return ceil >= HELP_RANK.guided
-      ? { move: "socratic", hintRung: rung }
-      : { move: "hint", hintRung: rung };
-  }
-  if (diagnosis.difficulty === "careless") return { move: "correct", hintRung: rung };
-  if (diagnosis.difficulty === "confidence") {
-    return { move: "hint", hintRung: Math.max(1, rung) };
-  }
-  return { move: "diagnose", hintRung: 0 };
-}
-
-// Lightweight intent read of the student's latest message. The prompt does the
-// nuance; this just lets us bias the recommended move and surface the signal.
+// Lightweight intent read of the student's latest message, surfaced to the prompt
+// (turn.intent); the model does the nuance.
 const INTENT_PATTERNS: { intent: string; re: RegExp }[] = [
   {
     intent: "frustrated",
@@ -1470,52 +1289,6 @@ function mentorQuestionsFromTurns(turns: DbRow[]): string[] {
     if (out.length >= 4) break;
   }
   return out;
-}
-
-function pedagogyPromptBlock(
-  move: TeachingMove,
-  diagnosis: StudentDiagnosis,
-  policy: HelpPolicy,
-  mode: string,
-  hintRung: number,
-  answersForbidden: boolean,
-  misconceptions: DbRow[],
-  recentQuestions: string[],
-  intent: string,
-): string {
-  const integrity = answersForbidden
-    ? "INTEGRITY (hard): do NOT provide the full or final answer / complete solution to the assigned task this turn — guide only."
-    : "INTEGRITY: reveal a full solution only if it genuinely helps after the student's own attempt; otherwise prefer guidance.";
-  const known = misconceptions.length
-    ? `This student has previously shown these misconceptions: ${misconceptions
-        .map((m) => `${String(m.skill_key)} — ${String(m.pattern)}`)
-        .join("; ")}. If it resurfaces, correct it directly.`
-    : "";
-  const askedBefore = recentQuestions.length
-    ? `You have ALREADY asked these recently — do NOT ask them again, and do NOT ask a reworded version of the same thing. If the student has already answered the point, accept it and move on; otherwise ask something genuinely new:\n${recentQuestions
-        .map((q) => `  • ${q}`)
-        .join("\n")}`
-    : "";
-  const intentLine =
-    intent && intent !== "none"
-      ? `Detected student intent: ${intent}. Respond to THIS first (see the intent rules above) before any recommended move.`
-      : "";
-  return [
-    "PEDAGOGY GUIDANCE (a recommendation — adapt to the student's actual message):",
-    `Recommended move: ${move}. ${MOVE_GUIDANCE[move]}`,
-    move === "hint"
-      ? `This is hint rung ${hintRung} of 4 (1 = gentle nudge, 4 = very revealing but still not the full answer). Make it MORE revealing than any earlier hint this session.`
-      : "",
-    intentLine,
-    `Student: level=${diagnosis.level}, likely difficulty=${diagnosis.difficulty}, grade band=${diagnosis.gradeBand}. Calibrate vocabulary and sentence length to the grade band.`,
-    `Mentor mode: ${mode}. Help ceiling: ${policy.helpCeiling} — never exceed it.`,
-    integrity,
-    known,
-    askedBefore,
-    'Set "understanding".demonstrated=true the moment the student\'s answer is essentially correct and complete, then confirm and move on instead of asking again. If you spot a recurring conceptual error, add a top-level "misconception": { "skill_key": "...", "pattern": "...", "hint": "..." } to your JSON.',
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 function confidenceFor(
@@ -1776,6 +1549,16 @@ async function loadStepState(
       seeded.quiz_passed_at = nowIso;
       seeded.quiz_presented_at = nowIso;
     }
+    // Pre-v2 code attached quiz choices on every eligible turn, so if the quiz was
+    // already live for this student it was already on screen — seed the presentation
+    // flag so the first post-deploy turn doesn't re-introduce it as new.
+    if (
+      req.quiz &&
+      !seeded.quiz_presented_at &&
+      (!req.code || seeded.code_passed_at)
+    ) {
+      seeded.quiz_presented_at = nowIso;
+    }
   } catch {
     return { state: seeded, seedFailed: true };
   }
@@ -1920,17 +1703,163 @@ function fallbackReply(
       quiz?.prompt ||
         "Choose the answer that best matches what you just practiced.",
     );
-  if (flow.nextAction === "retry")
-    return (
-      assessment?.feedback || "Try one more time. Focus on the current step."
-    );
-  if (flow.nextAction === "rescue")
-    return "Let's rescue this together. Say what part feels stuck, or try the smallest next change.";
   if (flow.nextAction === "run_code")
     return String(
       activity?.prompt || "Run the starter code and tell me what it does.",
     );
-  return String(activity?.prompt || "Tell me your next thought.");
+  return String(
+    assessment?.feedback || activity?.prompt || "Tell me your next thought.",
+  );
+}
+
+type TurnDirective = { key: string; text: string };
+
+// ONE composed per-turn instruction replacing the old teaching-move selector, pedagogy
+// prompt block, and six ad-hoc directive strings. Priority ladder: first match wins; the
+// resource clause is appended whenever card(s) ride along with this reply. The key doubles
+// as the learning_evidence.teaching_move label.
+function turnDirective(args: {
+  currentStage: Stage;
+  answer: DbRow | null;
+  presentedBefore: boolean;
+  stepStateBefore: StepState;
+  draftState: StepState;
+  draftFlow: FlowDecision;
+  requirements: StepRequirements;
+  activityMode: ResponseMode;
+  gradedUnderstanding: Understanding | null;
+  gradedCode: Understanding | null;
+  runtimeTimedOut: boolean;
+  assessment: Assessment | null;
+  attachedResources: LessonChatResource[];
+}): TurnDirective {
+  const {
+    currentStage,
+    answer,
+    presentedBefore,
+    stepStateBefore,
+    draftState,
+    draftFlow,
+    requirements,
+    activityMode,
+    gradedUnderstanding,
+    gradedCode,
+    runtimeTimedOut,
+    assessment,
+    attachedResources,
+  } = args;
+
+  const quizActive = draftFlow.nextAction === "choose";
+  const textStep = activityMode === "text" && requirements.understanding;
+  const stepConcluding =
+    draftFlow.nextAction === "complete" || draftFlow.stage === "complete";
+
+  const pick = (): TurnDirective => {
+    if (currentStage === "complete" && answer) {
+      return {
+        key: "post_completion",
+        text: "This lesson is already complete; the student's message is follow-up conversation. Answer it directly and briefly — do not repeat your earlier congratulations or closing summary.",
+      };
+    }
+    if (runtimeTimedOut) {
+      return {
+        key: "runtime_timeout",
+        text: "The code runner TIMED OUT — an infrastructure hiccup on our side, NOT the student's mistake. Reassure them briefly that it's on us and ask them to run it again; do not grade or critique their code.",
+      };
+    }
+    if (gradedUnderstanding?.demonstrated) {
+      return {
+        key: "understanding_demonstrated",
+        text: `The student HAS just demonstrated understanding of this step (grader level=${gradedUnderstanding.level}). Affirm warmly in one sentence and conclude the step — do not ask another question about it or offer more help.`,
+      };
+    }
+    const codePassedThisTurn =
+      gradedCode?.demonstrated === true ||
+      (answer?.mode === "code" && assessment?.passed === true);
+    // A code pass whose step still has a live quiz must NOT say "conclude" — the
+    // quiz-first branch below owns that turn (and introduces the newly shown options).
+    if (codePassedThisTurn && !quizActive) {
+      return {
+        key: "code_objective_met",
+        text: "The student's code runs and accomplishes this step's objective. Affirm once and conclude the step — do not demand a specific wording, topic, or a match to a shown example.",
+      };
+    }
+    if (
+      textStep &&
+      stepConcluding &&
+      currentStage !== "complete" &&
+      !stepStateBefore.understanding_at &&
+      Boolean(draftState.understanding_at)
+    ) {
+      // Stuck-cap conclusion: the step is wrapping without a demonstrated understanding.
+      return {
+        key: "step_concluding_stuck",
+        text: "The student has worked at this several times without fully landing it and the step is now wrapping up. State the step's idea plainly in one or two sentences — this is the ONE time you give it — then close warmly.",
+      };
+    }
+    if (quizActive && !stepStateBefore.quiz_presented_at) {
+      return {
+        key: "quiz_first_presentation",
+        text: `${
+          codePassedThisTurn
+            ? "The student's code just passed — affirm that in one sentence. "
+            : ""
+        }The quiz options for this step are being shown on screen below your reply for the FIRST time. Introduce the question briefly and tell the student to tap the best answer — do not enumerate the options in your text.`,
+      };
+    }
+    if (answer?.mode === "multiple_choice" && assessment?.passed === true) {
+      return {
+        key: "quiz_passed",
+        text: "The student tapped the correct answer (deterministically graded — see turn.grade and turn.message). Affirm briefly, reinforce in one sentence WHY it's right, and conclude the step — do not re-read the options or ask another question about it.",
+      };
+    }
+    if (answer?.mode === "multiple_choice" && assessment?.passed === false) {
+      return {
+        key: "quiz_wrong",
+        text: "The student tapped a wrong choice (deterministically graded — see turn.grade). Give brief, targeted feedback on why that specific choice doesn't work, then point them back at the options still on screen; do not re-read the full option list.",
+      };
+    }
+    if (quizActive && answer && answer.mode !== "multiple_choice") {
+      return {
+        key: "quiz_active_chat",
+        text: "The quiz options are already on screen and the student sent a chat message instead of tapping one. Respond to their message, then steer them back to tapping an answer — do not re-read or re-narrate the options.",
+      };
+    }
+    if (answer?.mode === "code" && assessment?.passed === false) {
+      return {
+        key: "run_failed",
+        text: "The student's code run did not pass (see turn.run_summary and turn.grade). Give the lightest help that unblocks the ONE thing to fix — a pointed question or a single hint at turn.hint_rung — then ask them to run it again.",
+      };
+    }
+    if (textStep && presentedBefore && !draftState.understanding_at) {
+      const gap = gradedUnderstanding?.note
+        ? ` The grader says what's still missing: ${gradedUnderstanding.note}.`
+        : "";
+      return {
+        key: "explanation_pending",
+        text: `This step needs the STUDENT to articulate the idea in their own words, and they have not yet.${gap} Work toward that without handing them the conclusion — address the specific gap; do not merely re-ask a question they already answered.`,
+      };
+    }
+    if (!presentedBefore) {
+      return {
+        key: "present_step",
+        text: "This step has not been shown to the student yet. Present it: introduce the task in a sentence or two at their grade level and invite a first attempt — do not pre-empt their thinking, give anything away, or interrogate them.",
+      };
+    }
+    return {
+      key: "converse",
+      text: "Continue the conversation toward this step's goal. Respond to what the student actually said and use the lightest teaching move that advances them.",
+    };
+  };
+
+  const directive = pick();
+  if (attachedResources.length) {
+    const titles = attachedResources
+      .map((resource) => `"${resource.title}"`)
+      .join(", ");
+    directive.text += ` The resource card(s) ${titles} are attached below your reply — tell the student to tap Open on the card; never say you can't share it.`;
+  }
+  return directive;
 }
 
 function skillKeysFor(
@@ -2023,7 +1952,6 @@ async function loadContext(
   milestone: DbRow | null;
   quiz: DbRow | null;
   recentTurns: DbRow[];
-  recentAttempts: DbRow[];
   mastery: DbRow[];
   resources: DbRow[];
   resourceChunks: DbRow[];
@@ -2098,7 +2026,6 @@ async function loadContext(
   const ctxSkills = [...skillKeysFor(activity, milestone, quiz)];
   const [
     recentTurns,
-    recentAttempts,
     mastery,
     resources,
     resourceInteractions,
@@ -2111,15 +2038,11 @@ async function loadContext(
     ),
     loadMany(
       config,
-      `lesson_attempts?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=5&select=*`,
+      `student_mastery?user_id=eq.${encodeURIComponent(userId)}&select=skill_key,level,score`,
     ),
     loadMany(
       config,
-      `student_mastery?user_id=eq.${encodeURIComponent(userId)}&select=*`,
-    ),
-    loadMany(
-      config,
-      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=5&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,transcript_text,metadata`,
+      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=5&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata`,
     ),
     loadMany(
       config,
@@ -2155,7 +2078,6 @@ async function loadContext(
     milestone,
     quiz,
     recentTurns,
-    recentAttempts,
     mastery,
     resources,
     resourceChunks,
@@ -2545,21 +2467,15 @@ async function handleTypedRequest(
     orchestratorAssessment,
   );
   const helpPolicy = resolveHelpPolicy(context.lesson);
-  // A free-text explanation/reflection step (not a code or quiz step). Used to keep the teaching
-  // move off worked-examples here (they'd hand the student the answer to restate).
-  const isTextStep = activityMode === "text" && !context.quiz;
-  const teaching = selectTeachingMove(
-    diagnosis,
-    helpPolicy,
-    mentorMode,
-    answer,
-    orchestratorAssessment,
-    hasAttempt,
-    helpRequest,
-    requestedRung,
-    !presentedBefore,
-    intent,
-    isTextStep,
+  // The hint rung the mentor may reveal at this turn (1-4; 0 = no hint asked). "Show me
+  // how" starts at rung 2. Clamped: body.hint_rung is client-supplied and unvalidated —
+  // an out-of-range rung would leak past the 1-4 ladder into the prompt and telemetry.
+  const hintRung = Math.max(
+    0,
+    Math.min(
+      4,
+      helpRequest === "show_me_how" ? Math.max(2, requestedRung) : requestedRung,
+    ),
   );
   const answersForbidden =
     helpPolicy.finalAnswerPolicy === "never" ||
@@ -2737,124 +2653,150 @@ async function handleTypedRequest(
       presentedBefore,
       activityMode,
     );
-    const understandingDirective = gradedUnderstanding
-      ? gradedUnderstanding.demonstrated
-        ? `\n\nUNDERSTANDING CHECK: The student HAS demonstrated understanding of this step (level=${gradedUnderstanding.level}). Affirm warmly in ONE sentence and CONCLUDE this step — do NOT ask another question about it, and IGNORE any hint/help recommendation above (they already understand).`
-        : `\n\nUNDERSTANDING CHECK: The student has NOT yet fully demonstrated understanding (level=${gradedUnderstanding.level})${gradedUnderstanding.note ? `; still missing: ${gradedUnderstanding.note}` : ""}. Address that specific gap in plain words — do not merely re-ask a question they already answered.`
-      : "";
-    const timeoutDirective = runtimeTimedOut
-      ? `\n\nRUNTIME NOTE: The code runner TIMED OUT — an infrastructure hiccup, NOT the student's mistake. Reassure them briefly (it's on us, not their code) and ask them to run it again; do not critique their code for this.`
-      : "";
-    const codeMetDirective = gradedCode?.demonstrated
-      ? `\n\nCODE CHECK: The student's code runs and accomplishes the objective. Affirm warmly in ONE sentence and CONCLUDE this step — do NOT demand a specific wording, topic, or that it match an example.`
-      : "";
     // Resource cards attached to THIS reply (opening turn, or the student asked for one).
     const attachedResources = resourcesForResponse(
       context.resources,
       answer,
       content,
     );
-    const resourceDirective =
-      answer && attachedResources.length
-        ? `\n\nRESOURCE NOTE: The student asked for a resource. The card(s) ${attachedResources
-            .map((resource) => `"${resource.title}"`)
-            .join(", ")} are attached below your reply — tell them to tap Open on the card. Do not say you can't share it, and do not ignore the request.`
-        : "";
-    const postCompletionDirective =
-      currentStage === "complete" && answer
-        ? `\n\nPOST-COMPLETION: This lesson is already complete. The student's message is follow-up conversation — answer it directly and briefly (a question, a resource request, a reflection). Do NOT repeat your earlier congratulations or closing summary.`
-        : "";
-    // Explanation/reflection steps exist to make the STUDENT articulate the idea; a mentor that
-    // answers its own question lets the student parrot it back and defeats the understanding check.
-    // Three cases: (a) grader already passed — stay silent, understandingDirective owns the turn;
-    // (b) the step is concluding after the student struggled (stuck cap) without demonstrating —
-    // let the mentor state the idea plainly so they leave with it; (c) otherwise — don't pre-answer.
-    const textStepTurn =
-      activityMode === "text" && !context.quiz && currentStage !== "complete";
-    const stepConcluding =
-      draftFlow.nextAction === "complete" || draftFlow.stage === "complete";
-    const explanationDirective = !textStepTurn
-      ? ""
-      : gradedUnderstanding?.demonstrated
-        ? ""
-        : stepConcluding
-          ? `\n\nEXPLANATION STEP (CONCLUDING): The student has worked at this several times without fully landing it and the step is now wrapping up. Give them the idea plainly in one or two sentences so they leave with it, then close warmly. This is the one time you state the answer — because they are done trying, not instead of trying.`
-          : `\n\nEXPLANATION STEP: The answer must come from the STUDENT in their own words — do NOT hand them this step's conclusion before they produce it. You may correct a wrong claim, clarify what the question is asking, narrow it, or give a sentence starter. If they are genuinely lost, teach the underlying idea with a fresh concrete example, but let them form the conclusion.`;
-    const systemContent = `${SYSTEM_PROMPT}\n\n${pedagogyPromptBlock(
-      teaching.move,
-      diagnosis,
-      helpPolicy,
-      mentorMode,
-      teaching.hintRung,
-      answersForbidden,
-      context.misconceptions,
-      recentQuestions,
-      intent,
-    )}${understandingDirective}${timeoutDirective}${codeMetDirective}${resourceDirective}${postCompletionDirective}${explanationDirective}`;
+    const attachedResourceIds = new Set(
+      attachedResources.map((resource) => String(resource.id)),
+    );
+    // ONE composed per-turn instruction (priority ladder) replacing the old pedagogy
+    // block and the six ad-hoc directive strings.
+    const directive = turnDirective({
+      currentStage,
+      answer,
+      presentedBefore,
+      stepStateBefore,
+      draftState,
+      draftFlow,
+      requirements,
+      activityMode,
+      gradedUnderstanding,
+      gradedCode,
+      runtimeTimedOut,
+      assessment: effectiveOrchestratorAssessment,
+      attachedResources,
+    });
+    const runSummary =
+      answer?.mode === "code" && answer.run_result
+        ? [
+            ...outputLines(answer.run_result),
+            ...(Array.isArray((answer.run_result as DbRow).errors)
+              ? ((answer.run_result as DbRow).errors as unknown[]).map(
+                  (entry) => `ERROR: ${String(entry)}`,
+                )
+              : []),
+          ]
+            .join("\n")
+            .slice(0, 400)
+        : null;
+    const relevantMastery = context.mastery.filter((row) =>
+      skillKeys.includes(String(row.skill_key)),
+    );
+    // A quiz tap's content is just the choice id — resolve its text so the mentor knows
+    // WHAT the student picked, not only that "b" was tapped.
+    const tappedChoice =
+      answer?.mode === "multiple_choice"
+        ? requirements.quizChoices.find(
+            (choice) =>
+              choice &&
+              typeof choice === "object" &&
+              String((choice as DbRow).id || "") ===
+                String(answer.choice_id || ""),
+          )
+        : null;
+    const tappedChoiceText = tappedChoice
+      ? String(
+          (tappedChoice as DbRow).text ||
+            (tappedChoice as DbRow).label ||
+            (tappedChoice as DbRow).value ||
+            "",
+        )
+      : "";
+    // Key order is STABLE -> VOLATILE: the static system prompt plus the session-stable
+    // keys (lesson/activity/milestone/arc/resources/policy) form a cacheable prefix
+    // across the turns of a step, and the per-turn keys sit last — with `directive` at
+    // the very end, closest to generation.
     const messages = [
-      { role: "system", content: systemContent },
+      { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
         content: JSON.stringify({
           instruction:
-            "Return only the typed JSON envelope. The orchestrator owns records, final stage/action, and resource cards; you own concise student-facing wording. If lesson_resources are present, invite the student to open one. If approved_resource_chunks are present, you may use them as teacher-approved context and cite PDF/document chunks by resource title/page and audio/video chunks by resource title/time range. Do not claim a resource was viewed unless resource_interactions proves it.",
-          lesson: context.lesson,
-          activity: context.activity,
-          lesson_arc: lessonArc,
-          milestone: context.milestone,
-          quiz_item: context.quiz,
-          recent_turns: context.recentTurns,
-          recent_attempts: context.recentAttempts,
-          mastery_summary: context.mastery,
-          lesson_resources: context.resources.map((resource) => ({
+            "One tutoring turn: follow `directive` under `policy` and return ONLY the JSON output contract from your system message.",
+          lesson: context.lesson
+            ? {
+                id: context.lesson.id,
+                title: context.lesson.title,
+                module: context.lesson.module,
+                level: context.lesson.level,
+                tutor_prompt: context.lesson.tutor_prompt,
+                sample_code: context.lesson.sample_code,
+                expected_output: context.lesson.expected_output,
+              }
+            : null,
+          activity: context.activity
+            ? {
+                id: context.activity.id,
+                title: context.activity.title,
+                stage: context.activity.stage,
+                response_mode: context.activity.response_mode,
+                prompt: context.activity.prompt,
+                starter_code: context.activity.starter_code,
+                expected_output: context.activity.expected_output,
+              }
+            : null,
+          milestone: context.milestone
+            ? {
+                objective: context.milestone.objective,
+                skill_keys: stringArray(context.milestone.skill_keys),
+              }
+            : null,
+          arc: lessonArc,
+          resources: context.resources.map((resource) => ({
             id: resource.id,
             title: resource.title,
             description: resource.description,
             resource_type: resource.resource_type,
             student_instructions: resource.student_instructions,
-            transcript_text: resource.transcript_text,
           })),
-          approved_resource_chunks: context.resourceChunks.map((chunk) => {
-            const resource = context.resources.find(
-              (item) => String(item.id) === String(chunk.resource_id),
-            );
-            return {
-              resource_id: chunk.resource_id,
-              resource_title: resource?.title || "Lesson resource",
-              source_kind: chunk.source_kind || "document",
-              page_number: chunk.page_number,
-              start_seconds: chunk.start_seconds,
-              end_seconds: chunk.end_seconds,
-              chunk_index: chunk.chunk_index,
-              chunk_text: String(chunk.chunk_text || "").slice(0, 1400),
-            };
-          }),
-          resource_interactions: context.resourceInteractions,
-          session: {
-            id: sessionId,
-            stage: currentStage,
-            status: session.status || "active",
-            retry_count: session.retry_count || 0,
-            rescue_count: session.rescue_count || 0,
-          },
-          mentor_preferences: mentorPreferences,
-          student_model: diagnosis,
-          teaching_move: teaching.move,
-          hint_rung: teaching.hintRung,
-          help_policy: {
+          policy: {
             help_ceiling: helpPolicy.helpCeiling,
             final_answer_policy: helpPolicy.finalAnswerPolicy,
             require_attempt_first: helpPolicy.requireAttemptFirst,
             answers_forbidden_this_turn: answersForbidden,
+            tone: helpPolicy.tone || null,
+            pace: helpPolicy.pace || null,
+            mentor_mode: mentorMode,
           },
-          known_misconceptions: context.misconceptions,
-          pending_checkpoints: context.pendingCheckpoints,
-          student_intent: intent,
-          recent_mentor_questions: recentQuestions,
-          understanding_check: gradedUnderstanding,
-          runtime_timeout: runtimeTimedOut,
-          latest_answer: answer,
-          deterministic_assessment: effectiveOrchestratorAssessment,
+          student: {
+            level: diagnosis.level,
+            difficulty: diagnosis.difficulty,
+            grade_band: diagnosis.gradeBand,
+            mastery: (relevantMastery.length ? relevantMastery : context.mastery)
+              .slice(0, 5)
+              .map((row) => ({
+                skill_key: row.skill_key,
+                level: row.level,
+                score: row.score,
+              })),
+            misconceptions: context.misconceptions.slice(0, 3).map((row) => ({
+              skill_key: row.skill_key,
+              pattern: row.pattern,
+              hint: row.hint,
+            })),
+            recent_questions: recentQuestions.slice(0, 4),
+          },
+          checkpoints: context.pendingCheckpoints.slice(0, 3),
+          resource_interactions: context.resourceInteractions
+            .slice(0, 8)
+            .map((interaction) => ({
+              resource_id: interaction.resource_id,
+              event_type: interaction.event_type,
+              created_at: interaction.created_at,
+            })),
           // The step's contract: what this step requires, what's already passed, and
           // whether its quiz is live on screen right now (quiz_presented means the
           // options are already visible — point at them, don't re-read them).
@@ -2885,38 +2827,91 @@ async function handleTypedRequest(
             attempts: draftState.attempts,
             quiz_active: draftFlow.nextAction === "choose",
           },
-          skill_keys: skillKeys,
-          pass_threshold: passThreshold(context.activity, context.quiz),
-          required_fields: [
-            "status",
-            "reply",
-            "stage",
-            "response_mode",
-            "choices",
-            "exercise",
-            "assessment",
-            "understanding",
-            "next_action",
-            "guardrail",
-          ],
+          // The live quiz, only while its choices are on screen — and never the answer key.
+          quiz:
+            draftFlow.nextAction === "choose"
+              ? {
+                  prompt: String(
+                    context.quiz?.prompt || context.activity?.prompt || "",
+                  ),
+                  choices: requirements.quizChoices,
+                }
+              : null,
+          // Teacher-approved source material: only on the step's opening turn or when a
+          // resource rides along with this reply (a request or the lesson opener). When
+          // specific card(s) are attached, their chunks come first so the cap can't
+          // starve the resource the student actually asked about (stable sort — the
+          // original page/time order is preserved within each group).
+          resource_chunks:
+            !presentedBefore || attachedResources.length > 0
+              ? [...context.resourceChunks]
+                  .sort(
+                    (a, b) =>
+                      Number(attachedResourceIds.has(String(b.resource_id))) -
+                      Number(attachedResourceIds.has(String(a.resource_id))),
+                  )
+                  .slice(0, 6)
+                  .map((chunk) => {
+                  const resource = context.resources.find(
+                    (item) => String(item.id) === String(chunk.resource_id),
+                  );
+                  return {
+                    resource_id: chunk.resource_id,
+                    resource_title: resource?.title || "Lesson resource",
+                    source_kind: chunk.source_kind || "document",
+                    page_number: chunk.page_number,
+                    start_seconds: chunk.start_seconds,
+                    end_seconds: chunk.end_seconds,
+                    chunk_text: String(chunk.chunk_text || "").slice(0, 1000),
+                  };
+                })
+              : [],
+          // Fresh arrays only (slice/map) — context.recentTurns is read newest-first by
+          // the dedup replay and the graders; the model reads oldest-first.
+          history: context.recentTurns
+            .slice(0, 8)
+            .map((turn) => ({
+              role: turn.role,
+              content: String(turn.content || "").slice(0, 400),
+            }))
+            .reverse(),
+          turn: {
+            message:
+              answer?.mode === "multiple_choice" && tappedChoiceText
+                ? `${content}: ${tappedChoiceText}`.slice(0, 600)
+                : content.slice(0, answer?.mode === "code" ? 1200 : 600),
+            kind: answer ? String(answer.mode) : "none",
+            input_modality: String(answer?.input_modality || "typed"),
+            transcript_confidence:
+              typeof answer?.transcript_confidence === "number"
+                ? answer.transcript_confidence
+                : null,
+            run_summary: runSummary,
+            grade: effectiveOrchestratorAssessment
+              ? {
+                  passed: effectiveOrchestratorAssessment.passed === true,
+                  feedback: effectiveOrchestratorAssessment.feedback || "",
+                }
+              : null,
+            understanding_check: gradedUnderstanding,
+            help_request: helpRequest || null,
+            hint_rung: hintRung,
+            intent,
+            runtime_timeout: runtimeTimedOut,
+          },
+          directive: directive.text,
         }),
       },
     ];
 
-    const modelRouting = modelRouteFor(
-      draftFlow,
-      answer,
-      orchestratorAssessment,
-      context,
-    );
-    const openAIResult = await callModel(messages, true, modelRouting.route);
+    const openAIResult = await callModel(messages, true, "default");
     await recordModelUsage(
       config,
       userId,
       sessionId,
       lessonId,
       openAIResult,
-      modelRouting.taskType,
+      "mentor_turn",
     );
     const contentJson = openAIResult.content;
     let parsed: DbRow;
@@ -2939,10 +2934,9 @@ async function handleTypedRequest(
       });
     }
 
-    const assessment = mergeAssessment(
-      effectiveOrchestratorAssessment,
-      parsedAssessment(parsed.assessment),
-    );
+    // Grading is deterministic-only: the orchestrator's assessment (incl. the semantic
+    // code judge's capped upgrade) is the grade; the mentor no longer emits one.
+    const assessment = effectiveOrchestratorAssessment;
     // The dedicated grader is authoritative for text completion (it hard-gates the loop);
     // the mentor's self-reported understanding is only the fallback when no grader ran.
     const understanding =
@@ -3199,9 +3193,9 @@ async function handleTypedRequest(
         assessment,
         skillKeys,
         context.milestone,
-        confidenceFor(assessment, session, teaching.hintRung),
-        teaching.move,
-        teaching.hintRung,
+        confidenceFor(assessment, session, hintRung),
+        directive.key,
+        hintRung,
         attemptedBeforeHelp,
       );
       // Only on the turn that PRODUCED the graded failure — ungraded turns (text chatter
@@ -3226,7 +3220,7 @@ async function handleTypedRequest(
       const turnInd = independenceFor(
         assessment,
         attemptedBeforeHelp,
-        teaching.hintRung,
+        hintRung,
       );
       // PostgREST serializes `numeric` as a string, so read it tolerantly (the rest
       // of this file reads numeric session columns via Number() for the same reason).

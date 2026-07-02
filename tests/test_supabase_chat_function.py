@@ -73,29 +73,34 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
         self.assertIn("maybeWriteRecommendation", self.source)
 
     def test_guardrails_and_course_flow_are_explicit_in_prompt(self):
-        self.assertIn("structured course conversation", self.source)
+        self.assertIn("back-and-forth conversation", self.source)
         self.assertIn("natural speech -> baby Jargon -> Jargon pseudocode -> Python bridge", self.source)
         self.assertIn("guardrail", self.source)
-        for action in ("retry", "rescue", "complete"):
-            self.assertIn(action, self.source)
+        # v2.0: the per-turn instruction is one composed directive from a priority ladder.
+        self.assertIn("function turnDirective", self.source)
+        for key in ("post_completion", "runtime_timeout", "present_step", "converse"):
+            self.assertIn(f'"{key}"', self.source)
 
     def test_orchestrator_loads_lesson_context_before_prompting(self):
         self.assertIn("async function loadContext", self.source)
         for fragment in (
             "milestones?id=eq",
             "quiz_items?lesson_id=eq",
-            "recent_turns",
-            "recent_attempts",
-            "mastery_summary",
-            "orchestrator_flow",
-            "deterministic_assessment",
+            "step_contract",
+            "directive: directive.text",
+            "history: context.recentTurns",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.source)
 
     def test_deterministic_flow_owns_state_and_completion(self):
-        self.assertIn("function flowFor", self.source)
-        self.assertIn("function sessionStatus", self.source)
+        # v2.0 flow core: requirements from the step's shape, progress in step_state.
+        self.assertIn("function requirementsFor", self.source)
+        self.assertIn("function applyTurn", self.source)
+        self.assertIn("function deriveTurn", self.source)
+        self.assertIn("step_state", self.source)
+        self.assertIn('"needs_rescue"', self.source)
+        self.assertIn('"needs_retry"', self.source)
         self.assertIn('stage: "complete"', self.source)
         self.assertIn('nextAction: "complete"', self.source)
         self.assertIn('nextAction: "choose"', self.source)
@@ -123,9 +128,9 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             "resources?: LessonChatResource[]",
             "lesson_resources?lesson_id=eq.",
             "resource_interactions?user_id=eq.",
-            "lesson_resources: context.resources.map",
+            "resources: context.resources.map",
             "resource_interactions: context.resourceInteractions",
-            "resourcesForResponse(context.resources, answer)",
+            "resourcesForResponse(",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.source)

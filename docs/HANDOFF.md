@@ -6,6 +6,45 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-02 (Tutor v2.0 Phase C: instruction layer + prompt diet + routing — DONE)
+
+Summary: The mentor's instruction layer is now one coherent build. SYSTEM_PROMPT rewritten as a
+single static block (persona/conversation craft + lightest-help teaching ladder + governance +
+reduced output contract {reply, understanding, misconception}). selectTeachingMove, MOVE_GUIDANCE,
+MODE_HELP_WANT, pedagogyPromptBlock, and the six ad-hoc per-turn directive strings are deleted,
+replaced by turnDirective() — one composed instruction from a priority ladder (post_completion >
+runtime_timeout > understanding_demonstrated > code_objective_met > step_concluding_stuck >
+quiz_first_presentation > quiz_passed > quiz_wrong > quiz_active_chat > run_failed >
+explanation_pending > present_step > converse) placed as the LAST user-JSON key; its key persists
+as learning_evidence.teaching_move. User JSON rebuilt on a diet with STABLE->VOLATILE key order
+for prompt caching: slim lesson/activity/milestone, arc, resources (no transcript_text), policy,
+student (mastery top-5, misconceptions <=3, recent questions <=4), checkpoints <=3, step_contract,
+conditional quiz (only while live, never the answer key), conditional resource chunks (step-open
+or request; attached-resource chunks first; 6x1000ch), content-only history x8 oldest-first, turn
+facts (message w/ resolved quiz-choice text, run_summary <=400, grade, understanding_check,
+help/hint/intent/timeout), directive. Grading is deterministic-only: parsedAssessment/
+mergeAssessment deleted, assessment = orchestrator's; assessAnswer gained a narrow
+MCQ-no-quiz-row pass-on-valid-choice branch (one legacy demo activity needs it). modelRouteFor
+deleted; routes reduced to default (TUTOR_MODEL_CONVERSATION -> gpt-4o @0.6) + understanding
+(gpt-4o-mini @0.2). hintRung clamped 0-4 ("show me how" floors at 2). loadContext diet:
+recentAttempts query deleted, mastery select trimmed, transcript_text unloaded. Backfill also
+seeds quiz_presented_at for pre-v2 mid-quiz students.
+Files changed: supabase/functions/chat/index.ts, tests/test_supabase_chat_function.py (stale
+pre-v2 fingerprints updated), docs/DECISIONS.md, docs/HANDOFF.md.
+Tests run: node --experimental-strip-types --check; python3 -m unittest
+tests.test_supabase_chat_function (12 OK); adversarial multi-agent review (16 findings -> 8
+confirmed after 2-verifier refutation, deduped to 5 fixes, all applied: code_objective_met no
+longer shadows the quiz's first presentation on code+quiz steps; hintRung clamp; MCQ auto-pass
+narrowed to the activity's own choices; backfill quiz_presented_at seed; attached-resource
+chunks preferred under the cap) + a follow-up verification agent over the fix delta (0 new
+defects; added quiz_passed directive + tapped-choice text resolution).
+Remaining concerns: text-step turns still write lesson_attempts with null score and no mastery
+rows — parity with pre-C behavior, but a deterministic understanding-based mastery write is a
+good future addition; token audit pending live traffic (compare model_usage_events.input_tokens
+for task_type=mentor_turn before/after this deploy — prior baseline ~5.5k avg mentor turns).
+Suggested next task: v2.0 Phase D — latency (loadContext two waves, batched writes,
+EdgeRuntime.waitUntil telemetry), legacy-path deletion, F10/F11 cleanup.
+
 ## Claude -> Codex / Human - 2026-07-02 (Tutor v2.0 Phase B: flow core simplification — DONE)
 
 Summary: Replaced flowFor's answer-mode-derived stage machine with persisted per-step progress.
