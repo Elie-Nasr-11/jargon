@@ -107,6 +107,9 @@ type Msg =
       choices?: ChatChoice[];
       resources?: LessonChatResource[];
       createdAt?: string;
+      // Error bubbles must never become the "latest mentor message" — that would strip the
+      // live quiz choices off the real question with no recovery path.
+      isError?: boolean;
     }
   | { id: string; role: "teacher"; text: string; createdAt?: string }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
@@ -467,6 +470,11 @@ function ChatPage() {
   const [sending, setSending] = useState(false);
   // Ref twin of `sending` for callbacks that fire from stale closures (voice, choice buttons).
   const sendingRef = useRef(false);
+  // The in-flight turn's promise, so a "busy" caller (a resolving code run) can await it and retry.
+  const inFlightTurnRef = useRef<Promise<TypedChatEnvelope | null> | null>(null);
+  // True while a code run is executing — blocks new sends so the run's mentor review can't be
+  // silently dropped by the in-flight gate when it resolves.
+  const [runInFlight, setRunInFlight] = useState(false);
   // The lesson finished (from a live envelope or a resumed complete session). Swaps the
   // composer for a completion banner until the student opts into a follow-up chat.
   const [lessonComplete, setLessonComplete] = useState(false);
@@ -507,10 +515,12 @@ function ChatPage() {
     () => mapLessons(lessons, lessonId, learningSession),
     [lessons, lessonId, learningSession],
   );
-  // Newest mentor message — the only bubble whose quiz choices are live.
+  // Newest REAL mentor message — the only bubble whose quiz choices are live. Error bubbles
+  // are skipped so a failed send can't strip the active question's buttons.
   const lastBotId = useMemo(() => {
     for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === "bot") return msgs[i].id;
+      const m = msgs[i];
+      if (m.role === "bot" && !m.isError) return m.id;
     }
     return null;
   }, [msgs]);
@@ -765,58 +775,73 @@ function ChatPage() {
     setMsgs((previous) => previous.filter((m) => m.id !== thinkingId).concat(message));
   };
 
+  // client_msg_id source — crypto.randomUUID is missing on older student devices and
+  // non-secure contexts; every send funnels through here, so it must never throw.
+  const newClientMsgId = () =>
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
   // THE single send path for every turn type (typed text, voice text, quiz choice, code run).
   // One in-flight gate lives here — as a ref, because voice/choice callbacks fire from event
-  // listeners whose closures hold stale `sending` state. Every answer carries a client_msg_id
-  // so the server can recognize duplicate deliveries.
+  // listeners whose closures hold stale `sending` state. Returns "busy" (instead of silently
+  // dropping) when a turn is already in flight so callers can wait and retry; the in-flight
+  // promise is exposed via inFlightTurnRef for exactly that. Every answer carries a
+  // client_msg_id so the server can recognize duplicate deliveries.
   const sendTurn = async (input: {
     answer: TypedChatAnswer;
     optimistic: Msg[];
     errorText: string;
-  }): Promise<TypedChatEnvelope | null> => {
-    if (!accessToken || sendingRef.current) return null;
+  }): Promise<TypedChatEnvelope | null | "busy"> => {
+    if (!accessToken) return null;
+    if (sendingRef.current) return "busy";
     sendingRef.current = true;
     setSending(true);
     for (const m of input.optimistic) addMsg(m);
     const thinkingId = uid();
     setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
-    try {
-      const envelope = await invokeTypedChat({
-        accessToken,
-        lessonId,
-        sessionId,
-        answer: { ...input.answer, client_msg_id: crypto.randomUUID() },
-        mentorPreferences: mentorToPreferences(mentor),
-      });
-      setSessionId(envelope.session_id);
-      setLearningSession((previous) =>
-        previous
-          ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
-          : previous,
-      );
-      if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
-      if (envelope.stage === "complete" || envelope.next_action === "complete") {
-        setLessonComplete(true);
+    const turn = (async () => {
+      try {
+        const envelope = await invokeTypedChat({
+          accessToken,
+          lessonId,
+          sessionId,
+          answer: { ...input.answer, client_msg_id: newClientMsgId() },
+          mentorPreferences: mentorToPreferences(mentor),
+        });
+        setSessionId(envelope.session_id);
+        setLearningSession((previous) =>
+          previous
+            ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
+            : previous,
+        );
+        if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
+        if (envelope.stage === "complete" || envelope.next_action === "complete") {
+          setLessonComplete(true);
+        }
+        replaceThinking(thinkingId, envelopeMessage(envelope));
+        return envelope;
+      } catch (error) {
+        replaceThinking(thinkingId, {
+          id: uid(),
+          role: "bot",
+          isError: true,
+          text: (error as Error).message || input.errorText,
+        });
+        return null;
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
       }
-      replaceThinking(thinkingId, envelopeMessage(envelope));
-      return envelope;
-    } catch (error) {
-      replaceThinking(thinkingId, {
-        id: uid(),
-        role: "bot",
-        text: (error as Error).message || input.errorText,
-      });
-      return null;
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
-    }
+    })();
+    inFlightTurnRef.current = turn;
+    return turn;
   };
 
   const submitTextAnswer = async (
     text: string,
     options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
-  ): Promise<TypedChatEnvelope | null> =>
+  ): Promise<TypedChatEnvelope | null | "busy"> =>
     sendTurn({
       answer: {
         mode: "text",
@@ -855,41 +880,53 @@ function ChatPage() {
   };
 
   const runCode = async (code: string, lang: ComposerLanguage): Promise<RuntimeRunResult> => {
-    if (lang === "python") return runPython(code);
-    if (lang === "javascript") return runJavaScript(code);
-    if (!accessToken) return { ok: false, output: "You need to sign in again." };
-    const result = await invokeJargonRun({ accessToken, code, answers: [] });
-    return {
-      ok: result.status === "ok",
-      output: formatRunOutput(result),
-      raw: result,
-    };
+    setRunInFlight(true);
+    try {
+      if (lang === "python") return await runPython(code);
+      if (lang === "javascript") return await runJavaScript(code);
+      if (!accessToken) return { ok: false, output: "You need to sign in again." };
+      const result = await invokeJargonRun({ accessToken, code, answers: [] });
+      return {
+        ok: result.status === "ok",
+        output: formatRunOutput(result),
+        raw: result,
+      };
+    } finally {
+      setRunInFlight(false);
+    }
   };
 
   const sendCodeResult = async (code: string, lang: ComposerLanguage, result: RuntimeRunResult) => {
-    await sendTurn({
+    // The run feedback must ALWAYS render, even when the mentor review is gated or fails —
+    // the student needs to see what their code did.
+    addMsg({
+      id: uid(),
+      role: "user",
+      text: `Ran ${languageLabel(lang)}:`,
+      code: { language: lang, source: code },
+    });
+    addMsg({
+      id: uid(),
+      role: "output",
+      ok: result.ok,
+      output: result.output || "(no output)",
+      lang,
+    });
+    const turn = {
       answer: {
-        mode: "code",
+        mode: "code" as const,
         code,
         run_result: result.raw || { ok: result.ok, output: result.output, language: lang },
       },
-      optimistic: [
-        {
-          id: uid(),
-          role: "user",
-          text: `Ran ${languageLabel(lang)}:`,
-          code: { language: lang, source: code },
-        },
-        {
-          id: uid(),
-          role: "output",
-          ok: result.ok,
-          output: result.output || "(no output)",
-          lang,
-        },
-      ],
+      optimistic: [] as Msg[],
       errorText: "The mentor could not review that run.",
-    });
+    };
+    if ((await sendTurn(turn)) === "busy") {
+      // A turn was in flight when the run resolved — wait it out, then retry once so the run
+      // still gets its mentor review (and its learning_turns record for the teacher).
+      await inFlightTurnRef.current?.catch(() => {});
+      await sendTurn(turn);
+    }
   };
 
   const submitStudentAssignment = async (input: {
@@ -927,6 +964,9 @@ function ChatPage() {
   };
 
   const useCodeInEditor = (code: ChatCodeBlock) => {
+    // Loading code must always surface the editor: if the completion banner is covering the
+    // composer, opt into follow-up mode first.
+    if (lessonComplete) setFollowUp(true);
     composerRef.current?.loadCode({ code: code.source, language: code.language });
     requestAnimationFrame(() => {
       composerWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -1059,7 +1099,7 @@ function ChatPage() {
               // Quiz choices are live ONLY on the newest mentor message — historical bubbles
               // keep their text but their buttons are gone, so an old quiz can't be re-answered.
               choicesActive={m.id === lastBotId}
-              choicesDisabled={sending}
+              choicesDisabled={sending || runInFlight}
               onUseCode={useCodeInEditor}
               onChooseChoice={sendChoice}
               onResourceEvent={handleResourceEvent}
@@ -1170,7 +1210,7 @@ function RealtimeVoicePanel({
   onSubmitVoiceTurn: (
     text: string,
     confidence?: number | null,
-  ) => Promise<TypedChatEnvelope | null>;
+  ) => Promise<TypedChatEnvelope | null | "busy">;
 }) {
   const [status, setStatus] = useState<"idle" | "connecting" | "live" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -1276,14 +1316,17 @@ function RealtimeVoicePanel({
       return;
     }
     // Dedup beyond call ids: the realtime model can re-invoke the tool with the SAME
-    // transcript under a NEW call id (each tool result prompts another response). Replay the
-    // previous reply for an identical utterance within a short window instead of re-submitting.
+    // transcript under a NEW call id (each tool result prompts another response). The window
+    // is deliberately SHORT — a model re-call lands within ~1-2s of the tool result, while a
+    // student legitimately repeating the same short answer ("b", "yes") for the NEXT question
+    // can't arrive that fast (the mentor hasn't finished speaking the reply). A longer window
+    // would swallow real answers.
     const normalized = text
       .toLowerCase()
       .replace(/[^\p{L}\p{N} ]+/gu, "")
       .replace(/\s+/g, " ");
     const last = lastSubmittedRef.current;
-    if (last && normalized && last.text === normalized && Date.now() - last.at < 20_000) {
+    if (last && normalized && last.text === normalized && Date.now() - last.at < 3_000) {
       submittedCallIdsRef.current.add(callId);
       sendToolResult(callId, { status: "ok", reply: last.reply });
       return;
@@ -1308,6 +1351,16 @@ function RealtimeVoicePanel({
     });
     try {
       const envelope = await onSubmitVoiceTurn(text, confidence);
+      if (envelope === "busy") {
+        // A typed/choice turn was in flight on the page — same handling as the local
+        // in-flight gate; un-mark the call so a retry can go through.
+        submittedCallIdsRef.current.delete(callId);
+        sendToolResult(callId, {
+          status: "error",
+          reply: "One moment — I'm still checking your previous answer.",
+        });
+        return;
+      }
       if (envelope) {
         lastSubmittedRef.current = {
           text: normalized,

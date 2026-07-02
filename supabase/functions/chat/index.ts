@@ -851,12 +851,22 @@ function runTimedOut(runResult: unknown): boolean {
   const raw = runResult as DbRow;
   // A timeout is always a FAILED run — a successful run whose output merely contains the
   // word "timeout" (e.g. a program that prints it) must never be misread as an infra hiccup.
+  // Engine-shaped results carry status ("ok") instead of ok:true, so check both.
   if (raw.ok === true) return false;
   if (typeof raw.status === "string") {
     const status = raw.status.trim().toLowerCase();
-    // The student's own runaway loop hit the engine limits — a real mistake, not infra.
+    if (status === "ok") return false;
+    // The student's own runaway loop hit the engine step/op limits — a real mistake, not infra.
     if (status === "limit_exceeded") return false;
     if (/^(timeout|timed[_ ]out)$/.test(status)) return true;
+  }
+  // The engine's wall-clock sandbox kill reports limits_hit: ["sandbox_timeout"] — treated
+  // as infra (matches pre-v2 behavior), unlike limit_exceeded above.
+  if (
+    Array.isArray(raw.limits_hit) &&
+    raw.limits_hit.some((entry) => String(entry) === "sandbox_timeout")
+  ) {
+    return true;
   }
   const errors = Array.isArray(raw.errors)
     ? raw.errors.filter((entry) => typeof entry === "string").join("\n")
@@ -867,10 +877,11 @@ function runTimedOut(runResult: unknown): boolean {
       : Array.isArray(raw.output)
         ? raw.output.join("\n")
         : "";
-  // Match only the real infra sentinels — the run fn's "Engine request timed out after …ms"
-  // (carried in errors[]) and the client abort's "took too long to answer". A loose
-  // `time.?out` would wrongly catch failed runs whose output merely mentions time.
-  return /engine request timed out|took too long to answer|timed out after \d+ms/i.test(
+  // Match only the real infra sentinels — the run fn's "Engine request timed out after …ms",
+  // the engine's "Sandbox timed out after 2.0 seconds." (float!), and the client abort's
+  // "took too long to answer". A loose `time.?out` would wrongly catch failed runs whose
+  // output merely mentions time.
+  return /engine request timed out|took too long to answer|timed out after \d+(\.\d+)?\s*(ms|seconds?)/i.test(
     `${errors}\n${out}`,
   );
 }

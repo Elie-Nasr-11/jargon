@@ -489,7 +489,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   const send = () => {
     const t = text.trim();
-    if (!t || sending) return;
+    // Also blocked while a code run is executing: a text turn in flight when the run
+    // resolves would collide with the run's mentor review.
+    if (!t || sending || running) return;
     const isDictated = dictationUsed;
     onSendText(t, {
       inputModality: isDictated ? "dictated" : "typed",
