@@ -39,6 +39,7 @@ import {
   fetchStudentAssignments,
   fetchStudentAssessments,
   fetchLatestLearningSession,
+  onAuthStateChange,
   fetchLessonActivities,
   fetchLessons,
   createRealtimeVoiceSession,
@@ -71,6 +72,7 @@ import type {
   StudentAssignmentBundle,
   StudentAssessmentBundle,
   TeacherLiveComment,
+  TypedChatAnswer,
   TypedChatEnvelope,
   VoiceInteractionEvent,
 } from "@/lib/types";
@@ -463,6 +465,12 @@ function ChatPage() {
   const [voice, setVoice] = useState<VoiceSettings>(DEFAULT_VOICE);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [sending, setSending] = useState(false);
+  // Ref twin of `sending` for callbacks that fire from stale closures (voice, choice buttons).
+  const sendingRef = useRef(false);
+  // The lesson finished (from a live envelope or a resumed complete session). Swaps the
+  // composer for a completion banner until the student opts into a follow-up chat.
+  const [lessonComplete, setLessonComplete] = useState(false);
+  const [followUp, setFollowUp] = useState(false);
   const [booting, setBooting] = useState(true);
   const [surfaceError, setSurfaceError] = useState("");
   const [liveViewers, setLiveViewers] = useState<LiveSessionViewer[]>([]);
@@ -499,6 +507,13 @@ function ChatPage() {
     () => mapLessons(lessons, lessonId, learningSession),
     [lessons, lessonId, learningSession],
   );
+  // Newest mentor message — the only bubble whose quiz choices are live.
+  const lastBotId = useMemo(() => {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "bot") return msgs[i].id;
+    }
+    return null;
+  }, [msgs]);
   const activeLiveViewers = useMemo(
     () =>
       liveViewers.filter(
@@ -530,11 +545,21 @@ function ChatPage() {
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [msgs.length]);
+    // Depend on the array identity, not just its length: replacing the "thinking" bubble with
+    // the mentor reply keeps the length constant but must still scroll the reply into view.
+  }, [msgs]);
 
   useEffect(() => {
     const id = window.setInterval(() => setViewerClock(Date.now()), 10_000);
     return () => window.clearInterval(id);
+  }, []);
+
+  // Keep the realtime connection authenticated for the page's lifetime — the handler in
+  // api.ts re-sets realtime auth on every token refresh, so the teacher live-view
+  // subscriptions survive past the first token's expiry (~1h).
+  useEffect(() => {
+    const { data } = onAuthStateChange(() => {});
+    return () => data.subscription.unsubscribe();
   }, []);
 
   const loadLesson = async (
@@ -546,6 +571,8 @@ function ChatPage() {
     setSurfaceError("");
     setSending(true);
     setLessonArc(null); // clear immediately so no stale strip flashes during the fetch
+    setLessonComplete(false);
+    setFollowUp(false);
     try {
       const [lessonActivities, latest] = await Promise.all([
         fetchLessonActivities(nextLessonId),
@@ -554,6 +581,7 @@ function ChatPage() {
       setActivities(lessonActivities);
       setLearningSession(latest);
       setSessionId(latest?.id || null);
+      setLessonComplete(latest?.status === "complete");
       // Show progress immediately (envelopes will supersede with the authoritative arc).
       setLessonArc(deriveLessonArc(lessonActivities, latest?.current_activity_id || null));
 
@@ -713,6 +741,9 @@ function ChatPage() {
 
   const selectLesson = async (id: string) => {
     if (!accessToken) return;
+    // Leave voice mode: the live session was negotiated for the previous lesson and its
+    // turns would otherwise submit against the new one.
+    setVoiceMode(false);
     setLessonId(id);
     store.setLessonId(id);
     await loadLesson(id, accessToken, mentor);
@@ -734,19 +765,19 @@ function ChatPage() {
     setMsgs((previous) => previous.filter((m) => m.id !== thinkingId).concat(message));
   };
 
-  const submitTextAnswer = async (
-    text: string,
-    options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
-  ): Promise<TypedChatEnvelope | null> => {
-    if (!accessToken) return null;
-    addMsg({
-      id: uid(),
-      role: "user",
-      text,
-      inputModality: options?.inputModality,
-      transcriptConfidence: options?.transcriptConfidence ?? null,
-    });
+  // THE single send path for every turn type (typed text, voice text, quiz choice, code run).
+  // One in-flight gate lives here — as a ref, because voice/choice callbacks fire from event
+  // listeners whose closures hold stale `sending` state. Every answer carries a client_msg_id
+  // so the server can recognize duplicate deliveries.
+  const sendTurn = async (input: {
+    answer: TypedChatAnswer;
+    optimistic: Msg[];
+    errorText: string;
+  }): Promise<TypedChatEnvelope | null> => {
+    if (!accessToken || sendingRef.current) return null;
+    sendingRef.current = true;
     setSending(true);
+    for (const m of input.optimistic) addMsg(m);
     const thinkingId = uid();
     setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
     try {
@@ -754,12 +785,7 @@ function ChatPage() {
         accessToken,
         lessonId,
         sessionId,
-        answer: {
-          mode: "text",
-          text,
-          input_modality: options?.inputModality || "typed",
-          transcript_confidence: options?.transcriptConfidence ?? null,
-        },
+        answer: { ...input.answer, client_msg_id: crypto.randomUUID() },
         mentorPreferences: mentorToPreferences(mentor),
       });
       setSessionId(envelope.session_id);
@@ -769,19 +795,46 @@ function ChatPage() {
           : previous,
       );
       if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
+      if (envelope.stage === "complete" || envelope.next_action === "complete") {
+        setLessonComplete(true);
+      }
       replaceThinking(thinkingId, envelopeMessage(envelope));
       return envelope;
     } catch (error) {
       replaceThinking(thinkingId, {
         id: uid(),
         role: "bot",
-        text: (error as Error).message || "The mentor could not answer.",
+        text: (error as Error).message || input.errorText,
       });
       return null;
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
+
+  const submitTextAnswer = async (
+    text: string,
+    options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
+  ): Promise<TypedChatEnvelope | null> =>
+    sendTurn({
+      answer: {
+        mode: "text",
+        text,
+        input_modality: options?.inputModality || "typed",
+        transcript_confidence: options?.transcriptConfidence ?? null,
+      },
+      optimistic: [
+        {
+          id: uid(),
+          role: "user",
+          text,
+          inputModality: options?.inputModality,
+          transcriptConfidence: options?.transcriptConfidence ?? null,
+        },
+      ],
+      errorText: "The mentor could not answer.",
+    });
 
   const sendUser = async (
     text: string,
@@ -791,39 +844,14 @@ function ChatPage() {
   };
 
   const sendChoice = async (choice: ChatChoice) => {
-    if (!accessToken) return;
     const selected = choiceLabel(choice);
     const selectedValue = choiceValue(choice);
     if (!selectedValue) return;
-    addMsg({ id: uid(), role: "user", text: `Selected: ${selected}` });
-    setSending(true);
-    const thinkingId = uid();
-    setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
-    try {
-      const envelope = await invokeTypedChat({
-        accessToken,
-        lessonId,
-        sessionId,
-        answer: { mode: "multiple_choice", choice_id: selectedValue },
-        mentorPreferences: mentorToPreferences(mentor),
-      });
-      setSessionId(envelope.session_id);
-      setLearningSession((previous) =>
-        previous
-          ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
-          : previous,
-      );
-      if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
-      replaceThinking(thinkingId, envelopeMessage(envelope));
-    } catch (error) {
-      replaceThinking(thinkingId, {
-        id: uid(),
-        role: "bot",
-        text: (error as Error).message || "The mentor could not check that answer.",
-      });
-    } finally {
-      setSending(false);
-    }
+    await sendTurn({
+      answer: { mode: "multiple_choice", choice_id: selectedValue },
+      optimistic: [{ id: uid(), role: "user", text: `Selected: ${selected}` }],
+      errorText: "The mentor could not check that answer.",
+    });
   };
 
   const runCode = async (code: string, lang: ComposerLanguage): Promise<RuntimeRunResult> => {
@@ -839,52 +867,29 @@ function ChatPage() {
   };
 
   const sendCodeResult = async (code: string, lang: ComposerLanguage, result: RuntimeRunResult) => {
-    addMsg({
-      id: uid(),
-      role: "user",
-      text: `Ran ${languageLabel(lang)}:`,
-      code: { language: lang, source: code },
-    });
-    addMsg({
-      id: uid(),
-      role: "output",
-      ok: result.ok,
-      output: result.output || "(no output)",
-      lang,
-    });
-    if (!accessToken) return;
-    setSending(true);
-    const thinkingId = uid();
-    setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
-    try {
-      const envelope = await invokeTypedChat({
-        accessToken,
-        lessonId,
-        sessionId,
-        answer: {
-          mode: "code",
-          code,
-          run_result: result.raw || { ok: result.ok, output: result.output, language: lang },
+    await sendTurn({
+      answer: {
+        mode: "code",
+        code,
+        run_result: result.raw || { ok: result.ok, output: result.output, language: lang },
+      },
+      optimistic: [
+        {
+          id: uid(),
+          role: "user",
+          text: `Ran ${languageLabel(lang)}:`,
+          code: { language: lang, source: code },
         },
-        mentorPreferences: mentorToPreferences(mentor),
-      });
-      setSessionId(envelope.session_id);
-      setLearningSession((previous) =>
-        previous
-          ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
-          : previous,
-      );
-      if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
-      replaceThinking(thinkingId, envelopeMessage(envelope));
-    } catch (error) {
-      replaceThinking(thinkingId, {
-        id: uid(),
-        role: "bot",
-        text: (error as Error).message || "The mentor could not review that run.",
-      });
-    } finally {
-      setSending(false);
-    }
+        {
+          id: uid(),
+          role: "output",
+          ok: result.ok,
+          output: result.output || "(no output)",
+          lang,
+        },
+      ],
+      errorText: "The mentor could not review that run.",
+    });
   };
 
   const submitStudentAssignment = async (input: {
@@ -1034,11 +1039,27 @@ function ChatPage() {
             </div>
           </div>
         ) : null}
+        {surfaceError && !booting ? (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
+            <span className="min-w-0 flex-1">{surfaceError}</span>
+            <button
+              type="button"
+              onClick={() => setSurfaceError("")}
+              className="shrink-0 text-[12px] underline underline-offset-2"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
         <div ref={scrollRef} className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5">
           {msgs.map((m) => (
             <MessageRow
               key={m.id}
               msg={m}
+              // Quiz choices are live ONLY on the newest mentor message — historical bubbles
+              // keep their text but their buttons are gone, so an old quiz can't be re-answered.
+              choicesActive={m.id === lastBotId}
+              choicesDisabled={sending}
               onUseCode={useCodeInEditor}
               onChooseChoice={sendChoice}
               onResourceEvent={handleResourceEvent}
@@ -1060,9 +1081,27 @@ function ChatPage() {
             onSubmitAssignment={submitStudentAssignment}
           />
           <AssessmentDock lessonId={lessonId} bundle={assessments} />
+          {lessonComplete && !followUp ? (
+            <div className="mt-2 flex items-center justify-between gap-3 rounded-3xl border border-border bg-background/70 px-5 py-4">
+              <div className="min-w-0">
+                <div className="text-[14px] font-medium text-foreground">Lesson complete</div>
+                <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+                  Nice work. Pick your next lesson from the Lessons menu, or keep chatting about
+                  this one.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFollowUp(true)}
+                className="shrink-0 rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                Ask a follow-up
+              </button>
+            </div>
+          ) : null}
           {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
               imperative handle for "Use this code" — survives entering/leaving voice mode. */}
-          <div className={voiceMode ? "hidden" : undefined}>
+          <div className={voiceMode || (lessonComplete && !followUp) ? "hidden" : undefined}>
             <Composer
               ref={composerRef}
               key={lessonId}
@@ -1141,6 +1180,10 @@ function RealtimeVoicePanel({
   const channelRef = useRef<RTCDataChannel | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const submittedCallIdsRef = useRef<Set<string>>(new Set());
+  // In-flight + last-utterance guards: the realtime model can re-call the tool with the same
+  // transcript under a fresh call id, and overlapping submissions must never race.
+  const turnInFlightRef = useRef(false);
+  const lastSubmittedRef = useRef<{ text: string; at: number; reply: string } | null>(null);
   const startedRef = useRef(false);
   // Mirror `status` into a ref so event-handler closures (data-channel close, connect timeout)
   // read the live value instead of the stale one captured at handler-creation time.
@@ -1232,7 +1275,29 @@ function RealtimeVoicePanel({
       });
       return;
     }
+    // Dedup beyond call ids: the realtime model can re-invoke the tool with the SAME
+    // transcript under a NEW call id (each tool result prompts another response). Replay the
+    // previous reply for an identical utterance within a short window instead of re-submitting.
+    const normalized = text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N} ]+/gu, "")
+      .replace(/\s+/g, " ");
+    const last = lastSubmittedRef.current;
+    if (last && normalized && last.text === normalized && Date.now() - last.at < 20_000) {
+      submittedCallIdsRef.current.add(callId);
+      sendToolResult(callId, { status: "ok", reply: last.reply });
+      return;
+    }
+    if (turnInFlightRef.current) {
+      // Don't mark submitted — the model may retry once the in-flight turn resolves.
+      sendToolResult(callId, {
+        status: "error",
+        reply: "One moment — I'm still checking your previous answer.",
+      });
+      return;
+    }
     submittedCallIdsRef.current.add(callId);
+    turnInFlightRef.current = true;
     setLastTranscript(text);
     setMessage("Sending your spoken answer to Jargon...");
     void onVoiceEvent({
@@ -1241,25 +1306,36 @@ function RealtimeVoicePanel({
       transcript: text,
       transcript_confidence: confidence,
     });
-    const envelope = await onSubmitVoiceTurn(text, confidence);
-    void onVoiceEvent({
-      event_type: "voice_tool_result",
-      input_modality: "audio_session",
-      payload: {
+    try {
+      const envelope = await onSubmitVoiceTurn(text, confidence);
+      if (envelope) {
+        lastSubmittedRef.current = {
+          text: normalized,
+          at: Date.now(),
+          reply: envelope.reply || "",
+        };
+      }
+      void onVoiceEvent({
+        event_type: "voice_tool_result",
+        input_modality: "audio_session",
+        payload: {
+          status: envelope?.status || "error",
+          stage: envelope?.stage || null,
+          next_action: envelope?.next_action || null,
+        },
+      });
+      sendToolResult(callId, {
         status: envelope?.status || "error",
+        reply: envelope?.reply || "The Mentor could not answer that yet.",
         stage: envelope?.stage || null,
         next_action: envelope?.next_action || null,
-      },
-    });
-    sendToolResult(callId, {
-      status: envelope?.status || "error",
-      reply: envelope?.reply || "The Mentor could not answer that yet.",
-      stage: envelope?.stage || null,
-      next_action: envelope?.next_action || null,
-      choices: envelope?.choices || [],
-      assessment: envelope?.assessment || null,
-    });
-    setMessage("Live voice is listening.");
+        choices: envelope?.choices || [],
+        assessment: envelope?.assessment || null,
+      });
+      setMessage("Live voice is listening.");
+    } finally {
+      turnInFlightRef.current = false;
+    }
   };
 
   const maybeHandleFunctionCall = (event: RealtimeEvent) => {
@@ -1778,6 +1854,8 @@ function AssignmentDock({
 
 function MessageRow({
   msg,
+  choicesActive = false,
+  choicesDisabled = false,
   onUseCode,
   onChooseChoice,
   onResourceEvent,
@@ -1788,6 +1866,9 @@ function MessageRow({
   onVoiceEvent,
 }: {
   msg: Msg;
+  // Choices render only on the newest mentor message; disabled while a turn is in flight.
+  choicesActive?: boolean;
+  choicesDisabled?: boolean;
   onUseCode: (code: ChatCodeBlock) => void;
   onChooseChoice: (choice: ChatChoice) => void;
   onResourceEvent: (
@@ -1894,14 +1975,15 @@ function MessageRow({
     <div ref={ref} className="flex">
       <div className="w-full max-w-[92%] space-y-3">
         <MessageContent text={msg.text} onUseCode={onUseCode} />
-        {msg.choices?.length ? (
+        {msg.choices?.length && choicesActive ? (
           <div className="flex flex-wrap gap-2">
             {msg.choices.map((choice, index) => (
               <button
                 key={`${choiceValue(choice)}-${index}`}
                 type="button"
+                disabled={choicesDisabled}
                 onClick={() => onChooseChoice(choice)}
-                className="rounded-full border border-border bg-background/70 px-3 py-1.5 text-[13px] text-foreground transition-colors hover:bg-muted"
+                className="rounded-full border border-border bg-background/70 px-3 py-1.5 text-[13px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
               >
                 {choiceLabel(choice)}
               </button>

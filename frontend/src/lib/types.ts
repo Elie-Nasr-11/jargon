@@ -1012,6 +1012,8 @@ export type TypedChatAnswer = {
   run_result?: Record<string, unknown> | null;
   input_modality?: ChatInputModality;
   transcript_confidence?: number | null;
+  // Client-generated per-send id so the server can drop duplicate deliveries.
+  client_msg_id?: string;
 };
 
 export type LessonArcStep = { step: number; title: string };

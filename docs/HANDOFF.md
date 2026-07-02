@@ -3975,3 +3975,15 @@ Suggested next task:
   row's `payload.error` and fix the next layer (most likely the model name or a session-config
   field). Optional follow-ups the user floated: ElevenLabs read-aloud TTS; set an explicit
   `OPENAI_REALTIME_MODEL` secret.
+
+## Claude -> Codex / Human - 2026-07-02 00:30
+
+Status: Starting
+Task: Tutor v2.0 Phase A — correctness quick fixes (stale quiz choices, unified send gate,
+completion state, scroll, realtime auth refresh, voice dedup, client_msg_id; backend model
+routing fix, runTimedOut status-keying, rate-limit role filter, pedagogy-block try coverage).
+Full plan in the session plan file; phases B-D follow (flow core w/ step_state, instruction
+layer consolidation, latency).
+Files I expect to touch: frontend/src/routes/chat.tsx, frontend/src/lib/api.ts,
+frontend/src/lib/types.ts, supabase/functions/chat/index.ts
+Notes: each phase independently deployable; wire envelope stays compatible in Phase A.

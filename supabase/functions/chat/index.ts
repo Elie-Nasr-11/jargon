@@ -364,6 +364,12 @@ function normalizeAnswer(answer: unknown): DbRow | null {
         : null,
     input_modality: inputModality,
     transcript_confidence: transcriptConfidence,
+    // Client-generated per-send id, persisted in the turn payload so duplicate deliveries
+    // (voice retries, double taps) can be detected server-side.
+    client_msg_id:
+      typeof raw.client_msg_id === "string" && raw.client_msg_id.length <= 64
+        ? raw.client_msg_id
+        : "",
   };
 }
 
@@ -573,9 +579,10 @@ async function isChatRateLimited(
   const since = encodeURIComponent(
     new Date(Date.now() - CHAT_RATE_LIMIT_WINDOW_MS).toISOString(),
   );
+  // Count only the STUDENT'S sends — mentor rows would silently halve the real ceiling.
   const count = await recentRowCount(
     config,
-    `learning_turns?user_id=eq.${encodeURIComponent(userId)}&session_id=eq.${encodeURIComponent(sessionId)}&created_at=gte.${since}&select=id&limit=${CHAT_RATE_LIMIT_MAX + 1}`,
+    `learning_turns?user_id=eq.${encodeURIComponent(userId)}&session_id=eq.${encodeURIComponent(sessionId)}&role=eq.student&created_at=gte.${since}&select=id&limit=${CHAT_RATE_LIMIT_MAX + 1}`,
   );
   return count >= CHAT_RATE_LIMIT_MAX;
 }
@@ -610,16 +617,22 @@ async function loadOrCreateSession(
 
 function modelFor(route: ModelRoute): string {
   // Prefer TUTOR_MODEL_*; fall back to the legacy OPENAI_MODEL_* then sane defaults.
-  const def = envText("TUTOR_MODEL_DEFAULT", envText("OPENAI_MODEL_DEFAULT", "gpt-4o-mini"));
+  // v2.0: the student-facing conversation runs on a STRONG model by default (it writes every
+  // word the student reads); the graders stay pinned to a cheap literal so flipping the
+  // conversation model can never silently make the high-volume graders expensive.
+  const def = envText(
+    "TUTOR_MODEL_CONVERSATION",
+    envText("TUTOR_MODEL_DEFAULT", envText("OPENAI_MODEL_DEFAULT", "gpt-4o")),
+  );
   const strong = envText("TUTOR_MODEL_STRONG", envText("OPENAI_MODEL_GRADING", "gpt-4o"));
   if (route === "grading") return envText("TUTOR_MODEL_GRADING", strong);
   if (route === "rescue") return envText("TUTOR_MODEL_RESCUE", envText("OPENAI_MODEL_RESCUE", strong));
   if (route === "resource_context") {
     return envText("TUTOR_MODEL_RESOURCE_CONTEXT", envText("OPENAI_MODEL_RESOURCE_CONTEXT", strong));
   }
-  // The understanding-check is a cheap, high-volume grader — default to the small model
-  // (deterministic via temperatureFor) and let ops tune it independently.
-  if (route === "understanding") return envText("TUTOR_MODEL_UNDERSTANDING", def);
+  // The understanding-check is a cheap, high-volume grader — pinned to the small model
+  // (deterministic via temperatureFor), independent of the conversation default.
+  if (route === "understanding") return envText("TUTOR_MODEL_UNDERSTANDING", "gpt-4o-mini");
   return def;
 }
 
@@ -772,15 +785,15 @@ async function callAnthropic(
 
 function modelRouteFor(
   flow: FlowDecision,
-  answer: DbRow | null,
-  assessment: Assessment | null,
-  context: Awaited<ReturnType<typeof loadContext>>,
+  _answer: DbRow | null,
+  _assessment: Assessment | null,
+  _context: Awaited<ReturnType<typeof loadContext>>,
 ): { route: ModelRoute; taskType: ModelUsageTaskType } {
+  // v2.0: the mentor reply is ALWAYS a conversation turn. Grading is deterministic code
+  // (assessAnswer/checkUnderstanding/code judge), so routing gradeable turns to the
+  // temp-0.2 "grading" model only flattened the mentor's voice on exactly the engaged
+  // turns; resource-context turns are ordinary conversation with extra context.
   if (flow.nextAction === "rescue") return { route: "rescue", taskType: "rescue" };
-  if (answer && assessment) return { route: "grading", taskType: "grading" };
-  if (context.resourceChunks.length > 0) {
-    return { route: "resource_context", taskType: "summarization" };
-  }
   return { route: "default", taskType: "mentor_turn" };
 }
 
@@ -829,28 +842,37 @@ function runHasErrors(runResult: unknown): boolean {
 
 // A runtime TIMEOUT is an infrastructure hiccup, not the student's mistake. We detect it
 // so the tutor can reassure and ask for a re-run instead of grading it as a failed attempt.
+// Three shapes reach us: (a) the run edge fn's engine/wake timeout — status "error" with an
+// "Engine request timed out…" error; (b) the client fetch-abort fallback object whose output
+// says "took too long to answer"; (c) the engine's `limit_exceeded` — that one is the
+// STUDENT'S runaway loop and must be graded normally, never excused as infra.
 function runTimedOut(runResult: unknown): boolean {
   if (!runResult || typeof runResult !== "object") return false;
   const raw = runResult as DbRow;
   // A timeout is always a FAILED run — a successful run whose output merely contains the
   // word "timeout" (e.g. a program that prints it) must never be misread as an infra hiccup.
   if (raw.ok === true) return false;
-  if (
-    typeof raw.status === "string" &&
-    /^\s*(timeout|timed[_ ]out)\s*$/i.test(raw.status)
-  ) {
-    return true;
+  if (typeof raw.status === "string") {
+    const status = raw.status.trim().toLowerCase();
+    // The student's own runaway loop hit the engine limits — a real mistake, not infra.
+    if (status === "limit_exceeded") return false;
+    if (/^(timeout|timed[_ ]out)$/.test(status)) return true;
   }
+  const errors = Array.isArray(raw.errors)
+    ? raw.errors.filter((entry) => typeof entry === "string").join("\n")
+    : "";
   const out =
     typeof raw.output === "string"
       ? raw.output
       : Array.isArray(raw.output)
         ? raw.output.join("\n")
         : "";
-  // Match only the real timeout sentinels — "took too long to answer" (client abort) and
-  // "timed out after …ms" (engine). A loose `time.?out` would wrongly catch failed runs
-  // whose output merely contains "runtime output" / "sometime out" and excuse a real bug.
-  return /took too long|timed out/i.test(out);
+  // Match only the real infra sentinels — the run fn's "Engine request timed out after …ms"
+  // (carried in errors[]) and the client abort's "took too long to answer". A loose
+  // `time.?out` would wrongly catch failed runs whose output merely mentions time.
+  return /engine request timed out|took too long to answer|timed out after \d+ms/i.test(
+    `${errors}\n${out}`,
+  );
 }
 
 function expectedOutputFor(
@@ -2286,6 +2308,11 @@ async function handleTypedRequest(
   const userId = String(user.id);
   const sessionId = String(session.id);
   const currentStage = stage(session.stage);
+
+  // Everything from answer-normalization onward runs inside the context-aware try so a
+  // throw in the pedagogy computation returns a typed error with session/stage instead of
+  // falling through to the bare outer catch.
+  try {
   const answer = normalizeAnswer(body.answer);
   const content = answerContent(answer);
   const mentorPreferences = normalizeMentorPreferences(body.mentor_preferences);
@@ -2360,7 +2387,6 @@ async function handleTypedRequest(
   // step, so a prior activity's turns can't prematurely complete a later one.
   const conversationDepth = priorActivityAttempts;
 
-  try {
     if (await isChatRateLimited(config, userId, sessionId)) {
       await recordRuntimeEvent(config, {
         userId,
