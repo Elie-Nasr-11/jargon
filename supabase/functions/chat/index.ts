@@ -163,7 +163,30 @@ type Envelope = {
   lesson_arc?: LessonArc | null;
   next_action: NextAction;
   guardrail: { redirected: boolean; reason: string | null };
+  // Authoritative session snapshot so the client can stay in sync without refetching
+  // (status, cursor, sticky activities-done flag). Assigned by the orchestrator only.
+  session?: EnvelopeSession | null;
 };
+
+type EnvelopeSession = {
+  status: string;
+  current_activity_id: string | null;
+  activities_complete: boolean;
+};
+
+function envelopeSession(value: unknown): EnvelopeSession | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as DbRow;
+  if (typeof raw.status !== "string" || !raw.status) return null;
+  return {
+    status: raw.status,
+    current_activity_id:
+      typeof raw.current_activity_id === "string"
+        ? raw.current_activity_id
+        : null,
+    activities_complete: raw.activities_complete === true,
+  };
+}
 
 type LessonChatResource = {
   id: string;
@@ -295,6 +318,9 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
           ? partial.guardrail.reason
           : null,
     },
+    // Shape-validated passthrough (needed so a dedup replay of a stored envelope keeps
+    // its session snapshot); the live path always overwrites this before persisting.
+    session: envelopeSession(partial.session),
   };
 }
 
@@ -1299,9 +1325,9 @@ function selectTeachingMove(
   const ceil = Math.min(HELP_RANK[policy.helpCeiling] ?? 3, wantRank);
   const rung = Math.max(1, Math.min(4, requestedRung || 1));
 
-  // Intro/presentation turn: the orchestrator presents the activity and never grades,
-  // so PRESENT the task — don't let attempt-first gating turn the lesson opener into an
-  // interrogation. (Applies even if the turn carried a message, mirroring flowFor.)
+  // Presentation turn (the step hasn't been shown yet): the orchestrator presents the
+  // activity and never grades, so PRESENT the task — don't let attempt-first gating turn
+  // the lesson opener into an interrogation. (Applies even if the turn carried a message.)
   if (isIntro && !helpRequest) return { move: "present", hintRung: 0 };
 
   // Confused student: never recommend another socratic re-ask — explain the gap (or
@@ -1589,30 +1615,259 @@ async function upsertMisconception(
   }
 }
 
-function flowFor(
-  currentStage: Stage,
-  session: DbRow,
+// --- Flow core (v2) -----------------------------------------------------------
+// A step is defined by REQUIREMENTS derived from its shape, and by persisted PROGRESS
+// in learning_sessions.step_state. The old flowFor derived control from the current
+// turn's answer.mode with no memory, which is what produced the practice<->assessment
+// ping-pong, quizzes re-attached to every reply, and voice/text turns tripping quiz
+// branches. Control now lives in three pure functions: requirementsFor (what this step
+// needs), applyTurn (fold one turn into progress), deriveTurn (progress -> FlowDecision).
+// The FlowDecision shape is unchanged so every downstream consumer still works.
+
+type StepRequirements = {
+  code: boolean;
+  quiz: boolean;
+  understanding: boolean;
+  quizChoices: unknown[];
+};
+
+// Requirements come from the step's SHAPE, never from the turn: a code step must pass a
+// run; a quiz-bearing step must pass its quiz; a free-text/file step must demonstrate
+// understanding. An MCQ-mode activity without a bound quiz row still counts as a quiz
+// step (its choices live on the activity itself; the mentor's assessment grades it).
+function requirementsFor(
   activity: DbRow | null,
   quiz: DbRow | null,
+): StepRequirements {
+  const mode = responseMode(activity?.response_mode, "code");
+  const needsCode = mode === "code";
+  const needsQuiz = Boolean(quiz) || mode === "multiple_choice";
+  const quizChoices = Array.isArray(quiz?.choices)
+    ? (quiz.choices as unknown[])
+    : Array.isArray(activity?.choices)
+      ? (activity.choices as unknown[])
+      : [];
+  return {
+    code: needsCode,
+    quiz: needsQuiz,
+    understanding: (mode === "text" || mode === "file") && !needsQuiz,
+    quizChoices,
+  };
+}
+
+// Persisted per-step progress (learning_sessions.step_state jsonb). The stage column is
+// now a display label for the teacher transcript; CONTROL lives here. Pass timestamps are
+// monotonic — once a gate is passed it stays passed for the life of the step.
+type StepState = {
+  activity_id: string | null;
+  presented_at: string | null;
+  code_passed_at: string | null;
+  quiz_presented_at: string | null;
+  quiz_passed_at: string | null;
+  understanding_at: string | null;
+  // Contentful turns on this step (drives the text-step stuck cap — conversational
+  // rounds, matching the old conversationDepth semantics).
+  attempts: number;
+  // Deterministically GRADED failures only (code run failed, eligible quiz answer
+  // wrong). Teacher-facing struggle signals key on this, never on raw attempts —
+  // side questions and help requests must not look like failing.
+  graded_fails: number;
+};
+
+function emptyStepState(activityId: string | null): StepState {
+  return {
+    activity_id: activityId,
+    presented_at: null,
+    code_passed_at: null,
+    quiz_presented_at: null,
+    quiz_passed_at: null,
+    understanding_at: null,
+    attempts: 0,
+    graded_fails: 0,
+  };
+}
+
+// A mismatched activity_id means the session advanced since the state was written —
+// treat it as empty (this is the reset-on-advance mechanism; the advance patch also
+// writes {} explicitly, so the two agree).
+function parseStepState(session: DbRow, activityId: string | null): StepState {
+  const raw =
+    session.step_state &&
+    typeof session.step_state === "object" &&
+    !Array.isArray(session.step_state)
+      ? (session.step_state as DbRow)
+      : null;
+  const storedKey =
+    raw && typeof raw.activity_id === "string" ? raw.activity_id : "";
+  if (!raw || storedKey !== (activityId ?? "")) {
+    return emptyStepState(activityId);
+  }
+  const iso = (value: unknown) =>
+    typeof value === "string" && value ? value : null;
+  const count = (value: unknown) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  };
+  return {
+    activity_id: activityId,
+    presented_at: iso(raw.presented_at),
+    code_passed_at: iso(raw.code_passed_at),
+    quiz_presented_at: iso(raw.quiz_presented_at),
+    quiz_passed_at: iso(raw.quiz_passed_at),
+    understanding_at: iso(raw.understanding_at),
+    attempts: count(raw.attempts),
+    graded_fails: count(raw.graded_fails),
+  };
+}
+
+// Load progress for the current step, lazily backfilling students who were mid-step when
+// v2 landed (their sessions have no step_state yet). One scoped lesson_attempts read seeds
+// the pass gates and attempt counts; a session that already finished its activities under
+// the old code gets every required gate seeded, so a completed lesson doesn't reopen.
+// seedFailed=true means the backfill read failed: the turn proceeds on the unseeded state,
+// but the caller MUST NOT persist it — leaving step_state empty re-runs the backfill next
+// turn instead of permanently erasing gates the student already passed.
+async function loadStepState(
+  config: SupabaseConfig,
+  session: DbRow,
+  activity: DbRow | null,
+  req: StepRequirements,
+): Promise<{ state: StepState; seedFailed: boolean }> {
+  const activityId = typeof activity?.id === "string" ? activity.id : null;
+  const state = parseStepState(session, activityId);
+  // Stage intro = the step genuinely hasn't been presented (fresh session or just
+  // advanced) — an empty state is correct, not missing.
+  if (state.presented_at || state.attempts > 0 || stage(session.stage) === "intro") {
+    return { state, seedFailed: false };
+  }
+  const nowIso = new Date().toISOString();
+  const seeded: StepState = { ...state, presented_at: nowIso };
+  if (
+    session.activities_complete === true ||
+    session.status === "complete" ||
+    stage(session.stage) === "complete"
+  ) {
+    return {
+      state: {
+        ...seeded,
+        code_passed_at: req.code ? nowIso : null,
+        quiz_presented_at: req.quiz ? nowIso : null,
+        quiz_passed_at: req.quiz ? nowIso : null,
+        understanding_at: req.understanding ? nowIso : null,
+      },
+      seedFailed: false,
+    };
+  }
+  try {
+    const attempts = await loadMany(
+      config,
+      `lesson_attempts?session_id=eq.${encodeURIComponent(String(session.id))}&activity_id=${activityId ? `eq.${encodeURIComponent(activityId)}` : "is.null"}&select=answer_mode,passed&limit=50`,
+    );
+    seeded.attempts = attempts.length;
+    seeded.graded_fails = attempts.filter((a) => a.passed === false).length;
+    if (attempts.some((a) => a.answer_mode === "code" && a.passed === true)) {
+      seeded.code_passed_at = nowIso;
+    }
+    if (
+      attempts.some(
+        (a) => a.answer_mode === "multiple_choice" && a.passed === true,
+      )
+    ) {
+      seeded.quiz_passed_at = nowIso;
+      seeded.quiz_presented_at = nowIso;
+    }
+  } catch {
+    return { state: seeded, seedFailed: true };
+  }
+  return { state: seeded, seedFailed: false };
+}
+
+function stepDone(state: StepState, req: StepRequirements): boolean {
+  return (
+    (!req.code || Boolean(state.code_passed_at)) &&
+    (!req.quiz || Boolean(state.quiz_passed_at)) &&
+    (!req.understanding || Boolean(state.understanding_at))
+  );
+}
+
+// The quiz is live only after its prerequisites: never before a required code gate has
+// passed, and never again once passed. Because a quiz can ONLY pass via a
+// multiple_choice answer while eligible, a text or voice turn can never trip it.
+function quizEligible(state: StepState, req: StepRequirements): boolean {
+  return (
+    req.quiz &&
+    !state.quiz_passed_at &&
+    (!req.code || Boolean(state.code_passed_at))
+  );
+}
+
+// Fold one turn into the step's persisted progress. A presentation turn (the step hasn't
+// been shown yet) only records the presentation — it NEVER grades, so an answer sent
+// before the step appears can't score against it (this replaces stage "intro" as control).
+function applyTurn(
+  before: StepState,
+  req: StepRequirements,
   answer: DbRow | null,
   assessment: Assessment | null,
   understanding: Understanding | null,
-  conversationDepth: number,
-): FlowDecision {
-  const activityMode = responseMode(activity?.response_mode, "code");
-  const quizChoices = Array.isArray(quiz?.choices)
-    ? (quiz.choices as unknown[])
-    : [];
-  const retryCount = Number(session.retry_count || 0);
-  const rescueCount = Number(session.rescue_count || 0);
-  const weakAction: NextAction =
-    retryCount > 0 || rescueCount > 0 ? "rescue" : "retry";
+  nowIso: string,
+): StepState {
+  if (!before.presented_at) {
+    return { ...before, presented_at: nowIso };
+  }
+  const after = { ...before };
+  if (answer && answerContent(answer)) {
+    after.attempts = before.attempts + 1;
+  }
+  // Deterministically graded failure (orchestrator source only — a mentor's free-form
+  // assessment must never look like a failed graded attempt).
+  if (
+    answer &&
+    assessment?.source === "orchestrator" &&
+    assessment.passed === false
+  ) {
+    after.graded_fails = before.graded_fails + 1;
+  }
+  if (
+    req.code &&
+    !after.code_passed_at &&
+    answer?.mode === "code" &&
+    assessment?.passed === true
+  ) {
+    after.code_passed_at = nowIso;
+  }
+  if (
+    quizEligible(before, req) &&
+    answer?.mode === "multiple_choice" &&
+    assessment?.passed === true
+  ) {
+    after.quiz_passed_at = nowIso;
+    if (!after.quiz_presented_at) after.quiz_presented_at = nowIso;
+  }
+  if (
+    req.understanding &&
+    !after.understanding_at &&
+    answer &&
+    (answer.mode === "text" || answer.mode === "file") &&
+    // Demonstrated understanding, or the stuck cap: >=4 prior attempts on this step means
+    // several rounds without landing it — conclude gracefully rather than loop forever.
+    (understanding?.demonstrated === true || before.attempts >= 4)
+  ) {
+    after.understanding_at = nowIso;
+  }
+  return after;
+}
 
-  // Stage "intro" means this activity has not been presented yet: present it and move to
-  // practice, never grade — whether or not this turn carried an answer. This keeps a fresh
-  // session and a session that just advanced to the next step symmetric (the advancing
-  // turn tells the student to "send a message", and that message lands here at intro).
-  if (currentStage === "intro") {
+// Derive the turn's flow from persisted progress. Choices are attached on EVERY turn
+// while the quiz is eligible (the prompt tells the mentor they're already on screen), so
+// the quiz can't be dismissed by a side conversation and never re-attaches after passing.
+function deriveTurn(
+  state: StepState,
+  req: StepRequirements,
+  presentedBefore: boolean,
+  activityMode: ResponseMode,
+): FlowDecision {
+  if (!presentedBefore) {
     return {
       stage: "practice",
       responseMode: activityMode,
@@ -1622,70 +1877,10 @@ function flowFor(
           : activityMode === "multiple_choice"
             ? "choose"
             : "reply",
-      choices: activityMode === "multiple_choice" ? quizChoices : [],
+      choices: activityMode === "multiple_choice" ? req.quizChoices : [],
     };
   }
-
-  if (!answer) {
-    const mode = activityMode;
-    return {
-      stage: currentStage === "intro" ? "practice" : currentStage,
-      responseMode: mode,
-      nextAction:
-        mode === "code"
-          ? "run_code"
-          : mode === "multiple_choice"
-            ? "choose"
-            : "reply",
-      choices: mode === "multiple_choice" ? quizChoices : [],
-    };
-  }
-
-  if (answer.mode === "code") {
-    if (assessment?.passed === true) {
-      return quiz
-        ? {
-            stage: "assessment",
-            responseMode: "multiple_choice",
-            nextAction: "choose",
-            choices: quizChoices,
-          }
-        : {
-            stage: "complete",
-            responseMode: "text",
-            nextAction: "complete",
-            choices: [],
-          };
-    }
-    // No auto-complete backstop here: open-ended tasks complete via the semantic code judge,
-    // and an exact-output task must keep requiring the right output (looping-with-escalating-
-    // help is correct there). Auto-completing clean-but-wrong runs would pass wrong answers.
-    return {
-      stage: "practice",
-      responseMode: "code",
-      nextAction: weakAction,
-      choices: [],
-    };
-  }
-
-  if (answer.mode === "multiple_choice") {
-    if (assessment?.passed === true) {
-      return {
-        stage: "complete",
-        responseMode: "text",
-        nextAction: "complete",
-        choices: [],
-      };
-    }
-    return {
-      stage: "review",
-      responseMode: "multiple_choice",
-      nextAction: weakAction,
-      choices: quizChoices,
-    };
-  }
-
-  if (assessment?.passed === true && currentStage === "review") {
+  if (stepDone(state, req)) {
     return {
       stage: "complete",
       responseMode: "text",
@@ -1693,51 +1888,23 @@ function flowFor(
       choices: [],
     };
   }
-
-  if (answer.mode === "text" || answer.mode === "file") {
-    if (quiz) {
-      return {
-        stage: "assessment",
-        responseMode: "multiple_choice",
-        nextAction: "choose",
-        choices: quizChoices,
-      };
-    }
-    // If the activity is already complete (e.g. a code activity whose code passed
-    // earlier), a further text turn is a wrap-up chat — stay complete.
-    if (currentStage === "complete") {
-      return { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
-    }
-    // Explanation/discussion activity: complete only when the mentor judges the
-    // student has demonstrated understanding (or after a stuck cap), instead of the
-    // old behavior of blind-completing on the first text turn or looping forever.
-    if (activityMode === "text") {
-      const demonstrated = understanding?.demonstrated === true;
-      // conversationDepth = prior attempts on THIS activity, so >=4 means the student
-      // has gone several rounds here without demonstrating — conclude rather than loop.
-      const stuck = conversationDepth >= 4;
-      if (demonstrated || stuck) {
-        return { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
-      }
-      return { stage: "practice", responseMode: "text", nextAction: "reply", choices: [] };
-    }
-    // Text side-message on a code/multiple-choice activity: keep guiding the student
-    // toward the real attempt (do NOT blind-complete the activity).
+  if (quizEligible(state, req)) {
     return {
-      stage: currentStage === "intro" ? "practice" : currentStage,
-      responseMode: activityMode,
-      nextAction:
-        activityMode === "multiple_choice" ? "choose" : activityMode === "code" ? "run_code" : "reply",
-      choices: activityMode === "multiple_choice" ? quizChoices : [],
+      stage: "assessment",
+      responseMode: "multiple_choice",
+      nextAction: "choose",
+      choices: req.quizChoices,
     };
   }
-
-  return {
-    stage: currentStage === "intro" ? "practice" : currentStage,
-    responseMode: activityMode,
-    nextAction: activityMode === "code" ? "run_code" : "reply",
-    choices: [],
-  };
+  if (req.code && !state.code_passed_at) {
+    return {
+      stage: "practice",
+      responseMode: "code",
+      nextAction: "run_code",
+      choices: [],
+    };
+  }
+  return { stage: "practice", responseMode: "text", nextAction: "reply", choices: [] };
 }
 
 function fallbackReply(
@@ -2222,6 +2389,9 @@ async function writeEvidenceAndMastery(
   }
 }
 
+// Teacher-facing support signal. Fires exactly once per step — on the turn of the 3rd
+// GRADED failure without the step passing (the caller additionally requires that THIS
+// turn produced a graded failure, so sitting at 3 fails can't re-fire it on chat turns).
 async function maybeWriteRecommendation(
   config: SupabaseConfig,
   userId: string,
@@ -2229,19 +2399,17 @@ async function maybeWriteRecommendation(
   sessionId: string,
   milestone: DbRow | null,
   envelope: Envelope,
+  gradedFails: number,
+  stepIsDone: boolean,
 ): Promise<void> {
-  if (envelope.next_action !== "retry" && envelope.next_action !== "rescue")
-    return;
+  if (gradedFails !== 3 || stepIsDone) return;
   await insertRow(config, "mentor_recommendations", {
     user_id: userId,
     session_id: sessionId,
     lesson_id: lessonId,
     milestone_id: typeof milestone?.id === "string" ? milestone.id : null,
-    recommendation_type: envelope.next_action,
-    title:
-      envelope.next_action === "rescue"
-        ? "Rescue support recommended"
-        : "Retry recommended",
+    recommendation_type: "rescue",
+    title: "Rescue support recommended",
     rationale:
       envelope.reply ||
       "The learner needs another pass on the current milestone.",
@@ -2250,17 +2418,10 @@ async function maybeWriteRecommendation(
       response_mode: envelope.response_mode,
       next_action: envelope.next_action,
       assessment: envelope.assessment,
+      graded_fails: gradedFails,
     },
     status: "pending",
   });
-}
-
-function sessionStatus(flow: FlowDecision): string {
-  if (flow.stage === "complete" || flow.nextAction === "complete")
-    return "complete";
-  if (flow.nextAction === "retry") return "needs_retry";
-  if (flow.nextAction === "rescue") return "needs_rescue";
-  return "active";
 }
 
 async function handleLegacyRequest(
@@ -2332,12 +2493,24 @@ async function handleTypedRequest(
     context.milestone,
     context.quiz,
   );
-  const orchestratorAssessment = assessAnswer(
-    answer,
-    context.lesson,
-    context.activity,
-    context.quiz,
-  );
+  // --- Flow core (v2): step requirements + persisted progress -----------------
+  const activityMode = responseMode(context.activity?.response_mode, "code");
+  const requirements = requirementsFor(context.activity, context.quiz);
+  const { state: stepStateBefore, seedFailed: stepSeedFailed } =
+    await loadStepState(config, session, context.activity, requirements);
+  const presentedBefore = Boolean(stepStateBefore.presented_at);
+  const quizEligibleBefore = quizEligible(stepStateBefore, requirements);
+  const turnStartedIso = new Date().toISOString();
+  // Grading eligibility: a presentation turn never grades (the step hasn't been shown
+  // yet), and an MCQ answer grades only while its quiz is actually live — a stale tap on
+  // an old choice block, or a choice sent before a required code gate passed, grades
+  // nothing and writes nothing.
+  const staleQuizAnswer =
+    answer?.mode === "multiple_choice" && !quizEligibleBefore;
+  const orchestratorAssessment =
+    !presentedBefore || staleQuizAnswer
+      ? null
+      : assessAnswer(answer, context.lesson, context.activity, context.quiz);
 
   // --- Pedagogy decision (diagnose -> policy -> teaching move) ---------------
   const mentorMode = mentorPreferences?.mode || "guide";
@@ -2355,9 +2528,9 @@ async function handleTypedRequest(
     (helpRequest === "hint" ? deriveHintRung(context.recentTurns) : 0);
   const intent = detectIntent(content);
   const recentQuestions = mentorQuestionsFromTurns(context.recentTurns);
-  const priorActivityAttempts = context.recentAttempts.filter(
-    (a) => String(a.activity_id || "") === String(context.activity?.id || ""),
-  ).length;
+  // Prior attempts on THIS step — persisted in step_state (resets on advance), replacing
+  // the old count of recent lesson_attempts rows.
+  const priorActivityAttempts = stepStateBefore.attempts;
   // A typed help request is NOT itself an attempt — otherwise "just tell me the answer" as a
   // first message would satisfy attempt-first and switch off the no-final-answer gate.
   const hasAttempt =
@@ -2374,7 +2547,6 @@ async function handleTypedRequest(
   const helpPolicy = resolveHelpPolicy(context.lesson);
   // A free-text explanation/reflection step (not a code or quiz step). Used to keep the teaching
   // move off worked-examples here (they'd hand the student the answer to restate).
-  const activityMode = responseMode(context.activity?.response_mode, "code");
   const isTextStep = activityMode === "text" && !context.quiz;
   const teaching = selectTeachingMove(
     diagnosis,
@@ -2385,18 +2557,13 @@ async function handleTypedRequest(
     hasAttempt,
     helpRequest,
     requestedRung,
-    currentStage === "intro",
+    !presentedBefore,
     intent,
     isTextStep,
   );
   const answersForbidden =
     helpPolicy.finalAnswerPolicy === "never" ||
     (helpPolicy.finalAnswerPolicy === "after_attempt" && !hasAttempt);
-  // How many attempts the student has already made ON THIS activity — a backstop so an
-  // explanation activity concludes instead of looping. Scoped to the current activity
-  // (via activity_id) and it naturally resets when the session advances to the next
-  // step, so a prior activity's turns can't prematurely complete a later one.
-  const conversationDepth = priorActivityAttempts;
 
     if (await isChatRateLimited(config, userId, sessionId)) {
       await recordRuntimeEvent(config, {
@@ -2417,6 +2584,54 @@ async function handleTypedRequest(
         lesson_id: lessonId,
         stage: currentStage,
       });
+    }
+
+    // Server-side turn idempotency (B4): a retried/double-submitted answer replays the
+    // stored mentor reply instead of running (and persisting) the whole turn again. The
+    // client stamps every answer with a client_msg_id; recent turns are already loaded,
+    // so the duplicate scan is free.
+    const clientMsgId =
+      typeof answer?.client_msg_id === "string" ? answer.client_msg_id : "";
+    if (clientMsgId) {
+      const turns = context.recentTurns; // newest first
+      const dupIndex = turns.findIndex((turn) => {
+        if (turn.role !== "student") return false;
+        const payload =
+          turn.payload && typeof turn.payload === "object"
+            ? (turn.payload as DbRow)
+            : null;
+        return payload?.client_msg_id === clientMsgId;
+      });
+      if (dupIndex >= 0) {
+        // The mentor row that followed the original submission holds the full envelope
+        // as its payload — replay it verbatim (scan newer rows, oldest-first). Hitting
+        // ANOTHER student row first means the original's reply never landed — fall
+        // through to the benign acknowledgment rather than replaying a later exchange.
+        for (let i = dupIndex - 1; i >= 0; i--) {
+          if (turns[i].role === "student") break;
+          if (turns[i].role !== "mentor") continue;
+          const payload = turns[i].payload;
+          if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+            const replay = makeEnvelope(payload as Partial<Envelope>);
+            replay.session_id = sessionId;
+            replay.lesson_id = lessonId;
+            return json(replay);
+          }
+          break;
+        }
+        // Original still in flight (or its reply never landed): acknowledge benignly
+        // without writing anything — the in-flight request owns this turn.
+        return json(
+          makeEnvelope({
+            session_id: sessionId,
+            lesson_id: lessonId,
+            stage: currentStage,
+            response_mode: "text",
+            next_action: "reply",
+            reply: "One moment — I'm still working on your last message.",
+          }),
+        );
+      }
     }
 
     if (answer && content) {
@@ -2441,9 +2656,9 @@ async function handleTypedRequest(
     const isTextExplanation =
       answer?.mode === "text" &&
       activityMode === "text" &&
-      !context.quiz &&
-      currentStage !== "intro" &&
-      currentStage !== "complete" &&
+      requirements.understanding &&
+      presentedBefore &&
+      !stepStateBefore.understanding_at &&
       // Only skip an explicit summary request; do NOT gate on confused/frustrated, so a
       // misread intent can never suppress grading a genuinely correct explanation.
       intent !== "wants_summary";
@@ -2476,8 +2691,9 @@ async function handleTypedRequest(
     const codeNeedsJudge =
       codeRanClean &&
       orchestratorAssessment?.passed === false &&
-      currentStage !== "intro" &&
-      currentStage !== "complete";
+      requirements.code &&
+      presentedBefore &&
+      !stepStateBefore.code_passed_at;
     const gradedCode = codeNeedsJudge
       ? await checkCodeObjective(
           config,
@@ -2507,15 +2723,19 @@ async function handleTypedRequest(
     // Lesson-arc view (step N of M, done, next) so the mentor can situate this turn.
     const lessonArc = buildLessonArc(context.activities, context.activity);
 
-    const draftFlow = flowFor(
-      currentStage,
-      session,
-      context.activity,
-      context.quiz,
+    const draftState = applyTurn(
+      stepStateBefore,
+      requirements,
       answer,
       effectiveOrchestratorAssessment,
       gradedUnderstanding,
-      conversationDepth,
+      turnStartedIso,
+    );
+    const draftFlow = deriveTurn(
+      draftState,
+      requirements,
+      presentedBefore,
+      activityMode,
     );
     const understandingDirective = gradedUnderstanding
       ? gradedUnderstanding.demonstrated
@@ -2635,7 +2855,36 @@ async function handleTypedRequest(
           runtime_timeout: runtimeTimedOut,
           latest_answer: answer,
           deterministic_assessment: effectiveOrchestratorAssessment,
-          orchestrator_flow: draftFlow,
+          // The step's contract: what this step requires, what's already passed, and
+          // whether its quiz is live on screen right now (quiz_presented means the
+          // options are already visible — point at them, don't re-read them).
+          step_contract: {
+            step: lessonArc ? lessonArc.step : 1,
+            of: lessonArc ? lessonArc.total : Math.max(context.activities.length, 1),
+            title: String(context.activity?.title || context.lesson?.title || ""),
+            kind: activityMode,
+            requirements: {
+              code: requirements.code
+                ? draftState.code_passed_at
+                  ? "passed"
+                  : "pending"
+                : "not_required",
+              quiz: requirements.quiz
+                ? draftState.quiz_passed_at
+                  ? "passed"
+                  : "pending"
+                : "not_required",
+              understanding: requirements.understanding
+                ? draftState.understanding_at
+                  ? "demonstrated"
+                  : "pending"
+                : "not_required",
+            },
+            presented: presentedBefore,
+            quiz_presented: Boolean(stepStateBefore.quiz_presented_at),
+            attempts: draftState.attempts,
+            quiz_active: draftFlow.nextAction === "choose",
+          },
           skill_keys: skillKeys,
           pass_threshold: passThreshold(context.activity, context.quiz),
           required_fields: [
@@ -2698,16 +2947,26 @@ async function handleTypedRequest(
     // the mentor's self-reported understanding is only the fallback when no grader ran.
     const understanding =
       gradedUnderstanding ?? parsedUnderstanding(parsed.understanding);
-    const finalFlow = flowFor(
-      currentStage,
-      session,
-      context.activity,
-      context.quiz,
+    const finalState = applyTurn(
+      stepStateBefore,
+      requirements,
       answer,
       assessment,
       understanding,
-      conversationDepth,
+      turnStartedIso,
     );
+    const finalFlow = deriveTurn(
+      finalState,
+      requirements,
+      presentedBefore,
+      activityMode,
+    );
+    // First attach of an eligible quiz: remember it so later prompts can say the options
+    // are already on screen (the mentor points at them instead of re-reading them).
+    if (finalFlow.nextAction === "choose" && !finalState.quiz_presented_at) {
+      finalState.quiz_presented_at = turnStartedIso;
+    }
+    const finalStepDone = stepDone(finalState, requirements);
 
     // Multi-step lessons: if the current activity is finished but later activities
     // remain (ordered by position), advance the session to the next activity instead
@@ -2805,11 +3064,14 @@ async function handleTypedRequest(
     if (activitiesDoneThisTurn && !unifiedComplete) {
       // Finished the steps but the lesson isn't done yet — hold it open instead of
       // celebrating completion (required work remains, or we couldn't confirm it's clear).
+      // With step completion persisted, this branch now runs on EVERY turn while gated,
+      // so the boilerplate nudge is appended only on the turn the activities first finish
+      // (later gated turns reply normally; the prompt still carries pending_checkpoints).
       envelope.stage = "review";
       envelope.response_mode = "text";
       envelope.next_action = "reply";
       envelope.choices = [];
-      if (requiredRemaining.length > 0) {
+      if (requiredRemaining.length > 0 && session.activities_complete !== true) {
         const list = requiredRemaining.map((c) => `"${c.title}"`).join(", ");
         const many = requiredRemaining.length > 1;
         envelope.reply =
@@ -2837,6 +3099,42 @@ async function handleTypedRequest(
       await upsertMisconception(config, userId, null, parsed.misconception);
     }
 
+    // A deterministic grade failed this turn (orchestrator-sourced only, so a mentor's
+    // free-form assessment can never bump the teacher-facing counters).
+    const gradedFail =
+      Boolean(answer) && effectiveOrchestratorAssessment?.passed === false;
+    const retryIncrement = gradedFail ? 1 : 0;
+    const finalGradedFails = finalState.graded_fails;
+    // Gate the status: complete only when activities AND required checkpoints are confidently
+    // done; if activities are done but something's outstanding (or unconfirmed), stay active.
+    // needs_rescue/needs_retry are TeacherConsole's needs-attention signals — the flow no
+    // longer emits retry/rescue actions, so they're derived from GRADED failures on this
+    // step (never from raw attempts: side questions to the mentor are not struggling).
+    const nextStatus = advancing
+      ? "active"
+      : unifiedComplete
+        ? "complete"
+        : activitiesComplete
+          ? "active"
+          : finalGradedFails >= 4 && !finalStepDone
+            ? "needs_rescue"
+            : gradedFail && finalGradedFails >= 2
+              ? "needs_retry"
+              : "active";
+
+    // Authoritative session snapshot on the wire, so the client can track status/cursor/
+    // completion without refetching. Assigned before the mentor-turn insert so the stored
+    // payload (used by the dedup replay and the teacher transcript) carries it too.
+    envelope.session = {
+      status: nextStatus,
+      current_activity_id: advancing
+        ? advanceToActivityId
+        : typeof context.activity?.id === "string"
+          ? context.activity.id
+          : null,
+      activities_complete: advancing ? false : activitiesComplete,
+    };
+
     await insertRow(config, "learning_turns", {
       session_id: sessionId,
       user_id: userId,
@@ -2849,7 +3147,9 @@ async function handleTypedRequest(
     });
 
     let attempt: DbRow | null = null;
-    if (answer) {
+    // Record writes gate on grading eligibility (B11): a presentation turn never writes
+    // (the step wasn't on screen yet), and a stale/ineligible quiz tap writes nothing.
+    if (answer && presentedBefore && !staleQuizAnswer) {
       attempt = await insertRow(config, "lesson_attempts", {
         session_id: sessionId,
         activity_id:
@@ -2904,32 +3204,25 @@ async function handleTypedRequest(
         teaching.hintRung,
         attemptedBeforeHelp,
       );
-      await maybeWriteRecommendation(
-        config,
-        userId,
-        lessonId,
-        sessionId,
-        context.milestone,
-        envelope,
-      );
+      // Only on the turn that PRODUCED the graded failure — ungraded turns (text chatter
+      // while stuck at 3 fails) must not re-fire the recommendation.
+      if (gradedFail) {
+        await maybeWriteRecommendation(
+          config,
+          userId,
+          lessonId,
+          sessionId,
+          context.milestone,
+          envelope,
+          finalGradedFails,
+          finalStepDone,
+        );
+      }
     }
 
-    const retryIncrement = envelope.next_action === "retry" ? 1 : 0;
-    const rescueIncrement = envelope.next_action === "rescue" ? 1 : 0;
-    // Gate the status: complete only when activities AND required checkpoints are confidently
-    // done; if activities are done but something's outstanding (or unconfirmed), stay active;
-    // otherwise the normal flow.
-    const nextStatus = advancing
-      ? "active"
-      : unifiedComplete
-        ? "complete"
-        : activitiesComplete
-          ? "active"
-          : sessionStatus(finalFlow);
-
-    // Rolling independence signal (only updated on real attempts).
+    // Rolling independence signal (only updated on real graded-eligible attempts).
     let nextIndependence: number | undefined;
-    if (answer) {
+    if (answer && presentedBefore && !staleQuizAnswer) {
       const turnInd = independenceFor(
         assessment,
         attemptedBeforeHelp,
@@ -2952,16 +3245,29 @@ async function handleTypedRequest(
           : typeof context.activity?.id === "string"
             ? context.activity.id
             : null,
+        // Stage stays a teacher-transcript label; the advance still resets it to "intro"
+        // for continuity, but control lives in step_state (reset to {} on advance).
         stage: advancing ? "intro" : envelope.stage,
         status: nextStatus,
         // Sticky: once the activities are done it stays done, even while gated on checkpoints.
         activities_complete: advancing ? false : activitiesComplete,
+        // When the lazy backfill failed, DON'T persist the unseeded state — leaving
+        // step_state empty makes the next turn re-run the backfill instead of
+        // permanently erasing gates the student passed before v2 (their graded work
+        // this turn is still durable in lesson_attempts and re-seeds from there).
+        ...(advancing
+          ? { step_state: {} }
+          : stepSeedFailed
+            ? {}
+            : { step_state: finalState }),
         score:
           typeof assessment?.score === "number"
             ? Math.max(Number(session.score || 0), assessment.score)
             : Number(session.score || 0),
         retry_count: advancing ? 0 : Number(session.retry_count || 0) + retryIncrement,
-        rescue_count: advancing ? 0 : Number(session.rescue_count || 0) + rescueIncrement,
+        // Frozen: rescue is no longer a flow action; the count is kept (not reset outside
+        // an advance) because TeacherConsole reads it as a historical signal.
+        rescue_count: advancing ? 0 : Number(session.rescue_count || 0),
         updated_at: new Date().toISOString(),
         mentor_mode: mentorMode,
         ...(nextIndependence !== undefined
@@ -2989,12 +3295,14 @@ async function handleTypedRequest(
         latencyMs: Date.now() - requestStartedAt,
         payload: { stage: envelope.stage, score: assessment?.score ?? null },
       });
-    } else if (envelope.next_action === "retry" || envelope.next_action === "rescue") {
+    } else if (gradedFail) {
+      // retry/rescue died as flow actions; keep the telemetry stream keyed on graded
+      // failures (rescue = the student is genuinely stuck on this step).
       await recordRuntimeEvent(config, {
         userId,
         sessionId,
         lessonId,
-        eventType: envelope.next_action,
+        eventType: finalGradedFails >= 4 && !finalStepDone ? "rescue" : "retry",
         latencyMs: Date.now() - requestStartedAt,
         payload: { stage: envelope.stage, assessment },
       });

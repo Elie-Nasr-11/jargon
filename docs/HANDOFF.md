@@ -6,6 +6,40 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-02 (Tutor v2.0 Phase B: flow core simplification — DONE)
+
+Summary: Replaced flowFor's answer-mode-derived stage machine with persisted per-step progress.
+New column learning_sessions.step_state jsonb {activity_id, presented_at, code_passed_at,
+quiz_presented_at, quiz_passed_at, understanding_at, attempts, graded_fails} + pure functions
+requirementsFor/parseStepState/loadStepState(lazy backfill for pre-v2 live sessions)/applyTurn/
+deriveTurn/stepDone/quizEligible. FlowDecision shape + draft/final two-phase kept. Grading
+eligibility: presentation turns never grade or write records (fixes B3/B11); MCQ answers grade only
+while their quiz is eligible (stale taps inert; voice/text turns can never trip or pass a quiz —
+fixes B1/B2). Quiz choices attach on every eligible turn until passed; quiz_presented tells the
+prompt the options are already on screen. Server-side turn dedup via answer.client_msg_id replays
+the stored mentor envelope (B4). Envelope gains authoritative session {status, current_activity_id,
+activities_complete}; chat.tsx merges it into learningSession (F7) and keys lessonComplete off it.
+step_contract replaces orchestrator_flow in the model's user JSON. Teacher signals preserved:
+needs_rescue/needs_retry now derive from step_state.graded_fails (deterministic failures only —
+side questions are not struggle), retry_count increments per graded fail, rescue_count frozen,
+mentor_recommendations fires once at the 3rd graded fail.
+Files changed: supabase/functions/chat/index.ts, supabase/migrations/20260702000000_tutor_v2_step_state.sql
+(new; also applied live via Management API ahead of deploy), .github/workflows/deploy-backend.yml
+(migration list), frontend/src/lib/types.ts, frontend/src/routes/chat.tsx, docs/HANDOFF.md.
+Tests run: node --experimental-strip-types --check (chat fn); frontend tsc/lint/build (0 errors,
+12 pre-existing warnings); adversarial multi-agent review (18 findings -> 6 confirmed after
+2-verifier refutation, all fixed: graded_fails split from attempts for teacher alerts, backfill
+failure no longer persists an unseeded state, checkpoint hold nudge appends once, dedup replay
+breaks on interleaved student turns, recommendation gated on the failing turn) + a follow-up
+verification agent over the fix delta (1 new defect found + fixed).
+Remaining concerns: post-completion turns re-derive stage complete each turn (parity with old
+behavior, prompt-side polish lands in Phase C); modelRouteFor's rescue route + fallbackReply's
+retry/rescue branches are dead code (deleted in Phase C/D); frontend half of Phases A+B is on the
+branch but not yet fast-forwarded to main (needs user OK).
+Suggested next task: v2.0 Phase C — instruction layer consolidation + prompt diet + routing polish
+(see /root plan "Tutor v2.0"): rewrite SYSTEM_PROMPT, delete selectTeachingMove/MOVE_GUIDANCE/six
+directives for a turnDirective() priority ladder, content-only history, reduced model output schema.
+
 ## Claude -> Codex / Human - 2026-07-01 (Checkpoint unification: drift/inefficiency review + follow-ups)
 
 Reviewed the whole unification for drift + inefficiencies (3 parallel review agents + a full DB field-parity

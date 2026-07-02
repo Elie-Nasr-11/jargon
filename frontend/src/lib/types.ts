@@ -1043,6 +1043,14 @@ export type TypedChatEnvelope = {
     redirected: boolean;
     reason: string | null;
   };
+  // Authoritative session snapshot from the orchestrator (v2): keeps the client's
+  // LearningSession in sync (status, step cursor, sticky activities-done flag)
+  // without a refetch. Optional — envelopes stored before v2 don't carry it.
+  session?: {
+    status: LearningSession["status"];
+    current_activity_id: string | null;
+    activities_complete: boolean;
+  } | null;
 };
 
 export type JargonRunResponse = {

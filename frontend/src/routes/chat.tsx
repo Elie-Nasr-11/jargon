@@ -810,13 +810,30 @@ function ChatPage() {
           mentorPreferences: mentorToPreferences(mentor),
         });
         setSessionId(envelope.session_id);
+        // Merge the orchestrator's session snapshot (F7): status, step cursor, and the
+        // sticky activities-done flag stay in sync without a refetch.
         setLearningSession((previous) =>
           previous
-            ? { ...previous, id: envelope.session_id || previous.id, stage: envelope.stage }
+            ? {
+                ...previous,
+                id: envelope.session_id || previous.id,
+                stage: envelope.stage,
+                ...(envelope.session
+                  ? {
+                      status: envelope.session.status,
+                      current_activity_id: envelope.session.current_activity_id,
+                      activities_complete: envelope.session.activities_complete,
+                    }
+                  : {}),
+              }
             : previous,
         );
         if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
-        if (envelope.stage === "complete" || envelope.next_action === "complete") {
+        if (
+          envelope.stage === "complete" ||
+          envelope.next_action === "complete" ||
+          envelope.session?.status === "complete"
+        ) {
           setLessonComplete(true);
         }
         replaceThinking(thinkingId, envelopeMessage(envelope));
