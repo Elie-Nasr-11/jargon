@@ -6,6 +6,70 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-02 (Tutor v2.0 Phase D: latency + cleanup — DONE)
+
+Summary: A tutor turn's I/O collapsed from ~9 serial reads + ~7 serial writes to two parallel
+read waves + (mentor insert -> one parallel record batch -> session patch). loadContext wave 1
+(lesson, allActivities select=* with the cursor row derived in code — the separate
+current-activity query is gone, recentTurns, mastery, resources +display_mode now actually
+selected, interactions, profile) then wave 2 (milestone, activity quiz, single-activity quiz
+fallback, misconceptions by activity skills, chunks), checkpoints chain overlapping both. The
+student-turn insert runs inside the grader Promise.all (handler attached immediately — review
+caught the unhandled-rejection window). advanceToActivityId derives from context.activities.
+Post-model: mentor turn insert first (transcript/dedup source of truth), then a parallel batch
+of [misconception, attempt->evidence chain, quiz_attempts, recommendation], THEN the session
+patch (review caught the patch racing a failed attempt insert: the session must never advance
+past lost graded records). Mastery loop -> one in.() read + one PostgREST upsert
+(on_conflict=user_id,skill_key — PK verified live; new upsertRows helper). All
+runtime_events/model_usage_events writes go through scheduleBackground (guarded
+EdgeRuntime.waitUntil) — telemetry off the critical path incl. error paths. Legacy {messages}
+path deleted (sole caller was the undeployed standalone mentor/mentor.js — it now gets a typed
+400). run fn marks terminal engine timeouts with timeout:true; chat runTimedOut prefers the
+flag (string heuristics kept as fallback). Frontend: fetchLatestLearningSession adds an explicit
+user_id filter (newest-first pick KEPT — it is the authoritative choice; "prefer active" would
+boot zombie sessions on completed lessons); dead helpRequest/hintRung plumbing removed; voice
+tool-result no longer forwards envelope.assessment; fabricated "min left" estimate deleted;
+resource/voice telemetry uses the cached session instead of per-event auth.getUser();
+resource-card dead ternary; the always-true dictation/read-aloud/live-voice flags deleted from
+VoiceSettings + every consumer branch (Composer no longer takes a voice prop).
+Files changed: supabase/functions/chat/index.ts, supabase/functions/run/index.ts,
+tests/test_supabase_chat_function.py, frontend/src/lib/api.ts, frontend/src/lib/jargon-store.ts,
+frontend/src/routes/chat.tsx, frontend/src/components/Composer.tsx,
+frontend/src/components/HeaderMenus.tsx, docs/HANDOFF.md.
+Tests run: node --experimental-strip-types --check (chat + run); python3 -m unittest
+tests.test_supabase_chat_function (12 OK, legacy test now asserts the path is gone); frontend
+tsc/lint/build (0 errors, 12 pre-existing warnings); adversarial multi-agent review (6 findings
+-> 4 confirmed after 2-verifier refutation, deduped to 3 fixes, all applied: student-turn insert
+joined into the grader Promise.all; session patch staged AFTER the record batch; dead empty
+import removed).
+Remaining concerns: the run fn's timeout:true flag is unreachable through the SHIPPED frontend
+(invokeJargonRun throws on the 502 and discards the body; the fabricated fallback message still
+matches the string heuristics, so detection works — forwarding structured 502 bodies would make
+the flag load-bearing, a small future client change); misconception read filter narrowed to
+activity skills (verified: authored activity skills mirror milestone skills, and an empty filter
+falls back to unfiltered — accepted); voice-session's session pick left as-is by design (matches
+the client's authoritative updated_at-desc pick). The branch now carries the frontend halves of
+Phases A+B+D awaiting the user-OK'd main fast-forward.
+Suggested next task: fast-forward main (frontend A+B+D goes live on Render), then a live
+behavioral matrix pass + latency p50/p95 comparison via runtime_events once student traffic
+accrues.
+
+Status was: Starting
+Task: loadContext -> two parallel read waves (activity derived from a widened allActivities
+select); post-model writes batched (mentor turn insert stays first, then one Promise.all;
+attempt->evidence stays chained); mastery per-skill loop -> one read + one PostgREST upsert
+(on_conflict=user_id,skill_key — PK verified); telemetry via guarded EdgeRuntime.waitUntil;
+legacy {messages} path deleted (sole caller: undeployed mentor/mentor.js); run fn returns
+timeout:true and runTimedOut prefers it; frontend F11 cruft (dead helpRequest/hintRung plumbing,
+voice-flag dead branches, fabricated "min left", getUser->getSession for telemetry, resource-card
+ternary) + explicit user_id on fetchLatestLearningSession.
+Files I expect to touch: supabase/functions/chat/index.ts, supabase/functions/run/index.ts,
+tests/test_supabase_chat_function.py, frontend/src/lib/api.ts, frontend/src/routes/chat.tsx,
+frontend/src/components/HeaderMenus.tsx, frontend/src/components/Composer.tsx,
+frontend/src/lib/jargon-store.ts, docs/HANDOFF.md.
+Notes: no schema changes; wire envelope unchanged; voice-session session pick intentionally
+left as-is (it already matches the client's authoritative updated_at-desc pick).
+
 ## Claude -> Codex / Human - 2026-07-02 (Tutor v2.0 Phase C: instruction layer + prompt diet + routing — DONE)
 
 Summary: The mentor's instruction layer is now one coherent build. SYSTEM_PROMPT rewritten as a

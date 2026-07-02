@@ -1,5 +1,4 @@
 // Jargon Mentor - structured course-session chat edge function.
-// Legacy compatibility: { messages } -> { reply } still works.
 // Typed contract: { lesson_id, session_id?, answer?, mentor_preferences? } -> learning envelope.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
@@ -352,15 +351,6 @@ function typedAuthStatus(message: string): number {
   return 500;
 }
 
-function isLegacyRequest(body: Record<string, unknown>): boolean {
-  return (
-    Array.isArray(body.messages) &&
-    !body.lesson_id &&
-    !body.session_id &&
-    !body.answer
-  );
-}
-
 function normalizeAnswer(answer: unknown): DbRow | null {
   if (!answer || typeof answer !== "object" || Array.isArray(answer))
     return null;
@@ -500,6 +490,40 @@ async function patchRows(
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify(row),
   });
+}
+
+// PostgREST upsert: one POST for many rows, merged on the given unique columns.
+async function upsertRows(
+  config: SupabaseConfig,
+  table: string,
+  rows: DbRow[],
+  onConflict: string,
+): Promise<void> {
+  if (!rows.length) return;
+  await supabaseFetch(
+    config,
+    `${table}?on_conflict=${encodeURIComponent(onConflict)}`,
+    {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(rows),
+    },
+  );
+}
+
+// Best-effort background work (telemetry) runs OFF the critical path: on the Supabase
+// edge runtime, waitUntil keeps the isolate alive past the response; elsewhere the
+// promise simply runs un-awaited. Callers must pass self-catching promises
+// (recordRuntimeEvent/recordModelUsage swallow their own errors).
+function scheduleBackground(task: Promise<unknown>): void {
+  const runtime = (
+    globalThis as {
+      EdgeRuntime?: { waitUntil?: (task: Promise<unknown>) => void };
+    }
+  ).EdgeRuntime;
+  if (runtime && typeof runtime.waitUntil === "function") {
+    runtime.waitUntil(task);
+  }
 }
 
 async function recordRuntimeEvent(
@@ -848,6 +872,9 @@ function runTimedOut(runResult: unknown): boolean {
   // word "timeout" (e.g. a program that prints it) must never be misread as an infra hiccup.
   // Engine-shaped results carry status ("ok") instead of ok:true, so check both.
   if (raw.ok === true) return false;
+  // The run fn marks its own engine/wake timeouts explicitly (v2.0 Phase D) — prefer the
+  // flag; every check below stays as a fallback for older cached clients.
+  if (raw.timeout === true) return true;
   if (typeof raw.status === "string") {
     const status = raw.status.trim().toLowerCase();
     if (status === "ok") return false;
@@ -1026,7 +1053,9 @@ async function checkUnderstanding(
       "understanding",
     );
     // Record the extra grader call so cost/usage telemetry isn't undercounted (best-effort).
-    await recordModelUsage(config, userId, sessionId, lessonId, result, "grading");
+    scheduleBackground(
+      recordModelUsage(config, userId, sessionId, lessonId, result, "grading"),
+    );
     return parsedUnderstanding(JSON.parse(extractJsonObject(result.content)));
   } catch {
     return null;
@@ -1089,7 +1118,9 @@ async function checkCodeObjective(
       true,
       "understanding",
     );
-    await recordModelUsage(config, userId, sessionId, lessonId, result, "grading");
+    scheduleBackground(
+      recordModelUsage(config, userId, sessionId, lessonId, result, "grading"),
+    );
     return parsedUnderstanding(JSON.parse(extractJsonObject(result.content)));
   } catch {
     return null;
@@ -1961,77 +1992,30 @@ async function loadContext(
   pendingCheckpoints: PendingCheckpoint[];
   pendingCheckpointsOk: boolean;
 }> {
-  // Kicked off concurrently; awaited near the return.
+  // Reads run in TWO parallel waves (wave 2 holds only the queries that genuinely
+  // depend on a wave-1 result), with the checkpoints chain overlapping both.
   const checkpointsPromise = loadPendingCheckpoints(config, userId, lessonId);
-  const lesson = await loadFirst(
-    config,
-    `lessons?id=eq.${encodeURIComponent(lessonId)}&publication_status=eq.published&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id,help_ceiling,require_attempt_first,final_answer_policy,tutor_tone,tutor_pace,grade_band`,
-  );
 
-  let activity: DbRow | null = null;
-  if (
-    typeof session.current_activity_id === "string" &&
-    session.current_activity_id
-  ) {
-    activity = await loadFirst(
-      config,
-      `lesson_activities?id=eq.${encodeURIComponent(session.current_activity_id)}&lesson_id=eq.${encodeURIComponent(lessonId)}&select=*`,
-    );
-  }
-  if (!activity) {
-    activity = await loadFirst(
-      config,
-      `lesson_activities?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
-    );
-  }
-
-  const milestoneId =
-    typeof activity?.milestone_id === "string" ? activity.milestone_id : "";
-  const milestone = milestoneId
-    ? await loadFirst(
-        config,
-        `milestones?id=eq.${encodeURIComponent(milestoneId)}&select=*`,
-      )
-    : await loadFirst(
-        config,
-        `milestones?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
-      );
-
-  // The full ordered step list — needed both for lesson-arc awareness and to scope the
-  // quiz fallback below.
-  const allActivities = await loadMany(
-    config,
-    `lesson_activities?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&select=id,position,title,prompt,stage,response_mode,skill_keys`,
-  );
-
-  // Quiz must be scoped to the CURRENT activity. The lesson-level (activity_id null)
-  // fallback exists ONLY for legacy single-activity lessons — on a multi-step lesson it
-  // would glue one unbound quiz onto EVERY step (stale choices on every reply, steps that
-  // can never advance past a quiz they don't own).
-  const activityQuiz = activity?.id
-    ? await loadFirst(
-        config,
-        `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=eq.${encodeURIComponent(String(activity.id))}&status=eq.published&order=position.asc&limit=1&select=*`,
-      )
-    : null;
-  const quiz =
-    activityQuiz ??
-    (allActivities.length <= 1
-      ? await loadFirst(
-          config,
-          `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
-        )
-      : null);
-
-  const ctxSkills = [...skillKeysFor(activity, milestone, quiz)];
+  // WAVE 1 — everything derivable from the entry params alone. The current activity is
+  // no longer its own query: allActivities is widened to select=* (a lesson has at most
+  // a handful of steps) and the cursor row is picked from it in code.
   const [
+    lesson,
+    allActivities,
     recentTurns,
     mastery,
     resources,
     resourceInteractions,
     profile,
-    misconceptions,
   ] = await Promise.all([
+    loadFirst(
+      config,
+      `lessons?id=eq.${encodeURIComponent(lessonId)}&publication_status=eq.published&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id,help_ceiling,require_attempt_first,final_answer_policy,tutor_tone,tutor_pace,grade_band`,
+    ),
+    loadMany(
+      config,
+      `lesson_activities?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&select=*`,
+    ),
     loadMany(
       config,
       `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=12&select=role,stage,response_mode,content,payload,created_at`,
@@ -2042,7 +2026,7 @@ async function loadContext(
     ),
     loadMany(
       config,
-      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=5&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata`,
+      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=5&select=id,title,description,resource_type,display_mode,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata`,
     ),
     loadMany(
       config,
@@ -2052,22 +2036,68 @@ async function loadContext(
       config,
       `profiles?id=eq.${encodeURIComponent(userId)}&select=name,grade&limit=1`,
     ),
-    loadMany(
-      config,
-      `student_misconceptions?user_id=eq.${encodeURIComponent(userId)}&status=eq.active${ctxSkills.length ? `&skill_key=${inFilter(ctxSkills)}` : ""}&order=last_seen_at.desc&limit=8&select=skill_key,pattern,hint,occurrences`,
-    ),
   ]);
+
+  const currentActivityId =
+    typeof session.current_activity_id === "string"
+      ? session.current_activity_id
+      : "";
+  const activity =
+    (currentActivityId
+      ? allActivities.find((row) => String(row.id) === currentActivityId)
+      : null) ??
+    allActivities[0] ??
+    null;
+
+  const milestoneId =
+    typeof activity?.milestone_id === "string" ? activity.milestone_id : "";
+  const activitySkills = stringArray(activity?.skill_keys);
   const resourceIds = uniqueStrings(
     resources.map((resource) =>
       typeof resource.id === "string" ? resource.id : String(resource.id || ""),
     ),
   );
-  const resourceChunks = resourceIds.length
-    ? await loadMany(
+
+  // WAVE 2 — queries keyed on wave-1 results. Quiz must be scoped to the CURRENT
+  // activity; the lesson-level (activity_id null) fallback exists ONLY for legacy
+  // single-activity lessons — on a multi-step lesson it would glue one unbound quiz onto
+  // EVERY step. Misconceptions are filtered by the ACTIVITY's skills (milestone/quiz
+  // skills resolve in this same wave; empty → unfiltered, and the prompt caps at 3).
+  const [milestone, activityQuiz, fallbackQuiz, misconceptions, resourceChunks] =
+    await Promise.all([
+      milestoneId
+        ? loadFirst(
+            config,
+            `milestones?id=eq.${encodeURIComponent(milestoneId)}&select=*`,
+          )
+        : loadFirst(
+            config,
+            `milestones?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
+          ),
+      activity?.id
+        ? loadFirst(
+            config,
+            `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=eq.${encodeURIComponent(String(activity.id))}&status=eq.published&order=position.asc&limit=1&select=*`,
+          )
+        : Promise.resolve(null),
+      allActivities.length <= 1
+        ? loadFirst(
+            config,
+            `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
+          )
+        : Promise.resolve(null),
+      loadMany(
         config,
-        `resource_text_chunks?resource_id=${inFilter(resourceIds)}&status=eq.approved&order=source_kind.asc,start_seconds.asc,page_number.asc,chunk_index.asc&limit=18&select=resource_id,page_number,chunk_index,chunk_text,status,source_kind,start_seconds,end_seconds`,
-      )
-    : [];
+        `student_misconceptions?user_id=eq.${encodeURIComponent(userId)}&status=eq.active${activitySkills.length ? `&skill_key=${inFilter(activitySkills)}` : ""}&order=last_seen_at.desc&limit=8&select=skill_key,pattern,hint,occurrences`,
+      ),
+      resourceIds.length
+        ? loadMany(
+            config,
+            `resource_text_chunks?resource_id=${inFilter(resourceIds)}&status=eq.approved&order=source_kind.asc,start_seconds.asc,page_number.asc,chunk_index.asc&limit=18&select=resource_id,page_number,chunk_index,chunk_text,status,source_kind,start_seconds,end_seconds`,
+          )
+        : Promise.resolve([] as DbRow[]),
+    ]);
+  const quiz = activityQuiz ?? fallbackQuiz;
 
   const pendingResult = await checkpointsPromise;
 
@@ -2262,16 +2292,24 @@ async function writeEvidenceAndMastery(
     attempted_before_help: attemptedBeforeHelp,
   });
 
-  for (const skill of skills) {
-    const current = await loadFirst(
-      config,
-      `student_mastery?user_id=eq.${encodeURIComponent(userId)}&skill_key=eq.${encodeURIComponent(skill)}&select=*`,
-    );
+  // One read for ALL skills, then one upsert POST — replaces the per-skill
+  // read-then-write loop (2N round trips -> 2). Same field math; the same
+  // read-modify-write race as before (no worse), resolved per-row by the
+  // (user_id, skill_key) primary key at merge time.
+  const currentRows = await loadMany(
+    config,
+    `student_mastery?user_id=eq.${encodeURIComponent(userId)}&skill_key=${inFilter(skills)}&select=*`,
+  );
+  const currentBySkill = new Map(
+    currentRows.map((row) => [String(row.skill_key), row]),
+  );
+  const nowIso = new Date().toISOString();
+  const nextRows = skills.map((skill) => {
+    const current = currentBySkill.get(skill) ?? null;
     const evidenceCount = Number(current?.evidence_count || 0);
     const attemptCount = Number(current?.attempt_count || 0);
     const oldScore = Number(current?.score || 0);
     const nextEvidenceCount = evidenceCount + 1;
-    const nextAttemptCount = attemptCount + 1;
     const nextScore = Math.max(
       0,
       Math.min(
@@ -2279,36 +2317,26 @@ async function writeEvidenceAndMastery(
         (oldScore * evidenceCount + assessment.score) / nextEvidenceCount,
       ),
     );
-    const level =
-      nextScore >= 0.85
-        ? "secure"
-        : nextScore >= 0.55
-          ? "developing"
-          : "emerging";
-    const payload = {
+    return {
       user_id: userId,
       skill_key: skill,
-      level,
+      level:
+        nextScore >= 0.85
+          ? "secure"
+          : nextScore >= 0.55
+            ? "developing"
+            : "emerging",
       evidence_count: nextEvidenceCount,
-      attempt_count: nextAttemptCount,
+      attempt_count: attemptCount + 1,
       score: nextScore,
       latest_score: assessment.score,
       confidence,
-      last_seen_at: new Date().toISOString(),
-      last_practiced_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      last_seen_at: nowIso,
+      last_practiced_at: nowIso,
+      updated_at: nowIso,
     };
-
-    if (current) {
-      await patchRows(
-        config,
-        `student_mastery?user_id=eq.${encodeURIComponent(userId)}&skill_key=eq.${encodeURIComponent(skill)}`,
-        payload,
-      );
-    } else {
-      await insertRow(config, "student_mastery", payload);
-    }
-  }
+  });
+  await upsertRows(config, "student_mastery", nextRows, "user_id,skill_key");
 }
 
 // Teacher-facing support signal. Fires exactly once per step — on the turn of the 3rd
@@ -2344,29 +2372,6 @@ async function maybeWriteRecommendation(
     },
     status: "pending",
   });
-}
-
-async function handleLegacyRequest(
-  body: Record<string, unknown>,
-): Promise<Response> {
-  const chatHistory = Array.isArray(body.messages) ? [...body.messages] : [];
-  const hasPersona = chatHistory.some(
-    (m) =>
-      m &&
-      typeof m === "object" &&
-      (m as DbRow).role === "system" &&
-      typeof (m as DbRow).content === "string" &&
-      String((m as DbRow).content).includes("You are the Jargon Mentor"),
-  );
-  if (!hasPersona)
-    chatHistory.unshift({ role: "system", content: SYSTEM_PROMPT });
-
-  try {
-    const reply = await callModel(chatHistory, false, "default");
-    return json({ reply: reply.content || "No response." });
-  } catch (err) {
-    return json({ reply: `Error: ${errorMessage(err)}` }, 500);
-  }
 }
 
 async function handleTypedRequest(
@@ -2482,19 +2487,21 @@ async function handleTypedRequest(
     (helpPolicy.finalAnswerPolicy === "after_attempt" && !hasAttempt);
 
     if (await isChatRateLimited(config, userId, sessionId)) {
-      await recordRuntimeEvent(config, {
-        userId,
-        sessionId,
-        lessonId,
-        eventType: "controlled_error",
-        status: "error",
-        latencyMs: Date.now() - requestStartedAt,
-        payload: {
-          reason: "chat_rate_limit",
-          window_ms: CHAT_RATE_LIMIT_WINDOW_MS,
-          max_turns: CHAT_RATE_LIMIT_MAX,
-        },
-      });
+      scheduleBackground(
+        recordRuntimeEvent(config, {
+          userId,
+          sessionId,
+          lessonId,
+          eventType: "controlled_error",
+          status: "error",
+          latencyMs: Date.now() - requestStartedAt,
+          payload: {
+            reason: "chat_rate_limit",
+            window_ms: CHAT_RATE_LIMIT_WINDOW_MS,
+            max_turns: CHAT_RATE_LIMIT_MAX,
+          },
+        }),
+      );
       return typedError("Too many chat turns at once. Pause for a minute and try again.", 429, {
         session_id: sessionId,
         lesson_id: lessonId,
@@ -2550,18 +2557,22 @@ async function handleTypedRequest(
       }
     }
 
-    if (answer && content) {
-      await insertRow(config, "learning_turns", {
-        session_id: sessionId,
-        user_id: userId,
-        lesson_id: lessonId,
-        role: "student",
-        stage: currentStage,
-        response_mode: answer.mode,
-        content,
-        payload: answer,
-      });
-    }
+    // The student-turn insert runs CONCURRENTLY with the grader below — nothing this
+    // request reads the row (recentTurns is already loaded). It is joined into the
+    // grader Promise.all so a failure still fails the turn before the mentor call.
+    const studentTurnPromise =
+      answer && content
+        ? insertRow(config, "learning_turns", {
+            session_id: sessionId,
+            user_id: userId,
+            lesson_id: lessonId,
+            role: "student",
+            stage: currentStage,
+            response_mode: answer.mode,
+            content,
+            payload: answer,
+          })
+        : Promise.resolve(null);
 
     // v1.2 loop-closer: for a free-text explanation turn, a dedicated grader judges whether
     // the student demonstrated the objective; its verdict hard-gates completion below and is
@@ -2578,18 +2589,6 @@ async function handleTypedRequest(
       // Only skip an explicit summary request; do NOT gate on confused/frustrated, so a
       // misread intent can never suppress grading a genuinely correct explanation.
       intent !== "wants_summary";
-    const gradedUnderstanding = isTextExplanation
-      ? await checkUnderstanding(
-          config,
-          userId,
-          sessionId,
-          lessonId,
-          context.activity,
-          context.milestone,
-          content,
-          context.recentTurns,
-        )
-      : null;
     const runtimeTimedOut = Boolean(
       answer?.mode === "code" && runTimedOut(answer.run_result),
     );
@@ -2610,19 +2609,39 @@ async function handleTypedRequest(
       requirements.code &&
       presentedBefore &&
       !stepStateBefore.code_passed_at;
-    const gradedCode = codeNeedsJudge
-      ? await checkCodeObjective(
-          config,
-          userId,
-          sessionId,
-          lessonId,
-          context.activity,
-          context.milestone,
-          typeof answer?.code === "string" ? answer.code : "",
-          outputLines(answer?.run_result).join("\n"),
-          context.recentTurns,
-        )
-      : null;
+    // The two graders are mutually exclusive (text explanation vs clean code); either one
+    // runs alongside the student-turn insert. The insert promise MUST be a member of this
+    // same Promise.all — that attaches its rejection handler immediately (an unhandled
+    // rejection would kill the isolate mid-request) and keeps fail-fast: an insert failure
+    // rejects the batch straight into the typed-500 catch before the mentor call.
+    const [gradedUnderstanding, gradedCode] = await Promise.all([
+      isTextExplanation
+        ? checkUnderstanding(
+            config,
+            userId,
+            sessionId,
+            lessonId,
+            context.activity,
+            context.milestone,
+            content,
+            context.recentTurns,
+          )
+        : Promise.resolve(null),
+      codeNeedsJudge
+        ? checkCodeObjective(
+            config,
+            userId,
+            sessionId,
+            lessonId,
+            context.activity,
+            context.milestone,
+            typeof answer?.code === "string" ? answer.code : "",
+            outputLines(answer?.run_result).join("\n"),
+            context.recentTurns,
+          )
+        : Promise.resolve(null),
+      studentTurnPromise,
+    ]);
     // A judge-based pass COMPLETES the activity (unblocks the loop) but is capped below the
     // "secure" mastery tier (< 0.85): the server never re-executed the code and run_result is
     // client-supplied, so an open-ended judgement earns solid-but-not-verified credit only.
@@ -2905,28 +2924,32 @@ async function handleTypedRequest(
     ];
 
     const openAIResult = await callModel(messages, true, "default");
-    await recordModelUsage(
-      config,
-      userId,
-      sessionId,
-      lessonId,
-      openAIResult,
-      "mentor_turn",
+    scheduleBackground(
+      recordModelUsage(
+        config,
+        userId,
+        sessionId,
+        lessonId,
+        openAIResult,
+        "mentor_turn",
+      ),
     );
     const contentJson = openAIResult.content;
     let parsed: DbRow;
     try {
       parsed = JSON.parse(contentJson);
     } catch {
-      await recordRuntimeEvent(config, {
-        userId,
-        sessionId,
-        lessonId,
-        eventType: "chat_failure",
-        status: "error",
-        latencyMs: Date.now() - requestStartedAt,
-        payload: { reason: "invalid_mentor_json" },
-      });
+      scheduleBackground(
+        recordRuntimeEvent(config, {
+          userId,
+          sessionId,
+          lessonId,
+          eventType: "chat_failure",
+          status: "error",
+          latencyMs: Date.now() - requestStartedAt,
+          payload: { reason: "invalid_mentor_json" },
+        }),
+      );
       return typedError("Mentor returned invalid JSON.", 502, {
         session_id: sessionId,
         lesson_id: lessonId,
@@ -2970,10 +2993,10 @@ async function handleTypedRequest(
       finalFlow.stage === "complete" || finalFlow.nextAction === "complete";
     let advanceToActivityId: string | null = null;
     if (finishedCurrentActivity && context.activity) {
+      // context.activities is already the full position-ordered step list — no query.
       const currentPosition = Number(context.activity.position ?? 0);
-      const nextActivity = await loadFirst(
-        config,
-        `lesson_activities?lesson_id=eq.${encodeURIComponent(lessonId)}&position=gt.${currentPosition}&order=position.asc&limit=1&select=id`,
+      const nextActivity = context.activities.find(
+        (row) => Number(row.position ?? 0) > currentPosition,
       );
       if (nextActivity && typeof nextActivity.id === "string") {
         advanceToActivityId = nextActivity.id;
@@ -3088,11 +3111,6 @@ async function handleTypedRequest(
         `${envelope.reply}\n\nThat's everything for this lesson — you've completed all the required work. Nicely done!`.trim();
     }
 
-    // Misconception memory: persist any recurring conceptual error the mentor flagged.
-    if (parsed.misconception) {
-      await upsertMisconception(config, userId, null, parsed.misconception);
-    }
-
     // A deterministic grade failed this turn (orchestrator-sourced only, so a mentor's
     // free-form assessment can never bump the teacher-facing counters).
     const gradedFail =
@@ -3129,6 +3147,9 @@ async function handleTypedRequest(
       activities_complete: advancing ? false : activitiesComplete,
     };
 
+    // The mentor-turn insert stays strictly BEFORE the batched writes below: this row is
+    // the teacher transcript and the dedup-replay source of truth, so the session must
+    // never advance past a reply that failed to persist.
     await insertRow(config, "learning_turns", {
       session_id: sessionId,
       user_id: userId,
@@ -3139,80 +3160,6 @@ async function handleTypedRequest(
       content: envelope.reply,
       payload: envelope,
     });
-
-    let attempt: DbRow | null = null;
-    // Record writes gate on grading eligibility (B11): a presentation turn never writes
-    // (the step wasn't on screen yet), and a stale/ineligible quiz tap writes nothing.
-    if (answer && presentedBefore && !staleQuizAnswer) {
-      attempt = await insertRow(config, "lesson_attempts", {
-        session_id: sessionId,
-        activity_id:
-          typeof context.activity?.id === "string" ? context.activity.id : null,
-        user_id: userId,
-        lesson_id: lessonId,
-        answer_mode: answer.mode,
-        answer_text: answer.mode === "text" ? answer.text : null,
-        answer_code: answer.mode === "code" ? answer.code : null,
-        choice_id: answer.mode === "multiple_choice" ? answer.choice_id : null,
-        run_result: answer.run_result || null,
-        score: typeof assessment?.score === "number" ? assessment.score : null,
-        passed:
-          typeof assessment?.passed === "boolean" ? assessment.passed : null,
-        feedback: assessment?.feedback || envelope.reply,
-        input_modality: answer.input_modality || "typed",
-        transcript_confidence:
-          typeof answer.transcript_confidence === "number"
-            ? answer.transcript_confidence
-            : null,
-      });
-
-      if (answer.mode === "multiple_choice" && context.quiz) {
-        await insertRow(config, "quiz_attempts", {
-          quiz_item_id: String(context.quiz.id),
-          session_id: sessionId,
-          user_id: userId,
-          lesson_id: lessonId,
-          answer_mode: answer.mode,
-          choice_id: answer.choice_id || null,
-          score:
-            typeof assessment?.score === "number" ? assessment.score : null,
-          passed:
-            typeof assessment?.passed === "boolean" ? assessment.passed : null,
-          feedback: assessment?.feedback || envelope.reply,
-          graded_by: "system",
-        });
-      }
-
-      await writeEvidenceAndMastery(
-        config,
-        userId,
-        lessonId,
-        sessionId,
-        attempt,
-        answer,
-        assessment,
-        skillKeys,
-        context.milestone,
-        confidenceFor(assessment, session, hintRung),
-        directive.key,
-        hintRung,
-        attemptedBeforeHelp,
-      );
-      // Only on the turn that PRODUCED the graded failure — ungraded turns (text chatter
-      // while stuck at 3 fails) must not re-fire the recommendation.
-      if (gradedFail) {
-        await maybeWriteRecommendation(
-          config,
-          userId,
-          lessonId,
-          sessionId,
-          context.milestone,
-          envelope,
-          finalGradedFails,
-          finalStepDone,
-        );
-      }
-    }
 
     // Rolling independence signal (only updated on real graded-eligible attempts).
     let nextIndependence: number | undefined;
@@ -3228,91 +3175,200 @@ async function handleTypedRequest(
       const prior = Number.isFinite(priorRaw) ? priorRaw : null;
       nextIndependence = prior === null ? turnInd : 0.7 * prior + 0.3 * turnInd;
     }
+
+    // Remaining record writes run as ONE parallel batch — none reads another's result
+    // except attempt -> evidence (evidence stores the attempt id), which stays chained
+    // inside its own batch member. The session patch is awaited AFTER the batch: the
+    // session must never advance past a turn whose graded records failed to persist
+    // (a dedup replay after a retried 500 would otherwise skip the records forever,
+    // and the step_state backfill relies on lesson_attempts being durable).
+    const recordWrites: Promise<unknown>[] = [];
+    // Misconception memory: persist any recurring conceptual error the mentor flagged.
+    if (parsed.misconception) {
+      recordWrites.push(
+        upsertMisconception(config, userId, null, parsed.misconception),
+      );
+    }
+    // Record writes gate on grading eligibility (B11): a presentation turn never writes
+    // (the step wasn't on screen yet), and a stale/ineligible quiz tap writes nothing.
+    if (answer && presentedBefore && !staleQuizAnswer) {
+      recordWrites.push(
+        (async () => {
+          const attempt = await insertRow(config, "lesson_attempts", {
+            session_id: sessionId,
+            activity_id:
+              typeof context.activity?.id === "string"
+                ? context.activity.id
+                : null,
+            user_id: userId,
+            lesson_id: lessonId,
+            answer_mode: answer.mode,
+            answer_text: answer.mode === "text" ? answer.text : null,
+            answer_code: answer.mode === "code" ? answer.code : null,
+            choice_id:
+              answer.mode === "multiple_choice" ? answer.choice_id : null,
+            run_result: answer.run_result || null,
+            score:
+              typeof assessment?.score === "number" ? assessment.score : null,
+            passed:
+              typeof assessment?.passed === "boolean" ? assessment.passed : null,
+            feedback: assessment?.feedback || envelope.reply,
+            input_modality: answer.input_modality || "typed",
+            transcript_confidence:
+              typeof answer.transcript_confidence === "number"
+                ? answer.transcript_confidence
+                : null,
+          });
+          await writeEvidenceAndMastery(
+            config,
+            userId,
+            lessonId,
+            sessionId,
+            attempt,
+            answer,
+            assessment,
+            skillKeys,
+            context.milestone,
+            confidenceFor(assessment, session, hintRung),
+            directive.key,
+            hintRung,
+            attemptedBeforeHelp,
+          );
+        })(),
+      );
+
+      if (answer.mode === "multiple_choice" && context.quiz) {
+        recordWrites.push(
+          insertRow(config, "quiz_attempts", {
+            quiz_item_id: String(context.quiz.id),
+            session_id: sessionId,
+            user_id: userId,
+            lesson_id: lessonId,
+            answer_mode: answer.mode,
+            choice_id: answer.choice_id || null,
+            score:
+              typeof assessment?.score === "number" ? assessment.score : null,
+            passed:
+              typeof assessment?.passed === "boolean" ? assessment.passed : null,
+            feedback: assessment?.feedback || envelope.reply,
+            graded_by: "system",
+          }),
+        );
+      }
+
+      // Only on the turn that PRODUCED the graded failure — ungraded turns (text chatter
+      // while stuck at 3 fails) must not re-fire the recommendation.
+      if (gradedFail) {
+        recordWrites.push(
+          maybeWriteRecommendation(
+            config,
+            userId,
+            lessonId,
+            sessionId,
+            context.milestone,
+            envelope,
+            finalGradedFails,
+            finalStepDone,
+          ),
+        );
+      }
+    }
+    await Promise.all(recordWrites);
     await patchRows(
       config,
       `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`,
-      {
-        // When advancing, point the cursor at the next activity and reset to its intro;
-        // otherwise keep the current activity (unchanged single-step behavior).
-        current_activity_id: advancing
-          ? advanceToActivityId
-          : typeof context.activity?.id === "string"
-            ? context.activity.id
-            : null,
-        // Stage stays a teacher-transcript label; the advance still resets it to "intro"
-        // for continuity, but control lives in step_state (reset to {} on advance).
-        stage: advancing ? "intro" : envelope.stage,
-        status: nextStatus,
-        // Sticky: once the activities are done it stays done, even while gated on checkpoints.
-        activities_complete: advancing ? false : activitiesComplete,
-        // When the lazy backfill failed, DON'T persist the unseeded state — leaving
-        // step_state empty makes the next turn re-run the backfill instead of
-        // permanently erasing gates the student passed before v2 (their graded work
-        // this turn is still durable in lesson_attempts and re-seeds from there).
-        ...(advancing
-          ? { step_state: {} }
-          : stepSeedFailed
-            ? {}
-            : { step_state: finalState }),
-        score:
-          typeof assessment?.score === "number"
-            ? Math.max(Number(session.score || 0), assessment.score)
-            : Number(session.score || 0),
-        retry_count: advancing ? 0 : Number(session.retry_count || 0) + retryIncrement,
-        // Frozen: rescue is no longer a flow action; the count is kept (not reset outside
-        // an advance) because TeacherConsole reads it as a historical signal.
-        rescue_count: advancing ? 0 : Number(session.rescue_count || 0),
-        updated_at: new Date().toISOString(),
-        mentor_mode: mentorMode,
-        ...(nextIndependence !== undefined
-          ? { independence_score: nextIndependence }
-          : {}),
-      },
-    );
+        {
+          // When advancing, point the cursor at the next activity and reset to its intro;
+          // otherwise keep the current activity (unchanged single-step behavior).
+          current_activity_id: advancing
+            ? advanceToActivityId
+            : typeof context.activity?.id === "string"
+              ? context.activity.id
+              : null,
+          // Stage stays a teacher-transcript label; the advance still resets it to "intro"
+          // for continuity, but control lives in step_state (reset to {} on advance).
+          stage: advancing ? "intro" : envelope.stage,
+          status: nextStatus,
+          // Sticky: once the activities are done it stays done, even while gated on checkpoints.
+          activities_complete: advancing ? false : activitiesComplete,
+          // When the lazy backfill failed, DON'T persist the unseeded state — leaving
+          // step_state empty makes the next turn re-run the backfill instead of
+          // permanently erasing gates the student passed before v2 (their graded work
+          // this turn is still durable in lesson_attempts and re-seeds from there).
+          ...(advancing
+            ? { step_state: {} }
+            : stepSeedFailed
+              ? {}
+              : { step_state: finalState }),
+          score:
+            typeof assessment?.score === "number"
+              ? Math.max(Number(session.score || 0), assessment.score)
+              : Number(session.score || 0),
+          retry_count: advancing
+            ? 0
+            : Number(session.retry_count || 0) + retryIncrement,
+          // Frozen: rescue is no longer a flow action; the count is kept (not reset outside
+          // an advance) because TeacherConsole reads it as a historical signal.
+          rescue_count: advancing ? 0 : Number(session.rescue_count || 0),
+          updated_at: new Date().toISOString(),
+          mentor_mode: mentorMode,
+          ...(nextIndependence !== undefined
+            ? { independence_score: nextIndependence }
+            : {}),
+        },
+      );
 
     if (currentStage !== envelope.stage) {
-      await recordRuntimeEvent(config, {
-        userId,
-        sessionId,
-        lessonId,
-        eventType: "stage_transition",
-        latencyMs: Date.now() - requestStartedAt,
-        payload: { from_stage: currentStage, to_stage: envelope.stage, next_action: envelope.next_action },
-      });
+      scheduleBackground(
+        recordRuntimeEvent(config, {
+          userId,
+          sessionId,
+          lessonId,
+          eventType: "stage_transition",
+          latencyMs: Date.now() - requestStartedAt,
+          payload: { from_stage: currentStage, to_stage: envelope.stage, next_action: envelope.next_action },
+        }),
+      );
     }
     if (!advancing && (envelope.next_action === "complete" || nextStatus === "complete")) {
-      await recordRuntimeEvent(config, {
-        userId,
-        sessionId,
-        lessonId,
-        eventType: "completion",
-        latencyMs: Date.now() - requestStartedAt,
-        payload: { stage: envelope.stage, score: assessment?.score ?? null },
-      });
+      scheduleBackground(
+        recordRuntimeEvent(config, {
+          userId,
+          sessionId,
+          lessonId,
+          eventType: "completion",
+          latencyMs: Date.now() - requestStartedAt,
+          payload: { stage: envelope.stage, score: assessment?.score ?? null },
+        }),
+      );
     } else if (gradedFail) {
       // retry/rescue died as flow actions; keep the telemetry stream keyed on graded
       // failures (rescue = the student is genuinely stuck on this step).
-      await recordRuntimeEvent(config, {
-        userId,
-        sessionId,
-        lessonId,
-        eventType: finalGradedFails >= 4 && !finalStepDone ? "rescue" : "retry",
-        latencyMs: Date.now() - requestStartedAt,
-        payload: { stage: envelope.stage, assessment },
-      });
+      scheduleBackground(
+        recordRuntimeEvent(config, {
+          userId,
+          sessionId,
+          lessonId,
+          eventType: finalGradedFails >= 4 && !finalStepDone ? "rescue" : "retry",
+          latencyMs: Date.now() - requestStartedAt,
+          payload: { stage: envelope.stage, assessment },
+        }),
+      );
     }
 
     return json(envelope);
   } catch (err) {
-    await recordRuntimeEvent(config, {
-      userId,
-      sessionId,
-      lessonId,
-      eventType: "chat_failure",
-      status: "error",
-      latencyMs: Date.now() - requestStartedAt,
-      payload: { message: errorMessage(err) },
-    });
+    scheduleBackground(
+      recordRuntimeEvent(config, {
+        userId,
+        sessionId,
+        lessonId,
+        eventType: "chat_failure",
+        status: "error",
+        latencyMs: Date.now() - requestStartedAt,
+        payload: { message: errorMessage(err) },
+      }),
+    );
     return typedError(errorMessage(err), 500, {
       session_id: sessionId,
       lesson_id: lessonId,
@@ -3332,7 +3388,6 @@ Deno.serve(async (req: Request) => {
     }
 
     const record = body as Record<string, unknown>;
-    if (isLegacyRequest(record)) return await handleLegacyRequest(record);
     return await handleTypedRequest(req, record);
   } catch (err) {
     return typedError(errorMessage(err), 500);

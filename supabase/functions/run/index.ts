@@ -29,7 +29,7 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function runError(message: string) {
+function runError(message: string, timedOut = false) {
   const output = [`[ERROR] ${message}`];
   return {
     output,
@@ -41,6 +41,9 @@ function runError(message: string) {
     status: "error",
     truncated: false,
     limits_hit: [],
+    // Explicit infra-timeout flag so the tutor never has to string-match the message
+    // to tell an engine timeout from a student error.
+    ...(timedOut ? { timeout: true } : {}),
   };
 }
 
@@ -292,15 +295,16 @@ Deno.serve(async (req: Request) => {
       return json(runError(`Engine returned non-JSON response with status ${res.status}.`), 502);
     }
   } catch (err) {
-    const message = isAbortError(err)
+    const timedOut = isAbortError(err);
+    const message = timedOut
       ? `Engine request timed out after ${ENGINE_FETCH_TIMEOUT_MS}ms after wake retry.`
       : `Engine unreachable: ${errorMessage(err)}`;
     await recordRuntimeEvent(runtime, {
       userId,
       eventType: "run_failure",
       latencyMs: Date.now() - startedAt,
-      payload: { reason: isAbortError(err) ? "engine_wake_timeout" : "engine_unreachable", message },
+      payload: { reason: timedOut ? "engine_wake_timeout" : "engine_unreachable", message },
     });
-    return json(runError(message), 502);
+    return json(runError(message, timedOut), 502);
   }
 });

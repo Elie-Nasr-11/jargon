@@ -1167,10 +1167,9 @@ function ChatPage() {
               onSendText={sendUser}
               onRunCode={runCode}
               onSendCodeResult={sendCodeResult}
-              voice={voice}
               onVoiceEvent={handleVoiceEvent}
               sending={sending}
-              canStartVoice={voice.realtimeEnabled}
+              canStartVoice
               onStartVoice={() => setVoiceMode(true)}
             />
           </div>
@@ -1400,7 +1399,6 @@ function RealtimeVoicePanel({
         stage: envelope?.stage || null,
         next_action: envelope?.next_action || null,
         choices: envelope?.choices || [],
-        assessment: envelope?.assessment || null,
       });
       setMessage("Live voice is listening.");
     } finally {
@@ -2120,7 +2118,7 @@ function ReadAloudAction({
     };
   }, [fallbackSupported]);
 
-  if (!voice.readAloudEnabled || !text.trim()) return null;
+  if (!text.trim()) return null;
 
   const finish = () => {
     setSpeaking(false);
@@ -2364,7 +2362,7 @@ function ResourceCard({
             ) : (
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
             )}
-            {busy ? "Opening..." : shouldRenderInline(resource) ? "Open" : "Open"}
+            {busy ? "Opening..." : "Open"}
           </button>
         </div>
 

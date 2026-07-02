@@ -802,7 +802,6 @@ function SimpleProgress({ progress }: { progress: number }) {
       </div>
       <div className="mt-1 flex justify-between text-[11.5px] text-foreground/70">
         <span>{Math.round(progress * 100)}% complete</span>
-        <span>{Math.max(0, Math.round((1 - progress) * 24))} min left</span>
       </div>
     </>
   );

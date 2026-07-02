@@ -19,7 +19,6 @@ import {
   JARGON_CONDITION_WORDS,
   JARGON_LANGUAGE_ID,
 } from "@/lib/jargon-syntax";
-import type { VoiceSettings } from "@/lib/jargon-store";
 import { useTheme } from "@/lib/theme";
 import type { ChatInputModality, VoiceInteractionEvent } from "@/lib/types";
 
@@ -147,7 +146,6 @@ type ComposerProps = {
   onSendText: (text: string, options?: SendTextOptions) => void;
   onSendCodeResult: (code: string, lang: Lang, result: RunResult) => void;
   onRunCode?: (code: string, lang: Lang) => Promise<RunResult>;
-  voice?: VoiceSettings;
   onVoiceEvent?: (event: VoiceInteractionEvent) => void | Promise<void>;
   initialCode?: string;
   initialLanguage?: Lang;
@@ -162,7 +160,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onSendText,
     onSendCodeResult,
     onRunCode,
-    voice,
     onVoiceEvent,
     initialCode,
     initialLanguage = "jargon",
@@ -411,11 +408,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       return;
     }
 
-    if (voice?.dictationEnabled === false) {
-      setVoiceError("Dictation is turned off in settings.");
-      return;
-    }
-
     const Ctor = speechRecognitionConstructor();
     if (!Ctor) {
       setVoiceError("Dictation is not available in this browser.");
@@ -584,16 +576,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 <button
                   type="button"
                   onClick={toggleDictation}
-                  disabled={sending || voice?.dictationEnabled === false || !voiceSupported}
+                  disabled={sending || !voiceSupported}
                   aria-label={dictating ? "Stop dictation" : "Start dictation"}
                   title={
-                    voice?.dictationEnabled === false
-                      ? "Dictation is off in settings"
-                      : voiceSupported
-                        ? dictating
-                          ? "Stop dictation"
-                          : "Dictate answer"
-                        : "Dictation is not available in this browser"
+                    voiceSupported
+                      ? dictating
+                        ? "Stop dictation"
+                        : "Dictate answer"
+                      : "Dictation is not available in this browser"
                   }
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
                     dictating

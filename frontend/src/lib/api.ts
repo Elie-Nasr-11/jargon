@@ -380,12 +380,19 @@ export async function fetchLessonActivities(lessonId: string) {
 }
 
 export async function fetchLatestLearningSession(lessonId: string) {
-  const { data, error } = await supabase
+  // Newest-first is the authoritative pick: the server never re-picks a session
+  // (without a session_id it creates a fresh one), so the client's choice here is
+  // what the whole turn loop will use. The explicit user filter is belt-and-braces
+  // over RLS.
+  const session = await getSession();
+  let query = supabase
     .from("learning_sessions")
     .select("*")
     .eq("lesson_id", lessonId)
     .order("updated_at", { ascending: false })
     .limit(1);
+  if (session?.user?.id) query = query.eq("user_id", session.user.id);
+  const { data, error } = await query;
   if (error) throw error;
   return ((data || [])[0] as LearningSession | undefined) || null;
 }
@@ -2223,11 +2230,10 @@ export async function getResourcePageAssetSignedUrl(asset: ResourcePageAsset) {
 }
 
 export async function recordResourceInteraction(event: ResourceInteractionEvent) {
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError) throw userError;
+  // Telemetry fires on every open/progress tick — read the locally-cached session
+  // instead of a per-event auth round trip (RLS still enforces the user server-side).
+  const session = await getSession();
+  const user = session?.user;
   if (!user) throw new Error("You need to sign in to record resource progress.");
   const { error } = await supabase.from("resource_interactions").insert({
     resource_id: event.resource_id,
@@ -2386,11 +2392,9 @@ export async function deleteResourceChunks(resourceId: string, chunkIds: string[
 }
 
 export async function recordVoiceInteraction(event: VoiceInteractionEvent) {
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError) throw userError;
+  // Voice telemetry is high-frequency — same locally-cached session read as above.
+  const session = await getSession();
+  const user = session?.user;
   if (!user) throw new Error("You need to sign in to record voice usage.");
 
   const { error } = await supabase.from("voice_interaction_events").insert({
@@ -2953,8 +2957,6 @@ export async function invokeTypedChat(input: {
   sessionId?: string | null;
   answer?: TypedChatAnswer;
   mentorPreferences: MentorPreferences;
-  helpRequest?: "hint" | "show_me_how" | "explain";
-  hintRung?: number;
 }) {
   const response = await fetchWithTimeout(functionUrl("chat"), {
     method: "POST",
@@ -2964,8 +2966,6 @@ export async function invokeTypedChat(input: {
       session_id: input.sessionId || undefined,
       answer: input.answer,
       mentor_preferences: input.mentorPreferences,
-      help_request: input.helpRequest || undefined,
-      hint_rung: input.hintRung || undefined,
     }),
   });
   const data = (await response.json()) as TypedChatEnvelope;

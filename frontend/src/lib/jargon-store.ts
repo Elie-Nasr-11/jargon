@@ -40,18 +40,16 @@ export const DEFAULT_MENTOR: MentorConfig = {
   mode: "guide",
 };
 
+// Dictation, read-aloud, and live voice are always on (their toggles were removed from
+// the UI along with the enabled flags); only rate and voice remain user-configurable.
+// Older localStorage payloads may still carry the deleted flags — the read() spread
+// tolerates unknown keys.
 export type VoiceSettings = {
-  dictationEnabled: boolean;
-  readAloudEnabled: boolean;
-  realtimeEnabled: boolean;
   readAloudRate: 0.85 | 1 | 1.2;
   voiceName: "marin" | "cedar" | "coral" | "nova" | "shimmer";
 };
 
 export const DEFAULT_VOICE: VoiceSettings = {
-  dictationEnabled: true,
-  readAloudEnabled: true,
-  realtimeEnabled: true,
   readAloudRate: 1,
   voiceName: "marin",
 };
@@ -86,11 +84,6 @@ export const store = {
   getVoice: () => ({
     ...DEFAULT_VOICE,
     ...read<Partial<VoiceSettings>>(KEYS.voice, {}),
-    // Dictation, read-aloud, and live voice are always on now (their toggles were removed from the
-    // UI) — coerce any previously-saved "off" back on so every consumer sees them enabled.
-    dictationEnabled: true,
-    readAloudEnabled: true,
-    realtimeEnabled: true,
   }),
   setVoice: (v: VoiceSettings) => write(KEYS.voice, v),
 };

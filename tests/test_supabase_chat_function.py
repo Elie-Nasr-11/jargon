@@ -11,11 +11,12 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
     def setUpClass(cls):
         cls.source = CHAT_FUNCTION.read_text(encoding="utf-8")
 
-    def test_legacy_messages_contract_is_preserved(self):
-        self.assertIn("function isLegacyRequest", self.source)
-        self.assertIn("Array.isArray(body.messages)", self.source)
-        self.assertIn("async function handleLegacyRequest", self.source)
-        self.assertIn("return json({ reply:", self.source)
+    def test_legacy_messages_path_is_gone(self):
+        # v2.0 Phase D removed the pre-typed {messages} contract; every request goes
+        # through the typed orchestrator now.
+        self.assertNotIn("isLegacyRequest", self.source)
+        self.assertNotIn("handleLegacyRequest", self.source)
+        self.assertIn("return await handleTypedRequest(req, record);", self.source)
 
     def test_typed_request_contract_is_supported(self):
         for field in ("lesson_id", "session_id", "answer", "mentor_preferences"):
@@ -115,7 +116,7 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             'insertRow(config, "quiz_attempts"',
             'insertRow(config, "learning_evidence"',
             'insertRow(config, "mentor_recommendations"',
-            'insertRow(config, "student_mastery"',
+            'upsertRows(config, "student_mastery"',
             "student_mastery?user_id=eq.",
             "graded_by: \"system\"",
         ):
