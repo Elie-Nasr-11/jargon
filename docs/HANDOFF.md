@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-03 (v2.1: tutor quality + infra hygiene + docs refresh — DONE)
+
+Summary: (1) Tutor quality — the mentor may now improvise one-at-a-time retrieval practice when
+a student asks to be quizzed (SYSTEM_PROMPT governance + post_completion directive; fixes the
+live refusal observed 2026-07-03 morning), and a text step passed by the dedicated understanding
+grader now writes deterministic mastery credit (solid 0.8 / partial 0.65 — capped SUB-SECURE to
+match the code judge's 0.8 precedent after the adversarial review caught my 0.9 crossing the
+0.85 tier; feedback kept affirmative on passed rows). (2) Infra — run-fn static test fixed;
+deploy-backend.yml now also deploys run/canvas/google-classroom/resource-processing and applies
+the (verified-idempotent) canvas migration; invokeJargonRun returns structured run-error bodies
+instead of throwing, so run's timeout:true finally reaches the tutor (formatRunOutput dedupes
+the mirrored error text). (3) Docs — ROADMAP Current State refreshed (tutor v2.0 + checkpoint
+unification + Canvas/Campus Live now recorded; stale assessment-deploy pointer removed;
+test-suite debt noted), OPEN_QUESTIONS #11 closed (two-route model strategy) and #4 annotated.
+Files changed: supabase/functions/chat/index.ts, tests/test_supabase_run_function.py,
+.github/workflows/deploy-backend.yml, frontend/src/lib/api.ts, frontend/src/lib/types.ts,
+frontend/src/routes/chat.tsx, docs/ROADMAP.md, docs/OPEN_QUESTIONS.md, docs/HANDOFF.md.
+Tests run: node --check (chat+run); frontend tsc/lint/build (0 errors); targeted suites
+(chat/run/complete_roadmap all green); FULL python suite 65 failures — all PRE-EXISTING stale
+static-fingerprint tests from earlier teacher-console/tutor rebuild eras (66 at HEAD; this
+change fixes one and adds none). Adversarial review: 6 findings -> 3 confirmed + 1 contested,
+all fixed (sub-secure cap, ROADMAP test literal, duplicate error text, affirmative feedback).
+Remaining concerns: the ~65 stale tests need a dedicated refresh pass (logged in ROADMAP);
+the run-fn worst-case double-abort (~21.5s) still outraces the client's 20s budget so that one
+timeout path falls back to the fabricated client message (string heuristics still catch it).
+Suggested next task: watch the next live sessions (quiz-me behavior + first text-step mastery
+rows), then either the stale-test refresh or the teacher independence/misconception dashboards.
 ## Claude -> Codex / Human - 2026-07-02 (HOTFIX: lesson_resources.display_mode does not exist)
 
 Summary: Phase D added display_mode to the lesson_resources select in loadContext assuming the

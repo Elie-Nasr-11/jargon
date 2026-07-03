@@ -52,9 +52,11 @@ Deferred details:
 Current decision so far:
 
 - OpenAI is acceptable for V1.
-- Model routing by task is allowed.
+- Model routing by task is DECIDED (2026-07-02): gpt-4o conversation / gpt-4o-mini graders —
+  see "What model and routing strategy should the Mentor use at scale?" below.
 - Product quality is the initial priority, but cost-to-quality must be measured.
 - Track cost per student/user/session/class/organization.
+- Still open: billing exposure/pricing to schools, and cost ceilings per tenant.
 
 Deferred details:
 
@@ -146,16 +148,21 @@ Deferred options:
 
 ## What model and routing strategy should the Mentor use at scale?
 
-Current decision so far:
+ANSWERED (2026-07-02, Tutor v2.0 Phase C — see DECISIONS "Tutor v2.0 Instruction Layer"):
 
-- Keep the existing OpenAI chat-completions path and current model setting for this repo pass.
-- Verify current model/pricing docs before changing model choices.
+- Two routes only. The student-facing conversation runs on a STRONG model
+  (`TUTOR_MODEL_CONVERSATION` -> gpt-4o, temp 0.6) because it writes every word the student
+  reads; the high-volume understanding/code graders are pinned to a cheap literal
+  (`TUTOR_MODEL_UNDERSTANDING` -> gpt-4o-mini, temp 0.2) so flipping the conversation model can
+  never silently make grading expensive. Grading itself is deterministic-only.
+- Caching is handled structurally: the static SYSTEM_PROMPT plus a stable->volatile user-JSON
+  key order gives ~1k cached tokens per turn (verified live). Prompt size dropped ~55%
+  (5.5k -> ~2.4k input tokens per mentor turn).
+- The model-agnostic gateway (`TUTOR_PROVIDER`, OpenAI default with an Anthropic adapter)
+  keeps the provider swappable; the moat is the governance layer, not the model.
 
-Deferred options:
-
-- Use one affordable default model for routine turns.
-- Route assessment/rescue turns to a stronger model.
-- Add caching or scripted first turns for very common lesson openings.
+Still open at larger scale: per-tenant routing overrides and a periodic cost-to-quality re-check
+as models change.
 
 ## How should interactive ASK work in the web UI?
 

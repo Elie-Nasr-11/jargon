@@ -3069,9 +3069,21 @@ export async function invokeJargonRun(input: {
     },
     20000,
   );
-  const data = (await response.json()) as JargonRunResponse;
+  const data = (await response.json()) as JargonRunResponse | null;
   if (!response.ok) {
-    throw new Error((data.errors && data.errors[0]) || "Jargon run failed.");
+    // The run fn's error responses (incl. engine timeouts, HTTP 502) carry the canonical
+    // run-result dict — with the explicit `timeout` flag the tutor prefers. Return it as
+    // the result (status "error" renders in the output bubble and rides run_result to the
+    // mentor) instead of throwing the shape away.
+    const isRunShape =
+      !!data &&
+      typeof data === "object" &&
+      typeof data.status === "string" &&
+      (Array.isArray(data.errors) || data.output !== undefined);
+    if (isRunShape) return data;
+    const firstError = data && Array.isArray(data.errors) ? data.errors[0] : "";
+    throw new Error(firstError || "Jargon run failed.");
   }
+  if (!data) throw new Error("Jargon run returned an empty response.");
   return data;
 }

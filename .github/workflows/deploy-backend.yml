@@ -23,6 +23,10 @@ on:
       - "supabase/functions/chat/**"
       - "supabase/functions/assessment-admin/**"
       - "supabase/functions/voice-session/**"
+      - "supabase/functions/run/**"
+      - "supabase/functions/canvas/**"
+      - "supabase/functions/google-classroom/**"
+      - "supabase/functions/resource-processing/**"
       - "supabase/migrations/**"
       - ".github/workflows/deploy-backend.yml"
 
@@ -62,7 +66,8 @@ jobs:
             supabase/migrations/20260701000000_checkpoint_required.sql \
             supabase/migrations/20260701120000_checkpoints_unified.sql \
             supabase/migrations/20260701130000_checkpoints_dualwrite.sql \
-            supabase/migrations/20260702000000_tutor_v2_step_state.sql ; do
+            supabase/migrations/20260702000000_tutor_v2_step_state.sql \
+            supabase/migrations/20260628000000_canvas_integration.sql ; do
             echo "Applying $f"
             body="$(jq -Rs '{query: .}' "$f")"
             resp="$(mktemp)"
@@ -80,9 +85,13 @@ jobs:
             echo "Applied $f."
           done
 
-      - name: Deploy edge functions (curriculum-admin, chat, assessment-admin, voice-session)
+      - name: Deploy edge functions
         run: |
           supabase functions deploy curriculum-admin --project-ref "$PROJECT_REF"
           supabase functions deploy chat --project-ref "$PROJECT_REF"
           supabase functions deploy assessment-admin --project-ref "$PROJECT_REF"
           supabase functions deploy voice-session --project-ref "$PROJECT_REF"
+          supabase functions deploy run --project-ref "$PROJECT_REF"
+          supabase functions deploy canvas --project-ref "$PROJECT_REF"
+          supabase functions deploy google-classroom --project-ref "$PROJECT_REF"
+          supabase functions deploy resource-processing --project-ref "$PROJECT_REF"

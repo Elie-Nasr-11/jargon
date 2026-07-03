@@ -4,12 +4,28 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 
 ## Current State
 
-Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete enough for the live pilot path. Voice v2 is deferred until the OpenAI voice-processing boundary is explicitly approved. The active implementation slice should now be chosen from assessment acceptance, admin hardening, media processing, analytics, or school-readiness needs.
+(Refreshed 2026-07-03.) Phase 0 is effectively complete. Phases 1 through 7, Voice v1+v2 (realtime), the
+assessment expansion, checkpoint unification, and the Tutor v2.0 rebuild are live. The Canvas
+(C1-C4) and Campus Live/OneRoster integrations are built alongside Google Classroom v1. Voice
+raw-audio storage remains off by default.
 
 - The tutor frontend is live at `https://jargon-9bv5.onrender.com/`.
 - Supabase Auth, lessons, sessions, turns, attempts, quiz attempts, evidence, and mastery are live.
-- The Render Jargon engine runs code through the Supabase `run` edge function.
-- The `chat` edge function is a Mentor orchestrator that can complete `lesson1` from practice to assessment to complete.
+- The Render Jargon engine runs code through the Supabase `run` edge function (engine timeouts
+  now carry an explicit `timeout` flag end-to-end).
+- **Tutor v2.0 (2026-07-02, live):** the `chat` edge function was rebuilt — control lives in
+  persisted per-step `learning_sessions.step_state` (presentation/code/quiz/understanding gates,
+  reset on advance) instead of a stage machine; ONE composed `turnDirective()` priority ladder +
+  a static SYSTEM_PROMPT replace the old teaching-move selector and ad-hoc directives; grading
+  is deterministic-only (code match + capped semantic judge + dedicated understanding grader);
+  conversation runs on gpt-4o with graders pinned to gpt-4o-mini; reads run in two parallel
+  waves and writes as mentor-insert -> parallel record batch -> session patch, with telemetry
+  off the critical path. First live traffic verified: mentor prompts ~2.4k tokens (was ~5.5k)
+  with 1k cached/turn, turn p50 12.7s -> 6.6s, zero errors.
+- **Checkpoint unification (2026-07-01, live):** assignments/assessments are mirrored into
+  unified `checkpoints`/`checkpoint_recipients` tables by dual-write triggers; lesson completion
+  is gated on required checkpoints (fail-closed) in both the runtime and the gradebook. The
+  physical contract (dropping the legacy tables) is deliberately deferred.
 - The teacher dashboard shows class progress, transcripts, attempts, quizzes, evidence, mastery, notes, resources, and assignments.
 - Resource-backed lessons, assignment review, curriculum authoring, and browser voice support are live enough to support the next multi-subject slice.
 - The first Phase 7 non-coding lesson path is live and accepted:
@@ -35,9 +51,11 @@ Phase 0 is effectively complete. Phases 1 through 7 and Voice v1 are complete en
   quizzes now have grouped assessment tables, `/quiz/$assessmentId`, MCQ auto-grading,
   text/code teacher review, rubric-backed evidence/mastery writes, and teacher/student
   visibility while preserving existing in-chat checkpoint quizzes.
-- Next step after deploy/live smoke: apply `0017_assessment_expansion.sql`, deploy
-  `assessment-admin`, and run the live acceptance path with 2 MCQ questions plus 1 text
-  review question. Voice v2 remains deferred.
+- Assessment expansion is deployed live (`assessment-admin` + migration applied 2026-07-01);
+  the checkpoint unification was built on top of it.
+- Known debt: the Python test suite under `tests/` has ~65 stale static-fingerprint failures
+  accumulated across the teacher-console and tutor rebuilds (the chat/run function tests are
+  current; the teacher-UI/routing ones assert superseded code). Needs a dedicated refresh pass.
 
 ## Product Direction Locked
 
@@ -235,6 +253,12 @@ Goal: fit into real school workflows.
   spike. Diagnostics now report missing OAuth secrets; write-sync tables and guarded stubs exist
   for later coursework/grade passback, but assignment and grade export remain disabled until
   explicit Google write scopes are accepted.
+- Status (2026-06-28): Canvas is implemented through C4 — OAuth connect + roster import (C1),
+  account provisioning on import (C2), grade passback (C3), and scheduled sync via
+  `canvas-sync.yml` + manual "Sync now" (C4). Campus Live has no public API, so it ships as the
+  OneRoster/CSV roster-import fallback plus a per-org link-out. As of 2026-07-03 the `canvas`,
+  `google-classroom`, `resource-processing`, and `run` functions (and the Canvas migration) are
+  in the CI deploy workflow.
 - Add Google/Microsoft SSO, Clever/ClassLink, CSV roster import, LTI 1.3, Canvas, grade passback, exports, retention/delete workflows, and parent/student reports.
 
 Exit criteria: one school-style roster can be imported, classes created, and grades exported.

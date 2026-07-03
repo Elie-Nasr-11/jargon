@@ -1062,6 +1062,9 @@ export type JargonRunResponse = {
   ask_var: string | null;
   status: "ok" | "error" | "limit_exceeded" | "waiting_for_input" | "sandbox_error";
   truncated: boolean;
+  // Explicit infra-timeout marker from the run fn's engine/wake timeout path — the
+  // tutor prefers it over string-matching the error message.
+  timeout?: boolean;
   limits_hit: string[];
 };
 

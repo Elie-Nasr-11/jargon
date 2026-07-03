@@ -40,7 +40,7 @@ class SupabaseRunFunctionStaticTests(unittest.TestCase):
         self.assertIn("Engine returned non-JSON response", self.source)
         self.assertIn("AbortController", self.source)
         self.assertIn("Engine request timed out", self.source)
-        self.assertIn("return json(runError(message), 502);", self.source)
+        self.assertIn("return json(runError(message, timedOut), 502);", self.source)
 
 
 if __name__ == "__main__":

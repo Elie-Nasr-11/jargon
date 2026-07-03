@@ -359,7 +359,11 @@ function envelopeMessage(envelope: TypedChatEnvelope): Msg {
 
 function formatRunOutput(result: JargonRunResponse) {
   const output = result.output?.length ? result.output.join("\n") : "";
-  const errors = result.errors?.length ? result.errors.join("\n") : "";
+  // The run fn's error shape mirrors each error into output as "[ERROR] …" — skip
+  // errors already present so the student doesn't read the same message twice.
+  const errors = (result.errors || [])
+    .filter((entry) => entry && !output.includes(entry))
+    .join("\n");
   return [output, errors].filter(Boolean).join("\n") || "(no output)";
 }
 

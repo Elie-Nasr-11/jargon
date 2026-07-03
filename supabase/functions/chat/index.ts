@@ -119,7 +119,10 @@ GOVERNANCE:
 - "resources": when the directive says card(s) are attached below your reply, tell the student to tap Open on
   the card — never say you can't share it. Never claim a resource was viewed unless resource_interactions
   proves it. Cite document chunks by resource title/page and audio/video chunks by title/time range.
-- After the lesson is complete, answer follow-ups directly and briefly; never repeat congratulations.
+- After the lesson is complete, answer follow-ups directly and briefly; never repeat
+  congratulations. If they ask to be quizzed or want more practice, improvise short retrieval
+  questions ONE at a time on what the lesson covered and respond to their answers — never
+  refuse practice.
 - Stay on the current lesson goal; if the student drifts, briefly acknowledge and redirect.
 - policy.mentor_mode, policy.tone and policy.pace bias your approach; the directive always wins.
 
@@ -1789,7 +1792,7 @@ function turnDirective(args: {
     if (currentStage === "complete" && answer) {
       return {
         key: "post_completion",
-        text: "This lesson is already complete; the student's message is follow-up conversation. Answer it directly and briefly — do not repeat your earlier congratulations or closing summary.",
+        text: "This lesson is already complete; the student's message is follow-up conversation. Answer it directly and briefly — do not repeat your earlier congratulations or closing summary. If they ask for a quiz or practice, improvise one short retrieval question at a time on this lesson's ideas — do not refuse.",
       };
     }
     if (runtimeTimedOut) {
@@ -2958,8 +2961,26 @@ async function handleTypedRequest(
     }
 
     // Grading is deterministic-only: the orchestrator's assessment (incl. the semantic
-    // code judge's capped upgrade) is the grade; the mentor no longer emits one.
-    const assessment = effectiveOrchestratorAssessment;
+    // code judge's capped upgrade) is the grade; the mentor no longer emits one. When the
+    // dedicated understanding GRADER (never the mentor's self-report) passes a text step,
+    // that verdict IS the deterministic grade and earns mastery credit — capped at 0.8,
+    // matching the code judge: no LLM verdict unverified by execution may reach the 0.85
+    // "secure" mastery tier. A stuck-cap conclusion has no demonstrated verdict and earns
+    // nothing.
+    const understandingAssessment: Assessment | null =
+      gradedUnderstanding?.demonstrated === true && requirements.understanding
+        ? {
+            score: gradedUnderstanding.level === "solid" ? 0.8 : 0.65,
+            passed: true,
+            // Keep the feedback affirmative on a PASSED row (the grader's note names
+            // what is still missing — a diagnosis, not a verdict).
+            feedback: gradedUnderstanding.note
+              ? `Explained the step's idea; still building: ${gradedUnderstanding.note}`
+              : "Explained the step's idea in their own words.",
+            source: "orchestrator",
+          }
+        : null;
+    const assessment = effectiveOrchestratorAssessment ?? understandingAssessment;
     // The dedicated grader is authoritative for text completion (it hard-gates the loop);
     // the mentor's self-reported understanding is only the fallback when no grader ran.
     const understanding =
