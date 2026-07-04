@@ -1497,6 +1497,7 @@ export function generateCurriculumDraft(input: {
   organizationId?: string;
   lessonId?: string;
   courseId?: string;
+  templateId?: string;
   referenceText?: string;
   current?: CurriculumOutlineDraft | CurriculumStepDraft[];
   feedback?: string;
@@ -1510,10 +1511,68 @@ export function generateCurriculumDraft(input: {
     organization_id: input.organizationId,
     lesson_id: input.lessonId,
     course_id: input.courseId,
+    template_id: input.templateId || undefined,
     reference_text: input.referenceText || undefined,
     current: input.current,
     feedback: input.feedback || undefined,
     target: input.target || undefined,
+  });
+}
+
+// --- Org-shared lesson templates (v4.0 Phase 2) ---------------------------
+export function saveCurriculumTemplate(input: {
+  accessToken: string;
+  classId?: string | null;
+  lessonId: string;
+  title?: string;
+  description?: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "save_template",
+    class_id: input.classId || undefined,
+    lesson_id: input.lessonId,
+    title: input.title || undefined,
+    description: input.description || undefined,
+  });
+}
+
+export function listCurriculumTemplates(input: {
+  accessToken: string;
+  classId?: string | null;
+  organizationId: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "list_templates",
+    class_id: input.classId || undefined,
+    organization_id: input.organizationId,
+  });
+}
+
+export function instantiateCurriculumTemplate(input: {
+  accessToken: string;
+  classId?: string | null;
+  templateId: string;
+  unitId: string;
+  title?: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "instantiate_template",
+    class_id: input.classId || undefined,
+    template_id: input.templateId,
+    unit_id: input.unitId,
+    title: input.title || undefined,
+  });
+}
+
+export function archiveCurriculumTemplate(input: {
+  accessToken: string;
+  classId?: string | null;
+  templateId: string;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "archive_template",
+    class_id: input.classId || undefined,
+    template_id: input.templateId,
   });
 }
 

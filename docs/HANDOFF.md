@@ -4264,3 +4264,35 @@ are deferred (PLATFORM.md deferred list).
 Suggested next task: after live-verifying the backend deploy is green and a normal lesson turn is
 unchanged, fast-forward main on user OK, author one lesson per new mode end-to-end, then start
 Phase 2 (teacher build system: hotlist v0 + org-shared templates + live-now + work overview).
+
+## Claude -> Codex / Human - 2026-07-04 14:20
+
+Status: Finished
+Summary: v4.0 Phase 2a — org-shared lesson templates. New lesson_templates table (by-value
+versioned snapshot of a lesson's mode flow + policy; RLS restricted to org teachers/admins,
+anon revoked). curriculum-admin gains save_template / list_templates / instantiate_template /
+archive_template (instantiate creates a lesson + milestone then fans the snapshot through
+upsertStep) plus a generate(lesson_steps) template_id scaffold (keeps a template's mode flow,
+AI rewrites titles/prompts for the new topic). Studio: "Save as template" on a lesson +
+"Start from a template" picker on a unit (instantiate → new lesson).
+Files changed: supabase/migrations/20260710000000_lesson_templates.sql (new),
+.github/workflows/deploy-backend.yml (migration appended), supabase/functions/curriculum-admin/
+index.ts (4 actions + template scaffold), frontend/src/lib/api.ts (+4 wrappers, generate
+templateId), frontend/src/lib/types.ts (CurriculumTemplate), frontend/src/routes/
+teacher.curriculum.tsx (TemplatePicker + save-as-template UI + handlers).
+Tests run: node --check (curriculum-admin); frontend tsc --noEmit + lint + build green;
+migration validated against the live DB in a ROLLED-BACK transaction (table + 2 policies + RLS
+on, anon SELECT = false, idempotent).
+Adversarial review (Opus, 2 dimensions, 9 agents) confirmed + FIXED 4 findings before deploy:
+HIGH RLS leak (is_org_member select exposed steps[].quiz.correct_choice_ids answer keys to any
+student via direct PostgREST → restricted select to teachers/admins + revoked anon); MEDIUM
+stage not snapshotted (collapsed to "practice" → snapshot stage); LOW legacy activity_type lost
+(→ snapshot activity_type); LOW cross-org rejection returned HTTP 500 (→ reworded to a 4xx
+message). Two other candidate findings verified false (empty-template unreachable; milestone
+allowed_response_modes not runtime-enforced).
+Remaining concerns: the studio template UI is frontend — NOT live until a main fast-forward
+(held for user OK); the backend (table + actions) deploys now and is inert until a teacher uses
+it. Phase 2b (derived hotlist landing) and 2c (live-now strip + work overview) are the remaining
+Phase 2 slices, both frontend-heavy in TeacherConsole.tsx.
+Suggested next task: v4.0 Phase 2b — the derived teacher hotlist feed (7 item kinds from the
+existing dashboard blob + mentor_recommendations) replacing the 3-count "Needs attention" card.

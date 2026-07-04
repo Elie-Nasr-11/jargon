@@ -251,12 +251,29 @@ export type CurriculumStepDraft = {
   correct_choice_id: string;
 };
 
+// v4.0 org-shared lesson template (a by-value snapshot of a lesson's mode flow + policy).
+export type CurriculumTemplate = {
+  id: string;
+  title: string;
+  description: string;
+  source_lesson_id: string | null;
+  steps: Array<{
+    position?: number;
+    title?: string;
+    mode?: LearningMode | null;
+    mode_type?: string | null;
+  }>;
+  created_at: string;
+};
+
 export type CurriculumAdminResponse = {
   status: "ok" | "error";
   node_type?: CurriculumNodeType | "step";
   mode?: string;
   outline?: CurriculumOutlineDraft;
   steps?: CurriculumStepDraft[];
+  templates?: CurriculumTemplate[];
+  template_id?: string;
   id?: string;
   lesson_id?: string;
   subject_id?: string;
