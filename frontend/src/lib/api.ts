@@ -59,6 +59,7 @@ import type {
   LessonResourceVisibility,
   LearningEvidence,
   LiveSessionViewer,
+  MentorRecommendation,
   ModelUsageEvent,
   AdminActorAccess,
   AdminOpsAction,
@@ -1648,6 +1649,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
       assessmentItemAttempts: [],
       checkpoints: [],
       checkpointRecipients: [],
+      mentorRecommendations: [],
     };
   }
 
@@ -1686,6 +1688,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assignmentsResult,
     assessmentsResult,
     checkpointsResult,
+    mentorRecommendationsResult,
   ] = await Promise.all([
     profileIds.length
       ? supabase.from("profiles").select("id,name,grade").in("id", profileIds)
@@ -1805,6 +1808,16 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
           .order("updated_at", { ascending: false })
           .limit(500)
       : Promise.resolve({ data: [], error: null }),
+    // v4.0 hotlist: the mentor's AI escalations (write-only until now).
+    studentIds.length
+      ? supabase
+          .from("mentor_recommendations")
+          .select("*")
+          .in("user_id", studentIds)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(100)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   for (const result of [
@@ -1824,6 +1837,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assignmentsResult,
     assessmentsResult,
     checkpointsResult,
+    mentorRecommendationsResult,
   ]) {
     if (result.error) throw result.error;
   }
@@ -1977,6 +1991,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
     assessmentItemAttempts: (assessmentItemAttemptRows || []) as AssessmentItemAttempt[],
     checkpoints,
     checkpointRecipients: (checkpointRecipientsResult.data || []) as CheckpointRecipient[],
+    mentorRecommendations: (mentorRecommendationsResult.data || []) as MentorRecommendation[],
   };
 }
 

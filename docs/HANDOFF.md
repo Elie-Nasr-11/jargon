@@ -4296,3 +4296,27 @@ it. Phase 2b (derived hotlist landing) and 2c (live-now strip + work overview) a
 Phase 2 slices, both frontend-heavy in TeacherConsole.tsx.
 Suggested next task: v4.0 Phase 2b — the derived teacher hotlist feed (7 item kinds from the
 existing dashboard blob + mentor_recommendations) replacing the 3-count "Needs attention" card.
+
+## Claude -> Codex / Human - 2026-07-04 15:10
+
+Status: Finished (Phase 2b)
+Summary: v4.0 Phase 2b — the derived teacher hotlist. New features/teacher/HotlistFeed.tsx
+(pure deriveHotlist + HotlistFeed component) turns the existing dashboard blob into ONE ranked
+attention feed of seven kinds (session_risk, alert_open, mentor_recommendation,
+submission_to_grade, assessment_to_review, live_now, due_soon) — the exact vocabulary a future
+notifications table will reuse (data-source swap). It REPLACES the 3-count "Needs attention"
+card on the teacher landing; clicking an item deep-links to the class or student. The only data
+addition is mentor_recommendations (write-only until now) into fetchTeacherDashboard — RLS
+verified: teachers read their students' rows via can_view_student, so the dashboard Promise.all
+can't break.
+Files changed: frontend/src/features/teacher/HotlistFeed.tsx (new), frontend/src/features/
+teacher/TeacherConsole.tsx (hotlist memo + openHotlistItem + card replacement; removed the 3
+now-dead count consts), frontend/src/lib/api.ts (mentor_recommendations fetch + MentorRecommendation
+in the returns), frontend/src/lib/types.ts (MentorRecommendation type + on TeacherDashboardData).
+Tests run: frontend tsc --noEmit + lint + build green. Frontend-only, NO backend change.
+Remaining concerns: frontend — NOT live until a main fast-forward. The last Phase 2 slice (2c:
+a "Live now" strip + a unified work overview inside the class Overview, promoting the existing
+watch-live plumbing) is not built yet; the hotlist already surfaces live_now + work globally on
+the landing, so 2c is an enrichment, not a gap.
+Suggested next task: v4.0 Phase 2c (class-view live-now strip + work overview) OR move to Phase 3
+(student class scoping + LMS shell). Frontend for Phases 1-2 all awaits one main fast-forward.

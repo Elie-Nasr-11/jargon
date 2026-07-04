@@ -26,6 +26,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
+import { HotlistFeed, deriveHotlist, type HotlistItem } from "@/features/teacher/HotlistFeed";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConsoleShell } from "@/components/ConsoleShell";
@@ -235,19 +236,46 @@ export function TeacherConsole() {
     return Array.from(groups.entries());
   }, [dashboard]);
 
-  // Cross-class "needs attention" counts for the home action queue.
-  const pendingGrading = dashboard
-    ? dashboard.assignmentSubmissions.filter((submission) => submission.status === "submitted")
-        .length
-    : 0;
-  const pendingReviews = dashboard
-    ? dashboard.assessmentAttempts.filter((attempt) => attempt.status === "submitted").length
-    : 0;
-  const openAlertCount = dashboard
-    ? dashboard.interventionAlerts.filter(
-        (alert) => alert.status === "open" || alert.status === "acknowledged",
-      ).length
-    : 0;
+  // v4.0 hotlist: one attention feed derived from the dashboard blob (replaces the
+  // 3-count "Needs attention" card). nowMs recomputes each render — fine for a feed.
+  const hotlist = useMemo(() => {
+    if (!dashboard || !model) return [] as HotlistItem[];
+    return deriveHotlist(
+      dashboard,
+      {
+        classesById: model.classesById,
+        profilesById: model.profilesById,
+        lessonsById: model.lessonsById,
+      },
+      Date.now(),
+    );
+  }, [dashboard, model]);
+
+  const openHotlistItem = useCallback(
+    (item: HotlistItem) => {
+      if (item.classId && item.studentId) {
+        navigate({
+          to: "/teacher/class/$classId/student/$studentId",
+          params: { classId: item.classId, studentId: item.studentId },
+          search: { tab: "overview" },
+        });
+      } else if (item.classId) {
+        navigate({
+          to: "/teacher/class/$classId",
+          params: { classId: item.classId },
+          search: {
+            tab:
+              item.kind === "submission_to_grade"
+                ? "assignments"
+                : item.kind === "assessment_to_review"
+                  ? "assessments"
+                  : "overview",
+          },
+        });
+      }
+    },
+    [navigate],
+  );
 
   const selectedClass =
     selectedClassId && model ? model.classesById.get(selectedClassId) || null : null;
@@ -905,22 +933,7 @@ export function TeacherConsole() {
                   }
                 />
               ) : (
-                <GradientCard>
-                  <div className="p-4 sm:p-5">
-                    <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                      Needs attention
-                    </div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                      <MetricCard label="Submissions to grade" value={String(pendingGrading)} />
-                      <MetricCard label="Assessments to review" value={String(pendingReviews)} />
-                      <MetricCard label="Open alerts" value={String(openAlertCount)} />
-                    </div>
-                    <p className="mt-4 text-[12.5px] text-muted-foreground">
-                      Pick a class above to open its roster, gradebook, resources, assignments, and
-                      assessments.
-                    </p>
-                  </div>
-                </GradientCard>
+                <HotlistFeed items={hotlist} onOpen={openHotlistItem} nowMs={Date.now()} />
               )}
 
               {selectedStudentId && studentStats ? (

@@ -1819,6 +1819,22 @@ export type TeacherDashboardData = {
   assessmentItemAttempts: AssessmentItemAttempt[];
   checkpoints: Checkpoint[];
   checkpointRecipients: CheckpointRecipient[];
+  mentorRecommendations: MentorRecommendation[];
+};
+
+// The mentor's AI escalations (v4.0 hotlist source). Written by the chat fn at 3 graded
+// fails; surfaced to teachers for the first time in the hotlist.
+export type MentorRecommendation = {
+  id: string;
+  user_id: string;
+  session_id: string | null;
+  lesson_id: string | null;
+  milestone_id: string | null;
+  recommendation_type: "assignment" | "retry" | "rescue" | "intervention";
+  title: string;
+  rationale: string;
+  status: "pending" | "approved" | "rejected" | "applied";
+  created_at: string;
 };
 
 export type StudentAssignmentBundle = {
