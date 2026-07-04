@@ -279,3 +279,13 @@ Goal: build remaining platform breadth before a dedicated visual cleanup pass.
 Exit criteria: admins can run the CSV/governance fallback flows live, external gates diagnose their
 missing secrets clearly, and draft curriculum import produces teacher-reviewable suggestions without
 publishing anything automatically.
+
+## v4.0 — The Platform (2026-07-04, in progress)
+
+The next arc, specced in `docs/PLATFORM.md` (canonical): lessons composed from eight
+conversational modes with a null-mode legacy fallback (P1), the teacher build system — derived
+hotlist, org-shared lesson templates, live-now strip, unified work overview (P2), student class
+scoping + the LMS shell — profile popup with real stats, class dashboards, unit views (P3),
+revision mode + per-mode proficiency surfaces (P4), and the platform layer — persisted
+notifications, student calendar, admin live monitoring, teacher reports (P5). Phase 0 (the spec)
+shipped 2026-07-04.

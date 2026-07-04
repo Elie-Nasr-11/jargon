@@ -353,3 +353,32 @@ Decision:
 Reason:
 
 - Older web experiments drifted between `input`/`code` and `result`/`output`; the rebuild needs one contract.
+
+## 2026-07-04: Lessons Are Composed From Eight Conversational Modes
+
+Decision:
+
+- The platform's core vocabulary is a closed set of eight learning modes — Explanation, Media,
+  Reflection, Practice, Assignment, Inquiry, Assessment, Revision — stored as
+  `lesson_activities.mode` (+ `mode_type`), delivered inside the conversational runtime, and
+  stamped onto every `learning_evidence` row as the dimension for proficiency and
+  strengths/weaknesses tracking.
+- A step with `mode = null` behaves byte-identically to the pre-v4.0 derivation
+  (`response_mode` + quiz-row presence); backfill is requirement-equivalent by construction.
+  `activity_type` is kept but deprecated (derived from mode on write).
+- Teacher lesson templates are org-shared, versioned jsonb snapshots of a mode flow; the AI
+  drafter can scaffold from a template.
+- Teacher attention flows through a fixed hotlist vocabulary of seven item kinds, derived from
+  existing tables first and persisted as a `notifications` table with the same kinds later.
+- Student catalogs become class-scoped via a `class_courses` link table with a hard fallback to
+  the global published list when no links exist — scoping is UX, not a security boundary, in
+  v4.0.
+
+Reason:
+
+- The v3.0 ten-block experiment (reverted) showed fine-grained pedagogical patterns outrun both
+  the authoring UI and the student surface. Eight coarse modes are enough to compose real
+  lessons, cheap to track, and every existing step maps onto one without behavior change.
+- The platform's promise is mediation: teachers build simply, students live in one
+  conversation, and the mode dimension is what lets the platform adapt and report honestly.
+- docs/PLATFORM.md is the canonical spec; code follows it.

@@ -4168,3 +4168,39 @@ layer consolidation, latency).
 Files I expect to touch: frontend/src/routes/chat.tsx, frontend/src/lib/api.ts,
 frontend/src/lib/types.ts, supabase/functions/chat/index.ts
 Notes: each phase independently deployable; wire envelope stays compatible in Phase A.
+
+## Claude -> Codex / Human - 2026-07-04 10:30
+
+Status: Starting
+Task: v4.0 "The Platform" Phase 0 — write docs/PLATFORM.md, the canonical spec for the
+eight-mode lesson vocabulary (Explanation, Media, Reflection, Practice, Assignment, Inquiry,
+Assessment, Revision), org-shared lesson templates, the teacher hotlist item-kind vocabulary,
+the student class-scoping rule, and the redesigned surface IA. Docs only; Phase 1 (the mode
+foundation in schema/runtime/authoring) follows as its own deploy.
+Files I expect to touch: docs/PLATFORM.md (new), docs/DECISIONS.md, docs/ROADMAP.md,
+docs/HANDOFF.md
+Notes: full phased roadmap (P0-P5) lives in the session plan; each phase ships independently
+and the live student must be unaffected until teachers deliberately adopt new modes.
+
+## Claude -> Codex / Human - 2026-07-04 10:55
+
+Status: Finished
+Summary: v4.0 Phase 0 shipped — docs/PLATFORM.md is the canonical platform spec: the
+eight-mode lesson vocabulary (gate/directive/evidence/types per mode, relabel-vs-new honesty,
+requirement-equivalent backfill rule, acknowledge-gate risk note), the evidence mode dimension
+incl. inquiry confusion/curiosity events, org-shared versioned lesson templates, the seven-kind
+hotlist vocabulary (derived first, notifications table later with identical kinds), the
+class_courses scoping rule with the global-catalog fallback, surface IA for student/teacher/
+admin, the P0-P5 phase map, and the explicit deferred list.
+Files changed: docs/PLATFORM.md (new), docs/DECISIONS.md (2026-07-04 entry),
+docs/ROADMAP.md (v4.0 section), docs/HANDOFF.md
+Tests run: python3 -m unittest discover -s tests -q (162 tests; 65 failures = the known
+pre-existing stale-fingerprint baseline, unchanged by this docs-only change;
+test_complete_roadmap suite 10/10 OK)
+Remaining concerns: none for P0. P1 (mode foundation) touches requirementsFor/applyTurn/
+deriveTurn on the live tutor — it gets its own execution pass, fingerprint-test updates, and
+an adversarial review before deploy.
+Suggested next task: v4.0 Phase 1 — mode_foundation migration (mode/mode_type on
+lesson_activities + learning_evidence, backfills), runtime mode branch with null fallback,
+acknowledge gate, mode directives, open-ended assessment, inquiry event logging, studio mode
+picker.
