@@ -60,6 +60,7 @@ import type {
   CurriculumStepKind,
   CurriculumSubject,
   CurriculumUnit,
+  LearningMode,
   Lesson,
   LessonActivity,
   LessonResource,
@@ -1670,30 +1671,150 @@ function stepKindConfig(kind: CurriculumStepKind) {
   return STEP_KINDS.find((item) => item.kind === kind) || STEP_KINDS[1];
 }
 
+// v4 learning modes (docs/PLATFORM.md): the authoring vocabulary. Each mode maps onto the
+// legacy kind system for icons/grouping; stage is a display label, gates live in mode.
+const MODE_META: Array<{
+  mode: LearningMode;
+  label: string;
+  kind: CurriculumStepKind;
+  stage: CurriculumStepInput["stage"];
+  activityType: CurriculumStepInput["activity_type"];
+  responseMode: ResponseMode;
+  defaultType: string;
+  promptLabel: string;
+  defaultPrompt: string;
+}> = [
+  {
+    mode: "explanation",
+    label: "Explain",
+    kind: "teach",
+    stage: "teach",
+    activityType: "discussion",
+    responseMode: "text",
+    defaultType: "",
+    promptLabel: "The material the mentor teaches (stated outright)",
+    defaultPrompt: "Teach this idea plainly with one concrete example.",
+  },
+  {
+    mode: "media",
+    label: "Media",
+    kind: "teach",
+    stage: "teach",
+    activityType: "discussion",
+    responseMode: "text",
+    defaultType: "",
+    promptLabel: "How to frame the attached resource(s)",
+    defaultPrompt: "Study the attached material, then come back when you're ready.",
+  },
+  {
+    mode: "reflection",
+    label: "Reflect",
+    kind: "reflect",
+    stage: "practice",
+    activityType: "reflection",
+    responseMode: "text",
+    defaultType: "",
+    promptLabel: "Reflection prompt (student produces the conclusion)",
+    defaultPrompt: "Explain the idea in your own words.",
+  },
+  {
+    mode: "practice",
+    label: "Practice",
+    kind: "practice",
+    stage: "practice",
+    activityType: "code",
+    responseMode: "code",
+    defaultType: "code",
+    promptLabel: "Practice prompt",
+    defaultPrompt: "Try this, then explain your thinking.",
+  },
+  {
+    mode: "assignment",
+    label: "Assignment",
+    kind: "teach",
+    stage: "practice",
+    activityType: "discussion",
+    responseMode: "text",
+    defaultType: "",
+    promptLabel: "How to frame the assigned task (lives in the work dock)",
+    defaultPrompt: "Introduce the assigned task and point the student to it.",
+  },
+  {
+    mode: "inquiry",
+    label: "Inquiry",
+    kind: "reflect",
+    stage: "practice",
+    activityType: "discussion",
+    responseMode: "text",
+    defaultType: "",
+    promptLabel: "Topic to invite questions about",
+    defaultPrompt: "What questions do you have about this topic?",
+  },
+  {
+    mode: "assessment",
+    label: "Assess",
+    kind: "checkpoint",
+    stage: "assessment",
+    activityType: "multiple_choice",
+    responseMode: "multiple_choice",
+    defaultType: "mcq",
+    promptLabel: "Question",
+    defaultPrompt: "Which option is correct?",
+  },
+  {
+    mode: "revision",
+    label: "Revise",
+    kind: "reflect",
+    stage: "review",
+    activityType: "discussion",
+    responseMode: "text",
+    defaultType: "recall",
+    promptLabel: "What to recall (prior skills; full behavior arrives in a later update)",
+    defaultPrompt: "Let's revisit what you learned earlier.",
+  },
+];
+
+function modeMeta(mode: LearningMode) {
+  return MODE_META.find((item) => item.mode === mode) || MODE_META[3];
+}
+
+// mode_type pinning mirrors the backend: practice code|applied, assessment mcq|open_ended.
+function pinnedShapeFor(mode: LearningMode, modeType: string) {
+  const meta = modeMeta(mode);
+  if (mode === "practice" && modeType === "applied") {
+    return { ...meta, activityType: "discussion" as const, responseMode: "text" as const };
+  }
+  if (mode === "assessment" && modeType === "open_ended") {
+    return {
+      ...meta,
+      activityType: "discussion" as const,
+      responseMode: "text" as const,
+      kind: "reflect" as const,
+    };
+  }
+  return meta;
+}
+
 function kindOfActivity(activity: LessonActivity): CurriculumStepKind {
+  if (activity.mode) return pinnedShapeFor(activity.mode, activity.mode_type || "").kind;
   if (activity.response_mode === "multiple_choice") return "checkpoint";
   if (activity.stage === "teach" || activity.stage === "intro") return "teach";
   if (activity.stage === "review" || activity.activity_type === "reflection") return "reflect";
   return "practice";
 }
 
-function defaultStepForKind(kind: CurriculumStepKind): CurriculumStepInput {
-  const config = stepKindConfig(kind);
+function defaultStepForMode(mode: LearningMode): CurriculumStepInput {
+  const meta = modeMeta(mode);
   const base: CurriculumStepInput = {
-    title: config.label,
-    stage: config.stage,
-    activity_type: config.activityType,
-    response_mode: config.responseMode,
-    prompt:
-      kind === "teach"
-        ? "Explain the idea simply, then ask the learner a quick question to check they followed."
-        : kind === "checkpoint"
-          ? "Which option is correct?"
-          : kind === "reflect"
-            ? "What is one thing you understood, and one thing that is still unclear?"
-            : "Try this, then explain your thinking.",
+    title: meta.label,
+    stage: meta.stage,
+    activity_type: meta.activityType,
+    response_mode: meta.responseMode,
+    prompt: meta.defaultPrompt,
+    mode,
+    mode_type: meta.defaultType || null,
   };
-  if (kind === "checkpoint") {
+  if (mode === "assessment") {
     base.choices = [
       { id: "a", text: "Option A" },
       { id: "b", text: "Option B" },
@@ -1710,19 +1831,33 @@ function defaultStepForKind(kind: CurriculumStepKind): CurriculumStepInput {
   return base;
 }
 
-// Map an AI-drafted step (kind + free text) onto the create/upsert step payload.
+// Map an AI-drafted step (mode or legacy kind + free text) onto the upsert payload.
 function stepInputFromDraft(draft: CurriculumStepDraft): CurriculumStepInput {
-  const config = stepKindConfig(draft.kind);
-  const isCheckpoint = draft.kind === "checkpoint";
+  const draftMode: LearningMode =
+    draft.mode ||
+    (
+      {
+        teach: "explanation",
+        practice: "practice",
+        checkpoint: "assessment",
+        reflect: "reflection",
+      } as const
+    )[draft.kind] ||
+    "practice";
+  const modeType = draft.mode_type || modeMeta(draftMode).defaultType;
+  const shape = pinnedShapeFor(draftMode, modeType);
+  const isMcq = draftMode === "assessment" && modeType !== "open_ended";
   const choices = (draft.choices || []).filter((choice) => choice.id && choice.text);
   return {
-    title: draft.title || config.label,
-    stage: config.stage,
-    activity_type: config.activityType,
-    response_mode: config.responseMode,
-    prompt: draft.prompt || config.label,
-    choices: isCheckpoint ? choices : [],
-    quiz: isCheckpoint
+    title: draft.title || shape.label,
+    stage: shape.stage,
+    activity_type: shape.activityType,
+    response_mode: shape.responseMode,
+    prompt: draft.prompt || shape.label,
+    mode: draftMode,
+    mode_type: modeType || null,
+    choices: isMcq ? choices : [],
+    quiz: isMcq
       ? {
           prompt: draft.prompt || "Choose the best answer.",
           choices,
@@ -1850,16 +1985,16 @@ function LessonDetail({
               )}
 
               <div className="mt-3 flex flex-wrap gap-2">
-                {STEP_KINDS.map((config) => (
+                {MODE_META.map((meta) => (
                   <button
-                    key={config.kind}
+                    key={meta.mode}
                     type="button"
-                    onClick={() => onUpsertStep(defaultStepForKind(config.kind))}
+                    onClick={() => onUpsertStep(defaultStepForMode(meta.mode))}
                     disabled={busy}
                     className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                   >
-                    {config.icon}
-                    Add {config.label.toLowerCase()}
+                    {stepKindConfig(meta.kind).icon}
+                    {meta.label}
                   </button>
                 ))}
               </div>
@@ -2157,16 +2292,39 @@ function StepCard({
   onSave: (step: CurriculumStepInput) => void;
   onDelete: () => void;
 }) {
-  const kind = kindOfActivity(activity);
-  const config = stepKindConfig(kind);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(activity.title);
   const [prompt, setPrompt] = useState(activity.prompt);
+  // v4 mode: existing steps keep their stored mode; "legacy" preserves pre-mode behavior
+  // for unmigrated steps (selecting Legacy on save explicitly clears the mode).
+  const [stepMode, setStepMode] = useState<LearningMode | "legacy">(activity.mode ?? "legacy");
+  const [stepModeType, setStepModeType] = useState(
+    activity.mode_type || (activity.mode ? modeMeta(activity.mode).defaultType : ""),
+  );
   const [practiceMode, setPracticeMode] = useState<ResponseMode>(
     activity.response_mode === "code" ? "code" : "text",
   );
   const [starterCode, setStarterCode] = useState(activity.starter_code || "");
   const [expectedOutput, setExpectedOutput] = useState(activity.expected_output || "");
+  // The selected mode drives which fields show; legacy keeps the old kind derivation.
+  const kind =
+    stepMode === "legacy"
+      ? kindOfActivity({ ...activity, mode: null })
+      : pinnedShapeFor(stepMode, stepModeType).kind;
+  const config =
+    stepMode === "legacy"
+      ? stepKindConfig(kind)
+      : {
+          ...stepKindConfig(kind),
+          label: modeMeta(stepMode).label,
+          promptLabel: modeMeta(stepMode).promptLabel,
+        };
+  const showCodeFields =
+    (stepMode === "legacy" && kind === "practice" && practiceMode === "code") ||
+    (stepMode === "practice" && stepModeType !== "applied");
+  const showChoices =
+    (stepMode === "legacy" && kind === "checkpoint") ||
+    (stepMode === "assessment" && stepModeType !== "open_ended");
   const initialChoices = quiz?.choices?.length
     ? quiz.choices
     : (activity.choices || [])
@@ -2190,29 +2348,44 @@ function StepCard({
     );
 
   const save = () => {
-    const isCode = kind === "practice" && practiceMode === "code";
+    const isCode = showCodeFields;
+    const isMcq = showChoices;
     const cleaned = choices
       .map((choice) => ({ id: choice.id.trim(), text: choice.text.trim() }))
       .filter((choice) => choice.id && choice.text);
+    const shape = stepMode === "legacy" ? null : pinnedShapeFor(stepMode, stepModeType);
     const step: CurriculumStepInput = {
       id: activity.id,
       title: title.trim() || config.label,
-      stage: config.stage,
-      activity_type:
-        kind === "checkpoint" ? "multiple_choice" : isCode ? "code" : config.activityType,
-      response_mode: kind === "checkpoint" ? "multiple_choice" : isCode ? "code" : "text",
+      stage: shape ? shape.stage : config.stage,
+      activity_type: shape
+        ? shape.activityType
+        : kind === "checkpoint"
+          ? "multiple_choice"
+          : isCode
+            ? "code"
+            : config.activityType,
+      response_mode: shape
+        ? shape.responseMode
+        : kind === "checkpoint"
+          ? "multiple_choice"
+          : isCode
+            ? "code"
+            : "text",
       prompt: prompt.trim(),
       starter_code: isCode ? starterCode : "",
       expected_output: isCode ? expectedOutput : "",
-      choices: kind === "checkpoint" ? cleaned : [],
-      quiz:
-        kind === "checkpoint"
-          ? {
-              prompt: prompt.trim() || "Choose the best answer.",
-              choices: cleaned,
-              correct_choice_ids: correctId ? [correctId] : [],
-            }
-          : undefined,
+      choices: isMcq ? cleaned : [],
+      // Always sent: an explicit null clears a step back to legacy behavior.
+      mode: stepMode === "legacy" ? null : stepMode,
+      mode_type: stepMode === "legacy" ? null : stepModeType || null,
+      quiz: isMcq
+        ? {
+            prompt: prompt.trim() || "Choose the best answer.",
+            choices: cleaned,
+            correct_choice_ids: correctId ? [correctId] : [],
+          }
+        : undefined,
     };
     onSave(step);
     setOpen(false);
@@ -2251,9 +2424,52 @@ function StepCard({
       {open ? (
         <div className="grid gap-3 border-t border-border p-3">
           <TextInput label="Step title" value={title} onChange={setTitle} />
+
+          <SelectInput
+            label="Learning mode"
+            value={stepMode}
+            options={["legacy", ...MODE_META.map((meta) => meta.mode)]}
+            optionLabels={{
+              legacy: "Legacy (pre-mode step)",
+              explanation: "Explanation — teach it outright",
+              media: "Media — study attached material",
+              reflection: "Reflection — student explains it",
+              practice: "Practice — use the idea",
+              assignment: "Assignment — frame docked task",
+              inquiry: "Inquiry — invite questions",
+              assessment: "Assessment — evaluate grasp",
+              revision: "Revision — recall prior skills",
+            }}
+            onChange={(value) => {
+              const next = value as LearningMode | "legacy";
+              setStepMode(next);
+              if (next !== "legacy") setStepModeType(modeMeta(next).defaultType);
+            }}
+          />
+
+          {stepMode === "practice" ? (
+            <SelectInput
+              label="Practice type"
+              value={stepModeType || "code"}
+              options={["code", "applied"]}
+              optionLabels={{ code: "Code — run it", applied: "Applied — use it in words" }}
+              onChange={setStepModeType}
+            />
+          ) : null}
+
+          {stepMode === "assessment" ? (
+            <SelectInput
+              label="Assessment type"
+              value={stepModeType || "mcq"}
+              options={["mcq", "open_ended"]}
+              optionLabels={{ mcq: "Multiple choice", open_ended: "Open-ended (graded, no hints)" }}
+              onChange={setStepModeType}
+            />
+          ) : null}
+
           <TextArea label={config.promptLabel} value={prompt} onChange={setPrompt} />
 
-          {kind === "practice" ? (
+          {stepMode === "legacy" && kind === "practice" ? (
             <SelectInput
               label="Answer mode"
               value={practiceMode}
@@ -2262,7 +2478,7 @@ function StepCard({
             />
           ) : null}
 
-          {kind === "practice" && practiceMode === "code" ? (
+          {showCodeFields ? (
             <>
               <TextArea label="Starter code" value={starterCode} onChange={setStarterCode} />
               <TextArea
@@ -2273,7 +2489,7 @@ function StepCard({
             </>
           ) : null}
 
-          {kind === "checkpoint" ? (
+          {showChoices ? (
             <div className="grid gap-2">
               <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                 Choices
@@ -3242,6 +3458,8 @@ function activityFromStepInput(
     rubric: {},
     skill_keys: step.skill_keys || [],
     pass_score: step.pass_score && step.pass_score > 0 ? step.pass_score : 1,
+    mode: step.mode ?? null,
+    mode_type: step.mode_type ?? null,
   };
 }
 
@@ -3466,11 +3684,13 @@ function SelectInput({
   value,
   options,
   onChange,
+  optionLabels,
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
+  optionLabels?: Record<string, string>;
 }) {
   return (
     <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
@@ -3482,7 +3702,7 @@ function SelectInput({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {optionLabels?.[option] ?? option}
           </option>
         ))}
       </select>

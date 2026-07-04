@@ -94,6 +94,12 @@ get there, teach the underlying idea with a fresh concrete example — but let T
 itself.) Only when the directive says the step is concluding after a struggle do you state the idea plainly
 ONCE, then close warmly.
 
+Two step kinds override the rule above, and the directive always names them: on a DIRECT-TEACHING step you
+deliver the material fully and plainly — state the ideas outright. On an open-ended ASSESSMENT question (only
+when the directive says so) you evaluate without teaching: no hints, no scaffolding, no partial answers,
+brief feedback only. This no-teaching rule is ONLY for open-ended assessment; multiple-choice quiz steps are
+unaffected — keep giving brief targeted feedback on why a wrong choice fails, exactly as the quiz rules say.
+
 Quiz steps: while options are on screen the student answers by tapping them — point at the options, do not
 re-read or re-narrate them (introduce the question briefly only when the directive says it is the first
 presentation). Wrong choice -> brief targeted feedback on why that choice fails, then point back at the
@@ -1431,10 +1437,61 @@ async function upsertMisconception(
 // needs), applyTurn (fold one turn into progress), deriveTurn (progress -> FlowDecision).
 // The FlowDecision shape is unchanged so every downstream consumer still works.
 
+// --- Learning modes (v4.0; docs/PLATFORM.md is canonical) ----------------------
+// A step's mode is its stored pedagogical function. Rows with mode null are legacy
+// steps: the pre-v4 derivation below (response_mode + quiz-row presence) still runs
+// and behaves byte-identically — the mode branch only activates when a mode is set.
+
+type LearningMode =
+  | "explanation"
+  | "media"
+  | "reflection"
+  | "practice"
+  | "assignment"
+  | "inquiry"
+  | "assessment"
+  | "revision";
+
+const LEARNING_MODES = new Set<string>([
+  "explanation",
+  "media",
+  "reflection",
+  "practice",
+  "assignment",
+  "inquiry",
+  "assessment",
+  "revision",
+]);
+
+function modeOf(activity: DbRow | null): LearningMode | null {
+  const raw = String(activity?.mode || "");
+  return LEARNING_MODES.has(raw) ? (raw as LearningMode) : null;
+}
+
+function modeTypeOf(activity: DbRow | null): string {
+  return String(activity?.mode_type || "");
+}
+
+// Question-shaped student turn (inquiry flow + curiosity logging). Deliberately loose:
+// a "?" anywhere, or an interrogative opener.
+function isQuestionShaped(text: string): boolean {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return false;
+  return (
+    trimmed.includes("?") ||
+    /^(what|why|how|when|where|who|which|can|could|do|does|did|is|are|will|would|should)\b/i.test(
+      trimmed,
+    )
+  );
+}
+
 type StepRequirements = {
   code: boolean;
   quiz: boolean;
   understanding: boolean;
+  // Presence gate for content-delivery modes (explanation/media/assignment/inquiry):
+  // the step passes on the student's next contentful turn after presentation.
+  acknowledge: boolean;
   quizChoices: unknown[];
 };
 
@@ -1442,22 +1499,86 @@ type StepRequirements = {
 // run; a quiz-bearing step must pass its quiz; a free-text/file step must demonstrate
 // understanding. An MCQ-mode activity without a bound quiz row still counts as a quiz
 // step (its choices live on the activity itself; the mentor's assessment grades it).
+// When the step has a v4 mode, the mode decides; a bound quiz row stays an orthogonal
+// gate in every mode (matching the legacy behavior for code steps with quizzes).
 function requirementsFor(
   activity: DbRow | null,
   quiz: DbRow | null,
 ): StepRequirements {
-  const mode = responseMode(activity?.response_mode, "code");
-  const needsCode = mode === "code";
-  const needsQuiz = Boolean(quiz) || mode === "multiple_choice";
   const quizChoices = Array.isArray(quiz?.choices)
     ? (quiz.choices as unknown[])
     : Array.isArray(activity?.choices)
       ? (activity.choices as unknown[])
       : [];
+  const needsQuizRow = Boolean(quiz);
+  const stepMode = modeOf(activity);
+  if (stepMode) {
+    switch (stepMode) {
+      case "explanation":
+      case "media":
+      case "assignment":
+      case "inquiry":
+        return {
+          code: false,
+          quiz: needsQuizRow,
+          understanding: false,
+          acknowledge: true,
+          quizChoices,
+        };
+      case "practice":
+        return modeTypeOf(activity) === "applied"
+          ? {
+              code: false,
+              quiz: needsQuizRow,
+              understanding: !needsQuizRow,
+              acknowledge: false,
+              quizChoices,
+            }
+          : {
+              code: true,
+              quiz: needsQuizRow,
+              understanding: false,
+              acknowledge: false,
+              quizChoices,
+            };
+      case "assessment":
+        return modeTypeOf(activity) === "open_ended"
+          ? {
+              code: false,
+              quiz: needsQuizRow,
+              understanding: !needsQuizRow,
+              acknowledge: false,
+              quizChoices,
+            }
+          : {
+              code: false,
+              quiz: true,
+              understanding: false,
+              acknowledge: false,
+              quizChoices,
+            };
+      case "reflection":
+      case "revision":
+        // Revision runs reflection-shaped until its dedicated runtime lands (Phase 4),
+        // so an authored revision step is never a brick.
+        return {
+          code: false,
+          quiz: needsQuizRow,
+          understanding: !needsQuizRow,
+          acknowledge: false,
+          quizChoices,
+        };
+    }
+  }
+  // Legacy derivation (mode null) — byte-identical to pre-v4 behavior.
+  const mode = responseMode(activity?.response_mode, "code");
+  const needsCode = mode === "code";
+  const needsQuiz = needsQuizRow || mode === "multiple_choice";
   return {
     code: needsCode,
     quiz: needsQuiz,
     understanding: (mode === "text" || mode === "file") && !needsQuiz,
+    acknowledge: false,
     quizChoices,
   };
 }
@@ -1479,6 +1600,10 @@ type StepState = {
   // wrong). Teacher-facing struggle signals key on this, never on raw attempts —
   // side questions and help requests must not look like failing.
   graded_fails: number;
+  // v4 acknowledge gate (explanation/media/assignment/inquiry): monotonic, like every
+  // other pass timestamp. question_count tracks answered questions on inquiry steps.
+  acknowledged_at: string | null;
+  question_count: number;
 };
 
 function emptyStepState(activityId: string | null): StepState {
@@ -1491,6 +1616,8 @@ function emptyStepState(activityId: string | null): StepState {
     understanding_at: null,
     attempts: 0,
     graded_fails: 0,
+    acknowledged_at: null,
+    question_count: 0,
   };
 }
 
@@ -1524,6 +1651,8 @@ function parseStepState(session: DbRow, activityId: string | null): StepState {
     understanding_at: iso(raw.understanding_at),
     attempts: count(raw.attempts),
     graded_fails: count(raw.graded_fails),
+    acknowledged_at: iso(raw.acknowledged_at),
+    question_count: count(raw.question_count),
   };
 }
 
@@ -1561,6 +1690,7 @@ async function loadStepState(
         quiz_presented_at: req.quiz ? nowIso : null,
         quiz_passed_at: req.quiz ? nowIso : null,
         understanding_at: req.understanding ? nowIso : null,
+        acknowledged_at: req.acknowledge ? nowIso : null,
       },
       seedFailed: false,
     };
@@ -1603,7 +1733,8 @@ function stepDone(state: StepState, req: StepRequirements): boolean {
   return (
     (!req.code || Boolean(state.code_passed_at)) &&
     (!req.quiz || Boolean(state.quiz_passed_at)) &&
-    (!req.understanding || Boolean(state.understanding_at))
+    (!req.understanding || Boolean(state.understanding_at)) &&
+    (!req.acknowledge || Boolean(state.acknowledged_at))
   );
 }
 
@@ -1614,7 +1745,8 @@ function quizEligible(state: StepState, req: StepRequirements): boolean {
   return (
     req.quiz &&
     !state.quiz_passed_at &&
-    (!req.code || Boolean(state.code_passed_at))
+    (!req.code || Boolean(state.code_passed_at)) &&
+    (!req.acknowledge || Boolean(state.acknowledged_at))
   );
 }
 
@@ -1628,6 +1760,7 @@ function applyTurn(
   assessment: Assessment | null,
   understanding: Understanding | null,
   nowIso: string,
+  stepMode: LearningMode | null = null,
 ): StepState {
   if (!before.presented_at) {
     return { ...before, presented_at: nowIso };
@@ -1635,6 +1768,27 @@ function applyTurn(
   const after = { ...before };
   if (answer && answerContent(answer)) {
     after.attempts = before.attempts + 1;
+  }
+  // v4 acknowledge gate: a content-delivery step passes on the student's next contentful
+  // turn after presentation. On inquiry steps a QUESTION keeps the step open (the mentor
+  // answers it; question_count records it) — any non-question message closes it. A stuck
+  // cap (>=3 prior turns) forces acknowledgement even on a question-shaped turn, so a
+  // false-positive question detection (e.g. "can we move on?") can never trap the student.
+  if (
+    req.acknowledge &&
+    answer &&
+    answerContent(answer) &&
+    (answer.mode === "text" || answer.mode === "file")
+  ) {
+    const asksQuestion =
+      stepMode === "inquiry" &&
+      isQuestionShaped(String(answer.text || "")) &&
+      before.attempts < 3;
+    if (asksQuestion) {
+      after.question_count = before.question_count + 1;
+    } else if (!after.acknowledged_at) {
+      after.acknowledged_at = nowIso;
+    }
   }
   // Deterministically graded failure (orchestrator source only — a mentor's free-form
   // assessment must never look like a failed graded attempt).
@@ -1761,6 +1915,8 @@ function turnDirective(args: {
   draftFlow: FlowDecision;
   requirements: StepRequirements;
   activityMode: ResponseMode;
+  stepMode: LearningMode | null;
+  stepModeType: string;
   gradedUnderstanding: Understanding | null;
   gradedCode: Understanding | null;
   runtimeTimedOut: boolean;
@@ -1776,6 +1932,8 @@ function turnDirective(args: {
     draftFlow,
     requirements,
     activityMode,
+    stepMode,
+    stepModeType,
     gradedUnderstanding,
     gradedCode,
     runtimeTimedOut,
@@ -1787,6 +1945,8 @@ function turnDirective(args: {
   const textStep = activityMode === "text" && requirements.understanding;
   const stepConcluding =
     draftFlow.nextAction === "complete" || draftFlow.stage === "complete";
+  const openEndedAssessment =
+    stepMode === "assessment" && stepModeType === "open_ended";
 
   const pick = (): TurnDirective => {
     if (currentStage === "complete" && answer) {
@@ -1804,7 +1964,68 @@ function turnDirective(args: {
     if (gradedUnderstanding?.demonstrated) {
       return {
         key: "understanding_demonstrated",
-        text: `The student HAS just demonstrated understanding of this step (grader level=${gradedUnderstanding.level}). Affirm warmly in one sentence and conclude the step — do not ask another question about it or offer more help.`,
+        text: openEndedAssessment
+          ? `The student's answer PASSED this assessment question (grader level=${gradedUnderstanding.level}). Confirm it briefly, reinforce in one sentence why it's right, and conclude the step.`
+          : `The student HAS just demonstrated understanding of this step (grader level=${gradedUnderstanding.level}). Affirm warmly in one sentence and conclude the step — do not ask another question about it or offer more help.`,
+      };
+    }
+    // --- v4 mode sub-ladder (docs/PLATFORM.md) --------------------------------
+    // Inquiry: a question keeps the step open — answer it, never conclude on it.
+    if (
+      stepMode === "inquiry" &&
+      requirements.acknowledge &&
+      answer?.mode === "text" &&
+      !draftState.acknowledged_at &&
+      draftState.question_count > stepStateBefore.question_count
+    ) {
+      return {
+        key: "inquiry_answer",
+        text: "The student asked a question on this open-questions step. Answer it directly and completely, then ask if anything else is unclear — do not conclude the step while they are still asking.",
+      };
+    }
+    // Acknowledge modes concluding this turn (unless a bound quiz just went live —
+    // the quiz-first branch below owns that turn).
+    if (
+      requirements.acknowledge &&
+      !stepStateBefore.acknowledged_at &&
+      Boolean(draftState.acknowledged_at) &&
+      !quizActive
+    ) {
+      const closing =
+        stepMode === "media"
+          ? "Respond briefly to what they said about the material, then conclude the step."
+          : stepMode === "assignment"
+            ? "Confirm they know where the task lives (the work panel above the message box) and that they can return here anytime, then conclude the step."
+            : stepMode === "inquiry"
+              ? "They have no more questions. Close the step warmly in a sentence or two."
+              : "Respond briefly to their reaction, reinforce the ONE key idea in a sentence, and conclude the step.";
+      return { key: `${stepMode}_concluded`, text: closing };
+    }
+    // Open-ended assessment concluding via the stuck cap (final attempt used up). A
+    // demonstrated PASS is already handled by understanding_demonstrated above, so this is
+    // only the out-of-attempts case: conclude WITHOUT revealing or teaching the answer, and
+    // do NOT invite another attempt (the step is advancing). Placed BEFORE assessment_miss.
+    if (
+      openEndedAssessment &&
+      !stepStateBefore.understanding_at &&
+      Boolean(draftState.understanding_at)
+    ) {
+      return {
+        key: "assessment_concluded",
+        text: "This was the student's last attempt on this assessment question and the step is now wrapping up. Acknowledge their effort briefly and let them know you're moving on — do NOT reveal or teach the correct answer, and do NOT invite another attempt.",
+      };
+    }
+    // Open-ended assessment miss (still has attempts left): grading is strict and hint-free.
+    if (
+      openEndedAssessment &&
+      answer?.mode === "text" &&
+      assessment?.source === "orchestrator" &&
+      assessment.passed === false &&
+      !draftState.understanding_at
+    ) {
+      return {
+        key: "assessment_miss",
+        text: "The student's answer to this open-ended ASSESSMENT question was graded not-passed (see turn.grade). Tell them briefly and specifically what was missing WITHOUT teaching toward the answer or giving hints, then invite them to try once more.",
       };
     }
     const codePassedThisTurn =
@@ -1865,6 +2086,17 @@ function turnDirective(args: {
         text: "The student's code run did not pass (see turn.run_summary and turn.grade). Give the lightest help that unblocks the ONE thing to fix — a pointed question or a single hint at turn.hint_rung — then ask them to run it again.",
       };
     }
+    if (
+      openEndedAssessment &&
+      presentedBefore &&
+      !draftState.understanding_at
+    ) {
+      // Assessment steps never coach: no hints, no scaffolding, no partial answers.
+      return {
+        key: "assessment_pending",
+        text: "This is an open-ended ASSESSMENT question the student has not passed yet. Respond briefly to their message if needed, but give NO hints, scaffolding, or partial answers — restate the question plainly if helpful and ask for their best answer.",
+      };
+    }
     if (textStep && presentedBefore && !draftState.understanding_at) {
       const gap = gradedUnderstanding?.note
         ? ` The grader says what's still missing: ${gradedUnderstanding.note}.`
@@ -1875,6 +2107,23 @@ function turnDirective(args: {
       };
     }
     if (!presentedBefore) {
+      // Content-delivery and assessment modes REPLACE the generic presentation text —
+      // the generic "don't give anything away" line directly contradicts direct teaching.
+      const modePresent =
+        stepMode === "explanation"
+          ? "This is a DIRECT-TEACHING step, not yet shown. Present the material in the step prompt fully and plainly at the student's grade level — for THIS step you should state the ideas outright (the student-produces-the-conclusion rule does not apply here) — then invite them to send a message when they're ready to move on."
+          : stepMode === "media"
+            ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, then reply here when they're ready to continue."
+            : stepMode === "inquiry"
+              ? "This OPEN-QUESTIONS step is being shown for the first time. Invite the student's questions about the topic — anything they're unsure or curious about — and make clear that if they have none, they can just say so and move on."
+              : stepMode === "assignment"
+                ? "This step hands off a TASK that lives in the work panel above the message box. Frame what the task is about in a sentence or two and point them to it; they reply here once they've seen it."
+                : openEndedAssessment
+                  ? "This is an open-ended ASSESSMENT question, shown for the first time. Ask it plainly and completely, then wait for their answer — no hints, no scaffolding, no examples."
+                  : "";
+      if (modePresent) {
+        return { key: "present_step", text: modePresent };
+      }
       return {
         key: "present_step",
         text: "This step has not been shown to the student yet. Present it: introduce the task in a sentence or two at their grade level and invite a first attempt — do not pre-empt their thinking, give anything away, or interrogate them.",
@@ -2259,6 +2508,8 @@ async function writeEvidenceAndMastery(
   teachingMove: string,
   hintRung: number,
   attemptedBeforeHelp: boolean,
+  stepMode: LearningMode | null = null,
+  stepModeType = "",
 ): Promise<void> {
   if (
     !answer ||
@@ -2293,6 +2544,9 @@ async function writeEvidenceAndMastery(
     teaching_move: teachingMove || null,
     hint_rung: hintRung || null,
     attempted_before_help: attemptedBeforeHelp,
+    // v4 mode dimension (docs/PLATFORM.md §3) — what KIND of work produced this evidence.
+    mode: stepMode,
+    mode_type: stepModeType || null,
   });
 
   // One read for ALL skills, then one upsert POST — replaces the per-skill
@@ -2425,6 +2679,9 @@ async function handleTypedRequest(
   );
   // --- Flow core (v2): step requirements + persisted progress -----------------
   const activityMode = responseMode(context.activity?.response_mode, "code");
+  // v4 learning mode (null = legacy step; the whole mode layer is inert then).
+  const stepMode = modeOf(context.activity);
+  const stepModeType = modeTypeOf(context.activity);
   const requirements = requirementsFor(context.activity, context.quiz);
   const { state: stepStateBefore, seedFailed: stepSeedFailed } =
     await loadStepState(config, session, context.activity, requirements);
@@ -2645,6 +2902,30 @@ async function handleTypedRequest(
         : Promise.resolve(null),
       studentTurnPromise,
     ]);
+    // Open-ended ASSESSMENT (v4): the understanding grader's verdict is the grade in BOTH
+    // directions — a clear miss records a graded fail (mirrors quiz_wrong) instead of the
+    // reflection coaching path. Only a genuine ANSWER ATTEMPT can record a miss: a help
+    // request, confusion, or a question-shaped turn (a clarifying question, not an answer)
+    // is never a fail — otherwise merely asking a question would flag needs_retry. Note
+    // suppressing a fail is always safe; suppressing a pass is not (a pass sets
+    // understanding via the grader on the model-output path regardless of this).
+    const openEndedMiss: Assessment | null =
+      stepMode === "assessment" &&
+      stepModeType === "open_ended" &&
+      gradedUnderstanding !== null &&
+      gradedUnderstanding.demonstrated !== true &&
+      !inferredHelp &&
+      intent !== "confused" &&
+      !isQuestionShaped(content)
+        ? {
+            score: 0,
+            passed: false,
+            feedback:
+              gradedUnderstanding.note || "That answer isn't quite there yet.",
+            source: "orchestrator",
+          }
+        : null;
+
     // A judge-based pass COMPLETES the activity (unblocks the loop) but is capped below the
     // "secure" mastery tier (< 0.85): the server never re-executed the code and run_result is
     // client-supplied, so an open-ended judgement earns solid-but-not-verified credit only.
@@ -2656,7 +2937,49 @@ async function handleTypedRequest(
             feedback: "Your code accomplishes the task.",
             source: "orchestrator",
           }
-        : orchestratorAssessment;
+        : (orchestratorAssessment ?? openEndedMiss);
+
+    // Inquiry events (v4): persist question-asking as typed evidence — "confusion" when
+    // the intent/help detectors fire, "curiosity" for question-shaped turns that are
+    // neither confusion nor gate answers. Logging-only (never gates a step), best-effort
+    // (never blocks the turn), and skipped on presentation turns (nothing was asked yet).
+    // Curiosity is suppressed when THIS turn is the step's graded answer (a reflection or
+    // open-ended answer phrased as a question is an answer, not an inquiry); confusion still
+    // logs everywhere, since help-seeking mid-answer is real signal.
+    const inquiryEventType =
+      answer?.mode === "text" && content && presentedBefore
+        ? intent === "confused" || helpRequest
+          ? "confusion"
+          : isQuestionShaped(content) && intent === "none" && !isTextExplanation
+            ? "curiosity"
+            : ""
+        : "";
+    if (inquiryEventType) {
+      scheduleBackground(
+        insertRow(config, "learning_evidence", {
+          user_id: userId,
+          lesson_id: lessonId,
+          milestone_id:
+            typeof context.milestone?.id === "string"
+              ? context.milestone.id
+              : null,
+          session_id: sessionId,
+          source_type: "chat_turn",
+          source_ref: {
+            inquiry: inquiryEventType,
+            message: content.slice(0, 200),
+          },
+          skill_keys: skillKeys,
+          score: null,
+          confidence: null,
+          rubric_result: {},
+          notes: "",
+          created_by: userId,
+          mode: "inquiry",
+          mode_type: inquiryEventType,
+        }).catch(() => {}),
+      );
+    }
 
     // Lesson-arc view (step N of M, done, next) so the mentor can situate this turn.
     const lessonArc = buildLessonArc(context.activities, context.activity);
@@ -2668,6 +2991,7 @@ async function handleTypedRequest(
       effectiveOrchestratorAssessment,
       gradedUnderstanding,
       turnStartedIso,
+      stepMode,
     );
     const draftFlow = deriveTurn(
       draftState,
@@ -2695,12 +3019,30 @@ async function handleTypedRequest(
       draftFlow,
       requirements,
       activityMode,
+      stepMode,
+      stepModeType,
       gradedUnderstanding,
       gradedCode,
       runtimeTimedOut,
       assessment: effectiveOrchestratorAssessment,
       attachedResources,
     });
+    // Media steps: record that the material was shown (the presentation turn attaches the
+    // card). Best-effort telemetry — interactions never gate and never block the turn.
+    if (stepMode === "media" && !presentedBefore && attachedResources.length) {
+      for (const resource of attachedResources) {
+        scheduleBackground(
+          insertRow(config, "resource_interactions", {
+            resource_id: resource.id,
+            user_id: userId,
+            session_id: sessionId,
+            lesson_id: lessonId,
+            event_type: "shown",
+            payload: { source: "media_step_presentation" },
+          }).catch(() => {}),
+        );
+      }
+    }
     const runSummary =
       answer?.mode === "code" && answer.run_result
         ? [
@@ -2827,6 +3169,10 @@ async function handleTypedRequest(
             of: lessonArc ? lessonArc.total : Math.max(context.activities.length, 1),
             title: String(context.activity?.title || context.lesson?.title || ""),
             kind: activityMode,
+            // v4 learning mode (null = legacy step). The directive already encodes the
+            // mode's flow; these let the mentor name what kind of step this is.
+            mode: stepMode,
+            mode_type: stepModeType || null,
             requirements: {
               code: requirements.code
                 ? draftState.code_passed_at
@@ -2841,6 +3187,11 @@ async function handleTypedRequest(
               understanding: requirements.understanding
                 ? draftState.understanding_at
                   ? "demonstrated"
+                  : "pending"
+                : "not_required",
+              acknowledge: requirements.acknowledge
+                ? draftState.acknowledged_at
+                  ? "done"
                   : "pending"
                 : "not_required",
             },
@@ -2992,6 +3343,7 @@ async function handleTypedRequest(
       assessment,
       understanding,
       turnStartedIso,
+      stepMode,
     );
     const finalFlow = deriveTurn(
       finalState,
@@ -3254,6 +3606,8 @@ async function handleTypedRequest(
             directive.key,
             hintRung,
             attemptedBeforeHelp,
+            stepMode,
+            stepModeType,
           );
         })(),
       );

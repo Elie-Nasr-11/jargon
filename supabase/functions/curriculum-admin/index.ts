@@ -118,6 +118,36 @@ function isLessonType(value: unknown): value is LessonType {
   return ["discussion", "code", "reflection", "multiple_choice", "file"].includes(cleanText(value));
 }
 
+// v4 learning modes (docs/PLATFORM.md). Mode types are validated HERE, not in the DB,
+// so new types never need a migration. A step with mode null is a legacy step.
+const LEARNING_MODES = new Set([
+  "explanation",
+  "media",
+  "reflection",
+  "practice",
+  "assignment",
+  "inquiry",
+  "assessment",
+  "revision",
+]);
+const MODE_TYPES: Record<string, string[]> = {
+  practice: ["code", "applied"],
+  assessment: ["mcq", "open_ended"],
+  revision: ["recall"],
+};
+function cleanMode(value: unknown): string | null {
+  const raw = cleanText(value);
+  return LEARNING_MODES.has(raw) ? raw : null;
+}
+function cleanModeType(mode: string | null, value: unknown): string {
+  if (!mode) return "";
+  const allowed = MODE_TYPES[mode] || [];
+  const raw = cleanText(value);
+  if (allowed.includes(raw)) return raw;
+  // Typed modes default to their primary type so a missing subtype can't strand a step.
+  return allowed[0] || "";
+}
+
 async function fetchJson(config: Config, path: string, init: RequestInit, serviceRole: boolean): Promise<unknown> {
   const headers = new Headers(init.headers || {});
   const key = serviceRole ? config.serviceRoleKey : config.anonKey;
@@ -1271,14 +1301,35 @@ async function upsertStep(config: Config, actorId: string, body: DbRow): Promise
   const step = body.step && typeof body.step === "object" ? (body.step as DbRow) : {};
   const title = cleanText(step.title) || "Step";
   const stage = isStage(step.stage) ? step.stage : "practice";
-  const responseMode: ResponseMode = isResponseMode(step.response_mode) ? step.response_mode : "text";
-  const activityType: LessonType = isLessonType(step.activity_type)
-    ? step.activity_type
-    : responseMode === "code"
+  // v4 mode (docs/PLATFORM.md): when set, the mode PINS response_mode so the stored shape
+  // can't drift from the mode's runtime contract; activity_type is derived for legacy
+  // compat (deprecated — the runtime keys on mode). When absent, everything is legacy.
+  const stepMode = cleanMode(step.mode);
+  const stepModeType = cleanModeType(stepMode, step.mode_type);
+  const responseMode: ResponseMode = stepMode
+    ? stepMode === "practice" && stepModeType !== "applied"
       ? "code"
-      : responseMode === "multiple_choice"
+      : stepMode === "assessment" && stepModeType !== "open_ended"
         ? "multiple_choice"
-        : "discussion";
+        : "text"
+    : isResponseMode(step.response_mode)
+      ? step.response_mode
+      : "text";
+  const activityType: LessonType = stepMode
+    ? stepMode === "practice" && stepModeType !== "applied"
+      ? "code"
+      : stepMode === "assessment" && stepModeType !== "open_ended"
+        ? "multiple_choice"
+        : stepMode === "reflection"
+          ? "reflection"
+          : "discussion"
+    : isLessonType(step.activity_type)
+      ? step.activity_type
+      : responseMode === "code"
+        ? "code"
+        : responseMode === "multiple_choice"
+          ? "multiple_choice"
+          : "discussion";
 
   const milestoneId = await lessonMilestoneId(config, lessonId);
 
@@ -1316,6 +1367,10 @@ async function upsertStep(config: Config, actorId: string, body: DbRow): Promise
         : {},
     skill_keys: cleanStringArray(step.skill_keys),
     pass_score: passScore,
+    // Only touch the mode columns when the payload carries the key: an explicit value
+    // (or explicit null/"none") sets or clears it; an old client that doesn't know about
+    // modes can never clobber one back to legacy.
+    ...("mode" in step ? { mode: stepMode, mode_type: stepModeType || null } : {}),
   });
 
   // Checkpoint step: upsert its quiz_item. Otherwise archive any quiz so the runtime
@@ -1571,16 +1626,33 @@ function parseStepDrafts(result: DbRow) {
     .slice(0, 10)
     .map((step) => {
       const row = step && typeof step === "object" ? (step as DbRow) : {};
-      const kind = ["teach", "practice", "checkpoint", "reflect"].includes(cleanText(row.kind))
-        ? cleanText(row.kind)
-        : "practice";
+      // v4 drafts carry a mode; older drafts (and refine round-trips of them) carry a
+      // kind. Accept either, derive the other, validate both.
+      const draftMode =
+        cleanMode(row.mode) ??
+        ({ teach: "explanation", practice: "practice", checkpoint: "assessment", reflect: "reflection" }[
+          cleanText(row.kind)
+        ] ||
+          "practice");
+      const draftModeType = cleanModeType(draftMode, row.mode_type);
+      const kind =
+        draftMode === "explanation" || draftMode === "media"
+          ? "teach"
+          : draftMode === "assessment"
+            ? "checkpoint"
+            : draftMode === "practice"
+              ? "practice"
+              : "reflect";
+      const isMcq = draftMode === "assessment" && draftModeType !== "open_ended";
       const choices = parseChoices(row.choices);
       return {
         kind,
+        mode: draftMode,
+        mode_type: draftModeType,
         title: cleanText(row.title) || "Step",
         prompt: cleanText(row.prompt),
-        choices: kind === "checkpoint" ? choices : [],
-        correct_choice_id: kind === "checkpoint" ? cleanText(row.correct_choice_id) : "",
+        choices: isMcq ? choices : [],
+        correct_choice_id: isMcq ? cleanText(row.correct_choice_id) : "",
       };
     })
     .filter((step) => step.prompt || step.title);
@@ -1639,12 +1711,18 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
     if (!isRefine && !prompt) throw new Error("prompt is required.");
 
     const system =
-      "You design a single lesson as an ordered list of steps. Return ONLY JSON of the form " +
-      '{"steps":[{"kind":"teach"|"practice"|"checkpoint"|"reflect","title":string,"prompt":string,' +
+      "You design a single lesson as an ordered list of steps. Every step has a learning MODE " +
+      "(the platform's pedagogical vocabulary). Return ONLY JSON of the form " +
+      '{"steps":[{"mode":"explanation"|"media"|"reflection"|"practice"|"assignment"|"inquiry"|"assessment"|"revision",' +
+      '"mode_type":string,"title":string,"prompt":string,' +
       '"choices":[{"id":string,"text":string}],"correct_choice_id":string}]}. ' +
-      "Use 3-6 steps. Include choices and correct_choice_id ONLY for checkpoint steps " +
-      "(2-4 choices with ids a,b,c,d). Keep prompts concrete and age-appropriate. Fit the lesson " +
-      "context. If reference material is provided, ground the steps in it.";
+      "mode_type is required only for practice ('code' for run-the-code steps, 'applied' for " +
+      "use-the-idea-in-words steps) and assessment ('mcq' or 'open_ended'). " +
+      "Include choices and correct_choice_id ONLY for assessment/mcq steps " +
+      "(2-4 choices with ids a,b,c,d). Use 3-6 steps. A good lesson opens with explanation or " +
+      "media, works the idea with reflection or practice, and ends with an assessment. " +
+      "Keep prompts concrete and age-appropriate. Fit the lesson context. " +
+      "If reference material is provided, ground the steps in it.";
     const parts: string[] = [];
     if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
     if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);

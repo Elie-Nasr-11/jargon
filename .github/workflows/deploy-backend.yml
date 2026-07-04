@@ -67,7 +67,8 @@ jobs:
             supabase/migrations/20260701120000_checkpoints_unified.sql \
             supabase/migrations/20260701130000_checkpoints_dualwrite.sql \
             supabase/migrations/20260702000000_tutor_v2_step_state.sql \
-            supabase/migrations/20260628000000_canvas_integration.sql ; do
+            supabase/migrations/20260628000000_canvas_integration.sql \
+            supabase/migrations/20260705000000_mode_foundation.sql ; do
             echo "Applying $f"
             body="$(jq -Rs '{query: .}' "$f")"
             resp="$(mktemp)"

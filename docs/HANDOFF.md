@@ -4204,3 +4204,63 @@ Suggested next task: v4.0 Phase 1 — mode_foundation migration (mode/mode_type 
 lesson_activities + learning_evidence, backfills), runtime mode branch with null fallback,
 acknowledge gate, mode directives, open-ended assessment, inquiry event logging, studio mode
 picker.
+
+## Claude -> Codex / Human - 2026-07-04 11:10
+
+Status: Starting
+Task: v4.0 Phase 1 — mode foundation. Migration (lesson_activities.mode/mode_type +
+learning_evidence.mode/mode_type + requirement-equivalent backfills), runtime mode branch in
+requirementsFor with null fallback, acknowledge gate (explanation/media/inquiry/assignment),
+open-ended assessment strict path, inquiry event logging (confusion/curiosity, logging-only),
+evidence mode stamping, curriculum-admin mode validation + activity_type derivation + drafter
+modes, studio mode picker. docs/PLATFORM.md is the spec.
+Files I expect to touch: supabase/migrations/20260705000000_mode_foundation.sql (new),
+.github/workflows/deploy-backend.yml, supabase/functions/chat/index.ts,
+supabase/functions/curriculum-admin/index.ts, frontend/src/routes/teacher.curriculum.tsx,
+frontend/src/lib/types.ts, frontend/src/lib/api.ts, tests/test_supabase_chat_function.py
+Notes: mode=null keeps the legacy derivation byte-identically; the live student must be
+unaffected. Media placement-pinning via lesson_resource_placements is deferred to P3 (keeping
+loadContext untouched this phase — the display_mode outage lesson). Adversarial review before
+deploy.
+
+## Claude -> Codex / Human - 2026-07-04 12:40
+
+Status: Finished
+Summary: v4.0 Phase 1 (mode foundation) — the eight-mode vocabulary is wired through schema,
+runtime, authoring, and evidence, with existing lessons behaving byte-identically (mode null =
+legacy derivation). Migration adds lesson_activities.mode/mode_type + learning_evidence.mode/
+mode_type; a CONSERVATIVE, ONE-TIME, requirement-equivalent backfill (marker-guarded so it never
+re-stamps a teacher-cleared step): code->practice/code (42), multiple_choice->assessment/mcq (1),
+text-with-no-published-quiz->reflection (35); the 2 text+quiz steps + any file steps stay legacy.
+chat/index.ts: mode branch in requirementsFor (legacy fallback kept verbatim), acknowledge gate
+(explanation/media/assignment/inquiry) with an inquiry stuck-cap so a question-shaped "move on"
+can't trap, open-ended assessment strict grading (miss only on genuine answer attempts, not
+questions/help; conclusion directive on the stuck-cap turn), inquiry confusion/curiosity event
+logging (curiosity suppressed on graded answers), media 'shown' interactions, evidence stamped
+with mode. curriculum-admin: mode validation + response_mode/activity_type pinning + drafter modes.
+Studio: the add-step row is the 8-mode picker; StepCard has mode/type selects + per-mode fields.
+Files changed: supabase/migrations/20260705000000_mode_foundation.sql (new),
+.github/workflows/deploy-backend.yml (migration appended), supabase/functions/chat/index.ts,
+supabase/functions/curriculum-admin/index.ts, frontend/src/routes/teacher.curriculum.tsx,
+frontend/src/lib/types.ts, tests/test_supabase_chat_function.py (+2 fingerprint tests).
+Tests run: node --experimental-strip-types --check (chat + curriculum-admin); python3 -m unittest
+(chat fingerprints 14/14; full suite at the 65 pre-existing stale baseline, none added);
+frontend tsc --noEmit + lint + build green; migration validated against the live DB in a
+ROLLED-BACK transaction (applies cleanly, idempotent, backfill counts 42/1/35/2 confirmed).
+Two adversarial review passes (the first ran out of credits mid-run on Fable; the second full run
+on Opus = 15 agents). Round 1 caught + fixed: a HIGH backfill brick (text+quiz->assessment could
+brick if the quiz was later archived; now those rows stay legacy), file steps left legacy,
+one-time backfill guard, curiosity-on-graded-answer suppression, no-hints prompt scoped to
+open_ended. Round 2 confirmed those fixes and surfaced 3 more (ALL new-opt-in-mode only, zero
+live-lesson exposure per every verifier): open-ended clarifying questions recorded as graded
+fails (fixed: miss only on genuine answer attempts), a contradictory conclude-vs-"try again"
+directive on the stuck-cap turn (fixed: assessment_concluded directive + guarded assessment_miss),
+inquiry question-shape false-positive trap (fixed: acknowledge stuck-cap).
+Remaining concerns: the studio mode picker + types are frontend — NOT live until a main
+fast-forward (held for user OK), so no teacher can author a mode (and thus no student can reach
+the new-mode paths) until then; the backend runtime is safe to deploy now because every existing
+lesson stays legacy-equivalent. Media placement-pinning + a richer inquiry curiosity classifier
+are deferred (PLATFORM.md deferred list).
+Suggested next task: after live-verifying the backend deploy is green and a normal lesson turn is
+unchanged, fast-forward main on user OK, author one lesson per new mode end-to-end, then start
+Phase 2 (teacher build system: hotlist v0 + org-shared templates + live-now + work overview).

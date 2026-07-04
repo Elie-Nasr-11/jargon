@@ -26,6 +26,18 @@ export type Lesson = {
   grade_band?: string | null;
 };
 
+// v4.0 learning modes (docs/PLATFORM.md). A step with mode null is a legacy step whose
+// kind is derived from response_mode + quiz presence; activity_type is deprecated.
+export type LearningMode =
+  | "explanation"
+  | "media"
+  | "reflection"
+  | "practice"
+  | "assignment"
+  | "inquiry"
+  | "assessment"
+  | "revision";
+
 export type LessonActivity = {
   id: string;
   lesson_id: string;
@@ -41,6 +53,8 @@ export type LessonActivity = {
   rubric: Record<string, unknown>;
   skill_keys: string[];
   pass_score: number;
+  mode?: LearningMode | null;
+  mode_type?: string | null;
 };
 
 export type CurriculumStatus = "draft" | "published" | "archived";
@@ -190,6 +204,10 @@ export type CurriculumStepInput = {
   choices?: Array<{ id: string; text: string }>;
   skill_keys?: string[];
   pass_score?: number;
+  // v4 mode: when present in the payload the backend pins response_mode/activity_type
+  // from it (null explicitly clears back to a legacy step).
+  mode?: LearningMode | null;
+  mode_type?: string | null;
   quiz?: {
     prompt: string;
     choices: Array<{ id: string; text: string }>;
@@ -225,6 +243,8 @@ export type CurriculumOutlineDraft = {
 
 export type CurriculumStepDraft = {
   kind: CurriculumStepKind;
+  mode?: LearningMode;
+  mode_type?: string;
   title: string;
   prompt: string;
   choices: Array<{ id: string; text: string }>;

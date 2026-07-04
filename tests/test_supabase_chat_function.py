@@ -149,6 +149,43 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.source)
 
+    def test_learning_modes_are_wired(self):
+        # v4.0 Phase 1 (docs/PLATFORM.md): the eight-mode vocabulary. Mode null must keep
+        # the legacy derivation, so both the mode branch AND the legacy path must exist.
+        for fragment in (
+            "const LEARNING_MODES",
+            "function modeOf",
+            "function modeTypeOf",
+            "function isQuestionShaped",
+            '"explanation"',
+            '"media"',
+            '"inquiry"',
+            '"revision"',
+            # The acknowledge gate is persisted and monotonic.
+            "acknowledged_at",
+            "question_count",
+            # Legacy fallback survives inside requirementsFor.
+            "// Legacy derivation (mode null)",
+            # Evidence rows carry the mode dimension.
+            "mode: stepMode",
+            'mode: "inquiry"',
+            # Open-ended assessment records misses deterministically.
+            "openEndedMiss",
+            '"assessment_miss"',
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
+
+    def test_mode_null_legacy_path_is_intact(self):
+        # The exact legacy expressions the pre-v4 runtime derived kinds from must remain
+        # (mode-null steps behave byte-identically).
+        for fragment in (
+            'const needsQuiz = needsQuizRow || mode === "multiple_choice";',
+            '(mode === "text" || mode === "file") && !needsQuiz',
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
+
 
 if __name__ == "__main__":
     unittest.main()
