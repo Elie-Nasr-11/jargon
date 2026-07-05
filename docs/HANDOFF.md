@@ -6,6 +6,44 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 4: revision-mode tutor runtime — DEPLOYED)
+
+Summary: An authored revision-mode step now behaves as RETRIEVAL PRACTICE instead of a generic
+reflection step. Additive + behavior-safe: everything is guarded on stepMode === "revision", and
+prod has ZERO revision steps (verified: modes in use = assessment/practice/reflection), so no current
+student turn is affected. SYSTEM_PROMPT gained a retrieval-practice block (one recall question at a
+time on the step's skills, target weakest tiers emerging<developing<secure, no re-teaching, +
+hallucination guard: skills/tiers only, never past-session specifics). turnDirective gained a
+revision block (revision_practice mid-step; revision_concluded ONLY when recall was demonstrated;
+revision_stuck on the attempts>=4 stuck-cap conclusion — states the idea plainly + offers to revisit,
+never false-praises), placed before the generic understanding branches and skipped while a bound quiz
+is live. Gating/deriveTurn/checkUnderstanding/mode-evidence stamping were already correct from P1.
+
+Files changed: supabase/functions/chat/index.ts (SYSTEM_PROMPT block, requirementsFor comment,
+turnDirective revision block + present arm), tests/test_supabase_chat_function.py
+(+test_revision_runtime_is_wired), docs/HANDOFF.md.
+
+Tests run: node --check (chat) OK; all 15 chat fingerprint tests green. Adversarial review (9 agents,
+3 dimensions -> verify): 1 real MEDIUM (revision_concluded falsely praised the stuck-cap conclusion —
+FIXED by splitting demonstrated vs stuck-cap) + 2 content LOWs (skill-less step / off-step mastery
+drift — FIXED in wording); isolation CONFIRMED (no non-revision step affected). Deployed via
+deploy-backend run #39 (green); prod-verified 0 live revision steps.
+
+DEFERRED — the proficiency surfaces (the other half of Phase 4): profile popup "strengths/weaknesses
+by mode" + teacher StudentDetail per-mode evidence breakdown (inquiry confusion-vs-curiosity). These
+are DATA-BLOCKED: learning_evidence.mode currently has 0 populated rows (mode-dimensioned evidence
+hasn't accumulated since the P1 deploy — low graded traffic on mode-tagged steps, and revision
+evidence needs authored revision steps + student runs). The revision runtime just deployed is what
+generates mode='revision' evidence; build the surfaces once the data exists so they aren't empty.
+Also deferred (net-new, needs schema): the "Review due" chip / due-queue from
+student_mastery.last_practiced_at, and platform-generated ad-hoc revision sessions
+(learning_sessions.lesson_id is NOT NULL).
+
+Suggested next task: FAST-FORWARD MAIN to take Phases 1-4 live (all Phase 1-3 frontend + the P4
+backend are on the branch; the frontend is inert until the main FF, held for user OK). Then Phase 5
+(notifications/calendar/admin monitoring/teacher reports), or the proficiency surfaces once
+mode-dimensioned evidence accumulates, or the deferred 3a mentor-prefs write-through.
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 3b: classes -> dashboard -> unit routes — DONE, frontend-only)
 
 Summary: The student LMS shell. New routes /classes (class menu) -> /classes/$classId (dashboard:
