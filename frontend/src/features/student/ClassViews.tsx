@@ -31,7 +31,7 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
-function PageShell({
+export function PageShell({
   title,
   subtitle,
   back,
@@ -70,7 +70,7 @@ function PageShell({
   );
 }
 
-function StateNote({ children }: { children: React.ReactNode }) {
+export function StateNote({ children }: { children: React.ReactNode }) {
   return (
     <GradientCard>
       <div className="p-6 text-center text-[13.5px] text-muted-foreground">{children}</div>

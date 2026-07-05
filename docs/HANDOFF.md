@@ -6,6 +6,46 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 deferred: student calendar DONE; remaining deferred re-scoped by exploration)
+
+Summary: Shipped the STUDENT CALENDAR (frontend-only): a new /calendar route + StudentCalendar
+using the (previously unused) shadcn Calendar primitive, fed by fetchStudentGrades (unified
+assignment/assessment work with due_at + submitted_at, self-scoped by RLS). Days with due/submitted
+work are marked; selecting a day lists its items. Entry point added to the Lessons dropdown
+(Class view / Calendar pair). routeTree.gen.ts hand-edited for /calendar. PageShell/StateNote
+exported from ClassViews for reuse.
+
+IMPORTANT — the rest of "Phase 5 / remaining deferred" was RE-SCOPED after exploration mapped the
+real cost (the roadmap under-counted these; none is a quick frontend swap):
+- NOTIFICATIONS TABLE: the hotlist's 7 kinds do NOT have 7 clean writers. Only mentor_recommendation
+  (chat maybeWriteRecommendation) and assessment_to_review (assessment-admin submitAssessment) have
+  server-side insert sites. submission_to_grade is CLIENT-side (submitAssignment in api.ts);
+  intervention_alerts has NO insert site anywhere (the alert kind is already dead); and
+  session_risk/live_now/due_soon are DERIVED state, not events. So a real notifications table needs
+  recipient fan-out (a row per teacher), the missing alert writer, and a MERGE (not swap) in
+  HotlistFeed — a multi-function backend feature, reviewed + deployed.
+- ADMIN LIVE TAB: the frontend PilotReadiness type exposes only aggregate counts, NOT the active
+  session list; admins can't read learning_sessions by RLS. Needs a new admin-ops action
+  (service-role active-session read) — and admin-ops is deliberately NOT in the auto-deploy list.
+- TEACHER REPORTS: admin-ops (generate_progress_report / export_class_snapshot / export_student_
+  archive) is platform/org-admin ONLY (global fetchActorAccess gate; no teacher tier). Needs a new
+  teacher-scoped auth path in admin-ops (again, not auto-deployed).
+- REVIEW-DUE CHIP: content-blocked — no published revision lesson to route into; needs a
+  spaced-repetition due-queue design over student_mastery.last_practiced_at.
+- AD-HOC REVISION SESSIONS: needs the runtime-wide learning_sessions.lesson_id NOT NULL relaxation —
+  highest risk to the live tutor; deferred by design.
+
+Files changed: frontend/src/features/student/StudentCalendar.tsx (new), routes/calendar.tsx (new),
+routeTree.gen.ts (hand-edit), features/student/ClassViews.tsx (export PageShell/StateNote),
+components/HeaderMenus.tsx (Class view / Calendar entry pair), docs/HANDOFF.md.
+
+Tests run: frontend tsc/lint/build (0 errors / 13 pre-existing warnings). Frontend-only.
+
+Suggested next task: each remaining deferred item is now a dedicated BACKEND slice (migration /
+edge-fn action / auth decision / deploy + adversarial review). Pick one to green-light — notifications
+table is the highest-value; admin Live tab is the smallest (one admin-ops read action + adding
+admin-ops to the deploy workflow).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 deferred follow-ups: prefs write-through + proficiency-by-mode — DONE, frontend-only)
 
 Summary: Two deferred items, both frontend-only (verified existing RLS permits every read/write, so

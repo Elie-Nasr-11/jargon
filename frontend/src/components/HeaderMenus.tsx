@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import gsap from "gsap";
-import { Check, ChevronDown, LayoutGrid, Menu, X } from "lucide-react";
+import { Calendar as CalendarDays, Check, ChevronDown, LayoutGrid, Menu, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { ProfilePanel } from "@/features/student/ProfilePanel";
 import { useIsTouch } from "@/hooks/useIsTouch";
@@ -652,13 +652,22 @@ function LessonsPanel({
     <div>
       {!bare && <h3 className="font-serif text-[22px] leading-tight tracking-tight">Lessons</h3>}
       <p className="mt-1 text-[13px] text-muted-foreground">Browse subjects, units, and lessons.</p>
-      <Link
-        to="/classes"
-        className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-depth-field px-3 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-      >
-        <LayoutGrid className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
-        Open class view
-      </Link>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Link
+          to="/classes"
+          className="flex items-center gap-2 rounded-xl border border-border bg-depth-field px-3 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+        >
+          <LayoutGrid className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+          Class view
+        </Link>
+        <Link
+          to="/calendar"
+          className="flex items-center gap-2 rounded-xl border border-border bg-depth-field px-3 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+        >
+          <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+          Calendar
+        </Link>
+      </div>
       <div className="mt-4 space-y-0.5">
         {singleSubject
           ? tree[0] && renderUnits(tree[0], 0)
