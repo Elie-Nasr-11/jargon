@@ -633,12 +633,25 @@ async function submitAssessment(config: Config, userId: string, body: DbRow): Pr
   // v4.0 Phase 5: notify the class's teachers ONLY when the submission actually needs teacher
   // review (open-ended items pending) — a fully auto-graded submission needs no review (best-effort).
   if (hasPendingReview) {
+    // Resolve the student's name so the live title matches the one-time backfill copy
+    // ("<name> submitted <assessment>"); best-effort, falls back to "A student".
+    let studentName = "A student";
+    try {
+      const profile = await loadFirst(
+        config,
+        `profiles?id=eq.${encodeURIComponent(userId)}&select=name`,
+      );
+      const name = profile ? cleanText(profile.name) : "";
+      if (name) studentName = name;
+    } catch (_error) {
+      // best-effort — keep the generic fallback.
+    }
     await notifyClassTeachers(config, {
       classId: cleanId(assessment.class_id) || null,
       organizationId: cleanId(assessment.organization_id) || null,
       relatedStudentId: userId,
       kind: "assessment_to_review",
-      title: `A student submitted ${cleanText(assessment.title) || "an assessment"}`,
+      title: `${studentName} submitted ${cleanText(assessment.title) || "an assessment"}`,
       ref: { assessment_id: cleanId(assessment.id), attempt_id: attemptId },
     });
   }

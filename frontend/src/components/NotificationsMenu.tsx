@@ -66,7 +66,15 @@ export function NotificationsMenu() {
       );
       void markNotificationRead(n.id).catch(() => {});
     }
-    if (n.class_id && n.related_student_id) {
+    // An assessment-to-review notification should land on the class Assessments tab, where the
+    // review/return controls live — not the student overview (which has none).
+    if (n.kind === "assessment_to_review" && n.class_id) {
+      navigate({
+        to: "/teacher/class/$classId",
+        params: { classId: n.class_id },
+        search: { tab: "assessments" },
+      });
+    } else if (n.class_id && n.related_student_id) {
       navigate({
         to: "/teacher/class/$classId/student/$studentId",
         params: { classId: n.class_id, studentId: n.related_student_id },

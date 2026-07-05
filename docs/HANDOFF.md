@@ -6,6 +6,34 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 2: notification bell coherence — DEPLOYED)
+
+Summary: Made the shipped teacher notification bell correct (the "honest bell" fix). Two issues from
+the audit: (1) a notification's live title read "A student submitted <assessment>" while the one-time
+backfill read "<name> submitted <assessment>" — same kind, two formats; (2) clicking a notification
+navigated to the student OVERVIEW tab, which has no review controls, instead of the class Assessments
+tab where the review/return controls (AssessmentManager) actually live.
+- assessment-admin submitAssessment now resolves the student's profile name (best-effort, try/catch,
+  falls back to "A student") so the live title matches the backfill format exactly
+  (coalesce(name,'A student') || ' submitted ' || coalesce(title,'an assessment')).
+- NotificationsMenu.openItem() adds a kind-aware branch: assessment_to_review -> /teacher/class/
+  $classId?tab=assessments (ahead of the student/class overview fallbacks). Read-marking unchanged.
+
+Files changed: supabase/functions/assessment-admin/index.ts, frontend/src/components/
+NotificationsMenu.tsx, docs/HANDOFF.md.
+
+Tests run: node --check assessment-admin; full Python suite green (164 ok / 4 skipped); frontend
+tsc/lint/build (0 errors). Adversarial review (1 agent): CONFIRMED the name lookup is off the
+submission's success path + doubly best-effort (its own try/catch + notifyClassTeachers swallows), so
+a submit can never 500 from it; the title matches the backfill; the deep-link route/tab are valid and
+branch ordering leaves other kinds unchanged. Deployed via assessment-admin auto-deploy; FF main.
+
+Scope note (deliberate): the bell stays a persistent assessment-review log — NOT broadened to the
+other hotlist kinds (that full HotlistFeed-on-notifications MERGE needs the missing intervention_alert
++ server-side submission_to_grade writers, still deferred). Admin bell also skipped: admins aren't
+notification recipients (recipients are class teachers), so it would render an empty bell. Dedup /
+auto-clear-on-return remain a later nicety.
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 1 S2: recipient grade guard — DEPLOYED)
 
 Summary: Closed a pre-existing grade-integrity hole. assignment_recipients + checkpoint_recipients
