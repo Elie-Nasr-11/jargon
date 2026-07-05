@@ -311,3 +311,49 @@ Deferred WITH CAUSE (not completion gaps — see `docs/PLATFORM.md` §9 + `docs/
 review-due chip (content-blocked — no published revision lesson), platform-generated ad-hoc revision
 sessions (`learning_sessions.lesson_id` NOT-NULL relaxation, highest live-tutor risk), and the full
 HotlistFeed-on-`notifications` merge (5 of 7 hotlist kinds still lack server-side writers).
+
+## Post-v4.0 — the remaining arc (2026-07-05, planned)
+
+Everything after v4.0 is either buildable-with-a-blocker or deliberate out-of-scope. Sequenced by
+value then risk. Grounded by two exploration passes (notifications/hotlist surface; file-submissions +
+live-intervention plumbing). Recommended order P1 → P5; C and D are strategic side-decisions.
+
+**KEY FINDING:** the missing notification writers are all best done as `SECURITY DEFINER` DB TRIGGERS —
+every producer that lacks a writer (client-side `submitAssignment`; the student-JWT chat runtime with
+no service-role key) cannot itself insert a `notifications` row, but a trigger can. So the "multi-fn
+backend slice" is really one migration of triggers: additive, best-effort, off the live-tutor path.
+
+- **Phase 1 — Notifications become a real feed (A + E). HIGH value / LOW risk / no blocking decision.**
+  - 1a (migration + 1 edge-fn hook): SECURITY DEFINER triggers fanning out to a class's active teachers:
+    `submission_to_grade` (AFTER INSERT on `assignment_submissions` status=submitted), `mentor_recommendation`
+    (on `mentor_recommendations` insert — row-writer already exists in chat, only the notification is
+    missing), `alert_open` (on `learning_sessions` status→`needs_rescue`, ALSO writing the currently-dead
+    `intervention_alerts` row). Plus a partial-unique dedup index (`(user_id, kind, ref->>… ) where
+    read_at is null`) + upsert, and an auto-clear hook in assessment-admin `returnAssessment` (mark the
+    matching `assessment_to_review` read when the teacher finishes). All best-effort: a failed notify must
+    not break the submission/turn.
+  - 1b (frontend): `HotlistFeed` becomes a MERGE of persisted notification rows (the 4 event kinds) + the
+    3 genuinely-derived kinds kept client-side (`live_now`, `due_soon`, `session_risk` — ephemeral/
+    projected, not events). The bell then carries all event kinds, not just assessments.
+- **Phase 2 — Submission safety (B1). MED value / LOW-MED risk / 1 decision (scanning).** Files already
+  work (real `student-submissions` bucket, 50 MB, no MIME limit, no scan, no retention; INSERT RLS only
+  checks owner, not the path's assignment/user binding). 2a: client `accept`+size guard, bucket MIME
+  allowlist + app-layer size check, path-bound INSERT RLS, drop the dead `assignment_submissions.file_path`
+  column. 2b: malware scanning (none today) + a retention policy (no DELETE path today).
+- **Phase 3 — Live-intervention completion (B2). MED value / MED runtime risk / 2 decisions.** Watch +
+  student-visible comments already work. 3a: a teacher HOLD flag on `learning_sessions`/`step_state` that
+  the chat turn loop checks before answering (+ API + teacher UI) — the one piece touching the live tutor
+  runtime. 3b: decide whether an intervention also writes `learning_evidence`/`teacher_notes`/audit
+  (anchor to `teacher_live_comments.turn_id`, which exists but is never set).
+- **Phase 4 — Revision & spacing (the review-due chip). MED value / LOW risk / content+design decision.**
+  Author a published revision lesson to route into + design a spaced-repetition due-queue over
+  `student_mastery.last_practiced_at` (+ tier). Then the "Review due · N" chip lights up.
+- **Phase 5 — Ad-hoc revision sessions. MED value / HIGH runtime risk / explicit go-ahead only.** Relax
+  `learning_sessions.lesson_id` from NOT NULL so the platform can generate lesson-less revision sessions;
+  runtime-wide, gated + heavily reviewed.
+
+Strategic side-decisions (not sequenced): **C** = PLATFORM §9 arcs (visual redesign · mini-chat ·
+per-material comments · real-time push · `lessons` RLS-as-boundary · builder merge · LLM inquiry tagging ·
+dropping `activity_type`/legacy · student-editable system prompt). **D** = reviving the reverted v3.0
+"Learning Engine" (pedagogy spec · learning blocks · spacing engine · mastery-v2 skill map) — overlaps
+Phase 4's spacing work, so fold any revival there rather than resurrect wholesale.
