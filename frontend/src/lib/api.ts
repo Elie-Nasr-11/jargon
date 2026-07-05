@@ -60,6 +60,7 @@ import type {
   LearningEvidence,
   LiveSessionViewer,
   MentorRecommendation,
+  Notification,
   ModelUsageEvent,
   AdminActorAccess,
   AdminOpsAction,
@@ -1933,6 +1934,34 @@ export function setClassCourses(input: {
     class_id: input.classId,
     course_ids: input.courseIds,
   });
+}
+
+// v4.0 Phase 5: the signed-in teacher's/admin's persistent notifications (RLS owner-read).
+export async function fetchNotifications(limit = 50): Promise<Notification[]> {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []) as Notification[];
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("read_at", null);
+  if (error) throw error;
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .is("read_at", null);
+  if (error) throw error;
 }
 
 export async function fetchTeacherClasses(userId: string) {

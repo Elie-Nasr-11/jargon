@@ -2663,6 +2663,10 @@ async function maybeWriteRecommendation(
     },
     status: "pending",
   });
+  // NOTE: chat runs under the student's JWT (no service-role key), so it CANNOT insert a
+  // notifications row (service-role-only insert). Rescue flags already reach teachers via the
+  // derived hotlist (dashboard.mentorRecommendations), so no chat-side notification writer is added
+  // here; the notifications table is fed by the service-role edge fns (assessment-admin) instead.
 }
 
 async function handleTypedRequest(

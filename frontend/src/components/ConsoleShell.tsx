@@ -5,6 +5,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
+import { NotificationsMenu } from "@/components/NotificationsMenu";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { useConsoleAccess } from "@/hooks/useConsoleAccess";
 import { cn } from "@/lib/utils";
@@ -44,7 +45,12 @@ export function ConsoleShell({
             >
               Jargon
             </Link>
-            {email ? <SettingsMenu email={email} /> : null}
+            {email ? (
+              <div className="flex items-center gap-0.5 sm:gap-1">
+                <NotificationsMenu />
+                <SettingsMenu email={email} />
+              </div>
+            ) : null}
           </div>
         </div>
       </header>

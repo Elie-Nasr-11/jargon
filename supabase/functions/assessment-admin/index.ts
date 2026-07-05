@@ -188,6 +188,49 @@ async function patchRows(config: Config, path: string, row: DbRow): Promise<DbRo
   return Array.isArray(data) ? (data.filter((item) => item && typeof item === "object") as DbRow[]) : [];
 }
 
+// v4.0 Phase 5: best-effort persistent notification to every active teacher of a class. NEVER
+// throws — a notification failure must not affect the submission/turn it accompanies.
+async function notifyClassTeachers(
+  config: Config,
+  input: {
+    classId: string | null;
+    organizationId: string | null;
+    relatedStudentId: string | null;
+    kind: string;
+    title: string;
+    ref: DbRow;
+  },
+): Promise<void> {
+  try {
+    if (!input.classId) return;
+    const teachers = await loadRows(
+      config,
+      `class_memberships?class_id=eq.${encodeURIComponent(input.classId)}&role=eq.teacher&status=eq.active&select=user_id`,
+    );
+    const rows = teachers
+      .map((teacher) => cleanId(teacher.user_id))
+      .filter(Boolean)
+      .map((teacherId) => ({
+        user_id: teacherId,
+        organization_id: input.organizationId,
+        class_id: input.classId,
+        related_student_id: input.relatedStudentId,
+        kind: input.kind,
+        title: input.title,
+        body: "",
+        ref: input.ref,
+      }));
+    if (!rows.length) return;
+    await serviceFetch(config, "/rest/v1/notifications", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify(rows),
+    });
+  } catch (_error) {
+    // best-effort — swallow.
+  }
+}
+
 async function fetchActorCanManageClass(
   config: Config,
   userId: string,
@@ -585,6 +628,19 @@ async function submitAssessment(config: Config, userId: string, body: DbRow): Pr
 
   if (!hasPendingReview && typeof autoScore === "number") {
     await writeEvidenceAndMastery(config, userId, assessment, updatedAttempt || attempt, itemAttempts, quizzes, autoScore, cleanText(nextAttemptPatch.feedback));
+  }
+
+  // v4.0 Phase 5: notify the class's teachers ONLY when the submission actually needs teacher
+  // review (open-ended items pending) — a fully auto-graded submission needs no review (best-effort).
+  if (hasPendingReview) {
+    await notifyClassTeachers(config, {
+      classId: cleanId(assessment.class_id) || null,
+      organizationId: cleanId(assessment.organization_id) || null,
+      relatedStudentId: userId,
+      kind: "assessment_to_review",
+      title: `A student submitted ${cleanText(assessment.title) || "an assessment"}`,
+      ref: { assessment_id: cleanId(assessment.id), attempt_id: attemptId },
+    });
   }
 
   return json({ status: "ok", data: { assessment, attempt: updatedAttempt, item_attempts: itemAttempts } });

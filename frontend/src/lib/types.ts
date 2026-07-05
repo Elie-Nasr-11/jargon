@@ -769,6 +769,21 @@ export type StudentClass = {
   organizationName: string | null;
 };
 
+// v4.0 Phase 5: a persistent teacher/admin notification (recipient = user_id).
+export type Notification = {
+  id: string;
+  user_id: string;
+  organization_id: string | null;
+  class_id: string | null;
+  related_student_id: string | null;
+  kind: string;
+  title: string;
+  body: string;
+  ref: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+};
+
 export type StudentMastery = {
   user_id: string;
   skill_key: string;
