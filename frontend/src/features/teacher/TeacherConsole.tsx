@@ -28,6 +28,7 @@ import {
 import { GradientCard } from "@/components/GradientCard";
 import { HotlistFeed, deriveHotlist, type HotlistItem } from "@/features/teacher/HotlistFeed";
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
+import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConsoleShell } from "@/components/ConsoleShell";
@@ -1234,6 +1235,8 @@ function ClassDetail({
                   : "No open intervention or runtime-error signals for this class."}
               </p>
             </div>
+
+            <LinkedCoursesPanel classId={item.id} lessons={lessons} />
 
             <ClassAnalyticsPanel
               dashboard={dashboard}

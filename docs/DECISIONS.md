@@ -2,6 +2,46 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-05: v4.0 Phase 3 — Class→Course Scoping is a Fail-Open UX Filter, Not an Access Boundary
+
+Decision:
+
+- A new `class_courses` link table (unique class_id+course_id) records which courses a class's
+  students should see. The student's browse catalog (`fetchStudentCatalog`) is derived from it,
+  but scoping is a UX filter over data the student can ALREADY read — lesson read-RLS stays open;
+  the scoped set is always a SUBSET of the full published catalog, so scoping can never expose a
+  lesson a student couldn't otherwise reach. Tightening lesson RLS to enforce scoping as a real
+  boundary is explicitly deferred (it risks cutting off the live student).
+- Fail-OPEN everywhere, so the live student is never worse off than today:
+  - An unlinked class contributes the FULL catalog. The visible catalog is the UNION across the
+    student's active classes, so a student is only narrowed when EVERY one of their classes is
+    scoped; being in any unlinked class shows everything. (A brand-new empty table = every class
+    unlinked = byte-identical catalog for the current live student.)
+  - An empty scoped result (links point only at courses with no published lessons) falls back to
+    the full catalog rather than a blank screen.
+  - The student's currently-open lesson is pinned into the catalog even if scoped out, so scoping
+    can never strand a student mid-lesson with no path back to their in-progress work.
+- The teacher write (`set_class_courses` in curriculum-admin) is a fail-safe replace: UPSERT the
+  desired links, THEN delete the ones no longer wanted (insert-before-delete). The two PostgREST
+  calls are not one transaction, so on a transient failure the worst case is a stale extra link
+  (fail-open) — never an accidentally-cleared scope. Course ids are org-validated against the
+  class's own organization (global/null-org courses allowed), mirroring the other authoring
+  actions' org discipline. The action is auth-gated by `assertCanAuthor` on the class's org.
+- RLS: `class_courses` SELECT = `is_class_member` (a student reads only their own classes' links);
+  write = `is_class_teacher` with `created_by = auth.uid()` (audit column can't be spoofed on a
+  direct write). anon revoked.
+
+Reason:
+
+- The overriding constraint is that a real student is live in production. Every scoping decision
+  is chosen so the live student's experience is identical until a teacher deliberately links
+  courses, and so that no teacher action can hide a student's in-progress or accidentally blank
+  their catalog. An adversarial review (12 confirmed findings) drove the union semantics, the
+  pinned-lesson rule, the insert-before-delete replace, the org-scoped validation, the non-capped
+  course list, and the spoof-proof audit column — all before the first deploy.
+- Keeping scoping as UX-only (not an RLS boundary) lets the enabler ship safely now; the harder
+  RLS-tightening question is separable and deferred to a later phase.
+
 ## 2026-07-02: Tutor v2.0 Instruction Layer — One Directive Ladder, Orchestrator-Only Grading
 
 Decision:

@@ -362,12 +362,69 @@ export async function fetchLessons(options: { includeDrafts?: boolean } = {}) {
       .join(" / ");
     return {
       ...lesson,
+      course_id: version?.course_id || null,
       subject_title: subject?.title || null,
       course_title: course?.title || null,
       unit_title: unit?.title || null,
       curriculum_group: curriculumGroup || null,
     };
   });
+}
+
+// v4.0 Phase 3: the student's class-scoped lesson catalog. Semantics (per docs/PLATFORM.md):
+// each active class the student is in contributes either its linked courses (if it has ≥1 link)
+// or — when it has NO links — the FULL catalog (an unlinked class imposes no scoping). The visible
+// catalog is the UNION of those contributions, so a student is only narrowed when EVERY one of
+// their active classes is scoped; being in any unlinked class shows the full list. With no session,
+// no memberships, no links anywhere, an empty scoped result, or any read error, it returns the full
+// fetchLessons() output — so the live student sees an identical list until a teacher links courses.
+// `pinnedLessonId` (the student's currently-open lesson) is always retained even if scoped out, so
+// scoping can never strand a student mid-lesson with no way back to their in-progress work.
+export async function fetchStudentCatalog(pinnedLessonId?: string | null): Promise<Lesson[]> {
+  const all = await fetchLessons();
+  try {
+    const session = await getSession();
+    const userId = session?.user?.id;
+    if (!userId) return all;
+
+    const { data: membershipRows, error: membershipError } = await supabase
+      .from("class_memberships")
+      .select("class_id")
+      .eq("user_id", userId)
+      .eq("role", "student")
+      .eq("status", "active");
+    if (membershipError) throw membershipError;
+    const classIds = uniqueStrings(
+      ((membershipRows || []) as Array<{ class_id: string | null }>).map((row) => row.class_id),
+    );
+    if (!classIds.length) return all;
+
+    const { data: linkRows, error: linkError } = await supabase
+      .from("class_courses")
+      .select("class_id,course_id")
+      .in("class_id", classIds);
+    if (linkError) throw linkError;
+    const rows = (linkRows || []) as Array<{ class_id: string | null; course_id: string | null }>;
+
+    // A class with NO link rows means "no scoping" → it contributes the full catalog, so the whole
+    // catalog is shown. Only when every active class is scoped do we narrow to the union of links.
+    const classesWithLinks = new Set(rows.map((row) => row.class_id).filter(Boolean));
+    if (classIds.some((id) => !classesWithLinks.has(id))) return all;
+
+    const linkedCourseIds = new Set(uniqueStrings(rows.map((row) => row.course_id)));
+    if (!linkedCourseIds.size) return all;
+
+    const scoped = all.filter(
+      (lesson) =>
+        (lesson.course_id && linkedCourseIds.has(lesson.course_id)) ||
+        (pinnedLessonId != null && lesson.id === pinnedLessonId),
+    );
+    // Never strand the student on an empty catalog (e.g. links point at courses with no published
+    // lessons yet) — fall back to the full list rather than showing nothing.
+    return scoped.length ? scoped : all;
+  } catch {
+    return all;
+  }
 }
 
 export async function fetchLessonActivities(lessonId: string) {
@@ -1574,6 +1631,32 @@ export function archiveCurriculumTemplate(input: {
     action: "archive_template",
     class_id: input.classId || undefined,
     template_id: input.templateId,
+  });
+}
+
+// v4.0 Phase 3: read the courses currently linked to a class (teacher/admin surface). Empty = no
+// scoping. Governed by the class_courses RLS select policy (any active class member + org admins).
+export async function fetchClassCourses(classId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("class_courses")
+    .select("course_id")
+    .eq("class_id", classId);
+  if (error) throw error;
+  return uniqueStrings(
+    ((data || []) as Array<{ course_id: string | null }>).map((row) => row.course_id),
+  );
+}
+
+// v4.0 Phase 3: replace a class's full course scope (teacher/admin). An empty list clears scoping.
+export function setClassCourses(input: {
+  accessToken: string;
+  classId: string;
+  courseIds: string[];
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "set_class_courses",
+    class_id: input.classId,
+    course_ids: input.courseIds,
   });
 }
 

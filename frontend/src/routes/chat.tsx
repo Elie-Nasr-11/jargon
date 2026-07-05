@@ -41,7 +41,7 @@ import {
   fetchLatestLearningSession,
   onAuthStateChange,
   fetchLessonActivities,
-  fetchLessons,
+  fetchStudentCatalog,
   createRealtimeVoiceSession,
   getLessonResourceSignedUrl,
   getLessonResourceThumbnailSignedUrl,
@@ -653,8 +653,10 @@ function ChatPage() {
           navigate({ to: roleHome(role), replace: true });
           return;
         }
+        // Pin the student's currently-open lesson into the scoped catalog so class scoping can
+        // never strand them mid-lesson with no way back to their in-progress work.
         const [liveLessons, liveAssignments, liveAssessments] = await Promise.all([
-          fetchLessons(),
+          fetchStudentCatalog(store.getLessonId()),
           fetchStudentAssignments(),
           fetchStudentAssessments(),
         ]);

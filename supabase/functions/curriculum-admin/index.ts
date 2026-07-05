@@ -1789,6 +1789,82 @@ async function archiveTemplate(config: Config, actorId: string, body: DbRow): Pr
   return json({ status: "ok", template_id: templateId });
 }
 
+// v4.0 Phase 3: set the full course scope for a class (replace semantics). An empty course_ids
+// list clears the scope (the class reverts to the full-catalog fallback). Auditable teacher/admin
+// write — assertCanAuthor gates on the CLASS's own organization.
+async function setClassCourses(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const classId = cleanText(body.class_id);
+  if (!classId) throw new Error("class_id is required.");
+  // NOT cleanStringArray: it caps at 24, which would silently truncate a large course set (a
+  // full-replace would then drop the dropped ids). A class can legitimately link many courses.
+  const courseIds = Array.from(
+    new Set(
+      (Array.isArray(body.course_ids) ? body.course_ids : [])
+        .map((value) => cleanText(value))
+        .filter(Boolean),
+    ),
+  );
+
+  const classRow = await selectFirst(
+    config,
+    `classes?id=eq.${enc(classId)}&select=id,organization_id&limit=1`,
+  );
+  if (!classRow) throw new Error("Class was not found.");
+  const classOrgId = String(classRow.organization_id);
+  await assertCanAuthor(config, actorId, classOrgId, classId);
+
+  // Validate every course id exists AND belongs to this class's org (or is a global course with
+  // null org) — mirrors the org-scoping discipline of the other authoring actions and yields a
+  // clean 4xx for a bad/foreign id instead of an FK 500. Unquoted in.(...) idiom (slugified ids).
+  if (courseIds.length) {
+    const found = await selectAll(
+      config,
+      `courses?id=in.(${courseIds.map(enc).join(",")})&select=id,organization_id`,
+    );
+    const validIds = new Set(
+      found
+        .filter((row) => !row.organization_id || String(row.organization_id) === classOrgId)
+        .map((row) => String(row.id)),
+    );
+    const missing = courseIds.filter((id) => !validIds.has(id));
+    if (missing.length) {
+      throw new Error(`These courses were not found in this organization: ${missing.join(", ")}.`);
+    }
+  }
+
+  // Fail-safe replace: UPSERT the desired links first, THEN delete the ones no longer wanted.
+  // Insert-before-delete means a transient failure never leaves the class with an empty scope
+  // (the two PostgREST calls are not one transaction); at worst a stale extra link survives —
+  // fail-open (students see more, never fewer) and self-heals on the next successful save.
+  if (courseIds.length) {
+    const now = new Date().toISOString();
+    await serviceFetch(config, "/rest/v1/class_courses?on_conflict=class_id,course_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(
+        courseIds.map((courseId) => ({
+          class_id: classId,
+          course_id: courseId,
+          created_by: actorId,
+          created_at: now,
+        })),
+      ),
+    });
+    await serviceFetch(
+      config,
+      `/rest/v1/class_courses?class_id=eq.${enc(classId)}&course_id=not.in.(${courseIds.map(enc).join(",")})`,
+      { method: "DELETE" },
+    );
+  } else {
+    // Clearing the scope entirely.
+    await serviceFetch(config, `/rest/v1/class_courses?class_id=eq.${enc(classId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  return json({ status: "ok", class_id: classId, course_ids: courseIds });
+}
+
 async function instantiateTemplate(config: Config, actorId: string, body: DbRow): Promise<Response> {
   const templateId = cleanText(body.template_id);
   const unitId = cleanText(body.unit_id);
@@ -2039,6 +2115,7 @@ Deno.serve(async (req: Request) => {
     if (action === "list_templates") return await listTemplates(config, actorId, record);
     if (action === "instantiate_template") return await instantiateTemplate(config, actorId, record);
     if (action === "archive_template") return await archiveTemplate(config, actorId, record);
+    if (action === "set_class_courses") return await setClassCourses(config, actorId, record);
     if (action === "generate") return await generateDraft(config, actorId, record);
     return errorResponse("Unsupported curriculum-admin action.", 400);
   } catch (error) {

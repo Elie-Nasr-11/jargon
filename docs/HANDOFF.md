@@ -6,6 +6,50 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 3-scoping: class_courses enabler — DONE)
+
+Summary: Class→course scoping so a teacher can restrict which courses a class's students browse,
+with fail-open fallbacks that keep the LIVE student byte-identical until a teacher links courses.
+New `class_courses` link table (RLS: member-read via is_class_member, teacher/admin-write via
+is_class_teacher + created_by=auth.uid(); anon revoked). New curriculum-admin `set_class_courses`
+action (auth-gated on the class's org, org-validated course ids, fail-safe upsert-then-delete-
+stale replace). `fetchStudentCatalog()` derives the student catalog: UNION across active classes
+where an unlinked class contributes the full catalog (only narrowed when EVERY class is scoped),
+empty-scoped falls back to full, and the student's open lesson is pinned in so scoping never
+strands them mid-lesson. chat.tsx swaps fetchLessons->fetchStudentCatalog(store.getLessonId()).
+Teacher LinkedCoursesPanel on the class Overview (reads fetchClassCourses, writes setClassCourses;
+hidden-but-linked courses still render so they're removable). See DECISIONS 2026-07-05.
+
+Files changed: supabase/migrations/20260715000000_class_scoping.sql (new),
+supabase/functions/curriculum-admin/index.ts (set_class_courses), .github/workflows/
+deploy-backend.yml (migration list), frontend/src/lib/api.ts (fetchStudentCatalog +
+fetchClassCourses + setClassCourses + course_id enrichment on fetchLessons), frontend/src/lib/
+types.ts (Lesson.course_id), frontend/src/routes/chat.tsx (catalog swap), frontend/src/features/
+teacher/LinkedCoursesPanel.tsx (new) + TeacherConsole.tsx (wire-in), docs/DECISIONS.md,
+docs/HANDOFF.md.
+
+Tests run: node --check curriculum-admin (OK); migration validated in a rolled-back live-DB
+transaction incl. a functional upsert-then-delete-stale round-trip (final scope exactly the new
+set); frontend tsc/lint/build (0 errors / 13 pre-existing warnings). Adversarial review (18
+agents, 4 dimensions -> adversarial verify): 12 confirmed (4 MEDIUM + 8 LOW), ALL fixed before
+deploy — 24-cap truncation (dropped cleanStringArray), multi-class union suppression (unlinked
+class => full catalog), mid-lesson lockout (pinned lesson), teacher-panel stuck/hidden links
+(union render list), non-transactional replace (insert-before-delete), foreign-org course link
+(org-validated), spoofable created_by (default auth.uid() + WITH CHECK). Every finding noted the
+live-student byte-identical invariant already held (empty table = no scoping).
+
+Remaining concerns: scoping is UX-only, not an RLS boundary (scoped set is a subset of the open
+published catalog; RLS-tightening deferred). Empty-scoped-links still fail open to the full
+catalog while the panel reports "saved — students see only these" (a teacher could link a
+draft-only course and see no effect) — acceptable anti-blank tradeoff, a teacher warning is
+deferred polish. Teacher side is poll-based (existing dashboard staleTime).
+
+Suggested next task: v4.0 Phase 3a — student profile popup with real stats (needs new student
+self-read RLS policies for teacher_notes/checkpoint_recipients — the phase's main backend risk),
+then Phase 3b (classes -> dashboard -> unit routes). ALL Phase 1-3 frontend still awaits the one
+pending main fast-forward (held for the user's OK); the backends are deployed and inert until the
+UI lands.
+
 ## Claude -> Codex / Human - 2026-07-03 (v2.1: tutor quality + infra hygiene + docs refresh — DONE)
 
 Summary: (1) Tutor quality — the mentor may now improvise one-at-a-time retrieval practice when
