@@ -2,6 +2,36 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
+## v4.0 "The Platform" — the live unknowns after the completion pass (2026-07-05)
+
+v4.0 is shipped and live (see `docs/ROADMAP.md`), but four items were deferred WITH CAUSE and remain
+genuinely open. Recording them here per CLAUDE.md (ambiguities live in OPEN_QUESTIONS, not just HANDOFF
+prose):
+
+- **When (if ever) do we tighten `lessons` RLS into a class-scoping boundary?** Today class scoping is a
+  fail-open UX filter (`class_courses` → `fetchStudentCatalog`; an unlinked class ⇒ full catalog), NOT a
+  security boundary — decided deliberately because tightening `lessons` read-RLS risks cutting off the
+  live student mid-lesson. Open: the trigger/criteria for making it a boundary, and the migration path
+  that can't strand an in-progress student.
+- **Should the platform generate ad-hoc revision sessions?** Revision MODE is live, but
+  platform-GENERATED ad-hoc revision sessions need `learning_sessions.lesson_id` relaxed from NOT NULL —
+  a runtime-wide change and the highest risk to the live tutor. Open: whether to do it, and how to gate
+  it so a null-lesson session can't break the turn loop / gate / mastery writes.
+- **What is the spaced-repetition due-queue behind the "review-due" chip?** The chip is content-blocked
+  (no published revision lesson to route into) AND needs a due-queue design over
+  `student_mastery.last_practiced_at` (+ tier: emerging resurfaces sooner than secure). Open: the SM-2-lite
+  parameters and where the due state is computed/stored.
+- **How do we complete the HotlistFeed → `notifications` MERGE?** The table + teacher bell shipped as an
+  additive surface (`assessment_to_review` is the only live writer). The full merge needs a server-side
+  `submission_to_grade` writer (submission is client-side today), an `intervention_alerts` insert writer
+  (that kind has no insert site anywhere), recipient fan-out, and a MERGE (not swap) in `HotlistFeed`.
+  Open: build the missing writers, then merge — see `docs/PLATFORM.md` §5 as-built note.
+
+Two pre-v4.0 questions below are also load-bearing for v4.0's live surfaces: "the exact live teacher
+intervention UX" (P2c live-now + P5 admin Live tab ship the WATCH entry points but not whether a teacher
+can pause a Mentor flow, or whether live comments create evidence/notes/audit) and "how student file
+submissions work" (assignment mode leans on it; file answer steps were left legacy in the P1 backfill).
+
 ## How should backend speech services work after the browser demo slice?
 
 Current decision so far:

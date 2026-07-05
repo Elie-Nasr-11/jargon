@@ -4,6 +4,12 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 
 ## Current State
 
+(Refreshed 2026-07-05.) **v4.0 "The Platform" is shipped and live** — all six phases (P0-P5) plus a
+four-tier polish/completion pass are on `main` (branch `claude/happy-johnson-wseex8` == `origin/main`,
+zero divergence). See the "v4.0 — The Platform" section below for the phase-by-phase status and the
+`docs/HANDOFF.md` Active Handoff entries for the per-slice detail. The rest of this Current State note
+(below) predates v4.0 and is kept as the v2.x/v3.0-era baseline.
+
 (Refreshed 2026-07-03.) Phase 0 is effectively complete. Phases 1 through 7, Voice v1+v2 (realtime), the
 assessment expansion, checkpoint unification, and the Tutor v2.0 rebuild are live. The Canvas
 (C1-C4) and Campus Live/OneRoster integrations are built alongside Google Classroom v1. Voice
@@ -280,12 +286,28 @@ Exit criteria: admins can run the CSV/governance fallback flows live, external g
 missing secrets clearly, and draft curriculum import produces teacher-reviewable suggestions without
 publishing anything automatically.
 
-## v4.0 — The Platform (2026-07-04, in progress)
+## v4.0 — The Platform (2026-07-05, SHIPPED & live on main)
 
-The next arc, specced in `docs/PLATFORM.md` (canonical): lessons composed from eight
-conversational modes with a null-mode legacy fallback (P1), the teacher build system — derived
-hotlist, org-shared lesson templates, live-now strip, unified work overview (P2), student class
-scoping + the LMS shell — profile popup with real stats, class dashboards, unit views (P3),
-revision mode + per-mode proficiency surfaces (P4), and the platform layer — persisted
-notifications, student calendar, admin live monitoring, teacher reports (P5). Phase 0 (the spec)
-shipped 2026-07-04.
+The arc specced in `docs/PLATFORM.md` (canonical): lessons composed from eight conversational modes
+with a null-mode legacy fallback (P1), the teacher build system — derived hotlist, org-shared lesson
+templates, live-now strip, unified work overview (P2), student class scoping + the LMS shell — profile
+popup with real stats, class dashboards, unit views (P3), revision mode + per-mode proficiency
+surfaces (P4), and the platform layer — persisted notifications, student calendar, admin live
+monitoring, teacher reports/export (P5).
+
+Status (2026-07-05): **all of P0-P5 are shipped, deployed, and live on `main`**, followed by a
+four-tier polish/completion pass:
+- **T1** — live-surface auto-refresh (teacher dashboard + admin Live tab poll every 30s), an
+  assignment-grade-integrity guard (BEFORE UPDATE triggers pin student-set score/feedback), and a
+  repaired test safety net (Python suite green + a new `tests.yml` CI job running it on push/PR).
+- **T2** — notification-bell coherence (live title matches the backfill; the notification deep-links
+  to the class Assessments review tab).
+- **T3** — the promised-but-partial surfaces: teacher "list past reports", the student class
+  dashboard's recent/upcoming-work strip + grades summary, and the unit view's assessment reviews.
+- **T4** — a cosmetic/correctness batch (shared EmptyState on two surfaces, quiz `<Link>` + unmasked
+  submit error in the docks, download toasts, a11y labels, dead-code + a NUL-byte fix).
+
+Deferred WITH CAUSE (not completion gaps — see `docs/PLATFORM.md` §9 + `docs/OPEN_QUESTIONS.md`): the
+review-due chip (content-blocked — no published revision lesson), platform-generated ad-hoc revision
+sessions (`learning_sessions.lesson_id` NOT-NULL relaxation, highest live-tutor risk), and the full
+HotlistFeed-on-`notifications` merge (5 of 7 hotlist kinds still lack server-side writers).

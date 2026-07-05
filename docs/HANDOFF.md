@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 5: docs reconciliation — CLOSES the completion plan)
+
+Summary: Docs-only, no code/deploy. Brought the canonical docs in line with the shipped v4.0 state.
+- ROADMAP.md: the "v4.0 — The Platform" header changed from "(2026-07-04, in progress)" to
+  "(2026-07-05, SHIPPED & live on main)" with a phase-by-phase status incl. the T1-T4 polish pass and
+  the deferred-with-cause list; the "Current State" intro gained a 2026-07-05 v4.0 note (branch ==
+  origin/main, zero divergence) above the older 2026-07-03 baseline.
+- PLATFORM.md §5: added an "as-built note" reconciling the "the feed upgrade is a data-source swap"
+  language — the swap did NOT happen (only 2 of 7 kinds ever had clean server writers; the chat one was
+  removed); the notifications table shipped as an ADDITIVE surface and the full merge is deferred.
+- OPEN_QUESTIONS.md: added the four live v4.0 unknowns (lessons-RLS-tightening timing; ad-hoc revision
+  / lesson_id relaxation; the review-due-queue design; the HotlistFeed→notifications merge) + flagged
+  two pre-v4.0 questions (live-intervention UX, file submissions) as load-bearing for v4.0 surfaces —
+  per CLAUDE.md (ambiguities belong here, not only in HANDOFF prose).
+- DECISIONS.md: a "v4.0 Completion Pass" entry recording the durable choices (notifications additive
+  not swap; grade guard via trigger not RLS; teacher admin-ops tier; Live surfaces poll not realtime;
+  the test suite is a CI gate; px-3 py-1.5 is a valid button size).
+
+Files changed: docs/ROADMAP.md, docs/PLATFORM.md, docs/OPEN_QUESTIONS.md, docs/DECISIONS.md,
+docs/HANDOFF.md.
+
+This CLOSES the v4.0 completion plan (T1-T5 all done). v4.0 "The Platform" is shipped, live on main,
+polished, test-gated, and documented. Remaining work is all deliberately-deferred, cause-recorded
+scope (OPEN_QUESTIONS): the review-due chip, ad-hoc revision sessions, the HotlistFeed merge, and
+PLATFORM §9's not-in-v4.0 list. Suggested next task: pick one of those deferred items (each is its own
+slice) or start a fresh arc.
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 4: polish batch — frontend-only)
 
 Summary: A design-vetted cosmetic/correctness batch (no backend). Discovered via a 7-agent workflow

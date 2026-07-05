@@ -115,9 +115,20 @@ strengths/weaknesses views for student (profile popup) and teacher (StudentDetai
 
 ## 5. The hotlist vocabulary (teacher attention)
 
-Seven item kinds. Phase 2 derives them client-side from data already fetched; Phase 5 makes
-them rows in a `notifications` table with **exactly these `kind` values**, so the feed upgrade
-is a data-source swap:
+Seven item kinds. Phase 2 derives them client-side from data already fetched; Phase 5 makes them
+rows in a `notifications` table with **exactly these `kind` values**, so the feed upgrade was
+intended as a data-source swap.
+
+> **As-built note (2026-07-05):** P5 shipped the `notifications` table + a persistent teacher bell
+> (unread badge + dropdown) as an ADDITIVE surface alongside the derived hotlist — NOT the swap.
+> Exploration found only 2 of the 7 kinds have clean server-side writers (`mentor_recommendation` in
+> chat — later removed because chat runs under the student JWT with no service-role key; and
+> `assessment_to_review` in assessment-admin, the one live writer). `submission_to_grade` is
+> client-side; `intervention_alerts` has NO insert site anywhere (that kind is already dead);
+> `session_risk` / `live_now` / `due_soon` are DERIVED state, not events. So `HotlistFeed` still
+> derives all seven client-side, and the bell carries `assessment_to_review` only. The full
+> data-source MERGE (not swap) remains deferred until the missing writers exist — see
+> `docs/OPEN_QUESTIONS.md`.
 
 | kind | source |
 |---|---|

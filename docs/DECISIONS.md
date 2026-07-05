@@ -2,6 +2,38 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-05: v4.0 Completion Pass — durable choices from the polish/finish tiers
+
+After P0-P5 shipped, a four-tier polish pass (T1-T4) landed with these durable decisions:
+
+- **The `notifications` table is an ADDITIVE persistent surface, not the hotlist swap.** The teacher
+  bell (unread badge + dropdown) carries the one kind with a clean service-role writer
+  (`assessment_to_review`); `HotlistFeed` still derives all seven kinds client-side. The chat-side
+  `mentor_recommendation` writer was REMOVED — chat runs under the student JWT with no service-role
+  key, so its insert was denied-and-swallowed (dead on arrival), and adding a service-role key to the
+  live tutor to fix it was rejected as a privilege-surface increase. The full data-source merge is
+  deferred (see `docs/OPEN_QUESTIONS.md`).
+- **Grade integrity on self-attested checkpoints is enforced by a trigger, not RLS.** Assignments are
+  self-attested (a student marks status from the dock), but the whole-row update grant let a student
+  self-set their own `score`/`final_score`/`feedback` via a raw PostgREST PATCH. RLS cannot
+  column-scope an UPDATE (both students and teachers are the `authenticated` role, and `WITH CHECK`
+  can't see the OLD row), so a `BEFORE UPDATE` trigger on `assignment_recipients` +
+  `checkpoint_recipients` pins the graded columns to their prior values when `auth.uid() = new.user_id`.
+  Teacher grading (different uid) and service-role writes (null uid) pass through; the dual-write's
+  `SECURITY DEFINER` keeps `auth.uid()` = the teacher so the mirror carries the real grade.
+- **Teacher access to admin-ops is a class-membership tier, dispatched before the admin gate.** The
+  teacher report + class-CSV actions authorize via `class_memberships` (role=teacher, status=active),
+  routed BEFORE `fetchActorAccess` (which throws for non-admins), and strictly validate the actor
+  teaches the class / the target is an active student in it — the service-role query literals mirror
+  the `is_class_teacher` / `can_view_student` RLS predicates exactly.
+- **The "Live" surfaces poll (no realtime).** Teacher dashboard + admin Live tab refresh every 30s
+  (foreground only); a realtime channel is a later option, not a v4.0 requirement.
+- **The Python test suite is a CI gate.** `.github/workflows/tests.yml` runs
+  `python3 -m unittest discover -s tests` on push (branch + main) and PR; drift between the
+  string-fingerprint tests and the source is a failing build, not silent rot.
+- **`px-3 py-1.5 text-[12px]` is a valid console action-button size.** It's the dominant size in the
+  teacher console (7 uses vs 4 of `px-4 py-2`); the two v4.0 buttons were deliberately NOT enlarged.
+
 ## 2026-07-05: v4.0 Phase 3 — Class→Course Scoping is a Fail-Open UX Filter, Not an Access Boundary
 
 Decision:
