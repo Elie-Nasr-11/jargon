@@ -730,6 +730,9 @@ export type LearningEvidence = {
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  // v4.0 learning-mode dimension (stamped by the tutor since P1; null on legacy evidence).
+  mode?: LearningMode | null;
+  mode_type?: string | null;
 };
 
 // v4.0 Phase 3a: the student profile popup's derived stats (all from student-self reads).
@@ -755,6 +758,7 @@ export type StudentProfileStats = {
   notes: TeacherNote[];
   grades: StudentGradeRow[];
   progress: StudentProgressSummary;
+  evidence: LearningEvidence[];
 };
 
 // v4.0 Phase 3b: a class the signed-in student belongs to (for the LMS class views).

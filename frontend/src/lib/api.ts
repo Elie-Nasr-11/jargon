@@ -306,6 +306,40 @@ export async function upsertProfile(user: User, name: string, grade: string) {
   if (error) throw error;
 }
 
+// v4.0 deferred: cross-device persistence of the student's mentor/voice prefs. student_settings
+// has a student-own ALL RLS policy (user_id = auth.uid()); these are client-only prefs (the tutor
+// still reads mentor_preferences off the chat request payload), so this is a convenience layer over
+// the localStorage source of truth.
+export async function fetchStudentSettings(): Promise<{
+  mentor_settings: unknown;
+  voice_settings: unknown;
+} | null> {
+  const session = await getSession();
+  if (!session?.user?.id) return null;
+  const { data, error } = await supabase
+    .from("student_settings")
+    .select("mentor_settings,voice_settings")
+    .eq("user_id", session.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { mentor_settings: unknown; voice_settings: unknown } | null) || null;
+}
+
+export async function upsertStudentSettings(patch: {
+  mentor_settings?: unknown;
+  voice_settings?: unknown;
+}): Promise<void> {
+  const session = await getSession();
+  if (!session?.user?.id) return;
+  const { error } = await supabase
+    .from("student_settings")
+    .upsert(
+      { user_id: session.user.id, ...patch, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" },
+    );
+  if (error) throw error;
+}
+
 export async function fetchLessons(options: { includeDrafts?: boolean } = {}) {
   let query = supabase.from("lessons").select("*").order("position", { ascending: true });
   if (!options.includeDrafts) query = query.eq("publication_status", "published");
@@ -447,6 +481,22 @@ export async function fetchStudentMastery(): Promise<StudentMastery[]> {
   return (data || []) as StudentMastery[];
 }
 
+// v4.0 deferred: the student's own mode-dimensioned learning evidence (for the profile's
+// "strengths by mode" section). Self-read permitted by the existing SELECT policy
+// can_view_student(user_id) (which includes auth.uid() = user_id).
+export async function fetchStudentEvidence(): Promise<LearningEvidence[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const { data, error } = await supabase
+    .from("learning_evidence")
+    .select("id,user_id,mode,mode_type,score,skill_keys,created_at")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return (data || []) as LearningEvidence[];
+}
+
 export async function fetchStudentTeacherNotes(): Promise<TeacherNote[]> {
   const session = await getSession();
   if (!session?.user?.id) return [];
@@ -549,14 +599,15 @@ export async function fetchStudentProfileStats(): Promise<StudentProfileStats> {
   const userId = session?.user?.id || null;
   const email = session?.user?.email || null;
   const safe = <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
-  const [profile, mastery, notes, grades, progress] = await Promise.all([
+  const [profile, mastery, notes, grades, progress, evidence] = await Promise.all([
     userId ? safe(fetchProfile(userId), null) : Promise.resolve(null),
     safe(fetchStudentMastery(), [] as StudentMastery[]),
     safe(fetchStudentTeacherNotes(), [] as TeacherNote[]),
     safe(fetchStudentGrades(), [] as StudentGradeRow[]),
     safe(fetchStudentProgressSummary(), { lessonsStarted: 0, lessonsCompleted: 0 }),
+    safe(fetchStudentEvidence(), [] as LearningEvidence[]),
   ]);
-  return { profile, email, mastery, notes, grades, progress };
+  return { profile, email, mastery, notes, grades, progress, evidence };
 }
 
 // v4.0 Phase 3b: the classes the signed-in student belongs to (for the LMS class views).

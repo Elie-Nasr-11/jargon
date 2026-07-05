@@ -29,6 +29,7 @@ import { GradientCard } from "@/components/GradientCard";
 import { HotlistFeed, deriveHotlist, type HotlistItem } from "@/features/teacher/HotlistFeed";
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
+import { INQUIRY_TYPE_LABELS, modeLabel } from "@/lib/modes";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConsoleShell } from "@/components/ConsoleShell";
@@ -4419,6 +4420,32 @@ function StudentDetail({
     (item) =>
       item.user_id === studentId && (!selectedSession || item.session_id === selectedSession.id),
   );
+  // v4.0 deferred: per-mode evidence breakdown (count + avg score) + the inquiry confusion/curiosity
+  // split — pays off the mode dimension stamped since P1. Empty until mode-tagged evidence accrues.
+  const evidenceByMode = (() => {
+    const acc = new Map<string, { count: number; total: number; scored: number }>();
+    const inquiry = { confusion: 0, curiosity: 0 };
+    for (const item of evidence) {
+      if (!item.mode) continue;
+      const cur = acc.get(item.mode) ?? { count: 0, total: 0, scored: 0 };
+      cur.count += 1;
+      if (item.score != null) {
+        cur.total += item.score;
+        cur.scored += 1;
+      }
+      acc.set(item.mode, cur);
+      if (item.mode === "inquiry") {
+        if (item.mode_type === "confusion") inquiry.confusion += 1;
+        else if (item.mode_type === "curiosity") inquiry.curiosity += 1;
+      }
+    }
+    const rows = Array.from(acc, ([mode, v]) => ({
+      mode,
+      count: v.count,
+      avg: v.scored ? v.total / v.scored : null,
+    })).sort((a, b) => b.count - a.count);
+    return { rows, inquiry };
+  })();
   const mastery = dashboard.mastery.filter((item) => item.user_id === studentId);
   const notes = dashboard.notes.filter((item) => item.student_id === studentId);
   const liveComments = selectedSession
@@ -4810,6 +4837,35 @@ function StudentDetail({
               </Panel>
 
               <Panel title="Evidence" icon={<FileText className="h-4 w-4" strokeWidth={1.6} />}>
+                {evidenceByMode.rows.length ? (
+                  <div className="mb-3 rounded-2xl border border-border bg-background/40 p-3">
+                    <div className="mb-2 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      By mode
+                    </div>
+                    <div className="grid gap-1.5">
+                      {evidenceByMode.rows.map((row) => (
+                        <div key={row.mode} className="flex items-center gap-2 text-[12.5px]">
+                          <span className="min-w-0 flex-1 truncate text-foreground">
+                            {modeLabel(row.mode)}
+                            {row.mode === "inquiry" &&
+                            (evidenceByMode.inquiry.confusion ||
+                              evidenceByMode.inquiry.curiosity) ? (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                · {evidenceByMode.inquiry.confusion} {INQUIRY_TYPE_LABELS.confusion}
+                                , {evidenceByMode.inquiry.curiosity} {INQUIRY_TYPE_LABELS.curiosity}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground">{row.count}×</span>
+                          <span className="w-10 shrink-0 text-right tabular-nums text-foreground">
+                            {row.avg == null ? "—" : formatScore(row.avg)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {evidence.length ? (
                   <RecordList
                     items={evidence.slice(0, 8).map((item) => ({

@@ -6,6 +6,40 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 deferred follow-ups: prefs write-through + proficiency-by-mode — DONE, frontend-only)
+
+Summary: Two deferred items, both frontend-only (verified existing RLS permits every read/write, so
+no migration/backend/deploy). (1) Mentor/voice prefs now WRITE THROUGH to student_settings for
+cross-device persistence: chat.tsx's updateMentor/updateVoice fire a best-effort
+upsertStudentSettings alongside the existing localStorage write, and boot prefers server prefs when
+present (merged over localStorage, converged back to the store), all guarded so a failure silently
+falls back to localStorage — the live chat boot is never blocked. localStorage stays the source of
+truth; the tutor still reads mentor_preferences off the request payload (these are client-only
+prefs). (2) Proficiency-BY-MODE surfaces on the v4 mode-evidence dimension: the student profile
+popup gains a "Strengths by activity" section (avg score per learning mode), and the teacher
+StudentDetail Evidence panel gains a "By mode" breakdown (count + avg score per mode, with the
+inquiry confusion-vs-curiosity split). HEADLINE: the teacher dashboard already fetched
+learning_evidence via select("*") — surfacing mode was a TYPE-ONLY unlock (LearningEvidence +=
+mode/mode_type); the student side got one new self-read (fetchStudentEvidence, permitted by
+can_view_student). Both surfaces hide/empty-state until mode-tagged evidence accrues (it will, as
+students complete the 78 practice/assessment/reflection steps backfilled in P1).
+
+Files changed: frontend/src/lib/api.ts (fetchStudentSettings/upsertStudentSettings +
+fetchStudentEvidence + bundle wiring), frontend/src/routes/chat.tsx (write-through + boot
+hydration), frontend/src/lib/types.ts (LearningEvidence += mode/mode_type; StudentProfileStats +=
+evidence), frontend/src/lib/modes.ts (new: MODE_LABELS + INQUIRY_TYPE_LABELS shared map),
+frontend/src/features/student/ProfilePanel.tsx (byMode section), frontend/src/features/teacher/
+TeacherConsole.tsx (evidenceByMode breakdown), docs/HANDOFF.md.
+
+Tests run: frontend tsc/lint/build (0 errors / 13 pre-existing warnings). No backend. Verified
+student_settings.user_id is UNIQUE (onConflict upsert works) and both RLS policies (student-own ALL
++ can_view_student self-read) already permit the writes/reads.
+
+Remaining deferred (blocked/large): the "Review due" chip (needs a published revision lesson to link
++ a spaced-repetition due-queue over student_mastery.last_practiced_at); platform-generated ad-hoc
+revision sessions (needs the runtime-wide learning_sessions.lesson_id NOT NULL relaxation); Phase 5
+(notifications/calendar/admin monitoring/teacher reports).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 4: revision-mode tutor runtime — DEPLOYED)
 
 Summary: An authored revision-mode step now behaves as RETRIEVAL PRACTICE instead of a generic

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchStudentProfileStats } from "@/lib/api";
 import type { MentorConfig } from "@/lib/jargon-store";
+import { modeLabel } from "@/lib/modes";
 import type { StudentProfileStats } from "@/lib/types";
 
 // v4.0 Phase 3a — the student profile popup. Reads the signed-in student's OWN profile, mastery,
@@ -66,6 +67,24 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
     return [...rows].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 6);
   }, [stats]);
 
+  // Strengths & focus areas BY MODE: average score of scored evidence per learning mode. Populates
+  // as the student completes mode-tagged steps; empty until then.
+  const byMode = useMemo(() => {
+    const acc = new Map<string, { total: number; count: number }>();
+    for (const ev of stats?.evidence ?? []) {
+      if (!ev.mode || ev.score == null) continue;
+      const cur = acc.get(ev.mode) ?? { total: 0, count: 0 };
+      cur.total += ev.score;
+      cur.count += 1;
+      acc.set(ev.mode, cur);
+    }
+    return Array.from(acc, ([mode, { total, count }]) => ({
+      mode,
+      avg: total / count,
+      count,
+    })).sort((a, b) => b.avg - a.avg);
+  }, [stats]);
+
   const gradedGrades = useMemo(
     () => (stats?.grades ?? []).filter((g) => g.score != null).slice(0, 5),
     [stats],
@@ -129,6 +148,33 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
               Complete lessons to build your skill map.
             </p>
           )}
+
+          {byMode.length ? (
+            <>
+              <SectionLabel>Strengths by activity</SectionLabel>
+              <div className="space-y-1.5">
+                {byMode.map((row) => (
+                  <div key={row.mode} className="flex items-center gap-2.5">
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                      {modeLabel(row.mode)}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {row.count} {row.count === 1 ? "item" : "items"}
+                    </span>
+                    <span className="h-[4px] w-16 shrink-0 overflow-hidden rounded-full bg-muted">
+                      <span
+                        className="block h-full rounded-full bg-foreground"
+                        style={{ width: pct(row.avg) }}
+                      />
+                    </span>
+                    <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-foreground/70">
+                      {pct(row.avg)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
 
           <SectionLabel>Grades</SectionLabel>
           {gradedGrades.length ? (

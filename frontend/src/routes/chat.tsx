@@ -43,6 +43,8 @@ import {
   fetchLessonActivities,
   fetchStudentCatalog,
   fetchStudentLessonProgress,
+  fetchStudentSettings,
+  upsertStudentSettings,
   createRealtimeVoiceSession,
   getLessonResourceSignedUrl,
   getLessonResourceThumbnailSignedUrl,
@@ -662,19 +664,31 @@ function ChatPage() {
         // Pin the student's currently-open lesson into the scoped catalog so class scoping can
         // never strand them mid-lesson with no way back to their in-progress work. The per-lesson
         // progress map is best-effort (never blocks boot).
-        const [liveLessons, liveAssignments, liveAssessments, liveProgress] = await Promise.all([
-          fetchStudentCatalog(store.getLessonId()),
-          fetchStudentAssignments(),
-          fetchStudentAssessments(),
-          fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>),
-        ]);
+        const [liveLessons, liveAssignments, liveAssessments, liveProgress, serverSettings] =
+          await Promise.all([
+            fetchStudentCatalog(store.getLessonId()),
+            fetchStudentAssignments(),
+            fetchStudentAssessments(),
+            fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>),
+            fetchStudentSettings().catch(() => null),
+          ]);
         if (!alive) return;
         const selected =
           liveLessons.find((lesson) => lesson.id === store.getLessonId())?.id ||
           liveLessons[0]?.id ||
           "lesson1";
-        const savedMentor = store.getMentor();
-        const savedVoice = store.getVoice();
+        // Prefer server-persisted prefs when present (cross-device), else localStorage. Converge
+        // the store so both layers agree; a failed/absent read silently keeps the local values.
+        const savedMentor =
+          serverSettings?.mentor_settings && typeof serverSettings.mentor_settings === "object"
+            ? { ...store.getMentor(), ...(serverSettings.mentor_settings as Partial<MentorConfig>) }
+            : store.getMentor();
+        const savedVoice =
+          serverSettings?.voice_settings && typeof serverSettings.voice_settings === "object"
+            ? { ...store.getVoice(), ...(serverSettings.voice_settings as Partial<VoiceSettings>) }
+            : store.getVoice();
+        if (serverSettings?.mentor_settings) store.setMentor(savedMentor);
+        if (serverSettings?.voice_settings) store.setVoice(savedVoice);
         setAccessToken(session.access_token);
         setEmail(session.user.email || "");
         setLessons(liveLessons);
@@ -777,11 +791,14 @@ function ChatPage() {
   const updateMentor = (next: MentorConfig) => {
     setMentor(next);
     store.setMentor(next);
+    // Best-effort cross-device persistence; localStorage stays the source of truth.
+    void upsertStudentSettings({ mentor_settings: next }).catch(() => {});
   };
 
   const updateVoice = (next: VoiceSettings) => {
     setVoice(next);
     store.setVoice(next);
+    void upsertStudentSettings({ voice_settings: next }).catch(() => {});
   };
 
   const addMsg = (m: Msg) => setMsgs((prev) => [...prev, m]);
