@@ -744,11 +744,20 @@ export type StudentGradeRow = {
   score: number | null; // 0..1 fraction, shown only when released/finalized
   due_at: string | null;
   submitted_at: string | null;
+  class_id: string | null;
 };
 
 export type StudentProgressSummary = {
   lessonsStarted: number;
   lessonsCompleted: number;
+};
+
+export type StudentProgressReportRow = {
+  id: string;
+  title: string;
+  report_type: string;
+  created_at: string;
+  body: unknown;
 };
 
 export type StudentProfileStats = {

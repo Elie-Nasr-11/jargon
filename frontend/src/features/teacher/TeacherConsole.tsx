@@ -68,6 +68,7 @@ import {
   updateAssessmentStatus,
   reviewAssessmentItem,
   returnAssessment,
+  fetchStudentProgressReports,
   teacherGenerateProgressReport,
   teacherExportClassSnapshot,
   updateInterventionAlertStatus,
@@ -106,6 +107,7 @@ import type {
   ResourceTextChunk,
   ResourceTextChunkStatus,
   StudentMastery,
+  StudentProgressReportRow,
   TeacherClassSummary,
   TeacherDashboardData,
   TeacherLiveComment,
@@ -138,6 +140,7 @@ export function TeacherConsole() {
   const [updatingAlertId, setUpdatingAlertId] = useState<string | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [pastReports, setPastReports] = useState<StudentProgressReportRow[]>([]);
   const [exportingSnapshot, setExportingSnapshot] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
 
@@ -148,6 +151,21 @@ export function TeacherConsole() {
 
   useEffect(() => {
     setReportError(null);
+    if (!selectedStudentId) {
+      setPastReports([]);
+      return;
+    }
+    let alive = true;
+    fetchStudentProgressReports(selectedStudentId)
+      .then((rows) => {
+        if (alive) setPastReports(rows);
+      })
+      .catch(() => {
+        if (alive) setPastReports([]);
+      });
+    return () => {
+      alive = false;
+    };
   }, [selectedStudentId]);
 
   useEffect(() => {
@@ -421,6 +439,10 @@ export function TeacherConsole() {
       // Defer the revoke so an in-flight download is not cancelled in browsers that capture the
       // blob asynchronously after click().
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      // Refresh the past-reports list so the one just generated appears.
+      fetchStudentProgressReports(selectedStudentId)
+        .then(setPastReports)
+        .catch(() => {});
     } catch (error) {
       setReportError((error as Error).message || "Could not generate the report.");
     } finally {
@@ -1020,6 +1042,7 @@ export function TeacherConsole() {
                   onGenerateReport={generateReport}
                   generatingReport={generatingReport}
                   reportError={reportError}
+                  pastReports={pastReports}
                   profile={selectedStudent}
                   stats={studentStats}
                   dashboard={dashboard}
@@ -4448,6 +4471,7 @@ function StudentDetail({
   onGenerateReport,
   generatingReport,
   reportError,
+  pastReports,
   profile,
   stats,
   dashboard,
@@ -4478,6 +4502,7 @@ function StudentDetail({
   onGenerateReport: () => void;
   generatingReport: boolean;
   reportError: string | null;
+  pastReports: StudentProgressReportRow[];
   profile: Profile | null;
   stats: StudentSummary;
   dashboard: TeacherDashboardData;
@@ -4575,6 +4600,18 @@ function StudentDetail({
   const canWatchSelectedSession =
     Boolean(selectedSession) && selectedSession?.status !== "complete";
 
+  const downloadReport = (report: StudentProgressReportRow) => {
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `progress-report-${report.created_at.slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
   return (
     <GradientCard>
       <div className="p-4 sm:p-5">
@@ -4597,6 +4634,21 @@ function StudentDetail({
               {generatingReport ? "Generating…" : "Generate report"}
             </button>
             {reportError ? <span className="text-[11.5px] text-danger">{reportError}</span> : null}
+            {pastReports.length ? (
+              <div className="mt-1 flex flex-col items-end gap-0.5">
+                {pastReports.slice(0, 5).map((report) => (
+                  <button
+                    key={report.id}
+                    type="button"
+                    onClick={() => downloadReport(report)}
+                    title={`Download "${report.title}"`}
+                    className="max-w-[240px] truncate text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {formatDateTime(report.created_at)} · {report.title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 

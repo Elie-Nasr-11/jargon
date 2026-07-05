@@ -75,6 +75,7 @@ import type {
   ResourceInteraction,
   StudentClass,
   StudentGradeRow,
+  StudentProgressReportRow,
   StudentMastery,
   StudentProfileStats,
   StudentProgressSummary,
@@ -537,7 +538,7 @@ export async function fetchStudentGrades(): Promise<StudentGradeRow[]> {
 
   const { data: checkpointRows, error: checkpointError } = await supabase
     .from("checkpoints")
-    .select("id,title,kind,due_at")
+    .select("id,title,kind,due_at,class_id")
     .in("id", checkpointIds);
   if (checkpointError) throw checkpointError;
   const checkpointById = new Map(
@@ -547,6 +548,7 @@ export async function fetchStudentGrades(): Promise<StudentGradeRow[]> {
         title: string;
         kind: string;
         due_at: string | null;
+        class_id: string | null;
       }>
     ).map((cp) => [cp.id, cp]),
   );
@@ -566,6 +568,7 @@ export async function fetchStudentGrades(): Promise<StudentGradeRow[]> {
         score,
         due_at: cp.due_at,
         submitted_at: row.submitted_at,
+        class_id: cp.class_id,
       } as StudentGradeRow;
     })
     .filter((row): row is StudentGradeRow => row !== null);
@@ -1116,6 +1119,21 @@ export async function generateProgressReport(input: {
 
 // Teacher-scoped progress report. Unlike generateProgressReport (admin), this authorizes via the
 // teacher's class_memberships in admin-ops — a teacher can only report on a student they teach.
+// Past progress reports for a student — RLS scopes the read to reports the actor may view
+// (can_view_student(student_id) — i.e. a teacher who teaches the student, or an org/platform admin).
+export async function fetchStudentProgressReports(
+  studentId: string,
+): Promise<StudentProgressReportRow[]> {
+  const { data, error } = await supabase
+    .from("student_progress_reports")
+    .select("id,title,report_type,created_at,body")
+    .eq("student_id", studentId)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (error) throw error;
+  return (data || []) as StudentProgressReportRow[];
+}
+
 export async function teacherGenerateProgressReport(input: {
   classId: string;
   userId: string;

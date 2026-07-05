@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 3: finish promised student/teacher surfaces)
+
+Summary: Completed the three still-partial v4.0 surfaces the spec promised — all FRONTEND-ONLY,
+reusing existing RLS-scoped reads (no migration, no backend deploy).
+- T3a "list past reports" — a compact list of a student's previously generated progress reports under
+  the Generate-report button in TeacherConsole StudentDetail; each re-downloads its JSON. New
+  fetchStudentProgressReports(studentId) reads student_progress_reports scoped by the EXISTING
+  can_view_student(student_id) SELECT policy (no new RLS needed — the generating teacher already
+  qualifies). The list refreshes after a new report is generated.
+- T3b class dashboard work + grades — a "Work" section (recent + upcoming checkpoints, and a grades
+  summary "N graded · avg X%") on the student ClassDashboard, scoped to this class. fetchStudentGrades
+  now also returns class_id (checkpoints select += class_id) so the dashboard can filter to the class.
+- T3c unit-view assessment reviews — an "Assessment reviews" section on the student UnitView showing
+  returned/graded assessments for the unit's lessons with the teacher's final score + feedback, from
+  the existing fetchStudentAssessments self-read (assessment_item_attempts student self-read policy).
+
+Files changed: frontend/src/lib/api.ts (fetchStudentProgressReports; fetchStudentGrades += class_id),
+frontend/src/lib/types.ts (StudentProgressReportRow; StudentGradeRow += class_id), frontend/src/
+features/student/ClassViews.tsx (ClassWorkSummary + AssessmentReviews + wiring), frontend/src/features/
+teacher/TeacherConsole.tsx (past-reports fetch/state + list in StudentDetail), docs/HANDOFF.md.
+
+Tests run: frontend tsc/lint/build (0 errors); full Python suite green (164 ok / 4 skipped). No
+backend change → no deploy, no adversarial review (all reads ride existing verified RLS policies:
+can_view_student for reports; the student self-reads for grades/assessments). Rides a main FF.
+
+Tier 3 DONE. Remaining completion-plan work: T4 (polish batch — empty-state consolidation, student
+dock hard-nav→Link + unmasked submit error, button sizing, a11y, download toasts, dead-code) and T5
+(docs reconciliation — ROADMAP status, PLATFORM §5 language, move live unknowns into OPEN_QUESTIONS/
+DECISIONS).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 2: notification bell coherence — DEPLOYED)
 
 Summary: Made the shipped teacher notification bell correct (the "honest bell" fix). Two issues from
