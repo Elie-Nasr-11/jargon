@@ -57,6 +57,7 @@ import {
   recordResourceInteraction,
   recordVoiceInteraction,
   submitAssignment,
+  submissionFileState,
   MAX_SUBMISSION_FILES,
   MAX_SUBMISSION_FILE_BYTES,
 } from "@/lib/api";
@@ -1890,15 +1891,20 @@ function AssignmentDock({
                       </div>
                       {submissionFiles.length ? (
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {submissionFiles.map((file) => (
-                            <span
-                              key={file.id}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground"
-                            >
-                              <Paperclip className="h-3 w-3" strokeWidth={1.7} />
-                              {file.original_filename}
-                            </span>
-                          ))}
+                          {submissionFiles.map((file) => {
+                            const fileState = submissionFileState(file);
+                            return (
+                              <span
+                                key={file.id}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground"
+                              >
+                                <Paperclip className="h-3 w-3" strokeWidth={1.7} />
+                                {file.original_filename}
+                                {fileState === "quarantined" ? " · flagged" : ""}
+                                {fileState === "purged" ? " · removed" : ""}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>

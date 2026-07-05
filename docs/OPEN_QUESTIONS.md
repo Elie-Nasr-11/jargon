@@ -71,22 +71,30 @@ Current decision so far:
 - Most assignment file submissions likely live in lesson/LMS assignment windows, not directly inside the chat composer.
 - Teacher-uploaded lesson resources are a separate feature track.
 
-As-built (2026-07-05, post-v4.0 Phase 2a — SHIPPED): submissions upload to a PRIVATE
+As-built (2026-07-05, post-v4.0 Phase 2a + 2b — SHIPPED): submissions upload to a PRIVATE
 `student-submissions` bucket (50 MB/file server ceiling), mirrored by `assignment_submission_files`
 rows; reads are signed-URL only, gated by the DB row (owner or the assigning teacher). Phase 2a added
 client + app-layer validation (≤10 files, ≤25 MB each, an `accept` hint) and a path-bound INSERT RLS
-(the object's user path segment must equal auth.uid()). Deliberately NOT done: a hard bucket MIME
-allowlist (regression risk on a private, non-served bucket for little gain) and dropping the dead
-`assignment_submissions.file_path` column (additive-only discipline).
+(the object's user path segment must equal auth.uid()). Phase 2b added a scan dimension + retention:
+- Scanning: a dedicated `scan_status` column (pending/clean/quarantined/skipped, separate from the
+  lifecycle `status`) + a `submission-maintenance` system-only edge fn (`scan` action) invoked daily
+  by `.github/workflows/submission-maintenance.yml`. A provider is optional and plugged in via env
+  (`SCAN_API_URL` [+ `SCAN_API_KEY`]); with NO provider, pending files are marked `skipped`
+  (unscanned, still readable), so this ships provider-READY without a key. The storage SELECT policy
+  now also blocks `quarantined` (and purged) files — a flagged file can't produce a signed URL.
+- Retention: the same fn's `retention` action purges the object BYTES of files older than
+  `SUBMISSION_RETENTION_DAYS` (default 365 = ~12 months) and stamps `purged_at` on the DB row (kept
+  as a tombstone). Nothing is old enough to purge for ~a year (the table is empty today).
+Deliberately NOT done: a hard bucket MIME allowlist (regression risk on a private, non-served bucket
+for little gain) and dropping the dead `assignment_submissions.file_path` column (additive-only).
 
-Deferred details (Phase 2b — need a decision):
+Deferred details (still open):
 
-- Malware scanning: NONE today. Options recorded — an external scan API called from a post-upload
-  edge fn (flip `assignment_submission_files.status` clean/quarantined; simplest infra, needs a
-  provider + key) vs self-hosted ClamAV (no per-scan cost, own the infra) vs accept-the-risk (private
-  bucket, signed-URL only, no execution, teacher/owner-only reads).
-- Retention: NONE today (no DELETE storage policy, no cleanup job). Needs a retention-window decision
-  (e.g. keep N months after the assignment closes) + a DELETE policy + a scheduled cleanup.
+- Which scan provider (and its exact response contract) — the pipeline treats `clean:false` /
+  `infected:true` / `malicious:true` / a truthy `threat` as quarantine; a concrete provider + key is
+  a config task, not a code change. A retroactive re-scan of already-`skipped` files is a manual op.
+- Per-org retention overrides (today a single global window via env). `organization_settings.
+  privacy_settings` is the natural home when per-tenant windows are needed.
 - Whether the chat composer `file` answer-mode becomes real (upload + reference) or stays LMS-window-
   only. Today `answerContent()` returns a `[file answer placeholder]` and file answers grade as text.
 - How returned files and teacher annotations appear to students.

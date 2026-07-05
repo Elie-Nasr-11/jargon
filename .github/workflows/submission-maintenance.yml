@@ -1,0 +1,58 @@
+name: Submission maintenance
+
+# Phase 2b — daily scan + retention sweep of the student-submissions bucket. Calls the
+# `submission-maintenance` edge function's `sweep` action (scan pending files, then purge files
+# older than SUBMISSION_RETENTION_DAYS). The function is system-only: it accepts ONLY the
+# service-role key as the Bearer JWT (same trusted-system-caller pattern as canvas-sync).
+#
+# Scan is a no-op that marks files 'skipped' until a provider is configured via the SCAN_API_URL
+# (+ optional SCAN_API_KEY) function secret. Retention purges nothing until files age past the
+# window (SUBMISSION_RETENTION_DAYS, default 365).
+#
+# Required repository secrets (already used by canvas-sync):
+#   SUPABASE_URL                e.g. https://<project-ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   the project's service-role key (full access — keep secret)
+
+on:
+  schedule:
+    # Daily at 07:30 UTC (offset from canvas-sync at 07:00 to avoid overlap).
+    - cron: "30 7 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: submission-maintenance
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger submission maintenance sweep
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY repository secrets are required."
+            exit 1
+          fi
+
+          response="$(mktemp)"
+          code="$(curl -sS -o "$response" -w '%{http_code}' \
+            -X POST "${SUPABASE_URL%/}/functions/v1/submission-maintenance" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"sweep"}')"
+
+          echo "HTTP $code"
+          cat "$response"
+          echo
+
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Submission maintenance returned HTTP $code"
+            exit 1
+          fi
+          if grep -q '"status":"error"' "$response"; then
+            echo "::error::Submission maintenance responded with an error status"
+            exit 1
+          fi

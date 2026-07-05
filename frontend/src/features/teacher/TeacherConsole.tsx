@@ -50,6 +50,7 @@ import {
   fetchResourceTextChunks,
   getResourcePageAssetSignedUrl,
   getSubmissionFileSignedUrl,
+  submissionFileState,
   gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
   getSession,
@@ -3515,6 +3516,17 @@ function AssignmentManager({
   };
 
   const openFile = async (file: AssignmentSubmissionFile) => {
+    const state = submissionFileState(file);
+    if (state === "purged") {
+      setAssignmentMessage(
+        "This file was removed under the retention policy and is no longer available.",
+      );
+      return;
+    }
+    if (state === "quarantined") {
+      setAssignmentMessage("This file was flagged by the malware scan and cannot be opened.");
+      return;
+    }
     try {
       const url = await getSubmissionFileSignedUrl(file);
       window.open(url, "_blank", "noopener,noreferrer");
@@ -3910,17 +3922,31 @@ function AssignmentManager({
                             ) : null}
                             {submissionFiles.length ? (
                               <div className="mt-2 flex flex-wrap gap-2">
-                                {submissionFiles.map((file) => (
-                                  <button
-                                    type="button"
-                                    key={file.id}
-                                    onClick={() => void openFile(file)}
-                                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
-                                  >
-                                    <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
-                                    {file.original_filename}
-                                  </button>
-                                ))}
+                                {submissionFiles.map((file) => {
+                                  const fileState = submissionFileState(file);
+                                  const unavailable = fileState !== "available";
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={file.id}
+                                      onClick={() => void openFile(file)}
+                                      disabled={unavailable}
+                                      title={
+                                        fileState === "purged"
+                                          ? "Removed under the retention policy"
+                                          : fileState === "quarantined"
+                                            ? "Flagged by the malware scan"
+                                            : undefined
+                                      }
+                                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:line-through disabled:hover:bg-transparent"
+                                    >
+                                      <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
+                                      {file.original_filename}
+                                      {fileState === "quarantined" ? " · flagged" : ""}
+                                      {fileState === "purged" ? " · removed" : ""}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             ) : null}
                             <div className="mt-3 grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">

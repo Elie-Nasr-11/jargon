@@ -2,6 +2,24 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-05: Post-v4.0 Phase 2b — submission scanning + retention posture
+
+- **Scanning is a provider-READY scaffold, not a bundled provider.** `assignment_submission_files`
+  gets its own `scan_status` (pending/clean/quarantined/skipped) — separate from the lifecycle
+  `status` enum — and a system-only `submission-maintenance` edge fn drains the pending queue. With no
+  `SCAN_API_URL` configured, pending files become `skipped` (unscanned but readable); enabling a
+  provider later scans only NEW uploads (a retroactive re-scan is a manual op). The security win that
+  ships today regardless of a provider: the storage SELECT policy blocks `quarantined` (and purged)
+  files, so a flagged file can never yield a signed URL — the quarantine gate is real the moment a
+  provider flips a row. We rejected self-hosted ClamAV (no worker infra in a Supabase-serverless +
+  Render-static stack) and rejected doing nothing (the scaffold is cheap and future-proofs the gate).
+- **Retention purges BYTES, keeps the row as a tombstone.** The same fn's `retention` action removes
+  the storage object of files older than `SUBMISSION_RETENTION_DAYS` (default 365 ≈ 12 months) and
+  stamps `purged_at`; the DB metadata row persists so the record (who submitted, when) survives. The
+  clock is the file's `created_at` (≈ assignment close, within days) to avoid a fragile join. Only the
+  service role can delete bucket objects (no DELETE RLS policy exists), so the sweep runs as the
+  trusted system caller from a daily GitHub Actions cron — the same pattern as canvas-sync.
+
 ## 2026-07-05: v4.0 Completion Pass — durable choices from the polish/finish tiers
 
 After P0-P5 shipped, a four-tier polish pass (T1-T4) landed with these durable decisions:

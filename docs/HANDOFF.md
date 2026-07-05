@@ -6,6 +6,39 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 2b: submission scanning + retention — building)
+
+Status: Built + verified locally; adversarial review + deploy next.
+Task: A provider-ready malware-scan scaffold and a 12-month retention sweep for the private
+`student-submissions` bucket. Additive; the file table is empty so there is zero live risk.
+
+Files touched:
+- `supabase/migrations/20260728000000_submission_retention_scan.sql` (NEW): adds `scan_status`
+  (pending/clean/quarantined/skipped, own CHECK) + `purged_at` to `assignment_submission_files`; two
+  partial indexes; recreates the storage.objects SELECT policy for `student-submissions` faithfully +
+  two AND clauses (`scan_status <> 'quarantined'`, `purged_at is null`) so a flagged/purged file can't
+  produce a signed URL. Validated in a rolled-back live-DB txn (predicate confirmed).
+- `supabase/functions/submission-maintenance/index.ts` (NEW): system-only (accepts ONLY the
+  service-role bearer). Actions `scan` (drain pending → provider verdict, or `skipped` when no
+  `SCAN_API_URL`; provider errors leave rows pending), `retention` (purge bytes older than
+  `SUBMISSION_RETENTION_DAYS` default 365, stamp `purged_at`), `sweep` (both).
+- `.github/workflows/submission-maintenance.yml` (NEW): daily 07:30 UTC + dispatch; service-role
+  bearer; reuses the SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY repo secrets (same as canvas-sync).
+- `.github/workflows/deploy-backend.yml`: migration appended to the apply list; the fn added to the
+  deploy step + paths.
+- Frontend: `types.ts` (`SubmissionScanStatus` + `scan_status`/`purged_at`), `api.ts`
+  (`submissionFileState` helper), `chat.tsx` + `TeacherConsole.tsx` (label/disable flagged+purged
+  files; teacher `openFile` refuses them).
+- `tests/test_submission_maintenance.py` (NEW, 8 fingerprints, CI-gated).
+
+Tests run: node --check (fn) green; frontend tsc/lint/build green; full Python suite (172) green;
+migration applied in a rolled-back live-DB transaction (new SELECT-policy predicate + both columns
+confirmed).
+
+Decisions (user-chosen): provider-ready scaffold (no key today), 12-month retention purging bytes
+while keeping the DB row as a tombstone. Note: retention is measured from the file's `created_at`
+(≈ the assignment close, within days) for robustness — no fragile join to a due date.
+
 ## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 2a: submission safety — DEPLOYED)
 
 Summary: Safe additive hardening of the student assignment-submission path (2b — scanning + retention

@@ -829,6 +829,8 @@ export type AssignmentRecipientStatus =
   | "complete";
 export type AssignmentSubmissionStatus = "submitted" | "returned" | "accepted";
 export type AssignmentSubmissionFileStatus = "submitted" | "returned" | "accepted" | "removed";
+// Phase 2b scan dimension (separate from the lifecycle status). Only 'quarantined' blocks reads.
+export type SubmissionScanStatus = "pending" | "clean" | "quarantined" | "skipped";
 
 export type Assignment = {
   id: string;
@@ -888,6 +890,8 @@ export type AssignmentSubmissionFile = {
   mime_type: string | null;
   file_size_bytes: number | null;
   status: AssignmentSubmissionFileStatus;
+  scan_status: SubmissionScanStatus;
+  purged_at: string | null;
   created_at: string;
   updated_at: string;
 };

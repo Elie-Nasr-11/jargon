@@ -28,6 +28,7 @@ on:
       - "supabase/functions/google-classroom/**"
       - "supabase/functions/resource-processing/**"
       - "supabase/functions/admin-ops/**"
+      - "supabase/functions/submission-maintenance/**"
       - "supabase/migrations/**"
       - ".github/workflows/deploy-backend.yml"
 
@@ -75,7 +76,8 @@ jobs:
             supabase/migrations/20260720000000_notifications.sql \
             supabase/migrations/20260725000000_recipient_grade_guard.sql \
             supabase/migrations/20260726000000_notification_writers.sql \
-            supabase/migrations/20260727000000_submission_path_binding.sql ; do
+            supabase/migrations/20260727000000_submission_path_binding.sql \
+            supabase/migrations/20260728000000_submission_retention_scan.sql ; do
             echo "Applying $f"
             body="$(jq -Rs '{query: .}' "$f")"
             resp="$(mktemp)"
@@ -106,3 +108,6 @@ jobs:
           # admin-ops now auto-deploys (actively developed as of the Live tab); it stays JWT- +
           # actor-access-gated internally. admin-seed remains manual (account provisioning).
           supabase functions deploy admin-ops --project-ref "$PROJECT_REF"
+          # submission-maintenance is system-only (accepts ONLY the service-role bearer); invoked
+          # by the scheduled submission-maintenance.yml workflow.
+          supabase functions deploy submission-maintenance --project-ref "$PROJECT_REF"

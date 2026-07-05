@@ -3492,6 +3492,17 @@ export async function returnAssessment(input: { attemptId: string; feedback: str
   return data.data;
 }
 
+// Phase 2b: a submission file is unopenable once its bytes are purged by retention or the scan
+// flags it. The storage RLS also blocks the signed URL in these states — this mirrors it in the UI
+// so we can label the file instead of surfacing a raw RLS error.
+export function submissionFileState(
+  file: Pick<AssignmentSubmissionFile, "scan_status" | "purged_at">,
+): "available" | "quarantined" | "purged" {
+  if (file.purged_at) return "purged";
+  if (file.scan_status === "quarantined") return "quarantined";
+  return "available";
+}
+
 export async function getSubmissionFileSignedUrl(file: AssignmentSubmissionFile) {
   const { data, error } = await supabase.storage
     .from(file.storage_bucket || "student-submissions")
