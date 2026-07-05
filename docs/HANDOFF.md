@@ -6,6 +6,40 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 5a: persistent notifications table + teacher bell — DEPLOYED)
+
+Summary: A real `notifications` table (recipient = user_id) + a persistent teacher notification
+surface (a header bell + unread badge + dropdown in ConsoleShell). Additive to the derived hotlist,
+NOT a rewrite — exploration proved only 2 of the 7 hotlist kinds have clean server writers
+(intervention_alerts has NO insert site; submission is client-side; 3 kinds are derived state). RLS:
+SELECT + UPDATE owner-only; grants REVOKE Supabase's default broad grants then re-grant the minimum
+(authenticated = select + update(read_at) ONLY — can't forge/insert or rewrite title/kind; INSERT
+service-role only; anon revoked). Prod-verified: table live, anon/insert/title-update all blocked,
+backfill marker set. ONE writer: assessment-admin submitAssessment notifies the class's teachers
+(assessment_to_review) ONLY when the submission needs teacher review (hasPendingReview), best-effort
++ own try/catch so it can never fail the submission.
+
+Files changed: supabase/migrations/20260720000000_notifications.sql (new), supabase/functions/
+assessment-admin/index.ts (notifyClassTeachers helper + gated call), supabase/functions/chat/index.ts
+(comment only — see below), .github/workflows/deploy-backend.yml (migration list), frontend/src/lib/
+types.ts (Notification), frontend/src/lib/api.ts (fetchNotifications / markNotificationRead /
+markAllNotificationsRead), frontend/src/components/NotificationsMenu.tsx (new), ConsoleShell.tsx
+(bell wiring), docs/HANDOFF.md.
+
+Tests run: node --check chat + assessment-admin; migration validated in a rolled-back live-DB
+transaction (incl. grant checks + backfill); frontend tsc/lint/build (0 errors). Adversarial review
+(12 agents) confirmed 8: the CHAT-side writer was DEAD-ON-ARRIVAL (chat runs under the student JWT,
+has no service-role key → the insert is denied and swallowed) → REMOVED it (rescue flags still reach
+teachers via the derived hotlist; keeps chat's privilege surface unchanged, no service-role key added
+to the live tutor); gated the assessment notify on hasPendingReview (don't notify for auto-graded);
+column-scoped the owner UPDATE to read_at (revoke-then-grant). Deployed via run #40 (green).
+
+Remaining deferred: admin Live tab (Slice B in the plan — new admin-ops list_active_sessions action +
+deploy-policy decision for admin-ops), teacher reports (needs a teacher auth tier in admin-ops),
+review-due chip (content-blocked), ad-hoc revision sessions (runtime-wide lesson_id relaxation).
+Also a future refinement: a full HotlistFeed data-source swap onto notifications (needs the missing
+alert writer + a submission edge fn first).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 deferred: student calendar DONE; remaining deferred re-scoped by exploration)
 
 Summary: Shipped the STUDENT CALENDAR (frontend-only): a new /calendar route + StudentCalendar
