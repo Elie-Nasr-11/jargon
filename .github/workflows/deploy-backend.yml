@@ -73,7 +73,8 @@ jobs:
             supabase/migrations/20260710000000_lesson_templates.sql \
             supabase/migrations/20260715000000_class_scoping.sql \
             supabase/migrations/20260720000000_notifications.sql \
-            supabase/migrations/20260725000000_recipient_grade_guard.sql ; do
+            supabase/migrations/20260725000000_recipient_grade_guard.sql \
+            supabase/migrations/20260726000000_notification_writers.sql ; do
             echo "Applying $f"
             body="$(jq -Rs '{query: .}' "$f")"
             resp="$(mktemp)"

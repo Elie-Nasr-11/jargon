@@ -741,6 +741,23 @@ async function returnAssessment(config: Config, userId: string, body: DbRow): Pr
   const quizIds = itemAttempts.map((item) => cleanId(item.quiz_item_id)).filter(Boolean);
   const quizzes = quizIds.length ? await loadRows(config, `quiz_items?id=${idFilter(quizIds)}&select=*`) : [];
   await writeEvidenceAndMastery(config, cleanId(attempt.user_id), assessment, updatedAttempt || attempt, itemAttempts, quizzes, finalScore, feedback);
+
+  // Auto-clear the "assessment to review" bell notification(s) for this student's assessment now that
+  // the teacher has returned it — mark them read for every recipient teacher (best-effort, never blocks).
+  try {
+    const studentId = cleanId(attempt.user_id);
+    const assessmentId = cleanId(assessment.id);
+    if (studentId && assessmentId) {
+      await serviceFetch(
+        config,
+        `/rest/v1/notifications?kind=eq.assessment_to_review&related_student_id=eq.${encodeURIComponent(studentId)}&ref->>assessment_id=eq.${encodeURIComponent(assessmentId)}&read_at=is.null`,
+        { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ read_at: now }) },
+      );
+    }
+  } catch (_error) {
+    // best-effort — a failed auto-clear must not affect returning the assessment.
+  }
+
   return json({ status: "ok", data: { attempt: updatedAttempt, final_score: finalScore } });
 }
 

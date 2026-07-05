@@ -66,13 +66,27 @@ export function NotificationsMenu() {
       );
       void markNotificationRead(n.id).catch(() => {});
     }
-    // An assessment-to-review notification should land on the class Assessments tab, where the
-    // review/return controls live — not the student overview (which has none).
+    // Deep-link each kind to the surface where the teacher can act on it:
+    //  - assessment_to_review → the class Assessments tab (review/return controls live there)
+    //  - submission_to_grade → the class Assignments tab (grading lives there)
+    //  - mentor_recommendation → the student's transcript (to see where they're stuck)
     if (n.kind === "assessment_to_review" && n.class_id) {
       navigate({
         to: "/teacher/class/$classId",
         params: { classId: n.class_id },
         search: { tab: "assessments" },
+      });
+    } else if (n.kind === "submission_to_grade" && n.class_id) {
+      navigate({
+        to: "/teacher/class/$classId",
+        params: { classId: n.class_id },
+        search: { tab: "assignments" },
+      });
+    } else if (n.kind === "mentor_recommendation" && n.class_id && n.related_student_id) {
+      navigate({
+        to: "/teacher/class/$classId/student/$studentId",
+        params: { classId: n.class_id, studentId: n.related_student_id },
+        search: { tab: "transcript" },
       });
     } else if (n.class_id && n.related_student_id) {
       navigate({

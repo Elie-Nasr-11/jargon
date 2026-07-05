@@ -6,6 +6,52 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 1: notification writers — the bell becomes a real feed — DEPLOYED)
+
+Summary: The teacher notification bell only ever carried `assessment_to_review` (the one kind written
+inside a service-role edge fn). Phase 1 adds the two other genuinely-discrete teacher events —
+`submission_to_grade` and `mentor_recommendation` — as SECURITY DEFINER DB TRIGGERS, because their
+producers (client-side submitAssignment; the student-JWT chat runtime) have no service-role insert
+path but a trigger does. The remaining hotlist kinds stay client-derived (session_risk/live_now/due_soon
+are ephemeral/projected; alert_open was NOT revived — it would duplicate the derived session_risk, and
+the discrete rescue EVENT is captured by mentor_recommendation). So the coherent end state is: the BELL
+= persistent discrete-event log (3 kinds, unread-tracked, auto-cleared); the HOTLIST = the live derived
+board (unchanged). No HotlistFeed rewrite — the hotlist already auto-currents by derivation.
+
+- Migration 20260726000000_notification_writers.sql (idempotent): triggers `notify_submission_to_grade`
+  (AFTER INSERT on assignment_submissions status=submitted → fan out to the assignment's class teachers)
+  and `notify_mentor_recommendation` (AFTER INSERT → fan out to the student's active classes' teachers,
+  distinct per teacher). Both best-effort (own EXCEPTION block → a failed notify can't roll back the
+  submission/turn), self-exclude the acting user, dedup via a partial unique index on
+  (user_id, kind, related_student_id, ref->>'subject_id') where unread — SCOPED to these two kinds
+  only (see F1 below). `on conflict do nothing`.
+- assessment-admin: auto-clear in returnAssessment (mark the student's assessment_to_review
+  notification(s) read on return, matched on ref->>assessment_id so it covers pre- and post-deploy rows).
+- NotificationsMenu: kind-aware deep-links — submission_to_grade → class Assignments tab,
+  mentor_recommendation → the student's transcript.
+
+Tests run: node --check assessment-admin; frontend tsc/lint/build (0 errors); full Python suite green
+(164 ok / 4 skipped); live-DB behavioral test in a rolled-back txn (2 submits of one assignment → 1
+deduped notification; mentor rec → 1; migration idempotent). Adversarial review (2 agents): the
+frontend/regression reviewer was clean; the backend reviewer found ONE real MEDIUM (F1) — the existing
+edge-fn assessment writer does a BULK insert with no on_conflict, so a shared dedup index would 409 the
+whole teacher batch on a re-submit and starve the rest. FIXED by scoping the dedup index to only the two
+trigger-written kinds (which use on conflict do nothing); assessment_to_review keeps its pre-existing
+no-dedup bulk insert + relies on the new auto-clear. Also added self-notification exclusion (F5).
+Deployed via the migration + assessment-admin auto-deploy.
+
+Accepted residual risks (documented, not blocking): F2 — plpgsql WHEN OTHERS does not catch
+QUERY_CANCELED, so a statement-timeout during the fan-out (pathological lock contention) could
+theoretically roll back the outer write; extremely unlikely on a tiny indexed insert. F3 — a mentor rec
+with neither lesson_id nor session_id falls back to its own id as the dedup subject (no dedup); in
+practice a chat-turn rec always has a lesson/session. F4 — pre-deploy assessment notifications lack the
+fields the dedup would need but auto-clear matches on assessment_id which they DO have, so they clear
+fine.
+
+Next (post-v4.0 roadmap, docs/ROADMAP.md): Phase 2 submission safety, Phase 3 live-intervention
+completion, Phase 4 revision/spacing, Phase 5 ad-hoc revision (highest risk). C/D are strategic
+side-decisions.
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 5: docs reconciliation — CLOSES the completion plan)
 
 Summary: Docs-only, no code/deploy. Brought the canonical docs in line with the shipped v4.0 state.
