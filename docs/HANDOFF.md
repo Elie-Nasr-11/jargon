@@ -6,6 +6,44 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 4: polish batch — frontend-only)
+
+Summary: A design-vetted cosmetic/correctness batch (no backend). Discovered via a 7-agent workflow
+(one investigator per item + a completeness critic) that returned design-aware specs, then applied +
+adversarially verified (3-dimension review workflow → 0 confirmed findings).
+- Empty states: HotlistFeed "all caught up" and the admin Live tab "no live session" now use the
+  shared EmptyState (CheckCircle2 / Activity icons). DELIBERATELY LEFT compact: ClassViews StateNote
+  (it's shared across loading/error/empty — a dashed empty panel is wrong for loading/error) and the
+  NotificationsMenu 340px dropdown (EmptyState too heavy there).
+- Student docks (chat.tsx): the assessment dock "Open quiz" raw <a href> → TanStack <Link to=/quiz/
+  $assessmentId> (client nav preserves chat/session state); the assignment dock submit error was
+  masked when files were attached — draft.message now wins over the "N files ready" hint, and the file
+  <input> onChange clears a stale message.
+- Download toasts (TeacherConsole): generateReport + exportClassSnapshot now fire notifyOk on success
+  and notifyErr on failure (inline error state kept).
+- a11y: the ClassOverview "Watch" button gained aria-label={`Watch ${name}`}; the NotificationsMenu
+  bell announces the unread count when > 0.
+- Dead code (HeaderMenus): the all-380 WIDTHS Record collapsed to a single PANEL_WIDTH constant (width
+  morph was a 380->380 no-op; height morph untouched); the stray `export type _R = ReactNode` shim
+  removed (ReactNode still genuinely used). PLUS fixed a real latent bug found mid-batch: a NUL byte
+  inside the ungrouped-lessons key literal (`"\x00nounit"` → `"__nounit"`) that made the file read as
+  binary to git/grep.
+- SKIPPED (deliberate): resizing the two new teacher buttons to px-4 py-2 — px-3 py-1.5 text-[12px] is
+  the DOMINANT console size (7 uses vs 4), so enlarging just those two would REDUCE consistency. The
+  discovery workflow's premise here was wrong; I verified against the source and dropped it.
+
+Files changed: frontend/src/features/teacher/HotlistFeed.tsx, frontend/src/routes/admin.tsx, frontend/
+src/routes/chat.tsx, frontend/src/features/teacher/TeacherConsole.tsx, frontend/src/features/teacher/
+ClassOverview.tsx, frontend/src/components/NotificationsMenu.tsx, frontend/src/components/
+HeaderMenus.tsx, docs/HANDOFF.md.
+
+Tests run: frontend tsc/lint/build (0 errors); full Python suite green (164 ok / 4 skipped); 3-agent
+adversarial review workflow → 0 confirmed findings. No backend → rides a main FF.
+
+Remaining completion-plan work: T5 (docs reconciliation — ROADMAP v4.0 status + Current State, record
+the main FF, reconcile PLATFORM §5's "data-source swap" language, migrate live v4.0 unknowns into
+OPEN_QUESTIONS/DECISIONS).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 3: finish promised student/teacher surfaces)
 
 Summary: Completed the three still-partial v4.0 surfaces the spec promised — all FRONTEND-ONLY,

@@ -113,6 +113,7 @@ export function ClassOverviewStrips({
                 <button
                   type="button"
                   onClick={() => onWatch(s.user_id, s.id)}
+                  aria-label={`Watch ${displayName(profilesById.get(s.user_id), s.user_id)}`}
                   className="shrink-0 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground hover:bg-muted"
                 >
                   Watch

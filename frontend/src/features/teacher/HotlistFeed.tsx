@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   CalendarClock,
+  CheckCircle2,
   CircleUserRound,
   ClipboardCheck,
   FileCheck2,
@@ -8,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
+import { EmptyState } from "@/components/EmptyState";
 import type { Lesson, Profile, TeacherClassSummary, TeacherDashboardData } from "@/lib/types";
 
 // v4.0 Phase 2 — the teacher hotlist. A single attention feed derived on load from the
@@ -225,9 +227,9 @@ export function HotlistFeed({
           ) : null}
         </div>
         {shown.length === 0 ? (
-          <p className="py-6 text-center text-[12.5px] text-muted-foreground">
+          <EmptyState icon={CheckCircle2}>
             You're all caught up — no submissions to grade, alerts, or work due soon.
-          </p>
+          </EmptyState>
         ) : (
           <div className="grid gap-1.5">
             {shown.map((item) => {

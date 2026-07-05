@@ -11,12 +11,7 @@ import type { LessonActivity, LessonArc } from "@/lib/types";
 
 type MenuKey = "lessons" | "progress" | "mentor" | "profile";
 
-const WIDTHS: Record<MenuKey, number> = {
-  lessons: 380,
-  progress: 380,
-  mentor: 380,
-  profile: 380,
-};
+const PANEL_WIDTH = 380;
 
 export function HeaderMenus({
   activeLessonId,
@@ -138,12 +133,12 @@ export function HeaderMenus({
     if (isTouch) return;
     if (!activeKey || !panelRef.current || !innerRef.current) return;
     if (activeKey === contentKey) {
-      const targetW = WIDTHS[activeKey];
+      const targetW = PANEL_WIDTH;
       const h = sizerRef.current?.offsetHeight ?? innerRef.current.offsetHeight;
       gsap.set(panelRef.current, { width: targetW, height: h });
       return;
     }
-    const targetW = WIDTHS[activeKey];
+    const targetW = PANEL_WIDTH;
     const inner = innerRef.current;
     gsap.killTweensOf(inner);
     gsap.to(inner, {
@@ -290,7 +285,7 @@ export function HeaderMenus({
           onMouseLeave={leave}
           className="absolute left-1/2 top-[calc(100%+10px)] z-[var(--z-menu)] -translate-x-1/2"
           style={{
-            width: contentKey ? WIDTHS[contentKey] : 380,
+            width: PANEL_WIDTH,
             maxWidth: "calc(100vw - 24px)",
             opacity: 0,
             // Closed panel must not intercept clicks: it stays display:block
@@ -508,7 +503,7 @@ function buildLessonTree(lessons: Lesson[]): LessonTree {
   const subjectIndex = new Map<string, number>();
   for (const l of lessons) {
     const subjectName = l.subjectTitle || l.group || "Lessons";
-    const unitKey = l.unitTitle || " nounit";
+    const unitKey = l.unitTitle || "__nounit";
     let si = subjectIndex.get(subjectName);
     if (si === undefined) {
       si = subjects.length;
@@ -1027,6 +1022,3 @@ function MentorGroup({
     </div>
   );
 }
-
-// Silence unused-import warning for ReactNode in some configs
-export type _R = ReactNode;

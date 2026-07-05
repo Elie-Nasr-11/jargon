@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
+import { EmptyState } from "@/components/EmptyState";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -1981,9 +1982,9 @@ export function AdminPage() {
                     ) : activeSessions === null ? (
                       <p className="text-[13px] text-muted-foreground">Loading live sessions…</p>
                     ) : activeSessions.length === 0 ? (
-                      <p className="text-[13px] text-muted-foreground">
+                      <EmptyState icon={Activity}>
                         No students are in a live session right now.
-                      </p>
+                      </EmptyState>
                     ) : (
                       <div className="grid gap-2">
                         {activeSessions.map((s) => {

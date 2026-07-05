@@ -36,7 +36,7 @@ import { ConsoleShell } from "@/components/ConsoleShell";
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { OverflowMenu } from "@/components/OverflowMenu";
-import { notifyUndo } from "@/lib/feedback";
+import { notifyErr, notifyOk, notifyUndo } from "@/lib/feedback";
 import { useUndoable } from "@/hooks/useUndoable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -439,12 +439,14 @@ export function TeacherConsole() {
       // Defer the revoke so an in-flight download is not cancelled in browsers that capture the
       // blob asynchronously after click().
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      notifyOk("Progress report downloaded.");
       // Refresh the past-reports list so the one just generated appears.
       fetchStudentProgressReports(selectedStudentId)
         .then(setPastReports)
         .catch(() => {});
     } catch (error) {
       setReportError((error as Error).message || "Could not generate the report.");
+      notifyErr(error, "Could not generate the report.");
     } finally {
       setGeneratingReport(false);
     }
@@ -465,8 +467,10 @@ export function TeacherConsole() {
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 0);
+      notifyOk("Class CSV exported.");
     } catch (error) {
       setSnapshotError((error as Error).message || "Could not export the class snapshot.");
+      notifyErr(error, "Could not export the class snapshot.");
     } finally {
       setExportingSnapshot(false);
     }

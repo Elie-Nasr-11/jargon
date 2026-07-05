@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import {
   AlertCircle,
@@ -1722,12 +1722,13 @@ function AssessmentDock({
                     </div>
                   ) : null}
                 </div>
-                <a
-                  href={`/quiz/${assessment.id}`}
+                <Link
+                  to="/quiz/$assessmentId"
+                  params={{ assessmentId: assessment.id }}
                   className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted"
                 >
                   {recipient?.status === "complete" ? "View result" : "Open quiz"}
-                </a>
+                </Link>
               </div>
             </div>
           </GradientCard>
@@ -1921,15 +1922,18 @@ function AssignmentDock({
                       onChange={(event) =>
                         setDraft(assignment.id, {
                           files: Array.from(event.target.files || []),
+                          message: "",
                         })
                       }
                       className="rounded-2xl border border-border bg-background/65 px-3 py-2 text-[12.5px] text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
                     />
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-[11.5px] text-muted-foreground">
-                        {draft.files.length
-                          ? `${draft.files.length} file${draft.files.length === 1 ? "" : "s"} ready`
-                          : draft.message}
+                        {draft.message
+                          ? draft.message
+                          : draft.files.length
+                            ? `${draft.files.length} file${draft.files.length === 1 ? "" : "s"} ready`
+                            : null}
                       </div>
                       <button
                         type="button"
