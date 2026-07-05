@@ -42,6 +42,7 @@ import {
   onAuthStateChange,
   fetchLessonActivities,
   fetchStudentCatalog,
+  fetchStudentLessonProgress,
   createRealtimeVoiceSession,
   getLessonResourceSignedUrl,
   getLessonResourceThumbnailSignedUrl,
@@ -269,16 +270,19 @@ function mapLessons(
   lessons: Lesson[],
   activeLessonId: string,
   learningSession: LearningSession | null,
+  lessonProgress: Record<string, number> = {},
 ): MenuLesson[] {
   return lessons.map((lesson) => ({
     id: lesson.id,
     title: lesson.title,
     subtitle: lessonSubtitle(lesson),
     group: lesson.curriculum_group || lesson.subject_title || lesson.module || "Lessons",
+    // The active lesson uses its live session stage; every other lesson uses the persisted
+    // per-lesson progress from the student's sessions (replaces the old hardcoded 0).
     progress:
       lesson.id === activeLessonId && learningSession
         ? (stageProgress[learningSession.stage] ?? 0)
-        : 0,
+        : (lessonProgress[lesson.id] ?? 0),
     subjectTitle:
       lesson.subject_title ||
       lesson.course_title ||
@@ -463,6 +467,8 @@ function ChatPage() {
   const [email, setEmail] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  // Per-lesson progress (0..1) for the "other lessons" bars, from the student's own sessions.
+  const [lessonProgress, setLessonProgress] = useState<Record<string, number>>({});
   const [activities, setActivities] = useState<LessonActivity[]>([]);
   const [learningSession, setLearningSession] = useState<LearningSession | null>(null);
   const [lessonArc, setLessonArc] = useState<LessonArc | null>(null);
@@ -516,8 +522,8 @@ function ChatPage() {
     currentLesson?.sample_code ||
     `// Write Jargon here\nPRINT "hello from jargon"`;
   const menuLessons = useMemo(
-    () => mapLessons(lessons, lessonId, learningSession),
-    [lessons, lessonId, learningSession],
+    () => mapLessons(lessons, lessonId, learningSession, lessonProgress),
+    [lessons, lessonId, learningSession, lessonProgress],
   );
   // Newest REAL mentor message — the only bubble whose quiz choices are live. Error bubbles
   // are skipped so a failed send can't strip the active question's buttons.
@@ -654,11 +660,13 @@ function ChatPage() {
           return;
         }
         // Pin the student's currently-open lesson into the scoped catalog so class scoping can
-        // never strand them mid-lesson with no way back to their in-progress work.
-        const [liveLessons, liveAssignments, liveAssessments] = await Promise.all([
+        // never strand them mid-lesson with no way back to their in-progress work. The per-lesson
+        // progress map is best-effort (never blocks boot).
+        const [liveLessons, liveAssignments, liveAssessments, liveProgress] = await Promise.all([
           fetchStudentCatalog(store.getLessonId()),
           fetchStudentAssignments(),
           fetchStudentAssessments(),
+          fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>),
         ]);
         if (!alive) return;
         const selected =
@@ -670,6 +678,7 @@ function ChatPage() {
         setAccessToken(session.access_token);
         setEmail(session.user.email || "");
         setLessons(liveLessons);
+        setLessonProgress(liveProgress);
         setAssignments(liveAssignments);
         setAssessments(liveAssessments);
         setLessonId(selected);

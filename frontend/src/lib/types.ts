@@ -757,6 +757,14 @@ export type StudentProfileStats = {
   progress: StudentProgressSummary;
 };
 
+// v4.0 Phase 3b: a class the signed-in student belongs to (for the LMS class views).
+export type StudentClass = {
+  id: string;
+  name: string;
+  organizationId: string | null;
+  organizationName: string | null;
+};
+
 export type StudentMastery = {
   user_id: string;
   skill_key: string;

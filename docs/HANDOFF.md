@@ -6,6 +6,42 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 3b: classes -> dashboard -> unit routes — DONE, frontend-only)
+
+Summary: The student LMS shell. New routes /classes (class menu) -> /classes/$classId (dashboard:
+unit cards scoped to the class's linked courses, each with aggregate progress) -> /classes/$classId/
+unit/$unitId (the unit's lessons with real per-lesson progress; tapping a lesson hands off to chat
+via store.setLessonId -> /chat). An "Open class view" entry was added to the Lessons dropdown. Also
+FIXES the long-standing hardcoded-0 "other lessons" progress bars in the chat Progress panel — they
+now read a real per-lesson fraction (complete=1, in-progress=0.5, unstarted=0) from the student's own
+learning_sessions. All reads are student-self via existing RLS (classes via is_class_member, orgs via
+is_org_member best-effort, learning_sessions own). CLOSES Phase 3.
+
+Files changed: frontend/src/lib/api.ts (fetchStudentClasses / fetchClassScopedLessons /
+fetchStudentLessonProgress), frontend/src/lib/types.ts (StudentClass), frontend/src/features/student/
+ClassViews.tsx (new: ClassMenu / ClassDashboard / UnitView + PageShell/groupByUnit helpers),
+frontend/src/features/student/useStudentGuard.ts (new: student-only route guard mirroring chat boot),
+frontend/src/routes/classes.tsx + classes.$classId.tsx + classes.$classId.unit.$unitId.tsx (new),
+frontend/src/routeTree.gen.ts (HAND-EDITED — imports, .update() defs, FileRoutesBy{FullPath,To,Id},
+FileRouteTypes unions, RootRouteChildren, declare-module blocks, rootRouteChildren), frontend/src/
+components/HeaderMenus.tsx ("Open class view" Link), frontend/src/routes/chat.tsx (lessonProgress
+state + mapLessons progress arg + best-effort fetch in bootstrap), docs/HANDOFF.md.
+
+Tests run: frontend tsc/lint/build (0 errors / 13 pre-existing warnings). No backend -> no node
+--check / migration / review. routeTree.gen.ts is @ts-nocheck; the vite build + tsc-clean callers
+(useParams from-ids, Link to/params) confirm the registrations resolve.
+
+Remaining concerns: routeTree.gen.ts is normally generator-output (no generator plugin installed) —
+future route changes keep hand-editing it. Per-lesson progress is a coarse 3-state proxy (no exact
+step fractions yet). ClassDashboard doesn't yet show recent/upcoming work or a grades summary (the
+profile popup covers grades; a class-scoped work strip is a follow-up). UnitView's "assessment
+reviews w/ teacher comments" (assessment_item_attempts) is deferred. Class scoping still fail-open
+(no links -> full catalog), consistent with 3-scoping.
+
+Suggested next task: fast-forward main to take Phases 1-3 live (held for user OK), then Phase 4
+(revision mode + proficiency surfaces) or the deferred 3a mentor-prefs write-through. ALL Phase 1-3
+frontend rides the ONE pending main fast-forward; every backend piece is already deployed + inert.
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 3a: student profile popup — DONE, frontend-only)
 
 Summary: A 4th "Profile" popup in the student header (HeaderMenus) showing real stats — name/grade/

@@ -71,6 +71,7 @@ import type {
   Profile,
   QuizAttempt,
   ResourceInteraction,
+  StudentClass,
   StudentGradeRow,
   StudentMastery,
   StudentProfileStats,
@@ -556,6 +557,98 @@ export async function fetchStudentProfileStats(): Promise<StudentProfileStats> {
     safe(fetchStudentProgressSummary(), { lessonsStarted: 0, lessonsCompleted: 0 }),
   ]);
   return { profile, email, mastery, notes, grades, progress };
+}
+
+// v4.0 Phase 3b: the classes the signed-in student belongs to (for the LMS class views).
+// Class read is via the "Members can view their classes" RLS; org names are best-effort (a
+// student may not be an org member) and fall back to null.
+export async function fetchStudentClasses(): Promise<StudentClass[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const { data: membershipRows, error: membershipError } = await supabase
+    .from("class_memberships")
+    .select("class_id")
+    .eq("user_id", session.user.id)
+    .eq("role", "student")
+    .eq("status", "active");
+  if (membershipError) throw membershipError;
+  const classIds = uniqueStrings(
+    ((membershipRows || []) as Array<{ class_id: string | null }>).map((row) => row.class_id),
+  );
+  if (!classIds.length) return [];
+
+  const { data: classRows, error: classError } = await supabase
+    .from("classes")
+    .select("id,name,organization_id")
+    .in("id", classIds)
+    .eq("status", "active");
+  if (classError) throw classError;
+  const classes = (classRows || []) as Array<{
+    id: string;
+    name: string;
+    organization_id: string | null;
+  }>;
+
+  const orgIds = uniqueStrings(classes.map((row) => row.organization_id));
+  const orgNameById = new Map<string, string>();
+  if (orgIds.length) {
+    const { data: orgRows } = await supabase
+      .from("organizations")
+      .select("id,name")
+      .in("id", orgIds);
+    for (const org of (orgRows || []) as Array<{ id: string; name: string }>) {
+      orgNameById.set(org.id, org.name);
+    }
+  }
+
+  return classes
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      organizationId: row.organization_id,
+      organizationName: row.organization_id ? orgNameById.get(row.organization_id) || null : null,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// v4.0 Phase 3b: the published lessons scoped to a single class — its linked courses, or the full
+// catalog when the class has no links. Powers the class dashboard + unit views.
+export async function fetchClassScopedLessons(classId: string): Promise<Lesson[]> {
+  const all = await fetchLessons();
+  try {
+    const linked = new Set(await fetchClassCourses(classId));
+    if (!linked.size) return all;
+    return all.filter((lesson) => lesson.course_id && linked.has(lesson.course_id));
+  } catch {
+    return all;
+  }
+}
+
+// v4.0 Phase 3b: a per-lesson progress fraction (0..1) for the signed-in student, derived from
+// their own learning_sessions. A completed lesson is 1; a lesson with a session still in progress
+// is 0.5; anything unstarted is absent (callers default to 0). This replaces the hardcoded-0 bars.
+export async function fetchStudentLessonProgress(): Promise<Record<string, number>> {
+  const session = await getSession();
+  if (!session?.user?.id) return {};
+  const { data, error } = await supabase
+    .from("learning_sessions")
+    .select("lesson_id,status,activities_complete")
+    .eq("user_id", session.user.id);
+  if (error) throw error;
+  const rows = (data || []) as Array<{
+    lesson_id: string | null;
+    status: string | null;
+    activities_complete: boolean | null;
+  }>;
+  const progress: Record<string, number> = {};
+  for (const row of rows) {
+    if (!row.lesson_id) continue;
+    const done = row.status === "complete" || row.activities_complete === true;
+    const value = done ? 1 : 0.5;
+    // Keep the most-progressed session per lesson.
+    progress[row.lesson_id] = Math.max(progress[row.lesson_id] ?? 0, value);
+  }
+  return progress;
 }
 
 export async function fetchLessonActivities(lessonId: string) {
