@@ -6,6 +6,40 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 5d: teacher class-snapshot CSV export — DEPLOYED)
+
+Summary: The data-export half of teacher reports. A teacher can export their own class as a CSV
+(roster · membership status · grade · completed lessons + count · active sessions · latest session ·
+assignment submitted/complete counts · open alerts) via the Export CSV button on the class Overview
+header. New admin-ops action `teacher_export_class_snapshot`, authorized via the SAME teacher tier as
+5c (fetchTeacherClassIds → role=teacher/status=active), dispatched before fetchActorAccess. It builds
+a CLASS-SCOPED snapshot reading ONLY public tables the teacher already sees under RLS
+(class_memberships/profiles/learning_sessions/assignments/assignment_recipients/intervention_alerts/
+lessons) scoped to THIS class's students — deliberately NOT reusing the org-wide
+loadPilotReadinessData, and deliberately NO auth-admin access (no email/last_sign_in), so the teacher
+tier touches zero auth surface. Same CSV columns as the admin snapshot minus the auth-only fields.
+
+Files changed: supabase/functions/admin-ops/index.ts (handleTeacherExportClassSnapshot + dispatch
+branch), frontend/src/lib/types.ts (AdminOpsAction += teacher_export_class_snapshot), frontend/src/
+lib/api.ts (teacherExportClassSnapshot, session-scoped), frontend/src/features/teacher/
+TeacherConsole.tsx (Export CSV button on the ClassDetail Overview header + exportingSnapshot/
+snapshotError state + blob download), docs/HANDOFF.md. NO migration (all tables/columns pre-exist).
+
+Tests run: node --check admin-ops; frontend tsc/lint/build (0 errors); independently verified every
+read column exists in the migrations (intervention_alerts.student_id, assignment_recipients.status
+enum, etc.). Adversarial review (2 agents): auth/scope reviewer traced all 8 attacks (foreign class,
+inactive teacher, cross-class student rows, unscoped downstream reads, PostgREST injection, early
+dispatch) — both claims (only-your-class, only-this-class's-students) HOLD/CONFIRMED; only LOW note is
+open_alerts being an aggregate count that could conflate a multi-class student's alerts (no other
+student's data leaks, matches admin behavior). Correctness/regression reviewer: CLEAN — column parity,
+row-mapping parity with the admin snapshot, empty-class safe, no dispatch regression, deploy wired.
+Deployed via run #43 (green); prod-verified both teacher actions live on the deployed function.
+
+This closes the teacher-report + data-export capability. Remaining teacher-report follow-up (own
+slice): a surface to LIST past progress reports (needs an RLS read policy on student_progress_reports
+for the generating teacher). Still deferred with cause: review-due chip (content-blocked) and ad-hoc
+revision sessions (runtime lesson_id NOT-NULL relaxation).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 5c: teacher-scoped progress report — teacher auth tier — DEPLOYED)
 
 Summary: Added a TEACHER auth tier to admin-ops so a teacher can generate a per-student progress
