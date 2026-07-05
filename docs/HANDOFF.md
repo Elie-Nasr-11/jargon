@@ -6,6 +6,35 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 1 S2: recipient grade guard — DEPLOYED)
+
+Summary: Closed a pre-existing grade-integrity hole. assignment_recipients + checkpoint_recipients
+both let a student self-UPDATE their OWN row (assignments are self-attested — the student marks
+status from the dock), but the grant is whole-row, so via a raw PostgREST PATCH a student could also
+set their own score/final_score/feedback, which the teacher gradebook + the student's own grades view
+read. RLS cannot column-scope an UPDATE (both students and teachers are the `authenticated` role, and
+WITH CHECK cannot see the OLD row), so the fix is a BEFORE UPDATE trigger on each table that pins the
+graded columns to their prior values when the writer is the row's OWN student (auth.uid() =
+new.user_id). Status + lifecycle timestamps stay student-settable (self-attestation intended). The
+completion GATE was never affected (it reads status, not score).
+
+Files changed: supabase/migrations/20260725000000_recipient_grade_guard.sql (new), .github/workflows/
+deploy-backend.yml (migration list), docs/HANDOFF.md. No frontend, no edge-fn change.
+
+Tests run: behavioral test on the LIVE DB in a rolled-back transaction — student self-write pins
+score/final_score/feedback (attempt to set 1.0/'i am great' reverted to 0.2/'teacher note') while
+status advances to 'complete'; an other-uid (teacher) write updates score to 0.9; double drop+create
+confirmed idempotent. Adversarial review (1 agent) traced every write path (submitAssignment =
+status-only; gradeAssignmentSubmission = teacher uid; assessment-admin = service role; chat = read-
+only; the dual-write's SECURITY DEFINER keeps auth.uid()=teacher so the mirror isn't pinned) —
+CONFIRMED no regression, no user_id-swap evasion (student policies WITH CHECK user_id=auth.uid()),
+and assessment_recipients correctly omitted (no student write path; RLS denies). Deployed via the
+migration apply loop; prod-verified both triggers attached.
+
+Tier 1 of the completion plan is DONE (S1 live-refresh, S2 grade guard, S3 test net + CI). Next:
+Tiers 2-5 (notifications coherence, list-past-reports, class dashboard work strip + unit reviews,
+polish batch, docs reconciliation).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 1 S1+S3: live-refresh + test safety net)
 
 Summary: Two frontend/test polish slices from the v4.0 completion plan (no backend deploy).
