@@ -13,6 +13,8 @@ import {
   ClipboardList,
   Eye,
   EyeOff,
+  Pause,
+  Play,
   ExternalLink,
   FileText,
   FileSearch,
@@ -61,6 +63,9 @@ import {
   sendTeacherLiveComment,
   startLiveSessionViewer,
   stopLiveSessionViewer,
+  fetchSessionHold,
+  holdSession,
+  releaseSessionHold,
   rejectResourceChunks,
   saveExtractedPdfChunks,
   saveResourceChunkEdits,
@@ -137,6 +142,9 @@ export function TeacherConsole() {
   const [savingAssessment, setSavingAssessment] = useState(false);
   const [liveViewer, setLiveViewer] = useState<LiveSessionViewer | null>(null);
   const [liveCommentDraft, setLiveCommentDraft] = useState("");
+  // Phase 3: whether the selected session is paused by a teacher, + an in-flight guard.
+  const [sessionHeld, setSessionHeld] = useState(false);
+  const [holdBusy, setHoldBusy] = useState(false);
   const [sendingLiveComment, setSendingLiveComment] = useState(false);
   const [updatingAlertId, setUpdatingAlertId] = useState<string | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -365,6 +373,26 @@ export function TeacherConsole() {
       ? dashboard.sessions.find((session) => session.id === selectedSessionId) || null
       : null;
   const liveViewerId = liveViewer?.id || null;
+  const selectedSessionKey = selectedSession?.id || null;
+
+  // Reflect the selected session's current hold state (Phase 3) so Pause/Resume shows the truth.
+  useEffect(() => {
+    if (!selectedSessionKey) {
+      setSessionHeld(false);
+      return;
+    }
+    let active = true;
+    void fetchSessionHold(selectedSessionKey)
+      .then((hold) => {
+        if (active) setSessionHeld(hold?.active === true);
+      })
+      .catch(() => {
+        if (active) setSessionHeld(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedSessionKey]);
 
   useEffect(() => {
     if (!liveViewerId) return;
@@ -803,6 +831,39 @@ export function TeacherConsole() {
     }
   };
 
+  const holdSelectedSession = async () => {
+    if (!selectedSession || !selectedStudentId) return;
+    setHoldBusy(true);
+    try {
+      await holdSession({
+        sessionId: selectedSession.id,
+        studentId: selectedStudentId,
+        classId: selectedClassId,
+        lessonId: selectedSession.lesson_id,
+      });
+      setSessionHeld(true);
+      setMessage("");
+    } catch (error) {
+      setMessage((error as Error).message || "Could not pause the session.");
+    } finally {
+      setHoldBusy(false);
+    }
+  };
+
+  const resumeSelectedSession = async () => {
+    if (!selectedSession) return;
+    setHoldBusy(true);
+    try {
+      await releaseSessionHold(selectedSession.id);
+      setSessionHeld(false);
+      setMessage("");
+    } catch (error) {
+      setMessage((error as Error).message || "Could not resume the session.");
+    } finally {
+      setHoldBusy(false);
+    }
+  };
+
   const updateAlertStatus = async (alertId: string, status: InterventionAlert["status"]) => {
     setUpdatingAlertId(alertId);
     try {
@@ -1069,6 +1130,10 @@ export function TeacherConsole() {
                   onStartWatching={() => void startWatchingSelectedSession()}
                   onStopWatching={() => void stopWatchingSelectedSession()}
                   onSendLiveComment={() => void sendLiveComment()}
+                  sessionHeld={sessionHeld}
+                  holdBusy={holdBusy}
+                  onHoldSession={() => void holdSelectedSession()}
+                  onResumeSession={() => void resumeSelectedSession()}
                   tab={search.tab ?? "overview"}
                   onTabChange={(value) =>
                     navigate({
@@ -4523,6 +4588,10 @@ function StudentDetail({
   onStartWatching,
   onStopWatching,
   onSendLiveComment,
+  sessionHeld,
+  holdBusy,
+  onHoldSession,
+  onResumeSession,
   onBack,
   tab,
   onTabChange,
@@ -4554,6 +4623,10 @@ function StudentDetail({
   onStartWatching: () => void;
   onStopWatching: () => void;
   onSendLiveComment: () => void;
+  sessionHeld: boolean;
+  holdBusy: boolean;
+  onHoldSession: () => void;
+  onResumeSession: () => void;
   onBack: () => void;
   tab?: string;
   onTabChange?: (value: string) => void;
@@ -4738,11 +4811,33 @@ function StudentDetail({
                 )}
                 {watchingSelectedSession ? "Stop watching" : "Watch live"}
               </button>
+              {watchingSelectedSession ? (
+                <button
+                  type="button"
+                  onClick={sessionHeld ? onResumeSession : onHoldSession}
+                  disabled={holdBusy}
+                  className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                    sessionHeld
+                      ? "border-warning/45 bg-warning/12 text-warning hover:bg-warning/20"
+                      : "border-border text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {sessionHeld ? (
+                    <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  ) : (
+                    <Pause className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  )}
+                  {sessionHeld ? "Resume mentor" : "Pause mentor"}
+                </button>
+              ) : null}
             </div>
             {watchingSelectedSession ? (
               <div className="mt-3 rounded-2xl border border-info/35 bg-info/10 px-3 py-2 text-[12px] text-info">
                 You are watching live. The student will see a teacher-viewing indicator while your
                 heartbeat is active.
+                {sessionHeld
+                  ? " The mentor is paused — the student can't send turns until you resume."
+                  : ""}
               </div>
             ) : null}
           </div>

@@ -2,6 +2,26 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-05: Post-v4.0 Phase 3 — teacher hold + interventions-as-record
+
+- **A teacher can PAUSE the live Mentor, and the pause is a fail-open SERVER gate — not a client-only
+  visual.** A `session_holds` table (one toggleable row per session) is the signal; the chat edge fn
+  reads an active hold right after loading the session (before any pedagogy/model work) and, if held,
+  returns a benign "your teacher paused" envelope instead of running the mentor — no grading, no
+  writes. The read happens under the STUDENT's own JWT (RLS lets a student read their own hold; the
+  chat fn holds no service-role key), and the whole gate is wrapped so ANY error falls through to the
+  normal turn. This is the deliberate safety posture: a paused session must never become a stuck
+  session, so a hiccup fails toward "let the student keep going," never toward "locked out." The
+  student sees a paused banner + a locked composer via realtime; the teacher toggles Pause/Resume from
+  the live-watch view.
+- **Interventions become durable, reviewable evidence.** Both a live tip and a hold now also write a
+  session-linked `learning_evidence` row (`source_type='teacher_note'`, `created_by`=teacher,
+  `teaching_move='teacher_intervention'`), on top of the pre-existing `teacher_live_comments` row +
+  `transcript_heatmap_events` marker. These evidence rows carry no `mode`/`score`, so they show in the
+  student's evidence/transcript review and teacher analytics WITHOUT polluting mastery tiers or the
+  by-mode proficiency surfaces. The evidence write is best-effort — a failure never breaks the tip or
+  the pause.
+
 ## 2026-07-05: Post-v4.0 Phase 2b — submission scanning + retention posture
 
 - **Scanning is a provider-READY scaffold, not a bundled provider.** `assignment_submission_files`

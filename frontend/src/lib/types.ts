@@ -565,6 +565,20 @@ export type TeacherLiveComment = {
   created_at: string;
 };
 
+// Phase 3: a teacher's pause of a live session. At most one row per session; `active` toggles.
+export type SessionHold = {
+  id: string;
+  session_id: string;
+  student_id: string;
+  teacher_id: string;
+  class_id: string | null;
+  active: boolean;
+  reason: string | null;
+  created_at: string;
+  released_at: string | null;
+  updated_at: string;
+};
+
 export type TranscriptHeatmapEvent = {
   id: string;
   session_id: string;
@@ -1154,6 +1168,8 @@ export type TypedChatEnvelope = {
     current_activity_id: string | null;
     activities_complete: boolean;
   } | null;
+  // Set only when a teacher has paused the session; the mentor did not run this turn.
+  held?: boolean;
 };
 
 export type JargonRunResponse = {

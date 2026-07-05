@@ -27,10 +27,11 @@ prose):
   (that kind has no insert site anywhere), recipient fan-out, and a MERGE (not swap) in `HotlistFeed`.
   Open: build the missing writers, then merge — see `docs/PLATFORM.md` §5 as-built note.
 
-Two pre-v4.0 questions below are also load-bearing for v4.0's live surfaces: "the exact live teacher
-intervention UX" (P2c live-now + P5 admin Live tab ship the WATCH entry points but not whether a teacher
-can pause a Mentor flow, or whether live comments create evidence/notes/audit) and "how student file
-submissions work" (assignment mode leans on it; file answer steps were left legacy in the P1 backfill).
+One pre-v4.0 question below remains load-bearing: "how student file submissions work" (assignment mode
+leans on it; file answer steps were left legacy in the P1 backfill; Phase 2a/2b hardened the storage +
+scan/retention posture). The "exact live teacher intervention UX" question is now largely answered —
+post-v4.0 Phase 3 shipped teacher Pause/Resume (a fail-open server hold) and interventions-as-record
+(a learning_evidence teacher_note per tip/hold); see its section below for the small remaining bits.
 
 ## How should backend speech services work after the browser demo slice?
 
@@ -57,11 +58,21 @@ Current decision so far:
 - Students should see a viewer icon when a teacher is actively watching.
 - Teachers may send live comments or tips into chat to steer a conversation.
 
-Deferred details:
+As-built (2026-07-05, post-v4.0 Phase 3 — SHIPPED): teacher live tips appear as normal transcript
+messages (a "teacher" bubble). Teachers CAN now pause the Mentor flow — a fail-open server hold
+(`session_holds`) makes the chat fn return a benign "paused" turn instead of running the mentor, with
+a student banner + locked composer; the teacher toggles Pause/Resume from the live-watch view. Live
+interventions (tips + holds) now create a durable record: a `teacher_live_comments` row + a
+`transcript_heatmap_events` marker (as before) PLUS a session-linked `learning_evidence` teacher_note
+row so the intervention shows in the reviewable student record.
 
-- Whether teacher comments appear as normal transcript messages, side comments, or pinned tips.
-- Whether teachers can pause a Mentor flow.
-- Whether live teacher comments create evidence, notes, audit events, or all three.
+Still deferred:
+
+- Whether a live tip should ALSO be offered as a side comment / pinned tip (today: transcript bubble only).
+- A dedicated audit-event stream for interventions beyond the evidence/heatmap trail (probably unneeded).
+- Auto-release of a stale hold (today a teacher must Resume; a hold left on simply keeps the student
+  paused until released — considered acceptable since the fn is fail-open on read errors, not on an
+  intentional active hold).
 
 ## How should student file submissions work?
 

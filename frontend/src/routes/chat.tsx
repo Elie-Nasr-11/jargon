@@ -34,6 +34,7 @@ import {
 } from "@/lib/jargon-store";
 import {
   fetchLiveSessionViewers,
+  fetchSessionHold,
   fetchLearningTurns,
   fetchTeacherLiveComments,
   fetchStudentAssignments,
@@ -74,6 +75,7 @@ import type {
   LessonArc,
   LessonChatResource,
   LiveSessionViewer,
+  SessionHold,
   MentorPreferences,
   StudentAssignmentBundle,
   StudentAssessmentBundle,
@@ -498,6 +500,8 @@ function ChatPage() {
   const [surfaceError, setSurfaceError] = useState("");
   const [liveViewers, setLiveViewers] = useState<LiveSessionViewer[]>([]);
   const [viewerClock, setViewerClock] = useState(() => Date.now());
+  // True while a teacher has paused this session (Phase 3). Composer is locked + a banner shows.
+  const [sessionHeld, setSessionHeld] = useState(false);
   const [assignments, setAssignments] = useState<StudentAssignmentBundle>({
     assignments: [],
     recipients: [],
@@ -728,6 +732,13 @@ function ChatPage() {
       .catch(() => {
         if (active) setLiveViewers([]);
       });
+    void fetchSessionHold(sessionId)
+      .then((hold) => {
+        if (active) setSessionHeld(hold?.active === true);
+      })
+      .catch(() => {
+        if (active) setSessionHeld(false);
+      });
 
     const upsertViewer = (viewer: LiveSessionViewer) => {
       setLiveViewers((current) => {
@@ -771,6 +782,19 @@ function ChatPage() {
               ? current
               : [...current, nextMessage],
           );
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "session_holds",
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          const hold = payload.new as SessionHold | null;
+          setSessionHeld(hold?.active === true);
         },
       )
       .subscribe();
@@ -829,6 +853,14 @@ function ChatPage() {
     errorText: string;
   }): Promise<TypedChatEnvelope | null | "busy"> => {
     if (!accessToken) return null;
+    if (sessionHeld) {
+      addMsg({
+        id: uid(),
+        role: "bot",
+        text: "Your teacher paused the session to step in — hang tight until they resume it.",
+      });
+      return null;
+    }
     if (sendingRef.current) return "busy";
     sendingRef.current = true;
     setSending(true);
@@ -864,6 +896,8 @@ function ChatPage() {
             : previous,
         );
         if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
+        // Server-authoritative hold: a turn submitted while paused comes back held → re-lock.
+        if (envelope.held) setSessionHeld(true);
         if (
           envelope.stage === "complete" ||
           envelope.next_action === "complete" ||
@@ -1131,6 +1165,14 @@ function ChatPage() {
             </div>
           </div>
         ) : null}
+        {sessionHeld ? (
+          <div className="mb-3 flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-3.5 py-1.5 text-[12px] text-warning">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
+              Your teacher paused the session — hang tight
+            </div>
+          </div>
+        ) : null}
         {surfaceError && !booting ? (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
             <span className="min-w-0 flex-1">{surfaceError}</span>
@@ -1203,7 +1245,8 @@ function ChatPage() {
               onRunCode={runCode}
               onSendCodeResult={sendCodeResult}
               onVoiceEvent={handleVoiceEvent}
-              sending={sending}
+              // Lock inputs while a teacher has the session paused (Phase 3).
+              sending={sending || sessionHeld}
               canStartVoice
               onStartVoice={() => setVoiceMode(true)}
             />

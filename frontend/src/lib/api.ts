@@ -94,6 +94,7 @@ import type {
   TypedChatAnswer,
   TypedChatEnvelope,
   TeacherLiveComment,
+  SessionHold,
   VoiceInteractionEvent,
 } from "@/lib/types";
 
@@ -2485,6 +2486,31 @@ async function currentUserId() {
   return user.id;
 }
 
+// Phase 3 interventions-as-record: a teacher's live tip or hold drops a session-linked teacher_note
+// into learning_evidence so it shows in the student's evidence/transcript review + teacher analytics.
+// Callers wrap this best-effort so a failure never breaks the underlying comment/hold write.
+async function recordInterventionEvidence(input: {
+  studentId: string;
+  lessonId: string | null;
+  sessionId: string;
+  teacherId: string;
+  note: string;
+  ref: Record<string, unknown>;
+}) {
+  const { error } = await supabase.from("learning_evidence").insert({
+    user_id: input.studentId,
+    lesson_id: input.lessonId,
+    session_id: input.sessionId,
+    source_type: "teacher_note",
+    source_ref: { ...input.ref, teacher_id: input.teacherId },
+    skill_keys: [],
+    notes: input.note.slice(0, 2000),
+    created_by: input.teacherId,
+    teaching_move: "teacher_intervention",
+  });
+  if (error) throw error;
+}
+
 export async function startLiveSessionViewer(input: {
   sessionId: string;
   studentId: string;
@@ -2570,7 +2596,76 @@ export async function sendTeacherLiveComment(input: {
   });
   if (heatmapError) throw heatmapError;
 
+  // Also record the tip as durable evidence (best-effort — the comment + heatmap already persisted).
+  await recordInterventionEvidence({
+    studentId: input.studentId,
+    lessonId: input.lessonId ?? null,
+    sessionId: input.sessionId,
+    teacherId,
+    note: input.content.trim(),
+    ref: { kind: "live_comment", teacher_live_comment_id: comment.id },
+  }).catch(() => {});
+
   return comment;
+}
+
+export async function fetchSessionHold(sessionId: string): Promise<SessionHold | null> {
+  const { data, error } = await supabase
+    .from("session_holds")
+    .select("*")
+    .eq("session_id", sessionId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as SessionHold) || null;
+}
+
+export async function holdSession(input: {
+  sessionId: string;
+  studentId: string;
+  classId: string | null;
+  lessonId?: string | null;
+  reason?: string | null;
+}): Promise<SessionHold> {
+  const teacherId = await currentUserId();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("session_holds")
+    .upsert(
+      {
+        session_id: input.sessionId,
+        student_id: input.studentId,
+        teacher_id: teacherId,
+        class_id: input.classId,
+        active: true,
+        reason: input.reason ?? null,
+        released_at: null,
+        updated_at: now,
+      },
+      { onConflict: "session_id" },
+    )
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  await recordInterventionEvidence({
+    studentId: input.studentId,
+    lessonId: input.lessonId ?? null,
+    sessionId: input.sessionId,
+    teacherId,
+    note: input.reason?.trim() || "Teacher paused the session to step in.",
+    ref: { kind: "session_hold", active: true },
+  }).catch(() => {});
+
+  return data as SessionHold;
+}
+
+export async function releaseSessionHold(sessionId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("session_holds")
+    .update({ active: false, released_at: now, updated_at: now })
+    .eq("session_id", sessionId);
+  if (error) throw error;
 }
 
 export async function updateInterventionAlertStatus(

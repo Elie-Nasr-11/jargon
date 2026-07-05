@@ -6,9 +6,48 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 2b: submission scanning + retention — building)
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 3: live-intervention completion — building)
 
 Status: Built + verified locally; adversarial review + deploy next.
+Task: Let a watching teacher PAUSE/RESUME the live Mentor flow, and record every live intervention
+(tip + hold) as a durable, reviewable learning_evidence teacher_note. Touches the live chat turn
+loop, so the hold gate is additive + fail-open.
+
+Files touched:
+- `supabase/migrations/20260729000000_session_holds.sql` (NEW): `session_holds` (one toggleable row
+  per session, unique session_id) + RLS + realtime publication. Validated in a rolled-back live-DB
+  txn. SECURITY NOTE (caught in review): `can_view_student()` is TRUE for the student themselves, so
+  the write policies additionally require `student_id <> auth.uid()` — otherwise a student could PATCH
+  their own hold to `active=false` and release a teacher's pause. Student reads own (for the banner);
+  only a teacher/admin who can view the student (and isn't the student) may insert/update.
+- `supabase/functions/chat/index.ts`: an OPTIONAL `held` field on the Envelope + a fail-open hold
+  gate right after session-load (before loadContext/pedagogy/model). When an active hold exists, the
+  fn returns a benign "your teacher paused" envelope (no grading, no writes); ANY error reading the
+  hold falls through to the normal turn, so a hiccup can never lock the student out. Read under the
+  student's own JWT (RLS lets a student read their own hold).
+- `frontend/src/lib/api.ts`: `holdSession` / `releaseSessionHold` / `fetchSessionHold`; a shared
+  best-effort `recordInterventionEvidence` (source_type teacher_note, session-linked,
+  created_by=teacher, teaching_move=teacher_intervention) called by BOTH `sendTeacherLiveComment`
+  (each tip) and `holdSession` (each pause).
+- Frontend: `types.ts` (`SessionHold` + `held?` on the envelope); `chat.tsx` (session_holds realtime
+  subscription → paused banner + composer lock + a send guard; re-lock on a held envelope);
+  `TeacherConsole.tsx` (Pause/Resume button in the live-view, wired to hold/release + a
+  fetch-on-select effect).
+- `tests/test_session_hold.py` (NEW, 6 fingerprints, CI-gated).
+
+Tests run: node --check (chat fn) green; frontend tsc/lint/build green; full Python suite (178) green;
+migration applied in a rolled-back live-DB transaction.
+
+Decisions (user-chosen): a fail-open SERVER hold (real pause, not visible-only) + a student banner;
+interventions recorded as learning_evidence teacher_note rows (comments + a heatmap event already
+persisted; this makes them show in the reviewable record).
+
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 2b: submission scanning + retention — DEPLOYED)
+
+Status: DEPLOYED + prod-verified (deploy run #48 green; scan_status/purged_at columns live, storage
+read policy carries the scan_status<>quarantined + purged_at-is-null guards, submission-maintenance
+fn ACTIVE). Frontend file-state labels ride the pending main fast-forward (inert until a provider or
+retention actually flags a file, so no user-facing change is held back).
 Task: A provider-ready malware-scan scaffold and a 12-month retention sweep for the private
 `student-submissions` bucket. Additive; the file table is empty so there is zero live risk.
 

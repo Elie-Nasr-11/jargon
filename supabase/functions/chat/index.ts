@@ -187,6 +187,8 @@ type Envelope = {
   // Authoritative session snapshot so the client can stay in sync without refetching
   // (status, cursor, sticky activities-done flag). Assigned by the orchestrator only.
   session?: EnvelopeSession | null;
+  // Set only when a teacher has paused this session; the mentor did not run this turn.
+  held?: boolean;
 };
 
 type EnvelopeSession = {
@@ -333,6 +335,8 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     // Shape-validated passthrough (needed so a dedup replay of a stored envelope keeps
     // its session snapshot); the live path always overwrites this before persisting.
     session: envelopeSession(partial.session),
+    // Optional; omitted from the wire unless a teacher paused this turn.
+    held: partial.held === true ? true : undefined,
   };
 }
 
@@ -2702,6 +2706,41 @@ async function handleTypedRequest(
   const userId = String(user.id);
   const sessionId = String(session.id);
   const currentStage = stage(session.stage);
+
+  // Teacher hold gate (fail-open): if a teacher has paused this live session, do NOT run the
+  // mentor — return a benign "paused" turn (no grading, no writes). Read under the student's own
+  // JWT (RLS lets a student read their own hold). Any error falls through to the normal turn so a
+  // hiccup can never lock the student out.
+  try {
+    const holdRows = (await supabaseFetch(
+      config,
+      `session_holds?session_id=eq.${encodeURIComponent(sessionId)}&active=is.true&select=id&limit=1`,
+    )) as DbRow[] | null;
+    if (Array.isArray(holdRows) && holdRows.length > 0) {
+      return json(
+        makeEnvelope({
+          status: "ok",
+          reply:
+            "Your teacher stepped in and paused the session for a moment. Hang tight — you'll be able to keep going as soon as they're done.",
+          session_id: sessionId,
+          lesson_id: lessonId,
+          stage: currentStage,
+          next_action: "reply",
+          held: true,
+          session: {
+            status: String(session.status || "active"),
+            current_activity_id:
+              typeof session.current_activity_id === "string"
+                ? session.current_activity_id
+                : null,
+            activities_complete: session.activities_complete === true,
+          },
+        }),
+      );
+    }
+  } catch (_holdError) {
+    // Fail-open: proceed with the normal turn.
+  }
 
   // Everything from answer-normalization onward runs inside the context-aware try so a
   // throw in the pedagogy computation returns a typed error with session/stage instead of
