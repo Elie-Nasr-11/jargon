@@ -4320,3 +4320,25 @@ watch-live plumbing) is not built yet; the hotlist already surfaces live_now + w
 the landing, so 2c is an enrichment, not a gap.
 Suggested next task: v4.0 Phase 2c (class-view live-now strip + work overview) OR move to Phase 3
 (student class scoping + LMS shell). Frontend for Phases 1-2 all awaits one main fast-forward.
+
+## Claude -> Codex / Human - 2026-07-05 10:15
+
+Status: Finished (Phase 2c)
+Summary: v4.0 Phase 2c — the teacher class Overview tab gains two attention strips at the top
+(new features/teacher/ClassOverview.tsx, ClassOverviewStrips): a "Live now" list of students in
+a non-complete session (pulsing dot + lesson + relative time + Watch) and a "Work" glance
+(to-grade/review, due-within-7-days, upcoming, live-now counts). "Watch" navigates to the student
+detail with a new `?session=<id>` param so the teacher lands ON the live session (the session-
+select effect now prefers ?session, else the finished transcript, else newest — zero regression to
+normal drill-ins since the param is only set by the strip). Teacher side is poll-based
+(staleTime 5min), so the strips reflect the last dashboard fetch (Refresh button re-pulls).
+Files changed: frontend/src/features/teacher/ClassOverview.tsx (new), frontend/src/features/
+teacher/TeacherConsole.tsx (render strips first in the Overview panel; session-select honors
+?session; search type += session), frontend/src/routes/teacher.class.$classId.student.$studentId.tsx
+(validateSearch += session).
+Tests run: frontend tsc --noEmit + lint + build green. Frontend-only, NO backend change.
+Remaining concerns: frontend — NOT live until a main fast-forward. This CLOSES Phase 2 (2a
+templates deployed; 2b hotlist + 2c live-now/work-overview on the branch). Next: Phase 3.
+Suggested next task: v4.0 Phase 3-scoping — the class_courses enabler (migration + set_class_courses
+action + fetchStudentCatalog with the global fallback + chat.tsx swap + teacher Linked-courses
+panel); adversarial review before the backend push.

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
 import { HotlistFeed, deriveHotlist, type HotlistItem } from "@/features/teacher/HotlistFeed";
+import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConsoleShell } from "@/components/ConsoleShell";
@@ -114,7 +115,7 @@ export function TeacherConsole() {
     classId?: string;
     studentId?: string;
   };
-  const search = useSearch({ strict: false }) as { tab?: string };
+  const search = useSearch({ strict: false }) as { tab?: string; session?: string };
   const [auth, setAuth] = useState<{ id: string; email: string } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -309,12 +310,16 @@ export function TeacherConsole() {
       return;
     }
     if (studentSessions.length && !studentSessions.some((item) => item.id === selectedSessionId)) {
+      // Honor an explicit ?session (from the class "Live now" strip) so drilling in lands on
+      // that live session; otherwise fall back to the finished transcript, then the newest.
       const preferred =
-        studentSessions.find((session) => session.status === "complete") || studentSessions[0];
+        (search.session && studentSessions.find((session) => session.id === search.session)) ||
+        studentSessions.find((session) => session.status === "complete") ||
+        studentSessions[0];
       setSelectedSessionId(preferred.id);
     }
     if (!studentSessions.length) setSelectedSessionId(null);
-  }, [selectedSessionId, selectedStudentId, studentSessions]);
+  }, [selectedSessionId, selectedStudentId, studentSessions, search.session]);
 
   const selectedSession =
     selectedSessionId && dashboard
@@ -1194,6 +1199,24 @@ function ClassDetail({
           </WorkspaceTabList>
 
           <WorkspacePanel value="overview">
+            <ClassOverviewStrips
+              classId={item.id}
+              dashboard={dashboard}
+              studentIds={studentIds}
+              assignments={assignments}
+              assessments={assessments}
+              profilesById={profilesById}
+              lessonTitle={(lessonId) =>
+                (lessonId && lessonsById.get(lessonId)?.title) || "a lesson"
+              }
+              onWatch={(studentId, sessionId) =>
+                navigate({
+                  to: "/teacher/class/$classId/student/$studentId",
+                  params: { classId: item.id, studentId },
+                  search: { tab: "overview", session: sessionId },
+                })
+              }
+            />
             <div className="mt-5 rounded-3xl border border-border bg-depth-sub p-4">
               <div className="mb-3 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
                 Pilot readiness
