@@ -6,6 +6,47 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 5c: teacher-scoped progress report — teacher auth tier — DEPLOYED)
+
+Summary: Added a TEACHER auth tier to admin-ops so a teacher can generate a per-student progress
+report for their own students — the capability the roadmap called out as blocked (all report actions
+were platform/org-admin only). New action `teacher_generate_progress_report`, authorized via
+class_memberships (role=teacher, status=active), NOT admin access. It is dispatched BEFORE
+fetchActorAccess (which throws for any non-admin), then strictly validates the actor teaches THIS
+class AND the target user is an ACTIVE student in THAT SAME class — so a teacher can only ever report
+on a student they actually teach. The service-role query literals (role='teacher'/'student',
+status='active') mirror the is_class_teacher / can_view_student RLS predicates EXACTLY, so the read
+grants the same scope a teacher would have under RLS, never broader. The admin path is unchanged: the
+report-building block was extracted into a shared buildProgressReport(config, {...}) helper that both
+the admin (org-scoped) and teacher (class-scoped) handlers call after their own auth. Teacher-scope
+denials map to 403.
+
+Files changed: supabase/functions/admin-ops/index.ts (buildProgressReport + progressReportExport
+helpers; refactored handleGenerateProgressReport; new fetchTeacherClassIds +
+handleTeacherGenerateProgressReport; dispatch branch before fetchActorAccess; 403 mapping), frontend/
+src/lib/types.ts (AdminOpsAction += teacher_generate_progress_report), frontend/src/lib/api.ts
+(teacherGenerateProgressReport, session-scoped), frontend/src/features/teacher/TeacherConsole.tsx
+(Generate report button in StudentDetail + generatingReport/reportError state + blob download with
+deferred revoke), docs/HANDOFF.md. NO migration (student_progress_reports + class_memberships already
+exist).
+
+Tests run: node --check admin-ops; frontend tsc/lint/build (0 errors). Adversarial review (3 agents:
+auth/scope, correctness/wiring, deploy/regression). Auth reviewer traced all 9 attack paths (foreign
+class, cross-class student, inactive membership, inactive student, non-student target, body actorId
+spoof, PostgREST injection, early-dispatch bypass, cross-teacher read) — ALL blocked/CONFIRMED, RLS
+literals match. Deploy reviewer: no blockers, no admin-action regression (fetchActorAccess still gates
+every admin action; only the one teacher action branches earlier). Correctness reviewer: clean; the
+one actionable LOW (synchronous URL.revokeObjectURL after click() — flaky in some browsers) was fixed
+(deferred via setTimeout). Deployed via run #42 (green); prod-verified the deployed admin-ops carries
+the action, resolver, shared builder (both callers), and the enrollment guard.
+
+Remaining deferred (each blocked with cause, NOT quick adds): review-due chip (content-blocked — no
+published revision lesson to route into + a due-queue design over student_mastery.last_practiced_at);
+ad-hoc revision sessions (runtime-wide learning_sessions.lesson_id NOT-NULL relaxation — highest
+live-tutor risk). Future teacher-report follow-ups (own reviewed slices): a teacher-scoped CLASS
+snapshot CSV (needs a class-scoped data loader, not the org-admin loadPilotReadinessData), and a
+surface to LIST past reports (today the report downloads inline on generate).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 5b: admin Live tab — active-session fleet — DEPLOYED)
 
 Summary: An admin "Live" tab showing learning sessions currently in progress across the admin's
