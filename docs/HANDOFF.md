@@ -6,6 +6,41 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 3a: student profile popup — DONE, frontend-only)
+
+Summary: A 4th "Profile" popup in the student header (HeaderMenus) showing real stats — name/grade/
+email, lessons completed/started, a proficiency snapshot (top skills by score + tier), grades
+(unified assignments+assessments via checkpoint_recipients, score shown only once released/returned),
+student-visible teacher notes, and a read-only mentor-style summary. KEY DE-RISK: verified against
+the LIVE DB that every student self-read is ALREADY permitted by existing RLS (student_mastery
+own-ALL; teacher_notes has an explicit `visibility='student_visible' AND student_id=auth.uid()`
+clause; checkpoint_recipients user_id=auth.uid(); learning_sessions own-ALL; profiles own) — so the
+plan's flagged "main backend risk" (new student-read policies) DID NOT MATERIALIZE. Phase 3a is
+FRONTEND-ONLY: no migration, no backend deploy, no RLS review. Rides the pending main FF.
+
+Files changed: frontend/src/lib/api.ts (fetchStudentMastery / fetchStudentTeacherNotes /
+fetchStudentGrades / fetchStudentProgressSummary / fetchStudentProfileStats — all self-scoped,
+each best-effort in the bundle), frontend/src/lib/types.ts (StudentGradeRow / StudentProgressSummary
+/ StudentProfileStats), frontend/src/features/student/ProfilePanel.tsx (new, self-fetching),
+frontend/src/components/HeaderMenus.tsx (Profile menu key/width/item/panel + mobile drawer section),
+docs/HANDOFF.md.
+
+Tests run: frontend tsc/lint/build (0 errors / 13 pre-existing warnings). No backend → no node
+--check / migration / review. fetchStudentGrades uses two .in() queries (recipients -> checkpoints)
+rather than a PostgREST FK embed, matching the other student fetches.
+
+DEFERRED (noted): the mentor/voice prefs write-through localStorage->student_settings (cross-device
+persistence) was intentionally deferred out of this slice to keep the LIVE chat.tsx boot path
+untouched. student_settings already has mentor_settings/voice_settings jsonb + a student-own ALL RLS
+policy, so it's a clean, separable follow-up (fetchStudentSettings on boot to hydrate, best-effort
+saveStudentSettings on change). Also deferred: honoring checkpoints.result_release_policy precisely
+(v1 shows a grade only when recipient status is complete/returned/graded).
+
+Suggested next task: v4.0 Phase 3b — new routes classes.tsx / classes.$classId.tsx /
+classes.$classId.unit.$unitId.tsx (HAND-EDIT routeTree.gen.ts) + features/student/ (ClassMenu /
+ClassDashboard / UnitView) + a "Open class view" entry + fix the hardcoded-0 "other lessons"
+progress bars. Frontend-only. ALL Phase 1-3 frontend still awaits the one pending main fast-forward.
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 3-scoping: class_courses enabler — DONE)
 
 Summary: Class→course scoping so a teacher can restrict which courses a class's students browse,

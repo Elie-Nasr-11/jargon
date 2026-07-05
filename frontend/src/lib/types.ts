@@ -732,6 +732,31 @@ export type LearningEvidence = {
   created_at: string;
 };
 
+// v4.0 Phase 3a: the student profile popup's derived stats (all from student-self reads).
+export type StudentGradeRow = {
+  id: string;
+  title: string;
+  kind: "assignment" | "assessment";
+  status: string;
+  score: number | null; // 0..1 fraction, shown only when released/finalized
+  due_at: string | null;
+  submitted_at: string | null;
+};
+
+export type StudentProgressSummary = {
+  lessonsStarted: number;
+  lessonsCompleted: number;
+};
+
+export type StudentProfileStats = {
+  profile: Profile | null;
+  email: string | null;
+  mastery: StudentMastery[];
+  notes: TeacherNote[];
+  grades: StudentGradeRow[];
+  progress: StudentProgressSummary;
+};
+
 export type StudentMastery = {
   user_id: string;
   skill_key: string;

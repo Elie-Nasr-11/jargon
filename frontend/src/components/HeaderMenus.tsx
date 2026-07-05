@@ -3,16 +3,18 @@ import { createPortal } from "react-dom";
 import gsap from "gsap";
 import { Check, ChevronDown, Menu, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
+import { ProfilePanel } from "@/features/student/ProfilePanel";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { LESSONS, type Lesson, type MentorConfig, type VoiceSettings } from "@/lib/jargon-store";
 import type { LessonActivity, LessonArc } from "@/lib/types";
 
-type MenuKey = "lessons" | "progress" | "mentor";
+type MenuKey = "lessons" | "progress" | "mentor" | "profile";
 
 const WIDTHS: Record<MenuKey, number> = {
   lessons: 380,
   progress: 380,
   mentor: 380,
+  profile: 380,
 };
 
 export function HeaderMenus({
@@ -208,6 +210,7 @@ export function HeaderMenus({
     { key: "lessons", label: "Lessons" },
     { key: "progress", label: "Progress" },
     { key: "mentor", label: "Mentor" },
+    { key: "profile", label: "Profile" },
   ];
 
   const renderPanelBody = (k: MenuKey | null) => (
@@ -238,6 +241,7 @@ export function HeaderMenus({
           onVoiceChange={onVoiceChange}
         />
       )}
+      {k === "profile" && <ProfilePanel mentor={mentor} />}
     </>
   );
 
@@ -372,6 +376,9 @@ export function HeaderMenus({
                       voice={voice}
                       onVoiceChange={onVoiceChange}
                     />
+                  </CollapsibleSection>
+                  <CollapsibleSection title="Profile">
+                    <ProfilePanel bare mentor={mentor} />
                   </CollapsibleSection>
                 </div>
               </GradientCard>

@@ -71,7 +71,10 @@ import type {
   Profile,
   QuizAttempt,
   ResourceInteraction,
+  StudentGradeRow,
   StudentMastery,
+  StudentProfileStats,
+  StudentProgressSummary,
   TeacherClassSummary,
   TeacherClassMembership,
   TeacherDashboardData,
@@ -425,6 +428,134 @@ export async function fetchStudentCatalog(pinnedLessonId?: string | null): Promi
   } catch {
     return all;
   }
+}
+
+// --- v4.0 Phase 3a: student self-read stats for the profile popup --------------------------
+// Every read below is the signed-in student's OWN rows, permitted by existing RLS policies
+// (student_mastery own-ALL; teacher_notes student_visible+own; checkpoint_recipients user_id;
+// learning_sessions own-ALL). No new policy or backend is required.
+
+export async function fetchStudentMastery(): Promise<StudentMastery[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const { data, error } = await supabase
+    .from("student_mastery")
+    .select("*")
+    .eq("user_id", session.user.id);
+  if (error) throw error;
+  return (data || []) as StudentMastery[];
+}
+
+export async function fetchStudentTeacherNotes(): Promise<TeacherNote[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const { data, error } = await supabase
+    .from("teacher_notes")
+    .select("*")
+    .eq("student_id", session.user.id)
+    .eq("visibility", "student_visible")
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as TeacherNote[];
+}
+
+// The student's graded work, unified across assignments + assessments via checkpoint_recipients
+// joined to checkpoints for title/kind/due (two .in() queries, mirroring the other student fetches
+// rather than a PostgREST FK embed). A score is surfaced only once finalized/returned so a
+// teacher's in-progress grading is never shown early.
+export async function fetchStudentGrades(): Promise<StudentGradeRow[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const { data: recipientRows, error: recipientError } = await supabase
+    .from("checkpoint_recipients")
+    .select("id,checkpoint_id,status,score,final_score,submitted_at")
+    .eq("user_id", session.user.id);
+  if (recipientError) throw recipientError;
+  const recipients = (recipientRows || []) as Array<{
+    id: string;
+    checkpoint_id: string;
+    status: string;
+    score: number | null;
+    final_score: number | null;
+    submitted_at: string | null;
+  }>;
+  const checkpointIds = uniqueStrings(recipients.map((row) => row.checkpoint_id));
+  if (!checkpointIds.length) return [];
+
+  const { data: checkpointRows, error: checkpointError } = await supabase
+    .from("checkpoints")
+    .select("id,title,kind,due_at")
+    .in("id", checkpointIds);
+  if (checkpointError) throw checkpointError;
+  const checkpointById = new Map(
+    (
+      (checkpointRows || []) as Array<{
+        id: string;
+        title: string;
+        kind: string;
+        due_at: string | null;
+      }>
+    ).map((cp) => [cp.id, cp]),
+  );
+
+  const released = new Set(["complete", "returned", "graded"]);
+  return recipients
+    .map((row) => {
+      const cp = checkpointById.get(row.checkpoint_id);
+      if (!cp) return null;
+      const rawScore = row.final_score ?? row.score;
+      const score = released.has(row.status) && rawScore != null ? rawScore : null;
+      return {
+        id: row.id,
+        title: cp.title,
+        kind: cp.kind === "assessment" ? "assessment" : "assignment",
+        status: row.status,
+        score,
+        due_at: cp.due_at,
+        submitted_at: row.submitted_at,
+      } as StudentGradeRow;
+    })
+    .filter((row): row is StudentGradeRow => row !== null);
+}
+
+export async function fetchStudentProgressSummary(): Promise<StudentProgressSummary> {
+  const session = await getSession();
+  if (!session?.user?.id) return { lessonsStarted: 0, lessonsCompleted: 0 };
+  const { data, error } = await supabase
+    .from("learning_sessions")
+    .select("lesson_id,status,activities_complete")
+    .eq("user_id", session.user.id);
+  if (error) throw error;
+  const rows = (data || []) as Array<{
+    lesson_id: string | null;
+    status: string | null;
+    activities_complete: boolean | null;
+  }>;
+  const started = new Set<string>();
+  const completed = new Set<string>();
+  for (const row of rows) {
+    if (!row.lesson_id) continue;
+    started.add(row.lesson_id);
+    if (row.status === "complete" || row.activities_complete) completed.add(row.lesson_id);
+  }
+  return { lessonsStarted: started.size, lessonsCompleted: completed.size };
+}
+
+// One call the profile popup awaits. Each read is independent and best-effort: a single failed
+// read degrades to an empty section rather than blanking the whole popup.
+export async function fetchStudentProfileStats(): Promise<StudentProfileStats> {
+  const session = await getSession();
+  const userId = session?.user?.id || null;
+  const email = session?.user?.email || null;
+  const safe = <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
+  const [profile, mastery, notes, grades, progress] = await Promise.all([
+    userId ? safe(fetchProfile(userId), null) : Promise.resolve(null),
+    safe(fetchStudentMastery(), [] as StudentMastery[]),
+    safe(fetchStudentTeacherNotes(), [] as TeacherNote[]),
+    safe(fetchStudentGrades(), [] as StudentGradeRow[]),
+    safe(fetchStudentProgressSummary(), { lessonsStarted: 0, lessonsCompleted: 0 }),
+  ]);
+  return { profile, email, mastery, notes, grades, progress };
 }
 
 export async function fetchLessonActivities(lessonId: string) {
