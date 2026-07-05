@@ -100,6 +100,13 @@ when the directive says so) you evaluate without teaching: no hints, no scaffold
 brief feedback only. This no-teaching rule is ONLY for open-ended assessment; multiple-choice quiz steps are
 unaffected — keep giving brief targeted feedback on why a wrong choice fails, exactly as the quiz rules say.
 
+Revision steps are RETRIEVAL PRACTICE on material the student has already studied: ask ONE short recall
+question at a time on the step's skills, targeting the ones they are weakest at (their per-skill tiers are in
+student.mastery — favor "emerging" over "developing" over "secure"). Let them retrieve the answer from memory
+— do NOT re-teach, summarize, or hand them the answer before they try; affirm accurate recall briefly and
+correct gaps gently. Speak only about the named skills and tiers you are given — never invent or claim
+specifics about the student's past sessions or earlier answers.
+
 Quiz steps: while options are on screen the student answers by tapping them — point at the options, do not
 re-read or re-narrate them (introduce the question briefly only when the directive says it is the first
 presentation). Wrong choice -> brief targeted feedback on why that choice fails, then point back at the
@@ -1559,8 +1566,9 @@ function requirementsFor(
             };
       case "reflection":
       case "revision":
-        // Revision runs reflection-shaped until its dedicated runtime lands (Phase 4),
-        // so an authored revision step is never a brick.
+        // Reflection and revision share the same GATING (understanding grader + stuck cap);
+        // revision is differentiated by its retrieval-practice directive + SYSTEM_PROMPT block,
+        // not by its requirements. A bound quiz makes either quiz-gated instead.
         return {
           code: false,
           quiz: needsQuizRow,
@@ -1961,6 +1969,30 @@ function turnDirective(args: {
         text: "The code runner TIMED OUT — an infrastructure hiccup on our side, NOT the student's mistake. Reassure them briefly that it's on us and ask them to run it again; do not grade or critique their code.",
       };
     }
+    // Revision: retrieval practice. One recall question at a time on the step's weakest skills,
+    // and a retention affirmation on conclusion. Placed before the generic understanding branches
+    // so a revision step owns its entire directive (mid-step + both conclusions). Skipped while a
+    // bound quiz is live — a quiz-bearing revision step defers to the quiz directives below.
+    if (stepMode === "revision" && presentedBefore && !quizActive) {
+      if (stepConcluding) {
+        // Split the two conclusions like the reflection path: affirm retention ONLY when recall
+        // was actually demonstrated. A stuck-cap conclusion (out of attempts, not demonstrated)
+        // must not praise a "solid grip" — state the idea plainly once and offer to revisit.
+        return gradedUnderstanding?.demonstrated
+          ? {
+              key: "revision_concluded",
+              text: 'They recalled what this revision step targets. Affirm the retention warmly in ONE line (e.g. "you\'ve still got a solid grip on this!") and conclude the step — do not open a new question.',
+            }
+          : {
+              key: "revision_stuck",
+              text: "They could not fully recall this after several tries and the step is now wrapping up. Do NOT praise it as solid or claim they have it down. State the step's key idea plainly in one or two sentences — this is the ONE time you give it — reassure them it's worth revisiting later, and close warmly.",
+            };
+      }
+      return {
+        key: "revision_practice",
+        text: 'This is RETRIEVAL PRACTICE. Briefly acknowledge or gently correct their recall, then ask ONE more short recall question on this step\'s skills (or the lesson\'s key ideas if no skills are named) — prefer any that show a weaker tier in student.mastery ("emerging" before "developing"). Do NOT re-teach or hand them the answer; prompt them to remember it. Reference skills by name only; never claim specifics about their past work.',
+      };
+    }
     if (gradedUnderstanding?.demonstrated) {
       return {
         key: "understanding_demonstrated",
@@ -2118,9 +2150,11 @@ function turnDirective(args: {
               ? "This OPEN-QUESTIONS step is being shown for the first time. Invite the student's questions about the topic — anything they're unsure or curious about — and make clear that if they have none, they can just say so and move on."
               : stepMode === "assignment"
                 ? "This step hands off a TASK that lives in the work panel above the message box. Frame what the task is about in a sentence or two and point them to it; they reply here once they've seen it."
-                : openEndedAssessment
-                  ? "This is an open-ended ASSESSMENT question, shown for the first time. Ask it plainly and completely, then wait for their answer — no hints, no scaffolding, no examples."
-                  : "";
+                : stepMode === "revision"
+                  ? "This is a REVISION step — retrieval practice on skills the student has already studied (their per-skill tiers are in student.mastery). Ask ONE short recall question on this step's skills (or the lesson's key ideas if no skills are named), targeting any that show a weaker tier (favor \"emerging\" over \"developing\"), phrased plainly at their grade level. Do NOT re-teach or state the answer — prompt them to recall it. Reference skills by name only; never claim specifics about their past sessions."
+                  : openEndedAssessment
+                    ? "This is an open-ended ASSESSMENT question, shown for the first time. Ask it plainly and completely, then wait for their answer — no hints, no scaffolding, no examples."
+                    : "";
       if (modePresent) {
         return { key: "present_step", text: modePresent };
       }

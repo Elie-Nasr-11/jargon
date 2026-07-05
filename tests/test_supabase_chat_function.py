@@ -186,6 +186,25 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.source)
 
+    def test_revision_runtime_is_wired(self):
+        # v4.0 Phase 4 (docs/PLATFORM.md): revision mode is retrieval practice — its own
+        # directive branch (mid-step + conclusion) and a SYSTEM_PROMPT block, targeting the
+        # student's weakest skills by tier with a hallucination guard (skills/tiers only,
+        # never raw transcript). Gating stays reflection-shaped (understanding + stuck cap).
+        for fragment in (
+            'key: "revision_practice"',
+            'key: "revision_concluded"',
+            # The stuck-cap conclusion must NOT praise recall it never saw (split from concluded).
+            'key: "revision_stuck"',
+            "gradedUnderstanding?.demonstrated",
+            'stepMode === "revision" && presentedBefore && !quizActive',
+            "Revision steps are RETRIEVAL PRACTICE",
+            # The weak-tier targeting + hallucination guard phrasing.
+            "never invent or claim",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
+
 
 if __name__ == "__main__":
     unittest.main()
