@@ -6,6 +6,34 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 2a: submission safety — DEPLOYED)
+
+Summary: Safe additive hardening of the student assignment-submission path (2b — scanning + retention
+— deferred to OPEN_QUESTIONS per decision). Files already upload to a PRIVATE student-submissions
+bucket (50 MB/file server ceiling, signed-URL reads gated by the DB row).
+- Client + app-layer validation: submitAssignment now rejects >10 files or any file >25 MB BEFORE any
+  DB write (clear error), with shared MAX_SUBMISSION_FILES / MAX_SUBMISSION_FILE_BYTES constants; the
+  chat assignment-dock file input gained an `accept` hint + on-selection count/size validation.
+- Path-bound INSERT RLS (migration 20260727000000_submission_path_binding.sql): the student-submissions
+  INSERT policy now also requires (storage.foldername(name))[2] = auth.uid()::text, so a student can
+  only write objects under their own path segment (defense-in-depth on top of the existing owner
+  check). Verified: the client scheme is {assignmentId}/{userId}/{submissionId}/{file} so segment [2]
+  is the uploader; a UUID survives safePathSegment unchanged; submitAssignment is the ONLY writer to
+  the bucket (the other .storage.upload targets lesson-resources); the table is currently EMPTY so no
+  existing upload can break.
+- Deliberately NOT done: a hard bucket MIME allowlist (regression risk on a private, non-served
+  bucket) and dropping the dead assignment_submissions.file_path column (additive-only discipline).
+
+Tests run: frontend tsc/lint/build (0 errors); full Python suite green; the policy DDL applied
+idempotently in a rolled-back live-DB transaction (predicate confirmed via pg_policies). NOTE on the
+deploy: storage.objects is owned by supabase_storage_admin and the deploy runs as postgres (not
+super/owner), but creating the policy via the Management API succeeded in the rolled-back test (same
+context the deploy uses), so the migration applies. Adversarial review focused on "can the tighter
+policy break a legitimate upload" (answer: no — only writer + path scheme + owner all check out).
+
+Deferred (Phase 2b — needs a decision, recorded in OPEN_QUESTIONS): malware scanning (no infra today;
+external scan API vs self-hosted ClamAV vs accept-the-risk) and retention (no DELETE policy/job today).
+
 ## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 1: notification writers — the bell becomes a real feed — DEPLOYED)
 
 Summary: The teacher notification bell only ever carried `assessment_to_review` (the one kind written

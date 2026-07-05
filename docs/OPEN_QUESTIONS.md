@@ -71,10 +71,24 @@ Current decision so far:
 - Most assignment file submissions likely live in lesson/LMS assignment windows, not directly inside the chat composer.
 - Teacher-uploaded lesson resources are a separate feature track.
 
-Deferred details:
+As-built (2026-07-05, post-v4.0 Phase 2a — SHIPPED): submissions upload to a PRIVATE
+`student-submissions` bucket (50 MB/file server ceiling), mirrored by `assignment_submission_files`
+rows; reads are signed-URL only, gated by the DB row (owner or the assigning teacher). Phase 2a added
+client + app-layer validation (≤10 files, ≤25 MB each, an `accept` hint) and a path-bound INSERT RLS
+(the object's user path segment must equal auth.uid()). Deliberately NOT done: a hard bucket MIME
+allowlist (regression risk on a private, non-served bucket for little gain) and dropping the dead
+`assignment_submissions.file_path` column (additive-only discipline).
 
-- Exact storage bucket layout, file size/type limits, malware scanning, and RLS policies.
-- Whether some file submissions are allowed from the chatbar for mini tasks.
+Deferred details (Phase 2b — need a decision):
+
+- Malware scanning: NONE today. Options recorded — an external scan API called from a post-upload
+  edge fn (flip `assignment_submission_files.status` clean/quarantined; simplest infra, needs a
+  provider + key) vs self-hosted ClamAV (no per-scan cost, own the infra) vs accept-the-risk (private
+  bucket, signed-URL only, no execution, teacher/owner-only reads).
+- Retention: NONE today (no DELETE storage policy, no cleanup job). Needs a retention-window decision
+  (e.g. keep N months after the assignment closes) + a DELETE policy + a scheduled cleanup.
+- Whether the chat composer `file` answer-mode becomes real (upload + reference) or stays LMS-window-
+  only. Today `answerContent()` returns a `[file answer placeholder]` and file answers grade as text.
 - How returned files and teacher annotations appear to students.
 
 ## What is the model/cost/billing strategy?

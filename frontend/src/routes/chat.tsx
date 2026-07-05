@@ -57,6 +57,8 @@ import {
   recordResourceInteraction,
   recordVoiceInteraction,
   submitAssignment,
+  MAX_SUBMISSION_FILES,
+  MAX_SUBMISSION_FILE_BYTES,
 } from "@/lib/api";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
@@ -1919,12 +1921,30 @@ function AssignmentDock({
                     <input
                       type="file"
                       multiple
-                      onChange={(event) =>
-                        setDraft(assignment.id, {
-                          files: Array.from(event.target.files || []),
-                          message: "",
-                        })
-                      }
+                      accept="image/*,application/pdf,.doc,.docx,.txt,.md,.rtf,.csv,.zip,.py,.js,.ts,.java,.c,.cpp,.h,.cs,.html,.css,.json"
+                      onChange={(event) => {
+                        const picked = Array.from(event.target.files || []);
+                        if (picked.length > MAX_SUBMISSION_FILES) {
+                          setDraft(assignment.id, {
+                            files: [],
+                            message: `Attach at most ${MAX_SUBMISSION_FILES} files.`,
+                          });
+                          event.target.value = "";
+                          return;
+                        }
+                        const tooBig = picked.find((f) => f.size > MAX_SUBMISSION_FILE_BYTES);
+                        if (tooBig) {
+                          setDraft(assignment.id, {
+                            files: [],
+                            message: `"${tooBig.name}" is too large — files must be under ${Math.round(
+                              MAX_SUBMISSION_FILE_BYTES / (1024 * 1024),
+                            )} MB.`,
+                          });
+                          event.target.value = "";
+                          return;
+                        }
+                        setDraft(assignment.id, { files: picked, message: "" });
+                      }}
                       className="rounded-2xl border border-border bg-background/65 px-3 py-2 text-[12.5px] text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
                     />
                     <div className="flex flex-wrap items-center justify-between gap-2">

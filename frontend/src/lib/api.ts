@@ -3080,6 +3080,11 @@ export async function fetchStudentAssignments(): Promise<StudentAssignmentBundle
   };
 }
 
+// Submission attachment limits. The bucket enforces a hard 50 MB/file ceiling server-side; these
+// give the student a clear error before the upload attempt and bound the attachment count.
+export const MAX_SUBMISSION_FILES = 10;
+export const MAX_SUBMISSION_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
+
 export async function submitAssignment(input: {
   assignmentId: string;
   content: string;
@@ -3093,6 +3098,18 @@ export async function submitAssignment(input: {
   } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!user) throw new Error("Sign in to submit assignments.");
+
+  if (input.files.length > MAX_SUBMISSION_FILES) {
+    throw new Error(`Attach at most ${MAX_SUBMISSION_FILES} files per submission.`);
+  }
+  const oversized = input.files.find((file) => file.size > MAX_SUBMISSION_FILE_BYTES);
+  if (oversized) {
+    throw new Error(
+      `"${oversized.name}" is too large — each file must be under ${Math.round(
+        MAX_SUBMISSION_FILE_BYTES / (1024 * 1024),
+      )} MB.`,
+    );
+  }
 
   const submissionId = uniqueId();
   const now = new Date().toISOString();
