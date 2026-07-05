@@ -1,0 +1,29 @@
+name: Tests
+
+# Runs the Python test suite (static source-fingerprint + interpreter tests) so drift between the
+# tests and the edge functions / frontend / migrations is caught instead of shipping silently.
+# The suite is stdlib-only plus the repo-root jargon_interpreter/jargon_examples modules, which
+# resolve because `python -m unittest` puts the working directory (repo root) on sys.path.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - claude/happy-johnson-wseex8
+      - main
+  pull_request:
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run test suite
+        run: python3 -m unittest discover -s tests

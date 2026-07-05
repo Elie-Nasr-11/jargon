@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 polish Tier 1 S1+S3: live-refresh + test safety net)
+
+Summary: Two frontend/test polish slices from the v4.0 completion plan (no backend deploy).
+- S1 — the "Live" surfaces now actually refresh. The teacher dashboard useQuery gained
+  refetchInterval:30s (foreground-only), which re-renders the hotlist live_now + the ClassOverview
+  live-now strip + every "Xm ago" label with a fresh clock. The admin Live tab now polls every 30s
+  while open (document.visibilityState==='visible' guard) instead of loading once, so the
+  active-session fleet + liveAgo() labels stay current. Frontend-only → rides the main FF.
+- S3 — the Python test suite was RED (65 failing assertions) and no CI ran it. Now GREEN (164 tests,
+  4 skipped) + a new .github/workflows/tests.yml runs `python3 -m unittest discover -s tests` on push
+  (branch + main) and PR. Root cause of the rot: the teacher console moved routes/teacher.tsx ->
+  features/teacher/TeacherConsole.tsx and several symbols were renamed. Fixes (TESTS ONLY, never
+  source): repointed the moved-file path constants; updated the two drifted BACKEND tutor
+  fingerprints — chat model routing (modelRouteFor/OPENAI_MODEL_GRADING|RESCUE|RESOURCE_CONTEXT ->
+  the 2-route TUTOR_MODEL_CONVERSATION/UNDERSTANDING contract) and chat approved-chunks
+  (approved_resource_chunks -> resource_chunks, slimmed prompt wording); refreshed admin-seed auth
+  (assertPlatformAdmin -> resolveActorAccess, seed_roster now allows scoped org-admins); removed two
+  assertions for genuinely-removed features (the platform-admin-only roster-seeding copy dropped in
+  task #28; the hardcoded default authoring blueprint that no longer exists anywhere).
+
+Files changed: frontend/src/features/teacher/TeacherConsole.tsx, frontend/src/routes/admin.tsx (S1);
+tests/test_phase11_reliability_model_routing.py, tests/test_media_processing.py, tests/test_admin_ops.py,
+tests/test_admin_seed_pilot.py, tests/test_assessment_expansion.py, tests/test_curriculum_authoring_studio.py,
+tests/test_live_teacher_intervention.py, .github/workflows/tests.yml (S3); docs/HANDOFF.md.
+
+Tests run: full suite green (164 ok / 4 skipped); frontend tsc/lint/build (0 errors). No backend
+deploy (no supabase/** change). Remaining Tier 1 item: S2 (harden the assignment checkpoint
+self-update so a student can self-attest status but not self-set score — a small idempotent RLS
+migration + review + deploy). Then Tiers 2-5 of the completion plan.
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 5d: teacher class-snapshot CSV export — DEPLOYED)
 
 Summary: The data-export half of teacher reports. A teacher can export their own class as a CSV

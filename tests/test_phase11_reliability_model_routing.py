@@ -35,15 +35,18 @@ class Phase11ReliabilityModelRoutingTests(unittest.TestCase):
                 self.assertIn(fragment, self.run_function)
 
     def test_chat_uses_env_model_routing_and_records_route_payload(self):
+        # Tutor v2.0 Phase C simplified routing to two env-driven routes (conversation vs the
+        # cheap understanding grader); the old grading/rescue/resource_context routes + modelRouteFor
+        # were removed. The mentor conversation resolves TUTOR_MODEL_CONVERSATION -> TUTOR_MODEL_DEFAULT
+        # -> OPENAI_MODEL_DEFAULT, and every call records its route in the usage payload.
         for fragment in (
+            'type ModelRoute = "default" | "understanding"',
+            'type ModelUsageTaskType = "mentor_turn" | "grading"',
+            '"TUTOR_MODEL_CONVERSATION"',
+            '"TUTOR_MODEL_UNDERSTANDING"',
+            '"TUTOR_MODEL_DEFAULT"',
             '"OPENAI_MODEL_DEFAULT"',
-            '"OPENAI_MODEL_GRADING"',
-            '"OPENAI_MODEL_RESCUE"',
-            '"OPENAI_MODEL_RESOURCE_CONTEXT"',
-            "type ModelRoute",
-            "modelRouteFor",
-            'route === "resource_context"',
-            'taskType: "summarization"',
+            "function modelFor(route: ModelRoute)",
             "payload: { route: usage.route }",
         ):
             with self.subTest(fragment=fragment):

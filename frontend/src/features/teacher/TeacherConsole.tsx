@@ -188,6 +188,10 @@ export function TeacherConsole() {
     queryFn: () => fetchTeacherDashboard(teacherId),
     enabled: Boolean(teacherId),
     staleTime: 5 * 60 * 1000,
+    // Keep the live surfaces (hotlist live_now, the class Overview live-now strip, and every
+    // "N min ago" label) current: refetch every 30s in the foreground only (React Query skips
+    // background tabs by default), which also re-renders with a fresh clock.
+    refetchInterval: 30 * 1000,
   });
   const dashboard = dashboardQuery.data ?? null;
   const booting = !authChecked || (Boolean(teacherId) && dashboardQuery.isPending);

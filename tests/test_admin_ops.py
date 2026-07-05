@@ -140,7 +140,8 @@ class AdminOpsStaticTests(unittest.TestCase):
             "Password reset",
             "Recent audit events",
             "Organization role updated.",
-            "Bulk roster seeding stays platform-admin only",
+            # removed: scoped org-admin onboarding (task #28) dropped the platform-admin-only
+            # restriction on roster seeding, so the "stays platform-admin only" copy no longer exists.
             "update_membership_status",
             "reset_user_password",
         ):

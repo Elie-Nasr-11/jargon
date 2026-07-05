@@ -7,7 +7,9 @@ MIGRATION = ROOT / "supabase" / "migrations" / "0012_live_teacher_intervention_r
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 CHAT_ROUTE = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
-TEACHER_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.tsx"
+# routes/teacher.tsx is now a thin route wrapper; the live-intervention teacher
+# UI lives in the TeacherConsole feature component.
+TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 
 
 class LiveTeacherInterventionStaticTests(unittest.TestCase):

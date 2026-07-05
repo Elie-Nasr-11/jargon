@@ -748,11 +748,18 @@ export function AdminPage() {
   const setAdminTab = (tab: string) =>
     navigate({ to: adminHome, search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
 
-  // Load the Live fleet the first time its tab is opened (poll-based; the panel has a Refresh).
+  // Keep the Live fleet current while its tab is open: load on first open, then poll every 30s
+  // (foreground only) so the session list + the "Xm ago" labels stay live. The panel keeps its
+  // manual Refresh too.
   useEffect(() => {
-    if (adminTab === "live" && token && activeSessions === null && !activeSessionsLoading) {
+    if (adminTab !== "live" || !token) return;
+    if (activeSessions === null && !activeSessionsLoading) {
       void refreshActiveSessions(token);
     }
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void refreshActiveSessions(token);
+    }, 30 * 1000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminTab, token]);
 

@@ -11,7 +11,9 @@ CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx"
 ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
 HEADER_MENUS = ROOT / "frontend" / "src" / "components" / "HeaderMenus.tsx"
-TEACHER_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.tsx"
+# routes/teacher.tsx is now a thin route wrapper; the console (which links to the
+# curriculum authoring studio) lives in the TeacherConsole feature component.
+TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 
 
 class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
@@ -73,9 +75,15 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         self.assertIn("invokeCurriculumAdmin", self.api)
         self.assertIn("fetchCurriculumAuthoringData", self.api)
         self.assertIn('createFileRoute("/teacher/curriculum")', self.route)
-        self.assertIn("Teacher dashboard", self.route)
+        # The authoring studio now links back to the teacher console via a breadcrumb
+        # crumb (was a "Teacher dashboard" back-link label).
+        self.assertIn(
+            '{ label: "Teacher", onClick: () => navigate({ to: "/teacher" }) }', self.route
+        )
         self.assertIn("/teacher/curriculum", self.route_tree)
-        self.assertIn('to="/teacher/curriculum"', self.teacher_route)
+        # The teacher console navigates to the studio via router `navigate({ to: ... })`
+        # rather than a JSX `to="..."` link attribute.
+        self.assertIn('to: "/teacher/curriculum"', self.teacher_route)
 
     def test_authoring_types_cover_blueprint_contract(self):
         for fragment in (
@@ -98,23 +106,18 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         self.assertIn('status: "published"', self.function)
 
     def test_student_lesson_menu_groups_curriculum_labels(self):
-        self.assertIn("groupLessons", self.header_menus)
+        # groupLessons was renamed to buildLessonTree (Subject > Unit > Lesson grouping).
+        self.assertIn("buildLessonTree", self.header_menus)
         self.assertIn("data-lesson-id", self.header_menus)
         chat_route = (ROOT / "frontend" / "src" / "routes" / "chat.tsx").read_text(encoding="utf-8")
         self.assertIn("lesson.curriculum_group", chat_route)
         self.assertIn("lesson.subject_title", chat_route)
 
-    def test_default_authoring_blueprint_is_multisubject_logic_lesson(self):
-        for fragment in (
-            "Logic Foundations",
-            "Clear Thinking",
-            "Claims, Reasons, Evidence",
-            "What Makes a Good Reason?",
-            "logic.claims,logic.reasons,logic.evidence",
-            "Because daily reading gives your brain more practice with words and ideas.",
-        ):
-            with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.route)
+    # removed: test_default_authoring_blueprint_is_multisubject_logic_lesson — the
+    # hardcoded "Logic Foundations / Clear Thinking / Claims, Reasons, Evidence" default
+    # blueprint no longer exists anywhere in the codebase after the curriculum-authoring
+    # redesign (the studio now starts empty and content comes from server data / AI drafts).
+    # Every assertion in that test targeted the removed seed content, so it was dropped.
 
 
 if __name__ == "__main__":

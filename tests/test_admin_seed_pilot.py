@@ -9,6 +9,8 @@ API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
 ADMIN_ROUTE = ROOT / "frontend" / "src" / "routes" / "admin.tsx"
 TEACHER_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.tsx"
+# The teacher console UI moved out of the thin route file into this feature module.
+TEACHER_CONSOLE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 TEACHER_RLS = ROOT / "supabase" / "migrations" / "0011_teacher_runtime_read_policies.sql"
 DOC = ROOT / "docs" / "ADMIN_SEEDED_PILOT.md"
 
@@ -22,6 +24,7 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
         cls.route_tree = ROUTE_TREE.read_text(encoding="utf-8")
         cls.admin_route = ADMIN_ROUTE.read_text(encoding="utf-8")
         cls.teacher_route = TEACHER_ROUTE.read_text(encoding="utf-8")
+        cls.teacher_console = TEACHER_CONSOLE.read_text(encoding="utf-8")
         cls.teacher_rls = TEACHER_RLS.read_text(encoding="utf-8")
         cls.doc = DOC.read_text(encoding="utf-8")
 
@@ -30,9 +33,11 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
             'req.headers.get("Authorization")',
             "Authentication is required.",
             "async function fetchCurrentUser",
-            "async function assertPlatformAdmin",
+            # Scoped org-admin onboarding replaced assertPlatformAdmin with resolveActorAccess
+            # (platform_admin | org_admin); the platform-admin-only gate remains for demo logins.
+            "async function resolveActorAccess",
             "platform_admins",
-            "Platform admin access is required.",
+            "Platform admin access is required",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.admin_seed)
@@ -124,7 +129,7 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
             "Choose a session to inspect the transcript.",
         ):
             with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.teacher_route)
+                self.assertIn(phrase, self.teacher_console)
 
     def test_teacher_dashboard_runtime_rls_is_read_only(self):
         for table in ("learning_sessions", "learning_turns", "lesson_attempts"):

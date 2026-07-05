@@ -10,7 +10,9 @@ SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 CHAT_ROUTE = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
 QUIZ_ROUTE = ROOT / "frontend" / "src" / "routes" / "quiz.$assessmentId.tsx"
-TEACHER_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.tsx"
+# The teacher console UI moved out of the thin routes/teacher.tsx into the
+# feature module; the assessment surfaces live in TeacherConsole.tsx now.
+TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
 
 

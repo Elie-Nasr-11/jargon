@@ -11,7 +11,8 @@ CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-TEACHER_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.tsx"
+# The teacher resource-manager UI moved from the thin route file into this feature module.
+TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 PDF_EXTRACT = ROOT / "frontend" / "src" / "lib" / "pdf-extract.ts"
 PACKAGE = ROOT / "frontend" / "package.json"
 
@@ -198,15 +199,17 @@ class MediaProcessingStaticTests(unittest.TestCase):
         for fragment in (
             "resource_text_chunks?resource_id=",
             "status=eq.approved",
-            "approved_resource_chunks",
+            # Tutor v2.0 Phase C renamed the mentor payload key approved_resource_chunks -> resource_chunks
+            # and slimmed the resource guidance wording; the "only approved chunks" contract is unchanged.
+            "resource_chunks:",
+            "Teacher-approved source material",
             "resource_title",
             "page_number",
             "source_kind",
             "start_seconds",
             "end_seconds",
-            "you may use them as teacher-approved context",
-            "audio/video chunks by resource title/time range",
-            "Do not claim a resource was viewed unless resource_interactions proves it",
+            "audio/video chunks by title/time range",
+            "Never claim a resource was viewed unless resource_interactions",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.chat)
