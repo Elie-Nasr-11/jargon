@@ -1143,6 +1143,22 @@ export async function teacherGenerateProgressReport(input: {
   };
 }
 
+// Teacher-scoped class snapshot CSV. Authorizes via the teacher's class_memberships in admin-ops —
+// a teacher can only export a class they teach.
+export async function teacherExportClassSnapshot(input: { classId: string }) {
+  const session = await getSession();
+  if (!session?.access_token) throw new Error("You must be signed in.");
+  const data = await invokeAdminOps({
+    accessToken: session.access_token,
+    action: "teacher_export_class_snapshot",
+    classId: input.classId,
+  });
+  if (!data.data?.export) {
+    throw new Error("Class snapshot response was missing data.");
+  }
+  return data.data.export;
+}
+
 export async function invokeGoogleClassroom(input: {
   accessToken: string;
   action:

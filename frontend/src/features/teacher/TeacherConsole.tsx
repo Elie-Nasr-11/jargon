@@ -69,6 +69,7 @@ import {
   reviewAssessmentItem,
   returnAssessment,
   teacherGenerateProgressReport,
+  teacherExportClassSnapshot,
   updateInterventionAlertStatus,
   updateLessonResource,
   uploadPdfPageAssets,
@@ -137,6 +138,8 @@ export function TeacherConsole() {
   const [updatingAlertId, setUpdatingAlertId] = useState<string | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [exportingSnapshot, setExportingSnapshot] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
 
   const teacherId = auth?.id ?? "";
   const email = auth?.email ?? "";
@@ -146,6 +149,10 @@ export function TeacherConsole() {
   useEffect(() => {
     setReportError(null);
   }, [selectedStudentId]);
+
+  useEffect(() => {
+    setSnapshotError(null);
+  }, [selectedClassId]);
 
   useEffect(() => {
     let alive = true;
@@ -414,6 +421,28 @@ export function TeacherConsole() {
       setReportError((error as Error).message || "Could not generate the report.");
     } finally {
       setGeneratingReport(false);
+    }
+  };
+
+  const exportClassSnapshot = async () => {
+    if (!selectedClassId || exportingSnapshot) return;
+    setExportingSnapshot(true);
+    setSnapshotError(null);
+    try {
+      const file = await teacherExportClassSnapshot({ classId: selectedClassId });
+      const blob = new Blob([file.body], { type: file.content_type });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = file.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      setSnapshotError((error as Error).message || "Could not export the class snapshot.");
+    } finally {
+      setExportingSnapshot(false);
     }
   };
 
@@ -904,6 +933,9 @@ export function TeacherConsole() {
                 <ClassDetail
                   item={selectedClass}
                   stats={classStats}
+                  onExportSnapshot={exportClassSnapshot}
+                  exportingSnapshot={exportingSnapshot}
+                  snapshotError={snapshotError}
                   dashboard={dashboard}
                   profilesById={model.profilesById}
                   lessons={dashboard.lessons}
@@ -1097,6 +1129,9 @@ function ClassButton({
 function ClassDetail({
   item,
   stats,
+  onExportSnapshot,
+  exportingSnapshot,
+  snapshotError,
   dashboard,
   profilesById,
   lessons,
@@ -1136,6 +1171,9 @@ function ClassDetail({
 }: {
   item: TeacherClassSummary;
   stats: ClassSummary;
+  onExportSnapshot: () => void;
+  exportingSnapshot: boolean;
+  snapshotError: string | null;
   dashboard: TeacherDashboardData;
   profilesById: Map<string, Profile>;
   lessons: Lesson[];
@@ -1219,10 +1257,26 @@ function ClassDetail({
               sessions.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center text-[12px]">
-            <MiniMetric label="Attempts" value={String(stats.attempts)} />
-            <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
-            <MiniMetric label="Evidence" value={String(stats.evidence)} />
+          <div className="flex flex-col items-stretch gap-2 lg:items-end">
+            <div className="flex flex-col items-end gap-1">
+              <button
+                type="button"
+                onClick={onExportSnapshot}
+                disabled={exportingSnapshot}
+                className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <FileText className="h-3.5 w-3.5" strokeWidth={1.7} />
+                {exportingSnapshot ? "Exporting…" : "Export CSV"}
+              </button>
+              {snapshotError ? (
+                <span className="text-[11.5px] text-danger">{snapshotError}</span>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-[12px]">
+              <MiniMetric label="Attempts" value={String(stats.attempts)} />
+              <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
+              <MiniMetric label="Evidence" value={String(stats.evidence)} />
+            </div>
           </div>
         </div>
 

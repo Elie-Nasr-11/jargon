@@ -1863,6 +1863,187 @@ async function handleTeacherGenerateProgressReport(
   });
 }
 
+// Teacher-scoped class snapshot CSV. Authorized via class_memberships (role=teacher), NOT admin
+// access. Reads ONLY public tables the teacher already sees under RLS (is_class_teacher /
+// can_view_student), scoped to THIS class's students — deliberately NO auth-admin access (no email /
+// last_sign_in), so the teacher tier touches zero auth surface. Mirrors the admin class-snapshot
+// columns minus the auth-only fields.
+async function handleTeacherExportClassSnapshot(
+  config: Config,
+  actorId: string,
+  body: DbRow,
+): Promise<Response> {
+  const classId = cleanId(body.class_id);
+  if (!classId) throw new Error("class_id is required.");
+  const teacherClassIds = await fetchTeacherClassIds(config, actorId);
+  if (!teacherClassIds.length) throw new Error("Teacher access is required.");
+  if (!teacherClassIds.includes(classId)) {
+    throw new Error("You do not teach this class.");
+  }
+
+  const classRow = await selectFirst(
+    config,
+    `classes?id=eq.${encodeURIComponent(classId)}&select=id,name,organization_id`,
+  );
+  if (!classRow) throw new Error("Class not found.");
+  const organizationId = cleanId(classRow.organization_id);
+  const orgRow = organizationId
+    ? await selectFirst(
+        config,
+        `organizations?id=eq.${encodeURIComponent(organizationId)}&select=id,name`,
+      )
+    : null;
+  const orgName = orgRow ? cleanText(orgRow.name) : "";
+
+  const memberships = await selectRows(
+    config,
+    `class_memberships?class_id=eq.${encodeURIComponent(classId)}&role=eq.student&select=user_id,role,status,created_at&order=created_at.asc`,
+  );
+  const studentIds = Array.from(
+    new Set(memberships.map((row) => cleanId(row.user_id)).filter(Boolean)),
+  );
+
+  const [profiles, sessions, assignments] = await Promise.all([
+    studentIds.length
+      ? selectRows(
+          config,
+          `profiles?${inFilter("id", studentIds)}&select=id,name,grade`,
+        )
+      : [],
+    studentIds.length
+      ? selectRows(
+          config,
+          `learning_sessions?${inFilter("user_id", studentIds)}&select=id,user_id,lesson_id,status,updated_at&order=updated_at.desc&limit=1000`,
+        )
+      : [],
+    selectRows(
+      config,
+      `assignments?class_id=eq.${encodeURIComponent(classId)}&select=id,lesson_id,title,status&order=updated_at.desc&limit=1000`,
+    ),
+  ]);
+
+  const assignmentIds = assignments
+    .map((row) => cleanId(row.id))
+    .filter(Boolean);
+  const [recipients, alerts, lessons] = await Promise.all([
+    assignmentIds.length
+      ? selectRows(
+          config,
+          `assignment_recipients?${inFilter("assignment_id", assignmentIds)}&select=assignment_id,user_id,status&limit=2000`,
+        )
+      : [],
+    studentIds.length
+      ? selectRows(
+          config,
+          `intervention_alerts?${inFilter("student_id", studentIds)}&select=id,student_id,status&limit=1000`,
+        )
+      : [],
+    selectRows(config, `lessons?select=id,title&limit=1000`),
+  ]);
+
+  const profileById = new Map(
+    profiles.map((profile) => [cleanId(profile.id), profile]),
+  );
+  const lessonsById = new Map(
+    lessons.map((lesson) => [cleanId(lesson.id), lesson]),
+  );
+  const sessionsByUser = rowsByKey(sessions, "user_id");
+  const recipientsByUser = rowsByKey(recipients, "user_id");
+  const alertsByUser = rowsByKey(alerts, "student_id");
+  const className = cleanText(classRow.name);
+
+  const rows = memberships.map((membership) => {
+    const userId = cleanId(membership.user_id);
+    const profile = profileById.get(userId) || {};
+    const userSessions = sessionsByUser.get(userId) || [];
+    const completedLessons = Array.from(
+      new Set(
+        userSessions
+          .filter((session) => cleanText(session.status) === "complete")
+          .map((session) =>
+            cleanText(
+              lessonsById.get(cleanId(session.lesson_id))?.title ||
+                session.lesson_id,
+            ),
+          )
+          .filter(Boolean),
+      ),
+    );
+    const latestSession = [...userSessions].sort(
+      (a, b) => numericDate(b.updated_at) - numericDate(a.updated_at),
+    )[0];
+    const recips = recipientsByUser.get(userId) || [];
+    const submittedCount = recips.filter((recipient) =>
+      ["submitted", "returned", "complete"].includes(cleanText(recipient.status)),
+    ).length;
+    const completeCount = recips.filter(
+      (recipient) => cleanText(recipient.status) === "complete",
+    ).length;
+    const openAlerts = (alertsByUser.get(userId) || []).filter((alert) =>
+      ["open", "acknowledged"].includes(cleanText(alert.status)),
+    ).length;
+    return {
+      organization: orgName,
+      class: className,
+      role: membership.role,
+      membership_status: membership.status,
+      name: profile.name || "",
+      grade: profile.grade || "",
+      completed_lessons: completedLessons.join("; "),
+      completed_lesson_count: completedLessons.length,
+      active_session_count: userSessions.filter(
+        (session) => cleanText(session.status) === "active",
+      ).length,
+      latest_session_status: latestSession ? latestSession.status : "",
+      latest_session_lesson: latestSession
+        ? cleanText(
+            lessonsById.get(cleanId(latestSession.lesson_id))?.title ||
+              latestSession.lesson_id,
+          )
+        : "",
+      assignments_total: recips.length,
+      assignments_submitted: submittedCount,
+      assignments_complete: completeCount,
+      open_alerts: openAlerts,
+    };
+  });
+
+  const safeClass =
+    className
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "class";
+  const csv = csvFromRows(rows, [
+    { key: "organization", label: "Organization" },
+    { key: "class", label: "Class" },
+    { key: "role", label: "Role" },
+    { key: "membership_status", label: "Membership status" },
+    { key: "name", label: "Name" },
+    { key: "grade", label: "Grade" },
+    { key: "completed_lessons", label: "Completed lessons" },
+    { key: "completed_lesson_count", label: "Completed lesson count" },
+    { key: "active_session_count", label: "Active sessions" },
+    { key: "latest_session_status", label: "Latest session status" },
+    { key: "latest_session_lesson", label: "Latest session lesson" },
+    { key: "assignments_total", label: "Assignments total" },
+    { key: "assignments_submitted", label: "Assignments submitted" },
+    { key: "assignments_complete", label: "Assignments complete" },
+    { key: "open_alerts", label: "Open alerts" },
+  ]);
+
+  return json({
+    status: "ok",
+    data: {
+      export: {
+        filename: `${safeClass}-snapshot.csv`,
+        content_type: "text/csv",
+        body: csv,
+      },
+    },
+  });
+}
+
 async function selectScopedTelemetryRows(
   config: Config,
   table: string,
@@ -2674,6 +2855,8 @@ Deno.serve(async (req: Request) => {
     // dispatched BEFORE fetchActorAccess, which throws for anyone who is not a platform/org admin.
     if (action === "teacher_generate_progress_report")
       return await handleTeacherGenerateProgressReport(config, actorId, record);
+    if (action === "teacher_export_class_snapshot")
+      return await handleTeacherExportClassSnapshot(config, actorId, record);
 
     const actorAccess = await fetchActorAccess(config, actorId);
     if (action === "list_admin_scope")

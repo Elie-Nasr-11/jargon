@@ -1799,6 +1799,7 @@ export type AdminOpsAction =
   | "organization_links"
   | "generate_progress_report"
   | "teacher_generate_progress_report"
+  | "teacher_export_class_snapshot"
   | "create_class"
   | "update_class"
   | "reset_user_password"
