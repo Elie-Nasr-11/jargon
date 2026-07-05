@@ -1114,6 +1114,35 @@ export async function generateProgressReport(input: {
   };
 }
 
+// Teacher-scoped progress report. Unlike generateProgressReport (admin), this authorizes via the
+// teacher's class_memberships in admin-ops — a teacher can only report on a student they teach.
+export async function teacherGenerateProgressReport(input: {
+  classId: string;
+  userId: string;
+  title?: string;
+  reportType?: string;
+}) {
+  const session = await getSession();
+  if (!session?.access_token) throw new Error("You must be signed in.");
+  const data = await invokeAdminOps({
+    accessToken: session.access_token,
+    action: "teacher_generate_progress_report",
+    classId: input.classId,
+    userId: input.userId,
+    payload: {
+      title: input.title || "Student progress report",
+      report_type: input.reportType || "parent",
+    },
+  });
+  if (!data.data?.progress_report || !data.data.export) {
+    throw new Error("Progress report response was missing data.");
+  }
+  return {
+    report: data.data.progress_report,
+    export: data.data.export,
+  };
+}
+
 export async function invokeGoogleClassroom(input: {
   accessToken: string;
   action:

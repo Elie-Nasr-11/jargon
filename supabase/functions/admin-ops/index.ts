@@ -1713,17 +1713,19 @@ async function handleOrganizationLinks(
   });
 }
 
-async function handleGenerateProgressReport(
+// Shared report builder used by BOTH the admin (org-scoped) and teacher (class-scoped) paths. The
+// CALLER is responsible for authorization before calling this — it performs no access check.
+async function buildProgressReport(
   config: Config,
-  actorId: string,
-  access: ActorAccess,
-  body: DbRow,
-): Promise<Response> {
-  const organizationId = cleanId(body.organization_id);
-  const classId = cleanId(body.class_id);
-  const studentId = cleanId(body.user_id);
-  if (!studentId) throw new Error("user_id is required.");
-  if (organizationId) requireOrganizationAccess(access, organizationId);
+  params: {
+    actorId: string;
+    organizationId: string;
+    classId: string;
+    studentId: string;
+    payload: DbRow | undefined;
+  },
+): Promise<DbRow> {
+  const { actorId, organizationId, classId, studentId, payload } = params;
   const archive = await buildStudentArchive(config, studentId);
   const sessions = Array.isArray(archive.learning_sessions) ? archive.learning_sessions as DbRow[] : [];
   const evidence = Array.isArray(archive.learning_evidence) ? archive.learning_evidence as DbRow[] : [];
@@ -1745,8 +1747,8 @@ async function handleGenerateProgressReport(
     class_id: classId || null,
     student_id: studentId,
     generated_by: actorId,
-    report_type: cleanText((body.payload as DbRow | undefined)?.report_type, "parent"),
-    title: cleanText((body.payload as DbRow | undefined)?.title, "Student progress report"),
+    report_type: cleanText(payload?.report_type, "parent"),
+    title: cleanText(payload?.title, "Student progress report"),
     status: "draft",
     summary: {
       completed_lessons: reportBody.completed_lessons,
@@ -1765,16 +1767,98 @@ async function handleGenerateProgressReport(
     entityId: cleanId(report.id),
     payload: { student_id: studentId },
   });
+  return report;
+}
+
+function progressReportExport(studentId: string, report: DbRow): DbRow {
+  return {
+    filename: `student-${safeFilenamePart(studentId)}-progress-report.json`,
+    content_type: "application/json",
+    body: JSON.stringify(report, null, 2),
+  };
+}
+
+async function handleGenerateProgressReport(
+  config: Config,
+  actorId: string,
+  access: ActorAccess,
+  body: DbRow,
+): Promise<Response> {
+  const organizationId = cleanId(body.organization_id);
+  const classId = cleanId(body.class_id);
+  const studentId = cleanId(body.user_id);
+  if (!studentId) throw new Error("user_id is required.");
+  if (organizationId) requireOrganizationAccess(access, organizationId);
+  const report = await buildProgressReport(config, {
+    actorId,
+    organizationId,
+    classId,
+    studentId,
+    payload: body.payload as DbRow | undefined,
+  });
   return json({
     status: "ok",
     data: {
       actor_access: actorAccessPayload(access),
       progress_report: report,
-      export: {
-        filename: `student-${safeFilenamePart(studentId)}-progress-report.json`,
-        content_type: "application/json",
-        body: JSON.stringify(report, null, 2),
-      },
+      export: progressReportExport(studentId, report),
+    },
+  });
+}
+
+// Active class_ids the actor teaches (role=teacher, status=active) — mirrors the is_class_teacher
+// RLS predicate exactly (role='teacher' and status='active') so the service-role read grants the
+// same scope a teacher would have under RLS, never broader.
+async function fetchTeacherClassIds(
+  config: Config,
+  userId: string,
+): Promise<string[]> {
+  const rows = await selectRows(
+    config,
+    `class_memberships?user_id=eq.${encodeURIComponent(userId)}&role=eq.teacher&status=eq.active&select=class_id`,
+  );
+  return Array.isArray(rows)
+    ? Array.from(new Set(rows.map((row) => cleanId(row.class_id)).filter(Boolean)))
+    : [];
+}
+
+// Teacher-scoped progress report. Authorized via class_memberships (role=teacher), NOT admin
+// access. Strictly validates the actor teaches THIS class AND the target user is an ACTIVE student
+// in THAT SAME class, so a teacher can only ever report on a student they actually teach.
+async function handleTeacherGenerateProgressReport(
+  config: Config,
+  actorId: string,
+  body: DbRow,
+): Promise<Response> {
+  const classId = cleanId(body.class_id);
+  const studentId = cleanId(body.user_id);
+  if (!classId) throw new Error("class_id is required.");
+  if (!studentId) throw new Error("user_id is required.");
+  const teacherClassIds = await fetchTeacherClassIds(config, actorId);
+  if (!teacherClassIds.length) throw new Error("Teacher access is required.");
+  if (!teacherClassIds.includes(classId)) {
+    throw new Error("You do not teach this class.");
+  }
+  const enrollment = await selectRows(
+    config,
+    `class_memberships?class_id=eq.${encodeURIComponent(classId)}&user_id=eq.${encodeURIComponent(studentId)}&role=eq.student&status=eq.active&select=user_id&limit=1`,
+  );
+  if (!Array.isArray(enrollment) || !enrollment.length) {
+    throw new Error("That student is not enrolled in this class.");
+  }
+  const organizationId = await fetchClassOrganizationId(config, classId);
+  const report = await buildProgressReport(config, {
+    actorId,
+    organizationId,
+    classId,
+    studentId,
+    payload: body.payload as DbRow | undefined,
+  });
+  return json({
+    status: "ok",
+    data: {
+      progress_report: report,
+      export: progressReportExport(studentId, report),
     },
   });
 }
@@ -2577,7 +2661,6 @@ Deno.serve(async (req: Request) => {
   try {
     const actor = await fetchCurrentUser(config);
     const actorId = String(actor.id);
-    const actorAccess = await fetchActorAccess(config, actorId);
 
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -2586,6 +2669,13 @@ Deno.serve(async (req: Request) => {
 
     const record = body as DbRow;
     const action = cleanText(record.action);
+
+    // Teacher-scoped actions authorize via class_memberships (role=teacher), so they must be
+    // dispatched BEFORE fetchActorAccess, which throws for anyone who is not a platform/org admin.
+    if (action === "teacher_generate_progress_report")
+      return await handleTeacherGenerateProgressReport(config, actorId, record);
+
+    const actorAccess = await fetchActorAccess(config, actorId);
     if (action === "list_admin_scope")
       return await handleListAdminScope(config, actorAccess);
     if (action === "list_pilot_readiness")
@@ -2639,7 +2729,10 @@ Deno.serve(async (req: Request) => {
     const status =
       message.includes("Admin access") ||
       message.includes("platform admins") ||
-      message.includes("org-admin")
+      message.includes("org-admin") ||
+      message.includes("Teacher access") ||
+      message.includes("do not teach") ||
+      message.includes("not enrolled in this class")
         ? 403
         : message.includes("authenticated") ||
             message.includes("Authentication")

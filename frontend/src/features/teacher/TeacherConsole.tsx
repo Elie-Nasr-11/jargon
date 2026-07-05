@@ -68,6 +68,7 @@ import {
   updateAssessmentStatus,
   reviewAssessmentItem,
   returnAssessment,
+  teacherGenerateProgressReport,
   updateInterventionAlertStatus,
   updateLessonResource,
   uploadPdfPageAssets,
@@ -134,11 +135,17 @@ export function TeacherConsole() {
   const [liveCommentDraft, setLiveCommentDraft] = useState("");
   const [sendingLiveComment, setSendingLiveComment] = useState(false);
   const [updatingAlertId, setUpdatingAlertId] = useState<string | null>(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const teacherId = auth?.id ?? "";
   const email = auth?.email ?? "";
   const selectedClassId = params.classId ?? null;
   const selectedStudentId = params.studentId ?? null;
+
+  useEffect(() => {
+    setReportError(null);
+  }, [selectedStudentId]);
 
   useEffect(() => {
     let alive = true;
@@ -380,6 +387,33 @@ export function TeacherConsole() {
       setMessage((error as Error).message || "Could not save teacher note.");
     } finally {
       setSavingNote(false);
+    }
+  };
+
+  const generateReport = async () => {
+    if (!selectedClassId || !selectedStudentId || generatingReport) return;
+    setGeneratingReport(true);
+    setReportError(null);
+    try {
+      const { export: file } = await teacherGenerateProgressReport({
+        classId: selectedClassId,
+        userId: selectedStudentId,
+      });
+      const blob = new Blob([file.body], { type: file.content_type });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = file.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      // Defer the revoke so an in-flight download is not cancelled in browsers that capture the
+      // blob asynchronously after click().
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      setReportError((error as Error).message || "Could not generate the report.");
+    } finally {
+      setGeneratingReport(false);
     }
   };
 
@@ -947,6 +981,9 @@ export function TeacherConsole() {
                 <StudentDetail
                   studentId={selectedStudentId}
                   classLabel={selectedClass?.name ?? ""}
+                  onGenerateReport={generateReport}
+                  generatingReport={generatingReport}
+                  reportError={reportError}
                   profile={selectedStudent}
                   stats={studentStats}
                   dashboard={dashboard}
@@ -4350,6 +4387,9 @@ function LessonProgress({
 function StudentDetail({
   studentId,
   classLabel,
+  onGenerateReport,
+  generatingReport,
+  reportError,
   profile,
   stats,
   dashboard,
@@ -4377,6 +4417,9 @@ function StudentDetail({
 }: {
   studentId: string;
   classLabel: string;
+  onGenerateReport: () => void;
+  generatingReport: boolean;
+  reportError: string | null;
   profile: Profile | null;
   stats: StudentSummary;
   dashboard: TeacherDashboardData;
@@ -4477,13 +4520,27 @@ function StudentDetail({
   return (
     <GradientCard>
       <div className="p-4 sm:p-5">
-        <button
-          type="button"
-          onClick={onBack}
-          className="mb-4 inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ChevronLeft className="h-4 w-4" strokeWidth={1.6} /> Back to {classLabel || "class"}
-        </button>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" strokeWidth={1.6} /> Back to {classLabel || "class"}
+          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={onGenerateReport}
+              disabled={generatingReport}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <FileText className="h-3.5 w-3.5" strokeWidth={1.7} />
+              {generatingReport ? "Generating…" : "Generate report"}
+            </button>
+            {reportError ? <span className="text-[11.5px] text-danger">{reportError}</span> : null}
+          </div>
+        </div>
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

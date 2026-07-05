@@ -1798,6 +1798,7 @@ export type AdminOpsAction =
   | "upsert_consent_settings"
   | "organization_links"
   | "generate_progress_report"
+  | "teacher_generate_progress_report"
   | "create_class"
   | "update_class"
   | "reset_user_password"
