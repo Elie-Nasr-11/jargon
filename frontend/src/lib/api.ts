@@ -62,6 +62,7 @@ import type {
   MentorRecommendation,
   Notification,
   ModelUsageEvent,
+  ActiveSession,
   AdminActorAccess,
   AdminOpsAction,
   AdminOpsResponse,
@@ -902,6 +903,13 @@ export async function fetchCostModelDashboard(accessToken: string): Promise<{
     scope: data.data.scope,
     dashboard: data.data.cost_model_dashboard,
   };
+}
+
+// v4.0 Phase 5: the admin Live fleet — currently-active learning sessions across the admin's scope.
+export async function fetchActiveSessions(accessToken: string): Promise<ActiveSession[]> {
+  const data = await invokeAdminOps({ accessToken, action: "list_active_sessions" });
+  const sessions = data.data?.sessions;
+  return Array.isArray(sessions) ? (sessions as ActiveSession[]) : [];
 }
 
 export async function exportClassSnapshot(accessToken: string, classId: string) {

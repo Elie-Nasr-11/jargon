@@ -39,6 +39,7 @@ import {
   fetchGoogleClassroomCourses,
   fetchGoogleClassroomMappings,
   fetchPilotReadiness,
+  fetchActiveSessions,
   generateProgressReport,
   getSession,
   importGoogleClassroomCourse,
@@ -88,6 +89,7 @@ import type {
   CanvasIntegrationState,
   CanvasPerson,
   PilotReadiness,
+  ActiveSession,
   PilotRole,
   ReadinessStatus,
   TeacherClassMembership,
@@ -314,6 +316,9 @@ export function AdminPage() {
   const [readiness, setReadiness] = useState<PilotReadiness | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [readinessMessage, setReadinessMessage] = useState("");
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[] | null>(null);
+  const [activeSessionsLoading, setActiveSessionsLoading] = useState(false);
+  const [activeSessionsError, setActiveSessionsError] = useState("");
   const [costDashboard, setCostDashboard] = useState<CostModelDashboard | null>(null);
   const [costLoading, setCostLoading] = useState(false);
   const [costMessage, setCostMessage] = useState("");
@@ -533,6 +538,20 @@ export function AdminPage() {
     }
   };
 
+  const refreshActiveSessions = async (accessToken = token) => {
+    if (!accessToken) return;
+    setActiveSessionsLoading(true);
+    setActiveSessionsError("");
+    try {
+      setActiveSessions(await fetchActiveSessions(accessToken));
+    } catch (error) {
+      // Keep a failed load distinct from a genuinely-empty fleet.
+      setActiveSessionsError((error as Error).message || "Could not load live sessions.");
+    } finally {
+      setActiveSessionsLoading(false);
+    }
+  };
+
   const refreshReadiness = async (accessToken = token, silent = false) => {
     if (!accessToken) return false;
     setReadinessLoading(true);
@@ -728,6 +747,21 @@ export function AdminPage() {
   const adminTab = search.tab ?? "readiness";
   const setAdminTab = (tab: string) =>
     navigate({ to: adminHome, search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
+
+  // Load the Live fleet the first time its tab is opened (poll-based; the panel has a Refresh).
+  useEffect(() => {
+    if (adminTab === "live" && token && activeSessions === null && !activeSessionsLoading) {
+      void refreshActiveSessions(token);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminTab, token]);
+
+  const liveAgo = (iso: string): string => {
+    const diff = Date.now() - Date.parse(iso);
+    if (!Number.isFinite(diff)) return "";
+    const m = Math.round(diff / 60_000);
+    return m < 1 ? "just now" : m < 60 ? `${m}m ago` : `${Math.round(m / 60)}h ago`;
+  };
   const integrationMode = search.integration ?? "google";
   const setIntegrationMode = (integration: string) =>
     navigate({
@@ -1889,6 +1923,7 @@ export function AdminPage() {
             <Tabs value={adminTab} onValueChange={setAdminTab}>
               <WorkspaceTabList>
                 <WorkspaceTab value="readiness">Readiness</WorkspaceTab>
+                <WorkspaceTab value="live">Live</WorkspaceTab>
                 <WorkspaceTab value="school">School data</WorkspaceTab>
                 <WorkspaceTab value="integrations">Integrations</WorkspaceTab>
                 {isPlatformLevel ? (
@@ -1897,6 +1932,95 @@ export function AdminPage() {
                 <WorkspaceTab value="ops">Operations</WorkspaceTab>
                 <WorkspaceTab value="seeding">Seeding</WorkspaceTab>
               </WorkspaceTabList>
+
+              <WorkspacePanel value="live">
+                <GradientCard>
+                  <div className="p-4 sm:p-6">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-[17px] font-medium text-foreground">
+                          Live sessions
+                          {activeSessions?.length ? (
+                            <span className="ml-2 text-[13px] font-normal text-muted-foreground">
+                              {activeSessions.length}
+                            </span>
+                          ) : null}
+                        </h2>
+                        <p className="mt-1 text-[13px] text-muted-foreground">
+                          Students active in the last 30 minutes across your{" "}
+                          {isPlatformLevel ? "platform" : "organization"}.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void refreshActiveSessions()}
+                        disabled={activeSessionsLoading}
+                        className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                      >
+                        {activeSessionsLoading ? "Refreshing…" : "Refresh"}
+                      </button>
+                    </div>
+                    {activeSessionsError ? (
+                      <p className="text-[13px] text-danger">
+                        {activeSessionsError}{" "}
+                        <button
+                          type="button"
+                          onClick={() => void refreshActiveSessions()}
+                          className="underline hover:no-underline"
+                        >
+                          Retry
+                        </button>
+                      </p>
+                    ) : activeSessions === null ? (
+                      <p className="text-[13px] text-muted-foreground">Loading live sessions…</p>
+                    ) : activeSessions.length === 0 ? (
+                      <p className="text-[13px] text-muted-foreground">
+                        No students are in a live session right now.
+                      </p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {activeSessions.map((s) => {
+                          const struggling =
+                            s.status === "needs_retry" || s.status === "needs_rescue";
+                          return (
+                            <div
+                              key={s.session_id}
+                              className="flex items-center gap-3 rounded-2xl border border-border bg-depth-field px-3 py-2.5"
+                            >
+                              <span className="relative flex h-2 w-2 shrink-0">
+                                <span
+                                  className={`absolute inline-flex h-full w-full animate-ping rounded-full ${struggling ? "bg-warning/60" : "bg-success/60"}`}
+                                />
+                                <span
+                                  className={`relative inline-flex h-2 w-2 rounded-full ${struggling ? "bg-warning" : "bg-success"}`}
+                                />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-[13.5px] text-foreground">
+                                  {s.student_name}
+                                </div>
+                                <div className="truncate text-[12px] text-muted-foreground">
+                                  {s.lesson_title}
+                                  {s.class_name ? ` · ${s.class_name}` : ""}
+                                  {s.stage ? ` · ${s.stage}` : ""}
+                                </div>
+                              </div>
+                              {struggling ? (
+                                <span className="shrink-0 rounded-full border border-warning/40 px-2 py-0.5 text-[10.5px] text-warning">
+                                  Needs attention
+                                </span>
+                              ) : null}
+                              <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                                {liveAgo(s.updated_at)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </GradientCard>
+              </WorkspacePanel>
 
               <WorkspacePanel value="readiness">
                 <GradientCard>

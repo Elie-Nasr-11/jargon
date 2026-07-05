@@ -27,6 +27,7 @@ on:
       - "supabase/functions/canvas/**"
       - "supabase/functions/google-classroom/**"
       - "supabase/functions/resource-processing/**"
+      - "supabase/functions/admin-ops/**"
       - "supabase/migrations/**"
       - ".github/workflows/deploy-backend.yml"
 
@@ -99,3 +100,6 @@ jobs:
           supabase functions deploy canvas --project-ref "$PROJECT_REF"
           supabase functions deploy google-classroom --project-ref "$PROJECT_REF"
           supabase functions deploy resource-processing --project-ref "$PROJECT_REF"
+          # admin-ops now auto-deploys (actively developed as of the Live tab); it stays JWT- +
+          # actor-access-gated internally. admin-seed remains manual (account provisioning).
+          supabase functions deploy admin-ops --project-ref "$PROJECT_REF"

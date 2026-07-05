@@ -1773,9 +1773,22 @@ export type CanvasResponse = {
   error?: string;
 };
 
+// v4.0 Phase 5: a currently-active learning session in the admin Live fleet.
+export type ActiveSession = {
+  session_id: string;
+  user_id: string;
+  student_name: string;
+  lesson_title: string;
+  stage: string;
+  status: string;
+  class_name: string;
+  updated_at: string;
+};
+
 export type AdminOpsAction =
   | "list_admin_scope"
   | "list_pilot_readiness"
+  | "list_active_sessions"
   | "list_cost_model_dashboard"
   | "export_class_snapshot"
   | "preview_csv_import"

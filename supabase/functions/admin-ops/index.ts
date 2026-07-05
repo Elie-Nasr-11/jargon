@@ -740,6 +740,67 @@ async function handleListAdminScope(
   return json({ status: "ok", data: await scopeResponse(config, access) });
 }
 
+// v4.0 Phase 5: the admin "Live" fleet — learning sessions currently in progress across the
+// admin's scope. Reuses loadAdminScope (org-gated) for the accessible student set + names, reads
+// active sessions (service role), and joins lesson titles. Poll-based; no realtime.
+async function handleListActiveSessions(
+  config: Config,
+  access: ActorAccess,
+): Promise<Response> {
+  const scope = await loadAdminScope(config, access);
+  const classes = Array.isArray(scope.classes) ? (scope.classes as DbRow[]) : [];
+  const memberships = Array.isArray(scope.class_memberships)
+    ? (scope.class_memberships as DbRow[])
+    : [];
+  const profiles = Array.isArray(scope.profiles) ? (scope.profiles as DbRow[]) : [];
+  const studentMemberships = memberships.filter(
+    (row) => cleanText(row.role) === "student" && cleanText(row.status) === "active",
+  );
+  const studentIds = idsFrom(studentMemberships, "user_id");
+  const now = new Date().toISOString();
+  if (!studentIds.length) return json({ status: "ok", data: { sessions: [], generated_at: now } });
+
+  // "Live" = a non-terminal session (active OR a struggling needs_retry/needs_rescue — those are
+  // exactly who an admin wants to watch) that was touched recently (a session left open + abandoned
+  // stays 'active' forever, so gate on recency rather than trusting a terminal transition).
+  const recentIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const sessions = await selectRows(
+    config,
+    `learning_sessions?${inFilter("user_id", studentIds)}&status=in.(active,needs_retry,needs_rescue)&updated_at=gte.${encodeURIComponent(recentIso)}&select=id,user_id,lesson_id,stage,status,updated_at&order=updated_at.desc&limit=200`,
+  );
+  const lessonIds = idsFrom(sessions, "lesson_id");
+  const lessons = lessonIds.length
+    ? await selectRows(config, `lessons?${inFilter("id", lessonIds)}&select=id,title`)
+    : [];
+
+  const nameById = new Map(profiles.map((p) => [cleanId(p.id), cleanText(p.name)]));
+  const lessonTitleById = new Map(lessons.map((l) => [cleanId(l.id), cleanText(l.title)]));
+  const classNameById = new Map(classes.map((c) => [cleanId(c.id), cleanText(c.name)]));
+  const studentClassName = new Map<string, string>();
+  for (const m of studentMemberships) {
+    const uid = cleanId(m.user_id);
+    const cid = cleanId(m.class_id);
+    if (uid && cid && !studentClassName.has(uid)) {
+      studentClassName.set(uid, classNameById.get(cid) || "");
+    }
+  }
+
+  const rows = sessions.map((s) => {
+    const uid = cleanId(s.user_id);
+    return {
+      session_id: cleanId(s.id),
+      user_id: uid,
+      student_name: nameById.get(uid) || "Student",
+      lesson_title: lessonTitleById.get(cleanId(s.lesson_id)) || "a lesson",
+      stage: cleanText(s.stage),
+      status: cleanText(s.status),
+      class_name: studentClassName.get(uid) || "",
+      updated_at: s.updated_at,
+    };
+  });
+  return json({ status: "ok", data: { sessions: rows, generated_at: now } });
+}
+
 async function loadPilotReadinessData(
   config: Config,
   access: ActorAccess,
@@ -2529,6 +2590,8 @@ Deno.serve(async (req: Request) => {
       return await handleListAdminScope(config, actorAccess);
     if (action === "list_pilot_readiness")
       return await handleListPilotReadiness(config, actorAccess);
+    if (action === "list_active_sessions")
+      return await handleListActiveSessions(config, actorAccess);
     if (action === "list_cost_model_dashboard")
       return await handleListCostModelDashboard(config, actorAccess);
     if (action === "export_class_snapshot")
