@@ -6,6 +6,43 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 5b: admin Live tab — active-session fleet — DEPLOYED)
+
+Summary: An admin "Live" tab showing learning sessions currently in progress across the admin's
+scope. admins can't read `learning_sessions` by RLS, so the read goes through a new service-role
+`admin-ops` action, `list_active_sessions`, gated by the existing platform/org-admin `fetchActorAccess`
+(org_admins see only their orgs' students via `loadAdminScope` — review confirmed no scope leak). It
+reads NON-TERMINAL sessions (`active` + `needs_retry` + `needs_rescue`) touched in the last 30 min,
+scoped to the admin's ACTIVE student memberships, joined to lesson/class labels, and returns each
+session's status so struggling students surface. The frontend renders a Live WorkspaceTab + panel:
+pulsing dot (amber "Needs attention" for needs_*), live count, a distinct error-vs-empty state, and a
+poll-based Refresh (realtime deferred).
+
+admin-ops was deliberately NOT auto-deployed before (service-role-sensitive); since it is now
+actively developed it was ADDED to deploy-backend.yml (paths trigger + function-deploy step). It
+stays JWT + actor-access gated internally. admin-seed stays manual (account provisioning).
+
+Files changed: supabase/functions/admin-ops/index.ts (handleListActiveSessions + list_active_sessions
+dispatch), .github/workflows/deploy-backend.yml (admin-ops added to paths + deploy step), frontend/
+src/lib/types.ts (ActiveSession + AdminOpsAction), frontend/src/lib/api.ts (fetchActiveSessions),
+frontend/src/routes/admin.tsx (Live tab + panel + state/refresh), docs/HANDOFF.md.
+
+Tests run: node --check admin-ops; frontend tsc/lint/build (0 errors). Adversarial review (8 agents):
+no scope/security leak. Fixed 5 correctness findings — `status=eq.active` hid struggling students (now
+includes needs_*), no recency bound let abandoned-open sessions read as live forever (now a 30-min
+window), the frontend collapsed fetch errors into the empty state (now a distinct Retry state), and
+student-membership status was ignored (now active-only). Deployed via run #41 (green); prod-verified
+the deployed admin-ops carries list_active_sessions + handleListActiveSessions + the non-terminal
+filter + the 30-min bound.
+
+This CLOSES the buildable remaining-deferred work. Still deferred with cause (each needs its own
+slice, NOT a quick add): teacher reports (needs a NEW teacher auth tier in admin-ops — today
+platform/org-admin only), review-due chip (content-blocked — no published revision lesson to route
+into + a due-queue design over student_mastery.last_practiced_at), ad-hoc revision sessions
+(runtime-wide learning_sessions.lesson_id NOT-NULL relaxation — highest live-tutor risk). Also a
+future refinement: the full HotlistFeed data-source swap onto notifications (needs the missing alert
+writer + a submission edge fn first).
+
 ## Claude -> Codex / Human - 2026-07-05 (v4.0 Phase 5a: persistent notifications table + teacher bell — DEPLOYED)
 
 Summary: A real `notifications` table (recipient = user_id) + a persistent teacher notification
