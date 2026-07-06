@@ -2,6 +2,28 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-06: Post-v4.0 Phase 5 — ad-hoc review sessions via a GREENFIELD table (not the lesson_id relaxation)
+
+The roadmap framed P5 as "relax `learning_sessions.lesson_id` NOT NULL" so an ad-hoc review could be a
+learning_sessions row with no lesson. An exhaustive blast-radius map (workflow, 4 parallel readers over
+backend/frontend/DB/requirements) rejected that path and chose a **dedicated `review_sessions` table**:
+
+- Relaxing the NOT NULL modifies the single table the live turn loop, the completion gate, and the entire
+  teacher/admin join surface all read from. It **breaks the exact resume query** it is meant to add
+  (`chat` loadOrCreateSession filters `lesson_id=eq.{lessonId}` — a NULL can never match `=eq`), and to
+  persist a review transcript it would force NOT NULL relaxation on **`learning_turns` + `lesson_attempts`
+  too** (both `lesson_id`/`session_id` NOT NULL) — three hot-path tables. The "1216/1216 rows are non-null"
+  invariant every defensive guard was written under would be quietly retired.
+- `review_sessions` is greenfield: the live tutor **never reads or writes it**, so it carries ZERO
+  regression risk to the turn loop, the gate, the resume path, and every existing teacher join. Resume is a
+  clean id-only lookup with none of the lesson-binding hazard. RLS mirrors the established boundaries
+  (owner `user_id=auth.uid()` FOR ALL; teacher SELECT via `can_view_student`).
+- The spaced-repetition ANALYTICS need no new storage — they already ship from the P4b review handler
+  (`learning_evidence` mode='revision' + `student_mastery.last_practiced_at`). The table only adds a
+  durable, teacher-visible SESSION record on top. Deliberately did NOT touch learning_sessions /
+  learning_turns / lesson_attempts. This is the "highest-risk" roadmap item made low-risk by picking the
+  isolated object over the shared one.
+
 ## 2026-07-05: Post-v4.0 Phase 3 — teacher hold + interventions-as-record
 
 - **A teacher can PAUSE the live Mentor, and the pause is a fail-open SERVER gate — not a client-only

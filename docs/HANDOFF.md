@@ -6,7 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 4b: guided-review loop-close — building)
+## Claude -> Codex / Human - 2026-07-06 (Post-v4.0 Phase 5: first-class ad-hoc review sessions — building)
+
+Status: Built + verified; adversarial review (workflow) running; deploy next.
+Task: Make guided reviews first-class, resumable, teacher-visible SESSIONS — via a GREENFIELD
+`review_sessions` table, NOT the roadmap's `learning_sessions.lesson_id` NOT-NULL relaxation (see the
+2026-07-06 DECISIONS entry + the exhaustive blast-radius workflow for why the relaxation was rejected).
+
+- `supabase/migrations/20260730000000_review_sessions.sql` (NEW, greenfield): `review_sessions`
+  (id/user_id/skill_key/tier/lesson_id/state jsonb/status/score/question_count/timestamps) + a status
+  CHECK + RLS (owner `user_id=auth.uid()` FOR ALL; teacher SELECT via `can_view_student`) + indexes.
+  Touches NO live table. Validated in a rolled-back live-DB txn (2 policies, insert+read-back).
+- `supabase/functions/chat/index.ts` handleReviewRequest: adds a best-effort review_sessions lifecycle
+  (start inserts a row → returns review_session_id; a continuation graded turn increments
+  server-truthful question_count/score/state.correct; a `review_action:"complete"` PATCH flips status
+  with NO model call). Still writes zero learning_sessions/turns/attempts. `review_session_id` added to
+  the Envelope + makeEnvelope (omitted unless set).
+- Frontend: `ReviewSession` type + `review_session_id` on the envelope; `invokeReview` threads the id,
+  `completeReviewSession` (best-effort) + `fetchStudentReviewSessions` (teacher read) in api.ts;
+  `ReviewDueChip` continues + finalizes the session; NEW `StudentReviewSessions` mounted in the teacher
+  student-detail Records tab (skill · questions · score · status · date).
+- `tests/test_review_sessions.py` (NEW): fingerprints + a guard that NO migration relaxes
+  learning_sessions.lesson_id NOT NULL (the invariant the greenfield design preserves).
+
+Tests: node --check green; frontend tsc/lint/build green; Python suite (190) green; migration validated
+in a rolled-back txn.
+
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 4b: guided-review loop-close — DEPLOYED)
 
 Status: Built + verified; adversarial review self-run (the agent kept getting killed by the flaky
 SQL stream, so I ran its schema/RLS checks myself); deploy next.

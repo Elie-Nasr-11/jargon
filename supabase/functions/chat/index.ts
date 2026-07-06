@@ -193,6 +193,8 @@ type Envelope = {
   session?: EnvelopeSession | null;
   // Set only when a teacher has paused this session; the mentor did not run this turn.
   held?: boolean;
+  // P5: the id of the first-class review_sessions row backing a guided review (review path only).
+  review_session_id?: string;
 };
 
 type EnvelopeSession = {
@@ -341,6 +343,9 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     session: envelopeSession(partial.session),
     // Optional; omitted from the wire unless a teacher paused this turn.
     held: partial.held === true ? true : undefined,
+    // Optional; only the review path sets it.
+    review_session_id:
+      typeof partial.review_session_id === "string" ? partial.review_session_id : undefined,
   };
 }
 
@@ -3838,7 +3843,10 @@ async function handleTypedRequest(
 // skill without entering the step/completion machinery: it maps the skill to a lesson it was taught
 // in (for a real objective to quiz + grade against), grades the recall with the same understanding
 // grader, and — the point of the feature — refreshes that skill's last_practiced_at (+ stamps
-// mode='revision' evidence) so a reviewed skill leaves the due queue. Stateless: writes no session.
+// mode='revision' evidence) so a reviewed skill leaves the due queue. P5: it also backs the review
+// with a first-class `review_sessions` row (greenfield table the live turn loop never reads) so the
+// review is a resumable, teacher-visible record — the row write is best-effort and never blocks the
+// turn; it writes NO learning_sessions / learning_turns row.
 async function handleReviewRequest(
   req: Request,
   body: Record<string, unknown>,
@@ -3861,6 +3869,46 @@ async function handleReviewRequest(
   const answer = normalizeAnswer(body.answer);
   const studentText = answerContent(answer);
   const mentorPreferences = normalizeMentorPreferences(body.mentor_preferences);
+  const reviewSessionIdIn =
+    typeof body.review_session_id === "string" &&
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+      body.review_session_id,
+    )
+      ? body.review_session_id
+      : "";
+  const reviewAction = typeof body.review_action === "string" ? body.review_action : "";
+
+  // Finalize a review session (no model call — just flips the record to complete; question_count and
+  // score are already server-tracked per turn). Best-effort; the owner RLS scopes the PATCH to this
+  // student's own row. Returns early so completion costs nothing.
+  if (reviewAction === "complete") {
+    if (reviewSessionIdIn) {
+      try {
+        await supabaseFetch(
+          config,
+          `review_sessions?id=eq.${encodeURIComponent(reviewSessionIdIn)}&user_id=eq.${encodeURIComponent(userId)}`,
+          {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ status: "complete", updated_at: new Date().toISOString() }),
+          },
+        );
+      } catch {
+        // best-effort — a lost finalize just leaves the row 'active'.
+      }
+    }
+    return json(
+      makeEnvelope({
+        status: "ok",
+        reply: "Nice work — that's logged. Come back when the next skills are due.",
+        session_id: null,
+        lesson_id: null,
+        stage: "review",
+        next_action: "reply",
+        review_session_id: reviewSessionIdIn || undefined,
+      }),
+    );
+  }
 
   try {
     // Map the skill to a lesson that teaches it (for a real objective). `skill_keys` is text[];
@@ -3997,6 +4045,55 @@ async function handleReviewRequest(
       );
     }
 
+    // P5: back the review with a first-class review_sessions row (best-effort; the live turn loop
+    // NEVER reads this table). Start (no id) inserts; a continuation turn increments server-truthful
+    // counts — no client-reported totals to trust. A failure just skips the tracked record.
+    let reviewSessionId = reviewSessionIdIn;
+    const gradedThisTurn = Boolean(gradedUnderstanding && answer);
+    const correctInc = gradedUnderstanding?.demonstrated ? 1 : 0;
+    try {
+      if (!reviewSessionId) {
+        const created = await insertRow(config, "review_sessions", {
+          user_id: userId,
+          skill_key: skillKey,
+          tier,
+          lesson_id: lessonId || null,
+          status: "active",
+          question_count: gradedThisTurn ? 1 : 0,
+          score: gradedThisTurn ? correctInc : null,
+          state: { correct: correctInc, started_at: new Date().toISOString() },
+        });
+        if (typeof created.id === "string") reviewSessionId = created.id;
+      } else if (gradedThisTurn) {
+        const rows = await loadMany(
+          config,
+          `review_sessions?id=eq.${encodeURIComponent(reviewSessionId)}&user_id=eq.${encodeURIComponent(userId)}&select=question_count,state`,
+        );
+        const cur = rows[0];
+        if (cur) {
+          const qc = Number(cur.question_count || 0) + 1;
+          const state = cur.state && typeof cur.state === "object" ? (cur.state as DbRow) : {};
+          const correct = Number(state.correct || 0) + correctInc;
+          await supabaseFetch(
+            config,
+            `review_sessions?id=eq.${encodeURIComponent(reviewSessionId)}&user_id=eq.${encodeURIComponent(userId)}`,
+            {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({
+                question_count: qc,
+                score: qc > 0 ? correct / qc : null,
+                state: { ...state, correct },
+                updated_at: new Date().toISOString(),
+              }),
+            },
+          );
+        }
+      }
+    } catch {
+      // best-effort — the review still works (and closes the loop) without a tracked session row.
+    }
+
     return json(
       makeEnvelope({
         status: "ok",
@@ -4005,6 +4102,7 @@ async function handleReviewRequest(
         lesson_id: lessonId || null,
         stage: "review",
         next_action: "reply",
+        review_session_id: reviewSessionId || undefined,
       }),
     );
   } catch (err) {

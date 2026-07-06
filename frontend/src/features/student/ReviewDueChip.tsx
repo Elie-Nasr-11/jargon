@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RotateCcw, Send } from "lucide-react";
 
-import { fetchReviewDue, invokeReview } from "@/lib/api";
+import { completeReviewSession, fetchReviewDue, invokeReview } from "@/lib/api";
 import { humanizeSkillKey, practicedAgo } from "@/lib/review";
 import type { MentorPreferences, ReviewDueSkill } from "@/lib/types";
 
@@ -26,6 +26,7 @@ export function ReviewDueChip({
   const [due, setDue] = useState<ReviewDueSkill[]>([]);
   const [open, setOpen] = useState(false);
   const [reviewSkill, setReviewSkill] = useState<string | null>(null);
+  const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
   const [lines, setLines] = useState<ReviewLine[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -64,12 +65,14 @@ export function ReviewDueChip({
   const startReview = async (skillKey: string) => {
     if (!accessToken || sending) return;
     setReviewSkill(skillKey);
+    setReviewSessionId(null);
     setLines([]);
     setInput("");
     setReviewError(null);
     setSending(true);
     try {
       const envelope = await invokeReview({ accessToken, skillKey, mentorPreferences });
+      setReviewSessionId(envelope.review_session_id ?? null);
       setLines([{ role: "mentor", text: envelope.reply }]);
     } catch (error) {
       setReviewError((error as Error).message || "Could not start review.");
@@ -91,7 +94,9 @@ export function ReviewDueChip({
         skillKey: reviewSkill,
         answer: { mode: "text", text },
         mentorPreferences,
+        reviewSessionId,
       });
+      if (envelope.review_session_id) setReviewSessionId(envelope.review_session_id);
       setLines((current) => [...current, { role: "mentor", text: envelope.reply }]);
     } catch (error) {
       setReviewError((error as Error).message || "Could not send your answer.");
@@ -101,7 +106,12 @@ export function ReviewDueChip({
   };
 
   const endReview = () => {
+    // Finalize the tracked review_sessions row (best-effort; server-tracked counts already landed).
+    if (accessToken && reviewSkill && reviewSessionId) {
+      void completeReviewSession({ accessToken, skillKey: reviewSkill, reviewSessionId });
+    }
     setReviewSkill(null);
+    setReviewSessionId(null);
     setLines([]);
     setInput("");
     setReviewError(null);
@@ -134,7 +144,8 @@ export function ReviewDueChip({
                 <button
                   type="button"
                   onClick={endReview}
-                  className="shrink-0 text-[11.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  disabled={sending}
+                  className="shrink-0 text-[11.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-40"
                 >
                   Done
                 </button>

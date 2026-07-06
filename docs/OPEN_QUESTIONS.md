@@ -30,9 +30,13 @@ prose):
   sooner (emergent SM-2 lapse). Guarded: skill must be in the student's own mastery (no model call for an
   arbitrary skill) + a per-user model_usage rate limit. Residual (accepted for v1): the rate limit is a
   sequential guard (recorded usage is async), so a parallel burst can slip a few calls before it engages.
-  STILL OPEN (P5): making an ad-hoc review a FIRST-CLASS `learning_sessions` row (needs the
-  `learning_sessions.lesson_id` NOT-NULL relaxation) so reviews are resumable + teacher-visible; today the
-  review turn is stateless (evidence-only, no session row).
+  P5 (SHIPPED): reviews are now FIRST-CLASS sessions via a GREENFIELD `review_sessions` table — NOT the
+  `learning_sessions.lesson_id` NOT-NULL relaxation, which an exhaustive blast-radius map rejected (it
+  would break the resume query + force NOT-NULL relaxations on learning_turns + lesson_attempts; see the
+  2026-07-06 DECISIONS entry). The review handler backs each guided review with a review_sessions row
+  (resumable id-only, teacher-visible via can_view_student); the live turn loop never reads it. Remaining
+  nice-to-haves: a student-facing "resume your last review" affordance (the row + state jsonb support it;
+  no UI yet) and auto-abandoning stale 'active' rows (a review closed via click-outside stays 'active').
 - **How do we complete the HotlistFeed → `notifications` MERGE?** The table + teacher bell shipped as an
   additive surface (`assessment_to_review` is the only live writer). The full merge needs a server-side
   `submission_to_grade` writer (submission is client-side today), an `intervention_alerts` insert writer

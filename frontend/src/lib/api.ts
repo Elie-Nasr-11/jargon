@@ -79,6 +79,7 @@ import type {
   StudentMastery,
   StudentProfileStats,
   ReviewDueSkill,
+  ReviewSession,
   StudentProgressSummary,
   TeacherClassSummary,
   TeacherClassMembership,
@@ -3683,13 +3684,15 @@ export async function invokeTypedChat(input: {
   return data;
 }
 
-// Post-v4.0 Phase 4b: a spaced-review turn on one skill. Hits the same chat fn with `review: true`,
-// which routes to the isolated review handler (no lesson session; refreshes the skill's spacing clock).
+// Post-v4.0 Phase 4b + 5: a spaced-review turn on one skill. Hits the same chat fn with `review: true`,
+// which routes to the isolated review handler (refreshes the skill's spacing clock and backs the
+// review with a first-class review_sessions row — returned as review_session_id for continuation).
 export async function invokeReview(input: {
   accessToken: string;
   skillKey: string;
   answer?: TypedChatAnswer;
   mentorPreferences: MentorPreferences;
+  reviewSessionId?: string | null;
 }) {
   const response = await fetchWithTimeout(functionUrl("chat"), {
     method: "POST",
@@ -3699,6 +3702,7 @@ export async function invokeReview(input: {
       skill_key: input.skillKey,
       answer: input.answer,
       mentor_preferences: input.mentorPreferences,
+      review_session_id: input.reviewSessionId || undefined,
     }),
   });
   const data = (await response.json()) as TypedChatEnvelope;
@@ -3706,6 +3710,43 @@ export async function invokeReview(input: {
     throw new Error(data.reply || "Review request failed.");
   }
   return data;
+}
+
+// P5: finalize a review session (no model call server-side; question_count/score are server-tracked
+// per turn). Best-effort — a failure just leaves the row 'active'; never throws so it can't disrupt
+// closing the review UI.
+export async function completeReviewSession(input: {
+  accessToken: string;
+  skillKey: string;
+  reviewSessionId: string;
+}) {
+  try {
+    await fetchWithTimeout(functionUrl("chat"), {
+      method: "POST",
+      headers: authHeaders(await freshAccessToken(input.accessToken)),
+      body: JSON.stringify({
+        review: true,
+        review_action: "complete",
+        skill_key: input.skillKey,
+        review_session_id: input.reviewSessionId,
+      }),
+    });
+  } catch {
+    // best-effort
+  }
+}
+
+// P5: a student's recent review sessions, for the teacher's student-detail view. RLS
+// (review_sessions_teacher_read via can_view_student) gates it to managed students.
+export async function fetchStudentReviewSessions(studentId: string): Promise<ReviewSession[]> {
+  const { data, error } = await supabase
+    .from("review_sessions")
+    .select("*")
+    .eq("user_id", studentId)
+    .order("updated_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return (data || []) as ReviewSession[];
 }
 
 export async function createRealtimeVoiceSession(input: {

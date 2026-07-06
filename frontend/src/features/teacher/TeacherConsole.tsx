@@ -31,6 +31,7 @@ import { GradientCard } from "@/components/GradientCard";
 import { HotlistFeed, deriveHotlist, type HotlistItem } from "@/features/teacher/HotlistFeed";
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
+import { StudentReviewSessions } from "@/features/teacher/StudentReviewSessions";
 import { INQUIRY_TYPE_LABELS, modeLabel } from "@/lib/modes";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -5174,6 +5175,7 @@ function StudentDetail({
                   />
                 )}
               </Panel>
+              <StudentReviewSessions studentId={studentId} />
             </div>
           </WorkspacePanel>
         </Tabs>
