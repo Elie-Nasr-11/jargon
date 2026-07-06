@@ -6,6 +6,32 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-06 (Progress bar moved into the header — fixed pill, click-dropdown)
+
+Status: Built + verified (tsc/lint/build green), shipping via main FF. FRONTEND-ONLY (no backend/migration).
+Task: per the user's review — move the lesson progress bar from the floating overlay below the header INTO
+the header row; make it fixed-size (no hover-widen); keep click-to-open its milestone dropdown; put the
+Classes icon immediately to its left.
+
+Files changed (`routes/chat.tsx` only):
+- `LessonProgress`: dropped the hover state / `onMouseEnter,onMouseLeave` / `expanded`+`maxWidth`
+  transition. Now a fixed `h-9 w-[210px]` header pill (segments + "Step N of M" + chevron). Container is
+  `relative hidden sm:block`; the roadmap dropdown is an absolute popover below it
+  (`right-0 top-[calc(100%+8px)] z-[var(--z-menu)] w-[340px]`, solid bg) that closes on outside-tap/Escape
+  (added a wrapRef + document pointerdown/keydown, mirroring SettingsMenu).
+- Header cluster: Classes `<button>` + `<LessonProgress>` wrapped in one `flex items-center gap-1.5` group
+  so Classes stays glued to the pill's left despite `sm:contents` distributing the top-level cluster.
+  Order: Messages · [Classes · Progress] · Settings.
+- Removed the floating overlay block (`pointer-events-none absolute top-[61px] z-[15]`).
+
+Tests run: `npx tsc --noEmit` (0 errors), `npm run lint` (0 errors, 12 pre-existing warns), `npm run build` (ok).
+
+Remaining concerns: the pill is `hidden sm:block`, so MOBILE no longer shows the progress bar (header row is
+too tight for a 210px pill beside the logo + 3 icons). Previously the floating pill showed on mobile — flagged
+to the user; a mobile-only floating fallback is an easy follow-up if wanted.
+
+Suggested next task: none pending; live smoke as a student (desktop) after the main FF.
+
 ## Claude -> Codex / Human - 2026-07-06 (Student header tweaks — Review→gear, drop Lessons, Classes far-right)
 
 Status: Built + verified (tsc/lint/build green), shipping via main FF. FRONTEND-ONLY (no backend/migration).

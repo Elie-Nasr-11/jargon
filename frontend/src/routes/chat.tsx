@@ -172,9 +172,9 @@ function deriveLessonArc(
   };
 }
 
-// A floating "Step N of M" pill under the header + an expandable roadmap of the lesson steps
-// (done / current / upcoming). Compact by default; grows to full width on hover (or while the
-// roadmap is open), and a click toggles the roadmap.
+// A fixed "Step N of M" pill that lives in the header, with an expandable roadmap of the lesson steps
+// (done / current / upcoming). Fixed width — no hover resize; a click toggles the roadmap dropdown,
+// which closes on outside-click or Escape. Hidden on mobile where the header row is too tight.
 function LessonProgress({
   arc,
   activities = [],
@@ -183,21 +183,34 @@ function LessonProgress({
   activities?: LessonActivity[];
 }) {
   const [open, setOpen] = useState(false);
-  const [hover, setHover] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close the roadmap on an outside tap or Escape (it's a header dropdown now, not a click-through overlay).
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: PointerEvent) => {
+      if (wrapRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   if (arc.total <= 1) return null;
-  const expanded = hover || open;
   return (
-    <div className="mx-auto w-full max-w-[760px] px-5 pt-3">
+    <div ref={wrapRef} className="relative hidden sm:block">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
         aria-expanded={open}
-        className={`pointer-events-auto mx-auto flex w-full items-center rounded-full border border-border bg-background/75 text-left shadow-sm backdrop-blur-md transition-all duration-300 ease-out hover:bg-muted/50 ${
-          expanded ? "gap-3 px-3.5 py-2" : "gap-2 px-3 py-1.5"
-        }`}
-        style={{ maxWidth: expanded ? 720 : 170 }}
+        className="flex h-9 w-[210px] items-center gap-2 rounded-full border border-border bg-background/60 px-3 text-left transition-colors hover:bg-muted/50"
       >
         <span className="flex min-w-0 flex-1 items-center gap-1" aria-hidden>
           {Array.from({ length: arc.total }).map((_, i) => (
@@ -214,7 +227,7 @@ function LessonProgress({
           ))}
         </span>
         <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-foreground">
-          {expanded ? `Step ${arc.step} of ${arc.total}` : `${arc.step}/${arc.total}`}
+          Step {arc.step} of {arc.total}
         </span>
         <ChevronDown
           className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
@@ -224,7 +237,7 @@ function LessonProgress({
         />
       </button>
       {open ? (
-        <div className="pointer-events-auto mt-2 rounded-2xl border border-border bg-background/85 p-3 shadow-sm backdrop-blur-md">
+        <div className="absolute right-0 top-[calc(100%+8px)] z-[var(--z-menu)] w-[340px] rounded-2xl border border-border bg-background p-3 shadow-lg">
           <LessonMilestones arc={arc} activities={activities} />
         </div>
       ) : null}
@@ -1039,14 +1052,19 @@ function ChatPage() {
                 dissolves this wrapper on desktop so the nav keeps its centered position. */}
             <div className="flex items-center gap-1 sm:contents">
               <StudentMiniChat />
-              <button
-                type="button"
-                onClick={() => setClassesOpen(true)}
-                aria-label="Classes"
-                className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
-              >
-                <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.5} />
-              </button>
+              {/* Classes icon glued to the left of the progress pill (a shared group keeps them
+                  adjacent even though `sm:contents` distributes the top-level cluster on desktop). */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setClassesOpen(true)}
+                  aria-label="Classes"
+                  className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
+                >
+                  <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.5} />
+                </button>
+                {lessonArc ? <LessonProgress arc={lessonArc} activities={activities} /> : null}
+              </div>
               <SettingsMenu
                 email={email}
                 mentor={mentor}
@@ -1062,16 +1080,6 @@ function ChatPage() {
       </header>
 
       <ClassesModal open={classesOpen} onOpenChange={setClassesOpen} />
-
-      {/* Floating overlay just below the header — takes no layout space, so the chat history
-          keeps its full height and simply scrolls beneath it. Clicks outside the pill fall
-          through (pointer-events re-enabled inside LessonProgress). z sits above the chat (10)
-          but below the header (20) so the nav dropdowns paint over it. */}
-      {lessonArc ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[61px] z-[15]">
-          <LessonProgress arc={lessonArc} activities={activities} />
-        </div>
-      ) : null}
 
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
         {activeLiveViewers.length ? (
