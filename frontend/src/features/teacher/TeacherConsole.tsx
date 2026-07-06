@@ -799,6 +799,13 @@ export function TeacherConsole() {
   const stopWatchingSelectedSession = async () => {
     if (!liveViewer) return;
     try {
+      // Release any pause FIRST: the Pause/Resume control only shows while watching, so a held
+      // student would otherwise be stuck (composer locked + server gate) once the teacher stops
+      // watching. Stopping the watch always lifts the teacher's own pause. Best-effort.
+      if (sessionHeld && selectedSession) {
+        await releaseSessionHold(selectedSession.id).catch(() => undefined);
+        setSessionHeld(false);
+      }
       await stopLiveSessionViewer(liveViewer.id);
       setLiveViewer(null);
       setLiveCommentDraft("");

@@ -49,6 +49,14 @@ class SessionHoldStaticTests(unittest.TestCase):
         # The envelope type carries the optional held flag.
         self.assertIn("held?: boolean", self.chat_fn)
 
+    def test_hold_only_enforced_while_a_teacher_is_watching(self):
+        # Combined-audit fix: a hold left active by a teacher who left must not strand the student —
+        # the gate additionally requires a fresh active viewer heartbeat.
+        self.assertIn("live_session_viewers?session_id=eq.", self.chat_fn)
+        self.assertIn("status=eq.active&last_seen_at=gte.", self.chat_fn)
+        # Teacher side: stopping the watch releases any pause first (else the student is stuck).
+        self.assertIn("releaseSessionHold(selectedSession.id)", self.teacher)
+
     def test_api_has_hold_helpers_and_evidence_record(self):
         for fragment in (
             "export async function holdSession",

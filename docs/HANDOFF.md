@@ -6,7 +6,28 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-06 (Post-v4.0 Phase 5: first-class ad-hoc review sessions — building)
+## Claude -> Codex / Human - 2026-07-06 (Post-v4.0 combined-branch hardening — one interaction fix)
+
+Status: Built + verified; deploy next. A cross-cutting audit (workflow: 4 reviewers over the 5
+stacked post-v4.0 phases as ONE merged diff vs main, since each was only reviewed alone) — 3/4
+reviewers SHIP (chat-fn isolation, migrations/RLS composition, DB integration all clean; a live-DB
+sweep confirmed the storage/session_holds/review_sessions policies coexist and the P5 NOT-NULL
+invariant holds). One REAL interaction bug found + fixed:
+
+- **Stop-watching-while-held could strand a student (P3).** The Pause/Resume control only shows while
+  a teacher is watching, so if a teacher paused a student then stopped watching (or closed the tab)
+  without resuming, the student stayed locked with no easy recovery. Fixed on BOTH sides:
+  - Teacher (`TeacherConsole.tsx` stopWatchingSelectedSession): releases any active hold before
+    stopping the watch (stopping the watch always lifts the teacher's own pause).
+  - Server (`chat/index.ts` hold gate): a hold now only blocks while a teacher is ACTUALLY watching —
+    it additionally requires a fresh `live_session_viewers` heartbeat (within 60s). A hold left active
+    by a teacher who navigated away auto-lifts, so a closed tab can never strand the student. The extra
+    read only fires when a hold exists (rare) and is fail-open.
+- `tests/test_session_hold.py` extended to lock both sides in.
+
+Tests: node --check; frontend tsc/lint/build; Python suite (190) green.
+
+## Claude -> Codex / Human - 2026-07-06 (Post-v4.0 Phase 5: first-class ad-hoc review sessions — DEPLOYED)
 
 Status: Built + verified; adversarial review (workflow) running; deploy next.
 Task: Make guided reviews first-class, resumable, teacher-visible SESSIONS — via a GREENFIELD

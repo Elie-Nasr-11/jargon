@@ -2726,26 +2726,43 @@ async function handleTypedRequest(
       `session_holds?session_id=eq.${encodeURIComponent(sessionId)}&active=is.true&select=id&limit=1`,
     )) as DbRow[] | null;
     if (Array.isArray(holdRows) && holdRows.length > 0) {
-      return json(
-        makeEnvelope({
-          status: "ok",
-          reply:
-            "Your teacher stepped in and paused the session for a moment. Hang tight — you'll be able to keep going as soon as they're done.",
-          session_id: sessionId,
-          lesson_id: lessonId,
-          stage: currentStage,
-          next_action: "reply",
-          held: true,
-          session: {
-            status: String(session.status || "active"),
-            current_activity_id:
-              typeof session.current_activity_id === "string"
-                ? session.current_activity_id
-                : null,
-            activities_complete: session.activities_complete === true,
-          },
-        }),
-      );
+      // Only enforce the pause while a teacher is ACTUALLY watching. A hold left active by a teacher
+      // who navigated away (tab close, no client release) must not strand the student — so require a
+      // fresh viewer heartbeat (within 60s of the 20s teacher heartbeat). If the viewer read errors,
+      // fall back to enforcing the explicit hold (no worse than before this guard).
+      let watching = true;
+      try {
+        const viewerCutoff = new Date(Date.now() - 60_000).toISOString();
+        const viewers = (await supabaseFetch(
+          config,
+          `live_session_viewers?session_id=eq.${encodeURIComponent(sessionId)}&status=eq.active&last_seen_at=gte.${encodeURIComponent(viewerCutoff)}&select=id&limit=1`,
+        )) as DbRow[] | null;
+        watching = Array.isArray(viewers) && viewers.length > 0;
+      } catch {
+        watching = true;
+      }
+      if (watching) {
+        return json(
+          makeEnvelope({
+            status: "ok",
+            reply:
+              "Your teacher stepped in and paused the session for a moment. Hang tight — you'll be able to keep going as soon as they're done.",
+            session_id: sessionId,
+            lesson_id: lessonId,
+            stage: currentStage,
+            next_action: "reply",
+            held: true,
+            session: {
+              status: String(session.status || "active"),
+              current_activity_id:
+                typeof session.current_activity_id === "string"
+                  ? session.current_activity_id
+                  : null,
+              activities_complete: session.activities_complete === true,
+            },
+          }),
+        );
+      }
     }
   } catch (_holdError) {
     // Fail-open: proceed with the normal turn.
