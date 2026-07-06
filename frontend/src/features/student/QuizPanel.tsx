@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, CheckCircle2, ClipboardList, Send } from "lucide-react";
-import { AmbientCanvas } from "@/components/AmbientCanvas";
-import { GradientCard } from "@/components/GradientCard";
-import {
-  fetchPrimaryRole,
-  fetchStudentAssessments,
-  getSession,
-  roleHome,
-  startAssessment,
-  submitAssessment,
-} from "@/lib/api";
+import { CheckCircle2, ClipboardList, Send } from "lucide-react";
+import { ReadAloudAction } from "@/components/ReadAloudAction";
+import { fetchStudentAssessments, startAssessment, submitAssessment } from "@/lib/api";
+import type { VoiceSettings } from "@/lib/jargon-store";
 import type {
   Assessment,
   AssessmentAttempt,
@@ -20,15 +12,9 @@ import type {
   StudentAssessmentBundle,
 } from "@/lib/types";
 
-export const Route = createFileRoute("/quiz/$assessmentId")({
-  head: () => ({
-    meta: [
-      { title: "Quiz - Jargon" },
-      { name: "description", content: "Complete a teacher-assigned Jargon assessment." },
-    ],
-  }),
-  component: QuizPage,
-});
+// The quiz-taking surface, prop-driven for the chat's quiz modal (formerly the /quiz route —
+// retired so all formal work stays one overlay away from the conversation). Starts/resumes the
+// attempt on mount and re-fetches after submit so results show in place.
 
 type AnswerDraft = {
   choiceId: string;
@@ -36,9 +22,16 @@ type AnswerDraft = {
   code: string;
 };
 
-function QuizPage() {
-  const navigate = useNavigate();
-  const { assessmentId } = Route.useParams();
+export function QuizPanel({
+  assessmentId,
+  accessToken,
+  voice,
+}: {
+  assessmentId: string;
+  // For per-question read-aloud (accessibility): the same TTS control the chat uses.
+  accessToken: string;
+  voice: VoiceSettings;
+}) {
   const [bundle, setBundle] = useState<StudentAssessmentBundle | null>(null);
   const [attempt, setAttempt] = useState<AssessmentAttempt | null>(null);
   const [drafts, setDrafts] = useState<Record<string, AnswerDraft>>({});
@@ -67,17 +60,6 @@ function QuizPage() {
     let alive = true;
     const load = async () => {
       try {
-        const session = await getSession();
-        if (!session) {
-          navigate({ to: "/login", replace: true });
-          return;
-        }
-        const role = await fetchPrimaryRole(session.access_token, session.user.id);
-        if (!alive) return;
-        if (role !== "student") {
-          navigate({ to: roleHome(role), replace: true });
-          return;
-        }
         const liveBundle = await fetchStudentAssessments();
         if (!alive) return;
         const liveAssessment = liveBundle.assessments.find((item) => item.id === assessmentId);
@@ -110,7 +92,7 @@ function QuizPage() {
     return () => {
       alive = false;
     };
-  }, [assessmentId, navigate]);
+  }, [assessmentId]);
 
   const setDraft = (itemId: string, patch: Partial<AnswerDraft>) => {
     setDrafts((current) => ({
@@ -179,51 +161,32 @@ function QuizPage() {
 
   const completed = attempt && attempt.status !== "in_progress";
 
+  if (booting) {
+    return <div className="py-6 text-[13px] text-muted-foreground">Loading quiz...</div>;
+  }
+  if (!assessment) {
+    return (
+      <div className="py-6 text-[13px] text-muted-foreground">
+        {message || "This quiz could not be loaded."}
+      </div>
+    );
+  }
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <AmbientCanvas />
-      <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/chat" })}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-background/55 px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
-            Back to chat
-          </button>
-          <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-            Lesson quiz
-          </div>
-        </div>
-
-        <GradientCard innerClassName="overflow-hidden">
-          <div className="bg-background/80 p-5 sm:p-7">
-            {booting ? (
-              <div className="text-[13px] text-muted-foreground">Loading quiz...</div>
-            ) : assessment ? (
-              <QuizContent
-                assessment={assessment}
-                items={items}
-                quizzesById={quizzesById}
-                itemAttempts={itemAttempts}
-                attempt={attempt}
-                drafts={drafts}
-                completed={Boolean(completed)}
-                submitting={submitting}
-                message={message}
-                onSetDraft={setDraft}
-                onSubmit={submit}
-              />
-            ) : (
-              <div className="text-[13px] text-muted-foreground">
-                {message || "This quiz could not be loaded."}
-              </div>
-            )}
-          </div>
-        </GradientCard>
-      </main>
-    </div>
+    <QuizContent
+      assessment={assessment}
+      items={items}
+      quizzesById={quizzesById}
+      itemAttempts={itemAttempts}
+      attempt={attempt}
+      drafts={drafts}
+      completed={Boolean(completed)}
+      submitting={submitting}
+      message={message}
+      onSetDraft={setDraft}
+      onSubmit={submit}
+      accessToken={accessToken}
+      voice={voice}
+    />
   );
 }
 
@@ -239,6 +202,8 @@ function QuizContent({
   message,
   onSetDraft,
   onSubmit,
+  accessToken,
+  voice,
 }: {
   assessment: Assessment;
   items: AssessmentItem[];
@@ -251,6 +216,8 @@ function QuizContent({
   message: string;
   onSetDraft: (itemId: string, patch: Partial<AnswerDraft>) => void;
   onSubmit: () => Promise<void>;
+  accessToken: string;
+  voice: VoiceSettings;
 }) {
   const attemptByItemId = new Map(itemAttempts.map((item) => [item.assessment_item_id, item]));
   return (
@@ -261,9 +228,9 @@ function QuizContent({
             <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
             {assessment.status}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+          <h2 className="mt-2 text-[22px] font-semibold tracking-tight text-foreground">
             {assessment.title}
-          </h1>
+          </h2>
           {assessment.instructions ? (
             <p className="mt-3 max-w-2xl whitespace-pre-wrap text-[14px] leading-relaxed text-muted-foreground">
               {assessment.instructions}
@@ -305,9 +272,19 @@ function QuizContent({
                   </span>
                 ) : null}
               </div>
-              <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
-                {quiz.prompt}
-              </p>
+              <div className="flex items-start gap-2">
+                <p className="min-w-0 flex-1 whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
+                  {quiz.prompt}
+                </p>
+                <ReadAloudAction
+                  text={quiz.prompt}
+                  voice={voice}
+                  accessToken={accessToken}
+                  lessonId={assessment.lesson_id ?? ""}
+                  sessionId={null}
+                  onVoiceEvent={() => {}}
+                />
+              </div>
               <div className="mt-4">
                 {quiz.question_type === "multiple_choice" ? (
                   <div className="grid gap-2">

@@ -190,12 +190,15 @@ export function ClassesModal({
   accessToken,
   mentorPreferences,
   currentLessonTitle = null,
+  initialTab = "overview",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accessToken: string | null;
   mentorPreferences: MentorPreferences;
   currentLessonTitle?: string | null;
+  // Which tab an open lands on (the chat's review nudge / completion banner target a tab).
+  initialTab?: Tab;
 }) {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("overview");
@@ -207,7 +210,7 @@ export function ClassesModal({
   // Start fresh each open + fetch the shared grade rows / review queue once.
   useEffect(() => {
     if (!open) return;
-    setTab("overview");
+    setTab(initialTab);
     setCls(null);
     setUnit(null);
     setGrades(null);
@@ -222,7 +225,7 @@ export function ClassesModal({
     return () => {
       alive = false;
     };
-  }, [open]);
+  }, [open, initialTab]);
 
   const openLesson = (lessonId: string) => {
     store.setLessonId(lessonId);

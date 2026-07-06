@@ -13,7 +13,6 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ChatRouteImport } from './routes/chat'
-import { Route as QuizAssessmentIdRouteImport } from './routes/quiz.$assessmentId'
 import { Route as TeacherRouteImport } from './routes/teacher'
 import { Route as TeacherCurriculumRouteImport } from './routes/teacher.curriculum'
 import { Route as TeacherClassClassIdRouteImport } from './routes/teacher.class.$classId'
@@ -38,11 +37,6 @@ const LoginRoute = LoginRouteImport.update({
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QuizAssessmentIdRoute = QuizAssessmentIdRouteImport.update({
-  id: '/quiz/$assessmentId',
-  path: '/quiz/$assessmentId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TeacherRoute = TeacherRouteImport.update({
@@ -78,7 +72,6 @@ export interface FileRoutesByFullPath {
   '/platform': typeof PlatformRoute
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
-  '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
@@ -90,7 +83,6 @@ export interface FileRoutesByTo {
   '/platform': typeof PlatformRoute
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
-  '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
@@ -103,7 +95,6 @@ export interface FileRoutesById {
   '/platform': typeof PlatformRoute
   '/chat': typeof ChatRoute
   '/login': typeof LoginRoute
-  '/quiz/$assessmentId': typeof QuizAssessmentIdRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
@@ -111,10 +102,10 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
+  fullPaths: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
-  id: '__root__' | '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
+  to: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
+  id: '__root__' | '/' | '/admin' | '/platform' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -123,7 +114,6 @@ export interface RootRouteChildren {
   PlatformRoute: typeof PlatformRoute
   ChatRoute: typeof ChatRoute
   LoginRoute: typeof LoginRoute
-  QuizAssessmentIdRoute: typeof QuizAssessmentIdRoute
   TeacherRoute: typeof TeacherRoute
   TeacherCurriculumRoute: typeof TeacherCurriculumRoute
   TeacherClassClassIdRoute: typeof TeacherClassClassIdRoute
@@ -158,13 +148,6 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof ChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/quiz/$assessmentId': {
-      id: '/quiz/$assessmentId'
-      path: '/quiz/$assessmentId'
-      fullPath: '/quiz/$assessmentId'
-      preLoaderRoute: typeof QuizAssessmentIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/teacher': {
@@ -211,7 +194,6 @@ const rootRouteChildren: RootRouteChildren = {
   PlatformRoute: PlatformRoute,
   ChatRoute: ChatRoute,
   LoginRoute: LoginRoute,
-  QuizAssessmentIdRoute: QuizAssessmentIdRoute,
   TeacherRoute: TeacherRoute,
   TeacherCurriculumRoute: TeacherCurriculumRoute,
   TeacherClassClassIdRoute: TeacherClassClassIdRoute,

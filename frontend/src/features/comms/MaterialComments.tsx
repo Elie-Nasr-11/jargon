@@ -181,10 +181,11 @@ export function MaterialComments({ resourceId }: { resourceId: string }) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+        aria-expanded={expanded}
+        className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
-        <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.6} />
-        {topLevel.length > 0 ? `Comments (${topLevel.length})` : "Add a comment"}
+        <MessageSquare className="h-3 w-3" strokeWidth={1.6} />
+        {topLevel.length > 0 ? `Comments · ${topLevel.length}` : "Add a comment"}
       </button>
 
       {expanded ? (

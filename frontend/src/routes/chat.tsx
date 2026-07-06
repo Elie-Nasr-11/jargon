@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import {
   AlertCircle,
@@ -27,7 +27,10 @@ import { MaterialComments } from "@/features/comms/MaterialComments";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
 import { LessonMilestones } from "@/components/LessonMilestones";
+import { ModalCard } from "@/components/ModalCard";
+import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ClassesModal } from "@/features/student/ClassesModal";
+import { QuizPanel } from "@/features/student/QuizPanel";
 import {
   DEFAULT_MENTOR,
   DEFAULT_VOICE,
@@ -47,6 +50,8 @@ import {
   fetchLessonActivities,
   fetchStudentCatalog,
   fetchStudentSettings,
+  fetchReviewDue,
+  getSubmissionFileSignedUrl,
   upsertStudentSettings,
   createRealtimeVoiceSession,
   getLessonResourceSignedUrl,
@@ -120,6 +125,11 @@ type Msg =
       // Error bubbles must never become the "latest mentor message" — that would strip the
       // live quiz choices off the real question with no recovery path.
       isError?: boolean;
+      // The failed turn's answer payload, so the error bubble's Retry can re-send it.
+      retryAnswer?: TypedChatAnswer;
+      // The choice the student picked on this (quiz) message — kept so history shows WHICH
+      // option was selected after the live buttons retire.
+      chosen?: string;
     }
   | { id: string; role: "teacher"; text: string; createdAt?: string }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
@@ -178,9 +188,11 @@ function deriveLessonArc(
 function LessonProgress({
   arc,
   activities = [],
+  onRestart,
 }: {
   arc: LessonArc;
   activities?: LessonActivity[];
+  onRestart?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -239,6 +251,19 @@ function LessonProgress({
       {open ? (
         <div className="absolute right-0 top-[calc(100%+8px)] z-[var(--z-menu)] w-[340px] rounded-2xl border border-border bg-background p-3 shadow-lg">
           <LessonMilestones arc={arc} activities={activities} />
+          {onRestart ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onRestart();
+              }}
+              className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <RotateCcw className="h-3 w-3" strokeWidth={1.8} />
+              Restart lesson
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -437,12 +462,25 @@ function ChatPage() {
   const [lessonComplete, setLessonComplete] = useState(false);
   const [followUp, setFollowUp] = useState(false);
   const [booting, setBooting] = useState(true);
+  // Bumping this re-runs the bootstrap effect — the boot-failure screen's Retry.
+  const [bootAttempt, setBootAttempt] = useState(0);
   const [surfaceError, setSurfaceError] = useState("");
   const [liveViewers, setLiveViewers] = useState<LiveSessionViewer[]>([]);
   const [viewerClock, setViewerClock] = useState(() => Date.now());
   // True while a teacher has paused this session (Phase 3). Composer is locked + a banner shows.
   const [sessionHeld, setSessionHeld] = useState(false);
   const [classesOpen, setClassesOpen] = useState(false);
+  // Which hub tab the next open lands on (the review nudge / completion banner set it).
+  const [classesTab, setClassesTab] = useState<"overview" | "classes" | "review">("overview");
+  // The quiz being taken, as a modal over the chat (the /quiz route is retired).
+  const [openQuizId, setOpenQuizId] = useState<string | null>(null);
+  // Count of skills due for spaced review — a small dismissible nudge card, once per browser session.
+  const [reviewNudge, setReviewNudge] = useState<number | null>(null);
+  // Scroll UX: only auto-stick when the student is already near the bottom; otherwise offer a
+  // jump-to-latest button instead of yanking them down mid-read.
+  const nearBottomRef = useRef(true);
+  const [showJump, setShowJump] = useState(false);
+  const [newBelow, setNewBelow] = useState(false);
   const [assignments, setAssignments] = useState<StudentAssignmentBundle>({
     assignments: [],
     recipients: [],
@@ -491,9 +529,11 @@ function ChatPage() {
     [liveViewers, viewerClock],
   );
 
+  // Auto-stick when the composer grows, but only if already near the bottom. Bound on [booting]
+  // so it attaches AFTER the boot screen unmounts (the refs are null while booting).
   useEffect(() => {
     const el = composerWrapRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
+    if (booting || !el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
       const sc = scrollRef.current;
       if (!sc) return;
@@ -506,13 +546,36 @@ function ChatPage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [booting]);
+
+  // Track whether the student is near the bottom; scrolled-away shows the jump button.
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (booting || !sc) return;
+    const onScroll = () => {
+      const distance = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
+      const near = distance < 180;
+      nearBottomRef.current = near;
+      setShowJump(!near);
+      if (near) setNewBelow(false);
+    };
+    onScroll();
+    sc.addEventListener("scroll", onScroll, { passive: true });
+    return () => sc.removeEventListener("scroll", onScroll);
+  }, [booting]);
 
   useEffect(() => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const sc = scrollRef.current;
+    if (!sc) return;
+    // Smart-stick: follow new messages only when already near the bottom; when the student has
+    // scrolled up to read history, flag "new below" instead of yanking them down.
     // Depend on the array identity, not just its length: replacing the "thinking" bubble with
     // the mentor reply keeps the length constant but must still scroll the reply into view.
+    if (nearBottomRef.current) {
+      sc.scrollTo({ top: sc.scrollHeight, behavior: "smooth" });
+    } else {
+      setNewBelow(true);
+    }
   }, [msgs]);
 
   useEffect(() => {
@@ -582,9 +645,8 @@ function ChatPage() {
       if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
       setMsgs([envelopeMessage(envelope)]);
     } catch (error) {
-      const message = (error as Error).message || "Could not load the live lesson.";
-      setSurfaceError(message);
-      setMsgs([{ id: uid(), role: "bot", text: message }]);
+      // Single surface: the dismissible error banner (no duplicate in-stream bot bubble).
+      setSurfaceError((error as Error).message || "Could not load the live lesson.");
     } finally {
       setSending(false);
       setBooting(false);
@@ -638,6 +700,14 @@ function ChatPage() {
         setLessonId(selected);
         setMentor(savedMentor);
         setVoice(savedVoice);
+        // Best-effort review nudge: a small once-per-browser-session card when skills are due.
+        void fetchReviewDue()
+          .then((rows) => {
+            if (alive && rows.length && !sessionStorage.getItem("jargon-review-nudge")) {
+              setReviewNudge(rows.length);
+            }
+          })
+          .catch(() => {});
         await loadLesson(selected, session.access_token, savedMentor);
       } catch (error) {
         if (!alive) return;
@@ -649,7 +719,7 @@ function ChatPage() {
     return () => {
       alive = false;
     };
-  }, [navigate]);
+  }, [navigate, bootAttempt]);
 
   useEffect(() => {
     if (!sessionId) {
@@ -836,6 +906,8 @@ function ChatPage() {
           role: "bot",
           isError: true,
           text: (error as Error).message || input.errorText,
+          // Keep the payload so the error bubble's Retry re-sends the same turn.
+          retryAnswer: input.answer,
         });
         return null;
       } finally {
@@ -881,11 +953,63 @@ function ChatPage() {
     const selected = choiceLabel(choice);
     const selectedValue = choiceValue(choice);
     if (!selectedValue) return;
+    // Stamp the pick on the quiz message so history keeps showing WHICH option was chosen
+    // after the live buttons retire.
+    const quizMsgId = lastBotId;
+    if (quizMsgId) {
+      setMsgs((prev) =>
+        prev.map((m) =>
+          m.id === quizMsgId && m.role === "bot" ? { ...m, chosen: selectedValue } : m,
+        ),
+      );
+    }
     await sendTurn({
       answer: { mode: "multiple_choice", choice_id: selectedValue },
       optimistic: [{ id: uid(), role: "user", text: `Selected: ${selected}` }],
       errorText: "The mentor could not check that answer.",
     });
+  };
+
+  // Re-send a failed turn from its error bubble (the bubble is removed; the original user
+  // message is already in the stream, so no new optimistic message is added).
+  const retryTurn = async (msg: Msg) => {
+    if (msg.role !== "bot" || !msg.retryAnswer) return;
+    const answer = msg.retryAnswer;
+    setMsgs((prev) => prev.filter((m) => m.id !== msg.id));
+    await sendTurn({ answer, optimistic: [], errorText: "The mentor could not answer." });
+  };
+
+  // Start the lesson over: a turn WITHOUT a session id makes the server open a FRESH session
+  // (which becomes the newest, so future visits resume it). The old session's transcript stays
+  // saved server-side; only this screen resets.
+  const restartLesson = async () => {
+    if (!accessToken || sendingRef.current) return;
+    if (!window.confirm("Start this lesson over from step 1? Your previous work stays saved."))
+      return;
+    setVoiceMode(false);
+    setSessionId(null);
+    setLearningSession(null);
+    setLessonComplete(false);
+    setFollowUp(false);
+    setSurfaceError("");
+    setLessonArc(deriveLessonArc(activities, null));
+    setSending(true);
+    setMsgs([{ id: uid(), role: "thinking" }]);
+    try {
+      const envelope = await invokeTypedChat({
+        accessToken,
+        lessonId,
+        mentorPreferences: mentorToPreferences(mentor),
+      });
+      setSessionId(envelope.session_id);
+      if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
+      setMsgs([envelopeMessage(envelope)]);
+    } catch (error) {
+      setSurfaceError((error as Error).message || "Could not restart the lesson.");
+      setMsgs([]);
+    } finally {
+      setSending(false);
+    }
   };
 
   const runCode = async (code: string, lang: ComposerLanguage): Promise<RuntimeRunResult> => {
@@ -1025,10 +1149,23 @@ function ChatPage() {
         style={{ background: "var(--background)" }}
       >
         <AmbientCanvas intensity={0.35} />
-        <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col items-center justify-center px-5">
-          <div className="text-[14px] text-muted-foreground">
+        <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col items-center justify-center gap-3 px-5">
+          <div className="text-center text-[14px] text-muted-foreground">
             {surfaceError || "Opening Jargon\u2026"}
           </div>
+          {surfaceError ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSurfaceError("");
+                setBooting(true);
+                setBootAttempt((attempt) => attempt + 1);
+              }}
+              className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              Try again
+            </button>
+          ) : null}
         </main>
       </div>
     );
@@ -1047,7 +1184,14 @@ function ChatPage() {
       >
         <div className="hairline">
           <div className="mx-auto flex h-[60px] max-w-[1200px] items-center justify-between gap-2 px-3 sm:px-6">
-            <div className="font-serif text-[22px] tracking-tight">Jargon</div>
+            <button
+              type="button"
+              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+              aria-label="Scroll to the top of the conversation"
+              className="font-serif text-[22px] tracking-tight"
+            >
+              Jargon
+            </button>
             {/* On mobile, group the menu + settings on the right (logo left). `sm:contents`
                 dissolves this wrapper on desktop so the nav keeps its centered position. */}
             <div className="flex items-center gap-1 sm:contents">
@@ -1057,13 +1201,22 @@ function ChatPage() {
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setClassesOpen(true)}
+                  onClick={() => {
+                    setClassesTab("overview");
+                    setClassesOpen(true);
+                  }}
                   aria-label="Classes"
                   className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
                 >
                   <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.5} />
                 </button>
-                {lessonArc ? <LessonProgress arc={lessonArc} activities={activities} /> : null}
+                {lessonArc ? (
+                  <LessonProgress
+                    arc={lessonArc}
+                    activities={activities}
+                    onRestart={restartLesson}
+                  />
+                ) : null}
               </div>
               <SettingsMenu
                 email={email}
@@ -1083,7 +1236,28 @@ function ChatPage() {
         accessToken={accessToken}
         mentorPreferences={mentorToPreferences(mentor)}
         currentLessonTitle={currentLesson?.title ?? null}
+        initialTab={classesTab}
       />
+
+      {/* Quiz-taking happens in a modal over the chat (the /quiz route is retired). Closing
+          re-fetches the assessments bundle so the work bar reflects a fresh submission. */}
+      <ModalCard
+        open={openQuizId !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setOpenQuizId(null);
+            void fetchStudentAssessments()
+              .then(setAssessments)
+              .catch(() => {});
+          }
+        }}
+        title="Quiz"
+        size="large"
+      >
+        {openQuizId ? (
+          <QuizPanel assessmentId={openQuizId} accessToken={accessToken || ""} voice={voice} />
+        ) : null}
+      </ModalCard>
 
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
         {activeLiveViewers.length ? (
@@ -1115,6 +1289,37 @@ function ChatPage() {
             </button>
           </div>
         ) : null}
+        {reviewNudge ? (
+          <div className="mb-3 flex items-center gap-3 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-[13px] text-foreground">
+            <RotateCcw className="h-4 w-4 shrink-0 text-warning" strokeWidth={1.7} />
+            <span className="min-w-0 flex-1">
+              {reviewNudge} {reviewNudge === 1 ? "skill is" : "skills are"} due for a quick review.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.setItem("jargon-review-nudge", "1");
+                setReviewNudge(null);
+                setClassesTab("review");
+                setClassesOpen(true);
+              }}
+              className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              Review now
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.setItem("jargon-review-nudge", "1");
+                setReviewNudge(null);
+              }}
+              aria-label="Dismiss review reminder"
+              className="shrink-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Later
+            </button>
+          </div>
+        ) : null}
         <div ref={scrollRef} className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5">
           {msgs.map((m) => (
             <MessageRow
@@ -1126,6 +1331,7 @@ function ChatPage() {
               choicesDisabled={sending || runInFlight}
               onUseCode={useCodeInEditor}
               onChooseChoice={sendChoice}
+              onRetry={retryTurn}
               onResourceEvent={handleResourceEvent}
               voice={voice}
               accessToken={accessToken || ""}
@@ -1134,33 +1340,63 @@ function ChatPage() {
               onVoiceEvent={handleVoiceEvent}
             />
           ))}
+          {showJump ? (
+            <div className="sticky bottom-1 z-10 flex justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setNewBelow(false);
+                  scrollRef.current?.scrollTo({
+                    top: scrollRef.current.scrollHeight,
+                    behavior: "smooth",
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3.5 py-1.5 text-[12px] font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted"
+              >
+                <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                {newBelow ? "New messages" : "Jump to latest"}
+              </button>
+            </div>
+          ) : null}
         </div>
         <div
           ref={composerWrapRef}
           className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
         >
-          <AssignmentDock
+          <WorkDock
             lessonId={lessonId}
-            bundle={assignments}
+            assignments={assignments}
+            assessments={assessments}
             onSubmitAssignment={submitStudentAssignment}
+            onOpenQuiz={setOpenQuizId}
           />
-          <AssessmentDock lessonId={lessonId} bundle={assessments} />
           {lessonComplete && !followUp ? (
-            <div className="mt-2 flex items-center justify-between gap-3 rounded-3xl border border-border bg-background/70 px-5 py-4">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border bg-background/70 px-5 py-4">
               <div className="min-w-0">
                 <div className="text-[14px] font-medium text-foreground">Lesson complete</div>
                 <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-                  Nice work. Pick your next lesson from the Lessons menu, or keep chatting about
-                  this one.
+                  Nice work. Pick your next lesson, or keep chatting about this one.
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setFollowUp(true)}
-                className="shrink-0 rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                Ask a follow-up
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClassesTab("classes");
+                    setClassesOpen(true);
+                  }}
+                  className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+                >
+                  Pick your next lesson
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFollowUp(true)}
+                  className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  Ask a follow-up
+                </button>
+              </div>
             </div>
           ) : null}
           {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
@@ -1647,12 +1883,72 @@ function RealtimeVoicePanel({
   );
 }
 
+// The slim work bar: one "Work due · N" row above the composer that expands into the full
+// assignment/quiz cards. Collapsed by default so due work stays one tap away without pushing
+// the composer down; renders nothing when the current lesson has no work.
+function WorkDock({
+  lessonId,
+  assignments,
+  assessments,
+  onSubmitAssignment,
+  onOpenQuiz,
+}: {
+  lessonId: string;
+  assignments: StudentAssignmentBundle;
+  assessments: StudentAssessmentBundle;
+  onSubmitAssignment: Parameters<typeof AssignmentDock>[0]["onSubmitAssignment"];
+  onOpenQuiz: (assessmentId: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const assignmentCount = assignments.assignments.filter(
+    (a) => a.status === "assigned" && a.lesson_id === lessonId,
+  ).length;
+  const assessmentCount = assessments.assessments.filter(
+    (a) => a.status === "published" && a.lesson_id === lessonId,
+  ).length;
+  const count = assignmentCount + assessmentCount;
+  if (!count) return null;
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2.5 rounded-full border border-border bg-background/70 px-4 py-2 text-left transition-colors hover:bg-muted/50"
+      >
+        <ClipboardList className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+        <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-foreground">
+          Work due · {count}
+        </span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+            expanded ? "rotate-180" : ""
+          }`}
+          strokeWidth={2}
+        />
+      </button>
+      {expanded ? (
+        <div className="mt-2">
+          <AssignmentDock
+            lessonId={lessonId}
+            bundle={assignments}
+            onSubmitAssignment={onSubmitAssignment}
+          />
+          <AssessmentDock lessonId={lessonId} bundle={assessments} onOpenQuiz={onOpenQuiz} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AssessmentDock({
   lessonId,
   bundle,
+  onOpenQuiz,
 }: {
   lessonId: string;
   bundle: StudentAssessmentBundle;
+  onOpenQuiz: (assessmentId: string) => void;
 }) {
   const visibleAssessments = bundle.assessments
     .filter((assessment) => assessment.status === "published" && assessment.lesson_id === lessonId)
@@ -1698,13 +1994,13 @@ function AssessmentDock({
                     </div>
                   ) : null}
                 </div>
-                <Link
-                  to="/quiz/$assessmentId"
-                  params={{ assessmentId: assessment.id }}
+                <button
+                  type="button"
+                  onClick={() => onOpenQuiz(assessment.id)}
                   className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted"
                 >
                   {recipient?.status === "complete" ? "View result" : "Open quiz"}
-                </Link>
+                </button>
               </div>
             </div>
           </GradientCard>
@@ -1866,6 +2162,26 @@ function AssignmentDock({
                         <div className="mt-2 flex flex-wrap gap-2">
                           {submissionFiles.map((file) => {
                             const fileState = submissionFileState(file);
+                            // Students can open their OWN submitted files: the storage SELECT
+                            // policy already permits owner reads for non-quarantined, non-purged
+                            // paths, so a signed URL works here just like teacher-side.
+                            if (fileState === "available") {
+                              return (
+                                <button
+                                  key={file.id}
+                                  type="button"
+                                  onClick={() => {
+                                    void getSubmissionFileSignedUrl(file)
+                                      .then((url) => window.open(url, "_blank", "noopener"))
+                                      .catch(() => {});
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                >
+                                  <Paperclip className="h-3 w-3" strokeWidth={1.7} />
+                                  {file.original_filename}
+                                </button>
+                              );
+                            }
                             return (
                               <span
                                 key={file.id}
@@ -1961,6 +2277,7 @@ function MessageRow({
   choicesDisabled = false,
   onUseCode,
   onChooseChoice,
+  onRetry,
   onResourceEvent,
   voice,
   accessToken,
@@ -1974,6 +2291,7 @@ function MessageRow({
   choicesDisabled?: boolean;
   onUseCode: (code: ChatCodeBlock) => void;
   onChooseChoice: (choice: ChatChoice) => void;
+  onRetry: (msg: Msg) => void;
   onResourceEvent: (
     resource: LessonChatResource,
     eventType: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded",
@@ -2068,7 +2386,49 @@ function MessageRow({
               {msg.text}
             </p>
           </div>
-          <CopyAction text={msg.text} />
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyAction text={msg.text} />
+            <ReadAloudAction
+              text={msg.text}
+              voice={voice}
+              accessToken={accessToken}
+              lessonId={lessonId}
+              sessionId={sessionId}
+              onVoiceEvent={onVoiceEvent}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // A failed turn: visibly an error (not a lookalike mentor reply), with an inline Retry that
+  // re-sends the original payload.
+  if (msg.isError) {
+    return (
+      <div ref={ref} className="flex">
+        <div className="w-full max-w-[92%]">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.1em] text-danger">
+                <AlertCircle className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Something went wrong
+              </div>
+              <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-foreground">
+                {msg.text}
+              </p>
+            </div>
+            {msg.retryAnswer ? (
+              <button
+                type="button"
+                disabled={choicesDisabled}
+                onClick={() => onRetry(msg)}
+                className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     );
@@ -2091,6 +2451,26 @@ function MessageRow({
                 {choiceLabel(choice)}
               </button>
             ))}
+          </div>
+        ) : msg.choices?.length && msg.chosen ? (
+          // A retired quiz keeps its options visible with the student's pick highlighted.
+          <div className="flex flex-wrap gap-2" aria-label="Your answer">
+            {msg.choices.map((choice, index) => {
+              const picked = choiceValue(choice) === msg.chosen;
+              return (
+                <span
+                  key={`${choiceValue(choice)}-${index}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] ${
+                    picked
+                      ? "border-foreground/50 bg-foreground/10 font-medium text-foreground"
+                      : "border-border/60 text-muted-foreground opacity-70"
+                  }`}
+                >
+                  {picked ? <Check className="h-3.5 w-3.5" strokeWidth={2.2} /> : null}
+                  {choiceLabel(choice)}
+                </span>
+              );
+            })}
           </div>
         ) : null}
         {msg.resources?.length ? (
@@ -2118,173 +2498,6 @@ function MessageRow({
         {msg.code && <HistoryCodePanel code={msg.code} onUseCode={onUseCode} />}
       </div>
     </div>
-  );
-}
-
-function ReadAloudAction({
-  text,
-  voice,
-  accessToken,
-  lessonId,
-  sessionId,
-  onVoiceEvent,
-}: {
-  text: string;
-  voice: VoiceSettings;
-  accessToken: string;
-  lessonId: string;
-  sessionId: string | null;
-  onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
-}) {
-  const [speaking, setSpeaking] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const startedAtRef = useRef<number | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const fallbackUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const fallbackSupported = typeof window !== "undefined" && "speechSynthesis" in window;
-
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause();
-      if (fallbackUtteranceRef.current && fallbackSupported) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, [fallbackSupported]);
-
-  if (!text.trim()) return null;
-
-  const finish = () => {
-    setSpeaking(false);
-    setPaused(false);
-    void onVoiceEvent({
-      event_type: "read_aloud_finished",
-      duration_seconds: startedAtRef.current
-        ? Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000))
-        : null,
-    });
-    audioRef.current = null;
-    fallbackUtteranceRef.current = null;
-    startedAtRef.current = null;
-  };
-
-  const playFallback = () => {
-    if (!fallbackSupported) throw new Error("Browser speech is not available.");
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = voice.readAloudRate;
-    utterance.onend = finish;
-    utterance.onerror = finish;
-    fallbackUtteranceRef.current = utterance;
-    startedAtRef.current = Date.now();
-    setSpeaking(true);
-    setPaused(false);
-    void onVoiceEvent({ event_type: "read_aloud_started" });
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const play = async () => {
-    if (speaking && paused) {
-      if (audioRef.current) {
-        await audioRef.current.play();
-      } else if (fallbackSupported) {
-        window.speechSynthesis.resume();
-      }
-      setPaused(false);
-      return;
-    }
-    audioRef.current?.pause();
-    if (fallbackSupported) window.speechSynthesis.cancel();
-    setLoading(true);
-    try {
-      const audio = await getMentorAudio({
-        accessToken,
-        text,
-        lessonId,
-        sessionId,
-        voice: voice.voiceName,
-        rate: voice.readAloudRate,
-      });
-      const element = new Audio(audio.audio_url);
-      element.playbackRate = voice.readAloudRate;
-      element.onended = finish;
-      element.onerror = finish;
-      audioRef.current = element;
-      startedAtRef.current = Date.now();
-      setSpeaking(true);
-      setPaused(false);
-      void onVoiceEvent({
-        event_type: "read_aloud_started",
-        payload: {
-          provider: "openai",
-          model: audio.model,
-          voice: audio.voice,
-          cache_hit: audio.cache_hit,
-        },
-      });
-      await element.play();
-    } catch {
-      void onVoiceEvent({ event_type: "read_aloud_failed" });
-      try {
-        playFallback();
-      } catch {
-        finish();
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const pause = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-    } else if (fallbackSupported) {
-      window.speechSynthesis.pause();
-    }
-    setPaused(true);
-  };
-
-  const replay = () => {
-    audioRef.current?.pause();
-    if (fallbackSupported) window.speechSynthesis.cancel();
-    setSpeaking(false);
-    setPaused(false);
-    requestAnimationFrame(() => void play());
-  };
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border/70 px-1.5 py-1">
-      <button
-        type="button"
-        onClick={speaking && !paused ? pause : () => void play()}
-        aria-label={speaking && !paused ? "Pause read aloud" : "Read mentor message aloud"}
-        title={speaking && !paused ? "Pause" : "Read aloud"}
-        disabled={loading}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        {loading ? (
-          <span className="run-bounce-loader scale-75" aria-label="Preparing audio">
-            <span className="run-bounce-dot" />
-            <span className="run-bounce-dot" />
-            <span className="run-bounce-dot" />
-          </span>
-        ) : speaking && !paused ? (
-          <Pause className="h-3.5 w-3.5" strokeWidth={1.8} />
-        ) : (
-          <Volume2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={replay}
-        aria-label="Replay mentor message"
-        title="Replay"
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
-      </button>
-    </span>
   );
 }
 
