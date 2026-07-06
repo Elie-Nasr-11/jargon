@@ -137,7 +137,7 @@ export function DmThread({
                   <div
                     className={`rounded-2xl px-3 py-2 text-[13px] leading-snug ${
                       mine
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-foreground text-background"
                         : "border border-border bg-muted text-foreground"
                     } ${hidden || retracted ? "opacity-60" : ""}`}
                   >
@@ -197,7 +197,7 @@ export function DmThread({
             type="button"
             onClick={() => void send()}
             disabled={sending || !input.trim()}
-            className="rounded-xl bg-primary px-3 py-2 text-[13px] font-medium text-primary-foreground transition-opacity disabled:opacity-40"
+            className="rounded-xl bg-foreground px-3 py-2 text-[13px] font-medium text-background transition-opacity disabled:opacity-40"
           >
             Send
           </button>

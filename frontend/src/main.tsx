@@ -10,7 +10,7 @@ import "./styles.css";
 // unaffected by the CSS reduced-motion block in styles.css, so collapse global
 // tween time: onComplete callbacks still fire (component state stays correct),
 // there is just no visible motion. Covers every GSAP animation app-wide
-// (HeaderMenus, SettingsMenu, ThemeToggle, Composer, route entrances).
+// (SettingsMenu, ThemeToggle, Composer, route entrances).
 if (prefersReducedMotion()) {
   gsap.globalTimeline.timeScale(100);
 }

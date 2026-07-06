@@ -209,7 +209,7 @@ export function MaterialComments({ resourceId }: { resourceId: string }) {
                       onChange={(e) => setReplyInput(e.target.value)}
                       rows={1}
                       placeholder="Reply…"
-                      className="max-h-20 min-h-8 flex-1 resize-none rounded-lg border border-border bg-background px-2 py-1.5 text-[12.5px] outline-none focus:border-primary"
+                      className="max-h-20 min-h-8 flex-1 resize-none rounded-lg border border-border bg-background px-2 py-1.5 text-[12.5px] outline-none focus:border-foreground/40"
                     />
                     <button
                       type="button"
@@ -242,7 +242,7 @@ export function MaterialComments({ resourceId }: { resourceId: string }) {
               onChange={(e) => setInput(e.target.value)}
               rows={1}
               placeholder="Write a comment…"
-              className="max-h-24 min-h-9 flex-1 resize-none rounded-lg border border-border bg-background px-2.5 py-2 text-[12.5px] outline-none focus:border-primary"
+              className="max-h-24 min-h-9 flex-1 resize-none rounded-lg border border-border bg-background px-2.5 py-2 text-[12.5px] outline-none focus:border-foreground/40"
             />
             <button
               type="button"

@@ -6,6 +6,62 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-06 (Student view v2 — chat + one hub; 5 phases)
+
+Status: Built + verified (tsc/lint/build green per phase), 5 commits on the branch, awaiting main FF.
+FRONTEND-ONLY (both potential backend touches verified unnecessary: review_sessions has an owner
+FOR ALL policy so students self-read history; the submissions storage SELECT policy already permits
+owner reads for signed URLs).
+
+Task: full student-end restructure from a 3-agent audit + 24 user decisions (6 question rounds).
+Target IA: chat is the product; ONE hub holds the LMS; one inbox; gear is pure settings.
+
+Phase summary (one commit each):
+- P1 (dad8065): ClassesModal → 5-tab hub (Overview·Classes·Calendar·Grades·Review) as a large
+  ModalCard (`size="large"`); Overview is new (continue-lesson, review nudge, due soon, recent);
+  grades fetched once per open and shared across tabs. GradesModal → content-only GradesPanel;
+  ReviewPanel moved into the hub. Gear lost Grades/Review. ProfilePanel: full skill map, new
+  review-history section, review-due + mentor-chips + dead grades fetch removed.
+- P2 (3807c3c): StudentMiniChat = the inbox (DM threads + notifications, one badge, persistent
+  realtime subs); direct_message notifications deep-link into their thread via ref.channel_id;
+  icon no longer null-renders when the comms flag is off. StudentNotifications deleted; gear lost
+  the Notifications row.
+- P3 (e758e8f): docks → "Work due · N" expandable bar; quiz → large modal (QuizPanel; /quiz route
+  retired + routeTree.gen.ts de-registered); complete-banner opens the hub (phantom "Lessons menu"
+  copy gone); danger-styled error bubbles + Retry (re-sends the payload) + boot-screen Try again +
+  single-surface load errors; once-per-session review nudge card; smart-stick scroll + jump-to-latest
+  (and the composer-resize observer now actually binds post-boot); retired quizzes keep the picked
+  choice highlighted; "Restart lesson" in the roadmap (fresh session via turn without session_id);
+  ReadAloudAction extracted to components/ + added to teacher comments and quiz prompts; students
+  can open their own submitted files; comments trigger promoted to a "Comments · N" chip; logo
+  scrolls to top.
+- P4 (8dbcd96): live voice is its own always-visible composer button (no more empty-input morph);
+  "Code" label on the editor button; voice/speed settings moved to a gear "Voice" row (new
+  VoiceControls; MentorControls is personality-only, MentorGroup exported); components/CodeArea.tsx
+  (lazy Monaco) replaces the assignment + quiz code textareas; compact mobile progress pill (N/M).
+- P5 (this commit): lib/format.ts (formatScore normalizes >1 — fixes the 6-formatters disagreement,
+  plus formatDate/relativeTime) adopted across GradesPanel/ProfilePanel/ClassViews/StudentCalendar/
+  QuizPanel/ClassesModal/StudentMiniChat/chat; StateNote → components/; shared components/Popover.tsx
+  (outside-tap/Escape once) adopted by the inbox + progress roadmap; DmThread/MaterialComments
+  buttons unified to the foreground/background palette; ProfilePanel sections show placeholders
+  instead of vanishing; dead code removed (fetchLearningSession, fetchLessonAttempts,
+  fetchLessonResources, useStudentGuard) + stale HeaderMenus/ReviewDueChip comment sweep.
+
+Tests run per phase: `npx tsc --noEmit` (0), `npm run lint` (0 errors, 12 pre-existing warns),
+`npm run build` (ok).
+
+Remaining concerns / consciously left:
+- Hub tab pills kept their static style (not converted to the animated MentorGroup/Segmented) and
+  the card-tier (GradientCard vs flat) sweep was left light — both want visual QA, good follow-up.
+- SettingsMenu keeps its own dropdown/bottom-sheet mechanics (deliberate: the mobile sheet is a
+  distinct pattern); Popover covers the other two header dropdowns.
+- "Restart lesson" leaves the prior session row active (superseded by newest-first pick) — server
+  cleanup of abandoned sessions is a possible later nicety.
+- PLATFORM/ROADMAP student sections need a reconciliation pass for the new IA (hub/inbox naming).
+
+Suggested next task: live smoke as a student post-FF (hub tabs, inbox deep-link, work bar, quiz
+modal, restart, voice buttons, mobile pill), then the docs reconciliation.
+
 ## Claude -> Codex / Human - 2026-07-06 (Progress bar moved into the header — fixed pill, click-dropdown)
 
 Status: Built + verified (tsc/lint/build green), shipping via main FF. FRONTEND-ONLY (no backend/migration).

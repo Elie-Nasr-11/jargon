@@ -28,6 +28,7 @@ import { Composer, type ComposerHandle, type ComposerLanguage } from "@/componen
 import { GradientCard } from "@/components/GradientCard";
 import { LessonMilestones } from "@/components/LessonMilestones";
 import { ModalCard } from "@/components/ModalCard";
+import { Popover } from "@/components/Popover";
 import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ClassesModal } from "@/features/student/ClassesModal";
@@ -70,6 +71,7 @@ import {
   MAX_SUBMISSION_FILES,
   MAX_SUBMISSION_FILE_BYTES,
 } from "@/lib/api";
+import { formatScore } from "@/lib/format";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
 import { supabase } from "@/lib/supabase";
@@ -184,8 +186,8 @@ function deriveLessonArc(
 }
 
 // A fixed "Step N of M" pill that lives in the header, with an expandable roadmap of the lesson steps
-// (done / current / upcoming). Fixed width — no hover resize; a click toggles the roadmap dropdown,
-// which closes on outside-click or Escape. Hidden on mobile where the header row is too tight.
+// (done / current / upcoming). Fixed width — no hover resize; a click toggles the roadmap dropdown
+// (a shared Popover handles outside-tap/Escape). Compact "N/M" variant on mobile.
 function LessonProgress({
   arc,
   activities = [],
@@ -196,84 +198,66 @@ function LessonProgress({
   onRestart?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  // Close the roadmap on an outside tap or Escape (it's a header dropdown now, not a click-through overlay).
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: PointerEvent) => {
-      if (wrapRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
 
   if (arc.total <= 1) return null;
   return (
-    <div ref={wrapRef} className="relative">
-      {/* Compact on mobile (segments + "N/M"), full-width with the long label on sm+. */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex h-9 w-[104px] items-center gap-2 rounded-full border border-border bg-background/60 px-3 text-left transition-colors hover:bg-muted/50 sm:w-[210px]"
-      >
-        <span className="flex min-w-0 flex-1 items-center gap-1" aria-hidden>
-          {Array.from({ length: arc.total }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 flex-1 rounded-full ${
-                i < arc.step - 1
-                  ? "bg-foreground/35"
-                  : i === arc.step - 1
-                    ? "bg-foreground"
-                    : "bg-border"
-              }`}
-            />
-          ))}
-        </span>
-        <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-foreground">
-          <span className="sm:hidden">
-            {arc.step}/{arc.total}
+    <Popover
+      open={open}
+      onClose={() => setOpen(false)}
+      panelClassName="w-[min(340px,calc(100vw-24px))] rounded-2xl border border-border bg-background p-3 shadow-lg"
+      trigger={
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex h-9 w-[104px] items-center gap-2 rounded-full border border-border bg-background/60 px-3 text-left transition-colors hover:bg-muted/50 sm:w-[210px]"
+        >
+          <span className="flex min-w-0 flex-1 items-center gap-1" aria-hidden>
+            {Array.from({ length: arc.total }).map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 flex-1 rounded-full ${
+                  i < arc.step - 1
+                    ? "bg-foreground/35"
+                    : i === arc.step - 1
+                      ? "bg-foreground"
+                      : "bg-border"
+                }`}
+              />
+            ))}
           </span>
-          <span className="hidden sm:inline">
-            Step {arc.step} of {arc.total}
+          <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-foreground">
+            <span className="sm:hidden">
+              {arc.step}/{arc.total}
+            </span>
+            <span className="hidden sm:inline">
+              Step {arc.step} of {arc.total}
+            </span>
           </span>
-        </span>
-        <ChevronDown
-          className={`hidden h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform sm:block ${
-            open ? "rotate-180" : ""
-          }`}
-          strokeWidth={2}
-        />
-      </button>
-      {open ? (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-[var(--z-menu)] w-[min(340px,calc(100vw-24px))] rounded-2xl border border-border bg-background p-3 shadow-lg">
-          <LessonMilestones arc={arc} activities={activities} />
-          {onRestart ? (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onRestart();
-              }}
-              className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <RotateCcw className="h-3 w-3" strokeWidth={1.8} />
-              Restart lesson
-            </button>
-          ) : null}
-        </div>
+          <ChevronDown
+            className={`hidden h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform sm:block ${
+              open ? "rotate-180" : ""
+            }`}
+            strokeWidth={2}
+          />
+        </button>
+      }
+    >
+      <LessonMilestones arc={arc} activities={activities} />
+      {onRestart ? (
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            onRestart();
+          }}
+          className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <RotateCcw className="h-3 w-3" strokeWidth={1.8} />
+          Restart lesson
+        </button>
       ) : null}
-    </div>
+    </Popover>
   );
 }
 
@@ -1993,7 +1977,7 @@ function AssessmentDock({
                   {latestAttempt?.final_score !== null &&
                   latestAttempt?.final_score !== undefined ? (
                     <div className="mt-1 text-[11.5px] text-muted-foreground">
-                      Latest score {formatChatScore(latestAttempt.final_score)}
+                      Latest score {formatScore(latestAttempt.final_score, "not graded")}
                     </div>
                   ) : recipient?.status === "submitted" ? (
                     <div className="mt-1 text-[11.5px] text-warning">
@@ -2163,7 +2147,7 @@ function AssignmentDock({
                         Score:{" "}
                         {latestSubmission.score === null
                           ? "not graded"
-                          : formatChatScore(latestSubmission.score)}
+                          : formatScore(latestSubmission.score, "not graded")}
                       </div>
                       {submissionFiles.length ? (
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -2694,12 +2678,6 @@ function youtubeEmbedUrl(rawUrl: string) {
   } catch {
     return "";
   }
-}
-
-function formatChatScore(score: number | null | undefined) {
-  if (score === null || score === undefined) return "not graded";
-  if (score <= 1) return `${Math.round(score * 100)}%`;
-  return `${Math.round(score)}%`;
 }
 
 function formatChatDateTime(value: string) {

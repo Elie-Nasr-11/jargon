@@ -3,6 +3,7 @@ import { CheckCircle2, ClipboardList, Send } from "lucide-react";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { CodeArea } from "@/components/CodeArea";
 import { fetchStudentAssessments, startAssessment, submitAssessment } from "@/lib/api";
+import { formatScore } from "@/lib/format";
 import type { VoiceSettings } from "@/lib/jargon-store";
 import type {
   Assessment,
@@ -246,7 +247,7 @@ function QuizContent({
             <div className="mt-1 text-[22px] font-semibold text-foreground">
               {attempt?.final_score === null || attempt?.final_score === undefined
                 ? "Pending"
-                : formatPercent(attempt.final_score)}
+                : formatScore(attempt.final_score, "n/a")}
             </div>
             <div className="mt-1 text-[11.5px] text-muted-foreground">
               {attempt?.status === "submitted" ? "Teacher review needed" : "Returned"}
@@ -370,9 +371,4 @@ function QuizContent({
       </div>
     </div>
   );
-}
-
-function formatPercent(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
-  return `${Math.round(value * 100)}%`;
 }

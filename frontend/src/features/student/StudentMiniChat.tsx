@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, MessageCircle } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
+import { Popover } from "@/components/Popover";
 import { DmThread } from "@/features/comms/DmThread";
 import {
   COMMS_MINI_CHAT_FLAG,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { notifyErr } from "@/lib/feedback";
+import { relativeTime } from "@/lib/format";
 import type { DmChannel, MyTeacher, Notification } from "@/lib/types";
 
 // The student's inbox: ONE header surface for teacher messages AND notifications. DM threads show
@@ -23,18 +25,7 @@ import type { DmChannel, MyTeacher, Notification } from "@/lib/types";
 // list shows always. A direct_message notification deep-links into its thread (ref.channel_id).
 // One unread badge fed by both realtime pipes (dm_messages + notifications).
 
-function relativeTime(iso: string, now: number): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "";
-  const diff = now - t;
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.round(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.round(diff / 3_600_000)}h ago`;
-  return `${Math.round(diff / 86_400_000)}d ago`;
-}
-
 export function StudentMiniChat() {
-  const wrapRef = useRef<HTMLDivElement>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<MyTeacher[]>([]);
   const [channels, setChannels] = useState<DmChannel[]>([]);
@@ -132,22 +123,6 @@ export function StudentMiniChat() {
     if (open) setDmUnread(false);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (e: PointerEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   const channelByTeacher = useMemo(() => {
     const map = new Map<string, DmChannel>();
     for (const ch of channels) map.set(`${ch.teacher_id}:${ch.class_id}`, ch);
@@ -225,129 +200,125 @@ export function StudentMiniChat() {
   const now = Date.now();
 
   return (
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Inbox"
-        className="relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
-      >
-        <MessageCircle className="h-[18px] w-[18px]" strokeWidth={1.5} />
-        {hasUnread ? (
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" />
-        ) : null}
-      </button>
-
-      {open ? (
-        <div
-          className="absolute right-0 top-[calc(100%+10px)] z-[var(--z-menu)]"
-          style={{ width: "min(360px, calc(100vw - 16px))" }}
+    <Popover
+      open={open}
+      onClose={() => setOpen(false)}
+      panelStyle={{ width: "min(360px, calc(100vw - 16px))" }}
+      trigger={
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Inbox"
+          className="relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
         >
-          <GradientCard>
-            <div className="flex h-[min(70dvh,520px)] flex-col p-3">
-              <div className="mb-2 flex items-center gap-2 px-1">
-                {activeChannel ? (
-                  <button
-                    type="button"
-                    onClick={() => setActiveChannel(null)}
-                    className="text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label="Back to inbox"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </button>
-                ) : null}
-                <div className="min-w-0 flex-1 truncate text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                  {activeChannel ? activeTeacherName || "Teacher" : "Inbox"}
-                </div>
-                {!activeChannel && unreadNotifications ? (
-                  <button
-                    type="button"
-                    onClick={markAll}
-                    className="shrink-0 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    Mark all read
-                  </button>
-                ) : null}
-              </div>
+          <MessageCircle className="h-[18px] w-[18px]" strokeWidth={1.5} />
+          {hasUnread ? (
+            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" />
+          ) : null}
+        </button>
+      }
+    >
+      <GradientCard>
+        <div className="flex h-[min(70dvh,520px)] flex-col p-3">
+          <div className="mb-2 flex items-center gap-2 px-1">
+            {activeChannel ? (
+              <button
+                type="button"
+                onClick={() => setActiveChannel(null)}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+                aria-label="Back to inbox"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            ) : null}
+            <div className="min-w-0 flex-1 truncate text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+              {activeChannel ? activeTeacherName || "Teacher" : "Inbox"}
+            </div>
+            {!activeChannel && unreadNotifications ? (
+              <button
+                type="button"
+                onClick={markAll}
+                className="shrink-0 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Mark all read
+              </button>
+            ) : null}
+          </div>
 
-              {activeChannel ? (
-                <div className="min-h-0 flex-1">
-                  <DmThread
-                    channelId={activeChannel.id}
-                    meId={meId}
-                    disabled={activeChannel.status !== "open"}
-                    disabledNote={
-                      activeChannel.status === "blocked"
-                        ? "Your teacher has paused this conversation."
-                        : "This conversation is closed."
-                    }
-                  />
-                </div>
-              ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                  {teachers.length ? (
-                    <>
-                      <div className="mb-1.5 px-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                        Message a teacher
-                      </div>
-                      <div className="mb-3 grid gap-1">
-                        {teachers.map((t) => (
-                          <button
-                            key={`${t.teacher_id}:${t.class_id}`}
-                            type="button"
-                            onClick={() => void selectTeacher(t)}
-                            disabled={opening}
-                            className="flex flex-col rounded-xl border border-border px-3 py-2 text-left transition-colors hover:bg-muted disabled:opacity-50"
-                          >
-                            <span className="text-[13px] text-foreground">{t.teacher_name}</span>
-                            <span className="text-[11px] text-muted-foreground">
-                              {t.class_name}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : null}
-
+          {activeChannel ? (
+            <div className="min-h-0 flex-1">
+              <DmThread
+                channelId={activeChannel.id}
+                meId={meId}
+                disabled={activeChannel.status !== "open"}
+                disabledNote={
+                  activeChannel.status === "blocked"
+                    ? "Your teacher has paused this conversation."
+                    : "This conversation is closed."
+                }
+              />
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {teachers.length ? (
+                <>
                   <div className="mb-1.5 px-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                    Notifications
+                    Message a teacher
                   </div>
-                  {notifications.length === 0 ? (
-                    <p className="px-1 py-4 text-center text-[12.5px] text-muted-foreground">
-                      No notifications yet.
-                    </p>
-                  ) : (
-                    <div className="grid gap-1">
-                      {notifications.slice(0, 40).map((n) => (
-                        <button
-                          key={n.id}
-                          type="button"
-                          onClick={() => openNotification(n)}
-                          className={`flex items-start gap-2.5 rounded-xl border border-border px-3 py-2 text-left transition-colors hover:bg-muted ${
-                            n.read_at ? "bg-transparent" : "bg-depth-field"
-                          }`}
-                        >
-                          <span
-                            className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                              n.read_at ? "bg-transparent" : "bg-danger"
-                            }`}
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[12.5px] text-foreground">{n.title}</span>
-                            <span className="block text-[11px] text-muted-foreground">
-                              {relativeTime(n.created_at, now)}
-                            </span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="mb-3 grid gap-1">
+                    {teachers.map((t) => (
+                      <button
+                        key={`${t.teacher_id}:${t.class_id}`}
+                        type="button"
+                        onClick={() => void selectTeacher(t)}
+                        disabled={opening}
+                        className="flex flex-col rounded-xl border border-border px-3 py-2 text-left transition-colors hover:bg-muted disabled:opacity-50"
+                      >
+                        <span className="text-[13px] text-foreground">{t.teacher_name}</span>
+                        <span className="text-[11px] text-muted-foreground">{t.class_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+
+              <div className="mb-1.5 px-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                Notifications
+              </div>
+              {notifications.length === 0 ? (
+                <p className="px-1 py-4 text-center text-[12.5px] text-muted-foreground">
+                  No notifications yet.
+                </p>
+              ) : (
+                <div className="grid gap-1">
+                  {notifications.slice(0, 40).map((n) => (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => openNotification(n)}
+                      className={`flex items-start gap-2.5 rounded-xl border border-border px-3 py-2 text-left transition-colors hover:bg-muted ${
+                        n.read_at ? "bg-transparent" : "bg-depth-field"
+                      }`}
+                    >
+                      <span
+                        className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                          n.read_at ? "bg-transparent" : "bg-danger"
+                        }`}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12.5px] text-foreground">{n.title}</span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          {relativeTime(n.created_at, now)}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
-          </GradientCard>
+          )}
         </div>
-      ) : null}
-    </div>
+      </GradientCard>
+    </Popover>
   );
 }

@@ -3,7 +3,7 @@ import type { LessonActivity, LessonArc } from "@/lib/types";
 
 // The step-by-step milestone list for the current lesson (done / current / upcoming). Enriched per
 // step from the lesson's activities: a stage/type chip and a one-line description, so every milestone
-// shows what it actually is. Extracted from the old HeaderMenus "Progress" tab — now the content of
+// shows what it actually is. Rendered as the content of
 // the hovering LessonProgress pill's dropdown.
 
 const ACCENT = "text-[color:var(--accent-text)]";

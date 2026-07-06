@@ -20,6 +20,7 @@ import { StudentCalendarBody } from "@/features/student/StudentCalendar";
 import { GradesPanel } from "@/features/student/GradesPanel";
 import { ReviewPanel } from "@/features/student/ReviewPanel";
 import { fetchReviewDue, fetchStudentGrades } from "@/lib/api";
+import { formatDate, formatScore } from "@/lib/format";
 import { store } from "@/lib/jargon-store";
 import type { MentorPreferences, ReviewDueSkill, StudentClass, StudentGradeRow } from "@/lib/types";
 
@@ -38,17 +39,6 @@ const TAB_TITLES: Record<Tab, string> = {
   grades: "Grades",
   review: "Review",
 };
-
-function fmtDue(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function pctScore(n: number): string {
-  return `${Math.round(n <= 1 ? n * 100 : n)}%`;
-}
 
 // The hub's landing tab: continue the open lesson, what's due soon, what just came back, and a
 // review nudge — each a pointer into its canonical tab, not a second home for the data.
@@ -139,7 +129,7 @@ function HubOverview({
                   strokeWidth={1.7}
                 />
                 <span className="min-w-0 flex-1 truncate text-foreground">{g.title}</span>
-                <span className="shrink-0 text-muted-foreground">due {fmtDue(g.due_at)}</span>
+                <span className="shrink-0 text-muted-foreground">due {formatDate(g.due_at)}</span>
               </div>
             ))}
           </div>
@@ -158,7 +148,7 @@ function HubOverview({
             onClick={() => onGoTab("grades")}
             className="text-[11.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
           >
-            {avg != null ? `${released.length} graded · avg ${pctScore(avg)}` : "View grades"}
+            {avg != null ? `${released.length} graded · avg ${formatScore(avg)}` : "View grades"}
           </button>
         </div>
         {recent.length ? (
@@ -171,7 +161,7 @@ function HubOverview({
                 />
                 <span className="min-w-0 flex-1 truncate text-foreground">{g.title}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {g.score != null ? pctScore(g.score) : g.status}
+                  {g.score != null ? formatScore(g.score) : g.status}
                 </span>
               </div>
             ))}

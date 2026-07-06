@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchLessons, fetchStudentClasses } from "@/lib/api";
+import { formatScore } from "@/lib/format";
 import type { StudentGradeRow } from "@/lib/types";
 
 // The student gradebook — the hub's Grades tab (formerly its own Settings-menu popup). Grouped by
@@ -7,10 +8,6 @@ import type { StudentGradeRow } from "@/lib/types";
 // without a lesson/unit fall into a "General" bucket, and grades whose class isn't among the
 // student's active classes into "Other". Grade rows are fetched once by the hub and passed in;
 // class/lesson names for grouping are fetched here on mount.
-
-function pct(n: number | null): string {
-  return n == null ? "—" : `${Math.round(n * 100)}%`;
-}
 
 type UnitGroup = { unit: string; grades: StudentGradeRow[] };
 type ClassGroup = { classKey: string; className: string; units: UnitGroup[] };
@@ -93,7 +90,7 @@ export function GradesPanel({ grades }: { grades: StudentGradeRow[] | null }) {
                           g.score == null ? "text-muted-foreground" : "font-medium text-foreground"
                         }`}
                       >
-                        {g.score == null ? g.status || "pending" : pct(g.score)}
+                        {g.score == null ? g.status || "pending" : formatScore(g.score)}
                       </span>
                     </div>
                   ))}

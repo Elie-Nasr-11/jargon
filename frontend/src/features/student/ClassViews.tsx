@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarClock, CheckCircle2, ChevronRight, GraduationCap } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
+import { StateNote } from "@/components/StateNote";
+import { formatDate, formatScore } from "@/lib/format";
 import {
   fetchClassScopedLessons,
   fetchStudentAssessments,
@@ -23,10 +25,6 @@ import type {
 // courses, or the full catalog when a class has no links); per-lesson progress from the student's
 // own sessions.
 
-function pctLabel(value: number): string {
-  return `${Math.round(value * 100)}%`;
-}
-
 function ProgressBar({ value }: { value: number }) {
   return (
     <span className="h-[4px] w-full overflow-hidden rounded-full bg-muted">
@@ -35,14 +33,6 @@ function ProgressBar({ value }: { value: number }) {
         style={{ width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%` }}
       />
     </span>
-  );
-}
-
-export function StateNote({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-border bg-muted/40 p-6 text-center text-[13px] text-muted-foreground">
-      {children}
-    </div>
   );
 }
 
@@ -73,13 +63,6 @@ function groupByUnit(lessons: Lesson[]): UnitGroup[] {
     const bp = b.lessons[0]?.unit_position ?? Number.MAX_SAFE_INTEGER;
     return ap - bp;
   });
-}
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 // The class dashboard's recent/upcoming work strip + grades summary, scoped to this class's
@@ -130,7 +113,7 @@ function ClassWorkSummary({ grades }: { grades: StudentGradeRow[] }) {
                     strokeWidth={1.7}
                   />
                   <span className="min-w-0 flex-1 truncate text-foreground">{g.title}</span>
-                  <span className="shrink-0 text-muted-foreground">due {fmtDate(g.due_at)}</span>
+                  <span className="shrink-0 text-muted-foreground">due {formatDate(g.due_at)}</span>
                 </div>
               ))}
             </div>
@@ -340,7 +323,7 @@ export function ClassDashboard({
                   </div>
                   <div className="text-[12.5px] text-muted-foreground">
                     {group.lessons.length} lesson{group.lessons.length === 1 ? "" : "s"} ·{" "}
-                    {pctLabel(unitProgress(group))} complete
+                    {formatScore(unitProgress(group))} complete
                   </div>
                 </div>
                 <ChevronRight
@@ -450,3 +433,5 @@ export function UnitView({
     </>
   );
 }
+
+export { StateNote };

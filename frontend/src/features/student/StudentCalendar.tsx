@@ -3,6 +3,7 @@ import { CalendarClock, CheckCircle2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { StateNote } from "@/features/student/ClassViews";
 import { fetchStudentGrades } from "@/lib/api";
+import { formatScore } from "@/lib/format";
 import type { StudentGradeRow } from "@/lib/types";
 
 // A month calendar of the student's assignment/assessment deadlines and submissions. Content-only now
@@ -145,9 +146,7 @@ export function StudentCalendarBody({
                   <div className="truncate text-[13px] text-foreground">{row.title}</div>
                   <div className="text-[11.5px] text-muted-foreground">
                     Submitted
-                    {row.score != null
-                      ? ` · ${Math.round(row.score <= 1 ? row.score * 100 : row.score)}%`
-                      : ""}
+                    {row.score != null ? ` · ${formatScore(row.score)}` : ""}
                   </div>
                 </div>
               </div>

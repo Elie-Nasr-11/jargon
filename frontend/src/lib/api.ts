@@ -799,16 +799,6 @@ export async function fetchLatestLearningSession(lessonId: string) {
   return ((data || [])[0] as LearningSession | undefined) || null;
 }
 
-export async function fetchLearningSession(sessionId: string) {
-  const { data, error } = await supabase
-    .from("learning_sessions")
-    .select("*")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as LearningSession | null) || null;
-}
-
 export async function fetchLearningTurns(sessionId: string) {
   const { data, error } = await supabase
     .from("learning_turns")
@@ -838,16 +828,6 @@ export async function fetchLiveSessionViewers(sessionId: string) {
     .order("last_seen_at", { ascending: false });
   if (error) throw error;
   return (data || []) as LiveSessionViewer[];
-}
-
-export async function fetchLessonAttempts(sessionId: string) {
-  const { data, error } = await supabase
-    .from("lesson_attempts")
-    .select("*")
-    .eq("session_id", sessionId)
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return (data || []) as LessonAttempt[];
 }
 
 export async function invokeAdminSeed(input: {
@@ -2958,16 +2938,6 @@ export async function updateInterventionAlertStatus(
     .single();
   if (error) throw error;
   return data as InterventionAlert;
-}
-
-export async function fetchLessonResources(lessonId: string) {
-  const { data, error } = await supabase
-    .from("lesson_resources")
-    .select("*")
-    .eq("lesson_id", lessonId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data || []) as LessonResource[];
 }
 
 export async function createLessonResource(input: {

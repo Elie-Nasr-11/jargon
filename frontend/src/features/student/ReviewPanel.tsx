@@ -13,8 +13,7 @@ const TIER_LABEL: Record<string, string> = {
 
 type ReviewLine = { role: "mentor" | "you"; text: string };
 
-// The spaced-review surface, now hosted as a Settings-menu modal (formerly the header "Review · N"
-// chip). Lists the skills due for retrieval practice and runs a one-tap guided review that refreshes
+// The spaced-review surface — the hub's Review tab. Lists the skills due for retrieval practice and runs a one-tap guided review that refreshes
 // a skill's spacing clock via the chat fn's isolated review handler. Content-only — the ModalCard
 // provides the frame, backdrop, and Escape handling.
 export function ReviewPanel({

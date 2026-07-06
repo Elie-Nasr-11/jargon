@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchStudentProfileStats } from "@/lib/api";
+import { formatScore } from "@/lib/format";
 import { modeLabel } from "@/lib/modes";
 import type { StudentProfileStats } from "@/lib/types";
 import { humanizeSkillKey, practicedAgo } from "@/lib/review";
@@ -8,12 +9,6 @@ import { humanizeSkillKey, practicedAgo } from "@/lib/review";
 // mode, review history, and student-visible teacher notes (all permitted by existing RLS — no new
 // backend). Self-contained: it fetches its bundle on mount and degrades each section gracefully.
 // Grades live in the hub's Grades tab; the review QUEUE lives in the hub's Review tab.
-
-function pct(score: number | null | undefined): string {
-  if (score == null) return "—";
-  const value = score <= 1 ? score * 100 : score;
-  return `${Math.round(value)}%`;
-}
 
 function titleCase(value: string): string {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
@@ -132,11 +127,11 @@ export function ProfilePanel({ bare }: { bare?: boolean }) {
                   <span className="h-[4px] w-16 shrink-0 overflow-hidden rounded-full bg-muted">
                     <span
                       className="block h-full rounded-full bg-foreground"
-                      style={{ width: pct(skill.score) }}
+                      style={{ width: formatScore(skill.score) }}
                     />
                   </span>
                   <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-foreground/70">
-                    {pct(skill.score)}
+                    {formatScore(skill.score)}
                   </span>
                 </div>
               ))}
@@ -147,30 +142,30 @@ export function ProfilePanel({ bare }: { bare?: boolean }) {
             </p>
           )}
 
+          <SectionLabel>Review history</SectionLabel>
           {reviewHistory.length ? (
-            <>
-              <SectionLabel>Review history</SectionLabel>
-              <div className="space-y-1.5">
-                {reviewHistory.map((session) => (
-                  <div key={session.id} className="flex items-center gap-2.5">
-                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
-                      {humanizeSkillKey(session.skill_key)}
-                    </span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">
-                      {practicedAgo(session.updated_at)}
-                    </span>
-                    <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-foreground/70">
-                      {session.score != null ? pct(session.score) : "—"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : null}
+            <div className="space-y-1.5">
+              {reviewHistory.map((session) => (
+                <div key={session.id} className="flex items-center gap-2.5">
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                    {humanizeSkillKey(session.skill_key)}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {practicedAgo(session.updated_at)}
+                  </span>
+                  <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-foreground/70">
+                    {formatScore(session.score)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12.5px] text-muted-foreground">No completed reviews yet.</p>
+          )}
 
+          <SectionLabel>Strengths by activity</SectionLabel>
           {byMode.length ? (
             <>
-              <SectionLabel>Strengths by activity</SectionLabel>
               <div className="space-y-1.5">
                 {byMode.map((row) => (
                   <div key={row.mode} className="flex items-center gap-2.5">
@@ -183,33 +178,37 @@ export function ProfilePanel({ bare }: { bare?: boolean }) {
                     <span className="h-[4px] w-16 shrink-0 overflow-hidden rounded-full bg-muted">
                       <span
                         className="block h-full rounded-full bg-foreground"
-                        style={{ width: pct(row.avg) }}
+                        style={{ width: formatScore(row.avg) }}
                       />
                     </span>
                     <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-foreground/70">
-                      {pct(row.avg)}
+                      {formatScore(row.avg)}
                     </span>
                   </div>
                 ))}
               </div>
             </>
-          ) : null}
+          ) : (
+            <p className="text-[12.5px] text-muted-foreground">
+              Complete activities to see your strengths here.
+            </p>
+          )}
 
+          <SectionLabel>Notes from your teacher</SectionLabel>
           {stats?.notes.length ? (
-            <>
-              <SectionLabel>Notes from your teacher</SectionLabel>
-              <div className="space-y-2">
-                {stats.notes.slice(0, 4).map((note) => (
-                  <div
-                    key={note.id}
-                    className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] leading-snug text-foreground"
-                  >
-                    {note.note}
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : null}
+            <div className="space-y-2">
+              {stats.notes.slice(0, 4).map((note) => (
+                <div
+                  key={note.id}
+                  className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] leading-snug text-foreground"
+                >
+                  {note.note}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12.5px] text-muted-foreground">No notes from your teacher yet.</p>
+          )}
         </>
       )}
     </div>
