@@ -6,7 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 3: live-intervention completion — building)
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 4: review-due chip + due-queue — FRONTEND on branch)
+
+Status: Built + verified; frontend-only (no backend/migration), rides the pending main fast-forward.
+Task: A spaced-repetition due-queue + a "Review · N" chip surfacing decaying skills.
+
+Files:
+- `frontend/src/lib/api.ts`: `REVIEW_INTERVAL_DAYS` (emerging 1d / developing 3d / secure 7d),
+  `computeReviewDue(mastery, now)` (pure SM-2-lite: due when now - last_practiced_at ≥ tier interval;
+  skips never-/un-practiced rows; sorts most-overdue first), `fetchReviewDue()` (own read + derive);
+  `reviewDue` added to the `fetchStudentProfileStats` bundle.
+- `frontend/src/lib/review.ts` (NEW): `humanizeSkillKey` / `practicedAgo` display helpers (kept out
+  of the component so it stays fast-refresh-clean; pure/testable).
+- `frontend/src/features/student/ReviewDueChip.tsx` (NEW): self-contained header chip — fetches on
+  mount, renders NOTHING when nothing is due, else a pill + a click-out popover listing due skills.
+- `frontend/src/routes/chat.tsx`: `<ReviewDueChip />` mounted beside HeaderMenus.
+- `frontend/src/features/student/ProfilePanel.tsx`: a "Due for review" section (from the bundle).
+- `frontend/src/lib/types.ts`: `ReviewDueSkill` + `reviewDue` on `StudentProfileStats`.
+- `tests/test_review_due.py` (NEW, 5 fingerprints, CI-gated).
+
+Tests: frontend tsc/lint/build green (0 errors / 13 pre-existing warns); Python suite (183) green.
+
+Deliberately NOT done (deferred — see OPEN_QUESTIONS): the one-tap GUIDED review that runs revision
+and CLOSES the loop (refreshes last_practiced_at so a reviewed skill clears the queue). Revision is a
+stored per-step mode (0 revision steps in content); re-entering a completed lesson only yields
+`post_completion` ad-lib chat, not revision. Closing the loop needs either a request-level review flag
+in the chat fn (additive/default-off turn-loop change — its own adversarial review) or authored
+`mode='revision'` content. This v1 surfaces the signal + guidance ("ask your mentor to quiz you on
+these"); the guided session is the reviewed follow-up.
+
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 3: live-intervention completion — DEPLOYED)
 
 Status: Built + verified locally; adversarial review + deploy next.
 Task: Let a watching teacher PAUSE/RESUME the live Mentor flow, and record every live intervention

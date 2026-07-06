@@ -3,6 +3,7 @@ import { fetchStudentProfileStats } from "@/lib/api";
 import type { MentorConfig } from "@/lib/jargon-store";
 import { modeLabel } from "@/lib/modes";
 import type { StudentProfileStats } from "@/lib/types";
+import { humanizeSkillKey, practicedAgo } from "@/lib/review";
 
 // v4.0 Phase 3a — the student profile popup. Reads the signed-in student's OWN profile, mastery,
 // grades, progress, and student-visible teacher notes (all permitted by existing RLS — no new
@@ -148,6 +149,27 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
               Complete lessons to build your skill map.
             </p>
           )}
+
+          {stats?.reviewDue.length ? (
+            <>
+              <SectionLabel>Due for review</SectionLabel>
+              <div className="space-y-1.5">
+                {stats.reviewDue.slice(0, 6).map((skill) => (
+                  <div key={skill.skill_key} className="flex items-center gap-2.5">
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                      {humanizeSkillKey(skill.skill_key)}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {titleCase(skill.level)} · {practicedAgo(skill.last_practiced_at)}
+                    </span>
+                  </div>
+                ))}
+                <p className="pt-0.5 text-[11.5px] text-muted-foreground">
+                  Ask your mentor to quiz you on these to keep them sharp.
+                </p>
+              </div>
+            </>
+          ) : null}
 
           {byMode.length ? (
             <>

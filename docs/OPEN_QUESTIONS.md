@@ -17,10 +17,19 @@ prose):
   platform-GENERATED ad-hoc revision sessions need `learning_sessions.lesson_id` relaxed from NOT NULL —
   a runtime-wide change and the highest risk to the live tutor. Open: whether to do it, and how to gate
   it so a null-lesson session can't break the turn loop / gate / mastery writes.
-- **What is the spaced-repetition due-queue behind the "review-due" chip?** The chip is content-blocked
-  (no published revision lesson to route into) AND needs a due-queue design over
-  `student_mastery.last_practiced_at` (+ tier: emerging resurfaces sooner than secure). Open: the SM-2-lite
-  parameters and where the due state is computed/stored.
+- **The spaced-repetition due-queue behind the "review-due" chip** — PARTLY SHIPPED (post-v4.0 Phase 4).
+  The SM-2-lite due-queue is live: `computeReviewDue` derives due skills client-side from
+  `student_mastery.last_practiced_at` vs a per-tier interval (emerging 1d < developing 3d < secure 7d),
+  surfaced by a self-contained `ReviewDueChip` in the chat header + a "Due for review" section in the
+  profile popup (informational — "ask your mentor to quiz you on these"). STILL OPEN: a one-tap GUIDED
+  review that actually runs revision + closes the loop. Revision is a stored per-STEP mode only (0
+  revision steps exist in content), and re-entering a completed lesson yields `post_completion` ad-lib
+  chat — NOT revision, and it stamps no `mode='revision'` evidence nor refreshes `last_practiced_at`, so
+  a reviewed skill never clears the queue on its own. Closing the loop needs either (a) a request-level
+  review flag in the chat fn (an additive, default-off turn-loop change: force revision on a completed
+  lesson's turn + stamp revision evidence + refresh last_practiced_at — needs its own adversarial review
+  since it touches the live turn loop) OR (b) authored `mode='revision'` content to route into. Deferred
+  pending a decision on which.
 - **How do we complete the HotlistFeed → `notifications` MERGE?** The table + teacher bell shipped as an
   additive surface (`assessment_to_review` is the only live writer). The full merge needs a server-side
   `submission_to_grade` writer (submission is client-side today), an `intervention_alerts` insert writer

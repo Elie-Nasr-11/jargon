@@ -78,6 +78,7 @@ import type {
   StudentProgressReportRow,
   StudentMastery,
   StudentProfileStats,
+  ReviewDueSkill,
   StudentProgressSummary,
   TeacherClassSummary,
   TeacherClassMembership,
@@ -485,6 +486,49 @@ export async function fetchStudentMastery(): Promise<StudentMastery[]> {
   return (data || []) as StudentMastery[];
 }
 
+// Post-v4.0 Phase 4: SM-2-lite spacing. A skill is "due" for review when its last practice is
+// older than its tier's interval — weaker tiers resurface sooner (emerging < developing < secure).
+// Pure + injectable `now` so it's deterministically testable; drives the review-due chip.
+export const REVIEW_INTERVAL_DAYS: Record<string, number> = {
+  emerging: 1,
+  developing: 3,
+  secure: 7,
+};
+const DEFAULT_REVIEW_INTERVAL_DAYS = 3;
+
+export function computeReviewDue(
+  mastery: StudentMastery[],
+  now: number = Date.now(),
+): ReviewDueSkill[] {
+  const due: ReviewDueSkill[] = [];
+  for (const m of mastery) {
+    if (!m.last_practiced_at) continue;
+    // Only skills the student has actually practiced (skip freshly-seeded rows).
+    if ((m.attempt_count ?? 0) <= 0 && (m.evidence_count ?? 0) <= 0) continue;
+    const practicedMs = new Date(m.last_practiced_at).getTime();
+    if (!Number.isFinite(practicedMs)) continue;
+    const daysSince = (now - practicedMs) / 86_400_000;
+    const interval = REVIEW_INTERVAL_DAYS[m.level] ?? DEFAULT_REVIEW_INTERVAL_DAYS;
+    const daysOverdue = daysSince - interval;
+    if (daysOverdue >= 0) {
+      due.push({
+        skill_key: m.skill_key,
+        level: m.level,
+        last_practiced_at: m.last_practiced_at,
+        days_overdue: Math.floor(daysOverdue),
+      });
+    }
+  }
+  due.sort((a, b) => b.days_overdue - a.days_overdue);
+  return due;
+}
+
+// Own-read + derive: the signed-in student's skills due for spaced review (drives the header chip).
+export async function fetchReviewDue(): Promise<ReviewDueSkill[]> {
+  const mastery = await fetchStudentMastery();
+  return computeReviewDue(mastery);
+}
+
 // v4.0 deferred: the student's own mode-dimensioned learning evidence (for the profile's
 // "strengths by mode" section). Self-read permitted by the existing SELECT policy
 // can_view_student(user_id) (which includes auth.uid() = user_id).
@@ -613,7 +657,16 @@ export async function fetchStudentProfileStats(): Promise<StudentProfileStats> {
     safe(fetchStudentProgressSummary(), { lessonsStarted: 0, lessonsCompleted: 0 }),
     safe(fetchStudentEvidence(), [] as LearningEvidence[]),
   ]);
-  return { profile, email, mastery, notes, grades, progress, evidence };
+  return {
+    profile,
+    email,
+    mastery,
+    notes,
+    grades,
+    progress,
+    evidence,
+    reviewDue: computeReviewDue(mastery),
+  };
 }
 
 // v4.0 Phase 3b: the classes the signed-in student belongs to (for the LMS class views).

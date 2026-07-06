@@ -22,6 +22,7 @@ import {
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { HeaderMenus } from "@/components/HeaderMenus";
 import { SettingsMenu } from "@/components/SettingsMenu";
+import { ReviewDueChip } from "@/features/student/ReviewDueChip";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
 import {
@@ -1128,6 +1129,7 @@ function ChatPage() {
             {/* On mobile, group the menu + settings on the right (logo left). `sm:contents`
                 dissolves this wrapper on desktop so the nav keeps its centered position. */}
             <div className="flex items-center gap-1 sm:contents">
+              <ReviewDueChip />
               <HeaderMenus
                 activeLessonId={lessonId}
                 lessons={menuLessons}

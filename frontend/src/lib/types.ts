@@ -774,6 +774,14 @@ export type StudentProgressReportRow = {
   body: unknown;
 };
 
+// Post-v4.0 Phase 4: a skill whose last practice is older than its tier's spacing interval.
+export type ReviewDueSkill = {
+  skill_key: string;
+  level: string;
+  last_practiced_at: string | null;
+  days_overdue: number;
+};
+
 export type StudentProfileStats = {
   profile: Profile | null;
   email: string | null;
@@ -782,6 +790,7 @@ export type StudentProfileStats = {
   grades: StudentGradeRow[];
   progress: StudentProgressSummary;
   evidence: LearningEvidence[];
+  reviewDue: ReviewDueSkill[];
 };
 
 // v4.0 Phase 3b: a class the signed-in student belongs to (for the LMS class views).
