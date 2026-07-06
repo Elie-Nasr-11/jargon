@@ -22,6 +22,7 @@ import {
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { HeaderMenus } from "@/components/HeaderMenus";
 import { SettingsMenu } from "@/components/SettingsMenu";
+import { StudentMiniChat } from "@/features/student/StudentMiniChat";
 import { ReviewDueChip } from "@/features/student/ReviewDueChip";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
@@ -1144,6 +1145,7 @@ function ChatPage() {
                 voice={voice}
                 onVoiceChange={updateVoice}
               />
+              <StudentMiniChat />
               <SettingsMenu email={email} />
             </div>
           </div>

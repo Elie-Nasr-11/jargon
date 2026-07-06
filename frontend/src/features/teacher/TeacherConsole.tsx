@@ -32,6 +32,7 @@ import { HotlistFeed, deriveHotlist, type HotlistItem } from "@/features/teacher
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
 import { StudentReviewSessions } from "@/features/teacher/StudentReviewSessions";
+import { TeacherStudentMessages } from "@/features/teacher/TeacherStudentMessages";
 import { INQUIRY_TYPE_LABELS, modeLabel } from "@/lib/modes";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -1112,6 +1113,7 @@ export function TeacherConsole() {
               {selectedStudentId && studentStats ? (
                 <StudentDetail
                   studentId={selectedStudentId}
+                  classId={selectedClassId}
                   classLabel={selectedClass?.name ?? ""}
                   onGenerateReport={generateReport}
                   generatingReport={generatingReport}
@@ -4570,6 +4572,7 @@ function LessonProgress({
 
 function StudentDetail({
   studentId,
+  classId,
   classLabel,
   onGenerateReport,
   generatingReport,
@@ -4605,6 +4608,7 @@ function StudentDetail({
   onTabChange,
 }: {
   studentId: string;
+  classId: string | null;
   classLabel: string;
   onGenerateReport: () => void;
   generatingReport: boolean;
@@ -4856,6 +4860,7 @@ function StudentDetail({
             <WorkspaceTab value="overview">Overview</WorkspaceTab>
             <WorkspaceTab value="transcript">Transcript &amp; notes</WorkspaceTab>
             <WorkspaceTab value="records">Records</WorkspaceTab>
+            <WorkspaceTab value="messages">Messages</WorkspaceTab>
           </WorkspaceTabList>
 
           <WorkspacePanel value="overview">
@@ -4863,6 +4868,14 @@ function StudentDetail({
               dashboard={dashboard}
               studentId={studentId}
               lessonsById={lessonsById}
+            />
+          </WorkspacePanel>
+
+          <WorkspacePanel value="messages">
+            <TeacherStudentMessages
+              studentId={studentId}
+              classId={classId}
+              classLabel={classLabel}
             />
           </WorkspacePanel>
 

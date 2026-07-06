@@ -831,6 +831,50 @@ export type Notification = {
   created_at: string;
 };
 
+// Comms Slice 2/3: 1:1 student<->teacher direct messaging.
+export type DmChannel = {
+  id: string;
+  student_id: string;
+  teacher_id: string;
+  class_id: string;
+  status: "open" | "closed" | "blocked";
+  last_message_at: string | null;
+  created_at: string;
+};
+
+export type DmMessage = {
+  id: string;
+  channel_id: string;
+  sender_id: string;
+  body: string;
+  moderation_status: "visible" | "hidden";
+  hidden_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+};
+
+// A student's teacher-of-a-class, from the list_my_teachers() security-definer helper.
+export type MyTeacher = {
+  teacher_id: string;
+  teacher_name: string;
+  class_id: string;
+  class_name: string;
+};
+
+// Comms Slice 4: a threaded comment under a lesson material (2-level).
+export type MaterialComment = {
+  id: string;
+  resource_id: string;
+  class_id: string;
+  user_id: string;
+  parent_id: string | null;
+  body: string;
+  moderation_status: "visible" | "hidden";
+  hidden_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+};
+
 export type StudentMastery = {
   user_id: string;
   skill_key: string;

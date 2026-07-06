@@ -61,6 +61,10 @@ import type {
   LiveSessionViewer,
   MentorRecommendation,
   Notification,
+  DmChannel,
+  DmMessage,
+  MyTeacher,
+  MaterialComment,
   ModelUsageEvent,
   ActiveSession,
   AdminActorAccess,
@@ -2087,6 +2091,208 @@ export async function markAllNotificationsRead(): Promise<void> {
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .is("read_at", null);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Comms (Slices 2-4): 1:1 student<->teacher DM, per-material comments, per-class rollout flags.
+// All reads/writes are direct Supabase under the hardened RLS from 20260801000000_comms_foundation.sql.
+// ---------------------------------------------------------------------------------------------------
+export const COMMS_MINI_CHAT_FLAG = "comms_mini_chat";
+export const COMMS_COMMENTS_FLAG = "comms_material_comments";
+
+// The set of the caller's class ids where a given comms flag is enabled (rollout gate). A student can
+// read class-scoped feature_flags for classes they are a member of (RLS).
+export async function fetchCommsEnabledClassIds(
+  classIds: string[],
+  flagKey: string,
+): Promise<Set<string>> {
+  const ids = uniqueStrings(classIds);
+  if (!ids.length) return new Set();
+  const { data, error } = await supabase
+    .from("feature_flags")
+    .select("class_id,enabled")
+    .eq("flag_key", flagKey)
+    .eq("enabled", true)
+    .in("class_id", ids);
+  if (error) throw error;
+  return new Set(
+    ((data || []) as Array<{ class_id: string | null }>)
+      .map((r) => r.class_id)
+      .filter((v): v is string => Boolean(v)),
+  );
+}
+
+// Teacher/admin toggles a class-scoped comms flag on/off (RLS: is_class_teacher can write).
+export async function setCommsFlag(
+  classId: string,
+  organizationId: string | null,
+  flagKey: string,
+  enabled: boolean,
+): Promise<void> {
+  const { data } = await supabase
+    .from("feature_flags")
+    .select("id")
+    .eq("flag_key", flagKey)
+    .eq("class_id", classId)
+    .is("environment_mode_id", null)
+    .maybeSingle();
+  if (data?.id) {
+    const { error } = await supabase
+      .from("feature_flags")
+      .update({ enabled, updated_at: new Date().toISOString() })
+      .eq("id", (data as { id: string }).id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("feature_flags")
+      .insert({ flag_key: flagKey, class_id: classId, organization_id: organizationId, enabled });
+    if (error) throw error;
+  }
+}
+
+// The caller (student) discovers the teachers of the classes they are enrolled in (security-definer;
+// class_memberships is not otherwise student-readable for teacher rows).
+export async function listMyTeachers(): Promise<MyTeacher[]> {
+  const { data, error } = await supabase.rpc("list_my_teachers");
+  if (error) throw error;
+  return (data || []) as MyTeacher[];
+}
+
+// Own DM channels (RLS scopes to the student participant / the class's teachers).
+export async function fetchDmChannels(): Promise<DmChannel[]> {
+  const { data, error } = await supabase
+    .from("dm_channels")
+    .select("*")
+    .order("last_message_at", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return (data || []) as DmChannel[];
+}
+
+// Open (or return) the 1:1 channel for a (student, teacher, class). The opener must be a participant;
+// is_dm_pair validates the pairing server-side. Idempotent via the unique triple.
+export async function openDmChannel(
+  studentId: string,
+  teacherId: string,
+  classId: string,
+): Promise<DmChannel | null> {
+  const session = await getSession();
+  const uid = session?.user?.id;
+  if (!uid) return null;
+  await supabase
+    .from("dm_channels")
+    .insert({
+      student_id: studentId,
+      teacher_id: teacherId,
+      class_id: classId,
+      created_by: uid,
+      status: "open",
+    })
+    .select()
+    .then(
+      () => undefined,
+      () => undefined,
+    ); // ignore unique-violation on an existing channel
+  const { data, error } = await supabase
+    .from("dm_channels")
+    .select("*")
+    .eq("student_id", studentId)
+    .eq("teacher_id", teacherId)
+    .eq("class_id", classId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as DmChannel | null) || null;
+}
+
+export async function fetchDmMessages(channelId: string): Promise<DmMessage[]> {
+  const { data, error } = await supabase
+    .from("dm_messages")
+    .select("*")
+    .eq("channel_id", channelId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []) as DmMessage[];
+}
+
+export async function sendDmMessage(channelId: string, body: string): Promise<void> {
+  const session = await getSession();
+  const uid = session?.user?.id;
+  if (!uid) throw new Error("Not signed in.");
+  const trimmed = body.trim();
+  if (!trimmed) return;
+  const { error } = await supabase
+    .from("dm_messages")
+    .insert({ channel_id: channelId, sender_id: uid, body: trimmed.slice(0, 4000) });
+  if (error) throw error;
+}
+
+// Teacher/admin moderation: hide/unhide a message (RLS-enforced; guard trigger stamps audit metadata).
+export async function setDmMessageHidden(id: string, hidden: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("dm_messages")
+    .update({ moderation_status: hidden ? "hidden" : "visible" })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// Author soft-deletes (retracts) their own message.
+export async function softDeleteDmMessage(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("dm_messages")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// --- per-material comments (Slice 4) ---
+export async function fetchMaterialComments(
+  resourceId: string,
+  classId: string,
+): Promise<MaterialComment[]> {
+  const { data, error } = await supabase
+    .from("material_comments")
+    .select("*")
+    .eq("resource_id", resourceId)
+    .eq("class_id", classId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []) as MaterialComment[];
+}
+
+export async function postMaterialComment(input: {
+  resourceId: string;
+  classId: string;
+  body: string;
+  parentId?: string | null;
+}): Promise<void> {
+  const session = await getSession();
+  const uid = session?.user?.id;
+  if (!uid) throw new Error("Not signed in.");
+  const trimmed = input.body.trim();
+  if (!trimmed) return;
+  const { error } = await supabase.from("material_comments").insert({
+    resource_id: input.resourceId,
+    class_id: input.classId,
+    user_id: uid,
+    parent_id: input.parentId ?? null,
+    body: trimmed.slice(0, 4000),
+  });
+  if (error) throw error;
+}
+
+export async function setMaterialCommentHidden(id: string, hidden: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("material_comments")
+    .update({ moderation_status: hidden ? "hidden" : "visible" })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function softDeleteMaterialComment(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("material_comments")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) throw error;
 }
 

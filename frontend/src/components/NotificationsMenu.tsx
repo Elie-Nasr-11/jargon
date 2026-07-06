@@ -114,7 +114,14 @@ export function NotificationsMenu() {
     //  - assessment_to_review → the class Assessments tab (review/return controls live there)
     //  - submission_to_grade → the class Assignments tab (grading lives there)
     //  - mentor_recommendation → the student's transcript (to see where they're stuck)
-    if (n.kind === "assessment_to_review" && n.class_id) {
+    //  - direct_message → the student's Messages tab (reply to the DM)
+    if (n.kind === "direct_message" && n.class_id && n.related_student_id) {
+      navigate({
+        to: "/teacher/class/$classId/student/$studentId",
+        params: { classId: n.class_id, studentId: n.related_student_id },
+        search: { tab: "messages" },
+      });
+    } else if (n.kind === "assessment_to_review" && n.class_id) {
       navigate({
         to: "/teacher/class/$classId",
         params: { classId: n.class_id },
