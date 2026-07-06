@@ -1129,7 +1129,10 @@ function ChatPage() {
             {/* On mobile, group the menu + settings on the right (logo left). `sm:contents`
                 dissolves this wrapper on desktop so the nav keeps its centered position. */}
             <div className="flex items-center gap-1 sm:contents">
-              <ReviewDueChip />
+              <ReviewDueChip
+                accessToken={accessToken}
+                mentorPreferences={mentorToPreferences(mentor)}
+              />
               <HeaderMenus
                 activeLessonId={lessonId}
                 lessons={menuLessons}

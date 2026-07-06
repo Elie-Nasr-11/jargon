@@ -3683,6 +3683,31 @@ export async function invokeTypedChat(input: {
   return data;
 }
 
+// Post-v4.0 Phase 4b: a spaced-review turn on one skill. Hits the same chat fn with `review: true`,
+// which routes to the isolated review handler (no lesson session; refreshes the skill's spacing clock).
+export async function invokeReview(input: {
+  accessToken: string;
+  skillKey: string;
+  answer?: TypedChatAnswer;
+  mentorPreferences: MentorPreferences;
+}) {
+  const response = await fetchWithTimeout(functionUrl("chat"), {
+    method: "POST",
+    headers: authHeaders(await freshAccessToken(input.accessToken)),
+    body: JSON.stringify({
+      review: true,
+      skill_key: input.skillKey,
+      answer: input.answer,
+      mentor_preferences: input.mentorPreferences,
+    }),
+  });
+  const data = (await response.json()) as TypedChatEnvelope;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.reply || "Review request failed.");
+  }
+  return data;
+}
+
 export async function createRealtimeVoiceSession(input: {
   accessToken: string;
   sdp: string;

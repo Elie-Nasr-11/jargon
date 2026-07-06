@@ -17,19 +17,22 @@ prose):
   platform-GENERATED ad-hoc revision sessions need `learning_sessions.lesson_id` relaxed from NOT NULL —
   a runtime-wide change and the highest risk to the live tutor. Open: whether to do it, and how to gate
   it so a null-lesson session can't break the turn loop / gate / mastery writes.
-- **The spaced-repetition due-queue behind the "review-due" chip** — PARTLY SHIPPED (post-v4.0 Phase 4).
+- **The spaced-repetition due-queue behind the "review-due" chip** — SHIPPED, loop closes (post-v4.0 P4 + P4b).
   The SM-2-lite due-queue is live: `computeReviewDue` derives due skills client-side from
   `student_mastery.last_practiced_at` vs a per-tier interval (emerging 1d < developing 3d < secure 7d),
   surfaced by a self-contained `ReviewDueChip` in the chat header + a "Due for review" section in the
-  profile popup (informational — "ask your mentor to quiz you on these"). STILL OPEN: a one-tap GUIDED
-  review that actually runs revision + closes the loop. Revision is a stored per-STEP mode only (0
-  revision steps exist in content), and re-entering a completed lesson yields `post_completion` ad-lib
-  chat — NOT revision, and it stamps no `mode='revision'` evidence nor refreshes `last_practiced_at`, so
-  a reviewed skill never clears the queue on its own. Closing the loop needs either (a) a request-level
-  review flag in the chat fn (an additive, default-off turn-loop change: force revision on a completed
-  lesson's turn + stamp revision evidence + refresh last_practiced_at — needs its own adversarial review
-  since it touches the live turn loop) OR (b) authored `mode='revision'` content to route into. Deferred
-  pending a decision on which.
+  profile popup + a one-tap GUIDED review (P4b). The guided review is a dedicated, ISOLATED chat-fn path
+  (`handleReviewRequest`, fires only on `body.review === true`, so the normal turn loop is untouched):
+  it maps the skill to a lesson it was taught in for a real objective, runs retrieval practice, grades
+  the recall with the understanding grader, and — closing the loop — stamps `mode='revision'` evidence +
+  refreshes `last_practiced_at` (via `writeEvidenceAndMastery`, which now accepts a null lesson/session).
+  A reviewed skill therefore leaves the due queue; a miss lowers the tier → shorter interval → resurfaces
+  sooner (emergent SM-2 lapse). Guarded: skill must be in the student's own mastery (no model call for an
+  arbitrary skill) + a per-user model_usage rate limit. Residual (accepted for v1): the rate limit is a
+  sequential guard (recorded usage is async), so a parallel burst can slip a few calls before it engages.
+  STILL OPEN (P5): making an ad-hoc review a FIRST-CLASS `learning_sessions` row (needs the
+  `learning_sessions.lesson_id` NOT-NULL relaxation) so reviews are resumable + teacher-visible; today the
+  review turn is stateless (evidence-only, no session row).
 - **How do we complete the HotlistFeed → `notifications` MERGE?** The table + teacher bell shipped as an
   additive surface (`assessment_to_review` is the only live writer). The full merge needs a server-side
   `submission_to_grade` writer (submission is client-side today), an `intervention_alerts` insert writer

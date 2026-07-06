@@ -41,6 +41,10 @@ const MENTOR_MODE_OPTIONS = new Set([
 const HELP_REQUEST_OPTIONS = new Set(["hint", "show_me_how", "explain"]);
 const CHAT_RATE_LIMIT_WINDOW_MS = 60_000;
 const CHAT_RATE_LIMIT_MAX = 30;
+// The review path has no session (so the turn-based limiter can't apply); bound its model spend by
+// counting the user's recent model_usage_events instead.
+const REVIEW_RATE_LIMIT_WINDOW_MS = 60_000;
+const REVIEW_RATE_LIMIT_MAX = 30;
 
 const SYSTEM_PROMPT = `You are the Jargon Mentor, a warm, curious, firm tutor for school children.
 
@@ -583,8 +587,8 @@ async function recordRuntimeEvent(
 async function recordModelUsage(
   config: SupabaseConfig,
   userId: string,
-  sessionId: string,
-  lessonId: string,
+  sessionId: string | null,
+  lessonId: string | null,
   usage: OpenAIResult,
   taskType: ModelUsageTaskType = "mentor_turn",
   status: "ok" | "error" = "ok",
@@ -1032,8 +1036,8 @@ function parsedUnderstanding(value: unknown): Understanding | null {
 async function checkUnderstanding(
   config: SupabaseConfig,
   userId: string,
-  sessionId: string,
-  lessonId: string,
+  sessionId: string | null,
+  lessonId: string | null,
   activity: DbRow | null,
   milestone: DbRow | null,
   studentText: string,
@@ -2535,8 +2539,8 @@ function resourcesForResponse(
 async function writeEvidenceAndMastery(
   config: SupabaseConfig,
   userId: string,
-  lessonId: string,
-  sessionId: string,
+  lessonId: string | null,
+  sessionId: string | null,
   attempt: DbRow | null,
   answer: DbRow | null,
   assessment: Assessment | null,
@@ -3829,6 +3833,185 @@ async function handleTypedRequest(
   }
 }
 
+// Post-v4.0 Phase 4b: a dedicated, ISOLATED spaced-review turn. Fires ONLY on body.review === true,
+// so the normal lesson turn loop is byte-identical and untouched. It runs retrieval practice on ONE
+// skill without entering the step/completion machinery: it maps the skill to a lesson it was taught
+// in (for a real objective to quiz + grade against), grades the recall with the same understanding
+// grader, and — the point of the feature — refreshes that skill's last_practiced_at (+ stamps
+// mode='revision' evidence) so a reviewed skill leaves the due queue. Stateless: writes no session.
+async function handleReviewRequest(
+  req: Request,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const skillKey = typeof body.skill_key === "string" ? body.skill_key.trim() : "";
+  if (!/^[a-zA-Z0-9_-]{1,80}$/.test(skillKey)) {
+    return typedError("A valid skill_key is required for review.", 400);
+  }
+
+  let config: SupabaseConfig;
+  let user: DbRow;
+  try {
+    config = restConfig(req);
+    user = await fetchCurrentUser(config);
+  } catch (err) {
+    const message = errorMessage(err);
+    return typedError(message, typedAuthStatus(message));
+  }
+  const userId = String(user.id);
+  const answer = normalizeAnswer(body.answer);
+  const studentText = answerContent(answer);
+  const mentorPreferences = normalizeMentorPreferences(body.mentor_preferences);
+
+  try {
+    // Map the skill to a lesson that teaches it (for a real objective). `skill_keys` is text[];
+    // cs.{"x"} = array-contains. Best-effort — a bare-skill review still works when unmapped.
+    const milestone = await loadFirst(
+      config,
+      `milestones?skill_keys=cs.${encodeURIComponent(`{"${skillKey}"}`)}&select=id,lesson_id,objective&limit=1`,
+    );
+    const lessonId =
+      milestone && typeof milestone.lesson_id === "string" ? milestone.lesson_id : "";
+    const lesson = lessonId
+      ? await loadFirst(
+          config,
+          `lessons?id=eq.${encodeURIComponent(lessonId)}&select=id,title,module,tutor_prompt`,
+        )
+      : null;
+    const masteryRows = await loadMany(
+      config,
+      `student_mastery?user_id=eq.${encodeURIComponent(userId)}&skill_key=eq.${encodeURIComponent(skillKey)}&select=skill_key,level,score`,
+    );
+    // Only review a skill the student has actually practiced (their own mastery row). This bounds
+    // review to their real due skills and costs no model call for an arbitrary/unknown skill.
+    if (masteryRows.length === 0) {
+      return json(
+        makeEnvelope({
+          status: "ok",
+          reply: "There's nothing to review for that skill yet — keep learning and it'll show up here.",
+          session_id: null,
+          lesson_id: null,
+          stage: "review",
+          next_action: "reply",
+        }),
+      );
+    }
+
+    // Cost guard: the review path has no session for the turn-based limiter, so bound model spend by
+    // the user's recent model_usage_events (chat + review). Sequential spam is capped; a legitimate
+    // student stays well under the ceiling.
+    const reviewSince = encodeURIComponent(
+      new Date(Date.now() - REVIEW_RATE_LIMIT_WINDOW_MS).toISOString(),
+    );
+    const recentModelCalls = await recentRowCount(
+      config,
+      `model_usage_events?user_id=eq.${encodeURIComponent(userId)}&created_at=gte.${reviewSince}&select=id&limit=${REVIEW_RATE_LIMIT_MAX + 1}`,
+    );
+    if (recentModelCalls >= REVIEW_RATE_LIMIT_MAX) {
+      return typedError("You're reviewing very fast — take a short breather and try again in a minute.", 429);
+    }
+
+    const tier = masteryRows[0] ? String(masteryRows[0].level || "emerging") : "emerging";
+    const gradingMilestone: DbRow =
+      milestone ?? { objective: `Recall and explain the idea behind: ${skillKey}` };
+
+    // Grade the recall ONLY when the student actually answered in words (reuse the strict grader).
+    const gradedUnderstanding =
+      studentText && (answer?.mode === "text" || answer?.mode === "file")
+        ? await checkUnderstanding(config, userId, null, lessonId || null, null, gradingMilestone, studentText, [])
+        : null;
+
+    const directive = !studentText
+      ? "Start a short spaced-review of ONE skill the student studied earlier. Ask ONE clear recall question on it — no re-teaching, do not reveal the answer."
+      : gradedUnderstanding?.demonstrated
+        ? "The student recalled this well. Affirm their retention warmly in ONE line, then ask ONE slightly deeper recall question on the SAME skill."
+        : "This is spaced RETRIEVAL PRACTICE. Briefly acknowledge or gently correct their recall, then ask ONE more short recall question on this skill — prompt them to remember it; do NOT hand them the answer.";
+
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: JSON.stringify({
+          instruction:
+            "One spaced-REVIEW turn (retrieval practice). Follow `directive` and return ONLY the JSON output contract from your system message.",
+          mode: "revision",
+          lesson: lesson
+            ? { title: lesson.title, module: lesson.module, tutor_prompt: lesson.tutor_prompt }
+            : null,
+          milestone: milestone ? { objective: milestone.objective } : null,
+          student: {
+            skill: skillKey,
+            tier,
+            difficulty: mentorPreferences?.difficulty ?? "standard",
+          },
+          turn: studentText ? { message: studentText.slice(0, 600) } : null,
+          directive,
+        }),
+      },
+    ];
+
+    const result = await callModel(messages, true, "default");
+    // session_id is a nullable uuid — must be null (not "") or the telemetry+rate-limit row 500s.
+    scheduleBackground(recordModelUsage(config, userId, null, lessonId || null, result, "mentor_turn"));
+    let parsed: DbRow;
+    try {
+      parsed = JSON.parse(result.content);
+    } catch {
+      return typedError("Mentor returned invalid JSON.", 502);
+    }
+    const reply =
+      typeof parsed.reply === "string" && parsed.reply.trim()
+        ? parsed.reply
+        : "Let's review — what do you remember about this idea?";
+
+    // Close the loop: on a graded recall, refresh last_practiced_at (+ mode='revision' evidence) for
+    // this skill so it leaves the due queue. A miss scores low → tier may drop → it resurfaces sooner.
+    if (gradedUnderstanding && answer) {
+      const assessment: Assessment = {
+        score: gradedUnderstanding.demonstrated
+          ? gradedUnderstanding.level === "solid"
+            ? 0.8
+            : 0.65
+          : 0.45,
+        passed: Boolean(gradedUnderstanding.demonstrated),
+        feedback:
+          gradedUnderstanding.note ||
+          (gradedUnderstanding.demonstrated ? "Recalled it." : "Still fuzzy — worth another look."),
+        source: "orchestrator",
+      };
+      await writeEvidenceAndMastery(
+        config,
+        userId,
+        lessonId || null,
+        null,
+        null,
+        answer,
+        assessment,
+        [skillKey],
+        milestone,
+        gradedUnderstanding.demonstrated ? 0.8 : 0.5,
+        "revision_practice",
+        0,
+        true,
+        "revision",
+        "recall",
+      );
+    }
+
+    return json(
+      makeEnvelope({
+        status: "ok",
+        reply,
+        session_id: null,
+        lesson_id: lessonId || null,
+        stage: "review",
+        next_action: "reply",
+      }),
+    );
+  } catch (err) {
+    return typedError(errorMessage(err), 500);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: corsHeaders });
@@ -3840,6 +4023,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const record = body as Record<string, unknown>;
+    if (record.review === true) return await handleReviewRequest(req, record);
     return await handleTypedRequest(req, record);
   } catch (err) {
     return typedError(errorMessage(err), 500);

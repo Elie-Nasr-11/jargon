@@ -6,6 +6,35 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 4b: guided-review loop-close — building)
+
+Status: Built + verified; adversarial review self-run (the agent kept getting killed by the flaky
+SQL stream, so I ran its schema/RLS checks myself); deploy next.
+Task: A one-tap guided review that runs retrieval practice and CLOSES the spacing loop.
+
+- `supabase/functions/chat/index.ts`: NEW `handleReviewRequest` dispatched at the top of Deno.serve
+  ONLY when `record.review === true` (normal turn loop byte-identical). It maps the skill→lesson via
+  `milestones?skill_keys=cs.{...}` (student can read published milestones; empty → bare-skill
+  fallback), grades with the existing understanding grader, and on a graded recall stamps
+  `mode='revision'` evidence + refreshes `last_practiced_at` (via `writeEvidenceAndMastery`, whose
+  lessonId/sessionId are now `string | null`). Guards: skill must be in the student's own mastery (no
+  model call otherwise) + a per-user model_usage rate limit (REVIEW_RATE_LIMIT_*). Widened
+  `recordModelUsage`/`checkUnderstanding` sessionId/lessonId to `string | null` — the review passes
+  NULL (session_id is a uuid; passing "" would 500 the usage insert and silently break the rate
+  limit + telemetry — caught in review).
+- Frontend: `invokeReview` (POST review:true) in api.ts; `ReviewDueChip` gained a mini review-chat
+  (startReview/sendReview/endReview) with a per-skill "Review" button; endReview refetches the queue
+  so a just-reviewed skill disappears.
+- `tests/test_review_due.py` extended (guided-review + isolated-handler fingerprints).
+
+Tests: node --check green; frontend tsc/lint/build green; Python suite (185) green. Live-DB
+confirmed: learning_evidence lesson_id/session_id/milestone_id all nullable; milestones "public
+SELECT"; student_mastery own-ALL; model_usage_events.session_id nullable uuid.
+
+Residual (accepted v1): the review rate limit is sequential (usage recorded async), so a parallel
+burst can slip a few calls before it engages. NEXT (P5): make ad-hoc reviews first-class
+learning_sessions rows (lesson_id NOT-NULL relaxation) so they're resumable + teacher-visible.
+
 ## Claude -> Codex / Human - 2026-07-05 (Post-v4.0 Phase 4: review-due chip + due-queue — FRONTEND on branch)
 
 Status: Built + verified; frontend-only (no backend/migration), rides the pending main fast-forward.
