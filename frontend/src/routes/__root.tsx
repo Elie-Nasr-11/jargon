@@ -3,6 +3,7 @@ import { Outlet, Link, createRootRouteWithContext, useRouter } from "@tanstack/r
 import { useEffect } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
+import { onAuthStateChange } from "../lib/api";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -73,6 +74,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // App-lifetime realtime-auth owner: onAuthStateChange re-sets supabase.realtime auth on every token
+  // refresh (api.ts), so ANY realtime channel — the teacher live-view, the notification bell, and
+  // future comms channels — survives past the first token's ~1h expiry. Mounting it here (above every
+  // route) means new realtime surfaces don't each have to remember to keep the socket authenticated.
+  useEffect(() => {
+    const { data } = onAuthStateChange(() => {});
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
+import { toast } from "sonner";
 import { GradientCard } from "./GradientCard";
-import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
+import {
+  fetchNotifications,
+  getSession,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import type { Notification } from "@/lib/types";
 
 // v4.0 Phase 5 — the teacher/admin notification bell: unread badge + a dropdown of recent
@@ -33,9 +40,46 @@ export function NotificationsMenu() {
 
   useEffect(() => {
     load();
-    // Light poll so the unread badge stays reasonably fresh without a realtime channel.
+    // Light poll as the FALLBACK if the realtime socket drops (keeps today's behavior).
     const interval = window.setInterval(load, 90_000);
     return () => window.clearInterval(interval);
+  }, []);
+
+  // Realtime: light the badge/toast the instant a notification row is written for me, instead of
+  // waiting up to 90s for the poll. RLS (user_id = auth.uid()) already scopes the realtime stream to
+  // my own rows; the user_id filter is a redundant safety + noise reduction. The app-lifetime
+  // realtime-auth owner in __root keeps this channel alive past the first token's ~1h expiry.
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+    void getSession()
+      .then((session) => {
+        const uid = session?.user?.id;
+        if (!uid || cancelled) return;
+        channel = supabase
+          .channel(`notifications-inbox-${uid}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "notifications",
+              filter: `user_id=eq.${uid}`,
+            },
+            (payload) => {
+              const row = payload.new as Notification | null;
+              if (!row?.id) return;
+              setItems((prev) => (prev.some((x) => x.id === row.id) ? prev : [row, ...prev]));
+              if (row.title) toast(row.title);
+            },
+          )
+          .subscribe();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {

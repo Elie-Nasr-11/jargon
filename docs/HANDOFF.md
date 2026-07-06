@@ -6,6 +6,35 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-06 (§9 comms features: mini-chat + material comments + realtime push — Starting)
+
+Status: Starting. User picked three §9 comms items. A ground-truth exploration workflow mapped the
+codebase: NO user-to-user messaging/threading primitive exists (chat_messages = student↔AI transcript;
+teacher_live_comments = one-directional, session-bound) — all three are greenfield, but session_holds is
+the proven two-party template (with the `student_id <> auth.uid()` guard around the can_view_student
+SELF-trap) and the notifications table already has the hardened RLS/dedup/bell machinery. A REAL MINOR
+is live → everything ships additive + behind a per-class feature_flag defaulting OFF.
+
+Decisions (AskUserQuestion stream kept closing; proceeding on codebase-grounded recommended defaults,
+user may redirect): (1) mini-chat = strict 1:1 student↔shared-active-class teacher, either party opens,
+validated by a net-new distinct-role check (not can_view_student alone); (2) moderation = post-moderate
++ RLS-ENFORCED hide + audit_events, flag-gated, async text-sweep as fast-follow, never block send;
+(3) push = in-app realtime NOW (reuse notifications + bell), OS/web-push deferred; (4) comments = under
+the ResourceCard, keyed to lesson_resources.id with a MANDATORY class_id anchor (is_class_member read
+gate — can_view_lesson_resource alone leaks across classes). Engineering defaults: reuse notifications
+(add kinds direct_message/material_comment), client-direct writes under hardened RLS, hoist ONE
+realtime-auth owner into __root.tsx.
+
+5 additive, flag-gated, independently-shippable slices (tasks #132-136): 1 in-app realtime bell ·
+2 messaging/comment table foundation · 3 mini-chat UI · 4 per-material comments · 5 (later) OS web-push.
+Each: build → verify (node --check / migration rolled-back txn / tsc-lint-build) → adversarial review →
+backend deploy from branch push → prod-verify; frontend rides the held main FF. Live student/tutor
+byte-unaffected until the flag is flipped.
+
+Files I expect to touch (Slice 1): new supabase/migrations/20260731000000_notifications_realtime.sql;
+.github/workflows/deploy-backend.yml (migration list); frontend/src/routes/__root.tsx (hoist realtime
+auth owner); frontend/src/components/NotificationsMenu.tsx (realtime INSERT subscription + toast).
+
 ## Claude -> Codex / Human - 2026-07-06 (§9 C-item: LLM inquiry tagging — SHIPPED)
 
 Status: DONE — committed (5f4b9e4), pushed, deployed (deploy-backend run 53 green; live chat fn
