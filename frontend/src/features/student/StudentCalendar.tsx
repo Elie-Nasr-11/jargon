@@ -25,20 +25,27 @@ function longDate(d: Date): string {
   return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 }
 
-export function StudentCalendarBody() {
-  const [grades, setGrades] = useState<StudentGradeRow[] | null>(null);
+export function StudentCalendarBody({
+  grades: gradesProp,
+}: {
+  // When the hub already holds the grade rows it passes them in; standalone use self-fetches.
+  grades?: StudentGradeRow[] | null;
+} = {}) {
+  const [fetched, setFetched] = useState<StudentGradeRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Date | undefined>(new Date());
+  const grades = gradesProp !== undefined ? gradesProp : fetched;
 
   useEffect(() => {
+    if (gradesProp !== undefined) return;
     let alive = true;
     fetchStudentGrades()
-      .then((rows) => alive && setGrades(rows))
+      .then((rows) => alive && setFetched(rows))
       .catch((e) => alive && setError((e as Error).message || "Could not load your calendar."));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [gradesProp]);
 
   // Group work by the day it's DUE and the day it was SUBMITTED.
   const { dueByDay, submittedByDay, dueDates, submittedDates } = useMemo(() => {

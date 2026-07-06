@@ -1071,15 +1071,19 @@ function ChatPage() {
                 onMentorChange={updateMentor}
                 voice={voice}
                 onVoiceChange={updateVoice}
-                accessToken={accessToken}
-                mentorPreferences={mentorToPreferences(mentor)}
               />
             </div>
           </div>
         </div>
       </header>
 
-      <ClassesModal open={classesOpen} onOpenChange={setClassesOpen} />
+      <ClassesModal
+        open={classesOpen}
+        onOpenChange={setClassesOpen}
+        accessToken={accessToken}
+        mentorPreferences={mentorToPreferences(mentor)}
+        currentLessonTitle={currentLesson?.title ?? null}
+      />
 
       <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
         {activeLiveViewers.length ? (

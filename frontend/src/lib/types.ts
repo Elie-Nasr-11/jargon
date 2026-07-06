@@ -803,10 +803,10 @@ export type StudentProfileStats = {
   email: string | null;
   mastery: StudentMastery[];
   notes: TeacherNote[];
-  grades: StudentGradeRow[];
   progress: StudentProgressSummary;
   evidence: LearningEvidence[];
   reviewDue: ReviewDueSkill[];
+  reviewSessions: ReviewSession[];
 };
 
 // v4.0 Phase 3b: a class the signed-in student belongs to (for the LMS class views).

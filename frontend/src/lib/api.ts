@@ -650,29 +650,32 @@ export async function fetchStudentProgressSummary(): Promise<StudentProgressSumm
 }
 
 // One call the profile popup awaits. Each read is independent and best-effort: a single failed
-// read degrades to an empty section rather than blanking the whole popup.
+// read degrades to an empty section rather than blanking the whole popup. (Grades left this
+// bundle when the gradebook moved to the hub's Grades tab.)
 export async function fetchStudentProfileStats(): Promise<StudentProfileStats> {
   const session = await getSession();
   const userId = session?.user?.id || null;
   const email = session?.user?.email || null;
   const safe = <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
-  const [profile, mastery, notes, grades, progress, evidence] = await Promise.all([
+  const [profile, mastery, notes, progress, evidence, reviewSessions] = await Promise.all([
     userId ? safe(fetchProfile(userId), null) : Promise.resolve(null),
     safe(fetchStudentMastery(), [] as StudentMastery[]),
     safe(fetchStudentTeacherNotes(), [] as TeacherNote[]),
-    safe(fetchStudentGrades(), [] as StudentGradeRow[]),
     safe(fetchStudentProgressSummary(), { lessonsStarted: 0, lessonsCompleted: 0 }),
     safe(fetchStudentEvidence(), [] as LearningEvidence[]),
+    userId
+      ? safe(fetchStudentReviewSessions(userId), [] as ReviewSession[])
+      : Promise.resolve([] as ReviewSession[]),
   ]);
   return {
     profile,
     email,
     mastery,
     notes,
-    grades,
     progress,
     evidence,
     reviewDue: computeReviewDue(mastery),
+    reviewSessions,
   };
 }
 
@@ -3944,8 +3947,9 @@ export async function completeReviewSession(input: {
   }
 }
 
-// P5: a student's recent review sessions, for the teacher's student-detail view. RLS
-// (review_sessions_teacher_read via can_view_student) gates it to managed students.
+// A student's recent review sessions. Used by the teacher's student-detail view (RLS
+// review_sessions_teacher_read via can_view_student) AND by the student's own profile
+// (review_sessions_owner permits self-read).
 export async function fetchStudentReviewSessions(studentId: string): Promise<ReviewSession[]> {
   const { data, error } = await supabase
     .from("review_sessions")

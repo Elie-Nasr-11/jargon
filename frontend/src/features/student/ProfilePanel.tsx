@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchStudentProfileStats } from "@/lib/api";
-import type { MentorConfig } from "@/lib/jargon-store";
 import { modeLabel } from "@/lib/modes";
 import type { StudentProfileStats } from "@/lib/types";
 import { humanizeSkillKey, practicedAgo } from "@/lib/review";
 
-// v4.0 Phase 3a — the student profile popup. Reads the signed-in student's OWN profile, mastery,
-// grades, progress, and student-visible teacher notes (all permitted by existing RLS — no new
+// The student profile popup: the student's OWN identity, progress, FULL skill map, strengths by
+// mode, review history, and student-visible teacher notes (all permitted by existing RLS — no new
 // backend). Self-contained: it fetches its bundle on mount and degrades each section gracefully.
+// Grades live in the hub's Grades tab; the review QUEUE lives in the hub's Review tab.
 
 function pct(score: number | null | undefined): string {
   if (score == null) return "—";
@@ -38,7 +38,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: boolean }) {
+export function ProfilePanel({ bare }: { bare?: boolean }) {
   const [stats, setStats] = useState<StudentProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,11 +62,17 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
     };
   }, []);
 
-  // Top skills by score, strongest first — the student's proficiency snapshot.
-  const topSkills = useMemo(() => {
+  // The FULL skill map by score, strongest first (the panel scrolls; no truncation).
+  const skills = useMemo(() => {
     const rows = stats?.mastery ?? [];
-    return [...rows].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 6);
+    return [...rows].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   }, [stats]);
+
+  // Completed guided-review sessions, newest first — the student's own review record.
+  const reviewHistory = useMemo(
+    () => (stats?.reviewSessions ?? []).filter((s) => s.status === "complete").slice(0, 6),
+    [stats],
+  );
 
   // Strengths & focus areas BY MODE: average score of scored evidence per learning mode. Populates
   // as the student completes mode-tagged steps; empty until then.
@@ -113,9 +119,9 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
           </div>
 
           <SectionLabel>Proficiency</SectionLabel>
-          {topSkills.length ? (
+          {skills.length ? (
             <div className="space-y-1.5">
-              {topSkills.map((skill) => (
+              {skills.map((skill) => (
                 <div key={skill.skill_key} className="flex items-center gap-2.5">
                   <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
                     {skill.skill_key}
@@ -141,23 +147,23 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
             </p>
           )}
 
-          {stats?.reviewDue.length ? (
+          {reviewHistory.length ? (
             <>
-              <SectionLabel>Due for review</SectionLabel>
+              <SectionLabel>Review history</SectionLabel>
               <div className="space-y-1.5">
-                {stats.reviewDue.slice(0, 6).map((skill) => (
-                  <div key={skill.skill_key} className="flex items-center gap-2.5">
+                {reviewHistory.map((session) => (
+                  <div key={session.id} className="flex items-center gap-2.5">
                     <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
-                      {humanizeSkillKey(skill.skill_key)}
+                      {humanizeSkillKey(session.skill_key)}
                     </span>
                     <span className="shrink-0 text-[11px] text-muted-foreground">
-                      {titleCase(skill.level)} · {practicedAgo(skill.last_practiced_at)}
+                      {practicedAgo(session.updated_at)}
+                    </span>
+                    <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-foreground/70">
+                      {session.score != null ? pct(session.score) : "—"}
                     </span>
                   </div>
                 ))}
-                <p className="pt-0.5 text-[11.5px] text-muted-foreground">
-                  Ask your mentor to quiz you on these to keep them sharp.
-                </p>
               </div>
             </>
           ) : null}
@@ -204,21 +210,6 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
               </div>
             </>
           ) : null}
-
-          <SectionLabel>Mentor style</SectionLabel>
-          <div className="flex flex-wrap gap-1.5">
-            {[mentor.tone, mentor.verbosity, mentor.difficulty].map((chip) => (
-              <span
-                key={chip}
-                className="rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground"
-              >
-                {chip}
-              </span>
-            ))}
-          </div>
-          <p className="mt-1.5 text-[11px] text-muted-foreground">
-            Adjust these in the Mentor menu.
-          </p>
         </>
       )}
     </div>
