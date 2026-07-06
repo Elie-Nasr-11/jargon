@@ -6,6 +6,34 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-06 (Student header tweaks — Review→gear, drop Lessons, Classes far-right)
+
+Status: Built + verified (tsc/lint/build green), shipping via main FF. FRONTEND-ONLY (no backend/migration).
+Task: follow-up to the IA restructure per the user's review — three header tweaks: move the "Review · N"
+chip off the header into the Settings gear (a row directly below Notifications, opening a modal), remove the
+Lessons dropdown entirely (lesson-switching now happens via the Classes popup → unit → lesson), and move the
+Classes icon to the far right, immediately left of the Settings gear.
+
+Files changed:
+- NEW `features/student/ReviewPanel.tsx`: the review surface as content-only (due-skill list + one-tap guided
+  review), extracted from the deleted ReviewDueChip. Empty state when nothing's due (no longer renders null).
+- `components/SettingsMenu.tsx`: new optional student props `accessToken` + `mentorPreferences`; a **Review**
+  row (RotateCcw) directly below Notifications opens a ModalCard hosting ReviewPanel. `StudentModal` += review.
+- `routes/chat.tsx`: dropped `<ReviewDueChip>` + `<HeaderMenus>` from the header; header cluster is now
+  StudentMiniChat · Classes icon · Settings (Classes far-right). Removed the now-orphaned `mapLessons`,
+  `menuLessons`, `lessonSubtitle`, `stageProgress`, `lessonProgress` state + its `fetchStudentLessonProgress`
+  bootstrap fetch, and `selectLesson`. Passed `accessToken` + `mentorPreferences` into SettingsMenu.
+- DELETED `components/HeaderMenus.tsx` (the Lessons tree; nothing else imported it) and
+  `features/student/ReviewDueChip.tsx` (replaced by ReviewPanel).
+
+Tests run: `npx tsc --noEmit` (0 errors), `npm run lint` (0 errors, 12 pre-existing warns), `npm run build` (ok).
+
+Remaining concerns: the global Lessons tree is gone, so the ONLY lesson switcher is now Classes → unit → open
+lesson (matches the user's "remove lessons" intent). The Review row shows always (not gated on due-count); the
+modal handles the "nothing due" empty state.
+
+Suggested next task: none pending; live smoke as a student after the main FF (header order + Review modal).
+
 ## Claude -> Codex / Human - 2026-07-06 (Student-view IA restructure — gear hub + centered-modal popups)
 
 Status: Built + verified (tsc/lint/build green), shipping via main FF. FRONTEND-ONLY (no backend/migration).

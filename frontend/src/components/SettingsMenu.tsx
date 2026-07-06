@@ -8,6 +8,7 @@ import {
   GraduationCap,
   LogOut,
   Moon,
+  RotateCcw,
   Settings,
   Sparkles,
   Sun,
@@ -19,13 +20,15 @@ import { ProfilePanel } from "@/features/student/ProfilePanel";
 import { MentorControls } from "@/features/student/MentorControls";
 import { GradesModal } from "@/features/student/GradesModal";
 import { StudentNotifications } from "@/features/student/StudentNotifications";
+import { ReviewPanel } from "@/features/student/ReviewPanel";
 import { useTheme } from "@/lib/theme";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
+import type { MentorPreferences } from "@/lib/types";
 
-type StudentModal = "profile" | "mentor" | "grades" | "notifications";
+type StudentModal = "profile" | "mentor" | "grades" | "notifications" | "review";
 
 // SettingsMenu is shared across the student chat and the teacher/admin ConsoleShell. The student
 // passes mentor/voice props; their presence turns this gear into the student hub (Profile · Mentor ·
@@ -37,12 +40,16 @@ export function SettingsMenu({
   onMentorChange,
   voice,
   onVoiceChange,
+  accessToken,
+  mentorPreferences,
 }: {
   email: string;
   mentor?: MentorConfig;
   onMentorChange?: (m: MentorConfig) => void;
   voice?: VoiceSettings;
   onVoiceChange?: (v: VoiceSettings) => void;
+  accessToken?: string | null;
+  mentorPreferences?: MentorPreferences;
 }) {
   const [modal, setModal] = useState<StudentModal | null>(null);
   const isStudent = Boolean(mentor && onMentorChange);
@@ -206,18 +213,32 @@ export function SettingsMenu({
         </span>
       </button>
       {isStudent ? (
-        <button
-          type="button"
-          onClick={() => {
-            close();
-            setModal("notifications");
-          }}
-          className={rowClass}
-        >
-          <span className="flex items-center gap-2.5">
-            <Bell className="h-[15px] w-[15px]" strokeWidth={1.5} /> Notifications
-          </span>
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              setModal("notifications");
+            }}
+            className={rowClass}
+          >
+            <span className="flex items-center gap-2.5">
+              <Bell className="h-[15px] w-[15px]" strokeWidth={1.5} /> Notifications
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              setModal("review");
+            }}
+            className={rowClass}
+          >
+            <span className="flex items-center gap-2.5">
+              <RotateCcw className="h-[15px] w-[15px]" strokeWidth={1.5} /> Review
+            </span>
+          </button>
+        </>
       ) : null}
       {campusLiveUrl ? (
         <a
@@ -343,6 +364,20 @@ export function SettingsMenu({
               if (!o) setModal(null);
             }}
           />
+          {mentorPreferences ? (
+            <ModalCard
+              open={modal === "review"}
+              onOpenChange={(o) => {
+                if (!o) setModal(null);
+              }}
+              title="Review"
+            >
+              <ReviewPanel
+                accessToken={accessToken ?? null}
+                mentorPreferences={mentorPreferences}
+              />
+            </ModalCard>
+          ) : null}
         </>
       ) : null}
     </div>

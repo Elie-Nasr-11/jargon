@@ -21,11 +21,9 @@ import {
   Volume2,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
-import { HeaderMenus } from "@/components/HeaderMenus";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { StudentMiniChat } from "@/features/student/StudentMiniChat";
 import { MaterialComments } from "@/features/comms/MaterialComments";
-import { ReviewDueChip } from "@/features/student/ReviewDueChip";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
 import { LessonMilestones } from "@/components/LessonMilestones";
@@ -34,7 +32,6 @@ import {
   DEFAULT_MENTOR,
   DEFAULT_VOICE,
   store,
-  type Lesson as MenuLesson,
   type MentorConfig,
   type VoiceSettings,
 } from "@/lib/jargon-store";
@@ -49,7 +46,6 @@ import {
   onAuthStateChange,
   fetchLessonActivities,
   fetchStudentCatalog,
-  fetchStudentLessonProgress,
   fetchStudentSettings,
   upsertStudentSettings,
   createRealtimeVoiceSession,
@@ -131,15 +127,6 @@ type Msg =
 
 const uid = () => Math.random().toString(36).slice(2);
 
-const stageProgress: Record<LearningSession["stage"], number> = {
-  intro: 0.12,
-  teach: 0.28,
-  practice: 0.5,
-  assessment: 0.72,
-  review: 0.88,
-  complete: 1,
-};
-
 function mentorToPreferences(mentor: MentorConfig): MentorPreferences {
   return {
     pace:
@@ -183,13 +170,6 @@ function deriveLessonArc(
     upcoming,
     next: upcoming[0] || null,
   };
-}
-
-function lessonSubtitle(lesson: Lesson) {
-  const path = [lesson.course_title, lesson.unit_title].filter(Boolean).join(" · ");
-  return (
-    [path || lesson.module, lesson.level].filter(Boolean).join(" · ") || lesson.tutor_prompt || ""
-  );
 }
 
 // A floating "Step N of M" pill under the header + an expandable roadmap of the lesson steps
@@ -250,36 +230,6 @@ function LessonProgress({
       ) : null}
     </div>
   );
-}
-
-function mapLessons(
-  lessons: Lesson[],
-  activeLessonId: string,
-  learningSession: LearningSession | null,
-  lessonProgress: Record<string, number> = {},
-): MenuLesson[] {
-  return lessons.map((lesson) => ({
-    id: lesson.id,
-    title: lesson.title,
-    subtitle: lessonSubtitle(lesson),
-    group: lesson.curriculum_group || lesson.subject_title || lesson.module || "Lessons",
-    // The active lesson uses its live session stage; every other lesson uses the persisted
-    // per-lesson progress from the student's sessions (replaces the old hardcoded 0).
-    progress:
-      lesson.id === activeLessonId && learningSession
-        ? (stageProgress[learningSession.stage] ?? 0)
-        : (lessonProgress[lesson.id] ?? 0),
-    subjectTitle:
-      lesson.subject_title ||
-      lesson.course_title ||
-      lesson.curriculum_group ||
-      lesson.module ||
-      undefined,
-    courseTitle: lesson.course_title || undefined,
-    unitTitle: lesson.unit_title || undefined,
-    unitPosition: lesson.unit_position ?? undefined,
-    position: lesson.position ?? undefined,
-  }));
 }
 
 function turnToMessage(turn: LearningTurn): Msg | null {
@@ -453,8 +403,6 @@ function ChatPage() {
   const [email, setEmail] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  // Per-lesson progress (0..1) for the "other lessons" bars, from the student's own sessions.
-  const [lessonProgress, setLessonProgress] = useState<Record<string, number>>({});
   const [activities, setActivities] = useState<LessonActivity[]>([]);
   const [learningSession, setLearningSession] = useState<LearningSession | null>(null);
   const [lessonArc, setLessonArc] = useState<LessonArc | null>(null);
@@ -510,10 +458,6 @@ function ChatPage() {
     activities.find((activity) => activity.response_mode === "code")?.starter_code ||
     currentLesson?.sample_code ||
     `// Write Jargon here\nPRINT "hello from jargon"`;
-  const menuLessons = useMemo(
-    () => mapLessons(lessons, lessonId, learningSession, lessonProgress),
-    [lessons, lessonId, learningSession, lessonProgress],
-  );
   // Newest REAL mentor message — the only bubble whose quiz choices are live. Error bubbles
   // are skipped so a failed send can't strip the active question's buttons.
   const lastBotId = useMemo(() => {
@@ -649,16 +593,13 @@ function ChatPage() {
           return;
         }
         // Pin the student's currently-open lesson into the scoped catalog so class scoping can
-        // never strand them mid-lesson with no way back to their in-progress work. The per-lesson
-        // progress map is best-effort (never blocks boot).
-        const [liveLessons, liveAssignments, liveAssessments, liveProgress, serverSettings] =
-          await Promise.all([
-            fetchStudentCatalog(store.getLessonId()),
-            fetchStudentAssignments(),
-            fetchStudentAssessments(),
-            fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>),
-            fetchStudentSettings().catch(() => null),
-          ]);
+        // never strand them mid-lesson with no way back to their in-progress work.
+        const [liveLessons, liveAssignments, liveAssessments, serverSettings] = await Promise.all([
+          fetchStudentCatalog(store.getLessonId()),
+          fetchStudentAssignments(),
+          fetchStudentAssessments(),
+          fetchStudentSettings().catch(() => null),
+        ]);
         if (!alive) return;
         const selected =
           liveLessons.find((lesson) => lesson.id === store.getLessonId())?.id ||
@@ -679,7 +620,6 @@ function ChatPage() {
         setAccessToken(session.access_token);
         setEmail(session.user.email || "");
         setLessons(liveLessons);
-        setLessonProgress(liveProgress);
         setAssignments(liveAssignments);
         setAssessments(liveAssessments);
         setLessonId(selected);
@@ -784,16 +724,6 @@ function ChatPage() {
       void supabase.removeChannel(channel);
     };
   }, [sessionId]);
-
-  const selectLesson = async (id: string) => {
-    if (!accessToken) return;
-    // Leave voice mode: the live session was negotiated for the previous lesson and its
-    // turns would otherwise submit against the new one.
-    setVoiceMode(false);
-    setLessonId(id);
-    store.setLessonId(id);
-    await loadLesson(id, accessToken, mentor);
-  };
 
   const updateMentor = (next: MentorConfig) => {
     setMentor(next);
@@ -1108,15 +1038,7 @@ function ChatPage() {
             {/* On mobile, group the menu + settings on the right (logo left). `sm:contents`
                 dissolves this wrapper on desktop so the nav keeps its centered position. */}
             <div className="flex items-center gap-1 sm:contents">
-              <ReviewDueChip
-                accessToken={accessToken}
-                mentorPreferences={mentorToPreferences(mentor)}
-              />
-              <HeaderMenus
-                activeLessonId={lessonId}
-                lessons={menuLessons}
-                onSelectLesson={selectLesson}
-              />
+              <StudentMiniChat />
               <button
                 type="button"
                 onClick={() => setClassesOpen(true)}
@@ -1125,13 +1047,14 @@ function ChatPage() {
               >
                 <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.5} />
               </button>
-              <StudentMiniChat />
               <SettingsMenu
                 email={email}
                 mentor={mentor}
                 onMentorChange={updateMentor}
                 voice={voice}
                 onVoiceChange={updateVoice}
+                accessToken={accessToken}
+                mentorPreferences={mentorToPreferences(mentor)}
               />
             </div>
           </div>
