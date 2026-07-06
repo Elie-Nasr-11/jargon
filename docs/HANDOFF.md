@@ -6,10 +6,13 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-06 (§9 C-item: LLM inquiry tagging — building)
+## Claude -> Codex / Human - 2026-07-06 (§9 C-item: LLM inquiry tagging — SHIPPED)
 
-Status: Built + verified; adversarial review (workflow) running; deploy next. Backend-only
-(chat fn), additive, regex-fallback-safe, logging-only.
+Status: DONE — committed (5f4b9e4), pushed, deployed (deploy-backend run 53 green; live chat fn
+verified via get_edge_function to contain normalizeInquiry + the "inquiry": null output contract +
+the mentor-preferred write). Adversarial review (2 reviewers + judge) → SHIP, no must-fix. Backend-only
+(chat fn), additive, regex-fallback-safe, logging-only. No migration/frontend/envelope change, so the
+backend deploy IS the whole ship — nothing for this item rides the held main FF.
 Task: The one cleanly-buildable §9 "deferred" item — make the confusion/curiosity inquiry signal
 accurate. Today curiosity is the loose `isQuestionShaped` regex (over-tags any question).
 
