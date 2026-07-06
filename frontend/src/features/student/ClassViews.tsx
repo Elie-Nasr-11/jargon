@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  BookOpen,
-  CalendarClock,
-  CheckCircle2,
-  ChevronRight,
-  GraduationCap,
-} from "lucide-react";
+import { BookOpen, CalendarClock, CheckCircle2, ChevronRight, GraduationCap } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
 import {
   fetchClassScopedLessons,
@@ -16,7 +8,6 @@ import {
   fetchStudentGrades,
   fetchStudentLessonProgress,
 } from "@/lib/api";
-import { store } from "@/lib/jargon-store";
 import type {
   Assessment,
   AssessmentAttempt,
@@ -25,12 +16,12 @@ import type {
   StudentClass,
   StudentGradeRow,
 } from "@/lib/types";
-import { useStudentGuard } from "@/features/student/useStudentGuard";
 
-// v4.0 Phase 3b — the student LMS shell: a class menu → per-class dashboard (unit cards) → per-unit
-// lesson list. Class scoping reuses fetchClassScopedLessons (linked courses, or the full catalog
-// when a class has no links), and per-lesson progress comes from the student's own sessions. All
-// three views open a lesson by handing off to the chat surface (store.setLessonId → /chat).
+// The student LMS views — a class menu → per-class dashboard (unit cards) → per-unit lesson list.
+// These are now PROP-DRIVEN content (no routing): the ClassesModal owns the drill-down state and
+// hands off lesson opens to the chat surface. Class scoping reuses fetchClassScopedLessons (linked
+// courses, or the full catalog when a class has no links); per-lesson progress from the student's
+// own sessions.
 
 function pctLabel(value: number): string {
   return `${Math.round(value * 100)}%`;
@@ -47,55 +38,17 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
-export function PageShell({
-  title,
-  subtitle,
-  back,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  back?: { to: string; label: string };
-  children?: React.ReactNode;
-}) {
+export function StateNote({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-        {back ? (
-          <Link
-            to={back.to}
-            className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.7} />
-            {back.label}
-          </Link>
-        ) : (
-          <Link
-            to="/chat"
-            className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.7} />
-            Back to chat
-          </Link>
-        )}
-        <h1 className="font-serif text-[28px] leading-tight tracking-tight">{title}</h1>
-        {subtitle ? <p className="mt-1 text-[13.5px] text-muted-foreground">{subtitle}</p> : null}
-        <div className="mt-6">{children}</div>
-      </div>
+    <div className="rounded-2xl border border-border bg-muted/40 p-6 text-center text-[13px] text-muted-foreground">
+      {children}
     </div>
   );
 }
 
-export function StateNote({ children }: { children: React.ReactNode }) {
-  return (
-    <GradientCard>
-      <div className="p-6 text-center text-[13.5px] text-muted-foreground">{children}</div>
-    </GradientCard>
-  );
-}
+export type UnitGroup = { unitId: string; unitTitle: string; lessons: Lesson[] };
 
 // Group scoped lessons into units keyed by unit_id, preserving unit_position then position order.
-type UnitGroup = { unitId: string; unitTitle: string; lessons: Lesson[] };
 function groupByUnit(lessons: Lesson[]): UnitGroup[] {
   const byUnit = new Map<string, { title: string; pos: number; lessons: Lesson[] }>();
   for (const lesson of lessons) {
@@ -122,11 +75,6 @@ function groupByUnit(lessons: Lesson[]): UnitGroup[] {
   });
 }
 
-function openLessonInChat(navigate: ReturnType<typeof useNavigate>, lessonId: string) {
-  store.setLessonId(lessonId);
-  navigate({ to: "/chat" });
-}
-
 function fmtDate(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -134,8 +82,8 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-// v4.0 Phase 3 completion — the class dashboard's recent/upcoming work strip + grades summary,
-// scoped to this class's checkpoints (assignments + assessments) from the student's own grade rows.
+// The class dashboard's recent/upcoming work strip + grades summary, scoped to this class's
+// checkpoints (assignments + assessments) from the student's own grade rows.
 function ClassWorkSummary({ grades }: { grades: StudentGradeRow[] }) {
   const now = Date.now();
   const released = grades.filter((g) => g.score != null);
@@ -214,8 +162,8 @@ function ClassWorkSummary({ grades }: { grades: StudentGradeRow[] }) {
   );
 }
 
-// v4.0 Phase 3 completion — the unit view's assessment reviews: returned/graded assessments for the
-// unit's lessons, with the teacher's final score + feedback (student self-reads its own attempts).
+// The unit view's assessment reviews: returned/graded assessments for the unit's lessons, with the
+// teacher's final score + feedback (student self-reads its own attempts).
 function AssessmentReviews({
   bundle,
   lessonIds,
@@ -273,14 +221,12 @@ function AssessmentReviews({
   );
 }
 
-// --- /classes ------------------------------------------------------------------------------
-export function ClassMenu() {
-  const { ready } = useStudentGuard();
+// --- class list --------------------------------------------------------------------------------
+export function ClassMenu({ onSelectClass }: { onSelectClass: (cls: StudentClass) => void }) {
   const [classes, setClasses] = useState<StudentClass[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!ready) return;
     let alive = true;
     fetchStudentClasses()
       .then((rows) => alive && setClasses(rows))
@@ -288,76 +234,66 @@ export function ClassMenu() {
     return () => {
       alive = false;
     };
-  }, [ready]);
+  }, []);
 
-  if (!ready) return <PageShell title="Classes" />;
-
+  if (error) return <StateNote>{error}</StateNote>;
+  if (classes === null) return <StateNote>Loading your classes…</StateNote>;
+  if (classes.length === 0) {
+    return (
+      <StateNote>
+        You&apos;re not enrolled in a class yet. You can still browse every lesson from the chat.
+      </StateNote>
+    );
+  }
   return (
-    <PageShell title="Your classes" subtitle="Open a class to see its units, lessons, and work.">
-      {error ? (
-        <StateNote>{error}</StateNote>
-      ) : classes === null ? (
-        <StateNote>Loading your classes…</StateNote>
-      ) : classes.length === 0 ? (
-        <StateNote>
-          You're not enrolled in a class yet. You can still browse every lesson from the chat.
-        </StateNote>
-      ) : (
-        <div className="grid gap-3">
-          {classes.map((cls) => (
-            <Link key={cls.id} to="/classes/$classId" params={{ classId: cls.id }}>
-              <GradientCard>
-                <div className="flex items-center gap-3 p-4">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background/45">
-                    <GraduationCap className="h-5 w-5 text-foreground" strokeWidth={1.6} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[15px] font-medium text-foreground">
-                      {cls.name}
-                    </div>
-                    {cls.organizationName ? (
-                      <div className="truncate text-[12.5px] text-muted-foreground">
-                        {cls.organizationName}
-                      </div>
-                    ) : null}
+    <div className="grid gap-3">
+      {classes.map((cls) => (
+        <button key={cls.id} type="button" onClick={() => onSelectClass(cls)} className="text-left">
+          <GradientCard>
+            <div className="flex items-center gap-3 p-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background/45">
+                <GraduationCap className="h-5 w-5 text-foreground" strokeWidth={1.6} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-medium text-foreground">{cls.name}</div>
+                {cls.organizationName ? (
+                  <div className="truncate text-[12.5px] text-muted-foreground">
+                    {cls.organizationName}
                   </div>
-                  <ChevronRight
-                    className="h-4 w-4 shrink-0 text-muted-foreground"
-                    strokeWidth={1.7}
-                  />
-                </div>
-              </GradientCard>
-            </Link>
-          ))}
-        </div>
-      )}
-    </PageShell>
+                ) : null}
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+            </div>
+          </GradientCard>
+        </button>
+      ))}
+    </div>
   );
 }
 
-// --- /classes/$classId ---------------------------------------------------------------------
-export function ClassDashboard() {
-  const { ready } = useStudentGuard();
-  const { classId } = useParams({ from: "/classes/$classId" });
-  const [cls, setCls] = useState<StudentClass | null>(null);
+// --- class dashboard (unit cards) --------------------------------------------------------------
+export function ClassDashboard({
+  classId,
+  onSelectUnit,
+}: {
+  classId: string;
+  onSelectUnit: (unit: UnitGroup) => void;
+}) {
   const [lessons, setLessons] = useState<Lesson[] | null>(null);
   const [progress, setProgress] = useState<Record<string, number>>({});
   const [grades, setGrades] = useState<StudentGradeRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!ready) return;
     let alive = true;
     (async () => {
       try {
-        const [classes, scoped, prog, gradeRows] = await Promise.all([
-          fetchStudentClasses(),
+        const [scoped, prog, gradeRows] = await Promise.all([
           fetchClassScopedLessons(classId),
           fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>),
           fetchStudentGrades().catch(() => [] as StudentGradeRow[]),
         ]);
         if (!alive) return;
-        setCls(classes.find((c) => c.id === classId) || null);
         setLessons(scoped);
         setProgress(prog);
         setGrades(gradeRows);
@@ -368,7 +304,7 @@ export function ClassDashboard() {
     return () => {
       alive = false;
     };
-  }, [ready, classId]);
+  }, [classId]);
 
   const units = useMemo(() => groupByUnit(lessons ?? []), [lessons]);
   const unitProgress = (group: UnitGroup): number => {
@@ -377,75 +313,68 @@ export function ClassDashboard() {
     return sum / group.lessons.length;
   };
 
-  if (!ready) return <PageShell title="Class" />;
-
+  if (error) return <StateNote>{error}</StateNote>;
+  if (lessons === null) return <StateNote>Loading…</StateNote>;
   return (
-    <PageShell
-      title={cls?.name || "Class"}
-      subtitle={cls?.organizationName || undefined}
-      back={{ to: "/classes", label: "All classes" }}
-    >
-      {error ? (
-        <StateNote>{error}</StateNote>
-      ) : lessons === null ? (
-        <StateNote>Loading…</StateNote>
-      ) : (
-        <div className="grid gap-3">
-          <ClassWorkSummary grades={grades.filter((g) => g.class_id === classId)} />
-          {units.length === 0 ? (
-            <StateNote>No lessons are available in this class yet.</StateNote>
-          ) : null}
-          {units.map((group) => (
-            <Link
-              key={group.unitId}
-              to="/classes/$classId/unit/$unitId"
-              params={{ classId, unitId: group.unitId }}
-            >
-              <GradientCard>
-                <div className="p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background/45">
-                      <BookOpen className="h-5 w-5 text-foreground" strokeWidth={1.6} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[15px] font-medium text-foreground">
-                        {group.unitTitle}
-                      </div>
-                      <div className="text-[12.5px] text-muted-foreground">
-                        {group.lessons.length} lesson{group.lessons.length === 1 ? "" : "s"} ·{" "}
-                        {pctLabel(unitProgress(group))} complete
-                      </div>
-                    </div>
-                    <ChevronRight
-                      className="h-4 w-4 shrink-0 text-muted-foreground"
-                      strokeWidth={1.7}
-                    />
+    <div className="grid gap-3">
+      <ClassWorkSummary grades={grades.filter((g) => g.class_id === classId)} />
+      {units.length === 0 ? (
+        <StateNote>No lessons are available in this class yet.</StateNote>
+      ) : null}
+      {units.map((group) => (
+        <button
+          key={group.unitId}
+          type="button"
+          onClick={() => onSelectUnit(group)}
+          className="text-left"
+        >
+          <GradientCard>
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background/45">
+                  <BookOpen className="h-5 w-5 text-foreground" strokeWidth={1.6} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[15px] font-medium text-foreground">
+                    {group.unitTitle}
                   </div>
-                  <div className="mt-3">
-                    <ProgressBar value={unitProgress(group)} />
+                  <div className="text-[12.5px] text-muted-foreground">
+                    {group.lessons.length} lesson{group.lessons.length === 1 ? "" : "s"} ·{" "}
+                    {pctLabel(unitProgress(group))} complete
                   </div>
                 </div>
-              </GradientCard>
-            </Link>
-          ))}
-        </div>
-      )}
-    </PageShell>
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  strokeWidth={1.7}
+                />
+              </div>
+              <div className="mt-3">
+                <ProgressBar value={unitProgress(group)} />
+              </div>
+            </div>
+          </GradientCard>
+        </button>
+      ))}
+    </div>
   );
 }
 
-// --- /classes/$classId/unit/$unitId --------------------------------------------------------
-export function UnitView() {
-  const { ready } = useStudentGuard();
-  const { classId, unitId } = useParams({ from: "/classes/$classId/unit/$unitId" });
-  const navigate = useNavigate();
+// --- unit view (lesson list + assessment reviews) ----------------------------------------------
+export function UnitView({
+  classId,
+  unitId,
+  onOpenLesson,
+}: {
+  classId: string;
+  unitId: string;
+  onOpenLesson: (lessonId: string) => void;
+}) {
   const [lessons, setLessons] = useState<Lesson[] | null>(null);
   const [progress, setProgress] = useState<Record<string, number>>({});
   const [assessments, setAssessments] = useState<StudentAssessmentBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!ready) return;
     let alive = true;
     (async () => {
       try {
@@ -465,74 +394,59 @@ export function UnitView() {
     return () => {
       alive = false;
     };
-  }, [ready, classId]);
+  }, [classId]);
 
   const unit = useMemo(() => {
     const groups = groupByUnit(lessons ?? []);
     return groups.find((g) => g.unitId === unitId) || null;
   }, [lessons, unitId]);
 
-  if (!ready) return <PageShell title="Unit" />;
-
+  if (error) return <StateNote>{error}</StateNote>;
+  if (lessons === null) return <StateNote>Loading…</StateNote>;
+  if (!unit) return <StateNote>This unit is no longer available.</StateNote>;
   return (
-    <PageShell
-      title={unit?.unitTitle || "Unit"}
-      subtitle={
-        unit ? `${unit.lessons.length} lesson${unit.lessons.length === 1 ? "" : "s"}` : undefined
-      }
-      back={{ to: `/classes/${classId}`, label: "Back to class" }}
-    >
-      {error ? (
-        <StateNote>{error}</StateNote>
-      ) : lessons === null ? (
-        <StateNote>Loading…</StateNote>
-      ) : !unit ? (
-        <StateNote>This unit is no longer available.</StateNote>
-      ) : (
-        <>
-          <div className="grid gap-2">
-            {unit.lessons.map((lesson) => {
-              const value = progress[lesson.id] ?? 0;
-              return (
-                <button
-                  key={lesson.id}
-                  type="button"
-                  onClick={() => openLessonInChat(navigate, lesson.id)}
-                  className="w-full text-left"
-                >
-                  <GradientCard>
-                    <div className="flex items-center gap-3 p-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[14px] font-medium text-foreground">
-                          {lesson.title}
-                        </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="w-28 max-w-[45%]">
-                            <ProgressBar value={value} />
-                          </span>
-                          <span className="text-[11.5px] tabular-nums text-muted-foreground">
-                            {value >= 1 ? "Complete" : value > 0 ? "In progress" : "Not started"}
-                          </span>
-                        </div>
-                      </div>
-                      <ChevronRight
-                        className="h-4 w-4 shrink-0 text-muted-foreground"
-                        strokeWidth={1.7}
-                      />
+    <>
+      <div className="grid gap-2">
+        {unit.lessons.map((lesson) => {
+          const value = progress[lesson.id] ?? 0;
+          return (
+            <button
+              key={lesson.id}
+              type="button"
+              onClick={() => onOpenLesson(lesson.id)}
+              className="w-full text-left"
+            >
+              <GradientCard>
+                <div className="flex items-center gap-3 p-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-medium text-foreground">
+                      {lesson.title}
                     </div>
-                  </GradientCard>
-                </button>
-              );
-            })}
-          </div>
-          {assessments ? (
-            <AssessmentReviews
-              bundle={assessments}
-              lessonIds={new Set(unit.lessons.map((l) => l.id))}
-            />
-          ) : null}
-        </>
-      )}
-    </PageShell>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="w-28 max-w-[45%]">
+                        <ProgressBar value={value} />
+                      </span>
+                      <span className="text-[11.5px] tabular-nums text-muted-foreground">
+                        {value >= 1 ? "Complete" : value > 0 ? "In progress" : "Not started"}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    strokeWidth={1.7}
+                  />
+                </div>
+              </GradientCard>
+            </button>
+          );
+        })}
+      </div>
+      {assessments ? (
+        <AssessmentReviews
+          bundle={assessments}
+          lessonIds={new Set(unit.lessons.map((l) => l.id))}
+        />
+      ) : null}
+    </>
   );
 }

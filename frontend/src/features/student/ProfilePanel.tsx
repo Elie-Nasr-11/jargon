@@ -86,15 +86,6 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
     })).sort((a, b) => b.avg - a.avg);
   }, [stats]);
 
-  const gradedGrades = useMemo(
-    () => (stats?.grades ?? []).filter((g) => g.score != null).slice(0, 5),
-    [stats],
-  );
-  const pendingCount = useMemo(
-    () => (stats?.grades ?? []).filter((g) => g.score == null).length,
-    [stats],
-  );
-
   const name = stats?.profile?.name || "Student";
   const grade = stats?.profile?.grade || null;
 
@@ -197,36 +188,6 @@ export function ProfilePanel({ mentor, bare }: { mentor: MentorConfig; bare?: bo
               </div>
             </>
           ) : null}
-
-          <SectionLabel>Grades</SectionLabel>
-          {gradedGrades.length ? (
-            <div className="space-y-1.5">
-              {gradedGrades.map((g) => (
-                <div key={g.id} className="flex items-center gap-2.5">
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
-                    {g.title}
-                  </span>
-                  <span className="shrink-0 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
-                    {g.kind}
-                  </span>
-                  <span className="w-10 shrink-0 text-right text-[12.5px] font-medium tabular-nums text-foreground">
-                    {pct(g.score)}
-                  </span>
-                </div>
-              ))}
-              {pendingCount ? (
-                <p className="pt-0.5 text-[11.5px] text-muted-foreground">
-                  {pendingCount} awaiting grade or not yet released.
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <p className="text-[12.5px] text-muted-foreground">
-              {pendingCount
-                ? `${pendingCount} piece${pendingCount === 1 ? "" : "s"} of work awaiting a grade.`
-                : "No graded work yet."}
-            </p>
-          )}
 
           {stats?.notes.length ? (
             <>

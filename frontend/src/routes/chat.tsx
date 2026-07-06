@@ -11,6 +11,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  LayoutGrid,
   Paperclip,
   Pause,
   Play,
@@ -27,6 +28,8 @@ import { MaterialComments } from "@/features/comms/MaterialComments";
 import { ReviewDueChip } from "@/features/student/ReviewDueChip";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
+import { LessonMilestones } from "@/components/LessonMilestones";
+import { ClassesModal } from "@/features/student/ClassesModal";
 import {
   DEFAULT_MENTOR,
   DEFAULT_VOICE,
@@ -192,18 +195,17 @@ function lessonSubtitle(lesson: Lesson) {
 // A floating "Step N of M" pill under the header + an expandable roadmap of the lesson steps
 // (done / current / upcoming). Compact by default; grows to full width on hover (or while the
 // roadmap is open), and a click toggles the roadmap.
-function LessonProgress({ arc }: { arc: LessonArc }) {
+function LessonProgress({
+  arc,
+  activities = [],
+}: {
+  arc: LessonArc;
+  activities?: LessonActivity[];
+}) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   if (arc.total <= 1) return null;
   const expanded = hover || open;
-  const steps: { step: number; title: string; state: "done" | "current" | "upcoming" }[] = [
-    ...arc.completed.map((s) => ({ ...s, state: "done" as const })),
-    ...(arc.current
-      ? [{ step: arc.step, title: arc.current.title, state: "current" as const }]
-      : []),
-    ...arc.upcoming.map((s) => ({ ...s, state: "upcoming" as const })),
-  ];
   return (
     <div className="mx-auto w-full max-w-[760px] px-5 pt-3">
       <button
@@ -242,35 +244,9 @@ function LessonProgress({ arc }: { arc: LessonArc }) {
         />
       </button>
       {open ? (
-        <ol className="pointer-events-auto mt-2 space-y-0.5 rounded-2xl border border-border bg-background/85 p-2 shadow-sm backdrop-blur-md">
-          {steps.map((s) => (
-            <li key={s.step} className="flex items-center gap-2.5 px-2 py-1.5 text-[13px]">
-              <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
-                  s.state === "done"
-                    ? "bg-success/15 text-success"
-                    : s.state === "current"
-                      ? "bg-foreground text-background"
-                      : "border border-border text-muted-foreground"
-                }`}
-              >
-                {s.state === "done" ? <Check className="h-3 w-3" strokeWidth={3} /> : s.step}
-              </span>
-              <span
-                className={
-                  s.state === "current" ? "font-medium text-foreground" : "text-muted-foreground"
-                }
-              >
-                {s.title}
-              </span>
-              {s.state === "current" ? (
-                <span className="ml-auto text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                  now
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ol>
+        <div className="pointer-events-auto mt-2 rounded-2xl border border-border bg-background/85 p-3 shadow-sm backdrop-blur-md">
+          <LessonMilestones arc={arc} activities={activities} />
+        </div>
       ) : null}
     </div>
   );
@@ -505,6 +481,7 @@ function ChatPage() {
   const [viewerClock, setViewerClock] = useState(() => Date.now());
   // True while a teacher has paused this session (Phase 3). Composer is locked + a banner shows.
   const [sessionHeld, setSessionHeld] = useState(false);
+  const [classesOpen, setClassesOpen] = useState(false);
   const [assignments, setAssignments] = useState<StudentAssignmentBundle>({
     assignments: [],
     recipients: [],
@@ -1138,20 +1115,30 @@ function ChatPage() {
               <HeaderMenus
                 activeLessonId={lessonId}
                 lessons={menuLessons}
-                lessonArc={lessonArc}
-                activities={activities}
                 onSelectLesson={selectLesson}
+              />
+              <button
+                type="button"
+                onClick={() => setClassesOpen(true)}
+                aria-label="Classes"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
+              >
+                <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.5} />
+              </button>
+              <StudentMiniChat />
+              <SettingsMenu
+                email={email}
                 mentor={mentor}
                 onMentorChange={updateMentor}
                 voice={voice}
                 onVoiceChange={updateVoice}
               />
-              <StudentMiniChat />
-              <SettingsMenu email={email} />
             </div>
           </div>
         </div>
       </header>
+
+      <ClassesModal open={classesOpen} onOpenChange={setClassesOpen} />
 
       {/* Floating overlay just below the header — takes no layout space, so the chat history
           keeps its full height and simply scrolls beneath it. Clicks outside the pill fall
@@ -1159,7 +1146,7 @@ function ChatPage() {
           but below the header (20) so the nav dropdowns paint over it. */}
       {lessonArc ? (
         <div className="pointer-events-none absolute inset-x-0 top-[61px] z-[15]">
-          <LessonProgress arc={lessonArc} />
+          <LessonProgress arc={lessonArc} activities={activities} />
         </div>
       ) : null}
 

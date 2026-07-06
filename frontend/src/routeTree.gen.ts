@@ -18,10 +18,6 @@ import { Route as TeacherRouteImport } from './routes/teacher'
 import { Route as TeacherCurriculumRouteImport } from './routes/teacher.curriculum'
 import { Route as TeacherClassClassIdRouteImport } from './routes/teacher.class.$classId'
 import { Route as TeacherClassClassIdStudentStudentIdRouteImport } from './routes/teacher.class.$classId.student.$studentId'
-import { Route as ClassesRouteImport } from './routes/classes'
-import { Route as ClassesClassIdRouteImport } from './routes/classes.$classId'
-import { Route as ClassesClassIdUnitUnitIdRouteImport } from './routes/classes.$classId.unit.$unitId'
-import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as IndexRouteImport } from './routes/index'
 
 const AdminRoute = AdminRouteImport.update({
@@ -70,26 +66,6 @@ const TeacherClassClassIdStudentStudentIdRoute =
     path: '/teacher/class/$classId/student/$studentId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ClassesRoute = ClassesRouteImport.update({
-  id: '/classes',
-  path: '/classes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClassesClassIdRoute = ClassesClassIdRouteImport.update({
-  id: '/classes/$classId',
-  path: '/classes/$classId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClassesClassIdUnitUnitIdRoute = ClassesClassIdUnitUnitIdRouteImport.update({
-  id: '/classes/$classId/unit/$unitId',
-  path: '/classes/$classId/unit/$unitId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CalendarRoute = CalendarRouteImport.update({
-  id: '/calendar',
-  path: '/calendar',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -107,10 +83,6 @@ export interface FileRoutesByFullPath {
   '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
   '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
-  '/classes': typeof ClassesRoute
-  '/classes/$classId': typeof ClassesClassIdRoute
-  '/classes/$classId/unit/$unitId': typeof ClassesClassIdUnitUnitIdRoute
-  '/calendar': typeof CalendarRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -123,10 +95,6 @@ export interface FileRoutesByTo {
   '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
   '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
-  '/classes': typeof ClassesRoute
-  '/classes/$classId': typeof ClassesClassIdRoute
-  '/classes/$classId/unit/$unitId': typeof ClassesClassIdUnitUnitIdRoute
-  '/calendar': typeof CalendarRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -140,17 +108,13 @@ export interface FileRoutesById {
   '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
   '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
-  '/classes': typeof ClassesRoute
-  '/classes/$classId': typeof ClassesClassIdRoute
-  '/classes/$classId/unit/$unitId': typeof ClassesClassIdUnitUnitIdRoute
-  '/calendar': typeof CalendarRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/classes' | '/classes/$classId' | '/classes/$classId/unit/$unitId' | '/calendar'
+  fullPaths: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/classes' | '/classes/$classId' | '/classes/$classId/unit/$unitId' | '/calendar'
-  id: '__root__' | '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/classes' | '/classes/$classId' | '/classes/$classId/unit/$unitId' | '/calendar'
+  to: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
+  id: '__root__' | '/' | '/admin' | '/platform' | '/chat' | '/login' | '/quiz/$assessmentId' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -164,10 +128,6 @@ export interface RootRouteChildren {
   TeacherCurriculumRoute: typeof TeacherCurriculumRoute
   TeacherClassClassIdRoute: typeof TeacherClassClassIdRoute
   TeacherClassClassIdStudentStudentIdRoute: typeof TeacherClassClassIdStudentStudentIdRoute
-  ClassesRoute: typeof ClassesRoute
-  ClassesClassIdRoute: typeof ClassesClassIdRoute
-  ClassesClassIdUnitUnitIdRoute: typeof ClassesClassIdUnitUnitIdRoute
-  CalendarRoute: typeof CalendarRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -235,34 +195,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeacherClassClassIdStudentStudentIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/classes': {
-      id: '/classes'
-      path: '/classes'
-      fullPath: '/classes'
-      preLoaderRoute: typeof ClassesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/classes/$classId': {
-      id: '/classes/$classId'
-      path: '/classes/$classId'
-      fullPath: '/classes/$classId'
-      preLoaderRoute: typeof ClassesClassIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/classes/$classId/unit/$unitId': {
-      id: '/classes/$classId/unit/$unitId'
-      path: '/classes/$classId/unit/$unitId'
-      fullPath: '/classes/$classId/unit/$unitId'
-      preLoaderRoute: typeof ClassesClassIdUnitUnitIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/calendar': {
-      id: '/calendar'
-      path: '/calendar'
-      fullPath: '/calendar'
-      preLoaderRoute: typeof CalendarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -284,10 +216,6 @@ const rootRouteChildren: RootRouteChildren = {
   TeacherCurriculumRoute: TeacherCurriculumRoute,
   TeacherClassClassIdRoute: TeacherClassClassIdRoute,
   TeacherClassClassIdStudentStudentIdRoute: TeacherClassClassIdStudentStudentIdRoute,
-  ClassesRoute: ClassesRoute,
-  ClassesClassIdRoute: ClassesClassIdRoute,
-  ClassesClassIdUnitUnitIdRoute: ClassesClassIdUnitUnitIdRoute,
-  CalendarRoute: CalendarRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

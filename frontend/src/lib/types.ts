@@ -759,6 +759,7 @@ export type StudentGradeRow = {
   due_at: string | null;
   submitted_at: string | null;
   class_id: string | null;
+  lesson_id: string | null;
 };
 
 export type StudentProgressSummary = {

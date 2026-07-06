@@ -588,7 +588,7 @@ export async function fetchStudentGrades(): Promise<StudentGradeRow[]> {
 
   const { data: checkpointRows, error: checkpointError } = await supabase
     .from("checkpoints")
-    .select("id,title,kind,due_at,class_id")
+    .select("id,title,kind,due_at,class_id,lesson_id")
     .in("id", checkpointIds);
   if (checkpointError) throw checkpointError;
   const checkpointById = new Map(
@@ -599,6 +599,7 @@ export async function fetchStudentGrades(): Promise<StudentGradeRow[]> {
         kind: string;
         due_at: string | null;
         class_id: string | null;
+        lesson_id: string | null;
       }>
     ).map((cp) => [cp.id, cp]),
   );
@@ -619,6 +620,7 @@ export async function fetchStudentGrades(): Promise<StudentGradeRow[]> {
         due_at: cp.due_at,
         submitted_at: row.submitted_at,
         class_id: cp.class_id,
+        lesson_id: cp.lesson_id,
       } as StudentGradeRow;
     })
     .filter((row): row is StudentGradeRow => row !== null);

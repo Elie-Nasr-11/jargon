@@ -6,6 +6,35 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-06 (Student-view IA restructure — gear hub + centered-modal popups)
+
+Status: Built + verified (tsc/lint/build green), shipping via main FF. FRONTEND-ONLY (no backend/migration).
+Task: simplify the student header per the user's review — fold Mentor/Profile/Grades/Notifications into the
+Settings gear as centered modals, collapse Progress into the floating pill, pull the gradebook out of the
+profile (grouped by class/unit), and turn the full-page Classes/Calendar routes into a single Classes popup
+(Calendar is a tab inside it).
+
+Files:
+- NEW `components/ModalCard.tsx` (Radix Dialog + GradientCard centered modal), `components/LessonMilestones.tsx`
+  (extracted from HeaderMenus' Progress panel), `features/student/{MentorControls,GradesModal,
+  StudentNotifications,ClassesModal}.tsx`.
+- `components/SettingsMenu.tsx`: now the student hub — Profile/Mentor/Grades rows above Appearance,
+  Notifications below, each opening a ModalCard. GATED on the student-only mentor/voice props so the shared
+  teacher/admin ConsoleShell + admin.tsx uses are unchanged.
+- `components/HeaderMenus.tsx`: reduced from 4 tabs to just the Lessons tree (Progress/Mentor/Profile panels +
+  Class/Calendar links + their dead code deleted; ~340 lines removed).
+- `routes/chat.tsx`: header re-wired (Classes LayoutGrid icon + classesOpen; SettingsMenu gets mentor/voice);
+  LessonProgress pill dropdown now renders LessonMilestones (passed `activities`).
+- `features/student/ProfilePanel.tsx`: Grades section removed. `features/student/ClassViews.tsx` +
+  `StudentCalendar.tsx`: refactored route-coupled → prop-driven content (drop useParams/Link/PageShell);
+  ClassesModal composes ClassMenu→ClassDashboard→UnitView drill-down + StudentCalendarBody.
+- `lib/types.ts` + `lib/api.ts`: StudentGradeRow/fetchStudentGrades gained `lesson_id` (for class→unit grouping).
+- DELETED routes `classes.tsx`, `classes.$classId.tsx`, `classes.$classId.unit.$unitId.tsx`, `calendar.tsx` +
+  de-registered from `routeTree.gen.ts` (old /classes* and /calendar URLs now 404 — internal-only).
+
+Tests: tsc 0 / lint 0 err (13 pre-existing warns) / build green. No backend. Remaining concern: runtime UX
+(modal drill-down, gradebook grouping) needs a live smoke — the user is reviewing live after the FF.
+
 ## Claude -> Codex / Human - 2026-07-06 (§9 comms: mini-chat + material comments + realtime push — SHIPPED backends, UI on branch)
 
 Status: DONE (4 slices). All BACKENDS committed, deployed (deploy-backend runs green), and prod-verified;

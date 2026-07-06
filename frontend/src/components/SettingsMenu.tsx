@@ -2,14 +2,50 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import { ExternalLink, LogOut, Moon, Settings, Sun } from "lucide-react";
+import {
+  Bell,
+  ExternalLink,
+  GraduationCap,
+  LogOut,
+  Moon,
+  Settings,
+  Sparkles,
+  Sun,
+  User,
+} from "lucide-react";
 import { GradientCard } from "./GradientCard";
+import { ModalCard } from "./ModalCard";
+import { ProfilePanel } from "@/features/student/ProfilePanel";
+import { MentorControls } from "@/features/student/MentorControls";
+import { GradesModal } from "@/features/student/GradesModal";
+import { StudentNotifications } from "@/features/student/StudentNotifications";
 import { useTheme } from "@/lib/theme";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
+import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
 
-export function SettingsMenu({ email }: { email: string }) {
+type StudentModal = "profile" | "mentor" | "grades" | "notifications";
+
+// SettingsMenu is shared across the student chat and the teacher/admin ConsoleShell. The student
+// passes mentor/voice props; their presence turns this gear into the student hub (Profile · Mentor ·
+// Grades above Appearance, Notifications below), each opening a centered modal. Teacher/admin call it
+// without those props and get the unchanged Appearance/Campus-Live/Log-out menu.
+export function SettingsMenu({
+  email,
+  mentor,
+  onMentorChange,
+  voice,
+  onVoiceChange,
+}: {
+  email: string;
+  mentor?: MentorConfig;
+  onMentorChange?: (m: MentorConfig) => void;
+  voice?: VoiceSettings;
+  onVoiceChange?: (v: VoiceSettings) => void;
+}) {
+  const [modal, setModal] = useState<StudentModal | null>(null);
+  const isStudent = Boolean(mentor && onMentorChange);
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
   const isTouch = useIsTouch();
@@ -115,6 +151,47 @@ export function SettingsMenu({ email }: { email: string }) {
         </div>
       </div>
       <div className="my-2 h-px bg-border" />
+      {isStudent ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              setModal("profile");
+            }}
+            className={rowClass}
+          >
+            <span className="flex items-center gap-2.5">
+              <User className="h-[15px] w-[15px]" strokeWidth={1.5} /> Profile
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              setModal("mentor");
+            }}
+            className={rowClass}
+          >
+            <span className="flex items-center gap-2.5">
+              <Sparkles className="h-[15px] w-[15px]" strokeWidth={1.5} /> Mentor
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              setModal("grades");
+            }}
+            className={rowClass}
+          >
+            <span className="flex items-center gap-2.5">
+              <GraduationCap className="h-[15px] w-[15px]" strokeWidth={1.5} /> Grades
+            </span>
+          </button>
+          <div className="my-2 h-px bg-border" />
+        </>
+      ) : null}
       <button type="button" onClick={toggle} className={rowClass}>
         <span className="flex items-center gap-2.5">
           {resolved === "dark" ? (
@@ -128,6 +205,20 @@ export function SettingsMenu({ email }: { email: string }) {
           {resolved === "dark" ? "Dark" : "Light"}
         </span>
       </button>
+      {isStudent ? (
+        <button
+          type="button"
+          onClick={() => {
+            close();
+            setModal("notifications");
+          }}
+          className={rowClass}
+        >
+          <span className="flex items-center gap-2.5">
+            <Bell className="h-[15px] w-[15px]" strokeWidth={1.5} /> Notifications
+          </span>
+        </button>
+      ) : null}
       {campusLiveUrl ? (
         <a
           href={campusLiveUrl}
@@ -214,6 +305,46 @@ export function SettingsMenu({ email }: { email: string }) {
           </>,
           document.body,
         )}
+
+      {isStudent && mentor && onMentorChange ? (
+        <>
+          <ModalCard
+            open={modal === "profile"}
+            onOpenChange={(o) => {
+              if (!o) setModal(null);
+            }}
+            title="Profile"
+          >
+            <ProfilePanel mentor={mentor} bare />
+          </ModalCard>
+          <ModalCard
+            open={modal === "mentor"}
+            onOpenChange={(o) => {
+              if (!o) setModal(null);
+            }}
+            title="Mentor"
+          >
+            <MentorControls
+              mentor={mentor}
+              onChange={onMentorChange}
+              voice={voice}
+              onVoiceChange={onVoiceChange}
+            />
+          </ModalCard>
+          <GradesModal
+            open={modal === "grades"}
+            onOpenChange={(o) => {
+              if (!o) setModal(null);
+            }}
+          />
+          <StudentNotifications
+            open={modal === "notifications"}
+            onOpenChange={(o) => {
+              if (!o) setModal(null);
+            }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
