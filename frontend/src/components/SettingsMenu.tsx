@@ -2,24 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import { Bell, ExternalLink, LogOut, Moon, Settings, Sparkles, Sun, User } from "lucide-react";
+import { ExternalLink, LogOut, Moon, Settings, Sparkles, Sun, User } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { ModalCard } from "./ModalCard";
 import { ProfilePanel } from "@/features/student/ProfilePanel";
 import { MentorControls } from "@/features/student/MentorControls";
-import { StudentNotifications } from "@/features/student/StudentNotifications";
 import { useTheme } from "@/lib/theme";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
 
-type StudentModal = "profile" | "mentor" | "notifications";
+type StudentModal = "profile" | "mentor";
 
-// SettingsMenu is shared across the student chat and the teacher/admin ConsoleShell. The student
-// passes mentor/voice props; their presence turns this gear into the student hub (Profile · Mentor ·
-// Grades above Appearance, Notifications below), each opening a centered modal. Teacher/admin call it
-// without those props and get the unchanged Appearance/Campus-Live/Log-out menu.
+// SettingsMenu is shared across the student chat and the teacher/admin ConsoleShell. It's pure
+// settings: the student's mentor/voice props add Profile + Mentor rows (each a centered modal);
+// teacher/admin call it without those props and get the Appearance/Campus-Live/Log-out menu.
+// Learning content (grades, review, notifications) lives in the hub and the inbox, not here.
 export function SettingsMenu({
   email,
   mentor,
@@ -182,22 +181,6 @@ export function SettingsMenu({
           {resolved === "dark" ? "Dark" : "Light"}
         </span>
       </button>
-      {isStudent ? (
-        <>
-          <button
-            type="button"
-            onClick={() => {
-              close();
-              setModal("notifications");
-            }}
-            className={rowClass}
-          >
-            <span className="flex items-center gap-2.5">
-              <Bell className="h-[15px] w-[15px]" strokeWidth={1.5} /> Notifications
-            </span>
-          </button>
-        </>
-      ) : null}
       {campusLiveUrl ? (
         <a
           href={campusLiveUrl}
@@ -310,12 +293,6 @@ export function SettingsMenu({
               onVoiceChange={onVoiceChange}
             />
           </ModalCard>
-          <StudentNotifications
-            open={modal === "notifications"}
-            onOpenChange={(o) => {
-              if (!o) setModal(null);
-            }}
-          />
         </>
       ) : null}
     </div>
