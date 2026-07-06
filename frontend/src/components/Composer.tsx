@@ -549,10 +549,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <div className="flex items-end gap-2">
                 <button
                   aria-label="Open code editor"
+                  title="Write and run code"
                   onClick={() => setMode("code")}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <Code2 className="h-[16px] w-[16px]" strokeWidth={1.5} />
+                  <span className="text-[12px] font-medium">Code</span>
                 </button>
                 <textarea
                   value={text}
@@ -597,35 +599,28 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     <Mic className="h-[15px] w-[15px]" strokeWidth={1.8} />
                   )}
                 </button>
-                {text.trim() ? (
-                  <button
-                    onClick={send}
-                    disabled={sending}
-                    aria-label="Send"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
-                  >
-                    <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
-                  </button>
-                ) : canStartVoice && onStartVoice ? (
+                {/* Live voice is its own ALWAYS-VISIBLE button (it used to hide behind an empty
+                    input, morphing with Send) — dictation (mic) and live voice stay distinct. */}
+                {canStartVoice && onStartVoice ? (
                   <button
                     type="button"
                     onClick={onStartVoice}
                     disabled={sending}
-                    aria-label="Start voice mode"
+                    aria-label="Start a live voice session"
                     title="Talk with the Mentor out loud"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <AudioLines className="h-[15px] w-[15px]" strokeWidth={1.8} />
                   </button>
-                ) : (
-                  <button
-                    disabled
-                    aria-label="Send"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background opacity-30"
-                  >
-                    <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
-                  </button>
-                )}
+                ) : null}
+                <button
+                  onClick={send}
+                  disabled={sending || !text.trim()}
+                  aria-label="Send"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
+                >
+                  <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
+                </button>
               </div>
               {dictating || voiceError || dictationConfidence !== null ? (
                 <div className="px-10 text-[11.5px] text-muted-foreground">

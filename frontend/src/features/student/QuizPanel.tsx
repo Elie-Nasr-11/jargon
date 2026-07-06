@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ClipboardList, Send } from "lucide-react";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
+import { CodeArea } from "@/components/CodeArea";
 import { fetchStudentAssessments, startAssessment, submitAssessment } from "@/lib/api";
 import type { VoiceSettings } from "@/lib/jargon-store";
 import type {
@@ -309,13 +310,12 @@ function QuizContent({
                     ))}
                   </div>
                 ) : quiz.question_type === "code" ? (
-                  <textarea
+                  <CodeArea
                     value={itemAttempt?.answer_code || draft.code}
-                    disabled={completed}
-                    onChange={(event) => onSetDraft(item.id, { code: event.target.value })}
+                    readOnly={completed}
+                    onChange={(code) => onSetDraft(item.id, { code })}
+                    height={150}
                     placeholder="Write code for this answer..."
-                    className="min-h-[150px] w-full rounded-2xl border border-border bg-[var(--code-background)] px-3 py-2 text-[13px] leading-relaxed text-[var(--code-foreground)] outline-none placeholder:text-muted-foreground disabled:opacity-70"
-                    style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
                   />
                 ) : (
                   <textarea

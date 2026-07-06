@@ -28,6 +28,7 @@ import { Composer, type ComposerHandle, type ComposerLanguage } from "@/componen
 import { GradientCard } from "@/components/GradientCard";
 import { LessonMilestones } from "@/components/LessonMilestones";
 import { ModalCard } from "@/components/ModalCard";
+import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ClassesModal } from "@/features/student/ClassesModal";
 import { QuizPanel } from "@/features/student/QuizPanel";
@@ -217,12 +218,13 @@ function LessonProgress({
 
   if (arc.total <= 1) return null;
   return (
-    <div ref={wrapRef} className="relative hidden sm:block">
+    <div ref={wrapRef} className="relative">
+      {/* Compact on mobile (segments + "N/M"), full-width with the long label on sm+. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex h-9 w-[210px] items-center gap-2 rounded-full border border-border bg-background/60 px-3 text-left transition-colors hover:bg-muted/50"
+        className="flex h-9 w-[104px] items-center gap-2 rounded-full border border-border bg-background/60 px-3 text-left transition-colors hover:bg-muted/50 sm:w-[210px]"
       >
         <span className="flex min-w-0 flex-1 items-center gap-1" aria-hidden>
           {Array.from({ length: arc.total }).map((_, i) => (
@@ -239,17 +241,22 @@ function LessonProgress({
           ))}
         </span>
         <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-foreground">
-          Step {arc.step} of {arc.total}
+          <span className="sm:hidden">
+            {arc.step}/{arc.total}
+          </span>
+          <span className="hidden sm:inline">
+            Step {arc.step} of {arc.total}
+          </span>
         </span>
         <ChevronDown
-          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+          className={`hidden h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform sm:block ${
             open ? "rotate-180" : ""
           }`}
           strokeWidth={2}
         />
       </button>
       {open ? (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-[var(--z-menu)] w-[340px] rounded-2xl border border-border bg-background p-3 shadow-lg">
+        <div className="absolute right-0 top-[calc(100%+8px)] z-[var(--z-menu)] w-[min(340px,calc(100vw-24px))] rounded-2xl border border-border bg-background p-3 shadow-lg">
           <LessonMilestones arc={arc} activities={activities} />
           {onRestart ? (
             <button
@@ -2206,12 +2213,11 @@ function AssignmentDock({
                       placeholder="Write your answer..."
                       className="min-h-[74px] rounded-2xl border border-border bg-background/65 px-3 py-2 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
                     />
-                    <textarea
+                    <CodeArea
                       value={draft.code}
-                      onChange={(event) => setDraft(assignment.id, { code: event.target.value })}
+                      onChange={(code) => setDraft(assignment.id, { code })}
+                      height={120}
                       placeholder="Optional code..."
-                      className="min-h-[88px] rounded-2xl border border-border bg-[var(--code-background)] px-3 py-2 text-[12.5px] leading-relaxed text-[var(--code-foreground)] outline-none placeholder:text-muted-foreground"
-                      style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
                     />
                     <input
                       type="file"
