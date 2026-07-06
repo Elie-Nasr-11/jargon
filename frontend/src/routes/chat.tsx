@@ -23,6 +23,7 @@ import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { HeaderMenus } from "@/components/HeaderMenus";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { StudentMiniChat } from "@/features/student/StudentMiniChat";
+import { MaterialComments } from "@/features/comms/MaterialComments";
 import { ReviewDueChip } from "@/features/student/ReviewDueChip";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
@@ -2527,6 +2528,8 @@ function ResourceCard({
             ) : null}
           </div>
         ) : null}
+
+        <MaterialComments resourceId={resource.id} />
       </div>
     </GradientCard>
   );
