@@ -6,6 +6,28 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-06 (§9 C-item: LLM inquiry tagging — building)
+
+Status: Built + verified; adversarial review (workflow) running; deploy next. Backend-only
+(chat fn), additive, regex-fallback-safe, logging-only.
+Task: The one cleanly-buildable §9 "deferred" item — make the confusion/curiosity inquiry signal
+accurate. Today curiosity is the loose `isQuestionShaped` regex (over-tags any question).
+
+- `supabase/functions/chat/index.ts`: SYSTEM_PROMPT output contract gained `"inquiry": null` + a
+  classification rule; a `normalizeInquiry()` helper; the inquiry-event write (learning_evidence
+  mode='inquiry') MOVED from before the mentor call to after the mentor parse (recordWrites area) so
+  it can read `parsed.inquiry`. It PREFERS the mentor's tag (a free piggyback — no extra model call);
+  confusion stays broad (mentor OR intent/helpRequest); curiosity is the mentor tag, or the loose
+  regex ONLY when the mentor emitted nothing; both still gated on a presented text turn + suppressed
+  on a graded-answer turn. source_ref carries inquiry_source (mentor|heuristic). Mastery/gating/
+  completion unchanged.
+- `tests/test_supabase_chat_function.py`: a `test_llm_inquiry_tagging` fingerprint.
+
+Tests: node --check green; Python suite (192) green (chat fingerprints intact). No migration, no
+frontend, no envelope/client change. Rest of §9 needs a product/safety/risk decision (mini-chat,
+per-material comments, real-time push, lessons-RLS boundary, builder merge, student system prompt);
+visual redesign is locked by the v4.0 design-system decision.
+
 ## Claude -> Codex / Human - 2026-07-06 (Post-v4.0 combined-branch hardening — one interaction fix)
 
 Status: Built + verified; deploy next. A cross-cutting audit (workflow: 4 reviewers over the 5

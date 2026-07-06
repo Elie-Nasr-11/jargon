@@ -209,7 +209,15 @@ monitoring. Import/export and class CRUD already exist.
 
 Visual redesign · student↔teacher mini chat (comms/moderation surface of its own) ·
 per-material comment sections · real-time push · `lessons` RLS tightening · merging the
-Assignment/Assessment builders · platform-generated ad-hoc revision sessions
-(`learning_sessions.lesson_id` is NOT NULL) · LLM inquiry tagging (heuristic first) · dropping
-`activity_type` or the legacy work tables · student-editable mentor system prompt (safety
-review of its own).
+Assignment/Assessment builders · dropping `activity_type` or the legacy work tables ·
+student-editable mentor system prompt (safety review of its own).
+
+DONE since (moved out of "deferred"):
+- **Platform-generated ad-hoc revision sessions** — SHIPPED post-v4.0 P4b/P5, but NOT via the
+  `learning_sessions.lesson_id` relaxation feared here: a greenfield `review_sessions` table + an
+  isolated `review:true` chat-fn handler (the live turn loop never reads it). See DECISIONS 2026-07-06.
+- **LLM inquiry tagging** — SHIPPED (§9 pick). The mentor now classifies the student's turn as
+  confusion/curiosity in its own JSON output (a free piggyback on the turn call — no extra model
+  round-trip), preferred over the loose `isQuestionShaped` regex, which survives only as the
+  no-mentor-tag fallback. Confusion stays broad (mentor OR the deterministic detectors). Still
+  logging-only (`learning_evidence` mode='inquiry'); feeds the teacher's confusion-vs-curiosity split.

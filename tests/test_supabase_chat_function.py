@@ -176,6 +176,23 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.source)
 
+    def test_llm_inquiry_tagging(self):
+        # PLATFORM.md §9: the mentor tags the student's turn as confusion/curiosity in its own JSON
+        # output (a free piggyback), preferred over the loose regex; the write moved after the parse.
+        for fragment in (
+            '"inquiry": null',  # the mentor output contract carries the tag
+            "function normalizeInquiry",
+            "const mentorInquiry = normalizeInquiry(parsed.inquiry)",
+            "inquiry_source",
+            # Confusion stays broad (mentor OR the deterministic detectors); curiosity prefers mentor.
+            'mentorInquiry === "confusion" || intent === "confused" || helpRequest',
+            'mentorInquiry === "curiosity" && !isTextExplanation',
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.source)
+        # The loose question-shaped heuristic survives ONLY as the no-mentor-tag fallback.
+        self.assertIn("!mentorInquiry &&", self.source)
+
     def test_mode_null_legacy_path_is_intact(self):
         # The exact legacy expressions the pre-v4 runtime derived kinds from must remain
         # (mode-null steps behave byte-identically).

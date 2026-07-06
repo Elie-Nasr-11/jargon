@@ -151,11 +151,16 @@ OUTPUT — return ONLY this JSON object, nothing else:
 {
   "reply": "student-facing mentor message",
   "understanding": { "demonstrated": false, "level": "none | partial | solid", "note": "" },
-  "misconception": null
+  "misconception": null,
+  "inquiry": null
 }
 Set understanding.demonstrated=true ONLY when the student's own words in the LATEST message are essentially
 correct and complete for THIS step's objective. When you spot a recurring conceptual error worth remembering,
-set "misconception" to { "skill_key": "...", "pattern": "...", "hint": "..." }; otherwise keep it null.`;
+set "misconception" to { "skill_key": "...", "pattern": "...", "hint": "..." }; otherwise keep it null.
+Set "inquiry" to "confusion" when the student's LATEST message signals they don't understand, are stuck, or
+are asking for help; to "curiosity" when they ask a genuine question that reaches BEYOND the current task
+(wanting to know more, a "what if" / "why does" / connecting to another idea); otherwise null. A plain attempt
+to answer the step is never an inquiry.`;
 
 type Stage =
   | "intro"
@@ -1014,6 +1019,13 @@ function assessAnswer(
   }
 
   return null;
+}
+
+// §9 LLM inquiry tagging: the mentor's classification of the student's latest message (piggybacks the
+// turn call — no extra model round-trip). "" when absent/unrecognized, so we fall back to the regex.
+function normalizeInquiry(value: unknown): "confusion" | "curiosity" | "" {
+  const v = String(value ?? "").trim().toLowerCase();
+  return v === "confusion" || v === "curiosity" ? v : "";
 }
 
 function parsedUnderstanding(value: unknown): Understanding | null {
@@ -3042,47 +3054,10 @@ async function handleTypedRequest(
           }
         : (orchestratorAssessment ?? openEndedMiss);
 
-    // Inquiry events (v4): persist question-asking as typed evidence — "confusion" when
-    // the intent/help detectors fire, "curiosity" for question-shaped turns that are
-    // neither confusion nor gate answers. Logging-only (never gates a step), best-effort
-    // (never blocks the turn), and skipped on presentation turns (nothing was asked yet).
-    // Curiosity is suppressed when THIS turn is the step's graded answer (a reflection or
-    // open-ended answer phrased as a question is an answer, not an inquiry); confusion still
-    // logs everywhere, since help-seeking mid-answer is real signal.
-    const inquiryEventType =
-      answer?.mode === "text" && content && presentedBefore
-        ? intent === "confused" || helpRequest
-          ? "confusion"
-          : isQuestionShaped(content) && intent === "none" && !isTextExplanation
-            ? "curiosity"
-            : ""
-        : "";
-    if (inquiryEventType) {
-      scheduleBackground(
-        insertRow(config, "learning_evidence", {
-          user_id: userId,
-          lesson_id: lessonId,
-          milestone_id:
-            typeof context.milestone?.id === "string"
-              ? context.milestone.id
-              : null,
-          session_id: sessionId,
-          source_type: "chat_turn",
-          source_ref: {
-            inquiry: inquiryEventType,
-            message: content.slice(0, 200),
-          },
-          skill_keys: skillKeys,
-          score: null,
-          confidence: null,
-          rubric_result: {},
-          notes: "",
-          created_by: userId,
-          mode: "inquiry",
-          mode_type: inquiryEventType,
-        }).catch(() => {}),
-      );
-    }
+    // Inquiry events (v4 + §9 LLM tagging): written AFTER the mentor turn so the mentor's own
+    // classification (parsed.inquiry) can drive the confusion/curiosity split — see below, near the
+    // misconception write. The deterministic gate that decides WHEN to log lives here in the regex
+    // detectors (intent/helpRequest/isQuestionShaped), used as the fallback when the mentor omits a tag.
 
     // Lesson-arc view (step N of M, done, next) so the mentor can situate this turn.
     const lessonArc = buildLessonArc(context.activities, context.activity);
@@ -3663,6 +3638,59 @@ async function handleTypedRequest(
     if (parsed.misconception) {
       recordWrites.push(
         upsertMisconception(config, userId, null, parsed.misconception),
+      );
+    }
+
+    // Inquiry events (v4 + §9 LLM tagging): persist question-asking as typed evidence — logging-only
+    // (never gates), best-effort (never blocks). PREFER the mentor's own inquiry classification (a
+    // free piggyback on the turn call — accurate curiosity vs confusion) and fall back to the regex
+    // detectors when the mentor emits none. Confusion stays BROAD (mentor OR the deterministic
+    // detectors — help-seeking is high-signal); curiosity is the mentor's judgment (or, only when the
+    // mentor gave nothing, the loose question-shaped heuristic), and is suppressed on a graded-answer
+    // turn (a reflection/open-ended answer phrased as a question is an answer, not an inquiry).
+    const mentorInquiry = normalizeInquiry(parsed.inquiry);
+    let inquiryEventType = "";
+    let inquirySource = "";
+    if (answer?.mode === "text" && content && presentedBefore) {
+      if (mentorInquiry === "confusion" || intent === "confused" || helpRequest) {
+        inquiryEventType = "confusion";
+        inquirySource = mentorInquiry === "confusion" ? "mentor" : "heuristic";
+      } else if (mentorInquiry === "curiosity" && !isTextExplanation) {
+        inquiryEventType = "curiosity";
+        inquirySource = "mentor";
+      } else if (
+        !mentorInquiry &&
+        isQuestionShaped(content) &&
+        intent === "none" &&
+        !isTextExplanation
+      ) {
+        inquiryEventType = "curiosity";
+        inquirySource = "heuristic";
+      }
+    }
+    if (inquiryEventType) {
+      scheduleBackground(
+        insertRow(config, "learning_evidence", {
+          user_id: userId,
+          lesson_id: lessonId,
+          milestone_id:
+            typeof context.milestone?.id === "string" ? context.milestone.id : null,
+          session_id: sessionId,
+          source_type: "chat_turn",
+          source_ref: {
+            inquiry: inquiryEventType,
+            inquiry_source: inquirySource,
+            message: content.slice(0, 200),
+          },
+          skill_keys: skillKeys,
+          score: null,
+          confidence: null,
+          rubric_result: {},
+          notes: "",
+          created_by: userId,
+          mode: "inquiry",
+          mode_type: inquiryEventType,
+        }).catch(() => {}),
       );
     }
     // Record writes gate on grading eligibility (B11): a presentation turn never writes
