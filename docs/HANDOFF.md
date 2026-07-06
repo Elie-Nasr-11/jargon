@@ -6,8 +6,39 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-06 (§9 comms features: mini-chat + material comments + realtime push — Starting)
+## Claude -> Codex / Human - 2026-07-06 (§9 comms: mini-chat + material comments + realtime push — SHIPPED backends, UI on branch)
 
+Status: DONE (4 slices). All BACKENDS committed, deployed (deploy-backend runs green), and prod-verified;
+all FRONTEND on `claude/happy-johnson-wseex8` awaiting the held main FF (gated additionally by a per-class
+feature flag defaulting OFF, so nothing reaches the live minor until a teacher opts a class in AND the FF
+lands). Each slice adversarially reviewed before its backend deploy (RLS-forgery + correctness lenses +
+judge → all SHIP; a Slice-2 moderator-branch hardening applied pre-deploy).
+
+- Slice 1 (5f4b9e4→d744761): `20260731000000_notifications_realtime.sql` adds `notifications` to the
+  realtime publication; `__root.tsx` hoists one app-lifetime realtime-auth owner; `NotificationsMenu`
+  gains a postgres_changes INSERT subscription (+ toast), poll kept as fallback. Prod-verified in publication.
+- Slice 2 (533f183): `20260801000000_comms_foundation.sql` — `dm_channels`/`dm_messages`/`material_comments`
+  + `is_dm_pair` + guard triggers + RLS + realtime. Prod-verified: 3 tables, 4 fns, 9 policies, 3 published.
+- Slice 3 (0ed8411): `20260802000000_comms_dm_notify.sql` (`list_my_teachers` + `direct_message` notify
+  trigger, prod-verified) + the mini-chat UI (DmThread, StudentMiniChat popover w/ unread dot,
+  TeacherStudentMessages tab w/ enable toggle + moderation, bell deep-link).
+- Slice 4 (d0aa63c): per-material comments UI under ResourceCard (frontend-only; reuses Slice 2 table/RLS).
+
+Files: supabase/migrations/2026073100..0801..0802.. ; deploy-backend.yml ; frontend types.ts/api.ts ;
+features/comms/{DmThread,MaterialComments} ; features/student/StudentMiniChat ;
+features/teacher/TeacherStudentMessages ; routes/chat.tsx ; components/NotificationsMenu ;
+routes/__root.tsx ; features/teacher/TeacherConsole (Messages tab). Verify: node --check n/a (SQL);
+tsc/lint/build green (0 err, 13 pre-existing warns) each slice.
+
+Remaining concerns / follow-ups: (a) teacher comment-MODERATION UI surface (RLS already permits
+is_class_teacher hide; only the UI is deferred); (b) the multi-class comment class-anchor uses "first
+enabled class" — fine for single-class students, revisit for multi-class; (c) a retention sweep for
+`purged_at` on dm_messages/material_comments (submission-maintenance shape) as a fast-follow; (d) true
+OS/web-push (Slice 5) deferred by decision — in-app realtime covers tab-open delivery. Suggested next
+task: the teacher comment-moderation surface, or wire the per-class enable toggle into a class-settings
+surface (today it lives on the teacher Messages tab). NOTE: main FF still HELD per the user.
+
+--- original starting entry (kept for provenance) ---
 Status: Starting. User picked three §9 comms items. A ground-truth exploration workflow mapped the
 codebase: NO user-to-user messaging/threading primitive exists (chat_messages = student↔AI transcript;
 teacher_live_comments = one-directional, session-bound) — all three are greenfield, but session_holds is

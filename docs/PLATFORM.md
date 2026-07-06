@@ -207,12 +207,25 @@ monitoring. Import/export and class CRUD already exist.
 
 ## 9. Deferred (explicitly not v4.0)
 
-Visual redesign · student↔teacher mini chat (comms/moderation surface of its own) ·
-per-material comment sections · real-time push · `lessons` RLS tightening · merging the
-Assignment/Assessment builders · dropping `activity_type` or the legacy work tables ·
-student-editable mentor system prompt (safety review of its own).
+Visual redesign · `lessons` RLS tightening · merging the Assignment/Assessment builders ·
+dropping `activity_type` or the legacy work tables · student-editable mentor system prompt
+(safety review of its own) · true OS/web-push (service worker + VAPID; in-app realtime shipped).
 
 DONE since (moved out of "deferred"):
+- **Student↔teacher mini-chat + per-material comments + real-time push** — SHIPPED as four additive,
+  adversarially-reviewed, per-class-flag-gated slices (a live minor is on the platform, so everything
+  ships behind a feature flag defaulting OFF and rides the held main FF). (1) In-app realtime bell:
+  `notifications` added to the realtime publication; the bell lights instantly instead of polling.
+  (2) Hardened messaging/comment foundation: `dm_channels`/`dm_messages` (1:1 validated by a distinct
+  active student+teacher `is_dm_pair`, avoiding the `can_view_student` self-trap) + `material_comments`
+  (2-level, mandatory `class_id` anchor gated by `is_class_member`, no cross-class leak). Post-
+  moderation, RLS-ENFORCED hide + author soft-delete + service-only retention purge, with BEFORE-UPDATE
+  guard triggers freezing body/identity and preventing an author from un-hiding a moderated message.
+  (3) Mini-chat UI: student header popover (live unread dot) + teacher Messages tab (self-serve enable
+  toggle + moderation) + `list_my_teachers()` discovery helper + a best-effort `direct_message` notify
+  trigger. (4) Per-material comments UI under the ResourceCard. Deferred within this arc: true OS/web-
+  push (in-app realtime covers tab-open delivery), and a teacher comment-moderation UI surface (the RLS
+  already permits it). See DECISIONS 2026-07-06.
 - **Platform-generated ad-hoc revision sessions** — SHIPPED post-v4.0 P4b/P5, but NOT via the
   `learning_sessions.lesson_id` relaxation feared here: a greenfield `review_sessions` table + an
   isolated `review:true` chat-fn handler (the live turn loop never reads it). See DECISIONS 2026-07-06.
