@@ -10,17 +10,16 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { Notification, StudentGradeRow } from "@/lib/types";
 
-// The persistent data layer behind the student edge chrome: it fetches + live-subscribes so the
-// edge badges and peeks (Classes due counts / Pulse next-deadline / Review / unread) stay current
-// even while every panel is closed. The notifications list + mark-read live here (one source of
-// truth shared by the badges and the Pulse activity feed); DM threads fetch on open, and this hook
-// only tracks the DM unread flag. Grades load once on mount and refresh via refreshGrades() when a
-// panel closes — the peeks read nextDue / dueByClass / avgByClass without their own fetches.
+// The persistent data layer behind the student sidebar: it fetches + live-subscribes so the
+// Pulse badge and the class summaries stay current while every page is closed. The notifications
+// list + mark-read live here (one source of truth shared by the badge and the Pulse activity
+// feed; a DM insert also writes a notification row, so DMs light the same badge). Grades load
+// once on mount and refresh via refreshGrades() when a page closes — the class cards read
+// nextDue / dueByClass / avgByClass without their own fetches.
 export function useStudentNavData() {
   const [meId, setMeId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reviewDueCount, setReviewDueCount] = useState(0);
-  const [dmUnread, setDmUnread] = useState(false);
   const [grades, setGrades] = useState<StudentGradeRow[]>([]);
 
   useEffect(() => {
@@ -32,13 +31,7 @@ export function useStudentNavData() {
         if (!uid || cancelled) return;
         setMeId(uid);
         void fetchNotifications()
-          .then((rows) => {
-            if (cancelled) return;
-            setNotifications(rows);
-            // Seed the Messages dot from any unread direct_message notification (a DM insert writes
-            // one), so the badge reflects DMs unread from before load — not only live arrivals.
-            if (rows.some((n) => n.kind === "direct_message" && !n.read_at)) setDmUnread(true);
-          })
+          .then((rows) => !cancelled && setNotifications(rows))
           .catch(() => {});
         void fetchReviewDue()
           .then((rows) => !cancelled && setReviewDueCount(rows.length))
@@ -75,26 +68,6 @@ export function useStudentNavData() {
     };
   }, [meId]);
 
-  // Live DM unread — a message in any of my channels (RLS-scoped) from someone else lights it.
-  useEffect(() => {
-    if (!meId) return;
-    const channel = supabase
-      .channel(`nav-dm-${meId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "dm_messages" },
-        (payload) => {
-          const row = payload.new as { sender_id?: string } | null;
-          if (!row || row.sender_id === meId) return;
-          setDmUnread(true);
-        },
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [meId]);
-
   const notificationsUnread = useMemo(
     () => notifications.filter((n) => !n.read_at).length,
     [notifications],
@@ -113,8 +86,6 @@ export function useStudentNavData() {
     );
     void apiMarkAll().catch(() => {});
   }, []);
-
-  const clearDmUnread = useCallback(() => setDmUnread(false), []);
 
   // Called after a guided review completes so the badge reflects the freshly-refreshed queue.
   const refreshReviewCount = useCallback(() => {
@@ -163,14 +134,12 @@ export function useStudentNavData() {
     notifications,
     notificationsUnread,
     reviewDueCount,
-    dmUnread,
     grades,
     nextDue,
     dueByClass,
     avgByClass,
     markNotificationRead,
     markAllNotificationsRead,
-    clearDmUnread,
     refreshReviewCount,
     refreshGrades,
   };

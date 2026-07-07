@@ -367,6 +367,13 @@ async function copyToClipboard(text: string) {
   textarea.remove();
 }
 
+// Live voice needs WebRTC + mic capture — on browsers without them (locked-down school
+// profiles) the empty-composer primary CTA must be Send, not a button that can only error.
+const voiceSupported =
+  typeof RTCPeerConnection !== "undefined" &&
+  typeof navigator !== "undefined" &&
+  Boolean(navigator.mediaDevices?.getUserMedia);
+
 function ChatPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState<string | null>(null);
@@ -424,9 +431,13 @@ function ChatPage() {
   const locked = openQuizId !== null || openAssignmentId !== null;
   // v6 shell state: the mobile nav drawer and the desktop sidebar collapse (persisted).
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => typeof window !== "undefined" && localStorage.getItem("jargon:sidebar-collapsed") === "1",
-  );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("jargon:sidebar-collapsed") === "1";
+    } catch {
+      return false; // storage denied (locked-down profiles) — just don't persist
+    }
+  });
   const toggleSidebar = () => {
     setSidebarCollapsed((v) => {
       const next = !v;
@@ -442,6 +453,18 @@ function ChatPage() {
   useEffect(() => {
     if (locked) setDrawerOpen(false);
   }, [locked]);
+  // Collapse/reopen each unmount the button that was just pressed — hand keyboard focus to the
+  // counterpart control so a keyboard user never falls back to <body>.
+  const reopenBtnRef = useRef<HTMLButtonElement>(null);
+  const skipFocusHandoffRef = useRef(true);
+  useEffect(() => {
+    if (skipFocusHandoffRef.current) {
+      skipFocusHandoffRef.current = false;
+      return;
+    }
+    if (sidebarCollapsed) reopenBtnRef.current?.focus();
+    else document.querySelector<HTMLButtonElement>('[aria-label="Hide sidebar"]')?.focus();
+  }, [sidebarCollapsed]);
   // Count of skills due for spaced review — a small dismissible nudge card, once per browser session.
   const [reviewNudge, setReviewNudge] = useState<number | null>(null);
   // Scroll UX: only auto-stick when the student is already near the bottom; otherwise offer a
@@ -820,9 +843,12 @@ function ChatPage() {
   }): Promise<TypedChatEnvelope | null | "busy"> => {
     if (!accessToken) return null;
     if (sessionHeld) {
+      // isError keeps this notice from becoming the "latest bot message" — a live quiz's choice
+      // buttons must not retire (and fake a recorded answer) for a turn that was never sent.
       addMsg({
         id: uid(),
         role: "bot",
+        isError: true,
         text: "Your teacher paused the session to step in — hang tight until they resume it.",
       });
       return null;
@@ -997,16 +1023,14 @@ function ChatPage() {
     });
   };
 
-  // Opening Pulse consumes the DM unread dot (its activity feed is the messages surface now; a
-  // direct_message row expands its thread inside the feed).
-  const openPulse = () => {
-    navData.clearDmUnread();
-    goView("pulse");
-  };
+  const openPulse = () => goView("pulse");
 
   // One launcher for both quiz surfaces: a finished attempt opens as a relaxed result view
-  // instead of flashing the locked frame while QuizPanel boots.
+  // instead of flashing the locked frame while QuizPanel boots. The ref remembers HOW it opened
+  // so exit only remounts the page (workVersion) when an attempt was actually submitted.
+  const quizOpenedAsResultRef = useRef(false);
   const openQuiz = (id: string, viewingResult = false) => {
+    quizOpenedAsResultRef.current = viewingResult;
     setQuizCompleted(viewingResult);
     setOpenQuizId(id);
   };
@@ -1024,15 +1048,16 @@ function ChatPage() {
   // Completion counts too — the banner replaces the composer, and the mic must not keep
   // auto-submitting turns to a finished lesson.
   useEffect(() => {
-    if (view || locked || (lessonComplete && !followUp)) setVoiceMode(false);
-  }, [view, locked, lessonComplete, followUp]);
+    if (view || locked || sessionHeld || (lessonComplete && !followUp)) setVoiceMode(false);
+  }, [view, locked, sessionHeld, lessonComplete, followUp]);
 
   // Opening a lesson from the Classes view LOADS it in place (chat.tsx owns loadLesson), then
   // returns to the chat view — the old modal-era same-route navigate never actually reloaded.
   const openLessonFromView = (nextLessonId: string) => {
-    // Never switch lessons under an in-flight turn (restartLesson's gate, mirrored): the old
-    // lesson's resolving envelope would smear its session id, arc, and reply into the new one.
-    if (nextLessonId !== lessonId && (sendingRef.current || runInFlight)) return;
+    // Never switch lessons under an in-flight turn OR an in-flight lesson load (loadLesson and
+    // restartLesson set only the `sending` state, not sendingRef): the old lesson's resolving
+    // envelope would smear its session id, arc, and reply into the new one.
+    if (nextLessonId !== lessonId && (sending || sendingRef.current || runInFlight)) return;
     store.setLessonId(nextLessonId);
     goView(null);
     if (nextLessonId === lessonId) return; // already the open lesson — just come back to it
@@ -1064,6 +1089,9 @@ function ChatPage() {
   useEffect(() => {
     if (prevViewRef.current === "pulse" && view !== "pulse") {
       navData.refreshReviewCount();
+      // Visiting Pulse consumes the notifications half of its badge — the student has seen the
+      // feed; marking on LEAVE keeps the unread highlights visible while they read.
+      navData.markAllNotificationsRead();
       setPulseFocusReview(false);
     }
     if (prevViewRef.current && !view) {
@@ -1280,6 +1308,7 @@ function ChatPage() {
       </button>
       {sidebarCollapsed ? (
         <button
+          ref={reopenBtnRef}
           type="button"
           inert={locked ? true : undefined}
           onClick={toggleSidebar}
@@ -1384,7 +1413,7 @@ function ChatPage() {
                     // Quiz choices are live ONLY on the newest mentor message — historical bubbles
                     // keep their text but their buttons are gone, so an old quiz can't be re-answered.
                     choicesActive={m.id === lastBotId}
-                    choicesDisabled={sending || runInFlight}
+                    choicesDisabled={sending || runInFlight || sessionHeld}
                     onUseCode={useCodeInEditor}
                     onChooseChoice={sendChoice}
                     onRetry={retryTurn}
@@ -1469,7 +1498,7 @@ function ChatPage() {
                     onVoiceEvent={handleVoiceEvent}
                     // Lock inputs while a teacher has the session paused (Phase 3).
                     sending={sending || sessionHeld}
-                    canStartVoice
+                    canStartVoice={voiceSupported}
                     onStartVoice={() => setVoiceMode(true)}
                   />
                 </div>
@@ -1511,6 +1540,7 @@ function ChatPage() {
                     notifications={navData.notifications}
                     onMarkRead={navData.markNotificationRead}
                     onOpenLesson={openLessonFromView}
+                    switchBlocked={sending || runInFlight}
                     onOpenQuiz={openQuiz}
                   />
                 </PageShell>
@@ -1551,7 +1581,9 @@ function ChatPage() {
         leaveNote="Leave this quiz? Your unsubmitted answers stay in this attempt."
         onExit={() => {
           setOpenQuizId(null);
-          onLockdownExit();
+          // Remount/refetch the page only when an attempt was SUBMITTED during this open — a
+          // read-only result view must not reset the canvas scroll or refire its fetches.
+          if (!quizOpenedAsResultRef.current && quizCompleted) onLockdownExit();
           void fetchStudentAssessments()
             .then(setAssessments)
             .catch(() => {});

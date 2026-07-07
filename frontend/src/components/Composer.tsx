@@ -602,11 +602,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 {/* ONE primary slot, ChatGPT-style: an empty box offers talk-out-loud; typing
                     swaps it to Send. Same size and styling both ways — no layout shift. Enter on
                     empty stays a no-op (send() guards); voice starts by click/tap only. */}
-                {!text.trim() && canStartVoice && onStartVoice ? (
+                {!text.trim() && !dictating && canStartVoice && onStartVoice ? (
                   <button
                     type="button"
-                    onClick={onStartVoice}
-                    disabled={sending}
+                    onClick={() => {
+                      // Never run two captures at once: kill any dictation session before the
+                      // live voice panel takes the mic.
+                      recognitionRef.current?.abort();
+                      recognitionRef.current = null;
+                      setDictating(false);
+                      onStartVoice();
+                    }}
+                    disabled={sending || running}
                     aria-label="Talk with the Mentor out loud"
                     title="Talk with the Mentor out loud"
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"

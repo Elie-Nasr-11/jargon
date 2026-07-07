@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
@@ -148,6 +148,7 @@ function SidebarContent({
     onToggleCollapse,
   } = props;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
   const navigate = useNavigate();
   const { resolved, toggle } = useTheme();
   const campusLiveUrl = useCampusLiveLink();
@@ -270,6 +271,9 @@ function SidebarContent({
             label="Mentor"
             onClick={() => {
               setMenuOpen(false);
+              // The modal must not stack over the open drawer (double dialog, broken focus
+              // restore on close) — the drawer closes first.
+              if (inDrawer) onCloseDrawer();
               onOpenMentor();
             }}
           />
@@ -295,10 +299,20 @@ function SidebarContent({
             icon={LogOut}
             label="Log out"
             onClick={async () => {
-              await signOut();
-              navigate({ to: "/login" });
+              try {
+                setLogoutError(false);
+                await signOut();
+                navigate({ to: "/login" });
+              } catch {
+                setLogoutError(true); // a silent failure would read as "logged out" on a shared machine
+              }
             }}
           />
+          {logoutError ? (
+            <div className="px-2.5 pb-1 pt-0.5 text-meta text-danger">
+              Could not log out. Check your connection and try again.
+            </div>
+          ) : null}
         </Popover>
       </div>
     </div>
@@ -308,6 +322,19 @@ function SidebarContent({
 export function AppSidebar(props: AppSidebarProps) {
   const { mentor, onMentorChange, voice, onVoiceChange, locked, drawerOpen, onCloseDrawer } = props;
   const [mentorOpen, setMentorOpen] = useState(false);
+
+  // Crossing into lg with the drawer open would display:none the panel while Radix's scrim,
+  // scroll lock, and focus trap stay live — the app would look frozen. Close it at the boundary.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const mq = window.matchMedia("(min-width: 64rem)");
+    const closeIfDesktop = () => {
+      if (mq.matches) onCloseDrawer();
+    };
+    closeIfDesktop();
+    mq.addEventListener("change", closeIfDesktop);
+    return () => mq.removeEventListener("change", closeIfDesktop);
+  }, [drawerOpen, onCloseDrawer]);
 
   return (
     <>

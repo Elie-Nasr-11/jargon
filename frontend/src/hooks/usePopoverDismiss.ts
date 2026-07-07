@@ -2,8 +2,10 @@ import { useEffect, type RefObject } from "react";
 
 // Shared dismissal for any anchored floating surface: outside-tap + capture-phase Escape with
 // preventDefault (the Radix dismissable-layer pattern), so ESC dismisses ONLY the innermost
-// surface — outer listeners (e.g. the panel exit) check defaultPrevented and see it consumed.
-// Used by components/Popover and the v5 edge flyouts.
+// surface — outer listeners (e.g. the route's view exit) check defaultPrevented and see it
+// consumed. The Escape listener binds to WINDOW, not document: capture propagation visits window
+// first, so this runs before Radix's document-capture escape handler regardless of registration
+// order — ESC inside a Radix Sheet/Dialog closes the innermost popover, not the whole layer.
 export function usePopoverDismiss(
   ref: RefObject<HTMLElement | null>,
   onClose: () => void,
@@ -22,10 +24,10 @@ export function usePopoverDismiss(
       }
     };
     document.addEventListener("pointerdown", onDoc);
-    document.addEventListener("keydown", onKey, { capture: true });
+    window.addEventListener("keydown", onKey, { capture: true });
     return () => {
       document.removeEventListener("pointerdown", onDoc);
-      document.removeEventListener("keydown", onKey, { capture: true });
+      window.removeEventListener("keydown", onKey, { capture: true });
     };
   }, [active, onClose, ref]);
 }

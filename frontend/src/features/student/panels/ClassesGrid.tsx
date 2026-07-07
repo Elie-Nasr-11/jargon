@@ -15,10 +15,15 @@ import type { StudentClass } from "@/lib/types";
 // classes load (scoped lessons × own progress); the grid remounts per page open, so every open
 // is a natural refresh. Click opens the class canvas (?view=classes&class=id).
 
-async function computeNextLessons(classes: StudentClass[]): Promise<Record<string, string | null>> {
-  const progress = await fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>);
+// A fetch failure must stay distinguishable from "every lesson complete" — the card renders
+// done as "All caught up" and unknown as an honest dash.
+type NextLesson = { kind: "next"; title: string } | { kind: "done" } | { kind: "unknown" };
+
+async function computeNextLessons(classes: StudentClass[]): Promise<Record<string, NextLesson>> {
+  const progress = await fetchStudentLessonProgress().catch(() => null);
   const entries = await Promise.all(
-    classes.map(async (cls) => {
+    classes.map(async (cls): Promise<readonly [string, NextLesson]> => {
+      if (!progress) return [cls.id, { kind: "unknown" }] as const;
       try {
         const lessons = await fetchClassScopedLessons(cls.id);
         const ordered = [...lessons].sort(
@@ -27,9 +32,9 @@ async function computeNextLessons(classes: StudentClass[]): Promise<Record<strin
               (b.unit_position ?? Number.MAX_SAFE_INTEGER) || (a.position ?? 0) - (b.position ?? 0),
         );
         const next = ordered.find((l) => (progress[l.id] ?? 0) < 1) ?? null;
-        return [cls.id, next?.title ?? null] as const;
+        return [cls.id, next ? { kind: "next", title: next.title } : { kind: "done" }] as const;
       } catch {
-        return [cls.id, null] as const;
+        return [cls.id, { kind: "unknown" }] as const;
       }
     }),
   );
@@ -55,7 +60,7 @@ export function ClassesGrid({
   onOpenClass: (classId: string) => void;
 }) {
   const [classes, setClasses] = useState<StudentClass[] | null>(null);
-  const [nextByClass, setNextByClass] = useState<Record<string, string | null> | null>(null);
+  const [nextByClass, setNextByClass] = useState<Record<string, NextLesson> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -115,7 +120,15 @@ export function ClassesGrid({
             <div className="mt-3 grid gap-1 border-t border-border/60 pt-3">
               <StatRow
                 label="Next lesson"
-                value={next === undefined ? "…" : (next ?? "All caught up")}
+                value={
+                  next === undefined
+                    ? "…"
+                    : next.kind === "next"
+                      ? next.title
+                      : next.kind === "done"
+                        ? "All caught up"
+                        : "—"
+                }
               />
               <StatRow
                 label="To do"

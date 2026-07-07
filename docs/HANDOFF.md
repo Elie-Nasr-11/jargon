@@ -5554,3 +5554,40 @@ templates deployed; 2b hotlist + 2c live-now/work-overview on the branch). Next:
 Suggested next task: v4.0 Phase 3-scoping — the class_courses enabler (migration + set_class_courses
 action + fetchStudentCatalog with the global fallback + chat.tsx swap + teacher Linked-courses
 panel); adversarial review before the backend push.
+
+## Claude -> Codex / Human - 2026-07-07 19:40
+
+Status: Finished
+Summary: STUDENT UI v6 — the v5 floating-edge shell became a ChatGPT-style layout after the user's
+live review. One persistent left sidebar (AppSidebar: wordmark · Tutor chat/Classes/Pulse nav with
+a Pulse badge · unit-grouped lessons list · account row with a minimal popover menu; Mentor opens
+as a centered modal that blurs the whole background). Classes and Pulse render as PLAIN full pages
+(PageShell, max-w-880, back pill + serif title) — no scrim/slide-over; the chat pane stays always
+mounted (hidden via visibility+inert under a page). The progress rail died; ChatStepperStrip is
+universal. Composer: an empty textbox shows the talk-out-loud button in the Send slot; typing swaps
+it to Send. ClassesGrid cards are fully static (no hover motion). Lockdown now dims/inerts the
+sidebar. Deleted: WorldArc, useEdgePresence, CornerWordmark, SlideOver, ProfileMenu,
+ChatStepperRail. An adversarial review ran (4 dimensions, per-finding verification; part of the
+verify fleet died on a session token limit and was hand-triaged) — 16 fixes folded: drawer
+auto-close at the lg boundary (stranded Radix scrim), logout error surface, Pulse badge consumed on
+leave (dead dmUnread wiring removed from useStudentNavData), ESC-in-drawer ordering
+(usePopoverDismiss ESC moved to window capture), Mentor-from-drawer closes the drawer first,
+in-flight-load switch guard + disabled canvas lesson rows, guarded localStorage, collapse focus
+handoff, workVersion bumps only on real submissions, honest "—" for failed next-lesson fetches,
+labeled PageShell focus target, sessionHeld hardening (choices disabled, isError pause bubble,
+voice force-off), dictation/voice-slot interplay (slot stable while dictating, dictation aborted
+before live voice, run-in-flight blocks voice), canStartVoice reflects real WebRTC support.
+Files changed: routes/chat.tsx (shell surgery + fixes), features/student/shell/{AppSidebar,
+PageShell}.tsx (new), features/student/lessonGroups.ts (new), features/student/shell/
+studentViews.ts (comment), features/student/chat/ChatStepper.tsx (rail deleted),
+features/student/panels/{ClassesGrid (static rework), ClassCanvas (groupByUnit import, h1,
+switchBlocked)}.tsx, components/{Composer (send/voice swap), Popover (top-start), ModalCard +
+ui/dialog (overlayClassName)}.tsx, hooks/{usePopoverDismiss (window-capture ESC),
+useStudentNavData (dmUnread removed)}.ts; deleted features/student/edge/* and shell/
+{CornerWordmark,SlideOver,ProfileMenu}.tsx.
+Tests run: npx tsc --noEmit 0 errors; eslint 0 errors (12 pre-existing warnings); vite build green
+— after every phase commit and after the review fixes.
+Remaining concerns: frontend-only, NOT live until a main fast-forward (user's call). Manual smoke
+on a real browser still worth doing: drawer at <lg, lockdown dimming, chat draft survival across
+page round-trips, the empty-composer voice button on a phone.
+Suggested next task: live review of v6 with the user; then whatever the review surfaces.

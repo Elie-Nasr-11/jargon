@@ -53,6 +53,7 @@ export function ClassCanvas({
   notifications,
   onMarkRead,
   onOpenLesson,
+  switchBlocked = false,
   onOpenQuiz,
 }: {
   classId: string;
@@ -61,6 +62,9 @@ export function ClassCanvas({
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onOpenLesson: (lessonId: string) => void;
+  // Lesson switching is refused while a turn is in flight — disable the rows (like the sidebar's)
+  // so the refusal never reads as a dead click.
+  switchBlocked?: boolean;
   // viewingResult=true when the latest attempt is already finished — the lockdown opens relaxed.
   onOpenQuiz: (assessmentId: string, viewingResult: boolean) => void;
 }) {
@@ -245,7 +249,8 @@ export function ClassCanvas({
                       <button
                         type="button"
                         onClick={() => onOpenLesson(lesson.id)}
-                        className="group/nav -mx-1 flex min-w-0 flex-1 items-center gap-3 rounded-control px-1 py-1 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover"
+                        disabled={switchBlocked}
+                        className="group/nav -mx-1 flex min-w-0 flex-1 items-center gap-3 rounded-control px-1 py-1 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover disabled:opacity-40 disabled:hover:bg-transparent"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-body text-foreground">{lesson.title}</div>

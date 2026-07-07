@@ -38,6 +38,8 @@ export function PageShell({
     <div
       ref={rootRef}
       tabIndex={-1}
+      role="region"
+      aria-label={title ?? backLabel ?? "Page"}
       className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain outline-none"
     >
       <div className="mx-auto w-full max-w-[880px] px-5 pb-16 pt-8 max-lg:pt-14 md:px-8">
