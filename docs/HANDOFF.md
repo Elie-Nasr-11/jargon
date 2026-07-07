@@ -6,6 +6,56 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-07 (Student UI v4 — depth, persistent sidebar, workspace views, integrated stepper)
+
+Status: Built + verified per phase (tsc/lint/build green; new Tailwind utilities confirmed present
+in the built CSS incl. dark elevation overrides), 5 commits on the branch, adversarial review
+running, awaiting main FF. FRONTEND-ONLY.
+
+Task: full UI makeover of the student platform per user review of v3 — "too flat, poor hierarchy,
+drawer/modal mechanics archaic". Locked decisions: workspace views (nav always live), persistent
+right sidebar at lg+ (mobile keeps the drawer), header profile menu with anchored settings cards,
+integrated left stepper, evolve-the-identity depth system, quiz stays a focused modal, chat retune
+only, ONE coherent release.
+
+Phases (one commit each):
+- P1 (a4ac1be) foundation: theme-aware elevation (--elev-card/raised/pop; dark = near-black spreads
+  + baked 1px light ring), --text-* type scale (display/title/body/body-lg/meta/overline),
+  .elev-hover + .composer-elev, Inter actually loads now (variable @font-face, URL verified against
+  the css2 API; it was silently falling back to system fonts), dialog/sheet z wired to the --z
+  ladder + scrim softened (black/45 + 2px blur).
+- P2 (1100cdd) shell + views: ?view= search param (back/refresh/deep-links); full-width header +
+  lg grid [content | 264px sidebar]; persistent Sidebar (Tutor chat pinned, Learning/Messages
+  groups, ·N review count, dm dot, gsap sliding notch); ViewHost/ViewShell render sections as
+  workspace views (back pill + serif display title, 0.2s rise in, instant out, ESC→chat); the chat
+  pane stays MOUNTED under views (invisible + inert, NOT display:none) so drafts/voice/realtime/
+  scroll survive; OverviewModal→OverviewPanel (2-col dashboard) + ClassesModal→ClassesPanel
+  unwrapped; opening a lesson from Classes now loadLesson()s in place (closes the OPEN_QUESTIONS
+  "same-route navigate never reloads" item); Messages fills the view; Review log cap raised; six
+  section modals deleted.
+- P3 (7d4c300) profile menu: header avatar (initial + notifications dot) → Settings mini-menu
+  (Profile · Mentor · Appearance inline toggle · Notifications · Campus Live · Log out) with
+  Profile/Mentor/Notifications as anchored floating cards (back-chevron, 0.18s drop-in); <lg rides
+  the house bottom-sheet pattern; drawer is pure section nav now.
+- P4 (ff114ad) stepper: ChatStepperRail in the chat column's 56px left gutter (rainbow fill tween
+  0.45s, nodes with grad-border ring current marker, xl+ title chip, roadmap popover via new
+  Popover placement="right-start") + ChatStepperStrip (<md top-of-stream bar); LeftProgressRail
+  (last floating chrome) deleted.
+- P5 (4d6a0cf) retune: user bubbles → opaque depth-card + shadow; mentor prose → text-body-lg;
+  notice cards unified radius + blur; WorkDock/completion banner on the ramp; composer raised +
+  focus-within pop; message entrance 0.26s; jump pill floating tier; quiz modal shadow-pop +
+  bottom-rise entrance + serif title.
+
+Tests run: per phase `npx tsc --noEmit` (0) · `npm run lint` (0 errors, 12 pre-existing warns) ·
+`npm run build` (ok) · built-CSS token audit (all new utilities + dark --elev-* present).
+
+Remaining concerns: adversarial-review findings to fold in before ship (in progress); live smoke
+post-FF (view switches w/ live voice, 1024px fit, dark elevation, mobile drawer/sheet/strip).
+Teacher/admin untouched (SettingsMenu/ConsoleShell unchanged).
+
+Suggested next task: post-FF smoke as a student across the QA matrix in the plan (widths
+375/768/1024/1280/1440, chat-state survival, realtime badges in views, reduced motion, dark).
+
 ## Claude -> Codex / Human - 2026-07-06 (Student nav v3 — right drawer + left progress rail)
 
 Status: Built + verified (tsc/lint/build green), on branch, awaiting main FF. FRONTEND-ONLY.
