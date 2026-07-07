@@ -2,24 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import { ExternalLink, LogOut, Moon, Settings, Sparkles, Sun, User, Volume2 } from "lucide-react";
+import { ExternalLink, LogOut, Moon, Settings, Sparkles, Sun, User } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { ModalCard } from "./ModalCard";
 import { ProfilePanel } from "@/features/student/ProfilePanel";
 import { MentorControls } from "@/features/student/MentorControls";
-import { VoiceControls } from "@/features/student/VoiceControls";
 import { useTheme } from "@/lib/theme";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
 
-type StudentModal = "profile" | "mentor" | "voice";
+type StudentModal = "profile" | "mentor";
 
-// SettingsMenu is shared across the student chat and the teacher/admin ConsoleShell. It's pure
-// settings: the student's mentor/voice props add Profile · Mentor · Voice rows (each a centered
-// modal); teacher/admin call it without those props and get the Appearance/Campus-Live/Log-out
-// menu. Learning content (grades, review, notifications) lives in the hub and the inbox, not here.
+// SettingsMenu is the teacher/admin console-header settings menu (Appearance / Campus Live /
+// Log out). It still accepts optional student mentor/voice props so a Profile + Mentor modal can
+// be rendered, but the student chat now uses the right-hand nav drawer (StudentNav) instead of
+// this gear.
 export function SettingsMenu({
   email,
   mentor,
@@ -166,20 +165,6 @@ export function SettingsMenu({
               <Sparkles className="h-[15px] w-[15px]" strokeWidth={1.5} /> Mentor
             </span>
           </button>
-          {voice && onVoiceChange ? (
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                setModal("voice");
-              }}
-              className={rowClass}
-            >
-              <span className="flex items-center gap-2.5">
-                <Volume2 className="h-[15px] w-[15px]" strokeWidth={1.5} /> Voice
-              </span>
-            </button>
-          ) : null}
           <div className="my-2 h-px bg-border" />
         </>
       ) : null}
@@ -301,19 +286,13 @@ export function SettingsMenu({
             }}
             title="Mentor"
           >
-            <MentorControls mentor={mentor} onChange={onMentorChange} />
+            <MentorControls
+              mentor={mentor}
+              onChange={onMentorChange}
+              voice={voice}
+              onVoiceChange={onVoiceChange}
+            />
           </ModalCard>
-          {voice && onVoiceChange ? (
-            <ModalCard
-              open={modal === "voice"}
-              onOpenChange={(o) => {
-                if (!o) setModal(null);
-              }}
-              title="Voice"
-            >
-              <VoiceControls voice={voice} onChange={onVoiceChange} />
-            </ModalCard>
-          ) : null}
         </>
       ) : null}
     </div>

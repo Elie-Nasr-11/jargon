@@ -11,7 +11,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
-  LayoutGrid,
+  Menu,
   Paperclip,
   Pause,
   Play,
@@ -21,18 +21,25 @@ import {
   Volume2,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
-import { SettingsMenu } from "@/components/SettingsMenu";
-import { StudentMiniChat } from "@/features/student/StudentMiniChat";
 import { MaterialComments } from "@/features/comms/MaterialComments";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
 import { LessonMilestones } from "@/components/LessonMilestones";
 import { ModalCard } from "@/components/ModalCard";
-import { Popover } from "@/components/Popover";
 import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ClassesModal } from "@/features/student/ClassesModal";
 import { QuizPanel } from "@/features/student/QuizPanel";
+import { StudentNav, type NavKey } from "@/features/student/StudentNav";
+import { OverviewModal } from "@/features/student/OverviewModal";
+import { MessagesPanel } from "@/features/student/MessagesPanel";
+import { StudentNotifications } from "@/features/student/StudentNotifications";
+import { MentorControls } from "@/features/student/MentorControls";
+import { ProfilePanel } from "@/features/student/ProfilePanel";
+import { StudentCalendarBody } from "@/features/student/StudentCalendar";
+import { GradesPanel } from "@/features/student/GradesPanel";
+import { ReviewPanel } from "@/features/student/ReviewPanel";
+import { useStudentNavData } from "@/hooks/useStudentNavData";
 import {
   DEFAULT_MENTOR,
   DEFAULT_VOICE,
@@ -185,10 +192,11 @@ function deriveLessonArc(
   };
 }
 
-// A fixed "Step N of M" pill that lives in the header, with an expandable roadmap of the lesson steps
-// (done / current / upcoming). Fixed width — no hover resize; a click toggles the roadmap dropdown
-// (a shared Popover handles outside-tap/Escape). Compact "N/M" variant on mobile.
-function LessonProgress({
+// A thin vertical progress rail pinned to the LEFT edge during a lesson: a column of step segments
+// (done / current / upcoming) + "N/M". Clicking expands a panel to the RIGHT with the full roadmap
+// (LessonMilestones) + Restart; it closes on outside-tap or Escape. Overlays the chat (fixed, z-40);
+// an open modal (z-50) covers it.
+function LeftProgressRail({
   arc,
   activities = [],
   onRestart,
@@ -198,66 +206,75 @@ function LessonProgress({
   onRestart?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: PointerEvent) => {
+      if (wrapRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   if (arc.total <= 1) return null;
   return (
-    <Popover
-      open={open}
-      onClose={() => setOpen(false)}
-      panelClassName="w-[min(340px,calc(100vw-24px))] rounded-2xl border border-border bg-background p-3 shadow-lg"
-      trigger={
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="flex h-9 w-[104px] items-center gap-2 rounded-full border border-border bg-background/60 px-3 text-left transition-colors hover:bg-muted/50 sm:w-[210px]"
-        >
-          <span className="flex min-w-0 flex-1 items-center gap-1" aria-hidden>
-            {Array.from({ length: arc.total }).map((_, i) => (
-              <span
-                key={i}
-                className={`h-1.5 flex-1 rounded-full ${
-                  i < arc.step - 1
-                    ? "bg-foreground/35"
-                    : i === arc.step - 1
-                      ? "bg-foreground"
-                      : "bg-border"
-                }`}
-              />
-            ))}
-          </span>
-          <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-foreground">
-            <span className="sm:hidden">
-              {arc.step}/{arc.total}
-            </span>
-            <span className="hidden sm:inline">
-              Step {arc.step} of {arc.total}
-            </span>
-          </span>
-          <ChevronDown
-            className={`hidden h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform sm:block ${
-              open ? "rotate-180" : ""
-            }`}
-            strokeWidth={2}
-          />
-        </button>
-      }
+    <div
+      ref={wrapRef}
+      className="pointer-events-none fixed left-2 top-1/2 z-40 flex -translate-y-1/2 items-start gap-2"
     >
-      <LessonMilestones arc={arc} activities={activities} />
-      {onRestart ? (
-        <button
-          type="button"
-          onClick={() => {
-            setOpen(false);
-            onRestart();
-          }}
-          className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <RotateCcw className="h-3 w-3" strokeWidth={1.8} />
-          Restart lesson
-        </button>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`Lesson progress: step ${arc.step} of ${arc.total}`}
+        className="pointer-events-auto flex flex-col items-center gap-1.5 rounded-full border border-border bg-background/80 px-1.5 py-2 shadow-sm backdrop-blur-md transition-colors hover:bg-muted/60"
+      >
+        <span className="flex flex-col items-center gap-1" aria-hidden>
+          {Array.from({ length: arc.total }).map((_, i) => (
+            <span
+              key={i}
+              className={`h-2.5 w-1.5 rounded-full ${
+                i < arc.step - 1
+                  ? "bg-foreground/35"
+                  : i === arc.step - 1
+                    ? "bg-foreground"
+                    : "bg-border"
+              }`}
+            />
+          ))}
+        </span>
+        <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+          {arc.step}/{arc.total}
+        </span>
+      </button>
+      {open ? (
+        <div className="pointer-events-auto max-h-[70vh] w-[min(320px,calc(100vw-56px))] overflow-y-auto rounded-2xl border border-border bg-background p-3 shadow-lg">
+          <LessonMilestones arc={arc} activities={activities} />
+          {onRestart ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onRestart();
+              }}
+              className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <RotateCcw className="h-3 w-3" strokeWidth={1.8} />
+              Restart lesson
+            </button>
+          ) : null}
+        </div>
       ) : null}
-    </Popover>
+    </div>
   );
 }
 
@@ -460,9 +477,13 @@ function ChatPage() {
   const [viewerClock, setViewerClock] = useState(() => Date.now());
   // True while a teacher has paused this session (Phase 3). Composer is locked + a banner shows.
   const [sessionHeld, setSessionHeld] = useState(false);
-  const [classesOpen, setClassesOpen] = useState(false);
-  // Which hub tab the next open lands on (the review nudge / completion banner set it).
-  const [classesTab, setClassesTab] = useState<"overview" | "classes" | "review">("overview");
+  // The right-hand nav drawer + which section modal is open (each drawer item is its own modal).
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [openModal, setOpenModal] = useState<NavKey | null>(null);
+  // A DM channel to deep-link the Messages modal into (from a direct_message notification click).
+  const [dmDeepLinkChannel, setDmDeepLinkChannel] = useState<string | null>(null);
+  // Persistent nav data: badge counts + the notifications list (shared with the Notifications modal).
+  const navData = useStudentNavData();
   // The quiz being taken, as a modal over the chat (the /quiz route is retired).
   const [openQuizId, setOpenQuizId] = useState<string | null>(null);
   // Count of skills due for spaced review — a small dismissible nudge card, once per browser session.
@@ -1183,52 +1204,140 @@ function ChatPage() {
             >
               Jargon
             </button>
-            {/* On mobile, group the menu + settings on the right (logo left). `sm:contents`
-                dissolves this wrapper on desktop so the nav keeps its centered position. */}
-            <div className="flex items-center gap-1 sm:contents">
-              <StudentMiniChat />
-              {/* Classes icon glued to the left of the progress pill (a shared group keeps them
-                  adjacent even though `sm:contents` distributes the top-level cluster on desktop). */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setClassesTab("overview");
-                    setClassesOpen(true);
-                  }}
-                  aria-label="Classes"
-                  className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
-                >
-                  <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.5} />
-                </button>
-                {lessonArc ? (
-                  <LessonProgress
-                    arc={lessonArc}
-                    activities={activities}
-                    onRestart={restartLesson}
-                  />
-                ) : null}
-              </div>
-              <SettingsMenu
-                email={email}
-                mentor={mentor}
-                onMentorChange={updateMentor}
-                voice={voice}
-                onVoiceChange={updateVoice}
-              />
-            </div>
+            {/* All navigation lives in the right-hand drawer now; the header is just the logo + a
+                single menu trigger (with an attention dot for unread/due). */}
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Menu"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
+            >
+              <Menu className="h-[20px] w-[20px]" strokeWidth={1.6} />
+              {navData.dmUnread || navData.notificationsUnread > 0 || navData.reviewDueCount > 0 ? (
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" />
+              ) : null}
+            </button>
           </div>
         </div>
       </header>
 
-      <ClassesModal
-        open={classesOpen}
-        onOpenChange={setClassesOpen}
-        accessToken={accessToken}
-        mentorPreferences={mentorToPreferences(mentor)}
-        currentLessonTitle={currentLesson?.title ?? null}
-        initialTab={classesTab}
+      {lessonArc ? (
+        <LeftProgressRail arc={lessonArc} activities={activities} onRestart={restartLesson} />
+      ) : null}
+
+      <StudentNav
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        email={email ?? ""}
+        reviewDueCount={navData.reviewDueCount}
+        messagesUnread={navData.dmUnread}
+        notificationsUnread={navData.notificationsUnread}
+        onSelect={(key) => {
+          setDrawerOpen(false);
+          if (key === "messages") {
+            setDmDeepLinkChannel(null);
+            navData.clearDmUnread();
+          }
+          setOpenModal(key);
+        }}
       />
+
+      {/* Each drawer item is its own clean centered modal. */}
+      <OverviewModal
+        open={openModal === "overview"}
+        onOpenChange={(o) => {
+          if (!o) setOpenModal(null);
+        }}
+        currentLessonTitle={currentLesson?.title ?? null}
+        onOpenGrades={() => setOpenModal("grades")}
+        onOpenReview={() => setOpenModal("review")}
+      />
+      <ClassesModal
+        open={openModal === "classes"}
+        onOpenChange={(o) => {
+          if (!o) setOpenModal(null);
+        }}
+      />
+      <ModalCard
+        open={openModal === "calendar"}
+        onOpenChange={(o) => {
+          if (!o) setOpenModal(null);
+        }}
+        title="Calendar"
+      >
+        <StudentCalendarBody />
+      </ModalCard>
+      <ModalCard
+        open={openModal === "grades"}
+        onOpenChange={(o) => {
+          if (!o) setOpenModal(null);
+        }}
+        title="Grades"
+      >
+        <GradesPanel />
+      </ModalCard>
+      <ModalCard
+        open={openModal === "review"}
+        onOpenChange={(o) => {
+          if (!o) {
+            setOpenModal(null);
+            navData.refreshReviewCount();
+          }
+        }}
+        title="Review"
+      >
+        <ReviewPanel accessToken={accessToken} mentorPreferences={mentorToPreferences(mentor)} />
+      </ModalCard>
+      <ModalCard
+        open={openModal === "messages"}
+        onOpenChange={(o) => {
+          if (!o) setOpenModal(null);
+        }}
+        title="Messages"
+      >
+        <MessagesPanel initialChannelId={dmDeepLinkChannel} />
+      </ModalCard>
+      <ModalCard
+        open={openModal === "profile"}
+        onOpenChange={(o) => {
+          if (!o) setOpenModal(null);
+        }}
+        title="Profile"
+      >
+        <ProfilePanel bare />
+      </ModalCard>
+      <ModalCard
+        open={openModal === "mentor"}
+        onOpenChange={(o) => {
+          if (!o) setOpenModal(null);
+        }}
+        title="Mentor"
+      >
+        <MentorControls
+          mentor={mentor}
+          onChange={updateMentor}
+          voice={voice}
+          onVoiceChange={updateVoice}
+        />
+      </ModalCard>
+      <ModalCard
+        open={openModal === "notifications"}
+        onOpenChange={(o) => {
+          if (!o) setOpenModal(null);
+        }}
+        title="Notifications"
+      >
+        <StudentNotifications
+          notifications={navData.notifications}
+          onMarkRead={navData.markNotificationRead}
+          onMarkAll={navData.markAllNotificationsRead}
+          onOpenDm={(channelId) => {
+            setDmDeepLinkChannel(channelId);
+            navData.clearDmUnread();
+            setOpenModal("messages");
+          }}
+        />
+      </ModalCard>
 
       {/* Quiz-taking happens in a modal over the chat (the /quiz route is retired). Closing
           re-fetches the assessments bundle so the work bar reflects a fresh submission. */}
@@ -1291,8 +1400,7 @@ function ChatPage() {
               onClick={() => {
                 sessionStorage.setItem("jargon-review-nudge", "1");
                 setReviewNudge(null);
-                setClassesTab("review");
-                setClassesOpen(true);
+                setOpenModal("review");
               }}
               className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
             >
@@ -1372,10 +1480,7 @@ function ChatPage() {
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setClassesTab("classes");
-                    setClassesOpen(true);
-                  }}
+                  onClick={() => setOpenModal("classes")}
                   className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
                 >
                   Pick your next lesson

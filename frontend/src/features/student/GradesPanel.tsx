@@ -1,21 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchLessons, fetchStudentClasses } from "@/lib/api";
+import { fetchLessons, fetchStudentClasses, fetchStudentGrades } from "@/lib/api";
 import { formatScore } from "@/lib/format";
 import type { StudentGradeRow } from "@/lib/types";
 
-// The student gradebook — the hub's Grades tab (formerly its own Settings-menu popup). Grouped by
-// class, then by unit (a grade's checkpoint carries lesson_id → the lesson's unitTitle); grades
-// without a lesson/unit fall into a "General" bucket, and grades whose class isn't among the
-// student's active classes into "Other". Grade rows are fetched once by the hub and passed in;
-// class/lesson names for grouping are fetched here on mount.
+// The student gradebook (the drawer's Grades modal). Grouped by class, then by unit (a grade's
+// checkpoint carries lesson_id → the lesson's unitTitle); grades without a lesson/unit fall into a
+// "General" bucket, and grades whose class isn't among the student's active classes into "Other".
+// Grade rows are passed in when a parent already holds them, else self-fetched on mount; class/lesson
+// names for grouping are always fetched here.
 
 type UnitGroup = { unit: string; grades: StudentGradeRow[] };
 type ClassGroup = { classKey: string; className: string; units: UnitGroup[] };
 
-export function GradesPanel({ grades }: { grades: StudentGradeRow[] | null }) {
+export function GradesPanel({ grades: gradesProp }: { grades?: StudentGradeRow[] | null }) {
+  const [fetched, setFetched] = useState<StudentGradeRow[] | null>(null);
+  const grades = gradesProp !== undefined ? gradesProp : fetched;
   const [classNames, setClassNames] = useState<Map<string, string>>(new Map());
   const [unitByLesson, setUnitByLesson] = useState<Map<string, string>>(new Map());
   const [namesLoaded, setNamesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (gradesProp !== undefined) return;
+    let cancelled = false;
+    void fetchStudentGrades()
+      .then((rows) => !cancelled && setFetched(rows))
+      .catch(() => !cancelled && setFetched([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [gradesProp]);
 
   useEffect(() => {
     let cancelled = false;

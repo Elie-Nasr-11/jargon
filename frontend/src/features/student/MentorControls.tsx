@@ -1,17 +1,34 @@
 import { useLayoutEffect, useRef } from "react";
 import gsap from "gsap";
-import type { MentorConfig } from "@/lib/jargon-store";
+import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
 
-// The mentor personality controls (tone · verbosity · difficulty), mounted inside the
-// Settings-menu Mentor modal. Voice/reading-speed moved to their own "Voice" settings row
-// (VoiceControls) — they configure audio, not the mentor's teaching style.
+// The mentor controls, mounted inside the Mentor modal: personality (tone · verbosity ·
+// difficulty) PLUS voice (voice · reading speed) when the voice props are passed — voice lives
+// with the mentor's talking style rather than a separate settings surface.
+
+const VOICE_OPTIONS: { label: string; value: VoiceSettings["voiceName"] }[] = [
+  { label: "Marin", value: "marin" },
+  { label: "Cedar", value: "cedar" },
+  { label: "Coral", value: "coral" },
+  { label: "Nova", value: "nova" },
+  { label: "Shimmer", value: "shimmer" },
+];
+const SPEED_OPTIONS: { label: string; value: VoiceSettings["readAloudRate"] }[] = [
+  { label: "Slow", value: 0.85 },
+  { label: "Normal", value: 1 },
+  { label: "Fast", value: 1.2 },
+];
 
 export function MentorControls({
   mentor,
   onChange,
+  voice,
+  onVoiceChange,
 }: {
   mentor: MentorConfig;
   onChange: (m: MentorConfig) => void;
+  voice?: VoiceSettings;
+  onVoiceChange?: (v: VoiceSettings) => void;
 }) {
   const groups: {
     key: keyof MentorConfig;
@@ -22,9 +39,11 @@ export function MentorControls({
     { key: "verbosity", label: "Verbosity", options: ["Concise", "Balanced", "Detailed"] },
     { key: "difficulty", label: "Difficulty", options: ["Gentle", "Standard", "Challenging"] },
   ];
+  const voiceLabel = VOICE_OPTIONS.find((o) => o.value === voice?.voiceName)?.label ?? "Marin";
+  const speedLabel = SPEED_OPTIONS.find((o) => o.value === voice?.readAloudRate)?.label ?? "Normal";
   return (
     <div>
-      <p className="text-[13px] text-muted-foreground">Shape how the tutor talks back.</p>
+      <p className="text-[13px] text-muted-foreground">Shape how the tutor talks — and sounds.</p>
       <div className="mt-5 space-y-4">
         {groups.map((g) => (
           <MentorGroup
@@ -35,12 +54,34 @@ export function MentorControls({
             onSelect={(opt) => onChange({ ...mentor, [g.key]: opt } as MentorConfig)}
           />
         ))}
+        {voice && onVoiceChange ? (
+          <>
+            <MentorGroup
+              label="Voice"
+              options={VOICE_OPTIONS.map((o) => o.label)}
+              value={voiceLabel}
+              onSelect={(opt) => {
+                const match = VOICE_OPTIONS.find((o) => o.label === opt);
+                if (match) onVoiceChange({ ...voice, voiceName: match.value });
+              }}
+            />
+            <MentorGroup
+              label="Reading speed"
+              options={SPEED_OPTIONS.map((o) => o.label)}
+              value={speedLabel}
+              onSelect={(opt) => {
+                const match = SPEED_OPTIONS.find((o) => o.label === opt);
+                if (match) onVoiceChange({ ...voice, readAloudRate: match.value });
+              }}
+            />
+          </>
+        ) : null}
       </div>
     </div>
   );
 }
 
-// The animated segmented-pill row, shared with VoiceControls.
+// The animated segmented-pill row used by every control group above.
 export function MentorGroup({
   label,
   options,

@@ -6,6 +6,50 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-06 (Student nav v3 — right drawer + left progress rail)
+
+Status: Built + verified (tsc/lint/build green), on branch, awaiting main FF. FRONTEND-ONLY.
+Note: this container was reset to an older commit (fdec60b) mid-session; re-synced the workspace to
+origin/main (1c605f1 = the deployed v2) before building, since the request builds on v2.
+
+Task: per the user's review of the deployed v2 — clear the chat header's icon cluster; move all nav
+into a RIGHT-hand slide-in drawer; move the lesson progress into a LEFT-edge vertical rail that
+expands rightward on click; move notifications back into Settings; fold voice back into Mentor.
+
+Files:
+- NEW `hooks/useStudentNavData.ts` — persistent badge/counts layer (notifications list + realtime,
+  reviewDueCount, dmUnread), shared with the Notifications modal.
+- NEW `features/student/StudentNav.tsx` — the right drawer (built on `components/ui/sheet.tsx`),
+  grouped Learning / Messages / Settings, per-item counts; Appearance toggles inline; Campus
+  Live / Log out inline; each other row calls onSelect(key).
+- NEW `features/student/OverviewModal.tsx` — the old hub Overview tab as its own self-fetching modal.
+- NEW `features/student/MessagesPanel.tsx` — DM-only inbox body (notifications removed) + deep-link.
+- NEW `features/student/StudentNotifications.tsx` — notifications list body (driven by the hook).
+- `routes/chat.tsx` — header = logo + one Menu trigger (attention dot); `LessonProgress` pill
+  refactored into a fixed-left `LeftProgressRail` (z-40, expands right, LessonMilestones + Restart);
+  `drawerOpen` + `openModal` state; mounts StudentNav + Overview/Classes/Calendar/Grades/Review/
+  Messages/Profile/Mentor/Notifications modals + the existing quiz modal; review-nudge + completion
+  banner now open the Review/Classes modals.
+- `features/student/ClassesModal.tsx` slimmed to the class→dashboard→unit drill-down only (5-tab bar
+  removed). `GradesPanel.tsx` gained a self-fetch fallback. `MentorControls.tsx` renders voice again.
+- `components/SettingsMenu.tsx` lost the Voice row (still teacher/admin-facing; students use the
+  drawer). DELETED `features/student/VoiceControls.tsx`, `features/student/StudentMiniChat.tsx`.
+
+Tests run: tsc 0 · lint 0 errors (12 pre-existing warns) · build ok. Adversarial review workflow
+run before ship (findings folded in / noted below).
+
+Remaining concerns:
+- Drawer(Radix Sheet) → section-modal(Radix Dialog) transition: the two Radix dialogs swap in one
+  interaction — smoke-test that clicking a drawer item opens the modal with the page still clickable
+  (no stuck body pointer-events). If it bites, defer setOpenModal by a tick.
+- Left rail overlays the chat at the left edge; smoke-test it doesn't obscure content on narrow
+  widths and that the composer stays clickable.
+- SettingsMenu keeps its (now student-unused) Profile/Mentor modal branches — harmless dead-for-
+  students code; teacher/admin console header unchanged.
+
+Suggested next task: live smoke as a student post-FF (drawer groups + counts, each modal, Overview,
+left rail expand + Restart, notifications-in-settings, voice-in-mentor, teacher gear unaffected).
+
 ## Claude -> Codex / Human - 2026-07-06 (Student view v2 — chat + one hub; 5 phases)
 
 Status: Built + verified (tsc/lint/build green per phase), 5 commits on the branch, awaiting main FF.
