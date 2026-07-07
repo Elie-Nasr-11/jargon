@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, ChevronRight } from "lucide-react";
 import { StateNote } from "@/components/StateNote";
 import { EntityComments } from "@/features/comms/EntityComments";
+import { groupByUnit } from "@/features/student/lessonGroups";
 import { formatDate, formatScore, relativeTime } from "@/lib/format";
 import {
   fetchClassScopedLessons,
@@ -35,35 +36,6 @@ function ProgressBar({ value }: { value: number }) {
       />
     </span>
   );
-}
-
-type UnitGroup = { unitId: string; unitTitle: string; lessons: Lesson[] };
-
-// Group scoped lessons into units keyed by unit_id, preserving unit_position then position order.
-function groupByUnit(lessons: Lesson[]): UnitGroup[] {
-  const byUnit = new Map<string, { title: string; pos: number; lessons: Lesson[] }>();
-  for (const lesson of lessons) {
-    const unitId = lesson.unit_id || "__none__";
-    let group = byUnit.get(unitId);
-    if (!group) {
-      group = {
-        title: lesson.unit_title || lesson.course_title || "Lessons",
-        pos: lesson.unit_position ?? Number.MAX_SAFE_INTEGER,
-        lessons: [],
-      };
-      byUnit.set(unitId, group);
-    }
-    group.lessons.push(lesson);
-  }
-  return Array.from(byUnit, ([unitId, group]) => ({
-    unitId,
-    unitTitle: group.title,
-    lessons: [...group.lessons].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
-  })).sort((a, b) => {
-    const ap = a.lessons[0]?.unit_position ?? Number.MAX_SAFE_INTEGER;
-    const bp = b.lessons[0]?.unit_position ?? Number.MAX_SAFE_INTEGER;
-    return ap - bp;
-  });
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
