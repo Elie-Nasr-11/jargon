@@ -24,7 +24,7 @@ import { MaterialComments } from "@/features/comms/MaterialComments";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
 import { LessonMilestones } from "@/components/LessonMilestones";
-import { ModalCard } from "@/components/ModalCard";
+import { FocusLock } from "@/components/FocusLock";
 import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { QuizPanel } from "@/features/student/QuizPanel";
@@ -86,6 +86,7 @@ import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
 import { supabase } from "@/lib/supabase";
 import type {
+  Assignment,
   JargonRunResponse,
   ChatInputModality,
   LearningSession,
@@ -413,8 +414,13 @@ function ChatPage() {
   // Persistent nav data: badge counts, the notifications list, and the grades summary feeding the
   // edge peeks — stays live while any panel is open.
   const navData = useStudentNavData();
-  // The quiz being taken, as a modal over the chat (the /quiz route is retired).
+  // Graded work runs under FULL LOCKDOWN (FocusLock): the quiz being taken, the assignment being
+  // submitted, and whether the open quiz's attempt is already finished (which relaxes the frame
+  // to a plain Close — viewing a result needs no lock).
   const [openQuizId, setOpenQuizId] = useState<string | null>(null);
+  const [openAssignmentId, setOpenAssignmentId] = useState<string | null>(null);
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const locked = openQuizId !== null || openAssignmentId !== null;
   // Count of skills due for spaced review — a small dismissible nudge card, once per browser session.
   const [reviewNudge, setReviewNudge] = useState<number | null>(null);
   // Scroll UX: only auto-stick when the student is already near the bottom; otherwise offer a
@@ -977,12 +983,12 @@ function ChatPage() {
     goView("pulse");
   };
 
-  // Hiding the chat under a view must not leave the mic hot: leaving RealtimeVoicePanel mounted
-  // but invisible+inert would keep the live session (and its audio) running with no reachable
-  // controls. Unmounting it triggers its full WebRTC/mic cleanup.
+  // Making the chat inert (under a panel OR under lockdown) must not leave the mic hot: leaving
+  // RealtimeVoicePanel mounted but unreachable would keep the live session (and its audio)
+  // running with no reachable controls. Unmounting it triggers its full WebRTC/mic cleanup.
   useEffect(() => {
-    if (view) setVoiceMode(false);
-  }, [view]);
+    if (view || locked) setVoiceMode(false);
+  }, [view, locked]);
 
   // Opening a lesson from the Classes view LOADS it in place (chat.tsx owns loadLesson), then
   // returns to the chat view — the old modal-era same-route navigate never actually reloaded.
@@ -1189,13 +1195,20 @@ function ChatPage() {
       <AmbientCanvas intensity={0.35} />
 
       {/* Floating corner chrome — no header, no bars. The wordmark and the settings avatar sit at
-          --z-header so they float above the panel scrim and stay reachable while a panel is open. */}
+          --z-header so they float above the panel scrim and stay reachable while a panel is open.
+          Under LOCKDOWN all four edges retract: inert, dimmed, nudged toward their edge. */}
       <CornerWordmark
         panelOpen={Boolean(view)}
+        dimmed={locked}
         onClosePanel={() => goView(null)}
         onScrollTop={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
       />
-      <div className="fixed right-4 top-3 z-[var(--z-header)]">
+      <div
+        inert={locked ? true : undefined}
+        className={`fixed right-4 top-3 z-[var(--z-header)] transition-[opacity,translate] duration-(--dur) ${
+          locked ? "pointer-events-none translate-x-2 opacity-30" : ""
+        }`}
+      >
         <ProfileMenu
           email={email ?? ""}
           mentor={mentor}
@@ -1209,6 +1222,7 @@ function ChatPage() {
           peeks, click opens the panel. */}
       <WorldArc
         view={view}
+        retracted={locked}
         notificationsUnread={navData.notificationsUnread}
         reviewDueCount={navData.reviewDueCount}
         nextDue={navData.nextDue}
@@ -1221,7 +1235,12 @@ function ChatPage() {
       {/* The left edge — the lesson journey rail (md+; mobile keeps the in-stream strip). Fixed
           chrome OUTSIDE the inert-able chat pane so the roadmap stays reachable over a panel. */}
       {lessonArc ? (
-        <div className="fixed left-0 top-1/2 z-[var(--z-header)] hidden w-12 -translate-y-1/2 justify-center md:flex">
+        <div
+          inert={locked ? true : undefined}
+          className={`fixed left-0 top-1/2 z-[var(--z-header)] hidden w-12 -translate-y-1/2 justify-center transition-[opacity,translate] duration-(--dur) md:flex ${
+            locked ? "pointer-events-none -translate-x-2 opacity-30" : ""
+          }`}
+        >
           <ChatStepperRail arc={lessonArc} activities={activities} onRestart={restartLesson} />
         </div>
       ) : null}
@@ -1233,9 +1252,9 @@ function ChatPage() {
       <div className="relative z-[var(--z-base)] grid h-full">
         <div
           className={`col-start-1 row-start-1 flex min-h-0 flex-col ${
-            view ? "pointer-events-none" : ""
+            view || locked ? "pointer-events-none" : ""
           }`}
-          inert={view ? true : undefined}
+          inert={view || locked ? true : undefined}
         >
           {/* Symmetric stage column — the journey rail is edge chrome now, not a gutter. */}
           <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-row px-5 pt-12 md:pt-10">
@@ -1359,8 +1378,11 @@ function ChatPage() {
                   lessonId={lessonId}
                   assignments={assignments}
                   assessments={assessments}
-                  onSubmitAssignment={submitStudentAssignment}
-                  onOpenQuiz={setOpenQuizId}
+                  onOpenAssignment={setOpenAssignmentId}
+                  onOpenQuiz={(id) => {
+                    setQuizCompleted(false);
+                    setOpenQuizId(id);
+                  }}
                 />
                 {lessonComplete && !followUp ? (
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
@@ -1448,7 +1470,10 @@ function ChatPage() {
                     notifications={navData.notifications}
                     onMarkRead={navData.markNotificationRead}
                     onOpenLesson={openLessonFromView}
-                    onOpenQuiz={setOpenQuizId}
+                    onOpenQuiz={(id) => {
+                      setQuizCompleted(false);
+                      setOpenQuizId(id);
+                    }}
                   />
                 ) : (
                   <ClassesGrid
@@ -1472,26 +1497,53 @@ function ChatPage() {
         ) : null}
       </div>
 
-      {/* Quiz-taking stays a FOCUSED modal over whatever surface is open (assessment deserves an
-          intentional frame). Closing re-fetches the assessments bundle so the work bar reflects a
-          fresh submission. */}
-      <ModalCard
+      {/* Graded work runs in a full FOCUS LOCKDOWN: no outside click, no ESC, no close X — the
+          only exits are Submit or the explicit inline Leave confirmation. The lock relaxes to a
+          plain Close once the attempt is finished (viewing a result). Exiting re-fetches the
+          assessments bundle so launchers reflect a fresh submission. */}
+      <FocusLock
         open={openQuizId !== null}
-        onOpenChange={(o) => {
-          if (!o) {
-            setOpenQuizId(null);
-            void fetchStudentAssessments()
-              .then(setAssessments)
-              .catch(() => {});
-          }
+        kind="Quiz"
+        locked={!quizCompleted}
+        leaveNote="Leave this quiz? Your unsubmitted answers stay in this attempt."
+        onExit={() => {
+          setOpenQuizId(null);
+          void fetchStudentAssessments()
+            .then(setAssessments)
+            .catch(() => {});
         }}
-        title="Quiz"
-        size="large"
       >
         {openQuizId ? (
-          <QuizPanel assessmentId={openQuizId} accessToken={accessToken || ""} voice={voice} />
+          <QuizPanel
+            assessmentId={openQuizId}
+            accessToken={accessToken || ""}
+            voice={voice}
+            onStatusChange={setQuizCompleted}
+          />
         ) : null}
-      </ModalCard>
+      </FocusLock>
+
+      <FocusLock
+        open={openAssignmentId !== null}
+        kind="Assignment"
+        locked
+        leaveNote="Leave without submitting? Your draft here will be lost."
+        onExit={() => setOpenAssignmentId(null)}
+      >
+        {openAssignmentId
+          ? (() => {
+              const assignment = assignments.assignments.find((a) => a.id === openAssignmentId);
+              return assignment ? (
+                <AssignmentFocus
+                  assignment={assignment}
+                  bundle={assignments}
+                  onSubmitAssignment={submitStudentAssignment}
+                  onSubmitted={() => setOpenAssignmentId(null)}
+                />
+              ) : null;
+            })()
+          : null}
+      </FocusLock>
     </div>
   );
 }
@@ -1942,27 +1994,29 @@ function RealtimeVoicePanel({
 // The slim work bar: one "Work due · N" row above the composer that expands into the full
 // assignment/quiz cards. Collapsed by default so due work stays one tap away without pushing
 // the composer down; renders nothing when the current lesson has no work.
+// The work bar collapsed to LAUNCHERS: graded work no longer submits inline — every row opens a
+// full-screen FocusLock (quiz or assignment). Summaries only, no forms.
 function WorkDock({
   lessonId,
   assignments,
   assessments,
-  onSubmitAssignment,
+  onOpenAssignment,
   onOpenQuiz,
 }: {
   lessonId: string;
   assignments: StudentAssignmentBundle;
   assessments: StudentAssessmentBundle;
-  onSubmitAssignment: Parameters<typeof AssignmentDock>[0]["onSubmitAssignment"];
+  onOpenAssignment: (assignmentId: string) => void;
   onOpenQuiz: (assessmentId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const assignmentCount = assignments.assignments.filter(
-    (a) => a.status === "assigned" && a.lesson_id === lessonId,
-  ).length;
-  const assessmentCount = assessments.assessments.filter(
-    (a) => a.status === "published" && a.lesson_id === lessonId,
-  ).length;
-  const count = assignmentCount + assessmentCount;
+  const lessonAssignments = assignments.assignments
+    .filter((a) => a.status === "assigned" && a.lesson_id === lessonId)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const lessonAssessments = assessments.assessments
+    .filter((a) => a.status === "published" && a.lesson_id === lessonId)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const count = lessonAssignments.length + lessonAssessments.length;
   if (!count) return null;
   return (
     <div className="mb-2">
@@ -1984,94 +2038,103 @@ function WorkDock({
         />
       </button>
       {expanded ? (
-        <div className="mt-2">
-          <AssignmentDock
-            lessonId={lessonId}
-            bundle={assignments}
-            onSubmitAssignment={onSubmitAssignment}
-          />
-          <AssessmentDock lessonId={lessonId} bundle={assessments} onOpenQuiz={onOpenQuiz} />
+        <div className="mt-2 space-y-2">
+          {lessonAssignments.map((assignment) => {
+            const recipient = assignments.recipients.find(
+              (item) => item.assignment_id === assignment.id,
+            );
+            return (
+              <WorkLauncherRow
+                key={assignment.id}
+                kind="Assignment"
+                title={assignment.title}
+                status={recipient?.status || "assigned"}
+                dueAt={assignment.due_at}
+                actionLabel={
+                  recipient?.status === "submitted" ? "Review / resubmit" : "Submit work"
+                }
+                onOpen={() => onOpenAssignment(assignment.id)}
+              />
+            );
+          })}
+          {lessonAssessments.map((assessment) => {
+            const recipient = assessments.recipients.find(
+              (item) => item.assessment_id === assessment.id,
+            );
+            const latestAttempt =
+              assessments.attempts.filter((att) => att.assessment_id === assessment.id)[0] || null;
+            return (
+              <WorkLauncherRow
+                key={assessment.id}
+                kind="Quiz"
+                title={assessment.title}
+                status={recipient?.status || "assigned"}
+                dueAt={assessment.due_at}
+                score={latestAttempt?.final_score ?? null}
+                actionLabel={recipient?.status === "complete" ? "View result" : "Open quiz"}
+                onOpen={() => onOpenQuiz(assessment.id)}
+              />
+            );
+          })}
         </div>
       ) : null}
     </div>
   );
 }
 
-function AssessmentDock({
-  lessonId,
-  bundle,
-  onOpenQuiz,
+function WorkLauncherRow({
+  kind,
+  title,
+  status,
+  dueAt,
+  score,
+  actionLabel,
+  onOpen,
 }: {
-  lessonId: string;
-  bundle: StudentAssessmentBundle;
-  onOpenQuiz: (assessmentId: string) => void;
+  kind: "Assignment" | "Quiz";
+  title: string;
+  status: string;
+  dueAt: string | null;
+  score?: number | null;
+  actionLabel: string;
+  onOpen: () => void;
 }) {
-  const visibleAssessments = bundle.assessments
-    .filter((assessment) => assessment.status === "published" && assessment.lesson_id === lessonId)
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-
-  if (!visibleAssessments.length) return null;
-
   return (
-    <div className="mb-3 space-y-2">
-      {visibleAssessments.map((assessment) => {
-        const recipient = bundle.recipients.find((item) => item.assessment_id === assessment.id);
-        const attempts = bundle.attempts.filter(
-          (attempt) => attempt.assessment_id === assessment.id,
-        );
-        const latestAttempt = attempts[0] || null;
-        const questionCount = bundle.items.filter(
-          (item) => item.assessment_id === assessment.id,
-        ).length;
-        return (
-          <GradientCard key={assessment.id} innerClassName="overflow-hidden">
-            <div className="bg-background/70 p-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                    <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    Quiz · {recipient?.status || "assigned"}
-                  </div>
-                  <div className="mt-1 text-[13.5px] font-medium text-foreground">
-                    {assessment.title}
-                  </div>
-                  <div className="mt-1 text-[11.5px] text-muted-foreground">
-                    {questionCount} question{questionCount === 1 ? "" : "s"}
-                    {assessment.due_at ? ` · Due ${formatChatDateTime(assessment.due_at)}` : ""}
-                  </div>
-                  {latestAttempt?.final_score !== null &&
-                  latestAttempt?.final_score !== undefined ? (
-                    <div className="mt-1 text-[11.5px] text-muted-foreground">
-                      Latest score {formatScore(latestAttempt.final_score, "not graded")}
-                    </div>
-                  ) : recipient?.status === "submitted" ? (
-                    <div className="mt-1 text-[11.5px] text-warning">
-                      Submitted · pending teacher review
-                    </div>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenQuiz(assessment.id)}
-                  className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted"
-                >
-                  {recipient?.status === "complete" ? "View result" : "Open quiz"}
-                </button>
-              </div>
-            </div>
-          </GradientCard>
-        );
-      })}
+    <div className="flex items-center gap-3 rounded-card border border-border/60 bg-depth-card px-3.5 py-2.5 shadow-card">
+      <div className="min-w-0 flex-1">
+        <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+          <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
+          {kind} · {status}
+        </div>
+        <div className="mt-0.5 truncate text-[13.5px] font-medium text-foreground">{title}</div>
+        <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+          {dueAt ? `Due ${formatChatDateTime(dueAt)}` : null}
+          {score !== null && score !== undefined
+            ? `${dueAt ? " · " : ""}Latest score ${formatScore(score, "not graded")}`
+            : ""}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted"
+      >
+        {actionLabel}
+      </button>
     </div>
   );
 }
 
-function AssignmentDock({
-  lessonId,
+// The assignment submission surface inside the FocusLock: instructions, the latest submission's
+// state, and the draft form (moved here from the retired inline AssignmentDock). A successful
+// submit exits the lockdown via onSubmitted.
+function AssignmentFocus({
+  assignment,
   bundle,
   onSubmitAssignment,
+  onSubmitted,
 }: {
-  lessonId: string;
+  assignment: Assignment;
   bundle: StudentAssignmentBundle;
   onSubmitAssignment: (input: {
     assignmentId: string;
@@ -2079,249 +2142,163 @@ function AssignmentDock({
     code: string;
     files: File[];
   }) => Promise<void>;
+  onSubmitted: () => void;
 }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<
-    Record<
-      string,
-      { content: string; code: string; files: File[]; saving: boolean; message: string }
-    >
-  >({});
-  const visibleAssignments = bundle.assignments
-    .filter((assignment) => assignment.status === "assigned" && assignment.lesson_id === lessonId)
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const [content, setContent] = useState("");
+  const [code, setCode] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
 
-  if (!visibleAssignments.length) return null;
+  const recipient = bundle.recipients.find((item) => item.assignment_id === assignment.id);
+  const submissions = bundle.submissions.filter(
+    (submission) => submission.assignment_id === assignment.id,
+  );
+  const latestSubmission = submissions[0] || null;
+  const submissionFiles = latestSubmission
+    ? bundle.files.filter((file) => file.submission_id === latestSubmission.id)
+    : [];
 
-  const getDraft = (assignmentId: string) =>
-    drafts[assignmentId] || { content: "", code: "", files: [], saving: false, message: "" };
-
-  const setDraft = (
-    assignmentId: string,
-    patch: Partial<{
-      content: string;
-      code: string;
-      files: File[];
-      saving: boolean;
-      message: string;
-    }>,
-  ) => {
-    setDrafts((current) => ({
-      ...current,
-      [assignmentId]: {
-        content: current[assignmentId]?.content || "",
-        code: current[assignmentId]?.code || "",
-        files: current[assignmentId]?.files || [],
-        saving: current[assignmentId]?.saving || false,
-        message: current[assignmentId]?.message || "",
-        ...patch,
-      },
-    }));
-  };
-
-  const submit = async (assignmentId: string) => {
-    const draft = getDraft(assignmentId);
-    if (!draft.content.trim() && !draft.code.trim() && !draft.files.length) {
-      setDraft(assignmentId, { message: "Add text, code, or a file before submitting." });
+  const submit = async () => {
+    if (!content.trim() && !code.trim() && !files.length) {
+      setMessage("Add text, code, or a file before submitting.");
       return;
     }
-    setDraft(assignmentId, { saving: true, message: "" });
+    setSaving(true);
+    setMessage("");
     try {
-      await onSubmitAssignment({
-        assignmentId,
-        content: draft.content,
-        code: draft.code,
-        files: draft.files,
-      });
-      setDraft(assignmentId, {
-        content: "",
-        code: "",
-        files: [],
-        saving: false,
-        message: "Submitted.",
-      });
+      await onSubmitAssignment({ assignmentId: assignment.id, content, code, files });
+      onSubmitted();
     } catch (error) {
-      setDraft(assignmentId, {
-        saving: false,
-        message: (error as Error).message || "Could not submit assignment.",
-      });
+      setSaving(false);
+      setMessage((error as Error).message || "Could not submit assignment.");
     }
   };
 
   return (
-    <div className="mb-3 space-y-2">
-      {visibleAssignments.map((assignment) => {
-        const recipient = bundle.recipients.find((item) => item.assignment_id === assignment.id);
-        const submissions = bundle.submissions.filter(
-          (submission) => submission.assignment_id === assignment.id,
-        );
-        const latestSubmission = submissions[0] || null;
-        const submissionFiles = latestSubmission
-          ? bundle.files.filter((file) => file.submission_id === latestSubmission.id)
-          : [];
-        const draft = getDraft(assignment.id);
-        const expanded = expandedId === assignment.id;
-        return (
-          <GradientCard key={assignment.id} innerClassName="overflow-hidden">
-            <div className="bg-background/70 p-3">
-              <button
-                type="button"
-                onClick={() => setExpandedId(expanded ? null : assignment.id)}
-                className="flex w-full items-start justify-between gap-3 text-left"
-              >
-                <span className="min-w-0">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                    <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    Assignment · {recipient?.status || "assigned"}
-                  </span>
-                  <span className="mt-1 block text-[13.5px] font-medium text-foreground">
-                    {assignment.title}
-                  </span>
-                  {assignment.due_at ? (
-                    <span className="mt-1 block text-[11.5px] text-muted-foreground">
-                      Due {formatChatDateTime(assignment.due_at)}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="shrink-0 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground">
-                  {expanded ? "Close" : "Open"}
-                </span>
-              </button>
+    <div>
+      <div className="text-[15px] font-medium text-foreground">{assignment.title}</div>
+      <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+        {recipient?.status || "assigned"}
+        {assignment.due_at ? ` · Due ${formatChatDateTime(assignment.due_at)}` : ""}
+      </div>
+      <p className="mt-3 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+        {assignment.instructions || "Submit your work when ready."}
+      </p>
 
-              {expanded ? (
-                <div className="mt-3 border-t border-border pt-3">
-                  <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
-                    {assignment.instructions || "Submit your work when ready."}
-                  </p>
-
-                  {latestSubmission ? (
-                    <div className="mt-3 rounded-2xl border border-border bg-background/45 p-3">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                        Latest submission · {latestSubmission.status}
-                      </div>
-                      {latestSubmission.feedback ? (
-                        <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground">
-                          {latestSubmission.feedback}
-                        </p>
-                      ) : (
-                        <p className="text-[12.5px] text-muted-foreground">
-                          Waiting for teacher feedback.
-                        </p>
-                      )}
-                      <div className="mt-2 text-[11.5px] text-muted-foreground">
-                        Score:{" "}
-                        {latestSubmission.score === null
-                          ? "not graded"
-                          : formatScore(latestSubmission.score, "not graded")}
-                      </div>
-                      {submissionFiles.length ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {submissionFiles.map((file) => {
-                            const fileState = submissionFileState(file);
-                            // Students can open their OWN submitted files: the storage SELECT
-                            // policy already permits owner reads for non-quarantined, non-purged
-                            // paths, so a signed URL works here just like teacher-side.
-                            if (fileState === "available") {
-                              return (
-                                <button
-                                  key={file.id}
-                                  type="button"
-                                  onClick={() => {
-                                    void getSubmissionFileSignedUrl(file)
-                                      .then((url) => window.open(url, "_blank", "noopener"))
-                                      .catch(() => {});
-                                  }}
-                                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                >
-                                  <Paperclip className="h-3 w-3" strokeWidth={1.7} />
-                                  {file.original_filename}
-                                </button>
-                              );
-                            }
-                            return (
-                              <span
-                                key={file.id}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground"
-                              >
-                                <Paperclip className="h-3 w-3" strokeWidth={1.7} />
-                                {file.original_filename}
-                                {fileState === "quarantined" ? " · flagged" : ""}
-                                {fileState === "purged" ? " · removed" : ""}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-3 grid gap-2">
-                    <textarea
-                      value={draft.content}
-                      onChange={(event) => setDraft(assignment.id, { content: event.target.value })}
-                      placeholder="Write your answer..."
-                      className="min-h-[74px] rounded-2xl border border-border bg-background/65 px-3 py-2 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
-                    />
-                    <CodeArea
-                      value={draft.code}
-                      onChange={(code) => setDraft(assignment.id, { code })}
-                      height={120}
-                      placeholder="Optional code..."
-                    />
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*,application/pdf,.doc,.docx,.txt,.md,.rtf,.csv,.zip,.py,.js,.ts,.java,.c,.cpp,.h,.cs,.html,.css,.json"
-                      onChange={(event) => {
-                        const picked = Array.from(event.target.files || []);
-                        if (picked.length > MAX_SUBMISSION_FILES) {
-                          setDraft(assignment.id, {
-                            files: [],
-                            message: `Attach at most ${MAX_SUBMISSION_FILES} files.`,
-                          });
-                          event.target.value = "";
-                          return;
-                        }
-                        const tooBig = picked.find((f) => f.size > MAX_SUBMISSION_FILE_BYTES);
-                        if (tooBig) {
-                          setDraft(assignment.id, {
-                            files: [],
-                            message: `"${tooBig.name}" is too large — files must be under ${Math.round(
-                              MAX_SUBMISSION_FILE_BYTES / (1024 * 1024),
-                            )} MB.`,
-                          });
-                          event.target.value = "";
-                          return;
-                        }
-                        setDraft(assignment.id, { files: picked, message: "" });
+      {latestSubmission ? (
+        <div className="mt-3 rounded-2xl border border-border bg-background/45 p-3">
+          <div className="mb-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+            Latest submission · {latestSubmission.status}
+          </div>
+          {latestSubmission.feedback ? (
+            <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground">
+              {latestSubmission.feedback}
+            </p>
+          ) : (
+            <p className="text-[12.5px] text-muted-foreground">Waiting for teacher feedback.</p>
+          )}
+          <div className="mt-2 text-[11.5px] text-muted-foreground">
+            Score:{" "}
+            {latestSubmission.score === null
+              ? "not graded"
+              : formatScore(latestSubmission.score, "not graded")}
+          </div>
+          {submissionFiles.length ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {submissionFiles.map((file) => {
+                const fileState = submissionFileState(file);
+                // Students can open their OWN submitted files: the storage SELECT policy already
+                // permits owner reads for non-quarantined, non-purged paths.
+                if (fileState === "available") {
+                  return (
+                    <button
+                      key={file.id}
+                      type="button"
+                      onClick={() => {
+                        void getSubmissionFileSignedUrl(file)
+                          .then((url) => window.open(url, "_blank", "noopener"))
+                          .catch(() => {});
                       }}
-                      className="rounded-2xl border border-border bg-background/65 px-3 py-2 text-[12.5px] text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-[11.5px] text-muted-foreground">
-                        {draft.message
-                          ? draft.message
-                          : draft.files.length
-                            ? `${draft.files.length} file${draft.files.length === 1 ? "" : "s"} ready`
-                            : null}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void submit(assignment.id)}
-                        disabled={draft.saving}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                      >
-                        <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
-                        {draft.saving ? "Submitting..." : "Submit"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <Paperclip className="h-3 w-3" strokeWidth={1.7} />
+                      {file.original_filename}
+                    </button>
+                  );
+                }
+                return (
+                  <span
+                    key={file.id}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-muted-foreground"
+                  >
+                    <Paperclip className="h-3 w-3" strokeWidth={1.7} />
+                    {file.original_filename}
+                    {fileState === "quarantined" ? " · flagged" : ""}
+                    {fileState === "purged" ? " · removed" : ""}
+                  </span>
+                );
+              })}
             </div>
-          </GradientCard>
-        );
-      })}
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid gap-2">
+        <textarea
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder="Write your answer..."
+          className="min-h-[110px] rounded-2xl border border-border bg-background/65 px-3 py-2 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+        />
+        <CodeArea value={code} onChange={setCode} height={140} placeholder="Optional code..." />
+        <input
+          type="file"
+          multiple
+          accept="image/*,application/pdf,.doc,.docx,.txt,.md,.rtf,.csv,.zip,.py,.js,.ts,.java,.c,.cpp,.h,.cs,.html,.css,.json"
+          onChange={(event) => {
+            const picked = Array.from(event.target.files || []);
+            if (picked.length > MAX_SUBMISSION_FILES) {
+              setFiles([]);
+              setMessage(`Attach at most ${MAX_SUBMISSION_FILES} files.`);
+              event.target.value = "";
+              return;
+            }
+            const tooBig = picked.find((f) => f.size > MAX_SUBMISSION_FILE_BYTES);
+            if (tooBig) {
+              setFiles([]);
+              setMessage(
+                `"${tooBig.name}" is too large — files must be under ${Math.round(
+                  MAX_SUBMISSION_FILE_BYTES / (1024 * 1024),
+                )} MB.`,
+              );
+              event.target.value = "";
+              return;
+            }
+            setFiles(picked);
+            setMessage("");
+          }}
+          className="rounded-2xl border border-border bg-background/65 px-3 py-2 text-[12.5px] text-foreground file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11.5px] text-muted-foreground">
+            {message
+              ? message
+              : files.length
+                ? `${files.length} file${files.length === 1 ? "" : "s"} ready`
+                : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
+            {saving ? "Submitting..." : "Submit"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

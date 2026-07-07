@@ -28,11 +28,15 @@ export function QuizPanel({
   assessmentId,
   accessToken,
   voice,
+  onStatusChange,
 }: {
   assessmentId: string;
   // For per-question read-aloud (accessibility): the same TTS control the chat uses.
   accessToken: string;
   voice: VoiceSettings;
+  // Fires with true once the attempt is no longer in progress (submitted/graded/returned) — the
+  // v5 FocusLock relaxes its lockdown to a plain Close on that signal.
+  onStatusChange?: (completed: boolean) => void;
 }) {
   const [bundle, setBundle] = useState<StudentAssessmentBundle | null>(null);
   const [attempt, setAttempt] = useState<AssessmentAttempt | null>(null);
@@ -162,6 +166,11 @@ export function QuizPanel({
   };
 
   const completed = attempt && attempt.status !== "in_progress";
+
+  useEffect(() => {
+    onStatusChange?.(Boolean(completed));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completed]);
 
   if (booting) {
     return <div className="py-6 text-[13px] text-muted-foreground">Loading quiz...</div>;

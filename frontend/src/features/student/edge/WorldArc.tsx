@@ -160,6 +160,7 @@ function PeekRow({ label, value }: { label: string; value: string }) {
 
 export function WorldArc({
   view,
+  retracted = false,
   notificationsUnread,
   reviewDueCount,
   nextDue,
@@ -169,6 +170,8 @@ export function WorldArc({
   onCloseView,
 }: {
   view: StudentView | undefined;
+  // Lockdown retraction: inert, faded, nudged toward its edge; the fan stays at rest.
+  retracted?: boolean;
   notificationsUnread: number;
   reviewDueCount: number;
   nextDue: StudentGradeRow | null;
@@ -186,7 +189,7 @@ export function WorldArc({
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const anyPeek = peeks.classes || peeks.pulse;
-  const fanned = fancy && (edgeHover || anyPeek);
+  const fanned = fancy && !retracted && (edgeHover || anyPeek);
 
   // The fan: both glyph wrappers tween along the arc between rest ±8° and open ±16°.
   useEffect(() => {
@@ -265,9 +268,10 @@ export function WorldArc({
 
   return (
     <div
-      className={`fixed right-1.5 top-1/2 z-[var(--z-header)] flex -translate-y-1/2 flex-col items-center ${
+      inert={retracted ? true : undefined}
+      className={`fixed right-1.5 top-1/2 z-[var(--z-header)] flex -translate-y-1/2 flex-col items-center transition-[opacity] duration-(--dur) ${
         fancy ? "gap-0" : "gap-1.5"
-      }`}
+      } ${retracted ? "pointer-events-none opacity-30" : ""}`}
       onPointerEnter={(e) => e.pointerType === "mouse" && setEdgeHover(true)}
       onPointerLeave={(e) => e.pointerType === "mouse" && setEdgeHover(false)}
     >
