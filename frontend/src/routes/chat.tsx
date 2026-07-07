@@ -37,11 +37,9 @@ import {
 } from "@/features/student/shell/studentViews";
 import { ProfileMenu } from "@/features/student/shell/ProfileMenu";
 import { WorldArc } from "@/features/student/edge/WorldArc";
-import { ClassesPanel } from "@/features/student/ClassesPanel";
-import { GradesPanel } from "@/features/student/GradesPanel";
-import { MessagesPanel } from "@/features/student/MessagesPanel";
-import { ReviewPanel } from "@/features/student/ReviewPanel";
-import { StudentNotifications } from "@/features/student/StudentNotifications";
+import { ClassesGrid } from "@/features/student/panels/ClassesGrid";
+import { ClassCanvas } from "@/features/student/panels/ClassCanvas";
+import { PulsePanel } from "@/features/student/panels/PulsePanel";
 import { ChatStepperRail, ChatStepperStrip } from "@/features/student/chat/ChatStepper";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
 import { prefersReducedMotion } from "@/lib/motion";
@@ -412,12 +410,8 @@ function ChatPage() {
     view?: StudentView;
     class?: string;
   };
-  // A DM deep-link into the Pulse activity feed (from a direct_message notification click). A
-  // one-shot TOKEN, not a bare id: seq makes re-clicking the SAME notification observable, and nav
-  // paths null it so a later plain Pulse open shows the feed instead of the old thread.
-  const [dmDeepLink, setDmDeepLink] = useState<{ channelId: string; seq: number } | null>(null);
-  // Persistent nav data: badge counts + the notifications list (shared with the Notifications
-  // surface) — stays live while any view is open.
+  // Persistent nav data: badge counts, the notifications list, and the grades summary feeding the
+  // edge peeks — stays live while any panel is open.
   const navData = useStudentNavData();
   // The quiz being taken, as a modal over the chat (the /quiz route is retired).
   const [openQuizId, setOpenQuizId] = useState<string | null>(null);
@@ -976,17 +970,9 @@ function ChatPage() {
     });
   };
 
-  // Opening Pulse WITHOUT a deep-link clears any stale one and consumes the unread dot (its feed
-  // is the messages surface now).
+  // Opening Pulse consumes the DM unread dot (its activity feed is the messages surface now; a
+  // direct_message row expands its thread inside the feed).
   const openPulse = () => {
-    setDmDeepLink(null);
-    navData.clearDmUnread();
-    goView("pulse");
-  };
-
-  // A DM notification click deep-links into its thread (seq makes every click observable).
-  const openDmFromNotification = (channelId: string) => {
-    setDmDeepLink((prev) => ({ channelId, seq: (prev?.seq ?? 0) + 1 }));
     navData.clearDmUnread();
     goView("pulse");
   };
@@ -1447,48 +1433,39 @@ function ChatPage() {
             key={`${view}:${classParam ?? ""}`}
             className="col-start-1 row-start-1 flex min-h-0 flex-col"
           >
-            <SlideOver title={VIEW_TITLES[view]} onClose={() => goView(null)} fill={false}>
-              {/* TEMPORARY (v5 P1): panels host the surviving v4 content so every flow stays
-                  reachable while the real ClassesGrid/ClassCanvas/PulsePanel land in P3. */}
+            <SlideOver
+              title={VIEW_TITLES[view]}
+              onClose={() => goView(null)}
+              onBack={view === "classes" && classParam ? () => goView("classes") : undefined}
+              backLabel="All classes"
+            >
               {view === "classes" ? (
-                <ClassesPanel onOpenLesson={openLessonFromView} />
+                classParam ? (
+                  <ClassCanvas
+                    classId={classParam}
+                    assignments={assignments}
+                    assessments={assessments}
+                    notifications={navData.notifications}
+                    onMarkRead={navData.markNotificationRead}
+                    onOpenLesson={openLessonFromView}
+                    onOpenQuiz={setOpenQuizId}
+                  />
+                ) : (
+                  <ClassesGrid
+                    dueByClass={navData.dueByClass}
+                    avgByClass={navData.avgByClass}
+                    onOpenClass={(id) => goView("classes", id)}
+                  />
+                )
               ) : (
-                <div className="space-y-8">
-                  <section>
-                    <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                      Messages
-                    </div>
-                    <div className="flex h-[min(52dvh,480px)] min-h-0 flex-col">
-                      <MessagesPanel deepLink={dmDeepLink} />
-                    </div>
-                  </section>
-                  <section>
-                    <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                      Notifications
-                    </div>
-                    <StudentNotifications
-                      notifications={navData.notifications}
-                      onMarkRead={navData.markNotificationRead}
-                      onMarkAll={navData.markAllNotificationsRead}
-                      onOpenDm={openDmFromNotification}
-                    />
-                  </section>
-                  <section>
-                    <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                      Review
-                    </div>
-                    <ReviewPanel
-                      accessToken={accessToken}
-                      mentorPreferences={mentorToPreferences(mentor)}
-                    />
-                  </section>
-                  <section>
-                    <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                      Grades
-                    </div>
-                    <GradesPanel />
-                  </section>
-                </div>
+                <PulsePanel
+                  grades={navData.grades}
+                  notifications={navData.notifications}
+                  onMarkRead={navData.markNotificationRead}
+                  onMarkAll={navData.markAllNotificationsRead}
+                  accessToken={accessToken}
+                  mentorPreferences={mentorToPreferences(mentor)}
+                />
               )}
             </SlideOver>
           </div>

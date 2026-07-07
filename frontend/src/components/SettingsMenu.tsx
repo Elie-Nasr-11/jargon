@@ -5,7 +5,6 @@ import gsap from "gsap";
 import { ExternalLink, LogOut, Moon, Settings, Sparkles, Sun, User } from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { ModalCard } from "./ModalCard";
-import { ProfilePanel } from "@/features/student/ProfilePanel";
 import { MentorControls } from "@/features/student/MentorControls";
 import { useTheme } from "@/lib/theme";
 import { useIsTouch } from "@/hooks/useIsTouch";
@@ -13,7 +12,7 @@ import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
 
-type StudentModal = "profile" | "mentor";
+type StudentModal = "mentor";
 
 // SettingsMenu is the teacher/admin console-header settings menu (Appearance / Campus Live /
 // Log out). It still accepts optional student mentor/voice props so a Profile + Mentor modal can
@@ -145,18 +144,6 @@ export function SettingsMenu({
             type="button"
             onClick={() => {
               close();
-              setModal("profile");
-            }}
-            className={rowClass}
-          >
-            <span className="flex items-center gap-2.5">
-              <User className="h-[15px] w-[15px]" strokeWidth={1.5} /> Profile
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              close();
               setModal("mentor");
             }}
             className={rowClass}
@@ -269,31 +256,20 @@ export function SettingsMenu({
         )}
 
       {isStudent && mentor && onMentorChange ? (
-        <>
-          <ModalCard
-            open={modal === "profile"}
-            onOpenChange={(o) => {
-              if (!o) setModal(null);
-            }}
-            title="Profile"
-          >
-            <ProfilePanel bare />
-          </ModalCard>
-          <ModalCard
-            open={modal === "mentor"}
-            onOpenChange={(o) => {
-              if (!o) setModal(null);
-            }}
-            title="Mentor"
-          >
-            <MentorControls
-              mentor={mentor}
-              onChange={onMentorChange}
-              voice={voice}
-              onVoiceChange={onVoiceChange}
-            />
-          </ModalCard>
-        </>
+        <ModalCard
+          open={modal === "mentor"}
+          onOpenChange={(o) => {
+            if (!o) setModal(null);
+          }}
+          title="Mentor"
+        >
+          <MentorControls
+            mentor={mentor}
+            onChange={onMentorChange}
+            voice={voice}
+            onVoiceChange={onVoiceChange}
+          />
+        </ModalCard>
       ) : null}
     </div>
   );
