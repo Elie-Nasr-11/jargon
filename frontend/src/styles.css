@@ -59,9 +59,28 @@
   --radius-card: 18px;
   --radius-pill: 999px;
 
-  /* elevation (shadow-card / shadow-pop) */
-  --shadow-card: 0 1px 2px rgba(10, 12, 20, 0.05), 0 8px 24px rgba(10, 12, 20, 0.06);
-  --shadow-pop: 0 12px 40px rgba(10, 12, 20, 0.16);
+  /* elevation (shadow-card / shadow-raised / shadow-pop). Indirected through --elev-* on
+     :root/.dark (like the colors) so the dark theme can swap in its ring-based recipe —
+     literals here would be inlined by Tailwind and never theme-switch. */
+  --shadow-card: var(--elev-card);
+  --shadow-raised: var(--elev-raised);
+  --shadow-pop: var(--elev-pop);
+
+  /* type scale (text-display / text-title / text-body / text-body-lg / text-meta /
+     text-overline). Conventions: display pairs with font-serif (view titles); overline
+     pairs with uppercase tracking-[0.1em] font-medium text-muted-foreground. */
+  --text-display: 26px;
+  --text-display--line-height: 1.15;
+  --text-title: 17px;
+  --text-title--line-height: 1.3;
+  --text-body: 14px;
+  --text-body--line-height: 1.55;
+  --text-body-lg: 15px;
+  --text-body-lg--line-height: 1.65;
+  --text-meta: 12px;
+  --text-meta--line-height: 1.4;
+  --text-overline: 11px;
+  --text-overline--line-height: 1.3;
 }
 
 :root {
@@ -128,7 +147,19 @@
   /* focus ring */
   --ring: rgba(10, 10, 10, 0.34);
 
-  /* motion durations */
+  /* elevation ramp. Surface layering recipe:
+       L0 page     — AmbientCanvas + --background; never shadowed.
+       L1 raised   — bg-depth-card (or a grad-border face) + shadow-card.
+       L2 floating — popovers, anchored cards, the composer, jump pill: shadow-raised.
+       L3 overlay  — quiz modal, drawer: shadow-pop + scrim.
+     Dark overrides bake a 1px light ring into the shadow (see .dark) because pure dark
+     shadows vanish on a near-black page. */
+  --elev-card: 0 1px 2px rgba(10, 12, 20, 0.05), 0 8px 24px rgba(10, 12, 20, 0.06);
+  --elev-raised: 0 2px 4px rgba(10, 12, 20, 0.06), 0 10px 32px rgba(10, 12, 20, 0.1);
+  --elev-pop: 0 12px 40px rgba(10, 12, 20, 0.16), 0 2px 8px rgba(10, 12, 20, 0.08);
+
+  /* motion durations. In Tailwind v4 markup use the var shorthand directly:
+     duration-(--dur-fast) / duration-(--dur) / duration-(--dur-slow). */
   --dur-fast: 0.16s;
   --dur: 0.24s;
   --dur-slow: 0.45s;
@@ -185,6 +216,16 @@
 
   /* focus ring (dark) */
   --ring: rgba(245, 245, 247, 0.4);
+
+  /* elevation (dark): near-black spreads for grounding + a baked-in 1px light ring for the
+     edge — rgba(10,12,20) shadows are invisible on a #0b0b0d page. */
+  --elev-card:
+    0 0 0 1px rgba(245, 245, 247, 0.055), 0 1px 2px rgba(0, 0, 0, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.42);
+  --elev-raised:
+    0 0 0 1px rgba(245, 245, 247, 0.07), 0 2px 6px rgba(0, 0, 0, 0.55),
+    0 12px 32px rgba(0, 0, 0, 0.5);
+  --elev-pop: 0 0 0 1px rgba(245, 245, 247, 0.09), 0 16px 48px rgba(0, 0, 0, 0.65);
 }
 
 @font-face {
@@ -194,6 +235,22 @@
   font-display: swap;
   src: url("https://fonts.gstatic.com/s/instrumentserif/v4/jizDREVItHgc8qDIbSTKq4XKVqOLkqJ55b9Pu14.woff2")
     format("woff2");
+}
+
+/* Inter — first in --font-sans but previously never loaded (silently fell back to system
+   fonts). v20 ships as a variable font: one latin woff2 covers every weight, so a single
+   face with the full weight range serves 400/500/600. The body's font-feature-settings
+   ("cv11","ss01") only take effect with the real Inter. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2")
+    format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 html,
@@ -378,6 +435,31 @@ body {
 }
 .run-bounce-dot:nth-child(3) {
   animation-delay: 0.24s;
+}
+
+/* Hover elevation for interactive cards: lift one tier on hover, settle on press.
+   (The global reduced-motion block below neutralizes these transitions.) */
+.elev-hover {
+  transition:
+    transform var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+.elev-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--elev-raised);
+}
+.elev-hover:active {
+  transform: translateY(0);
+  box-shadow: var(--elev-card);
+}
+
+/* The composer sits highest of the in-flow surfaces; focusing it steps it up one more. */
+.composer-elev {
+  box-shadow: var(--elev-raised);
+  transition: box-shadow var(--dur) ease;
+}
+.composer-elev:focus-within {
+  box-shadow: var(--elev-pop);
 }
 
 .hairline {
