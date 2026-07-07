@@ -229,7 +229,7 @@ function LeftProgressRail({
   return (
     <div
       ref={wrapRef}
-      className="pointer-events-none fixed left-2 top-1/2 z-40 flex -translate-y-1/2 items-start gap-2"
+      className="pointer-events-none fixed left-2 top-1/2 z-40 flex -translate-y-1/2 items-center gap-2"
     >
       <button
         type="button"

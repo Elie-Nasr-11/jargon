@@ -254,3 +254,16 @@ Options:
 - Continue stateless `answers`.
 - Use `preset_answers` keyed by variable.
 - Add a resumable execution/session model later.
+
+## Pre-existing: switching lessons while already on /chat is a no-op (found during nav v3 review)
+
+`ClassesModal.openLesson` does `store.setLessonId(id)` + `navigate({to:"/chat"})`. When the student
+is already on `/chat` (the common case — e.g. the completion banner's "Pick your next lesson"), the
+same-route navigate does NOT remount `ChatPage`, and the bootstrap effect (deps `[navigate,
+bootAttempt]`) never re-reads `store.getLessonId()`, so the newly-picked lesson is never loaded — only
+a full page reload recovers. `store.setLessonId` fires a `jargon:store` CustomEvent that has no
+listener. This predates the nav v3 restructure (openLesson is unchanged) but v3 makes it the primary
+"next lesson" path. Fix options: (a) pass an `onSwitchLesson` from ChatPage into ClassesModal that
+calls the in-scope `loadLesson(id, accessToken, mentor)` directly (cleanest); (b) listen for the
+`jargon:store` event in ChatPage and bump `bootAttempt` when the store lesson id differs; (c) key the
+ChatPage subtree on lessonId. Deferred from the nav change to keep it scoped + avoid boot-flow risk.

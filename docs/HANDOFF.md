@@ -36,14 +36,23 @@ Files:
   drawer). DELETED `features/student/VoiceControls.tsx`, `features/student/StudentMiniChat.tsx`.
 
 Tests run: tsc 0 · lint 0 errors (12 pre-existing warns) · build ok. Adversarial review workflow
-run before ship (findings folded in / noted below).
+(3 dimensions × verify) run before ship; 3 confirmed findings fixed, 1 deferred (below).
+
+Review fixes folded in:
+- FIXED: notification→Messages deep-link trapped the user (Back re-opened the same DM). MessagesPanel
+  now consumes the deep-link once (consumedDeepLinkRef).
+- FIXED: the left rail's trigger button jumped upward when the roadmap panel opened (wrapper grew;
+  items-start). Changed to items-center so the button stays pinned at viewport center.
+- FIXED: the Messages badge ignored DMs unread from before load. useStudentNavData now seeds dmUnread
+  from unread direct_message notifications on mount.
+- Verified NOT bugs: the drawer(Sheet)→modal(Dialog) focus/pointer-events transition (Radix restores
+  correctly), and the Sheet close-X overlap.
 
 Remaining concerns:
-- Drawer(Radix Sheet) → section-modal(Radix Dialog) transition: the two Radix dialogs swap in one
-  interaction — smoke-test that clicking a drawer item opens the modal with the page still clickable
-  (no stuck body pointer-events). If it bites, defer setOpenModal by a tick.
-- Left rail overlays the chat at the left edge; smoke-test it doesn't obscure content on narrow
-  widths and that the composer stays clickable.
+- DEFERRED (pre-existing, see OPEN_QUESTIONS.md): switching lessons while already on /chat is a no-op
+  — ClassesModal.openLesson does store.setLessonId + same-route navigate, which never reloads. The
+  completion banner's "Pick your next lesson" now routes through this. Out of scope for the nav change
+  (boot-flow risk); documented with fix options.
 - SettingsMenu keeps its (now student-unused) Profile/Mentor modal branches — harmless dead-for-
   students code; teacher/admin console header unchanged.
 

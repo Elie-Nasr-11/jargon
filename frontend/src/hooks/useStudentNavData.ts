@@ -29,7 +29,13 @@ export function useStudentNavData() {
         if (!uid || cancelled) return;
         setMeId(uid);
         void fetchNotifications()
-          .then((rows) => !cancelled && setNotifications(rows))
+          .then((rows) => {
+            if (cancelled) return;
+            setNotifications(rows);
+            // Seed the Messages dot from any unread direct_message notification (a DM insert writes
+            // one), so the badge reflects DMs unread from before load — not only live arrivals.
+            if (rows.some((n) => n.kind === "direct_message" && !n.read_at)) setDmUnread(true);
+          })
           .catch(() => {});
         void fetchReviewDue()
           .then((rows) => !cancelled && setReviewDueCount(rows.length))

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { StateNote } from "@/components/StateNote";
 import { DmThread } from "@/features/comms/DmThread";
@@ -70,15 +70,18 @@ export function MessagesPanel({ initialChannelId }: { initialChannelId?: string 
     return map;
   }, [channels]);
 
-  // Deep-link: once channels are loaded, open the requested one.
+  // Deep-link: once channels are loaded, open the requested one — but only ONCE, so tapping Back
+  // (which nulls activeChannel) doesn't immediately re-open the same thread and trap the user.
+  const consumedDeepLinkRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!initialChannelId || activeChannel) return;
+    if (!initialChannelId || consumedDeepLinkRef.current === initialChannelId) return;
     const channel = channels.find((c) => c.id === initialChannelId);
     if (channel) {
+      consumedDeepLinkRef.current = initialChannelId;
       setActiveChannel(channel);
       setActiveTeacherName(teacherNameById.get(channel.teacher_id) ?? "Teacher");
     }
-  }, [initialChannelId, channels, activeChannel, teacherNameById]);
+  }, [initialChannelId, channels, teacherNameById]);
 
   const selectTeacher = async (t: MyTeacher) => {
     if (!meId || opening) return;
