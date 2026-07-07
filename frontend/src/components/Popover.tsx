@@ -10,6 +10,7 @@ export function Popover({
   children,
   panelClassName,
   panelStyle,
+  placement = "bottom-end",
 }: {
   open: boolean;
   onClose: () => void;
@@ -17,6 +18,9 @@ export function Popover({
   children: ReactNode;
   panelClassName?: string;
   panelStyle?: React.CSSProperties;
+  // bottom-end: dropdown under a right-aligned trigger (default). right-start: flyout to the
+  // trigger's right, top-aligned (the chat stepper's roadmap).
+  placement?: "bottom-end" | "right-start";
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +46,11 @@ export function Popover({
       {trigger}
       {open ? (
         <div
-          className={`absolute right-0 top-[calc(100%+8px)] z-[var(--z-menu)] ${panelClassName ?? ""}`}
+          className={`absolute z-[var(--z-menu)] ${
+            placement === "right-start"
+              ? "left-[calc(100%+10px)] top-0"
+              : "right-0 top-[calc(100%+8px)]"
+          } ${panelClassName ?? ""}`}
           style={panelStyle}
         >
           {children}

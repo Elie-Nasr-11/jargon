@@ -34,6 +34,7 @@ import { Sidebar } from "@/features/student/shell/Sidebar";
 import { ViewHost } from "@/features/student/shell/ViewHost";
 import { isStudentView, type StudentView } from "@/features/student/shell/studentViews";
 import { ProfileMenu } from "@/features/student/shell/ProfileMenu";
+import { ChatStepperRail, ChatStepperStrip } from "@/features/student/chat/ChatStepper";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
 import {
   DEFAULT_MENTOR,
@@ -190,92 +191,6 @@ function deriveLessonArc(
     upcoming,
     next: upcoming[0] || null,
   };
-}
-
-// A thin vertical progress rail pinned to the LEFT edge during a lesson: a column of step segments
-// (done / current / upcoming) + "N/M". Clicking expands a panel to the RIGHT with the full roadmap
-// (LessonMilestones) + Restart; it closes on outside-tap or Escape. Overlays the chat (fixed, z-40);
-// an open modal (z-50) covers it.
-function LeftProgressRail({
-  arc,
-  activities = [],
-  onRestart,
-}: {
-  arc: LessonArc;
-  activities?: LessonActivity[];
-  onRestart?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: PointerEvent) => {
-      if (wrapRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  if (arc.total <= 1) return null;
-  return (
-    <div
-      ref={wrapRef}
-      className="pointer-events-none fixed left-2 top-1/2 z-40 flex -translate-y-1/2 items-center gap-2"
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-label={`Lesson progress: step ${arc.step} of ${arc.total}`}
-        className="pointer-events-auto flex flex-col items-center gap-1.5 rounded-full border border-border bg-background/80 px-1.5 py-2 shadow-sm backdrop-blur-md transition-colors hover:bg-muted/60"
-      >
-        <span className="flex flex-col items-center gap-1" aria-hidden>
-          {Array.from({ length: arc.total }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-2.5 w-1.5 rounded-full ${
-                i < arc.step - 1
-                  ? "bg-foreground/35"
-                  : i === arc.step - 1
-                    ? "bg-foreground"
-                    : "bg-border"
-              }`}
-            />
-          ))}
-        </span>
-        <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
-          {arc.step}/{arc.total}
-        </span>
-      </button>
-      {open ? (
-        <div className="pointer-events-auto max-h-[70vh] w-[min(320px,calc(100vw-56px))] overflow-y-auto rounded-2xl border border-border bg-background p-3 shadow-lg">
-          <LessonMilestones arc={arc} activities={activities} />
-          {onRestart ? (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onRestart();
-              }}
-              className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <RotateCcw className="h-3 w-3" strokeWidth={1.8} />
-              Restart lesson
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 function turnToMessage(turn: LearningTurn): Msg | null {
@@ -1299,185 +1214,208 @@ function ChatPage() {
               }`}
               inert={view ? true : undefined}
             >
-              <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col px-5 pt-10">
-                {activeLiveViewers.length ? (
-                  <div className="mb-3 flex justify-center">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-info/40 bg-info/12 px-3 py-1.5 text-[12px] text-info">
-                      <span className="h-1.5 w-1.5 rounded-full bg-info" />
-                      Teacher viewing
-                      {activeLiveViewers.length > 1 ? ` · ${activeLiveViewers.length}` : ""}
-                    </div>
-                  </div>
-                ) : null}
-                {sessionHeld ? (
-                  <div className="mb-3 flex justify-center">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-3.5 py-1.5 text-[12px] text-warning">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
-                      Your teacher paused the session — hang tight
-                    </div>
-                  </div>
-                ) : null}
-                {surfaceError && !booting ? (
-                  <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
-                    <span className="min-w-0 flex-1">{surfaceError}</span>
-                    <button
-                      type="button"
-                      onClick={() => setSurfaceError("")}
-                      className="shrink-0 text-[12px] underline underline-offset-2"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                ) : null}
-                {reviewNudge ? (
-                  <div className="mb-3 flex items-center gap-3 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-[13px] text-foreground">
-                    <RotateCcw className="h-4 w-4 shrink-0 text-warning" strokeWidth={1.7} />
-                    <span className="min-w-0 flex-1">
-                      {reviewNudge} {reviewNudge === 1 ? "skill is" : "skills are"} due for a quick
-                      review.
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        sessionStorage.setItem("jargon-review-nudge", "1");
-                        setReviewNudge(null);
-                        goView("review");
-                      }}
-                      className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
-                    >
-                      Review now
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        sessionStorage.setItem("jargon-review-nudge", "1");
-                        setReviewNudge(null);
-                      }}
-                      aria-label="Dismiss review reminder"
-                      className="shrink-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                    >
-                      Later
-                    </button>
-                  </div>
-                ) : null}
-                <div
-                  ref={scrollRef}
-                  className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5"
-                >
-                  {msgs.map((m) => (
-                    <MessageRow
-                      key={m.id}
-                      msg={m}
-                      // Quiz choices are live ONLY on the newest mentor message — historical bubbles
-                      // keep their text but their buttons are gone, so an old quiz can't be re-answered.
-                      choicesActive={m.id === lastBotId}
-                      choicesDisabled={sending || runInFlight}
-                      onUseCode={useCodeInEditor}
-                      onChooseChoice={sendChoice}
-                      onRetry={retryTurn}
-                      onResourceEvent={handleResourceEvent}
-                      voice={voice}
-                      accessToken={accessToken || ""}
-                      lessonId={lessonId}
-                      sessionId={sessionId}
-                      onVoiceEvent={handleVoiceEvent}
+              <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[820px] flex-1 flex-row px-5 pt-10">
+                {/* Integrated progress rail — the chat column's left gutter (md+); mobile gets a
+                    strip above the stream instead. Lives OUTSIDE the stream scroll container so
+                    it never scrolls away. */}
+                <div className="hidden w-14 shrink-0 md:flex">
+                  {lessonArc ? (
+                    <ChatStepperRail
+                      arc={lessonArc}
+                      activities={activities}
+                      onRestart={restartLesson}
                     />
-                  ))}
-                  {showJump ? (
-                    <div className="sticky bottom-1 z-10 flex justify-center">
+                  ) : null}
+                </div>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  {lessonArc ? (
+                    <div className="md:hidden">
+                      <ChatStepperStrip
+                        arc={lessonArc}
+                        activities={activities}
+                        onRestart={restartLesson}
+                      />
+                    </div>
+                  ) : null}
+                  {activeLiveViewers.length ? (
+                    <div className="mb-3 flex justify-center">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-info/40 bg-info/12 px-3 py-1.5 text-[12px] text-info">
+                        <span className="h-1.5 w-1.5 rounded-full bg-info" />
+                        Teacher viewing
+                        {activeLiveViewers.length > 1 ? ` · ${activeLiveViewers.length}` : ""}
+                      </div>
+                    </div>
+                  ) : null}
+                  {sessionHeld ? (
+                    <div className="mb-3 flex justify-center">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-3.5 py-1.5 text-[12px] text-warning">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
+                        Your teacher paused the session — hang tight
+                      </div>
+                    </div>
+                  ) : null}
+                  {surfaceError && !booting ? (
+                    <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
+                      <span className="min-w-0 flex-1">{surfaceError}</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNewBelow(false);
-                          scrollRef.current?.scrollTo({
-                            top: scrollRef.current.scrollHeight,
-                            behavior: "smooth",
-                          });
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3.5 py-1.5 text-[12px] font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted"
+                        onClick={() => setSurfaceError("")}
+                        className="shrink-0 text-[12px] underline underline-offset-2"
                       >
-                        <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
-                        {newBelow ? "New messages" : "Jump to latest"}
+                        Dismiss
                       </button>
                     </div>
                   ) : null}
-                </div>
-                <div
-                  ref={composerWrapRef}
-                  className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-                >
-                  <WorkDock
-                    lessonId={lessonId}
-                    assignments={assignments}
-                    assessments={assessments}
-                    onSubmitAssignment={submitStudentAssignment}
-                    onOpenQuiz={setOpenQuizId}
-                  />
-                  {lessonComplete && !followUp ? (
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border bg-background/70 px-5 py-4">
-                      <div className="min-w-0">
-                        <div className="text-[14px] font-medium text-foreground">
-                          Lesson complete
-                        </div>
-                        <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-                          Nice work. Pick your next lesson, or keep chatting about this one.
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => goView("classes")}
-                          className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
-                        >
-                          Pick your next lesson
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFollowUp(true)}
-                          className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
-                        >
-                          Ask a follow-up
-                        </button>
-                      </div>
+                  {reviewNudge ? (
+                    <div className="mb-3 flex items-center gap-3 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-[13px] text-foreground">
+                      <RotateCcw className="h-4 w-4 shrink-0 text-warning" strokeWidth={1.7} />
+                      <span className="min-w-0 flex-1">
+                        {reviewNudge} {reviewNudge === 1 ? "skill is" : "skills are"} due for a
+                        quick review.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sessionStorage.setItem("jargon-review-nudge", "1");
+                          setReviewNudge(null);
+                          goView("review");
+                        }}
+                        className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
+                      >
+                        Review now
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sessionStorage.setItem("jargon-review-nudge", "1");
+                          setReviewNudge(null);
+                        }}
+                        aria-label="Dismiss review reminder"
+                        className="shrink-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                      >
+                        Later
+                      </button>
                     </div>
                   ) : null}
-                  {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
-              imperative handle for "Use this code" — survives entering/leaving voice mode. */}
                   <div
-                    className={voiceMode || (lessonComplete && !followUp) ? "hidden" : undefined}
+                    ref={scrollRef}
+                    className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5"
                   >
-                    <Composer
-                      ref={composerRef}
-                      key={lessonId}
-                      initialCode={starterCode}
-                      initialLanguage="jargon"
-                      onSendText={sendUser}
-                      onRunCode={runCode}
-                      onSendCodeResult={sendCodeResult}
-                      onVoiceEvent={handleVoiceEvent}
-                      // Lock inputs while a teacher has the session paused (Phase 3).
-                      sending={sending || sessionHeld}
-                      canStartVoice
-                      onStartVoice={() => setVoiceMode(true)}
-                    />
+                    {msgs.map((m) => (
+                      <MessageRow
+                        key={m.id}
+                        msg={m}
+                        // Quiz choices are live ONLY on the newest mentor message — historical bubbles
+                        // keep their text but their buttons are gone, so an old quiz can't be re-answered.
+                        choicesActive={m.id === lastBotId}
+                        choicesDisabled={sending || runInFlight}
+                        onUseCode={useCodeInEditor}
+                        onChooseChoice={sendChoice}
+                        onRetry={retryTurn}
+                        onResourceEvent={handleResourceEvent}
+                        voice={voice}
+                        accessToken={accessToken || ""}
+                        lessonId={lessonId}
+                        sessionId={sessionId}
+                        onVoiceEvent={handleVoiceEvent}
+                      />
+                    ))}
+                    {showJump ? (
+                      <div className="sticky bottom-1 z-10 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewBelow(false);
+                            scrollRef.current?.scrollTo({
+                              top: scrollRef.current.scrollHeight,
+                              behavior: "smooth",
+                            });
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3.5 py-1.5 text-[12px] font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                          {newBelow ? "New messages" : "Jump to latest"}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
-                  {voiceMode ? (
-                    <RealtimeVoicePanel
-                      accessToken={accessToken || ""}
+                  <div
+                    ref={composerWrapRef}
+                    className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+                  >
+                    <WorkDock
                       lessonId={lessonId}
-                      sessionId={sessionId}
-                      voice={voice}
-                      autoStart
-                      onClose={() => setVoiceMode(false)}
-                      onVoiceEvent={handleVoiceEvent}
-                      onSubmitVoiceTurn={async (text, confidence) =>
-                        submitTextAnswer(text, {
-                          inputModality: "audio_session",
-                          transcriptConfidence: confidence ?? null,
-                        })
-                      }
+                      assignments={assignments}
+                      assessments={assessments}
+                      onSubmitAssignment={submitStudentAssignment}
+                      onOpenQuiz={setOpenQuizId}
                     />
-                  ) : null}
+                    {lessonComplete && !followUp ? (
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border bg-background/70 px-5 py-4">
+                        <div className="min-w-0">
+                          <div className="text-[14px] font-medium text-foreground">
+                            Lesson complete
+                          </div>
+                          <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+                            Nice work. Pick your next lesson, or keep chatting about this one.
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => goView("classes")}
+                            className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+                          >
+                            Pick your next lesson
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFollowUp(true)}
+                            className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+                          >
+                            Ask a follow-up
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
+              imperative handle for "Use this code" — survives entering/leaving voice mode. */}
+                    <div
+                      className={voiceMode || (lessonComplete && !followUp) ? "hidden" : undefined}
+                    >
+                      <Composer
+                        ref={composerRef}
+                        key={lessonId}
+                        initialCode={starterCode}
+                        initialLanguage="jargon"
+                        onSendText={sendUser}
+                        onRunCode={runCode}
+                        onSendCodeResult={sendCodeResult}
+                        onVoiceEvent={handleVoiceEvent}
+                        // Lock inputs while a teacher has the session paused (Phase 3).
+                        sending={sending || sessionHeld}
+                        canStartVoice
+                        onStartVoice={() => setVoiceMode(true)}
+                      />
+                    </div>
+                    {voiceMode ? (
+                      <RealtimeVoicePanel
+                        accessToken={accessToken || ""}
+                        lessonId={lessonId}
+                        sessionId={sessionId}
+                        voice={voice}
+                        autoStart
+                        onClose={() => setVoiceMode(false)}
+                        onVoiceEvent={handleVoiceEvent}
+                        onSubmitVoiceTurn={async (text, confidence) =>
+                          submitTextAnswer(text, {
+                            inputModality: "audio_session",
+                            transcriptConfidence: confidence ?? null,
+                          })
+                        }
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </main>
             </div>
