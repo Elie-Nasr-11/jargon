@@ -13,6 +13,7 @@ export function ModalCard({
   title,
   children,
   className,
+  overlayClassName,
   size = "default",
 }: {
   open: boolean;
@@ -20,6 +21,8 @@ export function ModalCard({
   title: string;
   children: ReactNode;
   className?: string;
+  // Per-modal scrim override — e.g. a strong whole-background blur for focus cards.
+  overlayClassName?: string;
   // "large" = the near-full-viewport hub variant: wider, and a FIXED height so tab switches
   // inside don't make the card jump.
   size?: "default" | "large";
@@ -27,7 +30,10 @@ export function ModalCard({
   const width = className ?? (size === "large" ? "sm:max-w-4xl" : "sm:max-w-md");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`block border-0 bg-transparent p-0 shadow-none ${width}`}>
+      <DialogContent
+        overlayClassName={overlayClassName}
+        className={`block border-0 bg-transparent p-0 shadow-none ${width}`}
+      >
         <GradientCard className="shadow-pop">
           <div className={`flex flex-col ${size === "large" ? "h-[86dvh]" : "max-h-[82vh]"}`}>
             <DialogTitle className="px-5 pb-2 pr-10 pt-4 text-[12px] font-medium uppercase tracking-[0.1em] text-muted-foreground">

@@ -599,28 +599,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     <Mic className="h-[15px] w-[15px]" strokeWidth={1.8} />
                   )}
                 </button>
-                {/* Live voice is its own ALWAYS-VISIBLE button (it used to hide behind an empty
-                    input, morphing with Send) — dictation (mic) and live voice stay distinct. */}
-                {canStartVoice && onStartVoice ? (
+                {/* ONE primary slot, ChatGPT-style: an empty box offers talk-out-loud; typing
+                    swaps it to Send. Same size and styling both ways — no layout shift. Enter on
+                    empty stays a no-op (send() guards); voice starts by click/tap only. */}
+                {!text.trim() && canStartVoice && onStartVoice ? (
                   <button
                     type="button"
                     onClick={onStartVoice}
                     disabled={sending}
-                    aria-label="Start a live voice session"
+                    aria-label="Talk with the Mentor out loud"
                     title="Talk with the Mentor out loud"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
                   >
                     <AudioLines className="h-[15px] w-[15px]" strokeWidth={1.8} />
                   </button>
-                ) : null}
-                <button
-                  onClick={send}
-                  disabled={sending || !text.trim()}
-                  aria-label="Send"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
-                >
-                  <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
-                </button>
+                ) : (
+                  <button
+                    onClick={send}
+                    disabled={sending || !text.trim()}
+                    aria-label="Send"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
+                  >
+                    <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
+                  </button>
+                )}
               </div>
               {dictating || voiceError || dictationConfidence !== null ? (
                 <div className="px-10 text-[11.5px] text-muted-foreground">

@@ -20,8 +20,9 @@ export function Popover({
   panelClassName?: string;
   panelStyle?: React.CSSProperties;
   // bottom-end: dropdown under a right-aligned trigger (default). right-start: flyout to the
-  // trigger's right, top-aligned (the chat stepper's roadmap).
-  placement?: "bottom-end" | "right-start";
+  // trigger's right, top-aligned (the chat stepper's roadmap). top-start: menu opening UPWARD
+  // from a bottom-anchored trigger (the sidebar account row).
+  placement?: "bottom-end" | "right-start" | "top-start";
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   usePopoverDismiss(wrapRef, onClose, open);
@@ -34,7 +35,9 @@ export function Popover({
           className={`absolute z-[var(--z-menu)] ${
             placement === "right-start"
               ? "left-[calc(100%+10px)] top-1/2 -translate-y-1/2"
-              : "right-0 top-[calc(100%+8px)]"
+              : placement === "top-start"
+                ? "bottom-[calc(100%+8px)] left-0"
+                : "right-0 top-[calc(100%+8px)]"
           } ${panelClassName ?? ""}`}
           style={panelStyle}
         >

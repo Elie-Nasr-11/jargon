@@ -1,9 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { GraduationCap } from "lucide-react";
-import gsap from "gsap";
 import { StateNote } from "@/components/StateNote";
-import { useCoarsePointer } from "@/hooks/useCoarsePointer";
-import { prefersReducedMotion } from "@/lib/motion";
 import { formatScore } from "@/lib/format";
 import {
   fetchClassScopedLessons,
@@ -12,137 +9,39 @@ import {
 } from "@/lib/api";
 import type { StudentClass } from "@/lib/types";
 
-// The Classes panel at rest: a grid of class cards. Rest shows name/org/due-pill; hovering or
-// focusing a card expands a stat footer (due · next lesson · avg) — the "next lesson" is computed
-// lazily on FIRST peek per class, cached per GRID MOUNT (every panel open is a natural refresh —
-// a page-life cache went stale the moment a lesson was completed). On coarse pointers the footer
-// is always expanded. Click opens the class canvas (?view=classes&class=id).
+// The Classes page: a grid of STATIC class cards — name/org/due pill up top, a stat footer
+// (next lesson · to do · average) always visible below. No hover motion, no expanding footers
+// (the v5 peek mechanic died with the v6 shell). Next lessons are computed eagerly after the
+// classes load (scoped lessons × own progress); the grid remounts per page open, so every open
+// is a natural refresh. Click opens the class canvas (?view=classes&class=id).
 
-type PeekCaches = {
-  nextLesson: Map<string, string | null>;
-  progress: Promise<Record<string, number>> | null;
-};
-
-async function computeNextLesson(caches: PeekCaches, classId: string): Promise<string | null> {
-  if (caches.nextLesson.has(classId)) return caches.nextLesson.get(classId) ?? null;
-  caches.progress ??= fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>);
-  const [lessons, progress] = await Promise.all([
-    fetchClassScopedLessons(classId),
-    caches.progress,
-  ]);
-  const ordered = [...lessons].sort(
-    (a, b) =>
-      (a.unit_position ?? Number.MAX_SAFE_INTEGER) - (b.unit_position ?? Number.MAX_SAFE_INTEGER) ||
-      (a.position ?? 0) - (b.position ?? 0),
+async function computeNextLessons(classes: StudentClass[]): Promise<Record<string, string | null>> {
+  const progress = await fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>);
+  const entries = await Promise.all(
+    classes.map(async (cls) => {
+      try {
+        const lessons = await fetchClassScopedLessons(cls.id);
+        const ordered = [...lessons].sort(
+          (a, b) =>
+            (a.unit_position ?? Number.MAX_SAFE_INTEGER) -
+              (b.unit_position ?? Number.MAX_SAFE_INTEGER) || (a.position ?? 0) - (b.position ?? 0),
+        );
+        const next = ordered.find((l) => (progress[l.id] ?? 0) < 1) ?? null;
+        return [cls.id, next?.title ?? null] as const;
+      } catch {
+        return [cls.id, null] as const;
+      }
+    }),
   );
-  const next = ordered.find((l) => (progress[l.id] ?? 0) < 1) ?? null;
-  const title = next?.title ?? null;
-  caches.nextLesson.set(classId, title);
-  return title;
+  return Object.fromEntries(entries);
 }
 
-function ClassCard({
-  cls,
-  due,
-  avg,
-  alwaysPeek,
-  caches,
-  onOpen,
-}: {
-  cls: StudentClass;
-  due: number;
-  avg: number | null;
-  alwaysPeek: boolean;
-  caches: PeekCaches;
-  onOpen: () => void;
-}) {
-  const [peek, setPeek] = useState(alwaysPeek);
-  const [nextLesson, setNextLesson] = useState<string | null | undefined>(
-    caches.nextLesson.has(cls.id) ? caches.nextLesson.get(cls.id) : undefined,
-  );
-  const footerRef = useRef<HTMLDivElement>(null);
-  const shown = alwaysPeek || peek;
-
-  // Lazy next-lesson on first reveal.
-  useEffect(() => {
-    if (!shown || nextLesson !== undefined) return;
-    let alive = true;
-    void computeNextLesson(caches, cls.id)
-      .then((title) => alive && setNextLesson(title))
-      .catch(() => alive && setNextLesson(null));
-    return () => {
-      alive = false;
-    };
-  }, [shown, nextLesson, cls.id, caches]);
-
-  // Footer expands with a crisp height rise (hover = more info made physical).
-  useEffect(() => {
-    const el = footerRef.current;
-    if (!el || alwaysPeek) return;
-    if (prefersReducedMotion()) {
-      gsap.set(el, { height: shown ? "auto" : 0, opacity: shown ? 1 : 0 });
-      return;
-    }
-    if (shown) {
-      gsap.to(el, { height: "auto", opacity: 1, duration: 0.2, ease: "power2.out" });
-    } else {
-      gsap.to(el, { height: 0, opacity: 0, duration: 0.16, ease: "power2.in" });
-    }
-  }, [shown, alwaysPeek]);
-
+function StatRow({ label, value }: { label: string; value: string }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      onPointerEnter={(e) => e.pointerType === "mouse" && setPeek(true)}
-      onPointerLeave={(e) => e.pointerType === "mouse" && setPeek(false)}
-      onFocus={() => setPeek(true)}
-      onBlur={() => setPeek(false)}
-      className="elev-hover rounded-card border border-border/60 bg-depth-card p-4 text-left shadow-card"
-    >
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background/45">
-          <GraduationCap className="h-5 w-5 text-foreground" strokeWidth={1.6} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] font-medium text-foreground">{cls.name}</div>
-          {cls.organizationName ? (
-            <div className="truncate text-meta text-muted-foreground">{cls.organizationName}</div>
-          ) : null}
-        </div>
-        {due > 0 ? (
-          <span className="shrink-0 rounded-pill border border-warning/40 bg-warning/10 px-2.5 py-1 text-meta font-medium tabular-nums text-warning">
-            {due} due
-          </span>
-        ) : null}
-      </div>
-      <div
-        ref={footerRef}
-        className="overflow-hidden"
-        style={alwaysPeek ? undefined : { height: 0, opacity: 0 }}
-      >
-        <div className="mt-3 grid gap-1 border-t border-border/60 pt-3">
-          <div className="flex items-baseline justify-between gap-3 text-meta">
-            <span className="text-muted-foreground">Next lesson</span>
-            <span className="min-w-0 truncate text-right font-medium text-foreground">
-              {nextLesson === undefined ? "…" : (nextLesson ?? "All caught up")}
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between gap-3 text-meta">
-            <span className="text-muted-foreground">To do</span>
-            <span className="font-medium tabular-nums text-foreground">
-              {due > 0 ? `${due} item${due === 1 ? "" : "s"}` : "Nothing due"}
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between gap-3 text-meta">
-            <span className="text-muted-foreground">Average</span>
-            <span className="font-medium tabular-nums text-foreground">
-              {avg != null ? formatScore(avg) : "—"}
-            </span>
-          </div>
-        </div>
-      </div>
-    </button>
+    <div className="flex items-baseline justify-between gap-3 text-meta">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-right font-medium text-foreground">{value}</span>
+    </div>
   );
 }
 
@@ -156,14 +55,17 @@ export function ClassesGrid({
   onOpenClass: (classId: string) => void;
 }) {
   const [classes, setClasses] = useState<StudentClass[] | null>(null);
+  const [nextByClass, setNextByClass] = useState<Record<string, string | null> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const coarse = useCoarsePointer();
-  const cachesRef = useRef<PeekCaches>({ nextLesson: new Map(), progress: null });
 
   useEffect(() => {
     let alive = true;
     fetchStudentClasses()
-      .then((rows) => alive && setClasses(rows))
+      .then((rows) => {
+        if (!alive) return;
+        setClasses(rows);
+        void computeNextLessons(rows).then((map) => alive && setNextByClass(map));
+      })
       .catch((e) => alive && setError((e as Error).message || "Could not load your classes."));
     return () => {
       alive = false;
@@ -181,17 +83,49 @@ export function ClassesGrid({
   }
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      {classes.map((cls) => (
-        <ClassCard
-          key={cls.id}
-          cls={cls}
-          due={dueByClass[cls.id] ?? 0}
-          avg={avgByClass[cls.id] ?? null}
-          alwaysPeek={coarse}
-          caches={cachesRef.current}
-          onOpen={() => onOpenClass(cls.id)}
-        />
-      ))}
+      {classes.map((cls) => {
+        const due = dueByClass[cls.id] ?? 0;
+        const avg = avgByClass[cls.id] ?? null;
+        const next = nextByClass?.[cls.id];
+        return (
+          <button
+            key={cls.id}
+            type="button"
+            onClick={() => onOpenClass(cls.id)}
+            className="rounded-card border border-border/60 bg-depth-card p-4 text-left shadow-card transition-colors duration-(--dur-fast) hover:border-border"
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background/45">
+                <GraduationCap className="h-5 w-5 text-foreground" strokeWidth={1.6} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-medium text-foreground">{cls.name}</div>
+                {cls.organizationName ? (
+                  <div className="truncate text-meta text-muted-foreground">
+                    {cls.organizationName}
+                  </div>
+                ) : null}
+              </div>
+              {due > 0 ? (
+                <span className="shrink-0 rounded-pill border border-warning/40 bg-warning/10 px-2.5 py-1 text-meta font-medium tabular-nums text-warning">
+                  {due} due
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-3 grid gap-1 border-t border-border/60 pt-3">
+              <StatRow
+                label="Next lesson"
+                value={next === undefined ? "…" : (next ?? "All caught up")}
+              />
+              <StatRow
+                label="To do"
+                value={due > 0 ? `${due} item${due === 1 ? "" : "s"}` : "Nothing due"}
+              />
+              <StatRow label="Average" value={avg != null ? formatScore(avg) : "—"} />
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
