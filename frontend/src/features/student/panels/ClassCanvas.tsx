@@ -184,9 +184,10 @@ export function ClassCanvas({
       {/* header */}
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <div className="min-w-0">
-          <div className="truncate text-title font-medium text-foreground">
+          {/* This IS the page title — PageShell passes no title for the canvas. */}
+          <h1 className="truncate font-serif text-display text-foreground">
             {cls?.name ?? "Class"}
-          </div>
+          </h1>
           {cls?.organizationName ? (
             <div className="truncate text-meta text-muted-foreground">{cls.organizationName}</div>
           ) : null}
