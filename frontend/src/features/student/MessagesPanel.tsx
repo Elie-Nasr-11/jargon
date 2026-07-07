@@ -108,7 +108,7 @@ export function MessagesPanel({ initialChannelId }: { initialChannelId?: string 
   }
 
   return (
-    <div className="flex h-[min(60dvh,460px)] flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       {activeChannel ? (
         <>
           <button

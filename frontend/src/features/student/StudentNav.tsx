@@ -20,12 +20,13 @@ import { useTheme } from "@/lib/theme";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 
-// The student's whole navigation, as a right-hand slide-in drawer (replaces the old header icon
-// cluster + gear). Grouped Learning / Messages / Settings; each item opens its own clean modal via
-// onSelect. Appearance toggles inline; Campus Live + Log out act inline. Per-item counts surface the
-// same unread/due state that the menu-trigger dot summarizes.
+// The MOBILE navigation drawer (<lg — desktop gets the persistent Sidebar). A pinned "Tutor chat"
+// row on top, then Learning / Messages groups mirroring the sidebar; the Settings group survives
+// here temporarily until the header profile menu lands. Appearance toggles inline; Campus Live +
+// Log out act inline.
 
 export type NavKey =
+  | "chat"
   | "overview"
   | "classes"
   | "calendar"
@@ -134,6 +135,7 @@ export function StudentNav({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+          <NavRow icon={Sparkles} label="Tutor chat" onClick={() => onSelect("chat")} />
           <SectionLabel>Learning</SectionLabel>
           <NavRow icon={LayoutDashboard} label="Overview" onClick={() => onSelect("overview")} />
           <NavRow icon={LayoutGrid} label="Classes" onClick={() => onSelect("classes")} />

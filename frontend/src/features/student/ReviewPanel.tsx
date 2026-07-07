@@ -14,8 +14,8 @@ const TIER_LABEL: Record<string, string> = {
 type ReviewLine = { role: "mentor" | "you"; text: string };
 
 // The spaced-review surface — the hub's Review tab. Lists the skills due for retrieval practice and runs a one-tap guided review that refreshes
-// a skill's spacing clock via the chat fn's isolated review handler. Content-only — the ModalCard
-// provides the frame, backdrop, and Escape handling.
+// a skill's spacing clock via the chat fn's isolated review handler. Content-only — the
+// Review workspace view provides the frame.
 export function ReviewPanel({
   accessToken,
   mentorPreferences,
@@ -131,7 +131,7 @@ export function ReviewPanel({
             Done
           </button>
         </div>
-        <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+        <div className="mt-2 max-h-[min(52dvh,560px)] space-y-2 overflow-y-auto">
           {lines.map((line, index) => (
             <div
               key={index}
