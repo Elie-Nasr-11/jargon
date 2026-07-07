@@ -1,41 +1,21 @@
-import { useNavigate } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import {
-  Bell,
   CalendarDays,
-  ExternalLink,
   GraduationCap,
   LayoutDashboard,
   LayoutGrid,
-  LogOut,
   MessageCircle,
-  Moon,
   RotateCcw,
   Sparkles,
-  Sun,
-  User,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { useTheme } from "@/lib/theme";
-import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
-import { signOut } from "@/lib/api";
+import type { StudentView } from "@/features/student/shell/studentViews";
 
 // The MOBILE navigation drawer (<lg — desktop gets the persistent Sidebar). A pinned "Tutor chat"
-// row on top, then Learning / Messages groups mirroring the sidebar; the Settings group survives
-// here temporarily until the header profile menu lands. Appearance toggles inline; Campus Live +
-// Log out act inline.
+// row on top, then Learning / Messages groups mirroring the sidebar. Settings/profile live behind
+// the header avatar (ProfileMenu) at every size, so this is pure section navigation.
 
-export type NavKey =
-  | "chat"
-  | "overview"
-  | "classes"
-  | "calendar"
-  | "grades"
-  | "review"
-  | "messages"
-  | "profile"
-  | "mentor"
-  | "notifications";
+export type NavKey = "chat" | StudentView;
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -98,7 +78,6 @@ export function StudentNav({
   email,
   reviewDueCount,
   messagesUnread,
-  notificationsUnread,
   onSelect,
 }: {
   open: boolean;
@@ -106,13 +85,8 @@ export function StudentNav({
   email: string;
   reviewDueCount: number;
   messagesUnread: boolean;
-  notificationsUnread: number;
   onSelect: (key: NavKey) => void;
 }) {
-  const navigate = useNavigate();
-  const { resolved, toggle } = useTheme();
-  const campusLiveUrl = useCampusLiveLink();
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -155,43 +129,6 @@ export function StudentNav({
             dot={messagesUnread}
             onClick={() => onSelect("messages")}
           />
-
-          <SectionLabel>Settings</SectionLabel>
-          <NavRow icon={User} label="Profile" onClick={() => onSelect("profile")} />
-          <NavRow icon={Sparkles} label="Mentor" onClick={() => onSelect("mentor")} />
-          <NavRow
-            icon={resolved === "dark" ? Sun : Moon}
-            label="Appearance"
-            trailing={resolved === "dark" ? "Dark" : "Light"}
-            onClick={toggle}
-          />
-          <NavRow
-            icon={Bell}
-            label="Notifications"
-            count={notificationsUnread}
-            onClick={() => onSelect("notifications")}
-          />
-          {campusLiveUrl ? (
-            <a
-              href={campusLiveUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => onOpenChange(false)}
-              className="flex w-full items-center gap-2.5 rounded-md px-2 py-2.5 text-left text-[13px] text-foreground transition-colors hover:bg-muted"
-            >
-              <ExternalLink className="h-[15px] w-[15px]" strokeWidth={1.5} /> Campus Live
-            </a>
-          ) : null}
-          <button
-            type="button"
-            onClick={async () => {
-              await signOut();
-              navigate({ to: "/login" });
-            }}
-            className="flex w-full items-center gap-2.5 rounded-md px-2 py-2.5 text-left text-[13px] text-foreground transition-colors hover:bg-muted"
-          >
-            <LogOut className="h-[15px] w-[15px]" strokeWidth={1.5} /> Log out
-          </button>
         </div>
       </SheetContent>
     </Sheet>

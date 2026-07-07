@@ -33,9 +33,7 @@ import { StudentNav, type NavKey } from "@/features/student/StudentNav";
 import { Sidebar } from "@/features/student/shell/Sidebar";
 import { ViewHost } from "@/features/student/shell/ViewHost";
 import { isStudentView, type StudentView } from "@/features/student/shell/studentViews";
-import { StudentNotifications } from "@/features/student/StudentNotifications";
-import { MentorControls } from "@/features/student/MentorControls";
-import { ProfilePanel } from "@/features/student/ProfilePanel";
+import { ProfileMenu } from "@/features/student/shell/ProfileMenu";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
 import {
   DEFAULT_MENTOR,
@@ -484,9 +482,6 @@ function ChatPage() {
   // the header profile menu lands.
   const { view } = Route.useSearch();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [settingsModal, setSettingsModal] = useState<"profile" | "mentor" | "notifications" | null>(
-    null,
-  );
   // A DM channel to deep-link the Messages view into (from a direct_message notification click).
   const [dmDeepLinkChannel, setDmDeepLinkChannel] = useState<string | null>(null);
   // Persistent nav data: badge counts + the notifications list (shared with the Notifications
@@ -1256,21 +1251,38 @@ function ChatPage() {
               >
                 Jargon
               </button>
-              {/* Mobile drawer trigger (temporarily shown at all sizes until the header profile
-                  menu lands; desktop nav is the persistent sidebar). */}
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(true)}
-                aria-label="Menu"
-                className="relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
-              >
-                <Menu className="h-[20px] w-[20px]" strokeWidth={1.6} />
-                {navData.dmUnread ||
-                navData.notificationsUnread > 0 ||
-                navData.reviewDueCount > 0 ? (
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" />
-                ) : null}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Mobile drawer trigger — desktop nav is the persistent sidebar. Its dot covers
+                    what the sidebar rows would show (messages + review); notifications live on
+                    the avatar at every size. */}
+                <button
+                  type="button"
+                  onClick={() => setDrawerOpen(true)}
+                  aria-label="Menu"
+                  className="relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground sm:h-9 sm:w-9 lg:hidden"
+                >
+                  <Menu className="h-[20px] w-[20px]" strokeWidth={1.6} />
+                  {navData.dmUnread || navData.reviewDueCount > 0 ? (
+                    <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" />
+                  ) : null}
+                </button>
+                <ProfileMenu
+                  email={email ?? ""}
+                  mentor={mentor}
+                  onMentorChange={updateMentor}
+                  voice={voice}
+                  onVoiceChange={updateVoice}
+                  notifications={navData.notifications}
+                  notificationsUnread={navData.notificationsUnread}
+                  onMarkRead={navData.markNotificationRead}
+                  onMarkAll={navData.markAllNotificationsRead}
+                  onOpenDm={(channelId) => {
+                    setDmDeepLinkChannel(channelId);
+                    navData.clearDmUnread();
+                    goView("messages");
+                  }}
+                />
+              </div>
             </div>
           </div>
         </header>
@@ -1505,66 +1517,19 @@ function ChatPage() {
         email={email ?? ""}
         reviewDueCount={navData.reviewDueCount}
         messagesUnread={navData.dmUnread}
-        notificationsUnread={navData.notificationsUnread}
         onSelect={(key) => {
           setDrawerOpen(false);
           if (key === "chat") {
             goView(null);
-          } else if (isStudentView(key)) {
-            if (key === "messages") {
-              setDmDeepLinkChannel(null);
-              navData.clearDmUnread();
-            }
-            goView(key);
-          } else {
-            setSettingsModal(key);
+            return;
           }
+          if (key === "messages") {
+            setDmDeepLinkChannel(null);
+            navData.clearDmUnread();
+          }
+          goView(key);
         }}
       />
-
-      {/* Settings popups — temporary small modals until the header profile menu lands. */}
-      <ModalCard
-        open={settingsModal === "profile"}
-        onOpenChange={(o) => {
-          if (!o) setSettingsModal(null);
-        }}
-        title="Profile"
-      >
-        <ProfilePanel bare />
-      </ModalCard>
-      <ModalCard
-        open={settingsModal === "mentor"}
-        onOpenChange={(o) => {
-          if (!o) setSettingsModal(null);
-        }}
-        title="Mentor"
-      >
-        <MentorControls
-          mentor={mentor}
-          onChange={updateMentor}
-          voice={voice}
-          onVoiceChange={updateVoice}
-        />
-      </ModalCard>
-      <ModalCard
-        open={settingsModal === "notifications"}
-        onOpenChange={(o) => {
-          if (!o) setSettingsModal(null);
-        }}
-        title="Notifications"
-      >
-        <StudentNotifications
-          notifications={navData.notifications}
-          onMarkRead={navData.markNotificationRead}
-          onMarkAll={navData.markAllNotificationsRead}
-          onOpenDm={(channelId) => {
-            setSettingsModal(null);
-            setDmDeepLinkChannel(channelId);
-            navData.clearDmUnread();
-            goView("messages");
-          }}
-        />
-      </ModalCard>
 
       {/* Quiz-taking stays a FOCUSED modal over whatever surface is open (assessment deserves an
           intentional frame). Closing re-fetches the assessments bundle so the work bar reflects a
