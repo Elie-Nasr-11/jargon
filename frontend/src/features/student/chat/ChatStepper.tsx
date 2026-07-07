@@ -6,11 +6,13 @@ import { Popover } from "@/components/Popover";
 import { prefersReducedMotion } from "@/lib/motion";
 import type { LessonActivity, LessonArc } from "@/lib/types";
 
-// The lesson progress, integrated INTO the chat column (no more floating chrome):
-// - ChatStepperRail — the desktop (md+) left-gutter rail: a vertical track with a rainbow fill
-//   that tweens as the step advances, step nodes (done / current-with-rainbow-ring / upcoming),
-//   an N/M label, and at xl+ a title chip for the current step extending into the empty left
-//   margin. Click anywhere → the full roadmap popover (LessonMilestones + Restart).
+// The lesson journey — the LEFT EDGE of the v5 stage:
+// - ChatStepperRail — the desktop (md+) rail, mounted as fixed edge chrome by the route: a
+//   vertical track with a rainbow fill that tweens as the step advances, step nodes (done /
+//   current-with-rainbow-ring / upcoming) and an N/M label. Hovering swells the track and maps the
+//   pointer to the nearest node, whose title materializes as a chip to the RIGHT (hover = more
+//   info). Click anywhere → the full roadmap popover (LessonMilestones + Restart) — also the
+//   keyboard/AT path to every title.
 // - ChatStepperStrip — the mobile (<md) top-of-stream strip: a slim gradient progress bar +
 //   "Step N/M · title", tapping opens the same roadmap.
 
@@ -55,7 +57,9 @@ export function ChatStepperRail({
   onRestart?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const fillRef = useRef<HTMLSpanElement>(null);
+  const trackRef = useRef<HTMLSpanElement>(null);
 
   const fraction = arc.total > 1 ? (arc.step - 1) / (arc.total - 1) : 0;
 
@@ -72,6 +76,10 @@ export function ChatStepperRail({
 
   if (arc.total <= 1) return null;
 
+  // Pointer position → nearest node; its title materializes to the right (pointer-only
+  // enhancement — the roadmap popover is the keyboard/AT path to titles).
+  const stepTitle = (idx: number) => activities[idx]?.title ?? `Step ${idx + 1}`;
+
   return (
     <div className="flex h-full flex-col items-center justify-center">
       <Popover
@@ -85,8 +93,19 @@ export function ChatStepperRail({
             aria-expanded={open}
             aria-label={`Lesson progress: step ${arc.step} of ${arc.total}. ${arc.current?.title ?? ""}`}
             className="group flex flex-col items-center gap-2.5 rounded-pill px-2 py-2"
+            onPointerMove={(e) => {
+              if (e.pointerType !== "mouse") return;
+              const r = trackRef.current?.getBoundingClientRect();
+              if (!r || r.height === 0) return;
+              const f = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+              setHoverIdx(Math.round(f * (arc.total - 1)));
+            }}
+            onPointerLeave={() => setHoverIdx(null)}
           >
-            <span className="relative block h-[min(320px,46vh)] w-[2px] rounded-pill bg-[var(--ink-16)]">
+            <span
+              ref={trackRef}
+              className="relative block h-[min(320px,46vh)] w-[2px] rounded-pill bg-[var(--ink-16)] transition-[width] duration-(--dur-fast) group-hover:w-[3px]"
+            >
               {/* animated fill */}
               <span
                 ref={fillRef}
@@ -129,13 +148,16 @@ export function ChatStepperRail({
                   />
                 );
               })}
-              {/* current-step title chip — xl+ has guaranteed empty margin to the left */}
-              <span
-                className="absolute right-full mr-3 hidden max-w-[150px] -translate-y-1/2 truncate rounded-pill border border-border bg-depth-card px-2.5 py-1 text-meta font-medium text-foreground shadow-card min-[1360px]:block"
-                style={{ top: `${fraction * 100}%` }}
-              >
-                {arc.current?.title ?? `Step ${arc.step}`}
-              </span>
+              {/* pointer-following title chip — appears to the RIGHT of the hovered node */}
+              {hoverIdx !== null ? (
+                <span
+                  aria-hidden
+                  className="absolute left-full ml-3 max-w-[180px] -translate-y-1/2 truncate rounded-pill border border-border bg-depth-card px-2.5 py-1 text-meta font-medium text-foreground shadow-card"
+                  style={{ top: `${(hoverIdx / (arc.total - 1)) * 100}%` }}
+                >
+                  {stepTitle(hoverIdx)}
+                </span>
+              ) : null}
             </span>
             <span className="text-[10px] font-medium tabular-nums text-muted-foreground transition-colors duration-(--dur-fast) group-hover:text-foreground">
               {arc.step}/{arc.total}

@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { usePopoverDismiss } from "@/hooks/usePopoverDismiss";
 
 // The shared anchored-popover shell for header dropdowns (inbox, progress roadmap): one place
 // owning outside-tap + Escape dismissal instead of each surface hand-rolling its own listeners.
@@ -23,29 +24,7 @@ export function Popover({
   placement?: "bottom-end" | "right-start";
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: PointerEvent) => {
-      if (wrapRef.current?.contains(e.target as Node)) return;
-      onClose();
-    };
-    // Capture-phase + preventDefault (the Radix dismissable-layer pattern): ESC must dismiss
-    // ONLY this innermost surface — outer listeners (e.g. the workspace-view exit) check
-    // defaultPrevented and must see it consumed.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener("pointerdown", onDoc);
-    document.addEventListener("keydown", onKey, { capture: true });
-    return () => {
-      document.removeEventListener("pointerdown", onDoc);
-      document.removeEventListener("keydown", onKey, { capture: true });
-    };
-  }, [open, onClose]);
+  usePopoverDismiss(wrapRef, onClose, open);
 
   return (
     <div ref={wrapRef} className="relative">

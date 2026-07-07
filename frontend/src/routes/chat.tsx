@@ -2,7 +2,6 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type React
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import {
-  Activity,
   AlertCircle,
   AudioLines,
   Check,
@@ -12,7 +11,6 @@ import {
   Copy,
   ExternalLink,
   FileText,
-  LayoutGrid,
   Paperclip,
   Pause,
   Play,
@@ -38,10 +36,12 @@ import {
   type StudentView,
 } from "@/features/student/shell/studentViews";
 import { ProfileMenu } from "@/features/student/shell/ProfileMenu";
+import { WorldArc } from "@/features/student/edge/WorldArc";
 import { ClassesPanel } from "@/features/student/ClassesPanel";
 import { GradesPanel } from "@/features/student/GradesPanel";
 import { MessagesPanel } from "@/features/student/MessagesPanel";
 import { ReviewPanel } from "@/features/student/ReviewPanel";
+import { StudentNotifications } from "@/features/student/StudentNotifications";
 import { ChatStepperRail, ChatStepperStrip } from "@/features/student/chat/ChatStepper";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
 import { prefersReducedMotion } from "@/lib/motion";
@@ -1216,51 +1216,29 @@ function ChatPage() {
           onMentorChange={updateMentor}
           voice={voice}
           onVoiceChange={updateVoice}
-          notifications={navData.notifications}
-          notificationsUnread={navData.notificationsUnread}
-          onMarkRead={navData.markNotificationRead}
-          onMarkAll={navData.markAllNotificationsRead}
-          onOpenDm={openDmFromNotification}
         />
       </div>
 
-      {/* TEMPORARY (v5 P1): straight-strip stand-ins for the P2 WorldArc — two right-edge glyphs
-          opening the peripheries. Replaced wholesale by features/student/edge/ in P2. */}
-      <div className="fixed right-1.5 top-1/2 z-[var(--z-header)] flex -translate-y-1/2 flex-col items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => (view === "classes" ? goView(null) : goView("classes"))}
-          aria-label="Classes"
-          className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ${
-            view === "classes"
-              ? "bg-depth-card text-foreground shadow-card"
-              : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-          }`}
-        >
-          <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.6} />
-        </button>
-        <button
-          type="button"
-          onClick={() => (view === "pulse" ? goView(null) : openPulse())}
-          aria-label={`Pulse${
-            navData.notificationsUnread + navData.reviewDueCount > 0
-              ? ` — ${navData.notificationsUnread + navData.reviewDueCount} new`
-              : ""
-          }`}
-          className={`relative flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ${
-            view === "pulse"
-              ? "bg-depth-card text-foreground shadow-card"
-              : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-          }`}
-        >
-          <Activity className="h-[18px] w-[18px]" strokeWidth={1.6} />
-          {navData.notificationsUnread + navData.reviewDueCount > 0 ? (
-            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9.5px] font-semibold tabular-nums text-white">
-              {Math.min(99, navData.notificationsUnread + navData.reviewDueCount)}
-            </span>
-          ) : null}
-        </button>
-      </div>
+      {/* The right edge — the two-glyph world arc (Classes · Pulse): rest is quiet, hover fans +
+          peeks, click opens the panel. */}
+      <WorldArc
+        view={view}
+        notificationsUnread={navData.notificationsUnread}
+        reviewDueCount={navData.reviewDueCount}
+        nextDue={navData.nextDue}
+        dueByClass={navData.dueByClass}
+        onOpenClasses={() => goView("classes")}
+        onOpenPulse={openPulse}
+        onCloseView={() => goView(null)}
+      />
+
+      {/* The left edge — the lesson journey rail (md+; mobile keeps the in-stream strip). Fixed
+          chrome OUTSIDE the inert-able chat pane so the roadmap stays reachable over a panel. */}
+      {lessonArc ? (
+        <div className="fixed left-0 top-1/2 z-[var(--z-header)] hidden w-12 -translate-y-1/2 justify-center md:flex">
+          <ChatStepperRail arc={lessonArc} activities={activities} onRestart={restartLesson} />
+        </div>
+      ) : null}
 
       {/* The stage stack: the chat pane is ALWAYS mounted (its session, draft, voice, and realtime
           state must survive panel switches) and stays VISIBLE under the panel's translucent scrim —
@@ -1273,19 +1251,8 @@ function ChatPage() {
           }`}
           inert={view ? true : undefined}
         >
-          <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[820px] flex-1 flex-row px-5 pt-12 md:pt-10">
-            {/* Integrated progress rail — the chat column's left gutter (md+); mobile gets a
-                    strip above the stream instead. Lives OUTSIDE the stream scroll container so
-                    it never scrolls away. */}
-            <div className="hidden w-14 shrink-0 md:flex">
-              {lessonArc ? (
-                <ChatStepperRail
-                  arc={lessonArc}
-                  activities={activities}
-                  onRestart={restartLesson}
-                />
-              ) : null}
-            </div>
+          {/* Symmetric stage column — the journey rail is edge chrome now, not a gutter. */}
+          <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-row px-5 pt-12 md:pt-10">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               {lessonArc ? (
                 <div className="md:hidden">
@@ -1494,6 +1461,17 @@ function ChatPage() {
                     <div className="flex h-[min(52dvh,480px)] min-h-0 flex-col">
                       <MessagesPanel deepLink={dmDeepLink} />
                     </div>
+                  </section>
+                  <section>
+                    <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Notifications
+                    </div>
+                    <StudentNotifications
+                      notifications={navData.notifications}
+                      onMarkRead={navData.markNotificationRead}
+                      onMarkAll={navData.markAllNotificationsRead}
+                      onOpenDm={openDmFromNotification}
+                    />
                   </section>
                   <section>
                     <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">

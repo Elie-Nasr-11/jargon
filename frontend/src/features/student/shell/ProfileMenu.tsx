@@ -1,32 +1,29 @@
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
-import { ArrowLeft, Bell, ExternalLink, LogOut, Moon, Sparkles, Sun, User } from "lucide-react";
+import { ArrowLeft, ExternalLink, LogOut, Moon, Sparkles, Sun, User } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
 import { Popover } from "@/components/Popover";
-import { ProfilePanel } from "@/features/student/ProfilePanel";
 import { MentorControls } from "@/features/student/MentorControls";
-import { StudentNotifications } from "@/features/student/StudentNotifications";
 import { useTheme } from "@/lib/theme";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { prefersReducedMotion } from "@/lib/motion";
 import { signOut } from "@/lib/api";
 import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
-import type { Notification } from "@/lib/types";
 
-// The header profile surface: an avatar button opening a Settings mini-menu (Profile · Mentor ·
-// Appearance inline toggle · Notifications · Campus Live · Log out); Profile/Mentor/Notifications
-// expand IN PLACE as anchored cards (a back chevron returns to the menu) — floating, not modal,
-// so the rest of the app stays live. Desktop anchors under the avatar (Popover); below lg the
-// same content rides the house bottom-sheet pattern (400px cards don't fit a phone).
+// The settings dot — the ONLY account surface on the v5 stage: an avatar in the top-right corner.
+// Hover peeks who's signed in (the edge law: hover = slightly-more-desirable info); click opens
+// the Settings mini-menu (Mentor · Appearance inline toggle · Campus Live · Log out); Mentor
+// expands IN PLACE as an anchored card (a back chevron returns) — floating, not modal, so the
+// stage stays live. Desktop anchors under the avatar (Popover); below lg the same content rides
+// the house bottom-sheet pattern. Profile stats moved to Pulse → Performance; notifications live
+// in the Pulse activity feed.
 
-type Card = "menu" | "profile" | "mentor" | "notifications";
+type Card = "menu" | "mentor";
 
 const CARD_TITLES: Record<Exclude<Card, "menu">, string> = {
-  profile: "Profile",
   mentor: "Mentor",
-  notifications: "Notifications",
 };
 
 function MenuRow({
@@ -88,25 +85,18 @@ export function ProfileMenu({
   onMentorChange,
   voice,
   onVoiceChange,
-  notifications,
-  notificationsUnread,
-  onMarkRead,
-  onMarkAll,
-  onOpenDm,
 }: {
   email: string;
   mentor: MentorConfig;
   onMentorChange: (m: MentorConfig) => void;
   voice: VoiceSettings;
   onVoiceChange: (v: VoiceSettings) => void;
-  notifications: Notification[];
-  notificationsUnread: number;
-  onMarkRead: (id: string) => void;
-  onMarkAll: () => void;
-  onOpenDm: (channelId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [card, setCard] = useState<Card>("menu");
+  // Hover peek (fine pointers): who's signed in, after a 120ms intent pause; never while open.
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const desktop = useIsDesktop();
   const navigate = useNavigate();
   const { resolved, toggle } = useTheme();
@@ -212,19 +202,12 @@ export function ProfileMenu({
       <div className="mb-1 px-2.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
         Settings
       </div>
-      <MenuRow icon={User} label="Profile" onClick={() => setCard("profile")} />
       <MenuRow icon={Sparkles} label="Mentor" onClick={() => setCard("mentor")} />
       <MenuRow
         icon={resolved === "dark" ? Sun : Moon}
         label="Appearance"
         trailing={resolved === "dark" ? "Dark" : "Light"}
         onClick={toggle}
-      />
-      <MenuRow
-        icon={Bell}
-        label="Notifications"
-        count={notificationsUnread}
-        onClick={() => setCard("notifications")}
       />
       {campusLiveUrl ? (
         <a
@@ -267,26 +250,12 @@ export function ProfileMenu({
         </div>
       </div>
       <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">
-        {activeCard === "profile" ? (
-          <ProfilePanel bare />
-        ) : activeCard === "mentor" ? (
-          <MentorControls
-            mentor={mentor}
-            onChange={onMentorChange}
-            voice={voice}
-            onVoiceChange={onVoiceChange}
-          />
-        ) : (
-          <StudentNotifications
-            notifications={notifications}
-            onMarkRead={onMarkRead}
-            onMarkAll={onMarkAll}
-            onOpenDm={(channelId) => {
-              close();
-              onOpenDm(channelId);
-            }}
-          />
-        )}
+        <MentorControls
+          mentor={mentor}
+          onChange={onMentorChange}
+          voice={voice}
+          onVoiceChange={onVoiceChange}
+        />
       </div>
     </div>
   );
@@ -298,17 +267,38 @@ export function ProfileMenu({
   );
 
   const trigger = (
-    <button
-      type="button"
-      onClick={() => (open ? close() : openMenu())}
-      aria-label="Account and settings"
-      className="relative flex h-9 w-9 items-center justify-center rounded-full bg-depth-card text-meta font-medium text-foreground shadow-card transition-colors duration-(--dur-fast) hover:bg-muted"
-    >
-      {email ? email.slice(0, 1).toUpperCase() : <User className="h-4 w-4" strokeWidth={1.6} />}
-      {notificationsUnread > 0 ? (
-        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger" />
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          if (peekTimer.current) clearTimeout(peekTimer.current);
+          setPeek(false);
+          if (open) close();
+          else openMenu();
+        }}
+        onPointerEnter={(e) => {
+          if (e.pointerType !== "mouse" || open) return;
+          peekTimer.current = setTimeout(() => setPeek(true), 120);
+        }}
+        onPointerLeave={(e) => {
+          if (e.pointerType !== "mouse") return;
+          if (peekTimer.current) clearTimeout(peekTimer.current);
+          setPeek(false);
+        }}
+        aria-label={`Account and settings — ${email || "signed in"}`}
+        className="relative flex h-9 w-9 items-center justify-center rounded-full bg-depth-card text-meta font-medium text-foreground shadow-card transition-colors duration-(--dur-fast) hover:bg-muted"
+      >
+        {email ? email.slice(0, 1).toUpperCase() : <User className="h-4 w-4" strokeWidth={1.6} />}
+      </button>
+      {peek && !open ? (
+        <span
+          aria-hidden
+          className="absolute right-0 top-[calc(100%+6px)] z-[var(--z-menu)] whitespace-nowrap rounded-pill border border-border bg-depth-card px-3 py-1.5 text-meta text-muted-foreground shadow-raised"
+        >
+          Signed in as <span className="font-medium text-foreground">{email}</span>
+        </span>
       ) : null}
-    </button>
+    </>
   );
 
   if (desktop) {
