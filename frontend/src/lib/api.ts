@@ -2310,23 +2310,28 @@ export async function fetchEntityCommentCounts(
   classId: string,
 ): Promise<Record<string, number>> {
   if (!entityIds.length) return {};
-  const entries = await Promise.all(
-    entityIds.map(async (entityId) => {
-      const { count, error } = await supabase
-        .from("entity_comments")
-        .select("id", { count: "exact", head: true })
-        .eq("entity_type", entityType)
-        .eq("entity_id", entityId)
-        .eq("class_id", classId)
-        .eq("moderation_status", "visible")
-        .is("deleted_at", null)
-        .is("parent_id", null);
-      if (error) throw error;
-      return [entityId, count ?? 0] as const;
-    }),
-  );
+  // Bounded fan-out: sequential batches of 8, first 80 entities — a huge canvas degrades to
+  // "chip appears on open" for the tail instead of firing a hundred parallel requests.
+  const ids = entityIds.slice(0, 80);
   const counts: Record<string, number> = {};
-  for (const [id, n] of entries) if (n > 0) counts[id] = n;
+  for (let i = 0; i < ids.length; i += 8) {
+    const entries = await Promise.all(
+      ids.slice(i, i + 8).map(async (entityId) => {
+        const { count, error } = await supabase
+          .from("entity_comments")
+          .select("id", { count: "exact", head: true })
+          .eq("entity_type", entityType)
+          .eq("entity_id", entityId)
+          .eq("class_id", classId)
+          .eq("moderation_status", "visible")
+          .is("deleted_at", null)
+          .is("parent_id", null);
+        if (error) throw error;
+        return [entityId, count ?? 0] as const;
+      }),
+    );
+    for (const [id, n] of entries) if (n > 0) counts[id] = n;
+  }
   return counts;
 }
 

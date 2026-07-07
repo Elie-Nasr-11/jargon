@@ -416,10 +416,15 @@ function ChatPage() {
   const navData = useStudentNavData();
   // Graded work runs under FULL LOCKDOWN (FocusLock): the quiz being taken, the assignment being
   // submitted, and whether the open quiz's attempt is already finished (which relaxes the frame
-  // to a plain Close — viewing a result needs no lock).
+  // to a plain Close — viewing a result needs no lock). An assignment locks while work is still
+  // owed OR a draft is dirty; reviewing a submitted one opens relaxed. workVersion remounts the
+  // open panel after a lockdown exit so its data reflects the fresh submission.
   const [openQuizId, setOpenQuizId] = useState<string | null>(null);
   const [openAssignmentId, setOpenAssignmentId] = useState<string | null>(null);
   const [quizCompleted, setQuizCompleted] = useState(false);
+  const [assignmentDirty, setAssignmentDirty] = useState(false);
+  const [workVersion, setWorkVersion] = useState(0);
+  const [pulseFocusReview, setPulseFocusReview] = useState(false);
   const locked = openQuizId !== null || openAssignmentId !== null;
   // Count of skills due for spaced review — a small dismissible nudge card, once per browser session.
   const [reviewNudge, setReviewNudge] = useState<number | null>(null);
@@ -983,16 +988,35 @@ function ChatPage() {
     goView("pulse");
   };
 
+  // One launcher for both quiz surfaces: a finished attempt opens as a relaxed result view
+  // instead of flashing the locked frame while QuizPanel boots.
+  const openQuiz = (id: string, viewingResult = false) => {
+    setQuizCompleted(viewingResult);
+    setOpenQuizId(id);
+  };
+
+  // A lockdown exit refreshes what the work may have changed: the grades summary feeding the
+  // edge peeks, and the open panel's data (remounted via workVersion).
+  const onLockdownExit = () => {
+    setWorkVersion((v) => v + 1);
+    navData.refreshGrades();
+  };
+
   // Making the chat inert (under a panel OR under lockdown) must not leave the mic hot: leaving
   // RealtimeVoicePanel mounted but unreachable would keep the live session (and its audio)
   // running with no reachable controls. Unmounting it triggers its full WebRTC/mic cleanup.
+  // Completion counts too — the banner replaces the composer, and the mic must not keep
+  // auto-submitting turns to a finished lesson.
   useEffect(() => {
-    if (view || locked) setVoiceMode(false);
-  }, [view, locked]);
+    if (view || locked || (lessonComplete && !followUp)) setVoiceMode(false);
+  }, [view, locked, lessonComplete, followUp]);
 
   // Opening a lesson from the Classes view LOADS it in place (chat.tsx owns loadLesson), then
   // returns to the chat view — the old modal-era same-route navigate never actually reloaded.
   const openLessonFromView = (nextLessonId: string) => {
+    // Never switch lessons under an in-flight turn (restartLesson's gate, mirrored): the old
+    // lesson's resolving envelope would smear its session id, arc, and reply into the new one.
+    if (nextLessonId !== lessonId && (sendingRef.current || runInFlight)) return;
     store.setLessonId(nextLessonId);
     goView(null);
     if (nextLessonId === lessonId) return; // already the open lesson — just come back to it
@@ -1018,11 +1042,13 @@ function ChatPage() {
   }, [view, classParam]);
 
   // Leaving a panel refreshes what may have changed inside it: Pulse hosts guided review (due
-  // count) and every panel can submit work (grades summary feeding the edge peeks).
+  // count) and every panel can submit work (grades summary feeding the edge peeks). The one-shot
+  // review-focus flag dies with the Pulse visit that consumed it.
   const prevViewRef = useRef<StudentView | undefined>(undefined);
   useEffect(() => {
     if (prevViewRef.current === "pulse" && view !== "pulse") {
       navData.refreshReviewCount();
+      setPulseFocusReview(false);
     }
     if (prevViewRef.current && !view) {
       navData.refreshGrades();
@@ -1309,6 +1335,7 @@ function ChatPage() {
                     onClick={() => {
                       sessionStorage.setItem("jargon-review-nudge", "1");
                       setReviewNudge(null);
+                      setPulseFocusReview(true);
                       openPulse();
                     }}
                     className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
@@ -1378,11 +1405,11 @@ function ChatPage() {
                   lessonId={lessonId}
                   assignments={assignments}
                   assessments={assessments}
-                  onOpenAssignment={setOpenAssignmentId}
-                  onOpenQuiz={(id) => {
-                    setQuizCompleted(false);
-                    setOpenQuizId(id);
+                  onOpenAssignment={(id) => {
+                    setAssignmentDirty(false);
+                    setOpenAssignmentId(id);
                   }}
+                  onOpenQuiz={openQuiz}
                 />
                 {lessonComplete && !followUp ? (
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
@@ -1452,7 +1479,7 @@ function ChatPage() {
 
         {view ? (
           <div
-            key={`${view}:${classParam ?? ""}`}
+            key={`${view}:${classParam ?? ""}:${workVersion}`}
             className="col-start-1 row-start-1 flex min-h-0 flex-col"
           >
             <SlideOver
@@ -1470,10 +1497,7 @@ function ChatPage() {
                     notifications={navData.notifications}
                     onMarkRead={navData.markNotificationRead}
                     onOpenLesson={openLessonFromView}
-                    onOpenQuiz={(id) => {
-                      setQuizCompleted(false);
-                      setOpenQuizId(id);
-                    }}
+                    onOpenQuiz={openQuiz}
                   />
                 ) : (
                   <ClassesGrid
@@ -1490,6 +1514,7 @@ function ChatPage() {
                   onMarkAll={navData.markAllNotificationsRead}
                   accessToken={accessToken}
                   mentorPreferences={mentorToPreferences(mentor)}
+                  focusReview={pulseFocusReview}
                 />
               )}
             </SlideOver>
@@ -1508,6 +1533,7 @@ function ChatPage() {
         leaveNote="Leave this quiz? Your unsubmitted answers stay in this attempt."
         onExit={() => {
           setOpenQuizId(null);
+          onLockdownExit();
           void fetchStudentAssessments()
             .then(setAssessments)
             .catch(() => {});
@@ -1523,27 +1549,44 @@ function ChatPage() {
         ) : null}
       </FocusLock>
 
-      <FocusLock
-        open={openAssignmentId !== null}
-        kind="Assignment"
-        locked
-        leaveNote="Leave without submitting? Your draft here will be lost."
-        onExit={() => setOpenAssignmentId(null)}
-      >
-        {openAssignmentId
-          ? (() => {
-              const assignment = assignments.assignments.find((a) => a.id === openAssignmentId);
-              return assignment ? (
-                <AssignmentFocus
-                  assignment={assignment}
-                  bundle={assignments}
-                  onSubmitAssignment={submitStudentAssignment}
-                  onSubmitted={() => setOpenAssignmentId(null)}
-                />
-              ) : null;
-            })()
-          : null}
-      </FocusLock>
+      {(() => {
+        const openAssignment = openAssignmentId
+          ? (assignments.assignments.find((a) => a.id === openAssignmentId) ?? null)
+          : null;
+        const recipient = openAssignmentId
+          ? (assignments.recipients.find((r) => r.assignment_id === openAssignmentId) ?? null)
+          : null;
+        // Work still owed → hard lock. Reviewing an already-submitted assignment opens relaxed —
+        // until the draft turns dirty, at which point the lock (and its warning) mean it again.
+        const stillOwed =
+          !recipient || recipient.status === "assigned" || recipient.status === "started";
+        return (
+          <FocusLock
+            open={openAssignmentId !== null}
+            kind="Assignment"
+            locked={stillOwed || assignmentDirty}
+            leaveNote="Leave without submitting? Your draft here will be lost."
+            onExit={() => {
+              setOpenAssignmentId(null);
+              setAssignmentDirty(false);
+            }}
+          >
+            {openAssignment ? (
+              <AssignmentFocus
+                assignment={openAssignment}
+                bundle={assignments}
+                onSubmitAssignment={submitStudentAssignment}
+                onDirtyChange={setAssignmentDirty}
+                onSubmitted={() => {
+                  setOpenAssignmentId(null);
+                  setAssignmentDirty(false);
+                  onLockdownExit();
+                }}
+              />
+            ) : null}
+          </FocusLock>
+        );
+      })()}
     </div>
   );
 }
@@ -2007,7 +2050,8 @@ function WorkDock({
   assignments: StudentAssignmentBundle;
   assessments: StudentAssessmentBundle;
   onOpenAssignment: (assignmentId: string) => void;
-  onOpenQuiz: (assessmentId: string) => void;
+  // viewingResult=true when the latest attempt is already finished — the lockdown opens relaxed.
+  onOpenQuiz: (assessmentId: string, viewingResult: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const lessonAssignments = assignments.assignments
@@ -2063,6 +2107,7 @@ function WorkDock({
             );
             const latestAttempt =
               assessments.attempts.filter((att) => att.assessment_id === assessment.id)[0] || null;
+            const finished = Boolean(latestAttempt && latestAttempt.status !== "in_progress");
             return (
               <WorkLauncherRow
                 key={assessment.id}
@@ -2071,8 +2116,8 @@ function WorkDock({
                 status={recipient?.status || "assigned"}
                 dueAt={assessment.due_at}
                 score={latestAttempt?.final_score ?? null}
-                actionLabel={recipient?.status === "complete" ? "View result" : "Open quiz"}
-                onOpen={() => onOpenQuiz(assessment.id)}
+                actionLabel={finished ? "View result" : "Open quiz"}
+                onOpen={() => onOpenQuiz(assessment.id, finished)}
               />
             );
           })}
@@ -2132,6 +2177,7 @@ function AssignmentFocus({
   assignment,
   bundle,
   onSubmitAssignment,
+  onDirtyChange,
   onSubmitted,
 }: {
   assignment: Assignment;
@@ -2142,6 +2188,9 @@ function AssignmentFocus({
     code: string;
     files: File[];
   }) => Promise<void>;
+  // Reports whether the draft holds anything — the parent locks the frame only for owed work or a
+  // dirty draft, so REVIEWING a submitted assignment stays freely dismissible.
+  onDirtyChange: (dirty: boolean) => void;
   onSubmitted: () => void;
 }) {
   const [content, setContent] = useState("");
@@ -2149,6 +2198,12 @@ function AssignmentFocus({
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+
+  const dirty = Boolean(content.trim() || code.trim() || files.length);
+  useEffect(() => {
+    onDirtyChange(dirty);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty]);
 
   const recipient = bundle.recipients.find((item) => item.assignment_id === assignment.id);
   const submissions = bundle.submissions.filter(

@@ -89,7 +89,8 @@ export function ClassCanvas({
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onOpenLesson: (lessonId: string) => void;
-  onOpenQuiz: (assessmentId: string) => void;
+  // viewingResult=true when the latest attempt is already finished — the lockdown opens relaxed.
+  onOpenQuiz: (assessmentId: string, viewingResult: boolean) => void;
 }) {
   const [cls, setCls] = useState<StudentClass | null>(null);
   const [lessons, setLessons] = useState<Lesson[] | null>(null);
@@ -264,12 +265,14 @@ export function ClassCanvas({
                   return (
                     <div
                       key={lesson.id}
-                      className="group flex w-full flex-wrap items-center gap-3 rounded-control px-2 py-2 transition-colors duration-(--dur-fast) hover:bg-surface-hover"
+                      className="group flex w-full flex-wrap items-center gap-3 rounded-control px-2 py-2"
                     >
+                      {/* hover treatment + chevron reveal scoped to the NAV BUTTON so an expanded
+                          comment thread below doesn't light the row up as if it navigated */}
                       <button
                         type="button"
                         onClick={() => onOpenLesson(lesson.id)}
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        className="group/nav -mx-1 flex min-w-0 flex-1 items-center gap-3 rounded-control px-1 py-1 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-body text-foreground">{lesson.title}</div>
@@ -281,7 +284,7 @@ export function ClassCanvas({
                           {value >= 1 ? "Complete" : value > 0 ? "In progress" : "Not started"}
                         </span>
                         <ChevronRight
-                          className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100"
+                          className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover/nav:opacity-100"
                           strokeWidth={1.7}
                         />
                       </button>
@@ -315,7 +318,7 @@ export function ClassCanvas({
               return (
                 <div
                   key={a.id}
-                  className="rounded-card border border-border/60 bg-depth-card p-4 shadow-card"
+                  className="group rounded-card border border-border/60 bg-depth-card p-4 shadow-card"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 truncate text-body font-medium text-foreground">
@@ -381,36 +384,38 @@ export function ClassCanvas({
               const attempt = latestAttemptByAssessment.get(a.id) ?? null;
               const released =
                 attempt && (attempt.status === "returned" || attempt.final_score != null);
-              const attemptsUsed = assessments.attempts.filter(
-                (att) => att.assessment_id === a.id && att.status !== "in_progress",
-              ).length;
-              const canTake = attemptsUsed < a.attempt_limit;
+              // Mirror QuizPanel's own logic: any finished attempt opens as a RESULT view —
+              // QuizPanel never starts a retake over a finished attempt, so don't promise one.
+              const finished = attempt && attempt.status !== "in_progress";
               return (
                 <div
                   key={a.id}
-                  className="rounded-card border border-border/60 bg-depth-card p-4 shadow-card"
+                  className="group rounded-card border border-border/60 bg-depth-card p-4 shadow-card"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 truncate text-body font-medium text-foreground">
                       {a.title}
                     </div>
-                    {released && attempt?.final_score != null ? (
-                      <span className="shrink-0 rounded-pill border border-border px-2.5 py-0.5 text-meta font-medium tabular-nums text-foreground">
-                        {formatScore(attempt.final_score)}
-                      </span>
-                    ) : canTake ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      {released && attempt?.final_score != null ? (
+                        <span className="rounded-pill border border-border px-2.5 py-0.5 text-meta font-medium tabular-nums text-foreground">
+                          {formatScore(attempt.final_score)}
+                        </span>
+                      ) : finished ? (
+                        <span className="text-meta text-muted-foreground">Awaiting review</span>
+                      ) : null}
                       <button
                         type="button"
-                        onClick={() => onOpenQuiz(a.id)}
-                        className="shrink-0 rounded-pill bg-foreground px-3 py-1 text-meta font-medium text-background transition-opacity duration-(--dur-fast) hover:opacity-90"
+                        onClick={() => onOpenQuiz(a.id, Boolean(finished))}
+                        className={`rounded-pill px-3 py-1 text-meta font-medium transition-opacity duration-(--dur-fast) hover:opacity-90 ${
+                          finished
+                            ? "border border-border text-foreground"
+                            : "bg-foreground text-background"
+                        }`}
                       >
-                        Open quiz
+                        {finished ? "View result" : "Open quiz"}
                       </button>
-                    ) : (
-                      <span className="shrink-0 text-meta text-muted-foreground">
-                        {attempt?.status === "submitted" ? "Awaiting review" : "No attempts left"}
-                      </span>
-                    )}
+                    </div>
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-meta text-muted-foreground">
                     {a.due_at ? (

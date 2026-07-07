@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, CalendarClock, CheckCircle2, ChevronDown } from "lucide-react";
 import { StateNote } from "@/components/StateNote";
 import { DmThread } from "@/features/comms/DmThread";
@@ -193,8 +193,19 @@ function GradesSection({ grades }: { grades: StudentGradeRow[] }) {
   const recent = released.slice(0, 5);
 
   // Batched comment counts for the recent rows' chips — grade comments are per-class anchored, so
-  // group the ids by class before counting. Chips only render on rows with a class.
+  // group the ids by class before counting. Chips only render on rows whose class the student is
+  // STILL an active member of (RLS would reject posts anchored to a class they left).
   const [gradeCounts, setGradeCounts] = useState<Record<string, number>>({});
+  const [activeClassIds, setActiveClassIds] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchStudentClasses()
+      .then((rows) => alive && setActiveClassIds(new Set(rows.map((c) => c.id))))
+      .catch(() => alive && setActiveClassIds(new Set()));
+    return () => {
+      alive = false;
+    };
+  }, []);
   useEffect(() => {
     const byClass = new Map<string, string[]>();
     for (const g of recent) {
@@ -247,7 +258,7 @@ function GradesSection({ grades }: { grades: StudentGradeRow[] }) {
             <span className="w-11 shrink-0 text-right text-meta font-medium tabular-nums text-foreground">
               {formatScore(g.score)}
             </span>
-            {g.class_id ? (
+            {g.class_id && activeClassIds?.has(g.class_id) ? (
               <EntityComments
                 entityType="grade"
                 entityId={g.id}
@@ -345,23 +356,46 @@ function ActivityFeed({
     return map;
   }, [teachers]);
 
+  // Expanding a thread consumes its unread direct_message notifications — the thread IS the
+  // notification's destination, so leaving them unread would keep the badge lit forever.
+  const expandChannel = (channel: DmChannel) => {
+    setExpanded(channel);
+    for (const n of notifications) {
+      if (n.kind === "direct_message" && !n.read_at && n.ref?.channel_id === channel.id) {
+        onMarkRead(n.id);
+      }
+    }
+  };
+
   // A direct_message notification row expands its thread in place (the v4 cross-surface
   // deep-link died with the Messages view — the feed IS the messages surface now).
   const openNotification = (n: Notification) => {
     onMarkRead(n.id);
     if (n.kind === "direct_message" && typeof n.ref?.channel_id === "string") {
       const channel = channels.find((c) => c.id === n.ref?.channel_id);
-      if (channel) setExpanded(channel);
+      if (channel) expandChannel(channel);
     }
   };
 
   const feed = useMemo(() => {
+    const channelIds = new Set(channels.map((c) => c.id));
     const items: FeedItem[] = [
-      ...notifications.map((n) => ({
-        kind: "notification" as const,
-        at: Date.parse(n.created_at),
-        notification: n,
-      })),
+      // A DM notification whose thread is already a feed row would show the same event twice —
+      // the thread row wins (expansion marks the notification read).
+      ...notifications
+        .filter(
+          (n) =>
+            !(
+              n.kind === "direct_message" &&
+              typeof n.ref?.channel_id === "string" &&
+              channelIds.has(n.ref.channel_id)
+            ),
+        )
+        .map((n) => ({
+          kind: "notification" as const,
+          at: Date.parse(n.created_at),
+          notification: n,
+        })),
       ...channels.map((c) => ({
         kind: "dm" as const,
         at: Date.parse(c.last_message_at ?? c.created_at),
@@ -450,7 +484,7 @@ function ActivityFeed({
               <button
                 key={`dm-${item.channel.id}`}
                 type="button"
-                onClick={() => setExpanded(item.channel)}
+                onClick={() => expandChannel(item.channel)}
                 className="flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover"
               >
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-info" />
@@ -542,12 +576,23 @@ function titleCase(value: string): string {
 function PerformanceSection({
   accessToken,
   mentorPreferences,
+  focusReview = false,
 }: {
   accessToken: string | null;
   mentorPreferences: MentorPreferences;
+  // One-shot: the review nudge's "Review now" landed here — scroll the review block into view
+  // once the section has data (it sits several screens down an otherwise top-anchored panel).
+  focusReview?: boolean;
 }) {
   const [stats, setStats] = useState<StudentProfileStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const reviewRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (focusReview && stats) {
+      reviewRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  }, [focusReview, stats]);
 
   useEffect(() => {
     let alive = true;
@@ -593,7 +638,9 @@ function PerformanceSection({
         <StatTile value={stats.progress.lessonsStarted} label="Lessons started" />
       </div>
 
-      <div className="mb-2 mt-5 text-meta font-medium text-foreground">Review</div>
+      <div ref={reviewRef} className="mb-2 mt-5 scroll-mt-4 text-meta font-medium text-foreground">
+        Review
+      </div>
       <ReviewPanel accessToken={accessToken} mentorPreferences={mentorPreferences} />
 
       <div className="mb-2 mt-5 text-meta font-medium text-foreground">Proficiency</div>
@@ -700,6 +747,7 @@ export function PulsePanel({
   onMarkAll,
   accessToken,
   mentorPreferences,
+  focusReview = false,
 }: {
   grades: StudentGradeRow[];
   notifications: Notification[];
@@ -707,6 +755,7 @@ export function PulsePanel({
   onMarkAll: () => void;
   accessToken: string | null;
   mentorPreferences: MentorPreferences;
+  focusReview?: boolean;
 }) {
   return (
     <div>
@@ -720,7 +769,11 @@ export function PulsePanel({
       <ActivityFeed notifications={notifications} onMarkRead={onMarkRead} onMarkAll={onMarkAll} />
 
       <SectionLabel>Performance</SectionLabel>
-      <PerformanceSection accessToken={accessToken} mentorPreferences={mentorPreferences} />
+      <PerformanceSection
+        accessToken={accessToken}
+        mentorPreferences={mentorPreferences}
+        focusReview={focusReview}
+      />
     </div>
   );
 }

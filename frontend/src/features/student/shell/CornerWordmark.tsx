@@ -21,6 +21,10 @@ export function CornerWordmark({
       aria-label={panelOpen ? "Back to the conversation" : "Scroll to the top of the conversation"}
       className={`fixed left-4 top-3 z-[var(--z-header)] font-serif text-[20px] tracking-tight text-foreground transition-[opacity,translate] duration-(--dur) ${
         dimmed ? "pointer-events-none -translate-x-2 opacity-30" : ""
+      } ${
+        // Below md the panel is full-screen and its back pill sits exactly here — hiding the
+        // wordmark stops it stealing those taps (the panel's own X covers the close action).
+        panelOpen ? "max-md:hidden" : ""
       }`}
     >
       Jargon

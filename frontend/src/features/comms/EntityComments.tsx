@@ -21,6 +21,8 @@ import type { EntityComment, EntityCommentType } from "@/lib/types";
 // visibility server-side. Replies under a hidden/deleted root never render (and the server rejects
 // new ones).
 
+let channelSeq = 0;
+
 function timeAgo(iso: string): string {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return "";
@@ -67,6 +69,8 @@ export function EntityComments({
   }, []);
 
   // Load + live-subscribe ONLY while open (many chips can be on screen; sockets stay bounded).
+  // The channel name carries a per-subscription sequence — reusing the exact name of a channel
+  // that is still tearing down (collapse → immediate re-expand) would join the dying instance.
   useEffect(() => {
     if (!expanded) return;
     let cancelled = false;
@@ -74,7 +78,7 @@ export function EntityComments({
       .then((rows) => !cancelled && setComments(rows))
       .catch(() => {});
     const channel = supabase
-      .channel(`entity-comments-${entityType}-${entityId}-${classId}`)
+      .channel(`entity-comments-${entityType}-${entityId}-${classId}-${++channelSeq}`)
       .on(
         "postgres_changes",
         {
@@ -156,6 +160,10 @@ export function EntityComments({
       } else {
         setInput("");
       }
+      // Refetch rather than trust realtime alone — the socket can lag or miss the own-insert.
+      void fetchEntityComments(entityType, entityId, classId)
+        .then((rows) => setComments(rows))
+        .catch(() => {});
     } catch (err) {
       notifyErr(err, "Couldn't post your comment.");
     } finally {
@@ -166,6 +174,13 @@ export function EntityComments({
   const retract = async (id: string) => {
     try {
       await softDeleteEntityComment(id);
+      // Update locally: the author's own SELECT policy excludes deleted rows, so the realtime
+      // UPDATE event never reaches them — without this the retract looks like a no-op.
+      setComments(
+        (prev) =>
+          prev?.map((c) => (c.id === id ? { ...c, deleted_at: new Date().toISOString() } : c)) ??
+          prev,
+      );
     } catch (err) {
       notifyErr(err, "Couldn't delete the comment.");
     }
@@ -205,13 +220,19 @@ export function EntityComments({
           ) : (
             topLevel.map((c) => (
               <div key={c.id} className="space-y-1.5">
-                <ThreadRow comment={c} mine={c.user_id === meId} onRetract={retract} />
+                <ThreadRow
+                  comment={c}
+                  mine={c.user_id === meId}
+                  coarse={coarse}
+                  onRetract={retract}
+                />
                 <div className="ml-4 space-y-1.5 border-l border-border/60 pl-3">
                   {(repliesByParent.get(c.id) || []).map((r) => (
                     <ThreadRow
                       key={r.id}
                       comment={r}
                       mine={r.user_id === meId}
+                      coarse={coarse}
                       onRetract={retract}
                     />
                   ))}
@@ -320,10 +341,12 @@ export function EntityComments({
 function ThreadRow({
   comment,
   mine,
+  coarse,
   onRetract,
 }: {
   comment: EntityComment;
   mine: boolean;
+  coarse: boolean;
   onRetract: (id: string) => void;
 }) {
   return (
@@ -339,8 +362,11 @@ function ThreadRow({
         <button
           type="button"
           onClick={() => onRetract(comment.id)}
-          className="mt-0.5 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) hover:text-foreground group-hover/row:opacity-100"
+          className={`mt-0.5 shrink-0 text-muted-foreground transition-opacity duration-(--dur-fast) hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100 ${
+            coarse ? "opacity-60" : "opacity-0"
+          }`}
           title="Delete"
+          aria-label="Delete comment"
         >
           <Trash2 className="h-3 w-3" />
         </button>

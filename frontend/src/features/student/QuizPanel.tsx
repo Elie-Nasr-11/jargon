@@ -150,13 +150,20 @@ export function QuizPanel({
           };
         }),
       });
-      const refreshed = await fetchStudentAssessments();
-      setBundle(refreshed);
-      setAttempt(
-        refreshed.attempts
-          .filter((item) => item.assessment_id === assessmentId)
-          .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] || null,
-      );
+      // The submit SUCCEEDED — mark the attempt done locally even if the results refetch fails,
+      // so the lockdown relaxes and Submit can't fire a duplicate attempt at a submitted quiz.
+      setAttempt((prev) => (prev ? { ...prev, status: "submitted" } : prev));
+      try {
+        const refreshed = await fetchStudentAssessments();
+        setBundle(refreshed);
+        setAttempt(
+          refreshed.attempts
+            .filter((item) => item.assessment_id === assessmentId)
+            .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] || null,
+        );
+      } catch {
+        // results will show on next open; the submission itself is safe
+      }
       setMessage("Quiz submitted.");
     } catch (error) {
       setMessage((error as Error).message || "Could not submit quiz.");
@@ -166,11 +173,14 @@ export function QuizPanel({
   };
 
   const completed = attempt && attempt.status !== "in_progress";
+  // A quiz that failed to load has no attempt to protect — report it "completed" so the
+  // FocusLock relaxes to a plain Close instead of trapping the student on a dead error screen.
+  const failedToLoad = !booting && !assessment;
 
   useEffect(() => {
-    onStatusChange?.(Boolean(completed));
+    onStatusChange?.(Boolean(completed) || failedToLoad);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completed]);
+  }, [completed, failedToLoad]);
 
   if (booting) {
     return <div className="py-6 text-[13px] text-muted-foreground">Loading quiz...</div>;

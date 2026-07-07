@@ -14,19 +14,21 @@ import type { StudentClass } from "@/lib/types";
 
 // The Classes panel at rest: a grid of class cards. Rest shows name/org/due-pill; hovering or
 // focusing a card expands a stat footer (due · next lesson · avg) — the "next lesson" is computed
-// lazily on FIRST peek per class (scoped lessons × own progress, cached for the page life). On
-// coarse pointers the footer is always expanded (and fetched on mount). Click opens the class
-// canvas (?view=classes&class=id).
+// lazily on FIRST peek per class, cached per GRID MOUNT (every panel open is a natural refresh —
+// a page-life cache went stale the moment a lesson was completed). On coarse pointers the footer
+// is always expanded. Click opens the class canvas (?view=classes&class=id).
 
-const nextLessonCache = new Map<string, string | null>();
-let progressPromise: Promise<Record<string, number>> | null = null;
+type PeekCaches = {
+  nextLesson: Map<string, string | null>;
+  progress: Promise<Record<string, number>> | null;
+};
 
-async function computeNextLesson(classId: string): Promise<string | null> {
-  if (nextLessonCache.has(classId)) return nextLessonCache.get(classId) ?? null;
-  progressPromise ??= fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>);
+async function computeNextLesson(caches: PeekCaches, classId: string): Promise<string | null> {
+  if (caches.nextLesson.has(classId)) return caches.nextLesson.get(classId) ?? null;
+  caches.progress ??= fetchStudentLessonProgress().catch(() => ({}) as Record<string, number>);
   const [lessons, progress] = await Promise.all([
     fetchClassScopedLessons(classId),
-    progressPromise,
+    caches.progress,
   ]);
   const ordered = [...lessons].sort(
     (a, b) =>
@@ -35,7 +37,7 @@ async function computeNextLesson(classId: string): Promise<string | null> {
   );
   const next = ordered.find((l) => (progress[l.id] ?? 0) < 1) ?? null;
   const title = next?.title ?? null;
-  nextLessonCache.set(classId, title);
+  caches.nextLesson.set(classId, title);
   return title;
 }
 
@@ -44,17 +46,19 @@ function ClassCard({
   due,
   avg,
   alwaysPeek,
+  caches,
   onOpen,
 }: {
   cls: StudentClass;
   due: number;
   avg: number | null;
   alwaysPeek: boolean;
+  caches: PeekCaches;
   onOpen: () => void;
 }) {
   const [peek, setPeek] = useState(alwaysPeek);
   const [nextLesson, setNextLesson] = useState<string | null | undefined>(
-    nextLessonCache.has(cls.id) ? nextLessonCache.get(cls.id) : undefined,
+    caches.nextLesson.has(cls.id) ? caches.nextLesson.get(cls.id) : undefined,
   );
   const footerRef = useRef<HTMLDivElement>(null);
   const shown = alwaysPeek || peek;
@@ -63,13 +67,13 @@ function ClassCard({
   useEffect(() => {
     if (!shown || nextLesson !== undefined) return;
     let alive = true;
-    void computeNextLesson(cls.id)
+    void computeNextLesson(caches, cls.id)
       .then((title) => alive && setNextLesson(title))
       .catch(() => alive && setNextLesson(null));
     return () => {
       alive = false;
     };
-  }, [shown, nextLesson, cls.id]);
+  }, [shown, nextLesson, cls.id, caches]);
 
   // Footer expands with a crisp height rise (hover = more info made physical).
   useEffect(() => {
@@ -154,6 +158,7 @@ export function ClassesGrid({
   const [classes, setClasses] = useState<StudentClass[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const coarse = useCoarsePointer();
+  const cachesRef = useRef<PeekCaches>({ nextLesson: new Map(), progress: null });
 
   useEffect(() => {
     let alive = true;
@@ -183,6 +188,7 @@ export function ClassesGrid({
           due={dueByClass[cls.id] ?? 0}
           avg={avgByClass[cls.id] ?? null}
           alwaysPeek={coarse}
+          caches={cachesRef.current}
           onOpen={() => onOpenClass(cls.id)}
         />
       ))}

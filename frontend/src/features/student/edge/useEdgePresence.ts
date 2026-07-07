@@ -44,7 +44,8 @@ export function useEdgePresence(onOpen: () => void) {
     rest,
     open,
     wrapRef,
-    // Spread on the WRAP (glyph + flyout) so moving the pointer into the flyout keeps it open.
+    // Spread on the WRAP (glyph + flyout) so moving the pointer into the flyout keeps it open,
+    // and so tabbing out through the flyout's Open row still rests the peek (blur bubbles here).
     hoverProps: {
       onPointerEnter: (e: React.PointerEvent) => {
         if (e.pointerType !== "mouse") return;
@@ -62,17 +63,27 @@ export function useEdgePresence(onOpen: () => void) {
           setTouchPeek(false);
         }, 240);
       },
-    },
-    // Spread on the glyph BUTTON.
-    triggerProps: {
-      onFocus: () => setPeek(true),
       onBlur: (e: React.FocusEvent) => {
         if (wrapRef.current?.contains(e.relatedTarget as Node)) return;
         setPeek(false);
         setTouchPeek(false);
       },
+    },
+    // Spread on the glyph BUTTON.
+    triggerProps: {
+      onFocus: () => setPeek(true),
       onPointerDown: (e: React.PointerEvent) => {
         lastPointerType.current = e.pointerType;
+      },
+      onKeyDown: (e: React.KeyboardEvent) => {
+        // A keyboard activation must never fall into the touch two-tap path (a stale 'touch'
+        // pointer type from an earlier tap would otherwise hijack Enter/Space into peek-only).
+        if (e.key === "Enter" || e.key === " ") lastPointerType.current = "keyboard";
+        if (e.key === "Escape" && peek) {
+          e.preventDefault();
+          e.stopPropagation();
+          rest();
+        }
       },
       onClick: () => {
         if (lastPointerType.current === "touch" && !touchPeek) {
@@ -81,13 +92,6 @@ export function useEdgePresence(onOpen: () => void) {
           return;
         }
         open();
-      },
-      onKeyDown: (e: React.KeyboardEvent) => {
-        if (e.key === "Escape" && peek) {
-          e.preventDefault();
-          e.stopPropagation();
-          rest();
-        }
       },
     },
   };

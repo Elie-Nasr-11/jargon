@@ -63,7 +63,9 @@ export function SlideOver({
         aria-label={title}
         className="relative flex h-full w-full min-w-0 flex-col border-l border-border bg-[var(--surface-3)] shadow-pop backdrop-blur-md md:w-[min(600px,100vw)]"
       >
-        <div className="flex items-center gap-3 px-5 pb-3 pt-5 sm:px-6">
+        {/* pr-16 reserves the top-right corner for the fixed settings dot (z-header) — without it
+            the avatar sits on top of this header's Close X and steals its clicks. */}
+        <div className="flex items-center gap-3 pb-3 pl-5 pr-16 pt-5 sm:pl-6">
           {onBack ? (
             <button
               type="button"

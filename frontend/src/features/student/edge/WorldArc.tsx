@@ -39,10 +39,6 @@ function useFinePointer(): boolean {
   return fine;
 }
 
-// The classes peek fetches names once per page life, on FIRST peek (lazy — rest costs nothing).
-let classesCache: StudentClass[] | null = null;
-let classesPromise: Promise<StudentClass[]> | null = null;
-
 function PeekCard({
   side,
   interactive,
@@ -184,7 +180,10 @@ export function WorldArc({
   const fancy = fine && !prefersReducedMotion();
   const [edgeHover, setEdgeHover] = useState(false);
   const [peeks, setPeeks] = useState({ classes: false, pulse: false });
-  const [classes, setClasses] = useState<StudentClass[] | null>(classesCache);
+  // The classes peek fetches names lazily on FIRST peek, cached per MOUNT (component state, not a
+  // module cache — a module cache would survive sign-out and leak the previous user's classes).
+  const [classes, setClasses] = useState<StudentClass[] | null>(null);
+  const classesFetchRef = useRef<Promise<StudentClass[]> | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -197,6 +196,7 @@ export function WorldArc({
     const bottom = bottomRef.current;
     if (!top || !bottom) return;
     if (!fancy) {
+      gsap.killTweensOf([top, bottom]);
       gsap.set([top, bottom], { x: 0, y: 0 });
       return;
     }
@@ -212,15 +212,17 @@ export function WorldArc({
     }
   }, [fanned, fancy]);
 
-  // Lazy classes fetch on first peek.
+  // Lazy classes fetch on first peek. A failed fetch clears the in-flight ref so the NEXT peek
+  // retries instead of showing "Loading…" forever.
   useEffect(() => {
     if (!peeks.classes || classes) return;
-    classesPromise ??= fetchStudentClasses().then((rows) => {
-      classesCache = rows;
-      return rows;
-    });
+    classesFetchRef.current ??= fetchStudentClasses();
     let cancelled = false;
-    void classesPromise.then((rows) => !cancelled && setClasses(rows)).catch(() => {});
+    void classesFetchRef.current
+      .then((rows) => !cancelled && setClasses(rows))
+      .catch(() => {
+        classesFetchRef.current = null;
+      });
     return () => {
       cancelled = true;
     };

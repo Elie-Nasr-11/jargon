@@ -97,6 +97,12 @@ export function ProfileMenu({
   // Hover peek (fine pointers): who's signed in, after a 120ms intent pause; never while open.
   const [peek, setPeek] = useState(false);
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (peekTimer.current) clearTimeout(peekTimer.current);
+    },
+    [],
+  );
   const desktop = useIsDesktop();
   const navigate = useNavigate();
   const { resolved, toggle } = useTheme();
