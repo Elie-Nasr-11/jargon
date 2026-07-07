@@ -6,6 +6,27 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-07 (Student UI v5 — "One Screen": chromeless stage, edge peripheries, Pulse, universal comments, lockdown)
+
+Status: Starting (P0 backend + data layer in progress)
+
+Task: v5 revisatory rethink per user review of v4 — one chromeless screen, lesson flow central,
+all nav/progress peripheral (edge presences: hover=peek, click=open), Classes grid → single-page
+class canvas, Pulse panel (agenda timeline + grades + one activity feed + performance), universal
+entity comments (class_public | teacher_private), full focus lockdown for quizzes/assignments.
+Plan: /root/.claude/plans/keen-percolating-acorn.md (user-approved). Phases P0-P6, ONE main FF at
+the end.
+
+Files I expect to touch: supabase/migrations/20260803000000_entity_comments.sql (NEW),
+.github/workflows/deploy-backend.yml (migration list), frontend/src/lib/{api,types}.ts,
+frontend/src/hooks/useStudentNavData.ts, frontend/src/routes/chat.tsx (shell surgery),
+frontend/src/features/student/** (edge/ NEW, shell/ rewrite, panels), frontend/src/features/comms/
+EntityComments.tsx (NEW), frontend/src/components/{FocusLock.tsx NEW, Popover.tsx}.
+
+Notes: entity_id is TEXT (lessons/lesson_activities have text PKs; uuid entities store id::text).
+Grade comments are minor-safety sensitive — guard forces teacher_private for non-teacher authors +
+owner-only commenting; two-account RLS probe planned in P4.
+
 ## Claude -> Codex / Human - 2026-07-07 (Student UI v4 — depth, persistent sidebar, workspace views, integrated stepper)
 
 Status: Built + verified per phase (tsc/lint/build green; new Tailwind utilities confirmed present

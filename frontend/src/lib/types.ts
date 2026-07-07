@@ -876,6 +876,24 @@ export type MaterialComment = {
   created_at: string;
 };
 
+// v5 universal comments: a threaded comment on a learning entity (2-level, polymorphic).
+export type EntityCommentType = "lesson" | "activity" | "assignment" | "assessment" | "grade";
+
+export type EntityComment = {
+  id: string;
+  entity_type: EntityCommentType;
+  entity_id: string;
+  class_id: string;
+  user_id: string;
+  parent_id: string | null;
+  visibility: "class_public" | "teacher_private";
+  body: string;
+  moderation_status: "visible" | "hidden";
+  hidden_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+};
+
 export type StudentMastery = {
   user_id: string;
   skill_key: string;

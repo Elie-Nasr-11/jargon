@@ -82,7 +82,8 @@ jobs:
             supabase/migrations/20260730000000_review_sessions.sql \
             supabase/migrations/20260731000000_notifications_realtime.sql \
             supabase/migrations/20260801000000_comms_foundation.sql \
-            supabase/migrations/20260802000000_comms_dm_notify.sql ; do
+            supabase/migrations/20260802000000_comms_dm_notify.sql \
+            supabase/migrations/20260803000000_entity_comments.sql ; do
             echo "Applying $f"
             body="$(jq -Rs '{query: .}' "$f")"
             resp="$(mktemp)"

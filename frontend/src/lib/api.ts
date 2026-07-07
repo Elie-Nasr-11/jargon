@@ -65,6 +65,8 @@ import type {
   DmMessage,
   MyTeacher,
   MaterialComment,
+  EntityComment,
+  EntityCommentType,
   ModelUsageEvent,
   ActiveSession,
   AdminActorAccess,
@@ -2276,6 +2278,88 @@ export async function setMaterialCommentHidden(id: string, hidden: boolean): Pro
 export async function softDeleteMaterialComment(id: string): Promise<void> {
   const { error } = await supabase
     .from("material_comments")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// --- universal entity comments (v5) ---
+export async function fetchEntityComments(
+  entityType: EntityCommentType,
+  entityId: string,
+  classId: string,
+): Promise<EntityComment[]> {
+  const { data, error } = await supabase
+    .from("entity_comments")
+    .select("*")
+    .eq("entity_type", entityType)
+    .eq("entity_id", entityId)
+    .eq("class_id", classId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []) as EntityComment[];
+}
+
+// Batched visible-comment counts for a panel's worth of entities (one query per entity type).
+// RLS already scopes rows to what the caller may see, so the counts are per-viewer honest.
+export async function fetchEntityCommentCounts(
+  entityType: EntityCommentType,
+  entityIds: string[],
+  classId: string,
+): Promise<Record<string, number>> {
+  if (!entityIds.length) return {};
+  const { data, error } = await supabase
+    .from("entity_comments")
+    .select("entity_id")
+    .eq("entity_type", entityType)
+    .eq("class_id", classId)
+    .in("entity_id", entityIds)
+    .eq("moderation_status", "visible")
+    .is("deleted_at", null);
+  if (error) throw error;
+  const counts: Record<string, number> = {};
+  for (const row of (data || []) as Array<{ entity_id: string }>) {
+    counts[row.entity_id] = (counts[row.entity_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
+export async function postEntityComment(input: {
+  entityType: EntityCommentType;
+  entityId: string;
+  classId: string;
+  body: string;
+  visibility?: "class_public" | "teacher_private";
+  parentId?: string | null;
+}): Promise<void> {
+  const session = await getSession();
+  const uid = session?.user?.id;
+  if (!uid) throw new Error("Not signed in.");
+  const trimmed = input.body.trim();
+  if (!trimmed) return;
+  const { error } = await supabase.from("entity_comments").insert({
+    entity_type: input.entityType,
+    entity_id: input.entityId,
+    class_id: input.classId,
+    user_id: uid,
+    parent_id: input.parentId ?? null,
+    visibility: input.visibility ?? "class_public",
+    body: trimmed.slice(0, 4000),
+  });
+  if (error) throw error;
+}
+
+export async function setEntityCommentHidden(id: string, hidden: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("entity_comments")
+    .update({ moderation_status: hidden ? "hidden" : "visible" })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function softDeleteEntityComment(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("entity_comments")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;

@@ -2,23 +2,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchNotifications,
   fetchReviewDue,
+  fetchStudentGrades,
   getSession,
   markAllNotificationsRead as apiMarkAll,
   markNotificationRead as apiMarkRead,
 } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
-import type { Notification } from "@/lib/types";
+import type { Notification, StudentGradeRow } from "@/lib/types";
 
-// The persistent data layer behind the student nav drawer: it fetches + live-subscribes so the
-// menu-trigger dot and the per-item counts (Messages / Review / Notifications) stay current even
-// while the drawer and its modals are closed. The notifications list + mark-read live here (one
-// source of truth shared by the badge and the Notifications modal); the Messages panel fetches its
-// own threads on open, and this hook only tracks the DM unread flag for its badge.
+// The persistent data layer behind the student edge chrome: it fetches + live-subscribes so the
+// edge badges and peeks (Classes due counts / Pulse next-deadline / Review / unread) stay current
+// even while every panel is closed. The notifications list + mark-read live here (one source of
+// truth shared by the badges and the Pulse activity feed); DM threads fetch on open, and this hook
+// only tracks the DM unread flag. Grades load once on mount and refresh via refreshGrades() when a
+// panel closes — the peeks read nextDue / dueByClass / avgByClass without their own fetches.
 export function useStudentNavData() {
   const [meId, setMeId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reviewDueCount, setReviewDueCount] = useState(0);
   const [dmUnread, setDmUnread] = useState(false);
+  const [grades, setGrades] = useState<StudentGradeRow[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +42,9 @@ export function useStudentNavData() {
           .catch(() => {});
         void fetchReviewDue()
           .then((rows) => !cancelled && setReviewDueCount(rows.length))
+          .catch(() => {});
+        void fetchStudentGrades()
+          .then((rows) => !cancelled && setGrades(rows))
           .catch(() => {});
       } catch {
         // best-effort: nav badges degrade to nothing, never break the chat
@@ -117,14 +123,55 @@ export function useStudentNavData() {
       .catch(() => {});
   }, []);
 
+  // Called when a panel closes (work may have been submitted inside it) so the edge peeks refresh.
+  const refreshGrades = useCallback(() => {
+    void fetchStudentGrades()
+      .then((rows) => setGrades(rows))
+      .catch(() => {});
+  }, []);
+
+  // Grade-derived summaries for the edge peeks: an item is OPEN while the student still owes work
+  // on it (assigned/started); submitted-awaiting-grading is no longer "due".
+  const { nextDue, dueByClass, avgByClass } = useMemo(() => {
+    const open = grades.filter(
+      (g) => (g.status === "assigned" || g.status === "started") && g.due_at,
+    );
+    const now = Date.now();
+    const upcoming = open
+      .filter((g) => new Date(g.due_at as string).getTime() >= now)
+      .sort(
+        (a, b) => new Date(a.due_at as string).getTime() - new Date(b.due_at as string).getTime(),
+      );
+    const byClass: Record<string, number> = {};
+    for (const g of open) {
+      if (g.class_id) byClass[g.class_id] = (byClass[g.class_id] ?? 0) + 1;
+    }
+    const sums: Record<string, { total: number; count: number }> = {};
+    for (const g of grades) {
+      if (g.class_id && g.score != null) {
+        const s = (sums[g.class_id] ??= { total: 0, count: 0 });
+        s.total += g.score;
+        s.count += 1;
+      }
+    }
+    const avg: Record<string, number> = {};
+    for (const [classId, s] of Object.entries(sums)) avg[classId] = s.total / s.count;
+    return { nextDue: upcoming[0] ?? null, dueByClass: byClass, avgByClass: avg };
+  }, [grades]);
+
   return {
     notifications,
     notificationsUnread,
     reviewDueCount,
     dmUnread,
+    grades,
+    nextDue,
+    dueByClass,
+    avgByClass,
     markNotificationRead,
     markAllNotificationsRead,
     clearDmUnread,
     refreshReviewCount,
+    refreshGrades,
   };
 }
