@@ -1,13 +1,8 @@
-// The workspace-view vocabulary shared by the route's search validation, the sidebar, the
-// mobile drawer, and the ViewHost. Absent view = the tutor chat.
-export const STUDENT_VIEWS = [
-  "overview",
-  "classes",
-  "calendar",
-  "grades",
-  "review",
-  "messages",
-] as const;
+// The v5 panel vocabulary shared by the route's search validation, the edge chrome, and the
+// SlideOver host. Absent view = the tutor chat (the stage). Two peripheries only: Classes (the
+// world of coursework) and Pulse (time + signal: agenda, grades, activity, performance). A class
+// canvas is Classes + a `class` search param, not its own view.
+export const STUDENT_VIEWS = ["classes", "pulse"] as const;
 
 export type StudentView = (typeof STUDENT_VIEWS)[number];
 
@@ -16,10 +11,6 @@ export function isStudentView(value: unknown): value is StudentView {
 }
 
 export const VIEW_TITLES: Record<StudentView, string> = {
-  overview: "Overview",
   classes: "Classes",
-  calendar: "Calendar",
-  grades: "Grades",
-  review: "Review",
-  messages: "Messages",
+  pulse: "Pulse",
 };

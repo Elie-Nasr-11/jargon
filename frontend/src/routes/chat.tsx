@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type React
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import {
+  Activity,
   AlertCircle,
   AudioLines,
   Check,
@@ -11,7 +12,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
-  Menu,
+  LayoutGrid,
   Paperclip,
   Pause,
   Play,
@@ -29,11 +30,18 @@ import { ModalCard } from "@/components/ModalCard";
 import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { QuizPanel } from "@/features/student/QuizPanel";
-import { StudentNav, type NavKey } from "@/features/student/StudentNav";
-import { Sidebar } from "@/features/student/shell/Sidebar";
-import { ViewHost } from "@/features/student/shell/ViewHost";
-import { isStudentView, type StudentView } from "@/features/student/shell/studentViews";
+import { CornerWordmark } from "@/features/student/shell/CornerWordmark";
+import { SlideOver } from "@/features/student/shell/SlideOver";
+import {
+  isStudentView,
+  VIEW_TITLES,
+  type StudentView,
+} from "@/features/student/shell/studentViews";
 import { ProfileMenu } from "@/features/student/shell/ProfileMenu";
+import { ClassesPanel } from "@/features/student/ClassesPanel";
+import { GradesPanel } from "@/features/student/GradesPanel";
+import { MessagesPanel } from "@/features/student/MessagesPanel";
+import { ReviewPanel } from "@/features/student/ReviewPanel";
 import { ChatStepperRail, ChatStepperStrip } from "@/features/student/chat/ChatStepper";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
 import { prefersReducedMotion } from "@/lib/motion";
@@ -103,10 +111,14 @@ export const Route = createFileRoute("/chat")({
   head: () => ({
     meta: [{ title: "Jargon" }, { name: "description", content: "Your conversation with Jargon." }],
   }),
-  // Workspace views live in the URL (?view=grades) so back button, refresh, and deep links all
-  // work; absent/invalid = the tutor chat.
-  validateSearch: (s: Record<string, unknown>): { view?: StudentView } => ({
+  // Panels live in the URL (?view=classes&class=…) so back button, refresh, and deep links all
+  // work; absent/invalid = the tutor chat. `class` only means something with view=classes.
+  validateSearch: (s: Record<string, unknown>): { view?: StudentView; class?: string } => ({
     view: isStudentView(s.view) ? s.view : undefined,
+    class:
+      isStudentView(s.view) && s.view === "classes" && typeof s.class === "string" && s.class
+        ? s.class
+        : undefined,
   }),
   component: ChatPage,
 });
@@ -393,14 +405,16 @@ function ChatPage() {
   const [viewerClock, setViewerClock] = useState(() => Date.now());
   // True while a teacher has paused this session (Phase 3). Composer is locked + a banner shows.
   const [sessionHeld, setSessionHeld] = useState(false);
-  // The active workspace view comes from the URL (?view=); absent = the tutor chat. The mobile
-  // drawer is the only remaining transient nav surface; settings still open as small modals until
-  // the header profile menu lands.
-  const { view } = Route.useSearch();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  // A DM deep-link into the Messages view (from a direct_message notification click). A one-shot
-  // TOKEN, not a bare id: seq makes re-clicking the SAME notification observable, and nav paths
-  // null it so a later plain Messages open shows the teacher list instead of the old thread.
+  // The active panel comes from the URL (?view=classes|pulse, plus &class= for a class canvas);
+  // absent = the bare stage (the tutor chat).
+  // (typed explicitly — the hand-maintained routeTree leaves useSearch() as any)
+  const { view, class: classParam } = Route.useSearch() as {
+    view?: StudentView;
+    class?: string;
+  };
+  // A DM deep-link into the Pulse activity feed (from a direct_message notification click). A
+  // one-shot TOKEN, not a bare id: seq makes re-clicking the SAME notification observable, and nav
+  // paths null it so a later plain Pulse open shows the feed instead of the old thread.
   const [dmDeepLink, setDmDeepLink] = useState<{ channelId: string; seq: number } | null>(null);
   // Persistent nav data: badge counts + the notifications list (shared with the Notifications
   // surface) — stays live while any view is open.
@@ -950,30 +964,31 @@ function ChatPage() {
     }
   };
 
-  // View navigation: the URL is the single source of truth (?view=…; null = tutor chat).
-  const goView = (next: StudentView | null) => {
-    void navigate({ to: "/chat", search: next ? { view: next } : {} });
+  // Panel navigation: the URL is the single source of truth (?view=…&class=…; null = the stage).
+  const goView = (next: StudentView | null, classId?: string | null) => {
+    void navigate({
+      to: "/chat",
+      search: next
+        ? classId && next === "classes"
+          ? { view: next, class: classId }
+          : { view: next }
+        : {},
+    });
   };
 
-  // ONE select handler for both nav surfaces (sidebar + drawer) so they can't diverge: opening
-  // Messages without a deep-link clears any stale one and consumes the unread dot.
-  const selectNav = (key: "chat" | StudentView) => {
-    if (key === "chat") {
-      goView(null);
-      return;
-    }
-    if (key === "messages") {
-      setDmDeepLink(null);
-      navData.clearDmUnread();
-    }
-    goView(key);
+  // Opening Pulse WITHOUT a deep-link clears any stale one and consumes the unread dot (its feed
+  // is the messages surface now).
+  const openPulse = () => {
+    setDmDeepLink(null);
+    navData.clearDmUnread();
+    goView("pulse");
   };
 
   // A DM notification click deep-links into its thread (seq makes every click observable).
   const openDmFromNotification = (channelId: string) => {
     setDmDeepLink((prev) => ({ channelId, seq: (prev?.seq ?? 0) + 1 }));
     navData.clearDmUnread();
-    goView("messages");
+    goView("pulse");
   };
 
   // Hiding the chat under a view must not leave the mic hot: leaving RealtimeVoicePanel mounted
@@ -994,27 +1009,31 @@ function ChatPage() {
     if (accessToken) void loadLesson(nextLessonId, accessToken, mentor);
   };
 
-  // ESC steps out of a view back to the chat — unless something closer consumed it (quiz dialog,
-  // popovers) or the student is typing.
+  // ESC pops ONE URL level (class canvas → classes grid → chat) — unless something closer
+  // consumed it (quiz dialog, popovers, edge flyouts) or the student is typing.
   useEffect(() => {
     if (!view) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      goView(null);
+      if (view === "classes" && classParam) goView("classes");
+      else goView(null);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
+  }, [view, classParam]);
 
-  // Leaving the Review view refreshes the sidebar's due count (a completed guided review just
-  // changed it).
+  // Leaving a panel refreshes what may have changed inside it: Pulse hosts guided review (due
+  // count) and every panel can submit work (grades summary feeding the edge peeks).
   const prevViewRef = useRef<StudentView | undefined>(undefined);
   useEffect(() => {
-    if (prevViewRef.current === "review" && view !== "review") {
+    if (prevViewRef.current === "pulse" && view !== "pulse") {
       navData.refreshReviewCount();
+    }
+    if (prevViewRef.current && !view) {
+      navData.refreshGrades();
     }
     prevViewRef.current = view;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1183,316 +1202,320 @@ function ChatPage() {
     <div className="relative h-dvh overflow-hidden" style={{ background: "var(--background)" }}>
       <AmbientCanvas intensity={0.35} />
 
-      <div className="relative z-[var(--z-base)] grid h-full grid-rows-[60px_minmax(0,1fr)]">
-        <header
-          className="z-[var(--z-header)] backdrop-blur-md"
-          style={{ background: "color-mix(in oklab, var(--background) 72%, transparent)" }}
-        >
-          <div className="hairline h-full">
-            <div className="flex h-full w-full items-center justify-between gap-2 px-4 sm:px-6">
-              <button
-                type="button"
-                onClick={() => {
-                  if (view) goView(null);
-                  else scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-                aria-label={
-                  view ? "Back to the conversation" : "Scroll to the top of the conversation"
-                }
-                className="font-serif text-[22px] tracking-tight"
-              >
-                Jargon
-              </button>
-              <div className="flex items-center gap-2">
-                {/* Mobile drawer trigger — desktop nav is the persistent sidebar. Its dot covers
-                    what the sidebar rows would show (messages + review); notifications live on
-                    the avatar at every size. */}
-                <button
-                  type="button"
-                  onClick={() => setDrawerOpen(true)}
-                  aria-label="Menu"
-                  className="relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground sm:h-9 sm:w-9 lg:hidden"
-                >
-                  <Menu className="h-[20px] w-[20px]" strokeWidth={1.6} />
-                  {navData.dmUnread || navData.reviewDueCount > 0 ? (
-                    <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" />
-                  ) : null}
-                </button>
-                <ProfileMenu
-                  email={email ?? ""}
-                  mentor={mentor}
-                  onMentorChange={updateMentor}
-                  voice={voice}
-                  onVoiceChange={updateVoice}
-                  notifications={navData.notifications}
-                  notificationsUnread={navData.notificationsUnread}
-                  onMarkRead={navData.markNotificationRead}
-                  onMarkAll={navData.markAllNotificationsRead}
-                  onOpenDm={openDmFromNotification}
-                />
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_264px]">
-          {/* Workspace stack: the chat pane is ALWAYS mounted (its session, draft, voice, and
-              realtime state must survive view switches) and merely hidden under an active view —
-              visibility (not display:none) keeps its layout alive so scroll positions and the
-              composer's observers stay valid. */}
-          <div className="relative grid min-h-0">
-            <div
-              className={`col-start-1 row-start-1 flex min-h-0 flex-col ${
-                view ? "pointer-events-none invisible" : ""
-              }`}
-              inert={view ? true : undefined}
-            >
-              <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[820px] flex-1 flex-row px-5 pt-10">
-                {/* Integrated progress rail — the chat column's left gutter (md+); mobile gets a
-                    strip above the stream instead. Lives OUTSIDE the stream scroll container so
-                    it never scrolls away. */}
-                <div className="hidden w-14 shrink-0 md:flex">
-                  {lessonArc ? (
-                    <ChatStepperRail
-                      arc={lessonArc}
-                      activities={activities}
-                      onRestart={restartLesson}
-                    />
-                  ) : null}
-                </div>
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  {lessonArc ? (
-                    <div className="md:hidden">
-                      <ChatStepperStrip
-                        arc={lessonArc}
-                        activities={activities}
-                        onRestart={restartLesson}
-                      />
-                    </div>
-                  ) : null}
-                  {activeLiveViewers.length ? (
-                    <div className="mb-3 flex justify-center">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-info/40 bg-info/12 px-3 py-1.5 text-[12px] text-info">
-                        <span className="h-1.5 w-1.5 rounded-full bg-info" />
-                        Teacher viewing
-                        {activeLiveViewers.length > 1 ? ` · ${activeLiveViewers.length}` : ""}
-                      </div>
-                    </div>
-                  ) : null}
-                  {sessionHeld ? (
-                    <div className="mb-3 flex justify-center">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-3.5 py-1.5 text-[12px] text-warning">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
-                        Your teacher paused the session — hang tight
-                      </div>
-                    </div>
-                  ) : null}
-                  {surfaceError && !booting ? (
-                    <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
-                      <span className="min-w-0 flex-1">{surfaceError}</span>
-                      <button
-                        type="button"
-                        onClick={() => setSurfaceError("")}
-                        className="shrink-0 text-[12px] underline underline-offset-2"
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  ) : null}
-                  {reviewNudge ? (
-                    <div className="mb-3 flex items-center gap-3 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-[13px] text-foreground">
-                      <RotateCcw className="h-4 w-4 shrink-0 text-warning" strokeWidth={1.7} />
-                      <span className="min-w-0 flex-1">
-                        {reviewNudge} {reviewNudge === 1 ? "skill is" : "skills are"} due for a
-                        quick review.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          sessionStorage.setItem("jargon-review-nudge", "1");
-                          setReviewNudge(null);
-                          goView("review");
-                        }}
-                        className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
-                      >
-                        Review now
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          sessionStorage.setItem("jargon-review-nudge", "1");
-                          setReviewNudge(null);
-                        }}
-                        aria-label="Dismiss review reminder"
-                        className="shrink-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                      >
-                        Later
-                      </button>
-                    </div>
-                  ) : null}
-                  <div
-                    ref={scrollRef}
-                    className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5"
-                  >
-                    {msgs.map((m) => (
-                      <MessageRow
-                        key={m.id}
-                        msg={m}
-                        // Quiz choices are live ONLY on the newest mentor message — historical bubbles
-                        // keep their text but their buttons are gone, so an old quiz can't be re-answered.
-                        choicesActive={m.id === lastBotId}
-                        choicesDisabled={sending || runInFlight}
-                        onUseCode={useCodeInEditor}
-                        onChooseChoice={sendChoice}
-                        onRetry={retryTurn}
-                        onResourceEvent={handleResourceEvent}
-                        voice={voice}
-                        accessToken={accessToken || ""}
-                        lessonId={lessonId}
-                        sessionId={sessionId}
-                        onVoiceEvent={handleVoiceEvent}
-                      />
-                    ))}
-                    {showJump ? (
-                      <div className="sticky bottom-1 z-10 flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewBelow(false);
-                            scrollRef.current?.scrollTo({
-                              top: scrollRef.current.scrollHeight,
-                              behavior: "smooth",
-                            });
-                          }}
-                          className="elev-hover inline-flex items-center gap-1.5 rounded-pill border border-border bg-depth-card/95 px-3.5 py-1.5 text-meta font-medium text-foreground shadow-raised backdrop-blur"
-                        >
-                          <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
-                          {newBelow ? "New messages" : "Jump to latest"}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div
-                    ref={composerWrapRef}
-                    className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-                  >
-                    <WorkDock
-                      lessonId={lessonId}
-                      assignments={assignments}
-                      assessments={assessments}
-                      onSubmitAssignment={submitStudentAssignment}
-                      onOpenQuiz={setOpenQuizId}
-                    />
-                    {lessonComplete && !followUp ? (
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
-                        <div className="min-w-0">
-                          <div className="text-[14px] font-medium text-foreground">
-                            Lesson complete
-                          </div>
-                          <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-                            Nice work. Pick your next lesson, or keep chatting about this one.
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => goView("classes")}
-                            className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
-                          >
-                            Pick your next lesson
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFollowUp(true)}
-                            className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
-                          >
-                            Ask a follow-up
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                    {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
-              imperative handle for "Use this code" — survives entering/leaving voice mode. */}
-                    <div
-                      className={voiceMode || (lessonComplete && !followUp) ? "hidden" : undefined}
-                    >
-                      <Composer
-                        ref={composerRef}
-                        key={lessonId}
-                        initialCode={starterCode}
-                        initialLanguage="jargon"
-                        onSendText={sendUser}
-                        onRunCode={runCode}
-                        onSendCodeResult={sendCodeResult}
-                        onVoiceEvent={handleVoiceEvent}
-                        // Lock inputs while a teacher has the session paused (Phase 3).
-                        sending={sending || sessionHeld}
-                        canStartVoice
-                        onStartVoice={() => setVoiceMode(true)}
-                      />
-                    </div>
-                    {voiceMode ? (
-                      <RealtimeVoicePanel
-                        accessToken={accessToken || ""}
-                        lessonId={lessonId}
-                        sessionId={sessionId}
-                        voice={voice}
-                        autoStart
-                        onClose={() => setVoiceMode(false)}
-                        onVoiceEvent={handleVoiceEvent}
-                        onSubmitVoiceTurn={async (text, confidence) =>
-                          submitTextAnswer(text, {
-                            inputModality: "audio_session",
-                            transcriptConfidence: confidence ?? null,
-                          })
-                        }
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              </main>
-            </div>
-
-            {view ? (
-              <div key={view} className="col-start-1 row-start-1 flex min-h-0 flex-col">
-                <ViewHost
-                  view={view}
-                  onBack={() => goView(null)}
-                  onGo={goView}
-                  currentLessonTitle={currentLesson?.title ?? null}
-                  onOpenLesson={openLessonFromView}
-                  accessToken={accessToken}
-                  mentorPreferences={mentorToPreferences(mentor)}
-                  dmDeepLink={dmDeepLink}
-                />
-              </div>
-            ) : null}
-          </div>
-
-          {/* Persistent desktop sidebar — same-room furniture over the ambient canvas, always
-              live even while a view is open. */}
-          <aside className="hidden min-h-0 border-l border-border bg-[var(--surface-1)] backdrop-blur-md lg:flex dark:bg-[var(--surface-2)]">
-            <Sidebar
-              activeKey={view ?? "chat"}
-              reviewDueCount={navData.reviewDueCount}
-              messagesUnread={navData.dmUnread}
-              onSelect={selectNav}
-            />
-          </aside>
-        </div>
+      {/* Floating corner chrome — no header, no bars. The wordmark and the settings avatar sit at
+          --z-header so they float above the panel scrim and stay reachable while a panel is open. */}
+      <CornerWordmark
+        panelOpen={Boolean(view)}
+        onClosePanel={() => goView(null)}
+        onScrollTop={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+      />
+      <div className="fixed right-4 top-3 z-[var(--z-header)]">
+        <ProfileMenu
+          email={email ?? ""}
+          mentor={mentor}
+          onMentorChange={updateMentor}
+          voice={voice}
+          onVoiceChange={updateVoice}
+          notifications={navData.notifications}
+          notificationsUnread={navData.notificationsUnread}
+          onMarkRead={navData.markNotificationRead}
+          onMarkAll={navData.markAllNotificationsRead}
+          onOpenDm={openDmFromNotification}
+        />
       </div>
 
-      <StudentNav
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        email={email ?? ""}
-        reviewDueCount={navData.reviewDueCount}
-        messagesUnread={navData.dmUnread}
-        onSelect={(key) => {
-          setDrawerOpen(false);
-          selectNav(key);
-        }}
-      />
+      {/* TEMPORARY (v5 P1): straight-strip stand-ins for the P2 WorldArc — two right-edge glyphs
+          opening the peripheries. Replaced wholesale by features/student/edge/ in P2. */}
+      <div className="fixed right-1.5 top-1/2 z-[var(--z-header)] flex -translate-y-1/2 flex-col items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => (view === "classes" ? goView(null) : goView("classes"))}
+          aria-label="Classes"
+          className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ${
+            view === "classes"
+              ? "bg-depth-card text-foreground shadow-card"
+              : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+          }`}
+        >
+          <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.6} />
+        </button>
+        <button
+          type="button"
+          onClick={() => (view === "pulse" ? goView(null) : openPulse())}
+          aria-label={`Pulse${
+            navData.notificationsUnread + navData.reviewDueCount > 0
+              ? ` — ${navData.notificationsUnread + navData.reviewDueCount} new`
+              : ""
+          }`}
+          className={`relative flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ${
+            view === "pulse"
+              ? "bg-depth-card text-foreground shadow-card"
+              : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+          }`}
+        >
+          <Activity className="h-[18px] w-[18px]" strokeWidth={1.6} />
+          {navData.notificationsUnread + navData.reviewDueCount > 0 ? (
+            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9.5px] font-semibold tabular-nums text-white">
+              {Math.min(99, navData.notificationsUnread + navData.reviewDueCount)}
+            </span>
+          ) : null}
+        </button>
+      </div>
+
+      {/* The stage stack: the chat pane is ALWAYS mounted (its session, draft, voice, and realtime
+          state must survive panel switches) and stays VISIBLE under the panel's translucent scrim —
+          only pointer-events + inert gate it, so scroll positions and the composer's observers stay
+          valid and nothing repaints on open/close. */}
+      <div className="relative z-[var(--z-base)] grid h-full">
+        <div
+          className={`col-start-1 row-start-1 flex min-h-0 flex-col ${
+            view ? "pointer-events-none" : ""
+          }`}
+          inert={view ? true : undefined}
+        >
+          <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[820px] flex-1 flex-row px-5 pt-12 md:pt-10">
+            {/* Integrated progress rail — the chat column's left gutter (md+); mobile gets a
+                    strip above the stream instead. Lives OUTSIDE the stream scroll container so
+                    it never scrolls away. */}
+            <div className="hidden w-14 shrink-0 md:flex">
+              {lessonArc ? (
+                <ChatStepperRail
+                  arc={lessonArc}
+                  activities={activities}
+                  onRestart={restartLesson}
+                />
+              ) : null}
+            </div>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {lessonArc ? (
+                <div className="md:hidden">
+                  <ChatStepperStrip
+                    arc={lessonArc}
+                    activities={activities}
+                    onRestart={restartLesson}
+                  />
+                </div>
+              ) : null}
+              {activeLiveViewers.length ? (
+                <div className="mb-3 flex justify-center">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-info/40 bg-info/12 px-3 py-1.5 text-[12px] text-info">
+                    <span className="h-1.5 w-1.5 rounded-full bg-info" />
+                    Teacher viewing
+                    {activeLiveViewers.length > 1 ? ` · ${activeLiveViewers.length}` : ""}
+                  </div>
+                </div>
+              ) : null}
+              {sessionHeld ? (
+                <div className="mb-3 flex justify-center">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-3.5 py-1.5 text-[12px] text-warning">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
+                    Your teacher paused the session — hang tight
+                  </div>
+                </div>
+              ) : null}
+              {surfaceError && !booting ? (
+                <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
+                  <span className="min-w-0 flex-1">{surfaceError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSurfaceError("")}
+                    className="shrink-0 text-[12px] underline underline-offset-2"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : null}
+              {reviewNudge ? (
+                <div className="mb-3 flex items-center gap-3 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-[13px] text-foreground">
+                  <RotateCcw className="h-4 w-4 shrink-0 text-warning" strokeWidth={1.7} />
+                  <span className="min-w-0 flex-1">
+                    {reviewNudge} {reviewNudge === 1 ? "skill is" : "skills are"} due for a quick
+                    review.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sessionStorage.setItem("jargon-review-nudge", "1");
+                      setReviewNudge(null);
+                      openPulse();
+                    }}
+                    className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
+                  >
+                    Review now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sessionStorage.setItem("jargon-review-nudge", "1");
+                      setReviewNudge(null);
+                    }}
+                    aria-label="Dismiss review reminder"
+                    className="shrink-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  >
+                    Later
+                  </button>
+                </div>
+              ) : null}
+              <div
+                ref={scrollRef}
+                className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5"
+              >
+                {msgs.map((m) => (
+                  <MessageRow
+                    key={m.id}
+                    msg={m}
+                    // Quiz choices are live ONLY on the newest mentor message — historical bubbles
+                    // keep their text but their buttons are gone, so an old quiz can't be re-answered.
+                    choicesActive={m.id === lastBotId}
+                    choicesDisabled={sending || runInFlight}
+                    onUseCode={useCodeInEditor}
+                    onChooseChoice={sendChoice}
+                    onRetry={retryTurn}
+                    onResourceEvent={handleResourceEvent}
+                    voice={voice}
+                    accessToken={accessToken || ""}
+                    lessonId={lessonId}
+                    sessionId={sessionId}
+                    onVoiceEvent={handleVoiceEvent}
+                  />
+                ))}
+                {showJump ? (
+                  <div className="sticky bottom-1 z-10 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewBelow(false);
+                        scrollRef.current?.scrollTo({
+                          top: scrollRef.current.scrollHeight,
+                          behavior: "smooth",
+                        });
+                      }}
+                      className="elev-hover inline-flex items-center gap-1.5 rounded-pill border border-border bg-depth-card/95 px-3.5 py-1.5 text-meta font-medium text-foreground shadow-raised backdrop-blur"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                      {newBelow ? "New messages" : "Jump to latest"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div
+                ref={composerWrapRef}
+                className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+              >
+                <WorkDock
+                  lessonId={lessonId}
+                  assignments={assignments}
+                  assessments={assessments}
+                  onSubmitAssignment={submitStudentAssignment}
+                  onOpenQuiz={setOpenQuizId}
+                />
+                {lessonComplete && !followUp ? (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
+                    <div className="min-w-0">
+                      <div className="text-[14px] font-medium text-foreground">Lesson complete</div>
+                      <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+                        Nice work. Pick your next lesson, or keep chatting about this one.
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => goView("classes")}
+                        className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+                      >
+                        Pick your next lesson
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFollowUp(true)}
+                        className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+                      >
+                        Ask a follow-up
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
+              imperative handle for "Use this code" — survives entering/leaving voice mode. */}
+                <div className={voiceMode || (lessonComplete && !followUp) ? "hidden" : undefined}>
+                  <Composer
+                    ref={composerRef}
+                    key={lessonId}
+                    initialCode={starterCode}
+                    initialLanguage="jargon"
+                    onSendText={sendUser}
+                    onRunCode={runCode}
+                    onSendCodeResult={sendCodeResult}
+                    onVoiceEvent={handleVoiceEvent}
+                    // Lock inputs while a teacher has the session paused (Phase 3).
+                    sending={sending || sessionHeld}
+                    canStartVoice
+                    onStartVoice={() => setVoiceMode(true)}
+                  />
+                </div>
+                {voiceMode ? (
+                  <RealtimeVoicePanel
+                    accessToken={accessToken || ""}
+                    lessonId={lessonId}
+                    sessionId={sessionId}
+                    voice={voice}
+                    autoStart
+                    onClose={() => setVoiceMode(false)}
+                    onVoiceEvent={handleVoiceEvent}
+                    onSubmitVoiceTurn={async (text, confidence) =>
+                      submitTextAnswer(text, {
+                        inputModality: "audio_session",
+                        transcriptConfidence: confidence ?? null,
+                      })
+                    }
+                  />
+                ) : null}
+              </div>
+            </div>
+          </main>
+        </div>
+
+        {view ? (
+          <div
+            key={`${view}:${classParam ?? ""}`}
+            className="col-start-1 row-start-1 flex min-h-0 flex-col"
+          >
+            <SlideOver title={VIEW_TITLES[view]} onClose={() => goView(null)} fill={false}>
+              {/* TEMPORARY (v5 P1): panels host the surviving v4 content so every flow stays
+                  reachable while the real ClassesGrid/ClassCanvas/PulsePanel land in P3. */}
+              {view === "classes" ? (
+                <ClassesPanel onOpenLesson={openLessonFromView} />
+              ) : (
+                <div className="space-y-8">
+                  <section>
+                    <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Messages
+                    </div>
+                    <div className="flex h-[min(52dvh,480px)] min-h-0 flex-col">
+                      <MessagesPanel deepLink={dmDeepLink} />
+                    </div>
+                  </section>
+                  <section>
+                    <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Review
+                    </div>
+                    <ReviewPanel
+                      accessToken={accessToken}
+                      mentorPreferences={mentorToPreferences(mentor)}
+                    />
+                  </section>
+                  <section>
+                    <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Grades
+                    </div>
+                    <GradesPanel />
+                  </section>
+                </div>
+              )}
+            </SlideOver>
+          </div>
+        ) : null}
+      </div>
 
       {/* Quiz-taking stays a FOCUSED modal over whatever surface is open (assessment deserves an
           intentional frame). Closing re-fetches the assessments bundle so the work bar reflects a
