@@ -1331,7 +1331,7 @@ function ChatPage() {
                               behavior: "smooth",
                             });
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3.5 py-1.5 text-[12px] font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted"
+                          className="elev-hover inline-flex items-center gap-1.5 rounded-pill border border-border bg-depth-card/95 px-3.5 py-1.5 text-meta font-medium text-foreground shadow-raised backdrop-blur"
                         >
                           <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
                           {newBelow ? "New messages" : "Jump to latest"}
@@ -1351,7 +1351,7 @@ function ChatPage() {
                       onOpenQuiz={setOpenQuizId}
                     />
                     {lessonComplete && !followUp ? (
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border bg-background/70 px-5 py-4">
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
                         <div className="min-w-0">
                           <div className="text-[14px] font-medium text-foreground">
                             Lesson complete
@@ -1967,7 +1967,7 @@ function WorkDock({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2.5 rounded-full border border-border bg-background/70 px-4 py-2 text-left transition-colors hover:bg-muted/50"
+        className="flex w-full items-center gap-2.5 rounded-pill border border-border bg-depth-card px-4 py-2 text-left shadow-card transition-colors duration-(--dur-fast) hover:bg-muted/50"
       >
         <ClipboardList className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-foreground">
@@ -2360,8 +2360,8 @@ function MessageRow({
     if (!ref.current) return;
     gsap.fromTo(
       ref.current,
-      { opacity: 0, y: 8 },
-      { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" },
+      { opacity: 0, y: 6 },
+      { opacity: 1, y: 0, duration: 0.26, ease: "power2.out" },
     );
   }, []);
 
@@ -2374,7 +2374,7 @@ function MessageRow({
     return (
       <div ref={ref} className="flex justify-end">
         <div className="flex max-w-[85%] flex-col items-end gap-2">
-          <div className="whitespace-pre-wrap rounded-2xl border border-border/60 bg-foreground/5 px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground/85">
+          <div className="whitespace-pre-wrap rounded-card border border-border/50 bg-depth-card px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground shadow-card">
             {text}
           </div>
           {msg.inputModality === "dictated" || msg.inputModality === "audio_session" ? (
@@ -2432,7 +2432,7 @@ function MessageRow({
     return (
       <div ref={ref} className="flex">
         <div className="w-full max-w-[92%] space-y-2">
-          <div className="rounded-2xl border border-info/40 bg-info/12 px-4 py-3">
+          <div className="rounded-card border border-info/40 bg-info/12 px-4 py-3 backdrop-blur-sm">
             <div className="mb-1 text-[11px] uppercase tracking-[0.1em] text-info">Teacher</div>
             <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
               {msg.text}
@@ -2460,7 +2460,7 @@ function MessageRow({
     return (
       <div ref={ref} className="flex">
         <div className="w-full max-w-[92%]">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-danger/40 bg-danger/10 px-4 py-3 backdrop-blur-sm">
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.1em] text-danger">
                 <AlertCircle className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -2813,7 +2813,7 @@ function MessageContent({
         return (
           <div
             key={`${segment.kind}-${index}`}
-            className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground"
+            className="whitespace-pre-wrap text-body-lg text-foreground"
           >
             {beat ? <span className="tutor-beat">{beat.replace(/\*\*/g, "")}</span> : null}
             {body.trim() ? renderInline(body) : null}

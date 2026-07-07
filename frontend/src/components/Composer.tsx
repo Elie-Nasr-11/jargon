@@ -542,7 +542,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   return (
     <div className="w-full">
-      <GradientCard>
+      <GradientCard className="composer-elev">
         <div ref={morphRef} className="overflow-hidden px-4 py-3">
           {mode === "text" ? (
             <div ref={textPanelRef} className="space-y-2">

@@ -28,7 +28,7 @@ export function ModalCard({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={`block border-0 bg-transparent p-0 shadow-none ${width}`}>
-        <GradientCard>
+        <GradientCard className="shadow-pop">
           <div className={`flex flex-col ${size === "large" ? "h-[86dvh]" : "max-h-[82vh]"}`}>
             <DialogTitle className="px-5 pb-2 pr-10 pt-4 text-[12px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
               {title}

@@ -230,9 +230,7 @@ function QuizContent({
             <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.7} />
             {assessment.status}
           </div>
-          <h2 className="mt-2 text-[22px] font-semibold tracking-tight text-foreground">
-            {assessment.title}
-          </h2>
+          <h2 className="mt-2 font-serif text-display text-foreground">{assessment.title}</h2>
           {assessment.instructions ? (
             <p className="mt-3 max-w-2xl whitespace-pre-wrap text-[14px] leading-relaxed text-muted-foreground">
               {assessment.instructions}
