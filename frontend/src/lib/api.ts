@@ -2300,7 +2300,8 @@ export async function fetchEntityComments(
   return (data || []) as EntityComment[];
 }
 
-// Batched visible-comment counts for a panel's worth of entities (one query per entity type).
+// Batched visible-comment counts for a panel's worth of entities: one HEAD count per entity (a
+// row-select would silently truncate at PostgREST's max-rows once a class accumulates comments).
 // RLS already scopes rows to what the caller may see, so the counts are per-viewer honest.
 export async function fetchEntityCommentCounts(
   entityType: EntityCommentType,
@@ -2308,19 +2309,22 @@ export async function fetchEntityCommentCounts(
   classId: string,
 ): Promise<Record<string, number>> {
   if (!entityIds.length) return {};
-  const { data, error } = await supabase
-    .from("entity_comments")
-    .select("entity_id")
-    .eq("entity_type", entityType)
-    .eq("class_id", classId)
-    .in("entity_id", entityIds)
-    .eq("moderation_status", "visible")
-    .is("deleted_at", null);
-  if (error) throw error;
+  const entries = await Promise.all(
+    entityIds.map(async (entityId) => {
+      const { count, error } = await supabase
+        .from("entity_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("entity_type", entityType)
+        .eq("entity_id", entityId)
+        .eq("class_id", classId)
+        .eq("moderation_status", "visible")
+        .is("deleted_at", null);
+      if (error) throw error;
+      return [entityId, count ?? 0] as const;
+    }),
+  );
   const counts: Record<string, number> = {};
-  for (const row of (data || []) as Array<{ entity_id: string }>) {
-    counts[row.entity_id] = (counts[row.entity_id] ?? 0) + 1;
-  }
+  for (const [id, n] of entries) if (n > 0) counts[id] = n;
   return counts;
 }
 

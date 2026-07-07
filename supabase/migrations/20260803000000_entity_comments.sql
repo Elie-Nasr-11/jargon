@@ -11,9 +11,15 @@
 -- casts back per type. No FK (polymorphic); the class_id anchor + per-type guard validation are the
 -- integrity gate, and orphaned comments after an entity deletion are inert (nothing joins them back).
 --
--- Grade comments are minor-safety sensitive: the guard forces teacher_private for non-teacher authors
--- and requires the checkpoint_recipient row to belong to the author (or the author to be a teacher),
--- so a student can never comment on — or leak — a classmate's grade.
+-- Grade comments are minor-safety sensitive: EVERY grade comment is teacher_private (forced in the
+-- guard for all authors — grade talk is never class-visible), and the checkpoint_recipient row must
+-- belong to the author (or the author must be a teacher), so a student can never comment on — or
+-- leak — a classmate's grade.
+--
+-- Private-thread read rule: a teacher_private row is readable by class teachers, its author, the
+-- author of its thread root (so a student reads the teacher's replies in the thread they started),
+-- and — for grade threads — the grade's owner (so a teacher-initiated grade thread reaches the
+-- student it is about). Classmates never qualify.
 
 -- ===================================================================================================
 -- Table
@@ -28,7 +34,7 @@ create table if not exists public.entity_comments (
   parent_id uuid references public.entity_comments on delete cascade,   -- null = top-level; else a reply
   visibility text not null default 'class_public'
     check (visibility in ('class_public', 'teacher_private')),
-  body text not null,
+  body text not null check (char_length(body) <= 4000),
   moderation_status text not null default 'visible' check (moderation_status in ('visible', 'hidden')),
   hidden_by uuid references auth.users on delete set null,
   hidden_at timestamptz,
@@ -42,6 +48,18 @@ create index if not exists entity_comments_entity_idx
 create index if not exists entity_comments_parent_idx
   on public.entity_comments (parent_id);
 
+-- Repair for tables created by an earlier run of this file (before the body length cap landed).
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.entity_comments'::regclass and conname = 'entity_comments_body_len'
+  ) then
+    alter table public.entity_comments
+      add constraint entity_comments_body_len check (char_length(body) <= 4000);
+  end if;
+end $$;
+
 alter table if exists public.entity_comments enable row level security;
 revoke all on public.entity_comments from anon;
 revoke all on public.entity_comments from authenticated;
@@ -53,8 +71,44 @@ grant select, insert, update, delete on public.entity_comments to service_role;
 -- ===================================================================================================
 -- RLS
 -- ===================================================================================================
--- Read: class members see live class_public rows plus their OWN teacher_private rows; a class
--- teacher/admin additionally sees everything in the class (incl. hidden/deleted, for moderation).
+-- SECURITY DEFINER read helpers: both would recurse (entity_comments policy querying
+-- entity_comments) or over-reach (checkpoint_recipients policy) if written inline.
+-- The caller authored the thread root → they read every reply in their thread (a student must see
+-- the teacher's replies in the private thread they started).
+create or replace function public.is_entity_comment_thread_root_author(root uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.entity_comments c where c.id = root and c.user_id = auth.uid()
+  );
+$$;
+revoke all on function public.is_entity_comment_thread_root_author(uuid) from public;
+grant execute on function public.is_entity_comment_thread_root_author(uuid) to authenticated;
+
+-- The caller owns the grade a comment thread is about → they read it even when a teacher started
+-- the thread (grade threads are always teacher_private; the subject student must not be locked out).
+create or replace function public.is_own_grade_entity(entity text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.checkpoint_recipients cr
+    where cr.id::text = entity and cr.user_id = auth.uid()
+  );
+$$;
+revoke all on function public.is_own_grade_entity(text) from public;
+grant execute on function public.is_own_grade_entity(text) to authenticated;
+
+-- Read: class members see live class_public rows; a teacher_private row is visible to its author,
+-- its thread-root author, and (for grade threads) the grade's owner; a class teacher/admin
+-- additionally sees everything in the class (incl. hidden/deleted, for moderation).
 drop policy if exists entity_comments_select on public.entity_comments;
 create policy entity_comments_select on public.entity_comments
   for select to authenticated
@@ -65,7 +119,12 @@ create policy entity_comments_select on public.entity_comments
       public.is_class_teacher(class_id)
       or (
         moderation_status = 'visible' and deleted_at is null
-        and (visibility = 'class_public' or user_id = auth.uid())
+        and (
+          visibility = 'class_public'
+          or user_id = auth.uid()
+          or (parent_id is not null and public.is_entity_comment_thread_root_author(parent_id))
+          or (entity_type = 'grade' and public.is_own_grade_entity(entity_id))
+        )
       )
     )
   );
@@ -122,6 +181,9 @@ begin
       exception when others then
         raise exception 'entity_comments: % id must be a uuid', new.entity_type;
       end;
+      -- Canonicalize the stored text (uppercase/braced uuid spellings would split threads and
+      -- evade every eq-match: fetches, counts, reply validation, the notification dedup index).
+      new.entity_id := entity_uuid::text;
     end if;
 
     if new.entity_type = 'lesson' then
@@ -159,20 +221,22 @@ begin
       if entity_class is null or entity_class <> new.class_id then
         raise exception 'entity_comments: class does not match the grade';
       end if;
-      -- Grade privacy: only the grade's owner (or a class teacher) may comment on it, and a
-      -- non-teacher author's comment is ALWAYS teacher_private — classmates never see grade talk.
-      if actor is not null and not is_mod then
-        if grade_owner is distinct from actor then
-          raise exception 'entity_comments: you may only comment on your own grade';
-        end if;
-        new.visibility := 'teacher_private';
+      -- Grade privacy: only the grade's owner (or a class teacher) may comment on it, and EVERY
+      -- grade comment — any author, any thread position — is teacher_private. Grade talk is never
+      -- class-visible; the subject student reads it via is_own_grade_entity().
+      if actor is not null and not is_mod and grade_owner is distinct from actor then
+        raise exception 'entity_comments: you may only comment on your own grade';
       end if;
+      new.visibility := 'teacher_private';
     end if;
 
-    -- 2-level threading: a reply's parent must be a TOP-LEVEL comment on the SAME entity + class,
-    -- and the reply INHERITS the parent's visibility (a private thread stays private end to end).
+    -- 2-level threading: a reply's parent must be a TOP-LEVEL, still-visible comment on the SAME
+    -- entity + class, and the reply INHERITS the parent's visibility (a private thread stays
+    -- private end to end). A reply asking for MORE privacy than its thread is an error, never a
+    -- silent widening — the author must start their own private comment instead.
     if new.parent_id is not null then
-      select id, parent_id, entity_type, entity_id, class_id, visibility into parent
+      select id, parent_id, entity_type, entity_id, class_id, visibility,
+             moderation_status, deleted_at, purged_at into parent
         from public.entity_comments where id = new.parent_id;
       if parent.id is null then
         raise exception 'entity_comments: parent % not found', new.parent_id;
@@ -184,6 +248,15 @@ begin
         or parent.entity_id <> new.entity_id
         or parent.class_id <> new.class_id then
         raise exception 'entity_comments: reply must match parent entity and class';
+      end if;
+      if parent.moderation_status <> 'visible'
+        or parent.deleted_at is not null
+        or parent.purged_at is not null then
+        raise exception 'entity_comments: this thread is closed';
+      end if;
+      if new.visibility = 'teacher_private' and parent.visibility = 'class_public' then
+        raise exception
+          'entity_comments: a private comment cannot reply to a public thread — post a new private comment instead';
       end if;
       new.visibility := parent.visibility;
     end if;
@@ -244,7 +317,7 @@ create trigger trg_guard_entity_comment_upd
   for each row execute function public.guard_entity_comment();
 
 comment on table public.entity_comments is
-  'v5 universal comments: 2-level threads on lesson/activity/assignment/assessment/grade, class-anchored; visibility class_public|teacher_private (immutable); grade comments forced teacher_private for students.';
+  'v5 universal comments: 2-level threads on lesson/activity/assignment/assessment/grade, class-anchored; visibility class_public|teacher_private (immutable, thread-inherited); grade comments are ALWAYS teacher_private (owner-or-teacher authors only).';
 
 -- ===================================================================================================
 -- Notify: a student''s teacher_private comment raises a `private_comment` notification to the class''s
