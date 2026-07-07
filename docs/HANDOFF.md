@@ -49,9 +49,23 @@ Phases (one commit each):
 Tests run: per phase `npx tsc --noEmit` (0) · `npm run lint` (0 errors, 12 pre-existing warns) ·
 `npm run build` (ok) · built-CSS token audit (all new utilities + dark --elev-* present).
 
-Remaining concerns: adversarial-review findings to fold in before ship (in progress); live smoke
-post-FF (view switches w/ live voice, 1024px fit, dark elevation, mobile drawer/sheet/strip).
-Teacher/admin untouched (SettingsMenu/ConsoleShell unchanged).
+Adversarial review (3 dimensions × verify, 19 raised → 18 confirmed → 11 root causes) FIXED in the
+follow-up commit: ESC now consumed capture-phase by popovers/sheets (no more close-popover+exit-view
+double handling); one shared selectNav for sidebar+drawer (desktop Messages now clears the unread
+dot and stale deep-links); DM deep-link became a one-shot {channelId,seq} token (re-clicking the
+same notification works); opening any view or switching lessons exits live voice (no hot mic under
+a hidden pane); a failed lesson switch clears the stale transcript; ProfileMenu survives lg
+breakpoint crossings + gained reduced-motion gates (message entrance too); the stepper's current
+node renders correctly (grad-border's unlayered position:relative beat the absolute utility — now
+wrapper-positioned); roadmap popover centered on the rail + width-clamped; sidebar notch guards
+display:none measurement + re-measures on resize; title chip gated to ≥1360px; the global
+focus-visible ring is outline-based (shadow-* utilities were swallowing the box-shadow ring); dark
+sidebar uses the denser surface tier for contrast.
+
+Remaining concerns (consciously accepted): resource audio/video playing in the chat keeps playing
+when a view hides it (voice/mic is handled; media pause is a possible nicety); the roadmap popover
+is not portaled (mitigated by centering + clamps — portal if a real device shows clipping); live
+smoke post-FF per the QA matrix. Teacher/admin untouched (SettingsMenu/ConsoleShell unchanged).
 
 Suggested next task: post-FF smoke as a student across the QA matrix in the plan (widths
 375/768/1024/1280/1440, chat-state survival, realtime badges in views, reduced motion, dark).

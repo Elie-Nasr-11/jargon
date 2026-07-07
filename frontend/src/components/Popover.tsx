@@ -30,14 +30,20 @@ export function Popover({
       if (wrapRef.current?.contains(e.target as Node)) return;
       onClose();
     };
+    // Capture-phase + preventDefault (the Radix dismissable-layer pattern): ESC must dismiss
+    // ONLY this innermost surface — outer listeners (e.g. the workspace-view exit) check
+    // defaultPrevented and must see it consumed.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        e.preventDefault();
+        onClose();
+      }
     };
     document.addEventListener("pointerdown", onDoc);
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, { capture: true });
     return () => {
       document.removeEventListener("pointerdown", onDoc);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, { capture: true });
     };
   }, [open, onClose]);
 
@@ -48,7 +54,7 @@ export function Popover({
         <div
           className={`absolute z-[var(--z-menu)] ${
             placement === "right-start"
-              ? "left-[calc(100%+10px)] top-0"
+              ? "left-[calc(100%+10px)] top-1/2 -translate-y-1/2"
               : "right-0 top-[calc(100%+8px)]"
           } ${panelClassName ?? ""}`}
           style={panelStyle}

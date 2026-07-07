@@ -19,7 +19,7 @@ export function ViewHost({
   onOpenLesson,
   accessToken,
   mentorPreferences,
-  dmDeepLinkChannel,
+  dmDeepLink,
 }: {
   view: StudentView;
   onBack: () => void;
@@ -28,7 +28,7 @@ export function ViewHost({
   onOpenLesson: (lessonId: string) => void;
   accessToken: string | null;
   mentorPreferences: MentorPreferences;
-  dmDeepLinkChannel: string | null;
+  dmDeepLink: { channelId: string; seq: number } | null;
 }) {
   return (
     <ViewShell title={VIEW_TITLES[view]} onBack={onBack} fill={view === "messages"}>
@@ -50,7 +50,7 @@ export function ViewHost({
       ) : view === "review" ? (
         <ReviewPanel accessToken={accessToken} mentorPreferences={mentorPreferences} />
       ) : (
-        <MessagesPanel initialChannelId={dmDeepLinkChannel} />
+        <MessagesPanel deepLink={dmDeepLink} />
       )}
     </ViewShell>
   );

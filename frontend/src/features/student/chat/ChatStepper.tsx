@@ -26,7 +26,7 @@ function RoadmapPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="max-h-[70vh] w-[320px] overflow-y-auto overscroll-contain rounded-card border border-border bg-background p-3 shadow-pop">
+    <div className="max-h-[70vh] w-[min(320px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-card border border-border bg-background p-3 shadow-pop">
       <LessonMilestones arc={arc} activities={activities} />
       {onRestart ? (
         <button
@@ -103,14 +103,18 @@ export function ChatStepperRail({
                 const current = i === arc.step - 1;
                 const top = `${(i / (arc.total - 1)) * 100}%`;
                 if (current) {
+                  // Positioned by a wrapper: .grad-border's own position:relative is unlayered
+                  // CSS and would override the `absolute` utility on the same element.
                   return (
                     <span
                       key={i}
                       aria-hidden
-                      className="grad-border grad-border-pill absolute left-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 shadow-card"
+                      className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2"
                       style={{ top }}
                     >
-                      <span className="grad-border-inner block" />
+                      <span className="grad-border grad-border-pill block h-3.5 w-3.5 shadow-card">
+                        <span className="grad-border-inner block h-full w-full" />
+                      </span>
                     </span>
                   );
                 }
@@ -127,7 +131,7 @@ export function ChatStepperRail({
               })}
               {/* current-step title chip — xl+ has guaranteed empty margin to the left */}
               <span
-                className="absolute right-full mr-3 hidden max-w-[150px] -translate-y-1/2 truncate rounded-pill border border-border bg-depth-card px-2.5 py-1 text-meta font-medium text-foreground shadow-card xl:block"
+                className="absolute right-full mr-3 hidden max-w-[150px] -translate-y-1/2 truncate rounded-pill border border-border bg-depth-card px-2.5 py-1 text-meta font-medium text-foreground shadow-card min-[1360px]:block"
                 style={{ top: `${fraction * 100}%` }}
               >
                 {arc.current?.title ?? `Step ${arc.step}`}

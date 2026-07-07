@@ -560,11 +560,11 @@ select {
    component/utility focus styles still win where they exist. */
 @layer base {
   :where(a, button, [role="button"], summary, [tabindex]):focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px var(--background),
-      0 0 0 4px var(--ring);
-  }
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  /* outline (not box-shadow): shadow-* utilities on elevated controls would override a
+     box-shadow ring; nothing touches outline. */
+}
 }
 
 /* Respect reduced-motion globally: neutralize the CSS keyframes (grad-shift,

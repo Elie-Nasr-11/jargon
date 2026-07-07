@@ -116,6 +116,13 @@ export function ProfileMenu({
   const backdropRef = useRef<HTMLDivElement>(null);
   const [sheetMounted, setSheetMounted] = useState(false);
 
+  // Crossing the lg breakpoint while open would strand open=true with nothing rendered (and
+  // the mobile scroll lock engaged) — reset on either crossing.
+  useEffect(() => {
+    setOpen(false);
+    setSheetMounted(false);
+  }, [desktop]);
+
   const openMenu = () => {
     setCard("menu");
     if (desktop) setOpen(true);
@@ -143,6 +150,17 @@ export function ProfileMenu({
     const backdrop = backdropRef.current;
     if (!sheet || !backdrop) return;
     gsap.killTweensOf([sheet, backdrop]);
+    if (prefersReducedMotion()) {
+      if (open) {
+        gsap.set(backdrop, { opacity: 1 });
+        gsap.set(sheet, { y: "0%" });
+      } else {
+        gsap.set(backdrop, { opacity: 0 });
+        gsap.set(sheet, { y: "100%" });
+        setSheetMounted(false);
+      }
+      return;
+    }
     if (open) {
       gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" });
       gsap.fromTo(sheet, { y: "100%" }, { y: "0%", duration: 0.32, ease: "power3.out" });
@@ -171,10 +189,13 @@ export function ProfileMenu({
   useEffect(() => {
     if (desktop || !open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        e.preventDefault();
+        close();
+      }
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, { capture: true });
+    return () => document.removeEventListener("keydown", onKey, { capture: true });
   }, [open, desktop]);
 
   const menuContent = (

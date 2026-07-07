@@ -56,19 +56,26 @@ export function Sidebar({
   const rowRefs = useRef(new Map<RowKey, HTMLButtonElement>());
   const didMount = useRef(false);
 
-  // Slide the left-edge notch to the active row (gsap.set on first paint, tween after).
+  // Slide the left-edge notch to the active row (gsap.set on first paint, tween after). Bails
+  // while the aside is display:none (<lg) — offsets are 0 there — and re-measures on resize so
+  // growing past lg lands the notch correctly.
   useEffect(() => {
-    const notch = notchRef.current;
-    const row = rowRefs.current.get(activeKey);
-    const list = listRef.current;
-    if (!notch || !row || !list) return;
-    const y = row.offsetTop + (row.offsetHeight - 18) / 2;
-    if (!didMount.current || prefersReducedMotion()) {
-      gsap.set(notch, { y, opacity: 1 });
-      didMount.current = true;
-    } else {
-      gsap.to(notch, { y, duration: 0.34, ease: "power3.out" });
-    }
+    const measure = (animate: boolean) => {
+      const notch = notchRef.current;
+      const row = rowRefs.current.get(activeKey);
+      if (!notch || !row || row.offsetHeight === 0) return;
+      const y = row.offsetTop + (row.offsetHeight - 18) / 2;
+      if (!animate || !didMount.current || prefersReducedMotion()) {
+        gsap.set(notch, { y, opacity: 1 });
+        didMount.current = true;
+      } else {
+        gsap.to(notch, { y, duration: 0.34, ease: "power3.out" });
+      }
+    };
+    measure(true);
+    const onResize = () => measure(false);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [activeKey]);
 
   return (

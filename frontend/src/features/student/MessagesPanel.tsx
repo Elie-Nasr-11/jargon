@@ -15,9 +15,15 @@ import { notifyErr } from "@/lib/feedback";
 import type { DmChannel, MyTeacher } from "@/lib/types";
 
 // The student's Messages modal body: DM threads with a teacher of a class where messaging is
-// enabled (per-class flag). DM-only — notifications live under Settings now. `initialChannelId`
+// enabled (per-class flag). DM-only — notifications live under Settings now. `deepLink`
 // deep-links straight into a thread (from a direct_message notification).
-export function MessagesPanel({ initialChannelId }: { initialChannelId?: string | null }) {
+export function MessagesPanel({
+  deepLink,
+}: {
+  // One-shot deep-link token: seq distinguishes repeated clicks on the same notification, so
+  // each click re-opens the thread even when the channel id is unchanged.
+  deepLink?: { channelId: string; seq: number } | null;
+}) {
   const [meId, setMeId] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<MyTeacher[]>([]);
   const [channels, setChannels] = useState<DmChannel[]>([]);
@@ -70,18 +76,21 @@ export function MessagesPanel({ initialChannelId }: { initialChannelId?: string 
     return map;
   }, [channels]);
 
-  // Deep-link: once channels are loaded, open the requested one — but only ONCE, so tapping Back
-  // (which nulls activeChannel) doesn't immediately re-open the same thread and trap the user.
+  // Deep-link: once channels are loaded, open the requested one — consumed ONCE PER TOKEN
+  // (seq+id), so tapping Back doesn't re-open the thread, but a fresh notification click (new
+  // seq) does.
   const consumedDeepLinkRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!initialChannelId || consumedDeepLinkRef.current === initialChannelId) return;
-    const channel = channels.find((c) => c.id === initialChannelId);
+    if (!deepLink) return;
+    const tokenKey = `${deepLink.seq}:${deepLink.channelId}`;
+    if (consumedDeepLinkRef.current === tokenKey) return;
+    const channel = channels.find((c) => c.id === deepLink.channelId);
     if (channel) {
-      consumedDeepLinkRef.current = initialChannelId;
+      consumedDeepLinkRef.current = tokenKey;
       setActiveChannel(channel);
       setActiveTeacherName(teacherNameById.get(channel.teacher_id) ?? "Teacher");
     }
-  }, [initialChannelId, channels, teacherNameById]);
+  }, [deepLink, channels, teacherNameById]);
 
   const selectTeacher = async (t: MyTeacher) => {
     if (!meId || opening) return;

@@ -36,6 +36,7 @@ import { isStudentView, type StudentView } from "@/features/student/shell/studen
 import { ProfileMenu } from "@/features/student/shell/ProfileMenu";
 import { ChatStepperRail, ChatStepperStrip } from "@/features/student/chat/ChatStepper";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
+import { prefersReducedMotion } from "@/lib/motion";
 import {
   DEFAULT_MENTOR,
   DEFAULT_VOICE,
@@ -397,8 +398,10 @@ function ChatPage() {
   // the header profile menu lands.
   const { view } = Route.useSearch();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // A DM channel to deep-link the Messages view into (from a direct_message notification click).
-  const [dmDeepLinkChannel, setDmDeepLinkChannel] = useState<string | null>(null);
+  // A DM deep-link into the Messages view (from a direct_message notification click). A one-shot
+  // TOKEN, not a bare id: seq makes re-clicking the SAME notification observable, and nav paths
+  // null it so a later plain Messages open shows the teacher list instead of the old thread.
+  const [dmDeepLink, setDmDeepLink] = useState<{ channelId: string; seq: number } | null>(null);
   // Persistent nav data: badge counts + the notifications list (shared with the Notifications
   // surface) — stays live while any view is open.
   const navData = useStudentNavData();
@@ -575,8 +578,13 @@ function ChatPage() {
       if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
       setMsgs([envelopeMessage(envelope)]);
     } catch (error) {
-      // Single surface: the dismissible error banner (no duplicate in-stream bot bubble).
+      // Single surface: the dismissible error banner (no duplicate in-stream bot bubble). Clear
+      // the stale transcript too — a failed lesson SWITCH must not show the old lesson's
+      // conversation under the new lesson id.
       setSurfaceError((error as Error).message || "Could not load the live lesson.");
+      setMsgs([]);
+      setSessionId(null);
+      setLearningSession(null);
     } finally {
       setSending(false);
       setBooting(false);
@@ -947,12 +955,41 @@ function ChatPage() {
     void navigate({ to: "/chat", search: next ? { view: next } : {} });
   };
 
+  // ONE select handler for both nav surfaces (sidebar + drawer) so they can't diverge: opening
+  // Messages without a deep-link clears any stale one and consumes the unread dot.
+  const selectNav = (key: "chat" | StudentView) => {
+    if (key === "chat") {
+      goView(null);
+      return;
+    }
+    if (key === "messages") {
+      setDmDeepLink(null);
+      navData.clearDmUnread();
+    }
+    goView(key);
+  };
+
+  // A DM notification click deep-links into its thread (seq makes every click observable).
+  const openDmFromNotification = (channelId: string) => {
+    setDmDeepLink((prev) => ({ channelId, seq: (prev?.seq ?? 0) + 1 }));
+    navData.clearDmUnread();
+    goView("messages");
+  };
+
+  // Hiding the chat under a view must not leave the mic hot: leaving RealtimeVoicePanel mounted
+  // but invisible+inert would keep the live session (and its audio) running with no reachable
+  // controls. Unmounting it triggers its full WebRTC/mic cleanup.
+  useEffect(() => {
+    if (view) setVoiceMode(false);
+  }, [view]);
+
   // Opening a lesson from the Classes view LOADS it in place (chat.tsx owns loadLesson), then
   // returns to the chat view — the old modal-era same-route navigate never actually reloaded.
   const openLessonFromView = (nextLessonId: string) => {
     store.setLessonId(nextLessonId);
     goView(null);
     if (nextLessonId === lessonId) return; // already the open lesson — just come back to it
+    setVoiceMode(false); // a live voice session belongs to the old lesson
     setLessonId(nextLessonId);
     if (accessToken) void loadLesson(nextLessonId, accessToken, mentor);
   };
@@ -1191,11 +1228,7 @@ function ChatPage() {
                   notificationsUnread={navData.notificationsUnread}
                   onMarkRead={navData.markNotificationRead}
                   onMarkAll={navData.markAllNotificationsRead}
-                  onOpenDm={(channelId) => {
-                    setDmDeepLinkChannel(channelId);
-                    navData.clearDmUnread();
-                    goView("messages");
-                  }}
+                  onOpenDm={openDmFromNotification}
                 />
               </div>
             </div>
@@ -1430,7 +1463,7 @@ function ChatPage() {
                   onOpenLesson={openLessonFromView}
                   accessToken={accessToken}
                   mentorPreferences={mentorToPreferences(mentor)}
-                  dmDeepLinkChannel={dmDeepLinkChannel}
+                  dmDeepLink={dmDeepLink}
                 />
               </div>
             ) : null}
@@ -1438,12 +1471,12 @@ function ChatPage() {
 
           {/* Persistent desktop sidebar — same-room furniture over the ambient canvas, always
               live even while a view is open. */}
-          <aside className="hidden min-h-0 border-l border-border bg-[var(--surface-1)] backdrop-blur-md lg:flex">
+          <aside className="hidden min-h-0 border-l border-border bg-[var(--surface-1)] backdrop-blur-md lg:flex dark:bg-[var(--surface-2)]">
             <Sidebar
               activeKey={view ?? "chat"}
               reviewDueCount={navData.reviewDueCount}
               messagesUnread={navData.dmUnread}
-              onSelect={(key) => goView(key === "chat" ? null : key)}
+              onSelect={selectNav}
             />
           </aside>
         </div>
@@ -1457,15 +1490,7 @@ function ChatPage() {
         messagesUnread={navData.dmUnread}
         onSelect={(key) => {
           setDrawerOpen(false);
-          if (key === "chat") {
-            goView(null);
-            return;
-          }
-          if (key === "messages") {
-            setDmDeepLinkChannel(null);
-            navData.clearDmUnread();
-          }
-          goView(key);
+          selectNav(key);
         }}
       />
 
@@ -2357,7 +2382,7 @@ function MessageRow({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!ref.current) return;
+    if (!ref.current || prefersReducedMotion()) return;
     gsap.fromTo(
       ref.current,
       { opacity: 0, y: 6 },
