@@ -11,6 +11,8 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Menu,
+  PanelLeft,
   Paperclip,
   Pause,
   Play,
@@ -28,19 +30,13 @@ import { FocusLock } from "@/components/FocusLock";
 import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { QuizPanel } from "@/features/student/QuizPanel";
-import { CornerWordmark } from "@/features/student/shell/CornerWordmark";
-import { SlideOver } from "@/features/student/shell/SlideOver";
-import {
-  isStudentView,
-  VIEW_TITLES,
-  type StudentView,
-} from "@/features/student/shell/studentViews";
-import { ProfileMenu } from "@/features/student/shell/ProfileMenu";
-import { WorldArc } from "@/features/student/edge/WorldArc";
+import { AppSidebar } from "@/features/student/shell/AppSidebar";
+import { PageShell } from "@/features/student/shell/PageShell";
+import { isStudentView, type StudentView } from "@/features/student/shell/studentViews";
 import { ClassesGrid } from "@/features/student/panels/ClassesGrid";
 import { ClassCanvas } from "@/features/student/panels/ClassCanvas";
 import { PulsePanel } from "@/features/student/panels/PulsePanel";
-import { ChatStepperRail, ChatStepperStrip } from "@/features/student/chat/ChatStepper";
+import { ChatStepperStrip } from "@/features/student/chat/ChatStepper";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
 import { prefersReducedMotion } from "@/lib/motion";
 import {
@@ -426,6 +422,26 @@ function ChatPage() {
   const [workVersion, setWorkVersion] = useState(0);
   const [pulseFocusReview, setPulseFocusReview] = useState(false);
   const locked = openQuizId !== null || openAssignmentId !== null;
+  // v6 shell state: the mobile nav drawer and the desktop sidebar collapse (persisted).
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => typeof window !== "undefined" && localStorage.getItem("jargon:sidebar-collapsed") === "1",
+  );
+  const toggleSidebar = () => {
+    setSidebarCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("jargon:sidebar-collapsed", next ? "1" : "0");
+      } catch {
+        // private-mode storage failures just lose persistence
+      }
+      return next;
+    });
+  };
+  // Lockdown must never leave the nav drawer open under the modal.
+  useEffect(() => {
+    if (locked) setDrawerOpen(false);
+  }, [locked]);
   // Count of skills due for spaced review — a small dismissible nudge card, once per browser session.
   const [reviewNudge, setReviewNudge] = useState<number | null>(null);
   // Scroll UX: only auto-stick when the student is already near the bottom; otherwise offer a
@@ -1217,82 +1233,84 @@ function ChatPage() {
   }
 
   return (
-    <div className="relative h-dvh overflow-hidden" style={{ background: "var(--background)" }}>
+    <div
+      className="relative flex h-dvh overflow-hidden"
+      style={{ background: "var(--background)" }}
+    >
       <AmbientCanvas intensity={0.35} />
 
-      {/* Floating corner chrome — no header, no bars. The wordmark and the settings avatar sit at
-          --z-header so they float above the panel scrim and stay reachable while a panel is open.
-          Under LOCKDOWN all four edges retract: inert, dimmed, nudged toward their edge. */}
-      <CornerWordmark
-        panelOpen={Boolean(view)}
-        dimmed={locked}
-        onClosePanel={() => goView(null)}
-        onScrollTop={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
-      />
-      <div
-        inert={locked ? true : undefined}
-        className={`fixed right-4 top-3 z-[var(--z-header)] transition-[opacity,translate] duration-(--dur) ${
-          locked ? "pointer-events-none translate-x-2 opacity-30" : ""
-        }`}
-      >
-        <ProfileMenu
-          email={email ?? ""}
-          mentor={mentor}
-          onMentorChange={updateMentor}
-          voice={voice}
-          onVoiceChange={updateVoice}
-        />
-      </div>
-
-      {/* The right edge — the two-glyph world arc (Classes · Pulse): rest is quiet, hover fans +
-          peeks, click opens the panel. */}
-      <WorldArc
+      {/* The v6 shell: ONE left column carries all navigation (ChatGPT-style); the rest of the
+          screen is whatever the active surface is — chat, Classes, or Pulse. Under lockdown the
+          sidebar goes inert + dim. */}
+      <AppSidebar
+        email={email ?? ""}
+        mentor={mentor}
+        onMentorChange={updateMentor}
+        voice={voice}
+        onVoiceChange={updateVoice}
         view={view}
-        retracted={locked}
-        notificationsUnread={navData.notificationsUnread}
-        reviewDueCount={navData.reviewDueCount}
-        nextDue={navData.nextDue}
-        dueByClass={navData.dueByClass}
+        lessons={lessons}
+        currentLessonId={lessonId}
+        switchBlocked={sending || runInFlight}
+        onOpenLesson={openLessonFromView}
+        onGoChat={() => goView(null)}
         onOpenClasses={() => goView("classes")}
         onOpenPulse={openPulse}
-        onCloseView={() => goView(null)}
+        pulseBadge={navData.notificationsUnread + navData.reviewDueCount}
+        locked={locked}
+        drawerOpen={drawerOpen}
+        onCloseDrawer={() => setDrawerOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
-      {/* The left edge — the lesson journey rail (md+; mobile keeps the in-stream strip). Fixed
-          chrome OUTSIDE the inert-able chat pane so the roadmap stays reachable over a panel. */}
-      {lessonArc ? (
-        <div
+      {/* Fixed launchers over the main area: the mobile hamburger, and the desktop reopen button
+          when the sidebar is collapsed. */}
+      <button
+        type="button"
+        inert={locked ? true : undefined}
+        onClick={() => setDrawerOpen(true)}
+        aria-label="Open navigation"
+        aria-expanded={drawerOpen}
+        className={`fixed left-3 top-3 z-[var(--z-header)] flex h-9 w-9 items-center justify-center rounded-full bg-depth-card text-muted-foreground shadow-card transition-opacity duration-(--dur) hover:text-foreground lg:hidden ${
+          locked ? "pointer-events-none opacity-30" : ""
+        }`}
+      >
+        <Menu className="h-[18px] w-[18px]" strokeWidth={1.6} />
+      </button>
+      {sidebarCollapsed ? (
+        <button
+          type="button"
           inert={locked ? true : undefined}
-          className={`fixed left-0 top-1/2 z-[var(--z-header)] hidden w-12 -translate-y-1/2 justify-center transition-[opacity,translate] duration-(--dur) md:flex ${
-            locked ? "pointer-events-none -translate-x-2 opacity-30" : ""
+          onClick={toggleSidebar}
+          aria-label="Show sidebar"
+          className={`fixed left-3 top-3 z-[var(--z-header)] hidden h-9 w-9 items-center justify-center rounded-full bg-depth-card text-muted-foreground shadow-card transition-opacity duration-(--dur) hover:text-foreground lg:flex ${
+            locked ? "pointer-events-none opacity-30" : ""
           }`}
         >
-          <ChatStepperRail arc={lessonArc} activities={activities} onRestart={restartLesson} />
-        </div>
+          <PanelLeft className="h-[16px] w-[16px]" strokeWidth={1.6} />
+        </button>
       ) : null}
 
-      {/* The stage stack: the chat pane is ALWAYS mounted (its session, draft, voice, and realtime
-          state must survive panel switches) and stays VISIBLE under the panel's translucent scrim —
-          only pointer-events + inert gate it, so scroll positions and the composer's observers stay
-          valid and nothing repaints on open/close. */}
-      <div className="relative z-[var(--z-base)] grid h-full">
+      {/* The main-area stack: the chat pane is ALWAYS mounted (its session, draft, voice, and
+          realtime state must survive view switches) and is hidden — visibility, never
+          display:none — under an open page, so scroll positions and the composer's observers stay
+          valid. Pages are plain full surfaces over the ambient background. */}
+      <div className="relative z-[var(--z-base)] grid min-w-0 flex-1">
         <div
-          className={`col-start-1 row-start-1 flex min-h-0 flex-col ${
+          className={`col-start-1 row-start-1 flex min-h-0 flex-col ${view ? "invisible" : ""} ${
             view || locked ? "pointer-events-none" : ""
           }`}
           inert={view || locked ? true : undefined}
         >
-          {/* Symmetric stage column — the journey rail is edge chrome now, not a gutter. */}
-          <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-row px-5 pt-12 md:pt-10">
+          <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-row px-5 pb-0 pt-14 lg:pt-8">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               {lessonArc ? (
-                <div className="md:hidden">
-                  <ChatStepperStrip
-                    arc={lessonArc}
-                    activities={activities}
-                    onRestart={restartLesson}
-                  />
-                </div>
+                <ChatStepperStrip
+                  arc={lessonArc}
+                  activities={activities}
+                  onRestart={restartLesson}
+                />
               ) : null}
               {activeLiveViewers.length ? (
                 <div className="mb-3 flex justify-center">
@@ -1482,14 +1500,10 @@ function ChatPage() {
             key={`${view}:${classParam ?? ""}:${workVersion}`}
             className="col-start-1 row-start-1 flex min-h-0 flex-col"
           >
-            <SlideOver
-              title={VIEW_TITLES[view]}
-              onClose={() => goView(null)}
-              onBack={view === "classes" && classParam ? () => goView("classes") : undefined}
-              backLabel="All classes"
-            >
-              {view === "classes" ? (
-                classParam ? (
+            {view === "classes" ? (
+              classParam ? (
+                // The class canvas carries its own name header — the back pill is the only shell.
+                <PageShell onBack={() => goView("classes")} backLabel="All classes">
                   <ClassCanvas
                     classId={classParam}
                     assignments={assignments}
@@ -1499,14 +1513,18 @@ function ChatPage() {
                     onOpenLesson={openLessonFromView}
                     onOpenQuiz={openQuiz}
                   />
-                ) : (
+                </PageShell>
+              ) : (
+                <PageShell title="Classes">
                   <ClassesGrid
                     dueByClass={navData.dueByClass}
                     avgByClass={navData.avgByClass}
                     onOpenClass={(id) => goView("classes", id)}
                   />
-                )
-              ) : (
+                </PageShell>
+              )
+            ) : (
+              <PageShell title="Pulse">
                 <PulsePanel
                   grades={navData.grades}
                   notifications={navData.notifications}
@@ -1516,8 +1534,8 @@ function ChatPage() {
                   mentorPreferences={mentorToPreferences(mentor)}
                   focusReview={pulseFocusReview}
                 />
-              )}
-            </SlideOver>
+              </PageShell>
+            )}
           </div>
         ) : null}
       </div>
