@@ -6,9 +6,53 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-07 (Student UI v5 — "One Screen": chromeless stage, edge peripheries, Pulse, universal comments, lockdown)
+## Claude -> Codex / Human - 2026-07-07 (Student UI v5 — "One Screen": chromeless stage, edge peripheries, Pulse, universal comments, lockdown — FINISHED, awaiting main FF)
 
-Status: Starting (P0 backend + data layer in progress)
+Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),
+adversarially reviewed (32 confirmed findings, all fixed), 10 commits on the branch pushed through
+`0fba6d0`. Backend (entity_comments migration) is LIVE (deploy runs 57/58 green) and inert until the
+frontend ships. ONE main fast-forward pending user OK.
+
+Summary: the student surface is now ONE chromeless screen. The lesson flow is the central stage
+(chat always mounted, visible under panel scrims, gated only by pointer-events+inert); ALL nav is
+peripheral: CornerWordmark + settings dot in the corners, the journey rail on the left edge
+(pointer-position title tooltips), and the two-glyph WorldArc on the right (rest ±8° → fan ±16° on
+hover, peeks with due counts/next deadline, straight 44px strip on touch/reduced-motion). Panels
+are right-aligned SlideOvers on a ?view=classes|pulse URL spine (+ &class= for the class canvas):
+ClassesGrid (hover stat footers) → ClassCanvas (one scrolling page: units+lessons inline,
+assignments, assessments, class posts) and Pulse (AgendaTimeline replacing the month grid; grades
+summary + gradebook disclosure; ONE activity feed merging notifications + DM threads inline;
+performance + embedded guided review). EVERYTHING is commentable via entity_comments (chip obeys
+the reveal law; grade threads always teacher_private; two-account RLS probe passed 11/11 live).
+Quizzes and assignment submission run under FocusLock (no ESC/outside/close-X; inline Leave?
+confirm; relaxes to Close for finished work; all four edges retract inert+dim).
+
+Files changed (headline): supabase/migrations/20260803000000_entity_comments.sql (NEW, live),
+deploy-backend.yml, lib/{api,types,modes}.ts, hooks/{useStudentNavData,usePopoverDismiss,
+useCoarsePointer}, routes/chat.tsx (shell surgery + WorkDock launchers + AssignmentFocus),
+features/student/shell/{studentViews,SlideOver NEW,CornerWordmark NEW,ProfileMenu},
+features/student/edge/{useEdgePresence,WorldArc} (NEW), features/student/panels/{ClassesGrid,
+ClassCanvas,PulsePanel} (NEW), features/student/chat/ChatStepper.tsx, features/comms/
+EntityComments.tsx (NEW), components/{FocusLock NEW,Popover,SettingsMenu}, QuizPanel.
+DELETED: Sidebar, ViewHost, ViewShell, StudentNav, OverviewPanel, StudentCalendar, MessagesPanel,
+StudentNotifications, ProfilePanel, ClassesPanel, ClassViews.
+
+Tests run: tsc/lint/build per phase; built-CSS token audit; two-account RLS probe on the live DB
+(rolled-back transaction, 11/11: grade privacy forced, classmate blind to comment AND teacher
+reply, foreign-grade + widening-reply inserts raise, thread-root-author read, teacher notified);
+adversarial review workflow (5 dimensions × per-finding verification, 38 agents) with all 32
+confirmed findings fixed and re-verified by the gate.
+
+Remaining concerns: (1) the DM deep-link token was REMOVED — the Pulse feed is the messages
+surface and direct_message rows expand in place; if a future surface needs a cross-panel DM jump
+it must be rebuilt. (2) Edge glyphs deliberately float above open panels at mid-height (the
+always-usable-periphery decision) — revisit if it reads as occlusion in live use. (3) Manual live
+smoke (keyboard ladder, touch pass, dark, reduced-motion, chat-state survival matrix, lockdown
+escape drill) still worth a pass after the FF — this round's QA was static + adversarial review.
+(4) fetchEntityCommentCounts caps at 80 entities per surface (chips beyond that appear on open).
+
+Suggested next task: main FF on user OK → live smoke as the demo student; then teacher-side
+moderation surface for entity_comments (hide/unhide is RLS-ready but has no teacher UI yet).
 
 Task: v5 revisatory rethink per user review of v4 — one chromeless screen, lesson flow central,
 all nav/progress peripheral (edge presences: hover=peek, click=open), Classes grid → single-page
