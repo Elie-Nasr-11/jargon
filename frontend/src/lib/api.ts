@@ -2300,9 +2300,10 @@ export async function fetchEntityComments(
   return (data || []) as EntityComment[];
 }
 
-// Batched visible-comment counts for a panel's worth of entities: one HEAD count per entity (a
-// row-select would silently truncate at PostgREST's max-rows once a class accumulates comments).
-// RLS already scopes rows to what the caller may see, so the counts are per-viewer honest.
+// Batched visible TOP-LEVEL comment counts for a panel's worth of entities: one HEAD count per
+// entity (a row-select would silently truncate at PostgREST's max-rows once a class accumulates
+// comments). Top-level only so the chip's number matches the opened thread's. RLS already scopes
+// rows to what the caller may see, so the counts are per-viewer honest.
 export async function fetchEntityCommentCounts(
   entityType: EntityCommentType,
   entityIds: string[],
@@ -2318,7 +2319,8 @@ export async function fetchEntityCommentCounts(
         .eq("entity_id", entityId)
         .eq("class_id", classId)
         .eq("moderation_status", "visible")
-        .is("deleted_at", null);
+        .is("deleted_at", null)
+        .is("parent_id", null);
       if (error) throw error;
       return [entityId, count ?? 0] as const;
     }),

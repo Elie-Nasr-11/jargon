@@ -2,7 +2,7 @@ import type { LearningMode } from "@/lib/types";
 
 // v4.0 shared learning-mode labels (docs/PLATFORM.md). Short, student- and teacher-facing labels
 // for the eight modes, used by the proficiency-by-mode surfaces. Kept here (not in a route file) so
-// both the student ProfilePanel and the teacher console can import them without a cross-route import.
+// the student Pulse Performance section and the teacher console share them without a cross-route import.
 export const MODE_LABELS: Record<LearningMode, string> = {
   explanation: "Explanation",
   media: "Media",
