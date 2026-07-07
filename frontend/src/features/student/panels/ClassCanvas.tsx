@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, ChevronRight } from "lucide-react";
 import { StateNote } from "@/components/StateNote";
+import { EntityComments } from "@/features/comms/EntityComments";
 import { formatDate, formatScore, relativeTime } from "@/lib/format";
 import {
   fetchClassScopedLessons,
+  fetchEntityCommentCounts,
   fetchStudentClasses,
   fetchStudentGrades,
   fetchStudentLessonProgress,
@@ -166,6 +168,39 @@ export function ClassCanvas({
     [notifications, classId],
   );
 
+  // Batched comment counts for the chips (per-viewer honest — RLS scopes what each caller sees).
+  const [commentCounts, setCommentCounts] = useState<{
+    lesson: Record<string, number>;
+    assignment: Record<string, number>;
+    assessment: Record<string, number>;
+  }>({ lesson: {}, assignment: {}, assessment: {} });
+  useEffect(() => {
+    if (!lessons) return;
+    let alive = true;
+    void Promise.all([
+      fetchEntityCommentCounts(
+        "lesson",
+        lessons.map((l) => l.id),
+        classId,
+      ).catch(() => ({})),
+      fetchEntityCommentCounts(
+        "assignment",
+        classAssignments.map((a) => a.id),
+        classId,
+      ).catch(() => ({})),
+      fetchEntityCommentCounts(
+        "assessment",
+        classAssessments.map((a) => a.id),
+        classId,
+      ).catch(() => ({})),
+    ]).then(([lesson, assignment, assessment]) => {
+      if (alive) setCommentCounts({ lesson, assignment, assessment });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [lessons, classAssignments, classAssessments, classId]);
+
   if (error) return <StateNote>{error}</StateNote>;
   if (lessons === null) return <StateNote>Loading…</StateNote>;
 
@@ -227,26 +262,36 @@ export function ClassCanvas({
                 {unit.lessons.map((lesson) => {
                   const value = progress[lesson.id] ?? 0;
                   return (
-                    <button
+                    <div
                       key={lesson.id}
-                      type="button"
-                      onClick={() => onOpenLesson(lesson.id)}
-                      className="group flex w-full items-center gap-3 rounded-control px-2 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover"
+                      className="group flex w-full flex-wrap items-center gap-3 rounded-control px-2 py-2 transition-colors duration-(--dur-fast) hover:bg-surface-hover"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-body text-foreground">{lesson.title}</div>
-                      </div>
-                      <span className="w-24 shrink-0">
-                        <ProgressBar value={value} />
-                      </span>
-                      <span className="w-20 shrink-0 text-right text-meta tabular-nums text-muted-foreground">
-                        {value >= 1 ? "Complete" : value > 0 ? "In progress" : "Not started"}
-                      </span>
-                      <ChevronRight
-                        className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100"
-                        strokeWidth={1.7}
+                      <button
+                        type="button"
+                        onClick={() => onOpenLesson(lesson.id)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-body text-foreground">{lesson.title}</div>
+                        </div>
+                        <span className="w-24 shrink-0">
+                          <ProgressBar value={value} />
+                        </span>
+                        <span className="w-20 shrink-0 text-right text-meta tabular-nums text-muted-foreground">
+                          {value >= 1 ? "Complete" : value > 0 ? "In progress" : "Not started"}
+                        </span>
+                        <ChevronRight
+                          className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100"
+                          strokeWidth={1.7}
+                        />
+                      </button>
+                      <EntityComments
+                        entityType="lesson"
+                        entityId={lesson.id}
+                        classId={classId}
+                        initialCount={commentCounts.lesson[lesson.id] ?? 0}
                       />
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -312,6 +357,14 @@ export function ClassCanvas({
                       {recipient.feedback}
                     </p>
                   ) : null}
+                  <div className="mt-2 flex flex-wrap justify-end gap-2">
+                    <EntityComments
+                      entityType="assignment"
+                      entityId={a.id}
+                      classId={classId}
+                      initialCount={commentCounts.assignment[a.id] ?? 0}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -373,6 +426,14 @@ export function ClassCanvas({
                       {attempt.feedback}
                     </p>
                   ) : null}
+                  <div className="mt-2 flex flex-wrap justify-end gap-2">
+                    <EntityComments
+                      entityType="assessment"
+                      entityId={a.id}
+                      classId={classId}
+                      initialCount={commentCounts.assessment[a.id] ?? 0}
+                    />
+                  </div>
                 </div>
               );
             })}

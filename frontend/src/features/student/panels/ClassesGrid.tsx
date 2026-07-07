@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { GraduationCap } from "lucide-react";
 import gsap from "gsap";
 import { StateNote } from "@/components/StateNote";
+import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import { prefersReducedMotion } from "@/lib/motion";
 import { formatScore } from "@/lib/format";
 import {
@@ -36,19 +37,6 @@ async function computeNextLesson(classId: string): Promise<string | null> {
   const title = next?.title ?? null;
   nextLessonCache.set(classId, title);
   return title;
-}
-
-function useCoarsePointer(): boolean {
-  const [coarse, setCoarse] = useState(
-    () => typeof window !== "undefined" && !window.matchMedia("(hover: hover)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(hover: hover)");
-    const onChange = () => setCoarse(!mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return coarse;
 }
 
 function ClassCard({

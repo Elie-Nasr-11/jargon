@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, CalendarClock, CheckCircle2, ChevronDown } from "lucide-react";
 import { StateNote } from "@/components/StateNote";
 import { DmThread } from "@/features/comms/DmThread";
+import { EntityComments } from "@/features/comms/EntityComments";
 import { GradesPanel } from "@/features/student/GradesPanel";
 import { ReviewPanel } from "@/features/student/ReviewPanel";
 import { formatScore, relativeTime } from "@/lib/format";
@@ -11,6 +12,7 @@ import {
   COMMS_MINI_CHAT_FLAG,
   fetchCommsEnabledClassIds,
   fetchDmChannels,
+  fetchEntityCommentCounts,
   fetchStudentClasses,
   fetchStudentProfileStats,
   getSession,
@@ -188,6 +190,33 @@ function GradesSection({ grades }: { grades: StudentGradeRow[] }) {
   const avg = released.length
     ? released.reduce((sum, g) => sum + (g.score ?? 0), 0) / released.length
     : null;
+  const recent = released.slice(0, 5);
+
+  // Batched comment counts for the recent rows' chips — grade comments are per-class anchored, so
+  // group the ids by class before counting. Chips only render on rows with a class.
+  const [gradeCounts, setGradeCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const byClass = new Map<string, string[]>();
+    for (const g of recent) {
+      if (!g.class_id) continue;
+      const list = byClass.get(g.class_id) ?? [];
+      list.push(g.id);
+      byClass.set(g.class_id, list);
+    }
+    if (!byClass.size) return;
+    let alive = true;
+    void Promise.all(
+      Array.from(byClass, ([classId, ids]) =>
+        fetchEntityCommentCounts("grade", ids, classId).catch(() => ({}) as Record<string, number>),
+      ),
+    ).then((maps) => {
+      if (alive) setGradeCounts(Object.assign({}, ...maps));
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grades]);
 
   if (!grades.length) {
     return <StateNote>No graded work yet.</StateNote>;
@@ -206,10 +235,10 @@ function GradesSection({ grades }: { grades: StudentGradeRow[] }) {
         </span>
       </div>
       <div className="grid gap-1">
-        {released.slice(0, 5).map((g) => (
+        {recent.map((g) => (
           <div
             key={g.id}
-            className="flex items-center gap-3 rounded-control border border-border/60 px-3 py-2"
+            className="group flex flex-wrap items-center gap-3 rounded-control border border-border/60 px-3 py-2"
           >
             <span className="min-w-0 flex-1 truncate text-body text-foreground">{g.title}</span>
             <span className="shrink-0 text-meta text-muted-foreground">
@@ -218,6 +247,14 @@ function GradesSection({ grades }: { grades: StudentGradeRow[] }) {
             <span className="w-11 shrink-0 text-right text-meta font-medium tabular-nums text-foreground">
               {formatScore(g.score)}
             </span>
+            {g.class_id ? (
+              <EntityComments
+                entityType="grade"
+                entityId={g.id}
+                classId={g.class_id}
+                initialCount={gradeCounts[g.id] ?? 0}
+              />
+            ) : null}
           </div>
         ))}
       </div>
