@@ -1,4 +1,5 @@
-// Submission maintenance (Phase 2b) — system-only sweeps for the student-submissions bucket.
+// Submission maintenance (Phase 2b; v9) — system-only sweeps for the student-submissions AND
+// student-uploads buckets (see TARGETS).
 //
 // Two actions, both invoked by a scheduled GitHub Actions workflow (submission-maintenance.yml)
 // authenticated with the service-role key as the Bearer JWT (the same system-caller pattern as
@@ -36,7 +37,12 @@ type Config = {
   retentionBatchLimit: number;
 };
 
-const BUCKET = "student-submissions";
+// Every (table, bucket) pair the sweep covers. student_uploads (v9 chat attachments) reuses the
+// same scan_status / purged_at columns, so it drains through the identical scan + retention logic.
+const TARGETS: { table: string; bucket: string }[] = [
+  { table: "assignment_submission_files", bucket: "student-submissions" },
+  { table: "student_uploads", bucket: "student-uploads" },
+];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -165,10 +171,14 @@ async function scanBytesWithProvider(
   return unsafe ? "quarantined" : "clean";
 }
 
-async function runScan(config: Config): Promise<Record<string, number | boolean>> {
+async function scanTable(
+  config: Config,
+  table: string,
+  bucket: string,
+): Promise<Record<string, number | boolean>> {
   const pending = (await restFetch(
     config,
-    `/rest/v1/assignment_submission_files?scan_status=eq.pending&purged_at=is.null&select=id,storage_bucket,storage_path,mime_type&order=created_at.asc&limit=${config.scanBatchLimit}`,
+    `/rest/v1/${table}?scan_status=eq.pending&purged_at=is.null&select=id,storage_bucket,storage_path,mime_type&order=created_at.asc&limit=${config.scanBatchLimit}`,
   )) as DbRow[];
 
   if (!Array.isArray(pending) || pending.length === 0) {
@@ -178,7 +188,7 @@ async function runScan(config: Config): Promise<Record<string, number | boolean>
   // No provider configured → drain the queue as 'skipped' (unscanned, still readable) in one PATCH.
   if (!config.scanApiUrl) {
     const ids = pending.map((row) => String(row.id)).join(",");
-    await restFetch(config, `/rest/v1/assignment_submission_files?id=in.(${ids})`, {
+    await restFetch(config, `/rest/v1/${table}?id=in.(${ids})`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({ scan_status: "skipped", updated_at: new Date().toISOString() }),
@@ -190,12 +200,12 @@ async function runScan(config: Config): Promise<Record<string, number | boolean>
   let quarantined = 0;
   let errors = 0;
   for (const row of pending) {
-    const bucket = String(row.storage_bucket || BUCKET);
+    const rowBucket = String(row.storage_bucket || bucket);
     const path = String(row.storage_path || "");
     try {
-      const bytes = await downloadStorageObject(config, bucket, path);
+      const bytes = await downloadStorageObject(config, rowBucket, path);
       const verdict = await scanBytesWithProvider(config, bytes, (row.mime_type as string) ?? null);
-      await restFetch(config, `/rest/v1/assignment_submission_files?id=eq.${encodeURIComponent(String(row.id))}`, {
+      await restFetch(config, `/rest/v1/${table}?id=eq.${encodeURIComponent(String(row.id))}`, {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({ scan_status: verdict, updated_at: new Date().toISOString() }),
@@ -210,11 +220,15 @@ async function runScan(config: Config): Promise<Record<string, number | boolean>
   return { scanned: clean + quarantined, clean, quarantined, skipped: 0, errors, provider: true };
 }
 
-async function runRetention(config: Config): Promise<Record<string, number>> {
+async function retentionTable(
+  config: Config,
+  table: string,
+  bucket: string,
+): Promise<Record<string, number>> {
   const cutoff = new Date(Date.now() - config.retentionDays * 24 * 60 * 60 * 1000).toISOString();
   const stale = (await restFetch(
     config,
-    `/rest/v1/assignment_submission_files?purged_at=is.null&created_at=lt.${encodeURIComponent(cutoff)}&select=id,storage_bucket,storage_path&order=created_at.asc&limit=${config.retentionBatchLimit}`,
+    `/rest/v1/${table}?purged_at=is.null&created_at=lt.${encodeURIComponent(cutoff)}&select=id,storage_bucket,storage_path&order=created_at.asc&limit=${config.retentionBatchLimit}`,
   )) as DbRow[];
 
   if (!Array.isArray(stale) || stale.length === 0) {
@@ -224,11 +238,11 @@ async function runRetention(config: Config): Promise<Record<string, number>> {
   let purged = 0;
   let errors = 0;
   for (const row of stale) {
-    const bucket = String(row.storage_bucket || BUCKET);
+    const rowBucket = String(row.storage_bucket || bucket);
     const path = String(row.storage_path || "");
     try {
-      await deleteStorageObject(config, bucket, path);
-      await restFetch(config, `/rest/v1/assignment_submission_files?id=eq.${encodeURIComponent(String(row.id))}`, {
+      await deleteStorageObject(config, rowBucket, path);
+      await restFetch(config, `/rest/v1/${table}?id=eq.${encodeURIComponent(String(row.id))}`, {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({ purged_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
@@ -240,6 +254,20 @@ async function runRetention(config: Config): Promise<Record<string, number>> {
     }
   }
   return { candidates: stale.length, purged, errors };
+}
+
+// Iterate every target; the response is keyed by table so both stores' counts are visible.
+async function runScan(config: Config): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  for (const target of TARGETS) out[target.table] = await scanTable(config, target.table, target.bucket);
+  return out;
+}
+
+async function runRetention(config: Config): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  for (const target of TARGETS)
+    out[target.table] = await retentionTable(config, target.table, target.bucket);
+  return out;
 }
 
 Deno.serve(async (req) => {
