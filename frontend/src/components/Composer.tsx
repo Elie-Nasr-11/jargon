@@ -7,12 +7,32 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import gsap from "gsap";
-import { AudioLines, Code2, Mic, MicOff, Plus, Send, Play, X } from "lucide-react";
+import {
+  AudioLines,
+  Code2,
+  FileText,
+  FolderOpen,
+  Loader2,
+  Mic,
+  MicOff,
+  Paperclip,
+  Plus,
+  Send,
+  Play,
+  X,
+} from "lucide-react";
 import { GradientCard } from "./GradientCard";
 import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
+import {
+  CHAT_UPLOAD_ACCEPT,
+  MAX_CHAT_UPLOAD_FILES,
+  listStudentUploads,
+  uploadStudentUpload,
+} from "@/lib/api";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import {
   JARGON_COMMANDS,
@@ -21,7 +41,12 @@ import {
   JARGON_LANGUAGE_ID,
 } from "@/lib/jargon-syntax";
 import { useTheme } from "@/lib/theme";
-import type { ChatInputModality, VoiceInteractionEvent } from "@/lib/types";
+import type {
+  ChatAttachment,
+  ChatInputModality,
+  StudentUpload,
+  VoiceInteractionEvent,
+} from "@/lib/types";
 
 const MonacoEditor = lazy(() =>
   import("@monaco-editor/react").then((m) => ({ default: m.default })),
@@ -75,6 +100,17 @@ type Lang = ComposerLanguage;
 type SendTextOptions = {
   inputModality?: ChatInputModality;
   transcriptConfidence?: number | null;
+  attachments?: ChatAttachment[];
+};
+
+// A composer-local attachment chip: tracks the upload in flight, then carries the resolved
+// ChatAttachment reference once the file lands in the student's upload store.
+type PendingAttachment = {
+  key: string;
+  filename: string;
+  uploading: boolean;
+  error: boolean;
+  attachment?: ChatAttachment;
 };
 
 type SpeechAlternativeLike = {
@@ -178,10 +214,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       `// Try me. Hit Run \u25B6 to see output in the chat.\nPRINT "hello from jargon"`,
   );
   const [running, setRunning] = useState(false);
-  // The "+" add-menu (opens upward from the composer's left). Today it carries one live action —
-  // Write code — and is the seam where attach actions (upload/photo/screenshot) land once the chat
-  // wire can carry them; for now the tutor only accepts text + code, so nothing else is offered.
+  // The "+" add-menu (opens upward from the composer's left): Write code, Attach file, and Attach
+  // from uploads. The uploads picker is a second view swapped into the same popover.
   const [plusOpen, setPlusOpen] = useState(false);
+  const [plusView, setPlusView] = useState<"menu" | "uploads">("menu");
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [uploadsList, setUploadsList] = useState<StudentUpload[] | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const lastSeedRef = useRef<string | undefined>(initialCode);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const morphRef = useRef<HTMLDivElement>(null);
@@ -502,15 +541,96 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     }
   };
 
+  // ---- attachments ----------------------------------------------------------------------------
+  const attachmentKey = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const uploadFile = async (file: File) => {
+    const key = attachmentKey();
+    setAttachments((prev) => [
+      ...prev,
+      { key, filename: file.name, uploading: true, error: false },
+    ]);
+    try {
+      const row = await uploadStudentUpload(file);
+      setAttachments((prev) =>
+        prev.map((a) =>
+          a.key === key
+            ? {
+                ...a,
+                uploading: false,
+                attachment: {
+                  upload_id: row.id,
+                  storage_path: row.storage_path,
+                  mime_type: row.mime_type || "",
+                  filename: row.original_filename,
+                },
+              }
+            : a,
+        ),
+      );
+    } catch {
+      setAttachments((prev) =>
+        prev.map((a) => (a.key === key ? { ...a, uploading: false, error: true } : a)),
+      );
+    }
+  };
+
+  const onFilesPicked = (e: ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = ""; // let the same file be re-picked later
+    const room = Math.max(0, MAX_CHAT_UPLOAD_FILES - attachments.length);
+    picked.slice(0, room).forEach((file) => void uploadFile(file));
+  };
+
+  const addFromLibrary = (row: StudentUpload) => {
+    setPlusOpen(false);
+    setPlusView("menu");
+    if (attachments.length >= MAX_CHAT_UPLOAD_FILES) return;
+    if (attachments.some((a) => a.attachment?.upload_id === row.id)) return;
+    setAttachments((prev) => [
+      ...prev,
+      {
+        key: attachmentKey(),
+        filename: row.original_filename,
+        uploading: false,
+        error: false,
+        attachment: {
+          upload_id: row.id,
+          storage_path: row.storage_path,
+          mime_type: row.mime_type || "",
+          filename: row.original_filename,
+        },
+      },
+    ]);
+  };
+
+  const removeAttachment = (key: string) =>
+    setAttachments((prev) => prev.filter((a) => a.key !== key));
+
+  const openUploadsPicker = () => {
+    setPlusView("uploads");
+    setUploadsList(null);
+    void listStudentUploads()
+      .then(setUploadsList)
+      .catch(() => setUploadsList([]));
+  };
+
+  const readyAttachments: ChatAttachment[] = attachments
+    .filter((a) => a.attachment && !a.error)
+    .map((a) => a.attachment as ChatAttachment);
+  const anyUploading = attachments.some((a) => a.uploading);
+  const canSend = (text.trim().length > 0 || readyAttachments.length > 0) && !anyUploading;
+
   const send = () => {
     const t = text.trim();
     // Also blocked while a code run is executing: a text turn in flight when the run
-    // resolves would collide with the run's mentor review.
-    if (!t || sending || running) return;
+    // resolves would collide with the run's mentor review. A turn may be text, attachments, or both.
+    if (sending || running || !canSend) return;
     const isDictated = dictationUsed;
     onSendText(t, {
       inputModality: isDictated ? "dictated" : "typed",
       transcriptConfidence: isDictated ? dictationConfidence : null,
+      attachments: readyAttachments.length ? readyAttachments : undefined,
     });
     if (isDictated) {
       emitVoiceEvent({
@@ -524,6 +644,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       });
     }
     setText("");
+    setAttachments([]);
     setDictationUsed(false);
     setDictationConfidence(null);
     setVoiceError("");
@@ -569,8 +690,54 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         <div ref={morphRef} className="overflow-hidden px-4 py-3">
           {mode === "text" ? (
             <div ref={textPanelRef} className="space-y-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={CHAT_UPLOAD_ACCEPT}
+                onChange={onFilesPicked}
+                className="hidden"
+              />
+              {attachments.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {attachments.map((a) => (
+                    <span
+                      key={a.key}
+                      className={`inline-flex max-w-[220px] items-center gap-1.5 rounded-pill border px-2 py-1 text-meta ${
+                        a.error
+                          ? "border-danger/40 bg-danger/10 text-danger"
+                          : "border-border bg-depth-sub text-foreground"
+                      }`}
+                    >
+                      {a.uploading ? (
+                        <Loader2 className="h-3 w-3 shrink-0 animate-spin" strokeWidth={2} />
+                      ) : (
+                        <Paperclip
+                          className="h-3 w-3 shrink-0 text-muted-foreground"
+                          strokeWidth={1.7}
+                        />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">{a.filename}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(a.key)}
+                        aria-label={`Remove ${a.filename}`}
+                        className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" strokeWidth={2} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="flex items-end gap-2">
-                <Popover open={plusOpen} onOpenChange={setPlusOpen}>
+                <Popover
+                  open={plusOpen}
+                  onOpenChange={(o) => {
+                    setPlusOpen(o);
+                    if (!o) setPlusView("menu");
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <button
                       type="button"
@@ -587,22 +754,87 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     side="top"
                     align="start"
                     sideOffset={8}
-                    className="w-[184px] rounded-card border border-border bg-depth-card p-1.5 shadow-raised"
+                    className="w-[224px] rounded-card border border-border bg-depth-card p-1.5 shadow-raised"
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPlusOpen(false);
-                        setMode("code");
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-                    >
-                      <Code2
-                        className="h-[15px] w-[15px] text-muted-foreground"
-                        strokeWidth={1.6}
-                      />
-                      Write code
-                    </button>
+                    {plusView === "menu" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPlusOpen(false);
+                            setMode("code");
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                        >
+                          <Code2
+                            className="h-[15px] w-[15px] text-muted-foreground"
+                            strokeWidth={1.6}
+                          />
+                          Write code
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPlusOpen(false);
+                            fileInputRef.current?.click();
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                        >
+                          <Paperclip
+                            className="h-[15px] w-[15px] text-muted-foreground"
+                            strokeWidth={1.6}
+                          />
+                          Attach file
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openUploadsPicker}
+                          className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                        >
+                          <FolderOpen
+                            className="h-[15px] w-[15px] text-muted-foreground"
+                            strokeWidth={1.6}
+                          />
+                          Attach from uploads
+                        </button>
+                      </>
+                    ) : (
+                      <div className="max-h-[248px] overflow-y-auto overscroll-contain">
+                        <button
+                          type="button"
+                          onClick={() => setPlusView("menu")}
+                          className="mb-1 flex w-full items-center gap-1.5 rounded-control px-2.5 py-1.5 text-left text-meta font-medium text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
+                        >
+                          <X className="h-3.5 w-3.5" strokeWidth={1.7} /> Your uploads
+                        </button>
+                        {uploadsList === null ? (
+                          <div className="px-2.5 py-2 text-meta text-muted-foreground">
+                            Loading…
+                          </div>
+                        ) : uploadsList.length === 0 ? (
+                          <div className="px-2.5 py-2 text-meta text-muted-foreground">
+                            No uploads yet.
+                          </div>
+                        ) : (
+                          uploadsList.map((row) => (
+                            <button
+                              key={row.id}
+                              type="button"
+                              onClick={() => addFromLibrary(row)}
+                              className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                            >
+                              <FileText
+                                className="h-[15px] w-[15px] shrink-0 text-muted-foreground"
+                                strokeWidth={1.6}
+                              />
+                              <span className="min-w-0 flex-1 truncate">
+                                {row.original_filename}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </PopoverContent>
                 </Popover>
                 <textarea
@@ -652,7 +884,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 {/* ONE primary slot, ChatGPT-style: an empty box offers talk-out-loud; typing
                     swaps it to Send. Same size and styling both ways — no layout shift. Enter on
                     empty stays a no-op (send() guards); voice starts by click/tap only. */}
-                {!text.trim() && !dictating && canStartVoice && onStartVoice ? (
+                {!text.trim() &&
+                readyAttachments.length === 0 &&
+                !dictating &&
+                canStartVoice &&
+                onStartVoice ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -673,7 +909,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 ) : (
                   <button
                     onClick={send}
-                    disabled={sending || !text.trim()}
+                    disabled={sending || !canSend}
                     aria-label="Send"
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
                   >

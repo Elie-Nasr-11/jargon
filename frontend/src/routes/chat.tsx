@@ -57,6 +57,7 @@ import {
   onAuthStateChange,
   fetchLessonActivities,
   fetchLessonResources,
+  getStudentUploadSignedUrl,
   fetchStudentCatalog,
   fetchStudentSettings,
   getSubmissionFileSignedUrl,
@@ -90,6 +91,7 @@ import type {
   Lesson,
   LessonActivity,
   LessonArc,
+  ChatAttachment,
   LessonChatResource,
   LiveSessionViewer,
   SessionHold,
@@ -131,6 +133,7 @@ type Msg =
       code?: ChatCodeBlock;
       inputModality?: ChatInputModality;
       transcriptConfidence?: number | null;
+      attachments?: ChatAttachment[];
       createdAt?: string;
     }
   | {
@@ -217,6 +220,9 @@ function turnToMessage(turn: LearningTurn): Msg | null {
       text: turn.content,
       inputModality: modality,
       transcriptConfidence: confidence,
+      attachments: Array.isArray(turn.payload?.attachments)
+        ? (turn.payload.attachments as ChatAttachment[])
+        : undefined,
       createdAt: turn.created_at,
     };
   }
@@ -912,7 +918,11 @@ function ChatPage() {
 
   const submitTextAnswer = async (
     text: string,
-    options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
+    options?: {
+      inputModality?: ChatInputModality;
+      transcriptConfidence?: number | null;
+      attachments?: ChatAttachment[];
+    },
   ): Promise<TypedChatEnvelope | null | "busy"> =>
     sendTurn({
       answer: {
@@ -920,6 +930,7 @@ function ChatPage() {
         text,
         input_modality: options?.inputModality || "typed",
         transcript_confidence: options?.transcriptConfidence ?? null,
+        attachments: options?.attachments,
       },
       optimistic: [
         {
@@ -928,6 +939,7 @@ function ChatPage() {
           text,
           inputModality: options?.inputModality,
           transcriptConfidence: options?.transcriptConfidence ?? null,
+          attachments: options?.attachments,
         },
       ],
       errorText: "The mentor could not answer.",
@@ -935,7 +947,11 @@ function ChatPage() {
 
   const sendUser = async (
     text: string,
-    options?: { inputModality?: ChatInputModality; transcriptConfidence?: number | null },
+    options?: {
+      inputModality?: ChatInputModality;
+      transcriptConfidence?: number | null;
+      attachments?: ChatAttachment[];
+    },
   ) => {
     await submitTextAnswer(text, options);
   };
@@ -2471,9 +2487,35 @@ function MessageRow({
     return (
       <div ref={ref} className="flex justify-end">
         <div className="flex max-w-[85%] flex-col items-end gap-2">
-          <div className="whitespace-pre-wrap rounded-card border border-border/50 bg-depth-card px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground shadow-card">
-            {text}
-          </div>
+          {text ? (
+            <div className="whitespace-pre-wrap rounded-card border border-border/50 bg-depth-card px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground shadow-card">
+              {text}
+            </div>
+          ) : null}
+          {msg.attachments?.length ? (
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {msg.attachments.map((att) => (
+                <button
+                  key={att.upload_id}
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const url = await getStudentUploadSignedUrl({
+                        storage_path: att.storage_path,
+                      });
+                      if (url) window.open(url, "_blank", "noopener,noreferrer");
+                    } catch {
+                      /* opening an attachment should never break the chat */
+                    }
+                  }}
+                  className="inline-flex max-w-[220px] items-center gap-1.5 rounded-pill border border-border bg-depth-sub px-2 py-1 text-meta text-foreground transition-colors hover:border-foreground/30"
+                >
+                  <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+                  <span className="min-w-0 flex-1 truncate">{att.filename}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           {msg.inputModality === "dictated" || msg.inputModality === "audio_session" ? (
             <span className="rounded-full border border-border/70 px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
               {msg.inputModality === "audio_session" ? "Voice" : "Dictated"}
