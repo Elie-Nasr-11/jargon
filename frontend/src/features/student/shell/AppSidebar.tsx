@@ -174,14 +174,14 @@ function SidebarContent({
     if (currentUnit) setOpenUnits((s) => (s[currentUnit] ? s : { ...s, [currentUnit]: true }));
   }, [currentLessonId, groups]);
 
-  // A lesson row. State reads at a glance from text weight + a leading slot: not-started is greyed
-  // (no marker), in-progress is full-opacity with a progress ring, completed is full-opacity (no
-  // marker). The current lesson keeps its highlighted row on top of all that.
+  // A lesson row. State reads from a three-tier title colour + a leading slot: in-progress is
+  // full-opacity with a progress ring, completed is grey, not-started/"locked" is greyer still.
+  // The current lesson keeps its highlighted row on top of all that.
   const lessonRow = (lesson: Lesson) => {
     const current = lesson.id === currentLessonId;
     const value = lessonProgress[lesson.id] ?? 0;
-    const started = value > 0;
     const inProgress = value > 0 && value < 1;
+    const completed = value >= 1;
     return (
       <button
         key={lesson.id}
@@ -192,9 +192,11 @@ function SidebarContent({
         className={`flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) disabled:opacity-40 ${
           current
             ? "bg-muted font-medium text-foreground"
-            : started
+            : inProgress
               ? "text-foreground hover:bg-muted/60"
-              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              : completed
+                ? "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                : "text-muted-foreground/60 hover:bg-muted/60 hover:text-foreground"
         }`}
       >
         <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
@@ -241,7 +243,7 @@ function SidebarContent({
         />
         <NavRow
           icon={Activity}
-          label="Pulse"
+          label="Overview"
           active={view === "pulse"}
           badge={pulseBadge}
           onClick={go(onOpenPulse)}

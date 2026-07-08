@@ -23,7 +23,7 @@ function RoadmapPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="max-h-[70vh] w-[min(320px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-card border border-border bg-background p-3 shadow-pop">
+    <div className="max-h-[70vh] w-[min(320px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-card border border-border bg-depth-card p-3 shadow-pop">
       <LessonMilestones arc={arc} activities={activities} />
       {onRestart ? (
         <button
@@ -73,6 +73,7 @@ export function ChatStepperStrip({
       <Popover
         open={open}
         onClose={() => setOpen(false)}
+        placement="bottom-start"
         trigger={
           <button
             type="button"

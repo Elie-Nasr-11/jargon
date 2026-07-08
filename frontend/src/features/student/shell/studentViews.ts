@@ -12,5 +12,6 @@ export function isStudentView(value: unknown): value is StudentView {
 
 export const VIEW_TITLES: Record<StudentView, string> = {
   classes: "Classes",
-  pulse: "Pulse",
+  // The `pulse` view key stays internal; the surface is labelled "Overview" everywhere it shows.
+  pulse: "Overview",
 };

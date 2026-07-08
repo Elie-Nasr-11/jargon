@@ -6,6 +6,25 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-08 (Student UI v9 — state-color tiers · attach-to-tutor (backend) · Overview rename · lesson resources · progress-popup cleanup)
+
+Status: Starting
+Task: Five tweaks after the v8 live review. Four frontend: (1) lesson-state colours become a 3-tier
+ramp (in-progress bright / completed grey / not-started greyer); (2) rename the "Pulse" nav+page to
+"Overview" (visible strings only, keep the ?view=pulse key); (3) surface a lesson's teacher resources
+in a top-right launcher over the chat; (4) clean up the progress-bar roadmap popup. One BACKEND
+feature the user greenlit fully: (5) attach files to the tutor chat — a new assignment-free
+student-uploads bucket+table+RLS, chat-wire + edge-fn + LLM vision so the tutor actually uses images/
+text files, with an owner-only trust boundary, scan/quarantine gating, prompt-injection fencing, and
+cost caps.
+Files I expect to touch (frontend): features/student/shell/AppSidebar.tsx, features/student/panels/
+ClassCanvas.tsx, features/student/shell/studentViews.ts, routes/chat.tsx, components/{LessonMilestones,
+Composer,Popover}.tsx, features/student/chat/ChatStepper.tsx, lib/{api,types}.ts. Backend: new
+migration 20260729000000_student_uploads_store.sql, supabase/functions/chat/index.ts,
+supabase/functions/submission-maintenance/index.ts.
+Notes: attach backend deploys are LIVE but gated behind the frontend (inert until it ships). Ships on
+claude/happy-johnson-wseex8 → main FF on OK.
+
 ## Claude -> Codex / Human - 2026-07-08 (Student UI v8 — composer polish + full-width calendar + unified lesson-state annotation — FINISHED, awaiting main FF)
 
 Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),

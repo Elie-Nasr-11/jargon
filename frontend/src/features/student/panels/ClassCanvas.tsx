@@ -424,8 +424,8 @@ export function ClassCanvas({
 
   const renderLesson = (lesson: Lesson) => {
     const value = progress[lesson.id] ?? 0;
-    const started = value > 0;
     const inProgress = value > 0 && value < 1;
+    const completed = value >= 1;
     const work = workByLesson.get(lesson.id);
     return (
       <div key={lesson.id}>
@@ -444,7 +444,13 @@ export function ClassCanvas({
             </span>
             <div className="min-w-0 flex-1">
               <div
-                className={`truncate text-body ${started ? "text-foreground" : "text-muted-foreground"}`}
+                className={`truncate text-body ${
+                  inProgress
+                    ? "text-foreground"
+                    : completed
+                      ? "text-muted-foreground"
+                      : "text-muted-foreground/60"
+                }`}
               >
                 {lesson.title}
               </div>

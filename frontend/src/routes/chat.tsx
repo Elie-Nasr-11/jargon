@@ -1507,7 +1507,7 @@ function ChatPage() {
                 </PageShell>
               )
             ) : (
-              <PageShell title="Pulse">
+              <PageShell title="Overview">
                 <PulsePanel
                   grades={navData.grades}
                   notifications={navData.notifications}

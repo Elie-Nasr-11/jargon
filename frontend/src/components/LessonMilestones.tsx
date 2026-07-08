@@ -1,12 +1,10 @@
 import { Check } from "lucide-react";
 import type { LessonActivity, LessonArc } from "@/lib/types";
 
-// The step-by-step milestone list for the current lesson (done / current / upcoming). Enriched per
-// step from the lesson's activities: a stage/type chip and a one-line description, so every milestone
-// shows what it actually is. Rendered as the content of
-// the hovering LessonProgress pill's dropdown.
-
-const ACCENT = "text-[color:var(--accent-text)]";
+// The step-by-step milestone list for the current lesson (done / current / upcoming), enriched per
+// step from the lesson's activities with a stage/type chip and a one-line description so every
+// milestone shows what it actually is. Rendered inside the roadmap popover opened from the chat
+// progress strip.
 
 const STAGE_LABELS: Record<string, string> = {
   intro: "Warm-up",
@@ -60,25 +58,11 @@ export function LessonMilestones({
     ...arc.upcoming.map((s) => ({ ...s, state: "upcoming" as const })),
   ];
   return (
-    <div className="mt-1">
-      <div className="mb-2 flex items-center gap-1" aria-hidden>
-        {Array.from({ length: arc.total }).map((_, i) => (
-          <span
-            key={i}
-            className={`h-1.5 flex-1 rounded-full ${
-              i < arc.step - 1
-                ? "bg-foreground/35"
-                : i === arc.step - 1
-                  ? "bg-foreground"
-                  : "bg-border"
-            }`}
-          />
-        ))}
-      </div>
-      <div className="mb-3 text-[11.5px] text-foreground">
+    <div>
+      <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
         Step {arc.step} of {arc.total}
       </div>
-      <ol className="space-y-1.5">
+      <ol className="space-y-1">
         {steps.map((s) => {
           const activity = activityForStep(s.step, s.title);
           const kind = stepKind(activity);
@@ -88,9 +72,12 @@ export function LessonMilestones({
               ? arc.current.prompt
               : activity?.prompt || "";
           return (
-            <li key={s.step} className="flex items-start gap-2.5 text-[13px]">
+            <li
+              key={s.step}
+              className="flex items-start gap-2.5 rounded-control px-1 py-1 text-body"
+            >
               <span
-                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-meta font-medium tabular-nums ${
                   s.state === "done"
                     ? "bg-success/15 text-success"
                     : s.state === "current"
@@ -103,16 +90,24 @@ export function LessonMilestones({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span
-                    className={`min-w-0 flex-1 text-foreground ${
-                      s.state === "current" ? "font-medium" : ""
+                    className={`min-w-0 flex-1 ${
+                      s.state === "current"
+                        ? "font-medium text-foreground"
+                        : s.state === "done"
+                          ? "text-muted-foreground"
+                          : "text-foreground"
                     }`}
                   >
                     {s.title}
                   </span>
-                  {kind ? <span className={`shrink-0 text-[10px] ${ACCENT}`}>{kind}</span> : null}
+                  {kind ? (
+                    <span className="shrink-0 text-overline uppercase tracking-[0.06em] text-muted-foreground">
+                      {kind}
+                    </span>
+                  ) : null}
                 </span>
                 {desc ? (
-                  <span className="mt-0.5 block text-[11.5px] leading-snug text-foreground/70">
+                  <span className="mt-0.5 block text-meta leading-snug text-muted-foreground">
                     {clampOneLine(desc)}
                   </span>
                 ) : null}

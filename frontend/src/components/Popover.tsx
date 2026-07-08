@@ -19,10 +19,11 @@ export function Popover({
   children: ReactNode;
   panelClassName?: string;
   panelStyle?: React.CSSProperties;
-  // bottom-end: dropdown under a right-aligned trigger (default). right-start: flyout to the
-  // trigger's right, top-aligned (the chat stepper's roadmap). top-start: menu opening UPWARD
-  // from a bottom-anchored trigger (the sidebar account row).
-  placement?: "bottom-end" | "right-start" | "top-start";
+  // bottom-end: dropdown under a right-aligned trigger (default). bottom-start: dropdown under a
+  // left-aligned trigger (the full-width lesson roadmap strip). right-start: flyout to the
+  // trigger's right, top-aligned. top-start: menu opening UPWARD from a bottom-anchored trigger
+  // (the sidebar account row).
+  placement?: "bottom-end" | "bottom-start" | "right-start" | "top-start";
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   usePopoverDismiss(wrapRef, onClose, open);
@@ -37,7 +38,9 @@ export function Popover({
               ? "left-[calc(100%+10px)] top-1/2 -translate-y-1/2"
               : placement === "top-start"
                 ? "bottom-[calc(100%+8px)] left-0"
-                : "right-0 top-[calc(100%+8px)]"
+                : placement === "bottom-start"
+                  ? "left-0 top-[calc(100%+8px)]"
+                  : "right-0 top-[calc(100%+8px)]"
           } ${panelClassName ?? ""}`}
           style={panelStyle}
         >
