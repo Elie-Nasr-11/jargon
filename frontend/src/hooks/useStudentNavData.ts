@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchNotifications,
-  fetchReviewDue,
   fetchStudentGrades,
   fetchStudentLessonProgress,
   getSession,
@@ -20,7 +19,6 @@ import type { Notification, StudentGradeRow } from "@/lib/types";
 export function useStudentNavData() {
   const [meId, setMeId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [reviewDueCount, setReviewDueCount] = useState(0);
   const [grades, setGrades] = useState<StudentGradeRow[]>([]);
   // Per-lesson completion (0..1) across the student's whole catalog — powers the sidebar's
   // at-a-glance state dots. Load-once like grades; missing ids read as not-started.
@@ -36,9 +34,6 @@ export function useStudentNavData() {
         setMeId(uid);
         void fetchNotifications()
           .then((rows) => !cancelled && setNotifications(rows))
-          .catch(() => {});
-        void fetchReviewDue()
-          .then((rows) => !cancelled && setReviewDueCount(rows.length))
           .catch(() => {});
         void fetchStudentGrades()
           .then((rows) => !cancelled && setGrades(rows))
@@ -94,13 +89,6 @@ export function useStudentNavData() {
     void apiMarkAll().catch(() => {});
   }, []);
 
-  // Called after a guided review completes so the badge reflects the freshly-refreshed queue.
-  const refreshReviewCount = useCallback(() => {
-    void fetchReviewDue()
-      .then((rows) => setReviewDueCount(rows.length))
-      .catch(() => {});
-  }, []);
-
   // Called when a panel closes (work may have been submitted inside it) so the edge peeks refresh.
   // Lesson progress can also have advanced (a lesson finished mid-session), so refresh it too.
   const refreshGrades = useCallback(() => {
@@ -144,7 +132,6 @@ export function useStudentNavData() {
   return {
     notifications,
     notificationsUnread,
-    reviewDueCount,
     grades,
     lessonProgress,
     nextDue,
@@ -152,7 +139,6 @@ export function useStudentNavData() {
     avgByClass,
     markNotificationRead,
     markAllNotificationsRead,
-    refreshReviewCount,
     refreshGrades,
   };
 }

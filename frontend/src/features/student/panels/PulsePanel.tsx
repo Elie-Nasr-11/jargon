@@ -1,13 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, CalendarClock, CheckCircle2, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  List,
+  NotebookPen,
+} from "lucide-react";
 import { StateNote } from "@/components/StateNote";
 import { DmThread } from "@/features/comms/DmThread";
 import { EntityComments } from "@/features/comms/EntityComments";
 import { GradesPanel } from "@/features/student/GradesPanel";
-import { ReviewPanel } from "@/features/student/ReviewPanel";
+import { AgendaCalendar } from "@/features/student/panels/AgendaCalendar";
 import { formatScore, relativeTime } from "@/lib/format";
 import { modeLabel } from "@/lib/modes";
-import { humanizeSkillKey, practicedAgo } from "@/lib/review";
 import {
   COMMS_MINI_CHAT_FLAG,
   fetchCommsEnabledClassIds,
@@ -22,18 +29,17 @@ import {
 import { notifyErr } from "@/lib/feedback";
 import type {
   DmChannel,
-  MentorPreferences,
   MyTeacher,
   Notification,
   StudentGradeRow,
   StudentProfileStats,
 } from "@/lib/types";
 
-// Pulse — time + signal, in one panel: (a) Up next, a day-grouped agenda replacing the month-grid
-// calendar (−7d…+21d, overdue pinned); (b) Grades, a summary + recent five with the full gradebook
-// behind a disclosure; (c) Activity, ONE merged feed of notifications and DM threads (threads
-// expand inline; "message a teacher" bootstraps a channel); (d) Performance, the student's own
-// numbers (progress/skills/review history/strengths/teacher notes) with guided review embedded.
+// Pulse — time + signal, in one panel: (a) Up next, this student's work as either a day-grouped
+// agenda (−7d…+21d, overdue pinned) or a month calendar, toggled; (b) Grades, a summary + recent
+// five with the full gradebook behind a disclosure; (c) Activity, ONE merged feed of notifications
+// and DM threads (threads expand inline; "message a teacher" bootstraps a channel); (d)
+// Performance, the student's own numbers (progress / skills / strengths / teacher notes).
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
@@ -560,9 +566,9 @@ function ActivityFeed({
 // ---------------------------------------------------------------------------------------------
 function StatTile({ value, label }: { value: string | number; label: string }) {
   return (
-    <div className="rounded-card border border-border/60 bg-background/45 px-3 py-2.5">
-      <div className="text-[18px] font-medium leading-none text-foreground">{value}</div>
-      <div className="mt-1 text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
+    <div className="rounded-card border border-border bg-depth-sub px-3 py-2.5">
+      <div className="text-title font-medium leading-none text-foreground">{value}</div>
+      <div className="mt-1 text-overline uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </div>
     </div>
@@ -573,26 +579,9 @@ function titleCase(value: string): string {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
-function PerformanceSection({
-  accessToken,
-  mentorPreferences,
-  focusReview = false,
-}: {
-  accessToken: string | null;
-  mentorPreferences: MentorPreferences;
-  // One-shot: the review nudge's "Review now" landed here — scroll the review block into view
-  // once the section has data (it sits several screens down an otherwise top-anchored panel).
-  focusReview?: boolean;
-}) {
+function PerformanceSection() {
   const [stats, setStats] = useState<StudentProfileStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const reviewRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (focusReview && stats) {
-      reviewRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-    }
-  }, [focusReview, stats]);
 
   useEffect(() => {
     let alive = true;
@@ -606,10 +595,6 @@ function PerformanceSection({
 
   const skills = useMemo(
     () => [...(stats?.mastery ?? [])].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
-    [stats],
-  );
-  const reviewHistory = useMemo(
-    () => (stats?.reviewSessions ?? []).filter((s) => s.status === "complete").slice(0, 6),
     [stats],
   );
   const byMode = useMemo(() => {
@@ -638,14 +623,11 @@ function PerformanceSection({
         <StatTile value={stats.progress.lessonsStarted} label="Lessons started" />
       </div>
 
-      <div ref={reviewRef} className="mb-2 mt-5 scroll-mt-4 text-meta font-medium text-foreground">
-        Review
+      <div className="mb-2 mt-6 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        Proficiency
       </div>
-      <ReviewPanel accessToken={accessToken} mentorPreferences={mentorPreferences} />
-
-      <div className="mb-2 mt-5 text-meta font-medium text-foreground">Proficiency</div>
       {skills.length ? (
-        <div className="space-y-1.5">
+        <div className="grid gap-2 rounded-card border border-border bg-depth-sub p-3">
           {skills.map((skill) => (
             <div key={skill.skill_key} className="flex items-center gap-2.5">
               <span className="min-w-0 flex-1 truncate text-body text-foreground">
@@ -670,30 +652,11 @@ function PerformanceSection({
         <p className="text-meta text-muted-foreground">Complete lessons to build your skill map.</p>
       )}
 
-      <div className="mb-2 mt-5 text-meta font-medium text-foreground">Review history</div>
-      {reviewHistory.length ? (
-        <div className="space-y-1.5">
-          {reviewHistory.map((session) => (
-            <div key={session.id} className="flex items-center gap-2.5">
-              <span className="min-w-0 flex-1 truncate text-body text-foreground">
-                {humanizeSkillKey(session.skill_key)}
-              </span>
-              <span className="shrink-0 text-meta text-muted-foreground">
-                {practicedAgo(session.updated_at)}
-              </span>
-              <span className="w-9 shrink-0 text-right text-meta tabular-nums text-foreground/70">
-                {formatScore(session.score)}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-meta text-muted-foreground">No completed reviews yet.</p>
-      )}
-
-      <div className="mb-2 mt-5 text-meta font-medium text-foreground">Strengths by activity</div>
+      <div className="mb-2 mt-6 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        Strengths by activity
+      </div>
       {byMode.length ? (
-        <div className="space-y-1.5">
+        <div className="grid gap-2 rounded-card border border-border bg-depth-sub p-3">
           {byMode.map((row) => (
             <div key={row.mode} className="flex items-center gap-2.5">
               <span className="min-w-0 flex-1 truncate text-body text-foreground">
@@ -720,15 +683,26 @@ function PerformanceSection({
         </p>
       )}
 
-      <div className="mb-2 mt-5 text-meta font-medium text-foreground">Notes from your teacher</div>
+      <div className="mb-2 mt-6 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        Notes from your teacher
+      </div>
       {stats.notes.length ? (
-        <div className="space-y-2">
+        <div className="grid gap-2">
           {stats.notes.slice(0, 4).map((note) => (
             <div
               key={note.id}
-              className="rounded-card border border-border/60 bg-background/45 px-3 py-2 text-meta leading-snug text-foreground"
+              className="flex gap-2.5 rounded-card border border-border bg-depth-sub p-3"
             >
-              {note.note}
+              <NotebookPen
+                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                strokeWidth={1.7}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-body leading-relaxed text-foreground">{note.note}</p>
+                <div className="mt-1 text-meta text-muted-foreground">
+                  {relativeTime(note.created_at)}
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -745,22 +719,46 @@ export function PulsePanel({
   notifications,
   onMarkRead,
   onMarkAll,
-  accessToken,
-  mentorPreferences,
-  focusReview = false,
 }: {
   grades: StudentGradeRow[];
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onMarkAll: () => void;
-  accessToken: string | null;
-  mentorPreferences: MentorPreferences;
-  focusReview?: boolean;
 }) {
+  const [agendaView, setAgendaView] = useState<"agenda" | "calendar">("agenda");
+  const views = [
+    { key: "agenda" as const, label: "Agenda", Icon: List },
+    { key: "calendar" as const, label: "Calendar", Icon: CalendarDays },
+  ];
   return (
     <div>
-      <SectionLabel>Up next</SectionLabel>
-      <AgendaTimeline grades={grades} />
+      <div className="mb-2 mt-7 flex items-center justify-between gap-3 first:mt-0">
+        <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+          Up next
+        </span>
+        <div className="flex items-center gap-0.5 rounded-pill border border-border p-0.5">
+          {views.map(({ key, label, Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setAgendaView(key)}
+              aria-pressed={agendaView === key}
+              className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-meta font-medium transition-colors duration-(--dur-fast) ${
+                agendaView === key
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" strokeWidth={1.7} /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {agendaView === "agenda" ? (
+        <AgendaTimeline grades={grades} />
+      ) : (
+        <AgendaCalendar grades={grades} />
+      )}
 
       <SectionLabel>Grades</SectionLabel>
       <GradesSection grades={grades} />
@@ -769,11 +767,7 @@ export function PulsePanel({
       <ActivityFeed notifications={notifications} onMarkRead={onMarkRead} onMarkAll={onMarkAll} />
 
       <SectionLabel>Performance</SectionLabel>
-      <PerformanceSection
-        accessToken={accessToken}
-        mentorPreferences={mentorPreferences}
-        focusReview={focusReview}
-      />
+      <PerformanceSection />
     </div>
   );
 }

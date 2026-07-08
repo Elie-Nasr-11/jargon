@@ -16,7 +16,6 @@ import {
   Paperclip,
   Pause,
   Play,
-  RotateCcw,
   Send,
   Square,
   Volume2,
@@ -58,7 +57,6 @@ import {
   fetchLessonActivities,
   fetchStudentCatalog,
   fetchStudentSettings,
-  fetchReviewDue,
   getSubmissionFileSignedUrl,
   upsertStudentSettings,
   createRealtimeVoiceSession,
@@ -427,7 +425,6 @@ function ChatPage() {
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [assignmentDirty, setAssignmentDirty] = useState(false);
   const [workVersion, setWorkVersion] = useState(0);
-  const [pulseFocusReview, setPulseFocusReview] = useState(false);
   const locked = openQuizId !== null || openAssignmentId !== null;
   // v6 shell state: the mobile nav drawer and the desktop sidebar collapse (persisted).
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -465,8 +462,6 @@ function ChatPage() {
     if (sidebarCollapsed) reopenBtnRef.current?.focus();
     else document.querySelector<HTMLButtonElement>('[aria-label="Hide sidebar"]')?.focus();
   }, [sidebarCollapsed]);
-  // Count of skills due for spaced review — a small dismissible nudge card, once per browser session.
-  const [reviewNudge, setReviewNudge] = useState<number | null>(null);
   // Scroll UX: only auto-stick when the student is already near the bottom; otherwise offer a
   // jump-to-latest button instead of yanking them down mid-read.
   const nearBottomRef = useRef(true);
@@ -696,14 +691,6 @@ function ChatPage() {
         setLessonId(selected);
         setMentor(savedMentor);
         setVoice(savedVoice);
-        // Best-effort review nudge: a small once-per-browser-session card when skills are due.
-        void fetchReviewDue()
-          .then((rows) => {
-            if (alive && rows.length && !sessionStorage.getItem("jargon-review-nudge")) {
-              setReviewNudge(rows.length);
-            }
-          })
-          .catch(() => {});
         await loadLesson(selected, session.access_token, savedMentor);
       } catch (error) {
         if (!alive) return;
@@ -1082,17 +1069,14 @@ function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, classParam]);
 
-  // Leaving a panel refreshes what may have changed inside it: Pulse hosts guided review (due
-  // count) and every panel can submit work (grades summary feeding the edge peeks). The one-shot
-  // review-focus flag dies with the Pulse visit that consumed it.
+  // Leaving a panel refreshes what may have changed inside it: every panel can submit work, so the
+  // grades summary that feeds the edge peeks is refetched on the way out.
   const prevViewRef = useRef<StudentView | undefined>(undefined);
   useEffect(() => {
     if (prevViewRef.current === "pulse" && view !== "pulse") {
-      navData.refreshReviewCount();
       // Visiting Pulse consumes the notifications half of its badge — the student has seen the
       // feed; marking on LEAVE keeps the unread highlights visible while they read.
       navData.markAllNotificationsRead();
-      setPulseFocusReview(false);
     }
     if (prevViewRef.current && !view) {
       navData.refreshGrades();
@@ -1285,7 +1269,7 @@ function ChatPage() {
         onGoChat={() => goView(null)}
         onOpenClasses={() => goView("classes")}
         onOpenPulse={openPulse}
-        pulseBadge={navData.notificationsUnread + navData.reviewDueCount}
+        pulseBadge={navData.notificationsUnread}
         locked={locked}
         drawerOpen={drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
@@ -1368,38 +1352,6 @@ function ChatPage() {
                     className="shrink-0 text-[12px] underline underline-offset-2"
                   >
                     Dismiss
-                  </button>
-                </div>
-              ) : null}
-              {reviewNudge ? (
-                <div className="mb-3 flex items-center gap-3 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-[13px] text-foreground">
-                  <RotateCcw className="h-4 w-4 shrink-0 text-warning" strokeWidth={1.7} />
-                  <span className="min-w-0 flex-1">
-                    {reviewNudge} {reviewNudge === 1 ? "skill is" : "skills are"} due for a quick
-                    review.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sessionStorage.setItem("jargon-review-nudge", "1");
-                      setReviewNudge(null);
-                      setPulseFocusReview(true);
-                      openPulse();
-                    }}
-                    className="shrink-0 rounded-full border border-border px-3 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
-                  >
-                    Review now
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sessionStorage.setItem("jargon-review-nudge", "1");
-                      setReviewNudge(null);
-                    }}
-                    aria-label="Dismiss review reminder"
-                    className="shrink-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                  >
-                    Later
                   </button>
                 </div>
               ) : null}
@@ -1561,9 +1513,6 @@ function ChatPage() {
                   notifications={navData.notifications}
                   onMarkRead={navData.markNotificationRead}
                   onMarkAll={navData.markAllNotificationsRead}
-                  accessToken={accessToken}
-                  mentorPreferences={mentorToPreferences(mentor)}
-                  focusReview={pulseFocusReview}
                 />
               </PageShell>
             )}
