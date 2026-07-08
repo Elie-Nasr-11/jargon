@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, ChevronRight, Lock, Megaphone } from "lucide-react";
 import { StateNote } from "@/components/StateNote";
 import { Collapsible } from "@/components/Collapsible";
+import { ProgressRing } from "@/components/ProgressRing";
 import { EntityComments } from "@/features/comms/EntityComments";
 import { groupByUnit } from "@/features/student/lessonGroups";
 import { formatDate, formatScore, relativeTime } from "@/lib/format";
@@ -26,8 +27,9 @@ import type {
 
 // The class canvas: EVERYTHING about one class on a single scrolling page — no drill-down. A
 // Recent & upcoming strip up top (this class's deadlines + latest submissions, so due dates read
-// without scanning); collapsible units whose lessons carry an at-a-glance state (dot + accent) and
-// their WORK IN PLACE (each assignment/assessment nested under the lesson it belongs to; lesson-less
+// without scanning); collapsible units whose lessons carry an at-a-glance state (a progress ring +
+// title weight) and their WORK IN PLACE (each assignment/assessment nested under the lesson it
+// belongs to; lesson-less
 // work drops to "Other work"); and a Discussion section split into the student's private teacher
 // threads and class-wide posts. Assignment submission and quiz-taking run in the P5 focus lockdown.
 
@@ -45,17 +47,6 @@ function unitStateOf(lessons: Lesson[], progress: Record<string, number>): UnitS
   if (complete === lessons.length) return "complete";
   if (started > 0 || complete > 0) return "in_progress";
   return "not_started";
-}
-
-function ProgressBar({ value }: { value: number }) {
-  return (
-    <span className="h-[4px] w-full overflow-hidden rounded-full bg-muted">
-      <span
-        className="block h-full rounded-full bg-foreground"
-        style={{ width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%` }}
-      />
-    </span>
-  );
 }
 
 function StateChip({ state }: { state: UnitState }) {
@@ -433,31 +424,31 @@ export function ClassCanvas({
 
   const renderLesson = (lesson: Lesson) => {
     const value = progress[lesson.id] ?? 0;
-    const accent =
-      value >= 1 ? "border-success/60" : value > 0 ? "border-info/60" : "border-transparent";
+    const started = value > 0;
+    const inProgress = value > 0 && value < 1;
     const work = workByLesson.get(lesson.id);
     return (
       <div key={lesson.id}>
         {/* hover treatment + chevron reveal scoped to the NAV BUTTON so an expanded comment thread
-            below doesn't light the row up as if it navigated */}
-        <div
-          className={`group flex w-full flex-wrap items-center gap-3 rounded-control border-l-2 py-2 pl-2.5 pr-2 ${accent}`}
-        >
+            below doesn't light the row up as if it navigated. State reads from a leading ring
+            (in-progress only) + title weight, matching the sidebar. */}
+        <div className="group flex w-full flex-wrap items-center gap-3 rounded-control px-2 py-2">
           <button
             type="button"
             onClick={() => onOpenLesson(lesson.id)}
             disabled={switchBlocked}
-            className="group/nav -mx-1 flex min-w-0 flex-1 items-center gap-3 rounded-control px-1 py-1 text-left transition-colors duration-(--dur-fast) hover:bg-accent focus-visible:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+            className="group/nav -mx-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-control px-1 py-1 text-left transition-colors duration-(--dur-fast) hover:bg-accent focus-visible:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
           >
+            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
+              {inProgress ? <ProgressRing value={value} size={14} /> : null}
+            </span>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-body text-foreground">{lesson.title}</div>
+              <div
+                className={`truncate text-body ${started ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                {lesson.title}
+              </div>
             </div>
-            <span className="w-24 shrink-0 max-sm:hidden">
-              <ProgressBar value={value} />
-            </span>
-            <span className="w-20 shrink-0 text-right text-meta tabular-nums text-muted-foreground">
-              {value >= 1 ? "Complete" : value > 0 ? "In progress" : "Not started"}
-            </span>
             <ChevronRight
               className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover/nav:opacity-100 group-focus-visible/nav:opacity-100"
               strokeWidth={1.7}

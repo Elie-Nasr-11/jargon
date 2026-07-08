@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Popover } from "@/components/Popover";
 import { Collapsible } from "@/components/Collapsible";
+import { ProgressRing } from "@/components/ProgressRing";
 import { ModalCard } from "@/components/ModalCard";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { MentorControls } from "@/features/student/MentorControls";
@@ -173,17 +174,14 @@ function SidebarContent({
     if (currentUnit) setOpenUnits((s) => (s[currentUnit] ? s : { ...s, [currentUnit]: true }));
   }, [currentLessonId, groups]);
 
-  // A lesson row: current-row highlight + a leading dot that reads its state at a glance
-  // (complete = filled success, in progress = soft, not started = hollow ring).
+  // A lesson row. State reads at a glance from text weight + a leading slot: not-started is greyed
+  // (no marker), in-progress is full-opacity with a progress ring, completed is full-opacity (no
+  // marker). The current lesson keeps its highlighted row on top of all that.
   const lessonRow = (lesson: Lesson) => {
     const current = lesson.id === currentLessonId;
     const value = lessonProgress[lesson.id] ?? 0;
-    const dot =
-      value >= 1
-        ? "bg-success"
-        : value > 0
-          ? "bg-foreground/40"
-          : "border border-muted-foreground/70";
+    const started = value > 0;
+    const inProgress = value > 0 && value < 1;
     return (
       <button
         key={lesson.id}
@@ -194,10 +192,14 @@ function SidebarContent({
         className={`flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) disabled:opacity-40 ${
           current
             ? "bg-muted font-medium text-foreground"
-            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            : started
+              ? "text-foreground hover:bg-muted/60"
+              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
         }`}
       >
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} aria-hidden />
+        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
+          {inProgress ? <ProgressRing value={value} size={14} /> : null}
+        </span>
         <span className="min-w-0 flex-1 truncate">{lesson.title}</span>
       </button>
     );
