@@ -12,7 +12,7 @@ import {
 import gsap from "gsap";
 import { AudioLines, Code2, Mic, MicOff, Plus, Send, Play, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
-import { Popover } from "./Popover";
+import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import {
   JARGON_COMMANDS,
@@ -183,6 +183,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // wire can carry them; for now the tutor only accepts text + code, so nothing else is offered.
   const [plusOpen, setPlusOpen] = useState(false);
   const lastSeedRef = useRef<string | undefined>(initialCode);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const morphRef = useRef<HTMLDivElement>(null);
   const textPanelRef = useRef<HTMLDivElement>(null);
   const codePanelRef = useRef<HTMLDivElement>(null);
@@ -343,6 +344,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     setCode(initialCode);
     setLang(initialLanguage);
   }, [initialCode, initialLanguage]);
+
+  // The composer input auto-grows with its content up to 3 lines, then scrolls inside the box.
+  // Runs on every text change — typed, dictated, or cleared on send — so the height always tracks
+  // the current value and snaps back to one line when the box is emptied.
+  const THREE_LINE_MAX = 80; // ~3 lines: 14.5px × 1.625 line-height × 3 + the py-1 padding.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, THREE_LINE_MAX)}px`;
+    el.style.overflowY = el.scrollHeight > THREE_LINE_MAX ? "auto" : "hidden";
+  }, [text, mode]);
 
   // smooth height morph between text & code panels
   useLayoutEffect(() => {
@@ -552,37 +565,43 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           {mode === "text" ? (
             <div ref={textPanelRef} className="space-y-2">
               <div className="flex items-end gap-2">
-                <Popover
-                  open={plusOpen}
-                  onClose={() => setPlusOpen(false)}
-                  placement="top-start"
-                  panelClassName="w-[184px] rounded-card border border-border bg-depth-card p-1.5 shadow-raised"
-                  trigger={
+                <Popover open={plusOpen} onOpenChange={setPlusOpen}>
+                  <PopoverTrigger asChild>
                     <button
                       type="button"
                       aria-label="Add"
-                      aria-expanded={plusOpen}
                       title="Add"
-                      onClick={() => setPlusOpen((v) => !v)}
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
                       <Plus className="h-[17px] w-[17px]" strokeWidth={1.7} />
                     </button>
-                  }
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlusOpen(false);
-                      setMode("code");
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                  </PopoverTrigger>
+                  {/* Portaled (Radix) so the upward menu clears the composer's overflow-hidden
+                      height-morph box that used to clip it. */}
+                  <PopoverContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="w-[184px] rounded-card border border-border bg-depth-card p-1.5 shadow-raised"
                   >
-                    <Code2 className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
-                    Write code
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPlusOpen(false);
+                        setMode("code");
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                    >
+                      <Code2
+                        className="h-[15px] w-[15px] text-muted-foreground"
+                        strokeWidth={1.6}
+                      />
+                      Write code
+                    </button>
+                  </PopoverContent>
                 </Popover>
                 <textarea
+                  ref={textareaRef}
                   value={text}
                   onChange={(e) => {
                     setText(e.target.value);
@@ -599,7 +618,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   }}
                   rows={1}
                   placeholder={"Ask anything\u2026 try \u201Cshow me a for loop\u201D"}
-                  className="max-h-[160px] min-h-[28px] flex-1 resize-none bg-transparent py-1 text-[14.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+                  className="min-h-[28px] flex-1 resize-none overflow-y-hidden bg-transparent py-1 text-[14.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
                 />
                 <button
                   type="button"

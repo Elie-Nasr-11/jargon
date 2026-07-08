@@ -6,6 +6,20 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-08 (Student UI v8 — composer polish + full-width calendar + unified lesson-state annotation)
+
+Status: Starting
+Task: Four frontend-only tweaks the user gave after reviewing v7 live. (1) The composer "+" popup is
+clipped by the textbox (morphRef overflow-hidden) → move it to the portaling Radix popover. (2) The
+composer textarea should auto-grow up to 3 lines then scroll. (3) The Pulse calendar should be
+full-width and more comprehensive (event dots + counts in day cells). (4) Unify per-lesson state
+annotation across the sidebar and class page: not-started = greyed, in-progress = white + a small
+progress ring, completed = white — via a new ProgressRing component (lessonProgress is tri-state, so
+the ring is a fixed half-arc "active" marker, not a precise %).
+Files I expect to touch: components/{Composer, ProgressRing NEW}, features/student/shell/AppSidebar.tsx,
+features/student/panels/{ClassCanvas,AgendaCalendar}.tsx. Reuse (no change): components/ui/{popover,calendar}.tsx.
+Notes: No migration, no backend. Ships on claude/happy-johnson-wseex8 → main FF on OK.
+
 ## Claude -> Codex / Human - 2026-07-08 (Student UI v7 — depth/hierarchy pass + collapsible units + composer "+" + calendar + Review removal — FINISHED, awaiting main FF)
 
 Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),
