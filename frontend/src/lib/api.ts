@@ -218,8 +218,10 @@ function storagePathForSubmission(input: {
 // real ceiling. Path scheme `{userId}/...` so the storage INSERT policy binds foldername[1] to the uid.
 export const MAX_CHAT_UPLOAD_FILES = 10;
 export const MAX_CHAT_UPLOAD_FILE_BYTES = 20 * 1024 * 1024; // 20 MB (bucket ceiling is 25 MB)
+// No .pdf: the edge fn never decodes PDFs (image vision + text-file inlining only), so accepting
+// them would surface an attachment the tutor silently can't read. Drop it from the picker filter.
 export const CHAT_UPLOAD_ACCEPT =
-  "image/*,text/*,.md,.csv,.json,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.cs,.html,.css,.pdf,.txt";
+  "image/*,text/*,.md,.csv,.json,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.cs,.html,.css,.txt";
 
 function storagePathForStudentUpload(input: { userId: string; fileName: string }): string {
   const name = safePathSegment(input.fileName) || "upload";

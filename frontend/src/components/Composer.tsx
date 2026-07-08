@@ -12,7 +12,9 @@ import {
 } from "react";
 import gsap from "gsap";
 import {
+  AlertCircle,
   AudioLines,
+  ChevronLeft,
   Code2,
   FileText,
   FolderOpen,
@@ -110,6 +112,7 @@ type PendingAttachment = {
   filename: string;
   uploading: boolean;
   error: boolean;
+  errorMsg?: string;
   attachment?: ChatAttachment;
 };
 
@@ -568,9 +571,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             : a,
         ),
       );
-    } catch {
+    } catch (err) {
+      const errorMsg =
+        err instanceof Error && err.message ? err.message : "Upload failed. Remove and try again.";
       setAttachments((prev) =>
-        prev.map((a) => (a.key === key ? { ...a, uploading: false, error: true } : a)),
+        prev.map((a) => (a.key === key ? { ...a, uploading: false, error: true, errorMsg } : a)),
       );
     }
   };
@@ -583,8 +588,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   };
 
   const addFromLibrary = (row: StudentUpload) => {
-    setPlusOpen(false);
-    setPlusView("menu");
+    // Stay in the uploads view so several library files can be picked in one visit; the student
+    // dismisses the popover themselves. Cap + dedupe still guard each add.
     if (attachments.length >= MAX_CHAT_UPLOAD_FILES) return;
     if (attachments.some((a) => a.attachment?.upload_id === row.id)) return;
     setAttachments((prev) => [
@@ -699,11 +704,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 className="hidden"
               />
               {attachments.length ? (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5" aria-live="assertive">
                   {attachments.map((a) => (
                     <span
                       key={a.key}
-                      className={`inline-flex max-w-[220px] items-center gap-1.5 rounded-pill border px-2 py-1 text-meta ${
+                      title={a.error ? a.errorMsg : a.filename}
+                      className={`inline-flex max-w-[240px] items-center gap-1.5 rounded-pill border px-2 py-1 text-meta ${
                         a.error
                           ? "border-danger/40 bg-danger/10 text-danger"
                           : "border-border bg-depth-sub text-foreground"
@@ -711,18 +717,27 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     >
                       {a.uploading ? (
                         <Loader2 className="h-3 w-3 shrink-0 animate-spin" strokeWidth={2} />
+                      ) : a.error ? (
+                        <AlertCircle className="h-3 w-3 shrink-0 text-danger" strokeWidth={2} />
                       ) : (
                         <Paperclip
                           className="h-3 w-3 shrink-0 text-muted-foreground"
                           strokeWidth={1.7}
                         />
                       )}
-                      <span className="min-w-0 flex-1 truncate">{a.filename}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {a.filename}
+                        {a.error ? ` — ${a.errorMsg || "failed"}` : ""}
+                      </span>
                       <button
                         type="button"
                         onClick={() => removeAttachment(a.key)}
                         aria-label={`Remove ${a.filename}`}
-                        className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                        className={`shrink-0 transition-colors ${
+                          a.error
+                            ? "text-danger hover:text-danger/80"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
                       >
                         <X className="h-3 w-3" strokeWidth={2} />
                       </button>
@@ -803,9 +818,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                         <button
                           type="button"
                           onClick={() => setPlusView("menu")}
+                          aria-label="Back to the add menu"
                           className="mb-1 flex w-full items-center gap-1.5 rounded-control px-2.5 py-1.5 text-left text-meta font-medium text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
                         >
-                          <X className="h-3.5 w-3.5" strokeWidth={1.7} /> Your uploads
+                          <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.7} /> Your uploads
                         </button>
                         {uploadsList === null ? (
                           <div className="px-2.5 py-2 text-meta text-muted-foreground">
@@ -885,7 +901,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     swaps it to Send. Same size and styling both ways — no layout shift. Enter on
                     empty stays a no-op (send() guards); voice starts by click/tap only. */}
                 {!text.trim() &&
-                readyAttachments.length === 0 &&
+                attachments.length === 0 &&
                 !dictating &&
                 canStartVoice &&
                 onStartVoice ? (

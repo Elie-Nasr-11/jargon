@@ -6,24 +6,84 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-08 (Student UI v9 — state-color tiers · attach-to-tutor (backend) · Overview rename · lesson resources · progress-popup cleanup)
+## Claude -> Codex / Human - 2026-07-08 (Student UI v9 — state-color tiers · attach-to-tutor (backend) · Overview rename · lesson resources · progress-popup cleanup — FINISHED, awaiting main FF)
 
-Status: Starting
-Task: Five tweaks after the v8 live review. Four frontend: (1) lesson-state colours become a 3-tier
-ramp (in-progress bright / completed grey / not-started greyer); (2) rename the "Pulse" nav+page to
-"Overview" (visible strings only, keep the ?view=pulse key); (3) surface a lesson's teacher resources
-in a top-right launcher over the chat; (4) clean up the progress-bar roadmap popup. One BACKEND
-feature the user greenlit fully: (5) attach files to the tutor chat — a new assignment-free
-student-uploads bucket+table+RLS, chat-wire + edge-fn + LLM vision so the tutor actually uses images/
-text files, with an owner-only trust boundary, scan/quarantine gating, prompt-injection fencing, and
-cost caps.
-Files I expect to touch (frontend): features/student/shell/AppSidebar.tsx, features/student/panels/
-ClassCanvas.tsx, features/student/shell/studentViews.ts, routes/chat.tsx, components/{LessonMilestones,
-Composer,Popover}.tsx, features/student/chat/ChatStepper.tsx, lib/{api,types}.ts. Backend: new
-migration 20260729000000_student_uploads_store.sql, supabase/functions/chat/index.ts,
-supabase/functions/submission-maintenance/index.ts.
-Notes: attach backend deploys are LIVE but gated behind the frontend (inert until it ships). Ships on
-claude/happy-johnson-wseex8 → main FF on OK.
+Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),
+migration applied LIVE and RLS-probed (owner isolation + path-binding confirmed), adversarially
+reviewed by two agents (security/RLS + frontend correctness/UX), findings folded. 8 phased commits on
+claude/happy-johnson-wseex8. The attach backend is deployed LIVE but inert until this frontend ships.
+ONE main fast-forward pending user OK.
+
+Summary — five tweaks the user gave after reviewing v8 live:
+1. Lesson-state colours → 3 tiers on both surfaces (sidebar + class page): current row keeps its
+   bg-muted highlight; otherwise in-progress = text-foreground (brightest, keeps the ProgressRing),
+   completed = text-muted-foreground (grey), not-started/"locked" = text-muted-foreground/60 (greyer
+   still). Thresholds inProgress = 0<v<1, completed = v>=1. (The low contrast on completed/locked is
+   the literal ask — greyer = "more locked" — with sr-only state labels for AT.)
+2. "Pulse" → "Overview": the three user-visible strings only (AppSidebar NavRow, VIEW_TITLES,
+   chat.tsx PageShell). Internal key ?view=pulse + openPulse/PulsePanel/pulseBadge identifiers stay.
+3. Lesson resources top-right: re-added api.fetchLessonResources(lessonId) (published lesson_resources,
+   RLS-scoped); a fixed right-3 top-3 launcher (Paperclip + count badge, shown only when the lesson has
+   resources and not under lockdown) opens a bottom-end Popover of the existing ResourceCards. The
+   effect now clears prior resources AND closes the popover on lesson switch (no stale/uninvited-open).
+4. Progress-bar roadmap popup cleanup: LessonMilestones rewritten off the segment-bar to an overline
+   "Step X of Y" + step rows with muted kind chips and 3-tier-greyed completed titles; RoadmapPanel on
+   bg-depth-card; Popover moved to a new bottom-start placement for the full-width strip trigger.
+5. Attach files to the tutor — FULL build (user chose "build fully now"):
+   - New assignment-free store: migration 20260729000000_student_uploads_store.sql adds the private
+     student-uploads bucket + public.student_uploads table + OWNER-ONLY RLS + storage path-binding
+     (foldername[1] = auth.uid(), scheme {userId}/{uniqueId}-{safeName}) + scan_status/purged_at
+     read-gating + indexes. Applied live; two-account RLS probe confirmed owner isolation + path-bind.
+   - Chat wire: attachments?: {upload_id,storage_path,mime_type,filename}[] rides alongside mode:"text"
+     on TypedChatAnswer (student can type AND attach; graders stay on the typed text). Client sends only
+     {upload_id,...}; normalizeAttachments is a STRUCTURAL whitelist (shape + count cap, no fetch).
+   - Trust boundary = server re-read: resolveAttachments (chat/index.ts, MAIN conversation route only)
+     re-reads student_uploads by id UNDER THE CALLER'S JWT (RLS → a foreign id vanishes) and fetches
+     bytes under the caller's JWT (storage SELECT re-checks owner + scan gate). No service-role, no
+     trusting client paths (IDOR guard). Images → provider vision block (OpenAI image_url data URL
+     detail:low / Anthropic base64), each preceded by an untrusted-image text note; text/code files →
+     decoded + truncated + fenced as untrusted with a per-turn nonce; PDF/oversize/quarantined → a
+     one-line "not readable" note. Cost caps: ≤4 images, per-image + total image-byte budgets, per-file
+     + total text-char caps.
+   - Prompt-injection defense: SYSTEM_PROMPT now states EVERYTHING attached (images AND inlined text)
+     is untrusted student DATA, never instructions; untrusted blocks placed after the authoritative
+     payload. Provider adapters branch on Array.isArray(content) so ONLY the user turn carries blocks;
+     graders + review route stay string-only.
+   - Composer "+" menu: Write code / Attach file (hidden <input>, CHAT_UPLOAD_ACCEPT, no .pdf) / Attach
+     from uploads (in-popover library picker, multi-add, quarantined/purged filtered). Removable chips
+     above the input (Loader2 while uploading; AlertCircle + surfaced error message + aria-live on
+     failure). Send gated on canSend (text OR >=1 ready attachment, blocked while any upload is in
+     flight); the empty-box voice/Send swap now flips to Send the instant a file is attached (gates on
+     attachments.length, pending or ready). chat.tsx threads attachments into the answer + optimistic
+     Msg; turnToMessage re-renders chips (open via getStudentUploadSignedUrl, window opened
+     synchronously so Safari/Firefox don't block the post-await popup).
+   - Scanner: submission-maintenance generalized to sweep a TARGETS list, adding
+     {student_uploads, student-uploads} (same pending→clean/quarantined drain + age purge).
+
+Files changed:
+- frontend: features/student/shell/AppSidebar.tsx, features/student/panels/ClassCanvas.tsx,
+  features/student/shell/studentViews.ts, routes/chat.tsx, components/{LessonMilestones,Composer,
+  Popover}.tsx, features/student/chat/ChatStepper.tsx, lib/{api,types}.ts.
+- backend: supabase/migrations/20260729000000_student_uploads_store.sql (new),
+  supabase/functions/chat/index.ts, supabase/functions/submission-maintenance/index.ts.
+
+Tests run: cd frontend && npx tsc --noEmit (0) · npm run lint (0 errors, 12 pre-existing warnings) ·
+npm run build (green). Migration applied live via Supabase apply_migration + a rolled-back two-account
+RLS probe (b_sees=0, path-bind ok). Deno edge-fn typecheck deferred to CI (deno unavailable here);
+attach path is dormant for existing traffic (empty attachments → early returns; string content
+unchanged) so the only active change for current sessions is the SYSTEM_PROMPT tweak.
+
+Remaining concerns:
+- Deno check + the two edge-fn deploys (chat, submission-maintenance) run in CI on branch push;
+  a failed attach deploy degrades gracefully (attachments ignored, string content unchanged).
+- Completed/locked lesson titles are intentionally low-contrast per the user's "grey / even more
+  grey" ask; sr-only labels cover AT but low-vision sighted users can't distinguish them by opacity.
+- Top-right resources launcher is fixed at all widths (mirrors the top-left hamburger pattern); worth
+  an eye on ~800-900px with the sidebar open in the live pass.
+
+Suggested next task: user does the live visual pass (full authenticated student render isn't
+reproducible here). Then confirm the main FF; watch a live turn with an image attach → tutor
+describes it, and a foreign/quarantined upload_id → silently ignored with a note.
 
 ## Claude -> Codex / Human - 2026-07-08 (Student UI v8 — composer polish + full-width calendar + unified lesson-state annotation — FINISHED, awaiting main FF)
 

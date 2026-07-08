@@ -1221,13 +1221,13 @@ function ChatPage() {
     [lessonId, sessionId],
   );
 
-  // v9: load the current lesson's published teacher resources for the top-right launcher; clears
-  // between lessons. RLS scopes what the student may see; a failure just hides the launcher.
+  // v9: load the current lesson's published teacher resources for the top-right launcher. Clears the
+  // prior lesson's resources AND closes any open popover up front so a lesson switch never shows stale
+  // resources or an uninvited-open panel. RLS scopes what the student may see; a failure hides the launcher.
   useEffect(() => {
-    if (!lessonId) {
-      setLessonResources([]);
-      return;
-    }
+    setLessonResources([]);
+    setResourcesOpen(false);
+    if (!lessonId) return;
     let alive = true;
     void fetchLessonResources(lessonId)
       .then((rows) => alive && setLessonResources(rows))
@@ -2499,13 +2499,18 @@ function MessageRow({
                   key={att.upload_id}
                   type="button"
                   onClick={async () => {
+                    // Open the tab synchronously inside the gesture so Safari/Firefox don't block
+                    // the post-await window.open; then point it at the signed URL once it resolves.
+                    const win = window.open("", "_blank", "noopener,noreferrer");
                     try {
                       const url = await getStudentUploadSignedUrl({
                         storage_path: att.storage_path,
                       });
-                      if (url) window.open(url, "_blank", "noopener,noreferrer");
+                      if (url && win) win.location.href = url;
+                      else if (win) win.close();
                     } catch {
                       /* opening an attachment should never break the chat */
+                      win?.close();
                     }
                   }}
                   className="inline-flex max-w-[220px] items-center gap-1.5 rounded-pill border border-border bg-depth-sub px-2 py-1 text-meta text-foreground transition-colors hover:border-foreground/30"
