@@ -10,8 +10,9 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import gsap from "gsap";
-import { AudioLines, Code2, Mic, MicOff, Send, Play, X } from "lucide-react";
+import { AudioLines, Code2, Mic, MicOff, Plus, Send, Play, X } from "lucide-react";
 import { GradientCard } from "./GradientCard";
+import { Popover } from "./Popover";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import {
   JARGON_COMMANDS,
@@ -177,6 +178,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       `// Try me. Hit Run \u25B6 to see output in the chat.\nPRINT "hello from jargon"`,
   );
   const [running, setRunning] = useState(false);
+  // The "+" add-menu (opens upward from the composer's left). Today it carries one live action —
+  // Write code — and is the seam where attach actions (upload/photo/screenshot) land once the chat
+  // wire can carry them; for now the tutor only accepts text + code, so nothing else is offered.
+  const [plusOpen, setPlusOpen] = useState(false);
   const lastSeedRef = useRef<string | undefined>(initialCode);
   const morphRef = useRef<HTMLDivElement>(null);
   const textPanelRef = useRef<HTMLDivElement>(null);
@@ -547,15 +552,36 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           {mode === "text" ? (
             <div ref={textPanelRef} className="space-y-2">
               <div className="flex items-end gap-2">
-                <button
-                  aria-label="Open code editor"
-                  title="Write and run code"
-                  onClick={() => setMode("code")}
-                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                <Popover
+                  open={plusOpen}
+                  onClose={() => setPlusOpen(false)}
+                  placement="top-start"
+                  panelClassName="w-[184px] rounded-card border border-border bg-depth-card p-1.5 shadow-raised"
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label="Add"
+                      aria-expanded={plusOpen}
+                      title="Add"
+                      onClick={() => setPlusOpen((v) => !v)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <Plus className="h-[17px] w-[17px]" strokeWidth={1.7} />
+                    </button>
+                  }
                 >
-                  <Code2 className="h-[16px] w-[16px]" strokeWidth={1.5} />
-                  <span className="text-[12px] font-medium">Code</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlusOpen(false);
+                      setMode("code");
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                  >
+                    <Code2 className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
+                    Write code
+                  </button>
+                </Popover>
                 <textarea
                   value={text}
                   onChange={(e) => {

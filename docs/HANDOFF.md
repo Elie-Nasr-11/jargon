@@ -6,6 +6,23 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-08 (Student UI v7 — depth/hierarchy pass + collapsible units + composer "+" + calendar + Review removal)
+
+Status: Starting
+Task: Frontend-only round of student-UI tweaks on top of v6 (shipped f4c18ce). (1) Composer: drop the
+"Code" word, make it a "+" menu (Write code live; attach deferred pending backend — the tutor wire is
+text/code only). (2) Sidebar + ClassCanvas: units become collapsible with at-a-glance state. (3)
+ClassesGrid: subject-based icons, hover title→stats swap, drop school name. (4) Pulse: remove the
+Review feature end-to-end (kept inert on the backend), restyle teacher Notes, add an [Agenda|Calendar]
+toggle, restyle proficiency/strengths. (5) A bounded depth/contrast pass over the touched surfaces.
+Files I expect to touch: components/{Composer,Collapsible NEW}, lib/subjectIcon.tsx (NEW),
+hooks/useStudentNavData.ts, routes/chat.tsx, features/student/shell/AppSidebar.tsx,
+features/student/panels/{ClassesGrid,ClassCanvas,PulsePanel}.tsx, features/student/panels/AgendaCalendar.tsx
+(NEW, revived), delete ReviewPanel.tsx.
+Notes: No migration, no edge-function change. Ships on claude/happy-johnson-wseex8 → main FF on OK.
+Three decisions were baked as defaults (AskUserQuestion stream failed): compose "+" attach deferred,
+keep proficiency/strengths, calendar as a toggle. All three approved in the plan.
+
 ## Claude -> Codex / Human - 2026-07-07 (Student UI v5 — "One Screen": chromeless stage, edge peripheries, Pulse, universal comments, lockdown — FINISHED, awaiting main FF)
 
 Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),

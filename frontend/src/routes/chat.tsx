@@ -1279,6 +1279,7 @@ function ChatPage() {
         view={view}
         lessons={lessons}
         currentLessonId={lessonId}
+        lessonProgress={navData.lessonProgress}
         switchBlocked={sending || runInFlight}
         onOpenLesson={openLessonFromView}
         onGoChat={() => goView(null)}

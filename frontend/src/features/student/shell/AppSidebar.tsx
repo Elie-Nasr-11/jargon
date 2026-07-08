@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
@@ -14,6 +14,7 @@ import {
   User,
 } from "lucide-react";
 import { Popover } from "@/components/Popover";
+import { Collapsible } from "@/components/Collapsible";
 import { ModalCard } from "@/components/ModalCard";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { MentorControls } from "@/features/student/MentorControls";
@@ -106,6 +107,8 @@ export type AppSidebarProps = {
   view: StudentView | undefined;
   lessons: Lesson[];
   currentLessonId: string;
+  // Per-lesson completion (0..1) across the catalog — drives the at-a-glance state dots on rows.
+  lessonProgress: Record<string, number>;
   // Lesson switching is refused while a turn is in flight — disable the rows so the refusal
   // never reads as a broken click.
   switchBlocked: boolean;
@@ -138,6 +141,7 @@ function SidebarContent({
     view,
     lessons,
     currentLessonId,
+    lessonProgress,
     switchBlocked,
     onOpenLesson,
     onGoChat,
@@ -149,6 +153,7 @@ function SidebarContent({
   } = props;
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutError, setLogoutError] = useState(false);
+  const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
   const { resolved, toggle } = useTheme();
   const campusLiveUrl = useCampusLiveLink();
@@ -159,7 +164,44 @@ function SidebarContent({
     if (inDrawer) onCloseDrawer();
   };
 
-  const groups = groupByUnit(lessons);
+  const groups = useMemo(() => groupByUnit(lessons), [lessons]);
+
+  // Auto-open the unit holding the current lesson — on load (the catalog arrives async) and each
+  // time the lesson changes — while merging so units the student expanded themselves stay open.
+  useEffect(() => {
+    const currentUnit = groups.find((g) => g.lessons.some((l) => l.id === currentLessonId))?.unitId;
+    if (currentUnit) setOpenUnits((s) => (s[currentUnit] ? s : { ...s, [currentUnit]: true }));
+  }, [currentLessonId, groups]);
+
+  // A lesson row: current-row highlight + a leading dot that reads its state at a glance
+  // (complete = filled success, in progress = soft, not started = hollow ring).
+  const lessonRow = (lesson: Lesson) => {
+    const current = lesson.id === currentLessonId;
+    const value = lessonProgress[lesson.id] ?? 0;
+    const dot =
+      value >= 1
+        ? "bg-success"
+        : value > 0
+          ? "bg-foreground/40"
+          : "border border-muted-foreground/40";
+    return (
+      <button
+        key={lesson.id}
+        type="button"
+        onClick={go(() => onOpenLesson(lesson.id))}
+        disabled={switchBlocked && !current}
+        aria-current={current ? "true" : undefined}
+        className={`flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) disabled:opacity-40 ${
+          current
+            ? "bg-muted font-medium text-foreground"
+            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+        }`}
+      >
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} aria-hidden />
+        <span className="min-w-0 flex-1 truncate">{lesson.title}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -207,34 +249,33 @@ function SidebarContent({
             Lessons
           </div>
         ) : null}
-        {groups.map((group) => (
-          <div key={group.unitId} className="mb-2">
-            {groups.length > 1 ? (
-              <div className="truncate px-2.5 py-1 text-meta text-muted-foreground/80">
-                {group.unitTitle}
-              </div>
-            ) : null}
-            {group.lessons.map((lesson) => {
-              const current = lesson.id === currentLessonId;
+        {/* One real unit (or an unnamed catalog) reads best as a flat list; multiple units each get
+            their own collapsible so a long catalog stays scannable and the current unit is open. */}
+        {groups.length > 1
+          ? groups.map((group) => {
+              const open = openUnits[group.unitId] ?? false;
+              const done = group.lessons.filter((l) => (lessonProgress[l.id] ?? 0) >= 1).length;
               return (
-                <button
-                  key={lesson.id}
-                  type="button"
-                  onClick={go(() => onOpenLesson(lesson.id))}
-                  disabled={switchBlocked && !current}
-                  aria-current={current ? "true" : undefined}
-                  className={`w-full truncate rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) disabled:opacity-40 ${
-                    current
-                      ? "bg-muted font-medium text-foreground"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                  }`}
+                <Collapsible
+                  key={group.unitId}
+                  open={open}
+                  onToggle={() =>
+                    setOpenUnits((s) => ({ ...s, [group.unitId]: !(s[group.unitId] ?? false) }))
+                  }
+                  headerClassName="mt-0.5 rounded-control px-2 py-1.5 text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted/60"
+                  title={<span className="truncate font-medium">{group.unitTitle}</span>}
+                  meta={
+                    <span className="shrink-0 pl-1 text-meta tabular-nums text-muted-foreground">
+                      {done}/{group.lessons.length}
+                    </span>
+                  }
+                  bodyClassName="pb-1 pl-1.5"
                 >
-                  {lesson.title}
-                </button>
+                  {group.lessons.map((lesson) => lessonRow(lesson))}
+                </Collapsible>
               );
-            })}
-          </div>
-        ))}
+            })
+          : (groups[0]?.lessons ?? []).map((lesson) => lessonRow(lesson))}
       </div>
 
       <div className="shrink-0 border-t border-border/60 p-2">

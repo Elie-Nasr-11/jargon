@@ -3,6 +3,7 @@ import {
   fetchNotifications,
   fetchReviewDue,
   fetchStudentGrades,
+  fetchStudentLessonProgress,
   getSession,
   markAllNotificationsRead as apiMarkAll,
   markNotificationRead as apiMarkRead,
@@ -21,6 +22,9 @@ export function useStudentNavData() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reviewDueCount, setReviewDueCount] = useState(0);
   const [grades, setGrades] = useState<StudentGradeRow[]>([]);
+  // Per-lesson completion (0..1) across the student's whole catalog — powers the sidebar's
+  // at-a-glance state dots. Load-once like grades; missing ids read as not-started.
+  const [lessonProgress, setLessonProgress] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +42,9 @@ export function useStudentNavData() {
           .catch(() => {});
         void fetchStudentGrades()
           .then((rows) => !cancelled && setGrades(rows))
+          .catch(() => {});
+        void fetchStudentLessonProgress()
+          .then((map) => !cancelled && setLessonProgress(map))
           .catch(() => {});
       } catch {
         // best-effort: nav badges degrade to nothing, never break the chat
@@ -95,9 +102,13 @@ export function useStudentNavData() {
   }, []);
 
   // Called when a panel closes (work may have been submitted inside it) so the edge peeks refresh.
+  // Lesson progress can also have advanced (a lesson finished mid-session), so refresh it too.
   const refreshGrades = useCallback(() => {
     void fetchStudentGrades()
       .then((rows) => setGrades(rows))
+      .catch(() => {});
+    void fetchStudentLessonProgress()
+      .then((map) => setLessonProgress(map))
       .catch(() => {});
   }, []);
 
@@ -135,6 +146,7 @@ export function useStudentNavData() {
     notificationsUnread,
     reviewDueCount,
     grades,
+    lessonProgress,
     nextDue,
     dueByClass,
     avgByClass,
