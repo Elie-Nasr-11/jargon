@@ -347,15 +347,20 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   // The composer input auto-grows with its content up to 3 lines, then scrolls inside the box.
   // Runs on every text change — typed, dictated, or cleared on send — so the height always tracks
-  // the current value and snaps back to one line when the box is emptied.
-  const THREE_LINE_MAX = 80; // ~3 lines: 14.5px × 1.625 line-height × 3 + the py-1 padding.
+  // the current value and snaps back to one line when the box is emptied. The 3-line cap is derived
+  // from the LIVE line-height + padding, so it's correct on touch too (coarse pointers bump the
+  // font to 16px); `vh` in the deps recomputes it on a viewport resize.
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
+    const cs = getComputedStyle(el);
+    const lineHeight = parseFloat(cs.lineHeight) || 24;
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const max = Math.ceil(lineHeight * 3 + pad);
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, THREE_LINE_MAX)}px`;
-    el.style.overflowY = el.scrollHeight > THREE_LINE_MAX ? "auto" : "hidden";
-  }, [text, mode]);
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }, [text, mode, vh]);
 
   // smooth height morph between text & code panels
   useLayoutEffect(() => {

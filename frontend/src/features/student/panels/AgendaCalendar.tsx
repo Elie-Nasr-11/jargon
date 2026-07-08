@@ -73,11 +73,11 @@ function EventDayButton({ className, day, modifiers, ...props }: ComponentProps<
       ref={ref}
       type="button"
       className={cn(
-        "flex h-full w-full flex-col items-center gap-1 rounded-control px-1 pb-1 pt-2 leading-none transition-colors focus-visible:outline-none",
+        "flex h-full w-full flex-col items-center gap-1 rounded-control px-1 pb-1 pt-2 leading-none outline-none transition-colors group-data-[focused=true]/day:ring-2 group-data-[focused=true]/day:ring-inset group-data-[focused=true]/day:ring-ring",
         selected
           ? "bg-foreground text-background"
           : today
-            ? "bg-accent text-foreground hover:bg-muted"
+            ? "bg-accent text-foreground ring-1 ring-inset ring-foreground/25 hover:bg-muted"
             : "text-foreground hover:bg-accent",
         outside && !selected ? "text-muted-foreground/50" : "",
         className,
@@ -102,7 +102,7 @@ function EventDayButton({ className, day, modifiers, ...props }: ComponentProps<
           {extra > 0 ? (
             <span
               className={cn(
-                "text-[9px] leading-none",
+                "text-[10px] leading-none",
                 selected ? "text-background/80" : "text-muted-foreground",
               )}
             >

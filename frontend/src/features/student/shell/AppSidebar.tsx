@@ -201,6 +201,9 @@ function SidebarContent({
           {inProgress ? <ProgressRing value={value} size={14} /> : null}
         </span>
         <span className="min-w-0 flex-1 truncate">{lesson.title}</span>
+        <span className="sr-only">
+          {value >= 1 ? "Completed" : value > 0 ? "In progress" : "Not started"}
+        </span>
       </button>
     );
   };

@@ -449,6 +449,9 @@ export function ClassCanvas({
                 {lesson.title}
               </div>
             </div>
+            <span className="sr-only">
+              {value >= 1 ? "Completed" : value > 0 ? "In progress" : "Not started"}
+            </span>
             <ChevronRight
               className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover/nav:opacity-100 group-focus-visible/nav:opacity-100"
               strokeWidth={1.7}

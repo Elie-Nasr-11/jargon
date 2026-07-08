@@ -6,19 +6,55 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-08 (Student UI v8 — composer polish + full-width calendar + unified lesson-state annotation)
+## Claude -> Codex / Human - 2026-07-08 (Student UI v8 — composer polish + full-width calendar + unified lesson-state annotation — FINISHED, awaiting main FF)
 
-Status: Starting
-Task: Four frontend-only tweaks the user gave after reviewing v7 live. (1) The composer "+" popup is
-clipped by the textbox (morphRef overflow-hidden) → move it to the portaling Radix popover. (2) The
-composer textarea should auto-grow up to 3 lines then scroll. (3) The Pulse calendar should be
-full-width and more comprehensive (event dots + counts in day cells). (4) Unify per-lesson state
-annotation across the sidebar and class page: not-started = greyed, in-progress = white + a small
-progress ring, completed = white — via a new ProgressRing component (lessonProgress is tri-state, so
-the ring is a fixed half-arc "active" marker, not a precise %).
-Files I expect to touch: components/{Composer, ProgressRing NEW}, features/student/shell/AppSidebar.tsx,
-features/student/panels/{ClassCanvas,AgendaCalendar}.tsx. Reuse (no change): components/ui/{popover,calendar}.tsx.
-Notes: No migration, no backend. Ships on claude/happy-johnson-wseex8 → main FF on OK.
+Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),
+adversarially reviewed by two agents (correctness: no hard bugs, all 4 areas sound; UX/a11y/CSS: 2
+HIGH + 3 lower findings, all fixed), 4 commits on claude/happy-johnson-wseex8. Frontend-only. ONE
+main fast-forward pending user OK.
+
+Summary — four tweaks the user gave after reviewing v7 live:
+1. Composer "+" menu: moved from the shared absolute Popover to the Radix popover
+   (components/ui/popover.tsx), which PORTALS to <body> and so clears the composer's overflow-hidden
+   height-morph box that was clipping the upward menu. Radix owns open/Escape/outside-click.
+2. Composer textarea: auto-grows with content up to 3 lines, then scrolls — a useLayoutEffect keyed
+   on [text, mode, vh] sizing to min(scrollHeight, cap) where the cap is derived from the LIVE
+   line-height + padding (so it's right on the 16px coarse-pointer font too) and toggling overflow-y.
+   Snaps back to one line on send.
+3. Pulse "Calendar" view: now full-width (root w-fit→w-full, day cells drop aspect-square for a
+   fixed h-16 flex-1) with a custom DayButton (fed the per-day maps via a stable context) rendering
+   the date + up to three event dots (warning=due, success=submitted) + a "+N" overflow — events
+   read straight off the month grid. Same grades feed, no extra fetch.
+4. Unified per-lesson state across the sidebar AND class page via a new components/ProgressRing.tsx:
+   not-started = greyed title (no marker), in-progress = full-opacity title + the ring, completed =
+   full-opacity title (no marker). Because lessonProgress is tri-state (0.5 in progress), the ring is
+   a consistent half-arc "active" marker, not a precise %. The class page dropped its linear
+   progress bar + status word for this (ProgressBar component removed).
+
+Review fixes folded: calendar day buttons had focus-visible:outline-none with NO replacement ring →
+added a visible ring via react-day-picker's group-data-[focused]/day; the class page had lost its
+screen-reader-readable lesson state (color/ring aren't announced) → added sr-only state labels to
+both the class page and the sidebar rows; today-cell got a ring so it reads in light theme; the
+3-line cap is now derived from the live line-height (was a fixed 80px that under-shot on touch);
++N bumped to 10px.
+
+Files changed: components/{Composer, ProgressRing NEW}, features/student/shell/AppSidebar.tsx,
+features/student/panels/{ClassCanvas, AgendaCalendar}.tsx. Reused unchanged:
+components/ui/{popover, calendar}.tsx.
+
+Tests run: tsc/lint/build per phase; two adversarial review agents on the full 848fb9c..HEAD diff.
+
+Remaining concerns: (1) The in-progress ring is a fixed half-arc because lessonProgress is tri-state
+— a real % needs a new backend signal (per-lesson activity fraction). (2) Class-page lesson state is
+now ring+colour (+ sr-only text) with the explicit word dropped, per the user's "completed is just
+white" ask — revisit if the minimalism reads as too sparse. (3) Calendar day dots are due-first, so
+a day with many due + few submitted can hide the submitted dot inside the +N (the count is right; the
+day-detail list below always shows everything). (4) Composer autogrow recomputes on window-height
+resize but not a width-only change (e.g. sidebar collapse) until the next keystroke — rare/cosmetic.
+(5) Branch commits show Unverified on GitHub (no signing key in this env) — contents are fine.
+
+Suggested next task: the composer-attach backend round (multimodal chat wire) that unlocks the "+"
+menu's upload/photo/screenshot items, or a per-lesson activity-fraction signal to make the ring real.
 
 ## Claude -> Codex / Human - 2026-07-08 (Student UI v7 — depth/hierarchy pass + collapsible units + composer "+" + calendar + Review removal — FINISHED, awaiting main FF)
 
