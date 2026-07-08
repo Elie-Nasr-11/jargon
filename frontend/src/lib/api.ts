@@ -52,8 +52,10 @@ import type {
   Lesson,
   LessonActivity,
   LessonAttempt,
+  LessonChatResource,
   LessonResource,
   LessonResourceDisplayMode,
+  LessonResourceSource,
   LessonResourceStatus,
   LessonResourceType,
   LessonResourceVisibility,
@@ -3202,6 +3204,48 @@ export async function recordResourceInteraction(event: ResourceInteractionEvent)
     progress_percent: event.progress_percent ?? null,
   });
   if (error) throw error;
+}
+
+// v9: the lesson's published resources for the chat's top-right "Resources" launcher. Mirrors the
+// server-side select the chat edge fn uses, read directly (RLS `can_view_lesson_resource` gates it).
+// ResourceCard signs URLs + mounts inline players lazily on open, so no pre-signing here.
+type LessonResourceListRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  resource_type: LessonResourceType;
+  source_type: LessonResourceSource;
+  storage_bucket: string | null;
+  storage_path: string | null;
+  external_url: string | null;
+  thumbnail_path: string | null;
+  student_instructions: string | null;
+};
+
+export async function fetchLessonResources(lessonId: string): Promise<LessonChatResource[]> {
+  if (!lessonId) return [];
+  const { data, error } = await supabase
+    .from("lesson_resources")
+    .select(
+      "id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions",
+    )
+    .eq("lesson_id", lessonId)
+    .eq("status", "published")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as LessonResourceListRow[]).map((r) => ({
+    id: r.id,
+    title: r.title,
+    description: r.description ?? undefined,
+    resource_type: r.resource_type,
+    source_type: r.source_type,
+    display_mode: "card",
+    storage_bucket: r.storage_bucket,
+    storage_path: r.storage_path,
+    external_url: r.external_url,
+    thumbnail_path: r.thumbnail_path,
+    student_instructions: r.student_instructions ?? undefined,
+  }));
 }
 
 async function invokeResourceProcessing(

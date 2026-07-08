@@ -36,6 +36,7 @@ import { ClassesGrid } from "@/features/student/panels/ClassesGrid";
 import { ClassCanvas } from "@/features/student/panels/ClassCanvas";
 import { PulsePanel } from "@/features/student/panels/PulsePanel";
 import { ChatStepperStrip } from "@/features/student/chat/ChatStepper";
+import { Popover } from "@/components/Popover";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
 import { prefersReducedMotion } from "@/lib/motion";
 import {
@@ -55,6 +56,7 @@ import {
   fetchLatestLearningSession,
   onAuthStateChange,
   fetchLessonActivities,
+  fetchLessonResources,
   fetchStudentCatalog,
   fetchStudentSettings,
   getSubmissionFileSignedUrl,
@@ -382,6 +384,9 @@ function ChatPage() {
   const [lessonArc, setLessonArc] = useState<LessonArc | null>(null);
   const [lessonId, setLessonId] = useState<string>("lesson1");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  // v9: the current lesson's published teacher resources, surfaced in the chat's top-right launcher.
+  const [lessonResources, setLessonResources] = useState<LessonChatResource[]>([]);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
   const [mentor, setMentor] = useState<MentorConfig>(DEFAULT_MENTOR);
   const [voice, setVoice] = useState<VoiceSettings>(DEFAULT_VOICE);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -1200,6 +1205,22 @@ function ChatPage() {
     [lessonId, sessionId],
   );
 
+  // v9: load the current lesson's published teacher resources for the top-right launcher; clears
+  // between lessons. RLS scopes what the student may see; a failure just hides the launcher.
+  useEffect(() => {
+    if (!lessonId) {
+      setLessonResources([]);
+      return;
+    }
+    let alive = true;
+    void fetchLessonResources(lessonId)
+      .then((rows) => alive && setLessonResources(rows))
+      .catch(() => alive && setLessonResources([]));
+    return () => {
+      alive = false;
+    };
+  }, [lessonId]);
+
   const handleVoiceEvent = useCallback(
     async (event: VoiceInteractionEvent) => {
       try {
@@ -1304,6 +1325,47 @@ function ChatPage() {
         >
           <PanelLeft className="h-[16px] w-[16px]" strokeWidth={1.6} />
         </button>
+      ) : null}
+
+      {/* Lesson resources: a top-right launcher (mirroring the top-left nav launchers) that opens
+          the teacher's attachments for this lesson. Chat view only, hidden under lockdown, and only
+          when the lesson actually has resources. */}
+      {!view && !locked && lessonResources.length > 0 ? (
+        <div className="fixed right-3 top-3 z-[var(--z-header)]">
+          <Popover
+            open={resourcesOpen}
+            onClose={() => setResourcesOpen(false)}
+            placement="bottom-end"
+            panelClassName="w-[min(360px,calc(100vw-24px))] max-h-[70vh] overflow-y-auto overscroll-contain rounded-card border border-border bg-depth-card p-2 shadow-pop"
+            trigger={
+              <button
+                type="button"
+                onClick={() => setResourcesOpen((v) => !v)}
+                aria-expanded={resourcesOpen}
+                aria-label={`Lesson resources (${lessonResources.length})`}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full bg-depth-card text-muted-foreground shadow-card transition-colors duration-(--dur) hover:text-foreground"
+              >
+                <Paperclip className="h-[17px] w-[17px]" strokeWidth={1.6} />
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold tabular-nums text-background">
+                  {lessonResources.length}
+                </span>
+              </button>
+            }
+          >
+            <div className="mb-1 px-2 pt-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Lesson resources
+            </div>
+            <div className="grid gap-2">
+              {lessonResources.map((resource) => (
+                <ResourceCard
+                  key={resource.id}
+                  resource={resource}
+                  onResourceEvent={handleResourceEvent}
+                />
+              ))}
+            </div>
+          </Popover>
+        </div>
       ) : null}
 
       {/* The main-area stack: the chat pane is ALWAYS mounted (its session, draft, voice, and
