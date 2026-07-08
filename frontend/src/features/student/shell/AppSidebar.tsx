@@ -183,7 +183,7 @@ function SidebarContent({
         ? "bg-success"
         : value > 0
           ? "bg-foreground/40"
-          : "border border-muted-foreground/40";
+          : "border border-muted-foreground/70";
     return (
       <button
         key={lesson.id}

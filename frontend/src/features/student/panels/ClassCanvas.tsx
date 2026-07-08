@@ -169,9 +169,9 @@ export function ClassCanvas({
 
   const units = useMemo(() => groupByUnit(lessons ?? []), [lessons]);
 
-  // Seed the open units ONCE when the catalog + progress first arrive: units with an in-progress
-  // lesson open; if none qualify the first unit opens so the page never lands fully collapsed.
-  // After that the student's own toggles win.
+  // Seed the open units ONCE when the catalog + progress first arrive: units whose folded state
+  // is in-progress (some lesson started, or partially complete) open; if none qualify the first
+  // unit opens so the page never lands fully collapsed. After that the student's own toggles win.
   useEffect(() => {
     if (seededRef.current || lessons === null || units.length === 0) return;
     seededRef.current = true;
@@ -447,7 +447,7 @@ export function ClassCanvas({
             type="button"
             onClick={() => onOpenLesson(lesson.id)}
             disabled={switchBlocked}
-            className="group/nav -mx-1 flex min-w-0 flex-1 items-center gap-3 rounded-control px-1 py-1 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover disabled:opacity-40 disabled:hover:bg-transparent"
+            className="group/nav -mx-1 flex min-w-0 flex-1 items-center gap-3 rounded-control px-1 py-1 text-left transition-colors duration-(--dur-fast) hover:bg-accent focus-visible:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
           >
             <div className="min-w-0 flex-1">
               <div className="truncate text-body text-foreground">{lesson.title}</div>
@@ -459,7 +459,7 @@ export function ClassCanvas({
               {value >= 1 ? "Complete" : value > 0 ? "In progress" : "Not started"}
             </span>
             <ChevronRight
-              className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover/nav:opacity-100"
+              className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover/nav:opacity-100 group-focus-visible/nav:opacity-100"
               strokeWidth={1.7}
             />
           </button>
@@ -485,7 +485,7 @@ export function ClassCanvas({
       key={n.id}
       type="button"
       onClick={() => onMarkRead(n.id)}
-      className={`flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover ${
+      className={`flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent ${
         n.read_at ? "bg-transparent" : "bg-depth-field"
       }`}
     >
@@ -610,7 +610,7 @@ export function ClassCanvas({
                   onToggle={() =>
                     setOpenUnits((s) => ({ ...s, [unit.unitId]: !(s[unit.unitId] ?? false) }))
                   }
-                  headerClassName="rounded-control px-2 py-1.5 transition-colors duration-(--dur-fast) hover:bg-surface-hover"
+                  headerClassName="rounded-control px-2 py-1.5 transition-colors duration-(--dur-fast) hover:bg-accent"
                   title={
                     <span className="truncate text-body font-medium text-foreground">
                       {unit.unitTitle}

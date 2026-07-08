@@ -36,7 +36,10 @@ export function AgendaCalendar({ grades }: { grades: StudentGradeRow[] }) {
     const dueDateList: Date[] = [];
     const subDateList: Date[] = [];
     for (const row of grades) {
-      const dk = dayKey(row.due_at);
+      // Match the agenda's semantics: a deadline only marks the calendar while the work is still
+      // OPEN — submitted/graded items surface on their submitted day instead, not as stale "due".
+      const openWork = row.status === "assigned" || row.status === "started";
+      const dk = openWork ? dayKey(row.due_at) : null;
       if (dk) {
         const list = due.get(dk);
         if (!list) {
@@ -103,7 +106,7 @@ export function AgendaCalendar({ grades }: { grades: StudentGradeRow[] }) {
             {dueThatDay.map((row) => (
               <div
                 key={`due-${row.id}`}
-                className="flex items-center gap-2.5 rounded-control border border-border/60 bg-depth-field px-3 py-2.5"
+                className="flex items-center gap-2.5 rounded-control border border-border bg-depth-field px-3 py-2.5"
               >
                 <CalendarClock className="h-4 w-4 shrink-0 text-warning" strokeWidth={1.7} />
                 <div className="min-w-0 flex-1">
@@ -117,7 +120,7 @@ export function AgendaCalendar({ grades }: { grades: StudentGradeRow[] }) {
             {submittedThatDay.map((row) => (
               <div
                 key={`sub-${row.id}`}
-                className="flex items-center gap-2.5 rounded-control border border-border/60 bg-depth-field px-3 py-2.5"
+                className="flex items-center gap-2.5 rounded-control border border-border bg-depth-field px-3 py-2.5"
               >
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-success" strokeWidth={1.7} />
                 <div className="min-w-0 flex-1">

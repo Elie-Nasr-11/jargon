@@ -491,7 +491,7 @@ function ActivityFeed({
                 key={`dm-${item.channel.id}`}
                 type="button"
                 onClick={() => expandChannel(item.channel)}
-                className="flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover"
+                className="flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent"
               >
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-info" />
                 <span className="min-w-0 flex-1">
@@ -513,7 +513,7 @@ function ActivityFeed({
                 key={`n-${item.notification.id}`}
                 type="button"
                 onClick={() => openNotification(item.notification)}
-                className={`flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover ${
+                className={`flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent ${
                   item.notification.read_at ? "bg-transparent" : "bg-depth-field"
                 }`}
               >
@@ -548,7 +548,7 @@ function ActivityFeed({
                 type="button"
                 onClick={() => void startThread(t)}
                 disabled={opening}
-                className="flex flex-col rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover disabled:opacity-50"
+                className="flex flex-col rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent disabled:opacity-50"
               >
                 <span className="text-body text-foreground">{t.teacher_name}</span>
                 <span className="text-meta text-muted-foreground">{t.class_name}</span>

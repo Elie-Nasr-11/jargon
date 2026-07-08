@@ -74,7 +74,7 @@ export function Collapsible({
           }`}
           strokeWidth={2}
         />
-        <span className="min-w-0 flex-1">{title}</span>
+        <span className="min-w-0 flex-1 truncate">{title}</span>
         {meta}
       </button>
       <div ref={bodyRef} className="overflow-hidden" style={{ height: 0 }}>

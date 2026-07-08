@@ -6,22 +6,54 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-08 (Student UI v7 — depth/hierarchy pass + collapsible units + composer "+" + calendar + Review removal)
+## Claude -> Codex / Human - 2026-07-08 (Student UI v7 — depth/hierarchy pass + collapsible units + composer "+" + calendar + Review removal — FINISHED, awaiting main FF)
 
-Status: Starting
-Task: Frontend-only round of student-UI tweaks on top of v6 (shipped f4c18ce). (1) Composer: drop the
-"Code" word, make it a "+" menu (Write code live; attach deferred pending backend — the tutor wire is
-text/code only). (2) Sidebar + ClassCanvas: units become collapsible with at-a-glance state. (3)
-ClassesGrid: subject-based icons, hover title→stats swap, drop school name. (4) Pulse: remove the
-Review feature end-to-end (kept inert on the backend), restyle teacher Notes, add an [Agenda|Calendar]
-toggle, restyle proficiency/strengths. (5) A bounded depth/contrast pass over the touched surfaces.
-Files I expect to touch: components/{Composer,Collapsible NEW}, lib/subjectIcon.tsx (NEW),
+Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),
+adversarially reviewed by two agents (correctness: no blocking bugs, 8/8 risk areas verified;
+UX/a11y/CSS: 2 medium + 3 low findings, all fixed), 5 commits on claude/happy-johnson-wseex8.
+Frontend-only — no migration, no edge-function change. ONE main fast-forward pending user OK.
+
+Summary: v7 tightens the v6 shell's hierarchy and moves a few features. Composer: the labeled
+"Code" button is now a "+" add-menu (upward popover; Write code is the one live action — attach
+items are DEFERRED until the chat wire can carry images/files; the tutor wire is text/code only
+today). Sidebar: multi-unit catalogs render as collapsible units (current-lesson unit auto-opens,
+merge keeps user toggles) with per-lesson state dots off a new lessonProgress map in
+useStudentNavData. Class cards: subject-keyword icon (lib/subjectIcon, no new fetch — label
+threaded from the scoped-lessons fetch), school name dropped, and the name cross-fades to the
+next/to-do/average stats on hover/focus in the same slot (zero reflow, reduced-motion instant).
+Class canvas: Recent & upcoming strip up top (overdue pinned); units are Collapsibles with a
+folded state chip; lesson rows carry a left state accent; assignments/assessments render IN PLACE
+under their lesson (lesson-less work → "Other work"); "Class posts" became "Discussion" split
+private-to-you (kind private_comment) vs class-wide. Pulse: the Review feature is REMOVED
+end-to-end from the student surface (ReviewPanel deleted; nudge card, focusReview scroll,
+reviewDueCount badge half, boot fetchReviewDue all unwired; review edge-fn/tables stay INERT on
+the backend); "Up next" gained an [Agenda | Calendar] toggle (AgendaCalendar revived from the
+f65927c^ month grid, same grades feed, due-marks only while work is open); teacher Notes are real
+cards; Proficiency/Strengths/StatTiles restyled onto the token scale in depth-sub cards. Depth
+pass: touched card surfaces moved to border-border + shadow-card, overline section headers, raw
+px → type tokens; found + fixed a dead `hover:bg-surface-hover` class (no such theme token —
+now hover:bg-accent) and a Collapsible title-truncation regression.
+
+Files changed: components/{Collapsible NEW,Composer}, lib/subjectIcon.ts (NEW),
 hooks/useStudentNavData.ts, routes/chat.tsx, features/student/shell/AppSidebar.tsx,
-features/student/panels/{ClassesGrid,ClassCanvas,PulsePanel}.tsx, features/student/panels/AgendaCalendar.tsx
-(NEW, revived), delete ReviewPanel.tsx.
-Notes: No migration, no edge-function change. Ships on claude/happy-johnson-wseex8 → main FF on OK.
-Three decisions were baked as defaults (AskUserQuestion stream failed): compose "+" attach deferred,
-keep proficiency/strengths, calendar as a toggle. All three approved in the plan.
+features/student/panels/{ClassesGrid,ClassCanvas,PulsePanel,AgendaCalendar NEW}.tsx.
+DELETED: features/student/ReviewPanel.tsx (lib/review.ts stays — teacher StudentReviewSessions
+uses it; fetchReviewDue remains defined in api.ts, now unconsumed).
+
+Tests run: tsc/lint/build per phase; grep-verified zero stray review references; built-CSS check
+that bg-surface-hover never generated (confirming the dead-class fix); two adversarial review
+agents on the full f4c18ce..HEAD diff, findings folded.
+
+Remaining concerns: (1) Composer attach (upload/photo/screenshot) is deferred — needs a backend
+round (image answer field on the chat fn + a vision-capable model path) before the "+" menu grows
+those items. (2) The Discussion split reads notifications, not a true cross-entity thread feed —
+a deeper aggregated read would need a new API. (3) Class-card stats are hover/focus-gated, so on
+touch devices they're effectively hidden (due pill stays visible) — intended trade-off, revisit if
+students miss them. (4) GitHub shows the branch commits as Unverified (no signing key in this
+environment) — content is fine.
+
+Suggested next task: the composer-attach backend round (multimodal chat wire), or teacher-side
+adoption of the same collapsible-unit + depth conventions.
 
 ## Claude -> Codex / Human - 2026-07-07 (Student UI v5 — "One Screen": chromeless stage, edge peripheries, Pulse, universal comments, lockdown — FINISHED, awaiting main FF)
 
