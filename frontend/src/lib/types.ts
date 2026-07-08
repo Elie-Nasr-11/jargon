@@ -1208,6 +1208,30 @@ export type LessonHelpCeiling =
   | "study";
 export type LessonFinalAnswerPolicy = "never" | "after_attempt" | "allowed";
 
+// v9: a file the student attached to a chat turn. The client sends only these references; the edge
+// fn re-reads the owning student_uploads row under the caller's JWT before touching bytes.
+export type ChatAttachment = {
+  upload_id: string;
+  storage_path: string;
+  mime_type: string;
+  filename: string;
+};
+
+// v9: a row in the student's general upload library (assignment-free), backing chat attachments.
+export type StudentUpload = {
+  id: string;
+  user_id: string;
+  storage_bucket: string;
+  storage_path: string;
+  original_filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  scan_status: "pending" | "clean" | "quarantined" | "skipped";
+  purged_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type TypedChatAnswer = {
   mode: "text" | "code" | "multiple_choice" | "file";
   text?: string;
@@ -1218,6 +1242,8 @@ export type TypedChatAnswer = {
   transcript_confidence?: number | null;
   // Client-generated per-send id so the server can drop duplicate deliveries.
   client_msg_id?: string;
+  // v9: files attached to this turn (the tutor sees images / reads text files); resolved server-side.
+  attachments?: ChatAttachment[];
 };
 
 export type LessonArcStep = { step: number; title: string };

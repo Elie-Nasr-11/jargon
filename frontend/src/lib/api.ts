@@ -83,6 +83,7 @@ import type {
   ResourceInteraction,
   StudentClass,
   StudentGradeRow,
+  StudentUpload,
   StudentProgressReportRow,
   StudentMastery,
   StudentProfileStats,
@@ -209,6 +210,105 @@ function storagePathForSubmission(input: {
     safePathSegment(input.submissionId),
     `${uniqueId()}-${name}`,
   ].join("/");
+}
+
+// v9: the student's general upload library (assignment-free), backing tutor-chat attachments. Mirrors
+// the submission-file helpers but targets the student-uploads bucket + student_uploads table;
+// owner-only RLS enforces access. Client caps are UX-only — the bucket file_size_limit + RLS are the
+// real ceiling. Path scheme `{userId}/...` so the storage INSERT policy binds foldername[1] to the uid.
+export const MAX_CHAT_UPLOAD_FILES = 10;
+export const MAX_CHAT_UPLOAD_FILE_BYTES = 20 * 1024 * 1024; // 20 MB (bucket ceiling is 25 MB)
+export const CHAT_UPLOAD_ACCEPT =
+  "image/*,text/*,.md,.csv,.json,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.cs,.html,.css,.pdf,.txt";
+
+function storagePathForStudentUpload(input: { userId: string; fileName: string }): string {
+  const name = safePathSegment(input.fileName) || "upload";
+  return `${safePathSegment(input.userId)}/${uniqueId()}-${name}`;
+}
+
+export async function uploadStudentUpload(file: File): Promise<StudentUpload> {
+  const session = await getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error("You need to sign in to attach a file.");
+  if (file.size > MAX_CHAT_UPLOAD_FILE_BYTES) {
+    throw new Error(
+      `Files must be ${Math.floor(MAX_CHAT_UPLOAD_FILE_BYTES / (1024 * 1024))} MB or smaller.`,
+    );
+  }
+  const path = storagePathForStudentUpload({ userId, fileName: file.name });
+  const { error: uploadError } = await supabase.storage
+    .from("student-uploads")
+    .upload(path, file, { contentType: file.type || undefined, upsert: false });
+  if (uploadError) throw uploadError;
+  const { data, error } = await supabase
+    .from("student_uploads")
+    .insert({
+      user_id: userId,
+      storage_bucket: "student-uploads",
+      storage_path: path,
+      original_filename: file.name,
+      mime_type: file.type || null,
+      file_size_bytes: file.size,
+    })
+    .select("*")
+    .single();
+  if (error) {
+    // A failed row insert would leave orphaned bytes — remove them best-effort.
+    await supabase.storage
+      .from("student-uploads")
+      .remove([path])
+      .catch(() => {});
+    throw error;
+  }
+  return data as StudentUpload;
+}
+
+export async function listStudentUploads(): Promise<StudentUpload[]> {
+  const { data, error } = await supabase
+    .from("student_uploads")
+    .select("*")
+    .is("purged_at", null)
+    .neq("scan_status", "quarantined")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as StudentUpload[];
+}
+
+export async function deleteStudentUpload(id: string): Promise<void> {
+  // Object first (the storage DELETE policy needs the row still present), then the row.
+  const { data: row } = await supabase
+    .from("student_uploads")
+    .select("storage_bucket,storage_path")
+    .eq("id", id)
+    .single();
+  if (row?.storage_path) {
+    await supabase.storage
+      .from(row.storage_bucket || "student-uploads")
+      .remove([row.storage_path])
+      .catch(() => {});
+  }
+  const { error } = await supabase.from("student_uploads").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function getStudentUploadSignedUrl(row: {
+  storage_bucket?: string | null;
+  storage_path: string;
+}): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from(row.storage_bucket || "student-uploads")
+    .createSignedUrl(row.storage_path, 60 * 30);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export function studentUploadState(row: {
+  scan_status?: string | null;
+  purged_at?: string | null;
+}): "available" | "quarantined" | "purged" {
+  if (row.purged_at) return "purged";
+  if (row.scan_status === "quarantined") return "quarantined";
+  return "available";
 }
 
 function resourceTypeFromFile(file: File): LessonResourceType {
