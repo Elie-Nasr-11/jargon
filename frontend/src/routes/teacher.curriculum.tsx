@@ -22,7 +22,8 @@ import {
   X,
 } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
-import { ConsoleShell } from "@/components/ConsoleShell";
+import { PageShell } from "@/components/PageShell";
+import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { RouteLoader } from "@/components/RouteLoader";
 import {
@@ -802,152 +803,161 @@ function CurriculumPage() {
   const crumbs = buildBreadcrumb({ selection, data, navigate });
 
   return (
-    <ConsoleShell email={email} widthClass="max-w-[1440px]">
-      <Breadcrumb segments={crumbs} />
+    <TeacherShell email={email} classes={data?.classes ?? []} activeView="curriculum">
+      <PageShell widthClass="max-w-[1440px]">
+        <div className="flex flex-col gap-5">
+          {/* The Breadcrumb here is CONTENT nav (it encodes the subject→lesson selection), not chrome. */}
+          <Breadcrumb segments={crumbs} />
 
-      <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
-            Curriculum studio
-          </div>
-          <h1 className="font-serif mt-2 text-[30px] leading-tight tracking-tight text-foreground sm:text-[38px]">
-            Build the lesson path.
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          {data?.classes.length ? (
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Class scope
-              <select
-                value={selectedClassId}
-                onChange={(event) => setSelectedClassId(event.target.value)}
-                className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+          <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="text-overline uppercase tracking-[0.12em] text-muted-foreground">
+                Curriculum studio
+              </div>
+              <h1 className="font-serif mt-2 text-display tracking-tight text-foreground">
+                Build the lesson path.
+              </h1>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              {data?.classes.length ? (
+                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  Class scope
+                  <select
+                    value={selectedClassId}
+                    onChange={(event) => setSelectedClassId(event.target.value)}
+                    className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                  >
+                    {data.classes.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {data?.classes.length ? (
+                <button
+                  type="button"
+                  onClick={() => setOutlineOpen((value) => !value)}
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+                >
+                  {outlineOpen ? (
+                    <PanelLeftClose className="h-4 w-4" strokeWidth={1.7} />
+                  ) : (
+                    <PanelLeft className="h-4 w-4" strokeWidth={1.7} />
+                  )}
+                  {outlineOpen ? "Hide outline" : "Show outline"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void loadData()}
+                className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
               >
-                {data.classes.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                Refresh
+              </button>
+            </div>
+          </section>
+
+          {message ? (
+            <GradientCard>
+              <div className="flex items-center justify-between gap-3 p-4 text-[13px] text-muted-foreground">
+                <span>{message}</span>
+                <button
+                  type="button"
+                  onClick={() => setMessage("")}
+                  className="text-[12px] text-muted-foreground/70 hover:text-foreground"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </GradientCard>
           ) : null}
-          {data?.classes.length ? (
-            <button
-              type="button"
-              onClick={() => setOutlineOpen((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+
+          {booting ? (
+            <GradientCard>
+              <div className="p-6 text-[14px] text-muted-foreground">Loading curriculum...</div>
+            </GradientCard>
+          ) : !data?.classes.length ? (
+            <GradientCard>
+              <div className="p-6 text-[14px] text-muted-foreground">
+                Teacher curriculum access requires an assigned class.
+              </div>
+            </GradientCard>
+          ) : data && selectedClass ? (
+            <div
+              className={`grid gap-4 ${outlineOpen ? "lg:grid-cols-[330px_minmax(0,1fr)]" : ""}`}
             >
+              {/* Sticky offsets are relative to the PageShell scroller (no sticky header anymore):
+              a small top inset, capped so the outline never outgrows the viewport. */}
               {outlineOpen ? (
-                <PanelLeftClose className="h-4 w-4" strokeWidth={1.7} />
-              ) : (
-                <PanelLeft className="h-4 w-4" strokeWidth={1.7} />
-              )}
-              {outlineOpen ? "Hide outline" : "Show outline"}
-            </button>
+                <aside className="min-w-0 lg:sticky lg:top-2 lg:max-h-[calc(100dvh-4rem)] lg:overflow-x-hidden lg:overflow-y-auto">
+                  <Outline
+                    subjects={orgSubjects}
+                    coursesForSubject={coursesForSubject}
+                    unitsForCourse={unitsForCourse}
+                    lessonsForUnit={lessonsForUnit}
+                    selection={selection}
+                    expanded={expanded}
+                    busy={busy}
+                    onToggle={toggleExpanded}
+                    onSelect={selectNode}
+                    onReorder={reorder}
+                    onAddSubject={addSubject}
+                    onAddCourse={addCourse}
+                    onAddUnit={addUnit}
+                    onAddLesson={addLesson}
+                    onCollapse={() => setOutlineOpen(false)}
+                  />
+                </aside>
+              ) : null}
+
+              <div className="min-w-0">
+                <DetailPane
+                  key={selection ? `${selection.type}:${selection.id}` : "empty"}
+                  selection={selection}
+                  data={data}
+                  lessonsById={lessonsById}
+                  orgUnits={orgUnits}
+                  resources={data.resources}
+                  busy={busy}
+                  publishing={publishing}
+                  onAddSubject={addSubject}
+                  onRename={renameNode}
+                  onArchive={archiveNode}
+                  onDelete={deleteNode}
+                  onAddCourse={addCourse}
+                  onAddUnit={addUnit}
+                  onAddLesson={addLesson}
+                  onMoveLesson={moveLesson}
+                  onSaveLessonMeta={saveLessonMeta}
+                  onUpsertStep={upsertStep}
+                  onReorderSteps={reorderSteps}
+                  onDeleteStep={deleteStep}
+                  onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
+                  onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
+                  onGenerateOutline={generateOutline}
+                  onApplyOutline={applyOutline}
+                  onGenerateSteps={generateSteps}
+                  onApplySteps={applyStepDrafts}
+                  templates={templates}
+                  onLoadTemplates={loadTemplates}
+                  onSaveTemplate={saveAsTemplate}
+                  onInstantiateTemplate={instantiateTemplate}
+                  onArchiveTemplate={archiveTemplate}
+                  currentVersionForCourse={currentVersionForCourse}
+                  counts={{
+                    coursesForSubject: (id) => coursesForSubject(id).length,
+                    unitsForCourse: (id) => unitsForCourse(id).length,
+                    lessonsForUnit: (id) => lessonsForUnit(id).length,
+                  }}
+                />
+              </div>
+            </div>
           ) : null}
-          <button
-            type="button"
-            onClick={() => void loadData()}
-            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-          >
-            Refresh
-          </button>
         </div>
-      </section>
-
-      {message ? (
-        <GradientCard>
-          <div className="flex items-center justify-between gap-3 p-4 text-[13px] text-muted-foreground">
-            <span>{message}</span>
-            <button
-              type="button"
-              onClick={() => setMessage("")}
-              className="text-[12px] text-muted-foreground/70 hover:text-foreground"
-            >
-              Dismiss
-            </button>
-          </div>
-        </GradientCard>
-      ) : null}
-
-      {booting ? (
-        <GradientCard>
-          <div className="p-6 text-[14px] text-muted-foreground">Loading curriculum...</div>
-        </GradientCard>
-      ) : !data?.classes.length ? (
-        <GradientCard>
-          <div className="p-6 text-[14px] text-muted-foreground">
-            Teacher curriculum access requires an assigned class.
-          </div>
-        </GradientCard>
-      ) : data && selectedClass ? (
-        <div className={`grid gap-4 ${outlineOpen ? "lg:grid-cols-[330px_minmax(0,1fr)]" : ""}`}>
-          {outlineOpen ? (
-            <aside className="min-w-0 lg:sticky lg:top-[calc(var(--header-height)+1.125rem)] lg:max-h-[calc(100vh-var(--header-height)-3.125rem)] lg:overflow-x-hidden lg:overflow-y-auto">
-              <Outline
-                subjects={orgSubjects}
-                coursesForSubject={coursesForSubject}
-                unitsForCourse={unitsForCourse}
-                lessonsForUnit={lessonsForUnit}
-                selection={selection}
-                expanded={expanded}
-                busy={busy}
-                onToggle={toggleExpanded}
-                onSelect={selectNode}
-                onReorder={reorder}
-                onAddSubject={addSubject}
-                onAddCourse={addCourse}
-                onAddUnit={addUnit}
-                onAddLesson={addLesson}
-                onCollapse={() => setOutlineOpen(false)}
-              />
-            </aside>
-          ) : null}
-
-          <div className="min-w-0">
-            <DetailPane
-              key={selection ? `${selection.type}:${selection.id}` : "empty"}
-              selection={selection}
-              data={data}
-              lessonsById={lessonsById}
-              orgUnits={orgUnits}
-              resources={data.resources}
-              busy={busy}
-              publishing={publishing}
-              onAddSubject={addSubject}
-              onRename={renameNode}
-              onArchive={archiveNode}
-              onDelete={deleteNode}
-              onAddCourse={addCourse}
-              onAddUnit={addUnit}
-              onAddLesson={addLesson}
-              onMoveLesson={moveLesson}
-              onSaveLessonMeta={saveLessonMeta}
-              onUpsertStep={upsertStep}
-              onReorderSteps={reorderSteps}
-              onDeleteStep={deleteStep}
-              onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
-              onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
-              onGenerateOutline={generateOutline}
-              onApplyOutline={applyOutline}
-              onGenerateSteps={generateSteps}
-              onApplySteps={applyStepDrafts}
-              templates={templates}
-              onLoadTemplates={loadTemplates}
-              onSaveTemplate={saveAsTemplate}
-              onInstantiateTemplate={instantiateTemplate}
-              onArchiveTemplate={archiveTemplate}
-              currentVersionForCourse={currentVersionForCourse}
-              counts={{
-                coursesForSubject: (id) => coursesForSubject(id).length,
-                unitsForCourse: (id) => unitsForCourse(id).length,
-                lessonsForUnit: (id) => lessonsForUnit(id).length,
-              }}
-            />
-          </div>
-        </div>
-      ) : null}
-    </ConsoleShell>
+      </PageShell>
+    </TeacherShell>
   );
 }
 
