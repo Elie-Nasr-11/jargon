@@ -915,6 +915,13 @@ export function TeacherConsole() {
         backLabel={
           selectedStudentId ? selectedClass?.name || "Class" : selectedClassId ? "Home" : undefined
         }
+        ariaLabel={
+          selectedStudentId
+            ? displayName(selectedStudent, selectedStudentId)
+            : selectedClassId
+              ? selectedClass?.name || "Class"
+              : "Teacher home"
+        }
       >
         <div className="flex flex-col gap-5">
           {/* The landing hero — the class/student pages carry their own name headers instead. */}
@@ -924,7 +931,7 @@ export function TeacherConsole() {
                 <div className="text-overline uppercase tracking-[0.12em] text-muted-foreground">
                   Teacher dashboard
                 </div>
-                <h1 className="font-serif mt-2 text-display tracking-tight text-foreground">
+                <h1 className="font-serif mt-2 text-display text-foreground">
                   Classroom evidence.
                 </h1>
                 <p className="mt-2 max-w-2xl text-body leading-relaxed text-muted-foreground">

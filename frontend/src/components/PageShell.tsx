@@ -14,6 +14,7 @@ export function PageShell({
   onBack,
   backLabel,
   widthClass = "max-w-[880px]",
+  ariaLabel,
   children,
 }: {
   title?: string;
@@ -21,6 +22,9 @@ export function PageShell({
   onBack?: () => void;
   backLabel?: string;
   widthClass?: string;
+  // What AT announces for the landmark. Pass this on pages whose visible heading lives inside a
+  // card (no title prop) — otherwise the fallback announces the BACK target, not this page.
+  ariaLabel?: string;
   children: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -41,8 +45,11 @@ export function PageShell({
     <div
       ref={rootRef}
       tabIndex={-1}
-      role="region"
-      aria-label={title ?? backLabel ?? "Page"}
+      // The page IS the main content: on teacher routes it's the only surface; on the student
+      // shell the chat's <main> is inert (hidden from AT) whenever a view page is mounted, so
+      // exactly one main landmark is exposed either way.
+      role="main"
+      aria-label={ariaLabel ?? title ?? backLabel ?? "Page"}
       className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain outline-none"
     >
       <div className={`mx-auto w-full ${widthClass} px-5 pb-16 pt-8 max-lg:pt-14 md:px-8`}>

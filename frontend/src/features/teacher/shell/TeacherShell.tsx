@@ -104,8 +104,18 @@ export function TeacherShell({
         <NotificationsMenu />
       </div>
 
-      {/* The stage: hosts render exactly one PageShell page, which owns its own scroll. */}
-      <div className="relative z-[var(--z-base)] flex min-w-0 flex-1 flex-col">{children}</div>
+      {/* The stage: hosts render exactly one PageShell page, which owns its own scroll. When the
+          sidebar is collapsed the reopen chip floats over the stage's top-left — unlike the 880px
+          student column, the wide teacher columns (1240/1440) reach it, so the stage takes top
+          clearance to keep the first content row (back pill, breadcrumb, sticky outline) out from
+          under the chip. */}
+      <div
+        className={`relative z-[var(--z-base)] flex min-w-0 flex-1 flex-col ${
+          collapsed ? "lg:pt-12" : ""
+        }`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

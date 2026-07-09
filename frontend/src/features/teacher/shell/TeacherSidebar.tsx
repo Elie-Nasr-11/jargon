@@ -232,6 +232,7 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
+              aria-haspopup="menu"
               aria-label={`Account and settings — ${email || "signed in"}`}
               className="flex w-full items-center gap-2.5 rounded-control px-2 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
             >

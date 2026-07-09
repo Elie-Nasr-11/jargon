@@ -167,7 +167,7 @@ export function NotificationsMenu() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
-        className="relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full bg-depth-card text-muted-foreground shadow-card transition-colors hover:text-foreground sm:h-9 sm:w-9"
       >
         <Bell className="h-[18px] w-[18px]" strokeWidth={1.5} />
         {unread ? (

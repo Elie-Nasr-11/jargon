@@ -6,22 +6,79 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-09 (Teacher Shell v1 — teacher portal on the student shell)
+## Claude -> Codex / Human - 2026-07-09 (Teacher Shell v1 — teacher portal on the student shell — FINISHED, awaiting main FF)
 
-Status: Starting
-Task: Restructure the teacher portal onto the same shell as the student side: a new TeacherShell
-(persistent left TeacherSidebar with Home/Curriculum rows + classes list + account popover, fixed
-hamburger/reopen launchers, fixed top-right NotificationsMenu) replaces ConsoleShell in
-TeacherConsole and teacher.curriculum.tsx; every teacher view becomes a hoisted PageShell page with
-a new widthClass prop (1240 console / 1440 curriculum). Shell + light restyle only — the 7 class
-tabs, gradebook, student drill-down, builders, and the curriculum outline+detail layout move in
-as-is. ConsoleShell/useConsoleAccess/--header-height deleted at the end. Frontend-only; admin
-untouched.
-Files I expect to touch: components/PageShell.tsx (new, hoisted from features/student/shell/),
-features/teacher/shell/{TeacherShell,TeacherSidebar,teacherNav}.{tsx,ts} (new),
+Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),
+adversarially reviewed by two agents (correctness/regressions + UX/a11y/CSS-validity), confirmed
+findings folded. 6 commits on claude/happy-johnson-wseex8. Frontend-only; zero routeTree/backend
+changes; admin untouched. ONE main fast-forward pending user OK.
+
+Summary — the teacher portal now runs on the same ChatGPT-style shell as the student side:
+1. PageShell hoisted to components/PageShell.tsx (pure move; only student import-line changed) with
+   two additive props: widthClass (default max-w-[880px] → student pixels unchanged; teacher passes
+   1240 console / 1440 curriculum) and ariaLabel (see review folds). Its root is now role="main"
+   (the teacher pages lost ConsoleShell's <main>; on the student shell the chat's <main> is inert
+   whenever a view page mounts, so exactly one main landmark is exposed either way).
+2. NEW features/teacher/shell/: teacherNav.ts (organizationName + groupClassesByOrg, shared by the
+   sidebar and the landing class picker), TeacherSidebar.tsx (AppSidebar's anatomy — wordmark +
+   collapse, Home/Curriculum nav rows, scrollable classes list with a Collapsible per org when >1
+   and auto-open of the active class's org, bottom account popover with Appearance/Campus Live/
+   Log out, desktop aside + mobile Sheet drawer + viewport-crossing force-close; NavRow/MenuRow
+   COPIED from AppSidebar so the live student file is untouched), TeacherShell.tsx (chromeless
+   h-dvh root + AmbientCanvas 0.35, owns drawer + collapse state persisted to
+   jargon:teacher-sidebar-collapsed, fixed hamburger/reopen launchers with focus handoff, the
+   unmodified NotificationsMenu re-hosted as a fixed top-right launcher, and a stage hosting one
+   PageShell page).
+3. TeacherConsole: ConsoleShell wrapper → TeacherShell + PageShell (keyed per navigation level so
+   entrance fade + focus re-run). Back pills replace the Breadcrumb block (student page → class
+   name, class page → "Home"); the landing hero (demoted to text-overline + serif text-display) and
+   fleet metric cards are scoped to the landing; the Curriculum button died (sidebar row owns it);
+   StudentDetail's internal back button + dead onBack prop removed. Data layer, mutations, the 7
+   class tabs, 4 student tabs, ?tab=/?session= spines, live-watch/hold/report flows untouched.
+4. Curriculum studio: same swap at 1440; keeps its INTERNAL Breadcrumb (content nav: the
+   subject→lesson selection) + header actions; the sticky outline re-anchored to the PageShell
+   scroller (lg:top-2 + lg:max-h-[calc(100dvh-4rem)] replacing the --header-height math).
+5. Deleted: components/ConsoleShell.tsx, hooks/useConsoleAccess.ts, the --header-height token
+   (all zero-consumer after the swaps; WorkspaceTabs/Breadcrumb/SettingsMenu survive for admin).
+
+Review folds (both agents):
+- The floating bell got the opaque launcher-chip treatment (bg-depth-card + shadow-card on the
+  NotificationsMenu trigger — TeacherShell is its sole consumer now) so page content scrolling
+  beneath it stays legible and the control reads as floating UI.
+- When the sidebar is collapsed the stage takes lg:pt-12 so the reopen chip never overlaps the
+  first content row (back pill / breadcrumb) or the curriculum sticky outline on wide columns.
+- PageShell ariaLabel prop: class/student/curriculum pages now announce their real name to AT
+  instead of the back-target ("Home"/class name); landing announces "Teacher home".
+- role="main" landmark restored (above); aria-haspopup="menu" on the account trigger; dead
+  tracking-tight dropped from the two serif h1s.
+
+Files changed: components/PageShell.tsx (new home), components/NotificationsMenu.tsx (chip trigger),
+features/teacher/shell/{TeacherShell,TeacherSidebar}.tsx + teacherNav.ts (new),
 features/teacher/TeacherConsole.tsx, routes/teacher.curriculum.tsx, routes/chat.tsx (import line),
-styles.css (--header-height), DELETE components/ConsoleShell.tsx + hooks/useConsoleAccess.ts.
-Notes: zero routeTree/backend changes. Ships on claude/happy-johnson-wseex8 → main FF on OK.
+styles.css; DELETED components/ConsoleShell.tsx + hooks/useConsoleAccess.ts +
+features/student/shell/PageShell.tsx (moved).
+
+Tests run: cd frontend && npx tsc --noEmit (0) · npm run lint (0 errors, 12 pre-existing warnings) ·
+npm run build (green) per phase and after the fold; reviewers verified all three arbitrary
+max-widths are emitted in the production CSS, admin unaffected, and no stale
+ConsoleShell/useConsoleAccess/--header-height references remain.
+
+Remaining concerns (accepted, noted for the live pass):
+- The always-on bell still floats over the content column's right edge at viewports ≤ ~1564px with
+  the sidebar open — now an opaque chip, so it reads as floating UI (same pattern as the student
+  hamburger), but worth an eye live.
+- On the curriculum page the sidebar's Classes rows navigate AWAY to the class workspace while the
+  studio's own "Class scope" select switches authoring context — two class pickers with different
+  meanings on one screen. Content-level UX; candidates for the next content round.
+- The account popover doesn't restore focus to its trigger on ESC/outside close — exact parity with
+  the student AppSidebar (same copied pattern); fix both together as a follow-up.
+- Dev-only: React StrictMode's double-invoke consumes the collapse focus-handoff skip flag on mount
+  (inherited from chat.tsx's pattern).
+
+Suggested next task: user does the live visual pass as teacher1 (landing, class tabs incl. gradebook
+at 1240, student drill-down + ?session= live-watch, curriculum at 1440 + sticky outline, mobile
+drawer, collapse/reopen, bell deep-links). Then main FF. Next round candidates: the curriculum
+class-picker ambiguity + content-surface restyles (the deferred "rework key surfaces" scope).
 
 ## Claude -> Codex / Human - 2026-07-08 (Student UI v9 — state-color tiers · attach-to-tutor (backend) · Overview rename · lesson resources · progress-popup cleanup — FINISHED, awaiting main FF)
 

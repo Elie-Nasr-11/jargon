@@ -804,7 +804,7 @@ function CurriculumPage() {
 
   return (
     <TeacherShell email={email} classes={data?.classes ?? []} activeView="curriculum">
-      <PageShell widthClass="max-w-[1440px]">
+      <PageShell widthClass="max-w-[1440px]" ariaLabel="Curriculum studio">
         <div className="flex flex-col gap-5">
           {/* The Breadcrumb here is CONTENT nav (it encodes the subject→lesson selection), not chrome. */}
           <Breadcrumb segments={crumbs} />
@@ -814,7 +814,7 @@ function CurriculumPage() {
               <div className="text-overline uppercase tracking-[0.12em] text-muted-foreground">
                 Curriculum studio
               </div>
-              <h1 className="font-serif mt-2 text-display tracking-tight text-foreground">
+              <h1 className="font-serif mt-2 text-display text-foreground">
                 Build the lesson path.
               </h1>
             </div>
