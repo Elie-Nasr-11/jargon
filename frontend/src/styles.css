@@ -85,7 +85,6 @@
 
 :root {
   /* foundation */
-  --header-height: 60px; /* ConsoleShell top bar; sticky offsets derive from this */
   --background: #ffffff;
   --surface: #f6f6fb;
   --surface-hover: #f9f9fe;
