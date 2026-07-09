@@ -30,7 +30,7 @@ import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { QuizPanel } from "@/features/student/QuizPanel";
 import { AppSidebar } from "@/features/student/shell/AppSidebar";
-import { PageShell } from "@/features/student/shell/PageShell";
+import { PageShell } from "@/components/PageShell";
 import { isStudentView, type StudentView } from "@/features/student/shell/studentViews";
 import { ClassesGrid } from "@/features/student/panels/ClassesGrid";
 import { ClassCanvas } from "@/features/student/panels/ClassCanvas";

@@ -6,6 +6,23 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-09 (Teacher Shell v1 — teacher portal on the student shell)
+
+Status: Starting
+Task: Restructure the teacher portal onto the same shell as the student side: a new TeacherShell
+(persistent left TeacherSidebar with Home/Curriculum rows + classes list + account popover, fixed
+hamburger/reopen launchers, fixed top-right NotificationsMenu) replaces ConsoleShell in
+TeacherConsole and teacher.curriculum.tsx; every teacher view becomes a hoisted PageShell page with
+a new widthClass prop (1240 console / 1440 curriculum). Shell + light restyle only — the 7 class
+tabs, gradebook, student drill-down, builders, and the curriculum outline+detail layout move in
+as-is. ConsoleShell/useConsoleAccess/--header-height deleted at the end. Frontend-only; admin
+untouched.
+Files I expect to touch: components/PageShell.tsx (new, hoisted from features/student/shell/),
+features/teacher/shell/{TeacherShell,TeacherSidebar,teacherNav}.{tsx,ts} (new),
+features/teacher/TeacherConsole.tsx, routes/teacher.curriculum.tsx, routes/chat.tsx (import line),
+styles.css (--header-height), DELETE components/ConsoleShell.tsx + hooks/useConsoleAccess.ts.
+Notes: zero routeTree/backend changes. Ships on claude/happy-johnson-wseex8 → main FF on OK.
+
 ## Claude -> Codex / Human - 2026-07-08 (Student UI v9 — state-color tiers · attach-to-tutor (backend) · Overview rename · lesson resources · progress-popup cleanup — FINISHED, awaiting main FF)
 
 Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),
