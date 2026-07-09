@@ -9,7 +9,6 @@ import {
   Building2,
   Check,
   CheckCircle2,
-  ChevronLeft,
   ClipboardList,
   Eye,
   EyeOff,
@@ -35,8 +34,9 @@ import { StudentReviewSessions } from "@/features/teacher/StudentReviewSessions"
 import { TeacherStudentMessages } from "@/features/teacher/TeacherStudentMessages";
 import { INQUIRY_TYPE_LABELS, modeLabel } from "@/lib/modes";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
-import { Breadcrumb } from "@/components/Breadcrumb";
-import { ConsoleShell } from "@/components/ConsoleShell";
+import { PageShell } from "@/components/PageShell";
+import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
+import { groupClassesByOrg, organizationName } from "@/features/teacher/shell/teacherNav";
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { OverflowMenu } from "@/components/OverflowMenu";
@@ -274,17 +274,8 @@ export function TeacherConsole() {
     return { profilesById, lessonsById, classesById, studentIds };
   }, [dashboard]);
 
-  // Org -> classes, so the picker mirrors the real hierarchy.
-  const classesByOrg = useMemo(() => {
-    const groups = new Map<string, TeacherClassSummary[]>();
-    for (const item of dashboard?.classes ?? []) {
-      const org = organizationName(item);
-      const list = groups.get(org) ?? [];
-      list.push(item);
-      groups.set(org, list);
-    }
-    return Array.from(groups.entries());
-  }, [dashboard]);
+  // Org -> classes, so the picker mirrors the real hierarchy (shared with the shell sidebar).
+  const classesByOrg = useMemo(() => groupClassesByOrg(dashboard?.classes ?? []), [dashboard]);
 
   // v4.0 hotlist: one attention feed derived from the dashboard blob (replaces the
   // 3-count "Needs attention" card). nowMs recomputes each render — fine for a feed.
@@ -899,275 +890,276 @@ export function TeacherConsole() {
   }
 
   return (
-    <ConsoleShell email={email}>
-      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
-            Teacher dashboard
-          </div>
-          <h1 className="font-serif mt-2 text-[38px] leading-tight tracking-tight text-foreground sm:text-[48px]">
-            Classroom evidence.
-          </h1>
-          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
-            Inspect roster progress, learning attempts, chat transcripts, quiz checks, mastery, and
-            notes for students in your assigned pilot classes.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => void loadDashboard()}
-            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-          >
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/teacher/curriculum" })}
-            className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-          >
-            Curriculum
-          </button>
-        </div>
-      </section>
+    <TeacherShell
+      email={email}
+      classes={dashboard?.classes ?? []}
+      activeView={selectedClassId || selectedStudentId ? "class" : "home"}
+      activeClassId={selectedClassId}
+    >
+      {/* Keyed per navigation level so the page's entrance fade + focus handoff re-run on
+          landing → class → student moves, like the student views. */}
+      <PageShell
+        key={`${selectedClassId ?? ""}:${selectedStudentId ?? ""}`}
+        widthClass="max-w-[1240px]"
+        onBack={
+          selectedStudentId
+            ? () =>
+                navigate({
+                  to: "/teacher/class/$classId",
+                  params: { classId: selectedClassId ?? "" },
+                })
+            : selectedClassId
+              ? () => navigate({ to: "/teacher" })
+              : undefined
+        }
+        backLabel={
+          selectedStudentId ? selectedClass?.name || "Class" : selectedClassId ? "Home" : undefined
+        }
+      >
+        <div className="flex flex-col gap-5">
+          {/* The landing hero — the class/student pages carry their own name headers instead. */}
+          {!selectedClassId ? (
+            <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <div className="text-overline uppercase tracking-[0.12em] text-muted-foreground">
+                  Teacher dashboard
+                </div>
+                <h1 className="font-serif mt-2 text-display tracking-tight text-foreground">
+                  Classroom evidence.
+                </h1>
+                <p className="mt-2 max-w-2xl text-body leading-relaxed text-muted-foreground">
+                  Inspect roster progress, learning attempts, chat transcripts, quiz checks,
+                  mastery, and notes for students in your assigned pilot classes.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void loadDashboard()}
+                  className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+                >
+                  Refresh
+                </button>
+              </div>
+            </section>
+          ) : null}
 
-      {booting ? (
-        <GradientCard>
-          <div className="p-6 text-[14px] text-muted-foreground">Loading teacher access...</div>
-        </GradientCard>
-      ) : message ? (
-        <GradientCard>
-          <div className="p-6 text-[14px] text-muted-foreground">{message}</div>
-        </GradientCard>
-      ) : null}
+          {booting ? (
+            <GradientCard>
+              <div className="p-6 text-[14px] text-muted-foreground">Loading teacher access...</div>
+            </GradientCard>
+          ) : message ? (
+            <GradientCard>
+              <div className="p-6 text-[14px] text-muted-foreground">{message}</div>
+            </GradientCard>
+          ) : null}
 
-      {!booting && dashboard && model && (
-        <>
-          <div className="grid gap-3 md:grid-cols-4">
-            <MetricCard label="Classes" value={String(dashboard.classes.length)} />
-            <MetricCard label="Students" value={String(model.studentIds.length)} />
-            <MetricCard
-              label="Completed"
-              value={String(
-                dashboard.sessions.filter((session) => session.status === "complete").length,
-              )}
-            />
-            <MetricCard label="Evidence" value={String(dashboard.evidence.length)} />
-          </div>
+          {!booting && dashboard && model && (
+            <>
+              {/* Fleet-wide metrics belong to the landing; class/student pages open on their own headers. */}
+              {!selectedClassId ? (
+                <div className="grid gap-3 md:grid-cols-4">
+                  <MetricCard label="Classes" value={String(dashboard.classes.length)} />
+                  <MetricCard label="Students" value={String(model.studentIds.length)} />
+                  <MetricCard
+                    label="Completed"
+                    value={String(
+                      dashboard.sessions.filter((session) => session.status === "complete").length,
+                    )}
+                  />
+                  <MetricCard label="Evidence" value={String(dashboard.evidence.length)} />
+                </div>
+              ) : null}
 
-          <div className="flex flex-col gap-4">
-            {!selectedClassId ? (
-              <GradientCard>
-                <div className="p-4">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-[16px] font-medium text-foreground">Classes</h2>
-                      <p className="mt-1 text-[12.5px] text-muted-foreground">
-                        Live roster counts and latest student activity.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-4">
-                    {classesByOrg.map(([org, items]) => (
-                      <div key={org}>
-                        <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                          <Building2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                          {org}
-                          <span className="text-muted-foreground/60">· {items.length}</span>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                          {items.map((item) => {
-                            const attention = classAttention(dashboard, item.id);
-                            return (
-                              <div key={item.id} className="min-w-0 h-full">
-                                <ClassButton
-                                  item={item}
-                                  active={item.id === selectedClassId}
-                                  stats={summarizeClass(dashboard, item.id)}
-                                  attention={attention}
-                                  onClick={() =>
-                                    navigate({
-                                      to: "/teacher/class/$classId",
-                                      params: { classId: item.id },
-                                      search:
-                                        attention.tone === "warning"
-                                          ? { tab: "gradebook" }
-                                          : undefined,
-                                    })
-                                  }
-                                />
-                              </div>
-                            );
-                          })}
+              <div className="flex flex-col gap-4">
+                {!selectedClassId ? (
+                  <GradientCard>
+                    <div className="p-4">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-[16px] font-medium text-foreground">Classes</h2>
+                          <p className="mt-1 text-[12.5px] text-muted-foreground">
+                            Live roster counts and latest student activity.
+                          </p>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex flex-col gap-4">
+                        {classesByOrg.map(([org, items]) => (
+                          <div key={org}>
+                            <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                              <Building2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                              {org}
+                              <span className="text-muted-foreground/60">· {items.length}</span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                              {items.map((item) => {
+                                const attention = classAttention(dashboard, item.id);
+                                return (
+                                  <div key={item.id} className="min-w-0 h-full">
+                                    <ClassButton
+                                      item={item}
+                                      active={item.id === selectedClassId}
+                                      stats={summarizeClass(dashboard, item.id)}
+                                      attention={attention}
+                                      onClick={() =>
+                                        navigate({
+                                          to: "/teacher/class/$classId",
+                                          params: { classId: item.id },
+                                          search:
+                                            attention.tone === "warning"
+                                              ? { tab: "gradebook" }
+                                              : undefined,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </GradientCard>
+                ) : null}
+
+                <div className="grid gap-4">
+                  {selectedStudentId ? null : selectedClass && classStats ? (
+                    <ClassDetail
+                      item={selectedClass}
+                      stats={classStats}
+                      onExportSnapshot={exportClassSnapshot}
+                      exportingSnapshot={exportingSnapshot}
+                      snapshotError={snapshotError}
+                      dashboard={dashboard}
+                      profilesById={model.profilesById}
+                      lessons={dashboard.lessons}
+                      lessonsById={model.lessonsById}
+                      resources={dashboard.resources.filter(
+                        (resource) => resource.class_id === selectedClass.id,
+                      )}
+                      assignments={dashboard.assignments.filter(
+                        (assignment) => assignment.class_id === selectedClass.id,
+                      )}
+                      assignmentRecipients={dashboard.assignmentRecipients}
+                      assignmentSubmissions={dashboard.assignmentSubmissions}
+                      assignmentSubmissionFiles={dashboard.assignmentSubmissionFiles}
+                      assessments={dashboard.assessments.filter(
+                        (assessment) => assessment.class_id === selectedClass.id,
+                      )}
+                      assessmentItems={dashboard.assessmentItems}
+                      assessmentRecipients={dashboard.assessmentRecipients}
+                      assessmentAttempts={dashboard.assessmentAttempts}
+                      assessmentItemAttempts={dashboard.assessmentItemAttempts}
+                      quizItems={dashboard.quizItems}
+                      studentIds={classStudents}
+                      selectedLessonId={selectedGradebookLessonId}
+                      selectedStudentId={selectedStudentId}
+                      onSelectLesson={setSelectedGradebookLessonId}
+                      onSelectStudent={(studentId) =>
+                        navigate({
+                          to: "/teacher/class/$classId/student/$studentId",
+                          params: { classId: selectedClass.id, studentId },
+                        })
+                      }
+                      tab={search.tab ?? "overview"}
+                      onTabChange={(value) =>
+                        navigate({
+                          to: "/teacher/class/$classId",
+                          params: { classId: selectedClass.id },
+                          search: { tab: value },
+                        })
+                      }
+                      savingResource={savingResource}
+                      savingAssignment={savingAssignment}
+                      savingAssessment={savingAssessment}
+                      onSaveResource={saveResource}
+                      onSaveAssignment={saveAssignment}
+                      onSaveAssessment={saveAssessment}
+                      onSetAssignmentStatus={(assignmentId, status) =>
+                        void setAssignmentStatus(assignmentId, status)
+                      }
+                      onSetAssessmentStatus={(assessmentId, status) =>
+                        void setAssessmentStatus(assessmentId, status)
+                      }
+                      onReviewSubmission={reviewSubmission}
+                      onReviewAssessmentItem={reviewAssessment}
+                      onReturnAssessment={returnAssessmentResult}
+                      updatingAlertId={updatingAlertId}
+                      onUpdateAlertStatus={(alertId, status) =>
+                        void updateAlertStatus(alertId, status)
+                      }
+                      onUpdateResource={(resource) =>
+                        setDashboard((current) =>
+                          current
+                            ? {
+                                ...current,
+                                resources: current.resources.map((item) =>
+                                  item.id === resource.id ? resource : item,
+                                ),
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  ) : (
+                    <HotlistFeed items={hotlist} onOpen={openHotlistItem} nowMs={Date.now()} />
+                  )}
+
+                  {selectedStudentId && studentStats ? (
+                    <StudentDetail
+                      studentId={selectedStudentId}
+                      classId={selectedClassId}
+                      classLabel={selectedClass?.name ?? ""}
+                      onGenerateReport={generateReport}
+                      generatingReport={generatingReport}
+                      reportError={reportError}
+                      pastReports={pastReports}
+                      profile={selectedStudent}
+                      stats={studentStats}
+                      dashboard={dashboard}
+                      lessonsById={model.lessonsById}
+                      sessions={studentSessions}
+                      selectedSession={selectedSession}
+                      selectedSessionId={selectedSessionId}
+                      onSelectSession={setSelectedSessionId}
+                      noteDraft={noteDraft}
+                      noteVisibility={noteVisibility}
+                      savingNote={savingNote}
+                      liveViewer={liveViewer}
+                      liveCommentDraft={liveCommentDraft}
+                      sendingLiveComment={sendingLiveComment}
+                      onNoteChange={setNoteDraft}
+                      onNoteVisibilityChange={setNoteVisibility}
+                      onSaveNote={() => void saveNote()}
+                      onLiveCommentChange={setLiveCommentDraft}
+                      onStartWatching={() => void startWatchingSelectedSession()}
+                      onStopWatching={() => void stopWatchingSelectedSession()}
+                      onSendLiveComment={() => void sendLiveComment()}
+                      sessionHeld={sessionHeld}
+                      holdBusy={holdBusy}
+                      onHoldSession={() => void holdSelectedSession()}
+                      onResumeSession={() => void resumeSelectedSession()}
+                      tab={search.tab ?? "overview"}
+                      onTabChange={(value) =>
+                        navigate({
+                          to: "/teacher/class/$classId/student/$studentId",
+                          params: {
+                            classId: selectedClassId ?? "",
+                            studentId: selectedStudentId,
+                          },
+                          search: { tab: value },
+                        })
+                      }
+                    />
+                  ) : null}
                 </div>
-              </GradientCard>
-            ) : (
-              <Breadcrumb
-                segments={[
-                  { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
-                  ...(selectedClass
-                    ? [
-                        { label: organizationName(selectedClass) },
-                        {
-                          label: selectedClass.name,
-                          onClick: () =>
-                            navigate({
-                              to: "/teacher/class/$classId",
-                              params: { classId: selectedClass.id },
-                            }),
-                        },
-                      ]
-                    : []),
-                  ...(selectedStudentId
-                    ? [{ label: displayName(selectedStudent, selectedStudentId) }]
-                    : []),
-                ]}
-              />
-            )}
-
-            <div className="grid gap-4">
-              {selectedStudentId ? null : selectedClass && classStats ? (
-                <ClassDetail
-                  item={selectedClass}
-                  stats={classStats}
-                  onExportSnapshot={exportClassSnapshot}
-                  exportingSnapshot={exportingSnapshot}
-                  snapshotError={snapshotError}
-                  dashboard={dashboard}
-                  profilesById={model.profilesById}
-                  lessons={dashboard.lessons}
-                  lessonsById={model.lessonsById}
-                  resources={dashboard.resources.filter(
-                    (resource) => resource.class_id === selectedClass.id,
-                  )}
-                  assignments={dashboard.assignments.filter(
-                    (assignment) => assignment.class_id === selectedClass.id,
-                  )}
-                  assignmentRecipients={dashboard.assignmentRecipients}
-                  assignmentSubmissions={dashboard.assignmentSubmissions}
-                  assignmentSubmissionFiles={dashboard.assignmentSubmissionFiles}
-                  assessments={dashboard.assessments.filter(
-                    (assessment) => assessment.class_id === selectedClass.id,
-                  )}
-                  assessmentItems={dashboard.assessmentItems}
-                  assessmentRecipients={dashboard.assessmentRecipients}
-                  assessmentAttempts={dashboard.assessmentAttempts}
-                  assessmentItemAttempts={dashboard.assessmentItemAttempts}
-                  quizItems={dashboard.quizItems}
-                  studentIds={classStudents}
-                  selectedLessonId={selectedGradebookLessonId}
-                  selectedStudentId={selectedStudentId}
-                  onSelectLesson={setSelectedGradebookLessonId}
-                  onSelectStudent={(studentId) =>
-                    navigate({
-                      to: "/teacher/class/$classId/student/$studentId",
-                      params: { classId: selectedClass.id, studentId },
-                    })
-                  }
-                  tab={search.tab ?? "overview"}
-                  onTabChange={(value) =>
-                    navigate({
-                      to: "/teacher/class/$classId",
-                      params: { classId: selectedClass.id },
-                      search: { tab: value },
-                    })
-                  }
-                  savingResource={savingResource}
-                  savingAssignment={savingAssignment}
-                  savingAssessment={savingAssessment}
-                  onSaveResource={saveResource}
-                  onSaveAssignment={saveAssignment}
-                  onSaveAssessment={saveAssessment}
-                  onSetAssignmentStatus={(assignmentId, status) =>
-                    void setAssignmentStatus(assignmentId, status)
-                  }
-                  onSetAssessmentStatus={(assessmentId, status) =>
-                    void setAssessmentStatus(assessmentId, status)
-                  }
-                  onReviewSubmission={reviewSubmission}
-                  onReviewAssessmentItem={reviewAssessment}
-                  onReturnAssessment={returnAssessmentResult}
-                  updatingAlertId={updatingAlertId}
-                  onUpdateAlertStatus={(alertId, status) => void updateAlertStatus(alertId, status)}
-                  onUpdateResource={(resource) =>
-                    setDashboard((current) =>
-                      current
-                        ? {
-                            ...current,
-                            resources: current.resources.map((item) =>
-                              item.id === resource.id ? resource : item,
-                            ),
-                          }
-                        : current,
-                    )
-                  }
-                />
-              ) : (
-                <HotlistFeed items={hotlist} onOpen={openHotlistItem} nowMs={Date.now()} />
-              )}
-
-              {selectedStudentId && studentStats ? (
-                <StudentDetail
-                  studentId={selectedStudentId}
-                  classId={selectedClassId}
-                  classLabel={selectedClass?.name ?? ""}
-                  onGenerateReport={generateReport}
-                  generatingReport={generatingReport}
-                  reportError={reportError}
-                  pastReports={pastReports}
-                  profile={selectedStudent}
-                  stats={studentStats}
-                  dashboard={dashboard}
-                  lessonsById={model.lessonsById}
-                  sessions={studentSessions}
-                  selectedSession={selectedSession}
-                  selectedSessionId={selectedSessionId}
-                  onSelectSession={setSelectedSessionId}
-                  noteDraft={noteDraft}
-                  noteVisibility={noteVisibility}
-                  savingNote={savingNote}
-                  liveViewer={liveViewer}
-                  liveCommentDraft={liveCommentDraft}
-                  sendingLiveComment={sendingLiveComment}
-                  onNoteChange={setNoteDraft}
-                  onNoteVisibilityChange={setNoteVisibility}
-                  onSaveNote={() => void saveNote()}
-                  onLiveCommentChange={setLiveCommentDraft}
-                  onStartWatching={() => void startWatchingSelectedSession()}
-                  onStopWatching={() => void stopWatchingSelectedSession()}
-                  onSendLiveComment={() => void sendLiveComment()}
-                  sessionHeld={sessionHeld}
-                  holdBusy={holdBusy}
-                  onHoldSession={() => void holdSelectedSession()}
-                  onResumeSession={() => void resumeSelectedSession()}
-                  tab={search.tab ?? "overview"}
-                  onTabChange={(value) =>
-                    navigate({
-                      to: "/teacher/class/$classId/student/$studentId",
-                      params: {
-                        classId: selectedClassId ?? "",
-                        studentId: selectedStudentId,
-                      },
-                      search: { tab: value },
-                    })
-                  }
-                  onBack={() =>
-                    navigate({
-                      to: "/teacher/class/$classId",
-                      params: { classId: selectedClassId ?? "" },
-                    })
-                  }
-                />
-              ) : null}
-            </div>
-          </div>
-        </>
-      )}
-    </ConsoleShell>
+              </div>
+            </>
+          )}
+        </div>
+      </PageShell>
+    </TeacherShell>
   );
 }
 
@@ -4603,7 +4595,6 @@ function StudentDetail({
   holdBusy,
   onHoldSession,
   onResumeSession,
-  onBack,
   tab,
   onTabChange,
 }: {
@@ -4639,7 +4630,6 @@ function StudentDetail({
   holdBusy: boolean;
   onHoldSession: () => void;
   onResumeSession: () => void;
-  onBack: () => void;
   tab?: string;
   onTabChange?: (value: string) => void;
 }) {
@@ -4730,14 +4720,8 @@ function StudentDetail({
   return (
     <GradientCard>
       <div className="p-4 sm:p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronLeft className="h-4 w-4" strokeWidth={1.6} /> Back to {classLabel || "class"}
-          </button>
+        {/* The shell's back pill owns "back to class" — this row keeps only the report actions. */}
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
           <div className="flex flex-col items-end gap-1">
             <button
               type="button"
@@ -6149,13 +6133,6 @@ function masteryBarClass(score: number) {
 
 function displayName(profile: Profile | null | undefined, userId: string) {
   return profile?.name || `Student ${userId.slice(0, 8)}`;
-}
-
-function organizationName(summary: TeacherClassSummary) {
-  const organization = Array.isArray(summary.organizations)
-    ? summary.organizations[0]
-    : summary.organizations;
-  return organization?.name || "Organization";
 }
 
 function lessonName(lessonsById: Map<string, Lesson>, lessonId: string | null | undefined) {
