@@ -43,6 +43,10 @@ Rules of engagement:
 4. **Every book item is accounted for.** Every numbered Example and Activity in the chapter must
    appear in the chunk's `coverage` array (mapped to the step that carries it, possibly merged
    with others) or in the `skipped` array with an explicit reason. Nothing is silently dropped.
+   **Numbering convention:** Examples and Activities are numbered PER LESSON (the first digit is
+   the lesson number, restarting every chapter), so `coverage` keys must carry the lesson prefix:
+   `"L1 Example 1.1"`, `"L3 Activity 3.2"`. Beware one book erratum: Chapter 1 Lesson 5's Examples
+   are misprinted as 4.x — key them by the lesson they physically appear in (`"L5 Example 4.1"`).
 5. **Pseudocode concepts are preserved; code is rewritten.** Where the book presents pseudocode
    (Chapter 3 onward), keep the concept and the scenario, but write the runnable code in **valid
    Jargon** per §6. You may say so in the step prompt ("the book writes this as a numbered
@@ -81,7 +85,8 @@ reflection step whose objective is vague cannot be graded; a code step whose `ex
 does not match the program's true output will block every student.
 
 **Lesson shape rule:** open with `explanation`, work the idea with `reflection`/`practice`, end
-with `assessment`. 4–6 steps per lesson.
+with `assessment` (a unit's final lesson may add one `revision`/`recall` step after the
+assessment). 4–6 steps per lesson.
 
 ## §4 — The JSON Manifest Schema (`jargon-book-manifest/v1`)
 
@@ -125,7 +130,8 @@ The annotated skeleton below documents every field. Annotations (`//`) are for Y
             "final_answer_policy": "after_attempt",  // never | after_attempt | allowed
             "tutor_tone": "encouraging",
             "tutor_pace": "guided",
-            "grade_band": "Grades 4-6"
+            "grade_band": "lower"                // lower | middle | upper (the ONLY values the
+                                                 // mentor honors; Book F's grades 4-6 = "lower")
           },
           "milestone": {
             "title": "Short noun phrase",
@@ -155,10 +161,11 @@ The annotated skeleton below documents every field. Annotations (`//`) are for Y
     }
   ],
 
-  // Bookkeeping — one entry per numbered Example/Activity in THIS chapter:
+  // Bookkeeping — one entry per numbered Example/Activity in THIS chapter (lesson-prefixed,
+  // since numbering restarts per lesson):
   "coverage": [
-    { "book_item": "Example 1.1", "handled_by": "itf-f-ch1-l1-s1" },
-    { "book_item": "Activity 1.5", "handled_by": "itf-f-ch1-l1-s4", "note": "merged with 1.6 into one MCQ" }
+    { "book_item": "L1 Example 1.1", "handled_by": "itf-f-ch1-l1-s1" },
+    { "book_item": "L1 Activity 1.5", "handled_by": "itf-f-ch1-l1-s4", "note": "merged with 1.6 into one MCQ" }
   ],
   "skipped": [
     { "book_item": "Safety Tips sidebar (p.15)", "reason": "non-instructional sidebar; teacher resource" }
@@ -166,7 +173,12 @@ The annotated skeleton below documents every field. Annotations (`//`) are for Y
 }
 ```
 
-**Hard constraints (checked on import — violations reject the file):**
+**Hard constraints — WARNING: the platform does NOT validate these for you.** An invalid value is
+not rejected; it is **silently coerced into a broken lesson** (an `assessment` step missing
+`mode_type` silently becomes an MCQ with no choices that no student can ever pass; a 9th choice is
+silently cut while a correct answer pointing at it survives, making the question unanswerable).
+The §11 checklist and the import driver are the ONLY enforcement — treat every item below as
+absolute:
 
 1. `mode` ∈ `explanation | media | reflection | practice | assignment | inquiry | assessment |
    revision` — lowercase, exact.
@@ -191,8 +203,7 @@ The annotated skeleton below documents every field. Annotations (`//`) are for Y
 
 This is the fidelity and format bar. Study it before generating anything. (It is abbreviated only
 in prose length — your explanation steps for this lesson would carry a little more of the book's
-text, e.g. the bus/car and space-shuttle/airplane pairs from Example 1.1 and the four types of
-personal computers.)
+text, e.g. the space-shuttle/airplane pair from Example 1.1.)
 
 ```json
 {
@@ -208,7 +219,7 @@ personal computers.)
     "final_answer_policy": "after_attempt",
     "tutor_tone": "encouraging",
     "tutor_pace": "guided",
-    "grade_band": "Grades 4-6"
+    "grade_band": "lower"
   },
   "milestone": {
     "title": "Purpose of technology",
@@ -230,7 +241,7 @@ personal computers.)
       "title": "The four categories of computers",
       "stage": "teach",
       "mode": "explanation",
-      "prompt": "The computer is also a technology. Some computers are general-purpose: personal computers (the desktop, laptop, tablet and smartphone) run many applications and serve many needs — entertainment, work, learning and communication. Others are specific-purpose: embedded computers live inside machines like elevators and control them (they are often called control modules); a server has the specific purpose of serving the requests of many clients, like YouTube serving videos; and a supercomputer responds to one big request rather than many small ones. In general there are four main categories: embedded computers, personal computers, servers and supercomputers.",
+      "prompt": "The computer is also a technology. Some computers are general-purpose: personal computers (the desktop, laptop, tablet and smartphone) serve our entertainment, our work and our communication. Others are specific-purpose: embedded computers live inside machines like elevators and control them (they are often called control modules); a server has the specific purpose of serving the requests of many clients, like YouTube serving videos; and a supercomputer responds to one big request rather than many small ones — like predicting the weather. In general there are four main categories: embedded computers, personal computers, servers and supercomputers.",
       "skill_keys": ["itf.computers.categories"]
     },
     {
@@ -274,20 +285,21 @@ And its bookkeeping entries in the chunk:
 
 ```json
 "coverage": [
-  { "book_item": "Example 1.1", "handled_by": "itf-f-ch1-l1-s1" },
-  { "book_item": "Example 1.2", "handled_by": "itf-f-ch1-l1-s2" },
-  { "book_item": "Example 1.3", "handled_by": "itf-f-ch1-l1-s2" },
-  { "book_item": "Example 1.4", "handled_by": "itf-f-ch1-l1-s2" },
-  { "book_item": "Example 1.5", "handled_by": "itf-f-ch1-l1-s2" },
-  { "book_item": "Activity 1.1", "handled_by": "itf-f-ch1-l1-s4", "note": "matching → merged into the MCQ check" },
-  { "book_item": "Activity 1.2", "handled_by": "itf-f-ch1-l1-s3", "note": "merged into the reflection" },
-  { "book_item": "Activity 1.3", "handled_by": "itf-f-ch1-l1-s3" },
-  { "book_item": "Activity 1.4", "handled_by": "itf-f-ch1-l1-s2", "note": "the four PC types are named in the explanation; recalled in s4" },
-  { "book_item": "Activity 1.5", "handled_by": "itf-f-ch1-l1-s4", "note": "fill-in-the-blank → merged into the MCQ check" },
-  { "book_item": "Activity 1.6", "handled_by": "itf-f-ch1-l1-s4", "note": "true/false → merged into the MCQ check" }
+  { "book_item": "L1 Example 1.1", "handled_by": "itf-f-ch1-l1-s1" },
+  { "book_item": "L1 Example 1.2", "handled_by": "itf-f-ch1-l1-s2" },
+  { "book_item": "L1 Example 1.3", "handled_by": "itf-f-ch1-l1-s2" },
+  { "book_item": "L1 Example 1.4", "handled_by": "itf-f-ch1-l1-s2" },
+  { "book_item": "L1 Example 1.5", "handled_by": "itf-f-ch1-l1-s2" },
+  { "book_item": "L1 Example 1.6", "handled_by": "itf-f-ch1-l1-s2", "note": "supercomputers predicting the weather" },
+  { "book_item": "L1 Activity 1.1", "handled_by": "itf-f-ch1-l1-s4", "note": "matching → merged into the MCQ check" },
+  { "book_item": "L1 Activity 1.2", "handled_by": "itf-f-ch1-l1-s3", "note": "merged into the reflection" },
+  { "book_item": "L1 Activity 1.3", "handled_by": "itf-f-ch1-l1-s3" },
+  { "book_item": "L1 Activity 1.4", "handled_by": "itf-f-ch1-l1-s2", "note": "the four PC types are named verbatim in the explanation" },
+  { "book_item": "L1 Activity 1.5", "handled_by": "itf-f-ch1-l1-s4", "note": "fill-in-the-blank → merged into the MCQ check" },
+  { "book_item": "L1 Activity 1.6", "handled_by": "itf-f-ch1-l1-s4", "note": "true/false → merged into the MCQ check" }
 ],
 "skipped": [
-  { "book_item": "Safety Tips sidebar (p.15)", "reason": "non-instructional sidebar; note for teacher resources" }
+  { "book_item": "L1 Safety Tips sidebar (p.15)", "reason": "posture/safety guidance — no interactive step; surface as a teacher resource" }
 ]
 ```
 
@@ -314,26 +326,36 @@ output. **There are exactly 11 statement forms. Nothing else exists.**
 | REMOVE | `REMOVE value from listname` | removes the FIRST occurrence **by value** (not by index) |
 | IF / ELSE / END | `IF cond THEN … ELSE … END` | `THEN` optional; `ELSE` optional; `END` required |
 | REPEAT | `REPEAT n times … END` | n = integer expression |
-| REPEAT_UNTIL | `REPEAT_UNTIL cond … END` | loops until cond is true (≤1000 iterations) |
+| REPEAT_UNTIL | `REPEAT_UNTIL cond … END` | loops until cond is true (see execution budget below) |
 | REPEAT_FOR_EACH | `REPEAT_FOR_EACH item in listexpr … END` | lists/tuples ONLY — no string iteration |
 | BREAK | `BREAK` | exits the innermost loop |
 
 **There is NO:** `WHILE`, `FUNCTION`/procedures, `RETURN`, `ELIF` (nest `IF`s instead), string
 iteration, imports, attribute calls (`x.append` is illegal — use `ADD`), comprehensions, lambdas.
+**The book's own pseudocode keywords are NOT Jargon either**: `CALL`, `WAIT`, `SEND`, `RECEIVE`,
+`WRITE`, `CONNECT`, `GOTO` all fail with "Unknown command" — transliterate the CONCEPT into the 11
+statements above, never the keyword.
 
 **Condition phrases** (the only recognized comparisons):
 `is equal to`, `is not equal to`, `is greater than`, `is greater than or equal to`,
 `is less than`, `is less than or equal to`, `is in`, `is not in`, `reaches end of`
 (index reaches the end of a list), `is even`, `is odd` — combined with `AND`, `OR`, `NOT`
-(`AND` binds tighter than `OR`). Bare boolean expressions are also accepted, e.g.
-`IF (x % 3) is equal to 0 THEN`.
+(`AND` binds tighter than `OR`). Comparisons may live inside parentheses too, e.g.
+`IF (x % 3) is equal to 0 THEN`; bare boolean expressions are also accepted, e.g. `IF (x > 3)`.
 
-**Expressions:** numbers, strings, booleans, `None`, lists, indexing/slicing, `+ - * / // % **`,
-and ONLY these functions: `abs, bool, float, int, len, list, max, min, range, round, sorted, str,
-sum`.
+**Expressions:** numbers, strings, booleans, `None`, lists, tuples, dictionaries with string keys,
+indexing/slicing, `+ - * / // % **`, comparisons/boolean operators, and ONLY these functions:
+`abs, bool, float, int, len, list, max, min, range, round, sorted, str, sum`. Numeric values are
+capped at |n| ≤ 10¹² — exceeding it aborts the program (e.g. factorials beyond 14! fail), so keep
+arithmetic small.
 
 **Comments:** `#` inline; `//` only as a full-line comment (inside expressions `//` is floor
 division).
+
+**Execution budget:** the engine stops any program after ~1000 TOTAL executed statements (not
+just loop iterations — a `REPEAT 400 times` loop with a 2-statement body dies mid-run with an
+error line). Keep graded programs tiny: small inputs, short loops, well under a few hundred
+executed statements.
 
 **Output formatting rules for `expected_output`** (must match EXACTLY):
 - Each `PRINT` emits one line; `expected_output` is those lines joined by newlines.
@@ -414,12 +436,12 @@ student.
 
 Reused platform keys (they already exist and carry cross-course mastery):
 `process.purpose`, `systems.input`, `systems.process`, `systems.output`, `signals.conversion`,
-`memory.storage`, `logic.sequence`, `jargon.set`, `jargon.print`, `jargon.if`, `jargon.list`,
-`jargon.loop`.
+`signals.exchange`, `memory.storage`, `logic.sequence`, `jargon.set`, `jargon.print`,
+`jargon.if`, `jargon.list`, `jargon.loop`.
 
 New Book-F keys (minted under the series-scoped `itf.` namespace so future IT Frontiers books
 reuse them):
-`itf.computers.categories`, `itf.signals.types`, `itf.signals.exchange`,
+`itf.computers.categories`, `itf.signals.types`,
 `itf.hardware.performance`, `itf.hardware.energy`, `itf.hardware.portability`,
 `itf.software.instructions`, `itf.software.types`, `itf.logic.conditionals`,
 `itf.logic.repetition`, `itf.data.structures`, `itf.data.addressing`, `itf.data.searching`,
@@ -433,7 +455,7 @@ Pre-assigned per lesson (milestone keys; steps use a subset of their lesson's ke
 | itf-f-ch1-l2 Systems & Signals | `systems.input`, `systems.process`, `systems.output`, `itf.signals.types` |
 | itf-f-ch1-l3 Signal Processing | `signals.conversion`, `systems.process` |
 | itf-f-ch1-l4 Memory | `memory.storage` |
-| itf-f-ch1-l5 Exchanging Signals | `itf.signals.exchange`, `systems.output` |
+| itf-f-ch1-l5 Exchanging Signals | `signals.exchange`, `systems.output` |
 | itf-f-ch2-l1 Performance | `itf.hardware.performance` |
 | itf-f-ch2-l2 Energy | `itf.hardware.energy` |
 | itf-f-ch2-l3 Portability | `itf.hardware.portability` |
@@ -459,7 +481,7 @@ Copy these into every lesson unless the mapping table forces otherwise:
   "final_answer_policy": "after_attempt",
   "tutor_tone": "encouraging",
   "tutor_pace": "guided",
-  "grade_band": "Grades 4-6"
+  "grade_band": "lower"
 }
 ```
 
@@ -469,7 +491,7 @@ Copy these into every lesson unless the mapping table forces otherwise:
 - **1 book lesson = 1 Jargon lesson. 1 chapter = 1 unit.** Never split a book lesson (it would
   break the slug table). If a lesson has more activities than fit in 6 steps, MERGE same-fact
   activities (per §7) rather than splitting.
-- 4–6 steps per lesson; absolute cap 10.
+- 4–6 steps per lesson; absolute cap 8 (the slug table provides `-s1` … `-s8` and no more).
 - `tutor_prompt` is a mentor brief, not content: what to emphasize, what to ask for first, common
   misconception to watch for. 1–3 sentences.
 
@@ -515,7 +537,7 @@ One conversation, five turns:
 | `itf-f-ch4-l4` | Ch4 L4 Sorting |
 | `itf-f-ch4-l5` | Ch4 L5 Queues & Stacks |
 
-Steps: `<lesson-slug>-s1` … `-s6`, in order.
+Steps: `<lesson-slug>-s1` … `-s8`, in order (target 4–6; 8 is the absolute cap).
 
 **The 'How to' Appendix (MS Word/Excel/PowerPoint) is NOT converted** — it appears once, in
 `itf-f-ch4.json`'s `skipped` array, with the reason "application how-to guide; import as teacher
@@ -533,11 +555,13 @@ After the JSON code block, print `CHECKLIST: PASS` — or each failing item — 
    text (not from memory).
 4. Every `practice`/`code` step: you traced the `starter_code` line by line against §6 — every
    statement is one of the 11 forms, every condition phrase is from the list, no banned features,
-   no `ASK`, loops terminate — and `expected_output` matches your trace EXACTLY (list formatting,
-   `True`/`False` capitalization, no quotes around printed strings).
+   no `ASK`, loops terminate well under the ~1000 total-executed-statement budget — and
+   `expected_output` matches your trace EXACTLY (list formatting, `True`/`False` capitalization,
+   no quotes around printed strings).
 5. Every skill key appears in §8's tables.
 6. `coverage` + `skipped` together account for EVERY numbered Example and Activity in this
-   chapter — cross-check against your Turn-0 inventory.
+   chapter, with lesson-prefixed keys (`"L2 Activity 2.3"`) — cross-check against your Turn-0
+   inventory. (Remember the Ch1 L5 misprint: its Examples are numbered 4.x in the book.)
 7. No sentence in any `prompt` states a fact that is not in the book.
 8. Every slug matches §10 character-for-character; `subject`/`course` blocks are byte-identical
    to the previous chunks.
@@ -576,5 +600,11 @@ After the JSON code block, print `CHECKLIST: PASS` — or each failing item — 
 *Platform note (not for the generating AI): the four chunk files are consumed by an importer that
 replays them through the platform's `curriculum-admin` actions (create_subject → create_course →
 create_unit → create_lesson_stub → save_lesson_meta → upsert_step → publish_lesson), validating
-every `practice`/`code` step against the real Jargon engine before any network call. That driver
-script is the follow-up task after the content is generated.*
+every `practice`/`code` step against the real Jargon engine before any network call. Driver
+gotchas already identified: (1) the platform does NOT validate §4's constraints — the driver must
+enforce them all itself before any write (invalid values silently coerce into broken lessons);
+(2) `create_lesson_stub` auto-creates a placeholder step `<lessonId>-activity-1` — pass that id as
+step 1's `step.id` (or `delete_step` it) so lessons don't publish with a stray "Add a prompt for
+learners." step; (3) `save_lesson_meta` reads policy fields FLAT on `meta` (`meta.help_ceiling`
+etc.) — the manifest's nested `policy` block must be flattened, or the whole policy silently
+drops. That driver script is the follow-up task after the content is generated.*

@@ -6,9 +6,30 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-10 (Book F generation prompt — external-AI import spec)
+## Claude -> Codex / Human - 2026-07-10 (Book F generation prompt — FINISHED)
 
-Status: Starting
+Summary: docs/curriculum/ITF_BOOK_F_GENERATION_PROMPT.md is complete and adversarially verified.
+Two verification agents checked every schema field/enum against curriculum-admin + types.ts +
+PLATFORM.md, empirically executed all language claims against the real interpreter, and
+spot-checked the worked example against the Book F PDF. Folded findings: platform silently COERCES
+invalid values (doc + future driver must enforce §4, reworded); grade_band must be lower|middle|
+upper ("Grades 4-6" was inert); step cap aligned to 8 (= slug table); reused existing
+signals.exchange key instead of minting; global ~1000-executed-statement budget + |n|≤10^12 numeric
+cap added to §6; book pseudocode keywords (CALL/WAIT/GOTO...) called out as non-Jargon;
+lesson-prefixed coverage keys (Example/Activity numbering restarts per lesson; Ch1 L5 misprints its
+Examples as 4.x); worked-example coverage completed (Example 1.6) and de-embellished.
+Files changed: docs/curriculum/ITF_BOOK_F_GENERATION_PROMPT.md (new), docs/HANDOFF.md.
+Tests run: all 3 calibration programs + ~20 adversarial probes executed via run_sandboxed (outputs
+match the doc byte-for-byte); all JSON blocks in the doc parse.
+Remaining concerns: the manifest's nested policy block must be FLATTENED onto save_lesson_meta's
+meta by the driver (noted in the doc's platform note); driver must also handle the
+create_lesson_stub placeholder step and enforce §4 itself.
+Suggested next task: tools/import_book_manifest.py — offline validation (schema + run code steps
+through the engine) + curriculum-admin replay with slug→id map idempotency; then import the four
+chapter files the external AI produces.
+
+Task (original): Author the prompt doc the user pastes into Cowork/ChatGPT (with the Book F PDF
+attached) to generate an importable "jargon-book-manifest/v1" package.
 Task: Author docs/curriculum/ITF_BOOK_F_GENERATION_PROMPT.md — a self-contained prompt the user
 pastes into Cowork/ChatGPT (with the Book F PDF attached) to generate an importable Jargon package
 ("jargon-book-manifest/v1": subject → course → 4 units → 17 lessons with steps/quizzes matching
