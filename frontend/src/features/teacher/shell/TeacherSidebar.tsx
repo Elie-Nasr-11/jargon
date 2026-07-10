@@ -152,12 +152,18 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
         <button
           type="button"
           onClick={go(() =>
-            navigate({ to: "/teacher/class/$classId", params: { classId: cls.id } }),
+            navigate({
+              to: "/teacher/class/$classId",
+              params: { classId: cls.id },
+              // Re-clicking the active class keeps the section you're on (also brings a
+              // student drill-down back to Students); other classes open on Overview.
+              search: active && activeSection ? { tab: activeSection } : undefined,
+            }),
           )}
-          aria-current={active && !activeSection ? "true" : undefined}
+          aria-current={active ? "true" : undefined}
           className={`flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) ${
             active
-              ? "font-medium text-foreground"
+              ? "font-medium text-foreground hover:bg-muted/60"
               : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
           }`}
         >

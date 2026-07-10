@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1365,6 +1365,16 @@ function ClassDetail({
   const [openBuilders, setOpenBuilders] = useState<Record<string, boolean>>({});
   const toggleBuilder = (key: string) =>
     setOpenBuilders((current) => ({ ...current, [key]: !current[key] }));
+  // "Gradebook" from the structure tree lands mid-section — scroll the gradebook into view
+  // once the Students section is on screen, instead of stranding the teacher at the top.
+  const gradebookRef = useRef<HTMLDivElement>(null);
+  const pendingGradebookScrollRef = useRef(false);
+  useEffect(() => {
+    if (section === "students" && pendingGradebookScrollRef.current) {
+      pendingGradebookScrollRef.current = false;
+      gradebookRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [section]);
   const studentSet = useMemo(() => new Set(studentIds), [studentIds]);
   const openAlerts = dashboard.interventionAlerts.filter(
     (alert) =>
@@ -1426,6 +1436,7 @@ function ClassDetail({
             on an explicit cross-section move. */}
         {section === "overview" ? (
           <div className="mt-4">
+            <h3 className="sr-only">Overview</h3>
             <ClassOverviewStrips
               classId={item.id}
               dashboard={dashboard}
@@ -1476,6 +1487,7 @@ function ClassDetail({
         {/* Grading queues lead — they're what the bell and hotlist deep-link to. */}
         {section === "students" ? (
           <div className="mt-4">
+            <h3 className="sr-only">Students &amp; performance</h3>
             <div className="grid gap-4">
               <AssignmentGrading
                 key={item.id}
@@ -1502,17 +1514,19 @@ function ClassDetail({
               />
             </div>
 
-            <GradebookTable
-              lessons={lessons}
-              lessonsById={lessonsById}
-              studentIds={studentIds}
-              dashboard={dashboard}
-              profilesById={profilesById}
-              selectedLessonId={selectedLessonId}
-              selectedStudentId={selectedStudentId}
-              onSelectLesson={onSelectLesson}
-              onSelectStudent={onSelectStudent}
-            />
+            <div ref={gradebookRef} className="scroll-mt-4">
+              <GradebookTable
+                lessons={lessons}
+                lessonsById={lessonsById}
+                studentIds={studentIds}
+                dashboard={dashboard}
+                profilesById={profilesById}
+                selectedLessonId={selectedLessonId}
+                selectedStudentId={selectedStudentId}
+                onSelectLesson={onSelectLesson}
+                onSelectStudent={onSelectStudent}
+              />
+            </div>
 
             <div className="mt-5 grid gap-3">
               {studentIds.length ? (
@@ -1582,6 +1596,7 @@ function ClassDetail({
 
         {section === "structure" ? (
           <div className="mt-4">
+            <h3 className="sr-only">Structure &amp; curriculum</h3>
             <ClassStructurePanel
               classId={item.id}
               lessons={lessons}
@@ -1589,6 +1604,7 @@ function ClassDetail({
               studentIds={studentIds}
               onOpenGradebook={(lessonId) => {
                 onSelectLesson(lessonId);
+                pendingGradebookScrollRef.current = true;
                 onSectionChange("students");
               }}
             />
@@ -2168,29 +2184,23 @@ function ResourceManager({
   };
 
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
-      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h3 className="text-[15px] font-medium text-foreground">Lesson resources</h3>
-          <p className="text-[12.5px] text-muted-foreground">
-            Attach teacher-approved files and links. Drafts stay hidden from students.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
-            {resources.length} resource{resources.length === 1 ? "" : "s"}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              cancelEdit();
-              setFormOpen(true);
-            }}
-            className="rounded-full bg-foreground px-3 py-1.5 text-[12px] font-medium text-background transition-colors hover:opacity-90"
-          >
-            New resource
-          </button>
-        </div>
+    <div className="pt-1">
+      {/* Hosted inside the Structure section's "Resources" bench — the Collapsible header
+          carries the title + count, so this keeps only the description and the action. */}
+      <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <p className="text-[12.5px] text-muted-foreground">
+          Attach teacher-approved files and links. Drafts stay hidden from students.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            cancelEdit();
+            setFormOpen(true);
+          }}
+          className="shrink-0 rounded-full bg-foreground px-3 py-1.5 text-[12px] font-medium text-background transition-colors hover:opacity-90"
+        >
+          New resource
+        </button>
       </div>
 
       <div className="grid gap-4">
@@ -2860,18 +2870,12 @@ function AssessmentManager({
   };
 
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
-      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h3 className="text-[15px] font-medium text-foreground">Lesson quizzes</h3>
-          <p className="text-[12.5px] text-muted-foreground">
-            Assign multi-question quizzes, auto-grade MCQ items, and review written answers.
-          </p>
-        </div>
-        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
-          {assessments.length} quiz{assessments.length === 1 ? "" : "zes"}
-        </div>
-      </div>
+    <div className="pt-1">
+      {/* Hosted inside the Structure section's "Quizzes" bench — title + count live on the
+          Collapsible header; grading moved to Students + performance. */}
+      <p className="mb-3 text-[12.5px] text-muted-foreground">
+        Build and publish multi-question quizzes for a lesson. MCQ items auto-grade on submission.
+      </p>
 
       <div className="grid gap-4">
         <div className="rounded-2xl border border-border bg-depth-sub p-4">
@@ -3345,18 +3349,12 @@ function AssignmentManager({
   };
 
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
-      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h3 className="text-[15px] font-medium text-foreground">Assignments</h3>
-          <p className="text-[12.5px] text-muted-foreground">
-            Create class work, collect submissions, and return teacher-reviewed feedback.
-          </p>
-        </div>
-        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
-          {assignments.length} assignment{assignments.length === 1 ? "" : "s"}
-        </div>
-      </div>
+    <div className="pt-1">
+      {/* Hosted inside the Structure section's "Assignments" bench — title + count live on the
+          Collapsible header; grading moved to Students + performance. */}
+      <p className="mb-3 text-[12.5px] text-muted-foreground">
+        Create class work for a lesson, choose recipients, and assign or save as draft.
+      </p>
 
       <div className="grid gap-4">
         <div className="rounded-2xl border border-border bg-depth-sub p-4">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ExternalLink } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { Collapsible } from "@/components/Collapsible";
 import { EmptyState } from "@/components/EmptyState";
 import { fetchClassCourses } from "@/lib/api";
@@ -30,20 +30,28 @@ export function ClassStructurePanel({
   onOpenGradebook: (lessonId: string) => void;
 }) {
   const navigate = useNavigate();
-  // null = loading; error degrades to an empty set (= unscoped full catalog).
+  // null = loading; a failed read degrades to an empty set (= unscoped full catalog) but is
+  // labeled honestly via loadError.
   const [courseIds, setCourseIds] = useState<Set<string> | null>(null);
-  const [closedCourses, setClosedCourses] = useState<Set<string>>(new Set());
+  const [loadError, setLoadError] = useState(false);
+  // Per-course open overrides; courses without an override follow the default (open for small
+  // catalogs, closed when the list is long — e.g. the unscoped full-catalog case).
+  const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let alive = true;
     setCourseIds(null);
-    setClosedCourses(new Set());
+    setLoadError(false);
+    setOpenOverrides({});
     fetchClassCourses(classId)
       .then((ids) => {
         if (alive) setCourseIds(new Set(ids));
       })
       .catch(() => {
-        if (alive) setCourseIds(new Set());
+        if (alive) {
+          setLoadError(true);
+          setCourseIds(new Set());
+        }
       });
     return () => {
       alive = false;
@@ -99,17 +107,15 @@ export function ClassStructurePanel({
     return counts;
   }, [scoped, dashboard, studentIds]);
 
+  // Open by default only while the list is small; the unscoped full catalog can be the whole
+  // org's curriculum, so long lists start folded to stay scannable (and cheap to lay out).
+  const defaultOpen = courses.length <= 3;
   const toggleCourse = (id: string) => {
-    setClosedCourses((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setOpenOverrides((prev) => ({ ...prev, [id]: !(prev[id] ?? defaultOpen) }));
   };
 
   return (
-    <div className="mt-6 grid gap-4">
+    <div className="mt-5">
       <div className="rounded-3xl border border-border bg-depth-card p-4">
         <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -122,7 +128,11 @@ export function ClassStructurePanel({
           {scoped ? (
             <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
               {scoped.length} lesson{scoped.length === 1 ? "" : "s"}
-              {courseIds && !courseIds.size ? " · full catalog" : ""}
+              {loadError
+                ? " · couldn't load course links — showing all"
+                : courseIds && !courseIds.size
+                  ? " · all courses"
+                  : ""}
             </div>
           ) : null}
         </div>
@@ -139,7 +149,7 @@ export function ClassStructurePanel({
             {courses.map((course) => (
               <div key={course.id} className="rounded-2xl border border-border bg-depth-sub p-3">
                 <Collapsible
-                  open={!closedCourses.has(course.id)}
+                  open={openOverrides[course.id] ?? defaultOpen}
                   onToggle={() => toggleCourse(course.id)}
                   title={
                     <span className="text-[13px] font-medium text-foreground">{course.title}</span>
@@ -207,7 +217,7 @@ export function ClassStructurePanel({
                                   }
                                   className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                 >
-                                  <ExternalLink className="h-3 w-3" strokeWidth={1.7} />
+                                  <Pencil className="h-3 w-3" strokeWidth={1.7} />
                                   Edit
                                 </button>
                               </div>

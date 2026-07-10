@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { EmptyState } from "@/components/EmptyState";
 import type {
   Assessment,
   AssessmentAttempt,
@@ -111,6 +110,16 @@ export function AssessmentGrading({
     }
   };
 
+  // Quiet day: collapse the whole queue to one slim line instead of a full card of nothing.
+  if (!reviewable.length) {
+    return (
+      <div className="rounded-3xl border border-border bg-depth-card px-4 py-3 text-[12.5px] text-muted-foreground">
+        <span className="font-medium text-foreground">Quiz attempts</span> — nothing to review;
+        student attempts will appear here.
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-3xl border border-border bg-depth-card p-4">
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
@@ -125,202 +134,199 @@ export function AssessmentGrading({
         </div>
       </div>
       {message ? (
-        <div className="mb-3 text-[12px] leading-relaxed text-muted-foreground">{message}</div>
+        <div role="status" className="mb-3 text-[12px] leading-relaxed text-muted-foreground">
+          {message}
+        </div>
       ) : null}
 
-      {reviewable.length ? (
-        <div className="grid content-start gap-3">
-          {reviewable.map((assessment) => {
-            const items = assessmentItems.filter((item) => item.assessment_id === assessment.id);
-            const recipients = assessmentRecipients.filter(
-              (recipient) => recipient.assessment_id === assessment.id,
-            );
-            const attempts = assessmentAttempts.filter(
-              (attempt) => attempt.assessment_id === assessment.id,
-            );
-            return (
-              <div
-                key={assessment.id}
-                className="rounded-2xl border border-border bg-depth-sub p-4"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13px] font-medium text-foreground">
-                      {assessment.title}
-                    </span>
-                    <AssessmentStatusChip status={assessment.status} />
-                  </div>
-                  <div className="mt-1 text-[11.5px] text-muted-foreground">
-                    {lessonTitle(lessons, assessment.lesson_id)} · {items.length} question
-                    {items.length === 1 ? "" : "s"} · {attempts.length} attempt
-                    {attempts.length === 1 ? "" : "s"}
-                    {assessment.due_at ? <> · due {formatDateTime(assessment.due_at)}</> : null}
-                  </div>
+      <div className="grid content-start gap-3">
+        {reviewable.map((assessment) => {
+          const items = assessmentItems.filter((item) => item.assessment_id === assessment.id);
+          const recipients = assessmentRecipients.filter(
+            (recipient) => recipient.assessment_id === assessment.id,
+          );
+          const attempts = assessmentAttempts.filter(
+            (attempt) => attempt.assessment_id === assessment.id,
+          );
+          return (
+            <div key={assessment.id} className="rounded-2xl border border-border bg-depth-sub p-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[13px] font-medium text-foreground">
+                    {assessment.title}
+                  </span>
+                  <AssessmentStatusChip status={assessment.status} />
                 </div>
-
-                <div className="mt-4 grid gap-2">
-                  {recipients.map((recipient) => {
-                    const profile = profilesById.get(recipient.user_id) || null;
-                    return (
-                      <div
-                        key={recipient.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-sub px-3 py-2"
-                      >
-                        <div className="text-[12.5px] text-foreground">
-                          {displayName(profile, recipient.user_id)}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <AssessmentRecipientChip status={recipient.status} />
-                          <span className="text-[11.5px] text-muted-foreground">
-                            {recipient.final_score === null
-                              ? "ungraded"
-                              : formatScore(recipient.final_score)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-4 grid gap-3">
-                  {attempts.map((attempt) => {
-                    const profile = profilesById.get(attempt.user_id) || null;
-                    const itemAttempts = assessmentItemAttempts.filter(
-                      (item) => item.assessment_attempt_id === attempt.id,
-                    );
-                    const pending = itemAttempts.some(
-                      (item) => item.review_state === "pending_review",
-                    );
-                    return (
-                      <div
-                        key={attempt.id}
-                        className="rounded-2xl border border-border bg-background/45 p-3"
-                      >
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <div className="text-[12.5px] font-medium text-foreground">
-                              {displayName(profile, attempt.user_id)}
-                            </div>
-                            <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                              {attempt.status} · {formatDateTime(attempt.created_at)}
-                            </div>
-                          </div>
-                          <span className="text-[11.5px] text-muted-foreground">
-                            {attempt.final_score === null
-                              ? "pending"
-                              : formatScore(attempt.final_score)}
-                          </span>
-                        </div>
-                        <div className="grid gap-2">
-                          {itemAttempts.map((itemAttempt) => {
-                            const quiz = quizItemsById.get(itemAttempt.quiz_item_id);
-                            const draft = reviewDrafts[itemAttempt.id] || {
-                              score:
-                                itemAttempt.score === null || itemAttempt.score === undefined
-                                  ? ""
-                                  : String(
-                                      Math.round(
-                                        (Number(itemAttempt.score || 0) /
-                                          Number(itemAttempt.max_score || 1)) *
-                                          100,
-                                      ),
-                                    ),
-                              feedback: itemAttempt.feedback || "",
-                              saving: false,
-                            };
-                            return (
-                              <div
-                                key={itemAttempt.id}
-                                className="rounded-2xl border border-border bg-background/45 p-3"
-                              >
-                                <div className="text-[12.5px] font-medium text-foreground">
-                                  {quiz?.prompt || "Question"}
-                                </div>
-                                <div className="mt-1 text-[11.5px] text-muted-foreground">
-                                  {itemAttempt.review_state.replace("_", " ")} · score{" "}
-                                  {itemAttempt.score === null
-                                    ? "pending"
-                                    : `${itemAttempt.score}/${itemAttempt.max_score}`}
-                                </div>
-                                {itemAttempt.answer_text ? (
-                                  <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
-                                    {itemAttempt.answer_text}
-                                  </p>
-                                ) : null}
-                                {itemAttempt.answer_code ? (
-                                  <pre
-                                    className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap rounded-2xl border border-border bg-[var(--code-background)] p-3 text-[12px] leading-relaxed text-[var(--code-foreground)]"
-                                    style={{
-                                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                                    }}
-                                  >
-                                    {itemAttempt.answer_code}
-                                  </pre>
-                                ) : null}
-                                {itemAttempt.review_state === "pending_review" ? (
-                                  <div className="mt-3 grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)_auto]">
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      max={100}
-                                      value={draft.score}
-                                      onChange={(event) =>
-                                        updateReviewDraft(itemAttempt.id, {
-                                          score: event.target.value,
-                                        })
-                                      }
-                                      placeholder="Score"
-                                      className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
-                                    />
-                                    <input
-                                      value={draft.feedback}
-                                      onChange={(event) =>
-                                        updateReviewDraft(itemAttempt.id, {
-                                          feedback: event.target.value,
-                                        })
-                                      }
-                                      placeholder="Feedback"
-                                      className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => void reviewItem(itemAttempt)}
-                                      disabled={draft.saving}
-                                      className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                                    >
-                                      Review
-                                    </button>
-                                  </div>
-                                ) : itemAttempt.feedback ? (
-                                  <p className="mt-2 text-[12.5px] text-muted-foreground">
-                                    {itemAttempt.feedback}
-                                  </p>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="mt-3 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => void returnAttempt(attempt)}
-                            disabled={pending || attempt.status === "returned"}
-                            className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
-                          >
-                            Return result
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="mt-1 text-[11.5px] text-muted-foreground">
+                  {lessonTitle(lessons, assessment.lesson_id)} · {items.length} question
+                  {items.length === 1 ? "" : "s"} · {attempts.length} attempt
+                  {attempts.length === 1 ? "" : "s"}
+                  {assessment.due_at ? <> · due {formatDateTime(assessment.due_at)}</> : null}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        <EmptyState>Nothing to review — quiz attempts will appear here.</EmptyState>
-      )}
+
+              <div className="mt-4 grid gap-2">
+                {recipients.map((recipient) => {
+                  const profile = profilesById.get(recipient.user_id) || null;
+                  return (
+                    <div
+                      key={recipient.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-field px-3 py-2"
+                    >
+                      <div className="text-[12.5px] text-foreground">
+                        {displayName(profile, recipient.user_id)}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AssessmentRecipientChip status={recipient.status} />
+                        <span className="text-[11.5px] text-muted-foreground">
+                          {recipient.final_score === null
+                            ? "ungraded"
+                            : formatScore(recipient.final_score)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                {attempts.map((attempt) => {
+                  const profile = profilesById.get(attempt.user_id) || null;
+                  const itemAttempts = assessmentItemAttempts.filter(
+                    (item) => item.assessment_attempt_id === attempt.id,
+                  );
+                  const pending = itemAttempts.some(
+                    (item) => item.review_state === "pending_review",
+                  );
+                  return (
+                    <div
+                      key={attempt.id}
+                      className="rounded-2xl border border-border bg-background/45 p-3"
+                    >
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="text-[12.5px] font-medium text-foreground">
+                            {displayName(profile, attempt.user_id)}
+                          </div>
+                          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                            {attempt.status} · {formatDateTime(attempt.created_at)}
+                          </div>
+                        </div>
+                        <span className="text-[11.5px] text-muted-foreground">
+                          {attempt.final_score === null
+                            ? "pending"
+                            : formatScore(attempt.final_score)}
+                        </span>
+                      </div>
+                      <div className="grid gap-2">
+                        {itemAttempts.map((itemAttempt) => {
+                          const quiz = quizItemsById.get(itemAttempt.quiz_item_id);
+                          const draft = reviewDrafts[itemAttempt.id] || {
+                            score:
+                              itemAttempt.score === null || itemAttempt.score === undefined
+                                ? ""
+                                : String(
+                                    Math.round(
+                                      (Number(itemAttempt.score || 0) /
+                                        Number(itemAttempt.max_score || 1)) *
+                                        100,
+                                    ),
+                                  ),
+                            feedback: itemAttempt.feedback || "",
+                            saving: false,
+                          };
+                          return (
+                            <div
+                              key={itemAttempt.id}
+                              className="rounded-2xl border border-border bg-background/45 p-3"
+                            >
+                              <div className="text-[12.5px] font-medium text-foreground">
+                                {quiz?.prompt || "Question"}
+                              </div>
+                              <div className="mt-1 text-[11.5px] text-muted-foreground">
+                                {itemAttempt.review_state.replace("_", " ")} · score{" "}
+                                {itemAttempt.score === null
+                                  ? "pending"
+                                  : `${itemAttempt.score}/${itemAttempt.max_score}`}
+                              </div>
+                              {itemAttempt.answer_text ? (
+                                <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                                  {itemAttempt.answer_text}
+                                </p>
+                              ) : null}
+                              {itemAttempt.answer_code ? (
+                                <pre
+                                  className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap rounded-2xl border border-border bg-[var(--code-background)] p-3 text-[12px] leading-relaxed text-[var(--code-foreground)]"
+                                  style={{
+                                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                                  }}
+                                >
+                                  {itemAttempt.answer_code}
+                                </pre>
+                              ) : null}
+                              {itemAttempt.review_state === "pending_review" ? (
+                                <div className="mt-3 grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)_auto]">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={draft.score}
+                                    onChange={(event) =>
+                                      updateReviewDraft(itemAttempt.id, {
+                                        score: event.target.value,
+                                      })
+                                    }
+                                    placeholder="Score"
+                                    aria-label="Score (0–100)"
+                                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                                  />
+                                  <input
+                                    value={draft.feedback}
+                                    onChange={(event) =>
+                                      updateReviewDraft(itemAttempt.id, {
+                                        feedback: event.target.value,
+                                      })
+                                    }
+                                    placeholder="Feedback"
+                                    aria-label="Feedback for the student"
+                                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void reviewItem(itemAttempt)}
+                                    disabled={draft.saving}
+                                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                  >
+                                    Review
+                                  </button>
+                                </div>
+                              ) : itemAttempt.feedback ? (
+                                <p className="mt-2 text-[12.5px] text-muted-foreground">
+                                  {itemAttempt.feedback}
+                                </p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void returnAttempt(attempt)}
+                          disabled={pending || attempt.status === "returned"}
+                          className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
+                        >
+                          Return result
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
