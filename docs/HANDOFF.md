@@ -6,7 +6,23 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-09 (Teacher Shell v1 — teacher portal on the student shell — FINISHED, awaiting main FF)
+## Claude -> Codex / Human - 2026-07-10 (Teacher IA v2 — classes → Overview / Students / Structure)
+
+Status: Starting
+Task: Reorganize the teacher class workspace from 7 tabs into 3 sections driven by sidebar sub-rows
+under the active class: Overview / Students + performance (roster + gradebook + the GRADING halves
+split out of AssignmentManager/AssessmentManager) / Structure + curriculum (class-scoped
+Course→Unit→Lesson tree + LinkedCoursesPanel + the builder halves + ResourceManager). The in-page
+class tab row dies; ?tab= becomes the section key with legacy-value normalization; hotlist/
+notification/ClassButton deep links remapped. Frontend-only.
+Files I expect to touch: features/teacher/TeacherConsole.tsx, features/teacher/shell/
+{TeacherSidebar,TeacherShell,teacherNav}.ts(x), features/teacher/LinkedCoursesPanel.tsx,
+components/NotificationsMenu.tsx; NEW features/teacher/{lessonStatus.ts,classShared.tsx,
+AssignmentGrading.tsx,AssessmentGrading.tsx,ClassStructurePanel.tsx}.
+Notes: 5 phases, each app-whole + gated (tsc/lint/build). Student portal, admin, WorkspaceTabs.tsx
+untouched (StudentDetail keeps its 4 tabs).
+
+## Claude -> Codex / Human - 2026-07-09 (Teacher Shell v1 — teacher portal on the student shell — SHIPPED to main, 6a7bd62)
 
 Status: Built + verified per phase (tsc 0 / lint 0 errors + 12 pre-existing warnings / build green),
 adversarially reviewed by two agents (correctness/regressions + UX/a11y/CSS-validity), confirmed

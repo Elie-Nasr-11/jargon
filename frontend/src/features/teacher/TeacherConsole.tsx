@@ -32,6 +32,28 @@ import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
 import { StudentReviewSessions } from "@/features/teacher/StudentReviewSessions";
 import { TeacherStudentMessages } from "@/features/teacher/TeacherStudentMessages";
+import {
+  checkpointIndexFor,
+  lessonProgressStatus,
+  lessonStatusClass,
+  requiredCheckpointStatus,
+  sessionProgressStatus,
+  unifiedLessonStatus,
+  unifiedStatusClass,
+  type LessonProgressStatus,
+  type UnifiedLessonStatus,
+} from "@/features/teacher/lessonStatus";
+import {
+  AssessmentRecipientChip,
+  AssessmentStatusChip,
+  AssignmentRecipientChip,
+  AssignmentStatusChip,
+  displayName,
+  formatDateTime,
+  formatScore,
+  lessonName,
+  lessonTitle,
+} from "@/features/teacher/classShared";
 import { INQUIRY_TYPE_LABELS, modeLabel } from "@/lib/modes";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { PageShell } from "@/components/PageShell";
@@ -5362,70 +5384,6 @@ function ResourceChunkStatusChip({ status }: { status: ResourceTextChunkStatus }
   );
 }
 
-function AssignmentStatusChip({ status }: { status: AssignmentStatus }) {
-  const classes =
-    status === "assigned"
-      ? "border-success/40 bg-success/12 text-success"
-      : status === "archived"
-        ? "border-border bg-background/45 text-muted-foreground"
-        : status === "recommended"
-          ? "border-info/40 bg-info/12 text-info"
-          : "border-warning/40 bg-warning/12 text-warning";
-  return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
-      {status.replace("_", " ")}
-    </span>
-  );
-}
-
-function AssignmentRecipientChip({ status }: { status: AssignmentRecipient["status"] }) {
-  const classes =
-    status === "complete"
-      ? "border-success/40 bg-success/12 text-success"
-      : status === "submitted"
-        ? "border-info/40 bg-info/12 text-info"
-        : status === "returned"
-          ? "border-warning/40 bg-warning/12 text-warning"
-          : "border-border bg-background/45 text-muted-foreground";
-  return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
-      {status}
-    </span>
-  );
-}
-
-function AssessmentStatusChip({ status }: { status: AssessmentStatus }) {
-  const classes =
-    status === "published"
-      ? "border-success/40 bg-success/12 text-success"
-      : status === "archived"
-        ? "border-border bg-background/45 text-muted-foreground"
-        : "border-warning/40 bg-warning/12 text-warning";
-  return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
-      {status}
-    </span>
-  );
-}
-
-function AssessmentRecipientChip({ status }: { status: AssessmentRecipient["status"] }) {
-  const classes =
-    status === "complete"
-      ? "border-success/40 bg-success/12 text-success"
-      : status === "submitted"
-        ? "border-info/40 bg-info/12 text-info"
-        : status === "started"
-          ? "border-info/40 bg-info/12 text-info"
-          : status === "returned"
-            ? "border-warning/40 bg-warning/12 text-warning"
-            : "border-border bg-background/45 text-muted-foreground";
-  return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
-      {status.replace("_", " ")}
-    </span>
-  );
-}
-
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
     <div className="rounded-3xl border border-border bg-depth-sub p-4">
@@ -5962,164 +5920,6 @@ function completedLessonNamesFor(
   );
 }
 
-type LessonProgressStatus = "Not started" | "Active" | "Retry" | "Complete";
-
-function sessionProgressStatus(session: LearningSession): LessonProgressStatus {
-  if (session.status === "complete") return "Complete";
-  if (session.status === "needs_retry") return "Retry";
-  return "Active";
-}
-
-function lessonProgressStatus(
-  sessions: LearningSession[],
-  studentId: string,
-  lessonId: string,
-): LessonProgressStatus {
-  const lessonSessions = sessions.filter(
-    (session) => session.user_id === studentId && session.lesson_id === lessonId,
-  );
-  if (lessonSessions.some((session) => session.status === "complete")) return "Complete";
-  if (lessonSessions.some((session) => session.status === "needs_retry")) return "Retry";
-  if (
-    lessonSessions.some(
-      (session) => session.status === "active" || session.status === "needs_rescue",
-    )
-  ) {
-    return "Active";
-  }
-  return "Not started";
-}
-
-// Per-dashboard index so the gradebook doesn't rescan dashboard.checkpoints +
-// dashboard.checkpointRecipients on every (student, lesson) cell. Built once per dashboard
-// object (WeakMap keyed on the fetch result) and reused across all cells and re-renders;
-// evicted automatically when a new fetch replaces the dashboard. Collapses requiredCheckpointStatus
-// from O(checkpoints + recipients) per call to O(required checkpoints for the lesson).
-type CheckpointIndex = {
-  requiredByLesson: Map<string, string[]>; // lesson_id -> required+live checkpoint ids
-  recipientStatus: Map<string, string>; // `${user_id}::${checkpoint_id}` -> status
-};
-const checkpointIndexCache = new WeakMap<TeacherDashboardData, CheckpointIndex>();
-
-function checkpointIndexFor(dashboard: TeacherDashboardData): CheckpointIndex {
-  const cached = checkpointIndexCache.get(dashboard);
-  if (cached) return cached;
-  const requiredByLesson = new Map<string, string[]>();
-  for (const c of dashboard.checkpoints) {
-    const live =
-      (c.kind === "assignment" && c.status === "assigned") ||
-      (c.kind === "assessment" && c.status === "published");
-    if (c.required && c.lesson_id && live) {
-      const arr = requiredByLesson.get(c.lesson_id);
-      if (arr) arr.push(c.id);
-      else requiredByLesson.set(c.lesson_id, [c.id]);
-    }
-  }
-  const recipientStatus = new Map<string, string>();
-  for (const r of dashboard.checkpointRecipients) {
-    recipientStatus.set(`${r.user_id}::${r.checkpoint_id}`, r.status);
-  }
-  const index = { requiredByLesson, recipientStatus };
-  checkpointIndexCache.set(dashboard, index);
-  return index;
-}
-
-// Reads the SAME unified `checkpoints` source as the chat runtime's completion gate
-// (loadPendingCheckpoints in supabase/functions/chat/index.ts) — so the gradebook and the
-// gate can't drift. A required checkpoint gates the lesson until the student COMPLETES it: any
-// recipient status other than `complete` (assigned/started/submitted/returned) is still
-// outstanding (parent must be live — assignment `assigned` / assessment `published`).
-// Caveat: the runtime fails CLOSED (an unreadable checkpoint read holds the lesson open via
-// pendingCheckpointsOk); the gradebook has no such signal, so if the checkpoint tables were
-// unreadable at chat time the live lesson stays gated while this view reflects the teacher's
-// current (successful) data load rather than that transient runtime state.
-function requiredCheckpointStatus(
-  dashboard: TeacherDashboardData,
-  studentId: string,
-  lessonId: string,
-): { total: number; outstanding: number } {
-  const index = checkpointIndexFor(dashboard);
-  const ids = index.requiredByLesson.get(lessonId);
-  if (!ids || !ids.length) return { total: 0, outstanding: 0 };
-  let total = 0;
-  let outstanding = 0;
-  for (const checkpointId of ids) {
-    const status = index.recipientStatus.get(`${studentId}::${checkpointId}`);
-    if (status === undefined) continue; // not assigned to this student
-    total += 1;
-    if (status !== "complete") outstanding += 1;
-  }
-  return { total, outstanding };
-}
-
-type UnifiedLessonStatus = LessonProgressStatus | "Checkpoints due";
-
-// The honest lesson status the student is actually subject to: activities AND required
-// checkpoints. Key subtlety: when activities are done but a required checkpoint remains,
-// the runtime holds the session at status "active" with a sticky `activities_complete`
-// flag (NOT status "complete") — so we key "activities finished" off that flag, and only
-// off status "complete" for genuinely-finished lessons. That lets us surface the held-open
-// state as "Checkpoints due" rather than a misleading "Active" or "Complete".
-function unifiedLessonStatus(
-  dashboard: TeacherDashboardData,
-  studentId: string,
-  lessonId: string,
-): {
-  status: UnifiedLessonStatus;
-  activities: LessonProgressStatus;
-  checkpoints: { total: number; outstanding: number };
-} {
-  const activities = lessonProgressStatus(dashboard.sessions, studentId, lessonId);
-  const checkpoints = requiredCheckpointStatus(dashboard, studentId, lessonId);
-  // Sticky across sessions (mirrors lessonProgressStatus's own `.some` completion): once a
-  // session marked the activities done, treat activities as done even if a newer session is
-  // active. `status === "complete"` implies activities were done too.
-  const activitiesDone =
-    activities === "Complete" ||
-    dashboard.sessions.some(
-      (session) =>
-        session.user_id === studentId &&
-        session.lesson_id === lessonId &&
-        session.activities_complete === true,
-    );
-
-  let status: UnifiedLessonStatus;
-  if (activitiesDone && checkpoints.outstanding > 0) {
-    // Steps finished but required checkpoints still block completion — the actionable state.
-    // Checked FIRST (before "Complete") so a required checkpoint added/reset AFTER an earlier
-    // session already reached status "complete" still surfaces here — matching the runtime,
-    // which re-holds the lesson open on the student's next turn.
-    status = "Checkpoints due";
-  } else if (activities === "Complete" || (activitiesDone && checkpoints.outstanding === 0)) {
-    // Fully complete, or all activities + required checkpoints done (runtime flips the
-    // session to "complete" on the student's next visit).
-    status = "Complete";
-  } else {
-    status = activities; // Active / Retry / Not started
-  }
-  return { status, activities, checkpoints };
-}
-
-function unifiedStatusClass(status: UnifiedLessonStatus) {
-  if (status === "Checkpoints due") {
-    return "border-warning/40 bg-warning/12 text-warning";
-  }
-  return lessonStatusClass(status);
-}
-
-function lessonStatusClass(status: LessonProgressStatus) {
-  if (status === "Complete") {
-    return "border-success/40 bg-success/12 text-success";
-  }
-  if (status === "Active") {
-    return "border-info/40 bg-info/12 text-info";
-  }
-  if (status === "Retry") {
-    return "border-warning/40 bg-warning/12 text-warning";
-  }
-  return "border-border bg-background/45 text-muted-foreground";
-}
-
 function severityClass(severity: "low" | "medium" | "high") {
   if (severity === "high") return "border-danger/35 bg-danger/10 text-danger";
   if (severity === "medium") return "border-warning/40 bg-warning/12 text-warning";
@@ -6136,20 +5936,6 @@ function masteryBarClass(score: number) {
   if (score >= 0.85) return "bg-success";
   if (score >= 0.55) return "bg-warning";
   return "bg-danger";
-}
-
-function displayName(profile: Profile | null | undefined, userId: string) {
-  return profile?.name || `Student ${userId.slice(0, 8)}`;
-}
-
-function lessonName(lessonsById: Map<string, Lesson>, lessonId: string | null | undefined) {
-  if (!lessonId) return "No lesson";
-  return lessonsById.get(lessonId)?.title || lessonId;
-}
-
-function lessonTitle(lessons: Lesson[], lessonId: string | null | undefined) {
-  if (!lessonId) return "No lesson";
-  return lessons.find((lesson) => lesson.id === lessonId)?.title || lessonId;
 }
 
 function inputModalityFromPayload(
@@ -6171,12 +5957,6 @@ function statusLabel(session: LearningSession) {
   return `${session.status} - ${session.stage} - score ${formatScore(session.score)}`;
 }
 
-function formatScore(score: number | null | undefined) {
-  if (score === null || score === undefined) return "n/a";
-  if (score <= 1) return `${Math.round(score * 100)}%`;
-  return `${Math.round(score)}%`;
-}
-
 function formatPercent(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
   return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
@@ -6191,15 +5971,6 @@ function formatPass(value: boolean | null | undefined) {
   if (value === true) return "passed";
   if (value === false) return "not passed";
   return "ungraded";
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 }
 
 function unique(values: string[]) {
