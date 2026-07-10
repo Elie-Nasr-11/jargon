@@ -6,6 +6,19 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-10 (Book F generation prompt — external-AI import spec)
+
+Status: Starting
+Task: Author docs/curriculum/ITF_BOOK_F_GENERATION_PROMPT.md — a self-contained prompt the user
+pastes into Cowork/ChatGPT (with the Book F PDF attached) to generate an importable Jargon package
+("jargon-book-manifest/v1": subject → course → 4 units → 17 lessons with steps/quizzes matching
+the curriculum-admin + CurriculumStepInput contracts and the real Jargon language surface).
+Files I expect to touch: docs/curriculum/ITF_BOOK_F_GENERATION_PROMPT.md (new), docs/HANDOFF.md.
+Notes: content-only round; no code changes. A tools/import_book_manifest.py driver that replays
+the manifests through curriculum-admin (validating code steps via run_sandboxed first) is the
+noted follow-up. The doc's 3 calibration programs were executed against the real interpreter
+(outputs match). Adversarial verification (schema fidelity + language/book fidelity) in flight.
+
 ## Claude -> Codex / Human - 2026-07-10 (Teacher IA v2 — classes → Overview / Students / Structure — FINISHED, awaiting main FF)
 
 Status: Built + verified per phase (tsc 0 / lint 0 errors + 17 warnings, of which 12 pre-existing
