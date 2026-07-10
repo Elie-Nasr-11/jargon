@@ -35,15 +35,11 @@ import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
 import { AssessmentGrading } from "@/features/teacher/AssessmentGrading";
 import { ClassStructurePanel } from "@/features/teacher/ClassStructurePanel";
 import {
-  checkpointIndexFor,
-  lessonProgressStatus,
   lessonStatusClass,
   requiredCheckpointStatus,
   sessionProgressStatus,
   unifiedLessonStatus,
   unifiedStatusClass,
-  type LessonProgressStatus,
-  type UnifiedLessonStatus,
 } from "@/features/teacher/lessonStatus";
 import {
   AssessmentRecipientChip,
@@ -3220,6 +3216,33 @@ function AssessmentManager({
                       />
                     </div>
                   </div>
+
+                  {/* Who this quiz went to and where each recipient stands — the only class-level
+                      view of "assigned but not yet attempted" (the grading queue starts at the
+                      first attempt). */}
+                  <div className="mt-4 grid gap-2">
+                    {recipients.map((recipient) => {
+                      const profile = profilesById.get(recipient.user_id) || null;
+                      return (
+                        <div
+                          key={recipient.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-field px-3 py-2"
+                        >
+                          <div className="text-[12.5px] text-foreground">
+                            {displayName(profile, recipient.user_id)}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <AssessmentRecipientChip status={recipient.status} />
+                            <span className="text-[11.5px] text-muted-foreground">
+                              {recipient.final_score === null
+                                ? "ungraded"
+                                : formatScore(recipient.final_score)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })
@@ -3608,6 +3631,31 @@ function AssignmentManager({
                         ]}
                       />
                     </div>
+                  </div>
+
+                  {/* Who this assignment went to and where each recipient stands — the only
+                      class-level view of "assigned but not yet submitted" (the grading queue
+                      starts at the first submission). */}
+                  <div className="mt-4 grid gap-2">
+                    {assignmentRecipients.map((recipient) => {
+                      const profile = profilesById.get(recipient.user_id) || null;
+                      return (
+                        <div
+                          key={recipient.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-field px-3 py-2"
+                        >
+                          <div className="text-[12.5px] text-foreground">
+                            {displayName(profile, recipient.user_id)}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <AssignmentRecipientChip status={recipient.status} />
+                            <span className="text-[11.5px] text-muted-foreground">
+                              {recipient.score === null ? "ungraded" : formatScore(recipient.score)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );

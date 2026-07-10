@@ -6,9 +6,65 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-10 (Teacher IA v2 — classes → Overview / Students / Structure)
+## Claude -> Codex / Human - 2026-07-10 (Teacher IA v2 — classes → Overview / Students / Structure — FINISHED, awaiting main FF)
 
-Status: Starting
+Status: Built + verified per phase (tsc 0 / lint 0 errors + 17 warnings, of which 12 pre-existing
+and 5 are react-refresh advisories inherent to the new shared-helpers module / build green),
+adversarially reviewed by two agents (correctness/regressions + UX/a11y), confirmed findings
+folded. 7 commits on claude/happy-johnson-wseex8. Frontend-only; zero routeTree/backend changes;
+student portal, admin, and WorkspaceTabs.tsx untouched (grep-verified). ONE main fast-forward
+pending user OK.
+
+Summary — the teacher class workspace is now the flow the user asked for: classes → (Overview /
+Students & performance / Structure & curriculum), driven by sidebar sub-rows:
+1. NEW lessonStatus.ts + classShared.tsx: pure moves of the TC-private unifiedLessonStatus family
+   (with the WeakMap checkpoint index) and display helpers/status chips, so new files share them.
+2. Managers split: NEW AssignmentGrading.tsx / AssessmentGrading.tsx carry the submission/attempt
+   review UI (own reviewDrafts state, per-class key); the in-place builders keep the create forms,
+   status controls, and (post-review re-add) the per-recipient status strips — the class-level
+   "assigned but not yet submitted" view. Grading queues show any work with ≥1 submission/attempt
+   INCLUDING archived parents (filtering them dead-ended hotlist/bell deep links); empty queues
+   collapse to one slim line each.
+3. NEW ClassStructurePanel.tsx: class-scoped Course→Unit→Lesson tree (fetchClassCourses scoping
+   with fetchClassScopedLessons semantics — empty link set = full catalog, labeled "all courses";
+   fetch errors labeled honestly), draft/archived chips, honest X/Y-complete per lesson via
+   unifiedLessonStatus over the roster, per-lesson Gradebook (scrolls the gradebook into view
+   after the section flip) + Edit-in-curriculum deep link. LinkedCoursesPanel moved in beneath the
+   tree with a new onSaved callback that re-scopes the tree live. Courses default-closed when >3.
+4. The IA flip: ?tab= carries the section (teacherNav ClassSection/CLASS_SECTIONS/
+   normalizeClassSection maps all seven legacy values — assignments/assessments/gradebook/roster →
+   students, lessons/resources → structure); the 7-tab strip and forceMount panels died; ClassDetail
+   conditionally renders ONE section under the persistent class header (name/Export CSV/metrics) +
+   sr-only section headings. Sidebar: three section rows under the active class (role=group,
+   aria-current, drawer auto-close = mobile switcher; the active class's org Collapsible is held
+   open while inside it). Deep links remapped: hotlist + bell grading kinds → students; class-card
+   warning → students; student back pill → students. Student drill-down route + its 4 tabs
+   untouched.
+
+Files changed: features/teacher/{TeacherConsole.tsx (net ~-800 lines), AssignmentGrading.tsx (new),
+AssessmentGrading.tsx (new), ClassStructurePanel.tsx (new), classShared.tsx (new), lessonStatus.ts
+(new), LinkedCoursesPanel.tsx (+onSaved), shell/{TeacherSidebar,TeacherShell,teacherNav}},
+components/NotificationsMenu.tsx (2 deep links), docs/HANDOFF.md.
+
+Tests run: npx tsc --noEmit, npm run lint, npm run build per phase; adversarial review x2 on the
+combined diff; full authenticated render not reproducible in this env — user does the live pass.
+
+Remaining concerns (accepted/follow-ups):
+- Cross-section switches unmount the previous section: in-progress builder drafts / chunk-QA runs
+  are lost on an explicit section move (old forceMount kept them). Follow-up: dirty-state guard.
+- Mobile section switching costs a drawer round-trip (no in-page pills); collapsed desktop sidebar
+  hides the switcher behind the reopen chip. Follow-up candidate: <lg-only compact pill row.
+- Structure's X/Y-complete does a sessions scan per (lesson,student) like the roster grid; fine at
+  pilot scale — follow-up: a per-dashboard sessions index in lessonStatus.ts if profiling hurts.
+- Pre-existing debt now living in the grading files: window.prompt for return feedback,
+  placeholder-only inputs got aria-labels but no visible labels, submission text nests same-token
+  backgrounds.
+- Old lessons-tab per-lesson artifact counts (N resources/assignments/assessments) have no home in
+  the new IA (structure tree shows publish + progress instead) — restore in a content round if
+  missed.
+
+Suggested next task: user live pass → content-surface redesign round (landing/class/student page
+internals) on top of the new IA.
 Task: Reorganize the teacher class workspace from 7 tabs into 3 sections driven by sidebar sub-rows
 under the active class: Overview / Students + performance (roster + gradebook + the GRADING halves
 split out of AssignmentManager/AssessmentManager) / Structure + curriculum (class-scoped

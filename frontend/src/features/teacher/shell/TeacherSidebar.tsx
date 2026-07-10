@@ -250,7 +250,10 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
             list stays scannable and the active class's org is open. */}
         {groups.length > 1
           ? groups.map(([org, list]) => {
-              const open = openOrgs[org] ?? false;
+              // The org holding the active class stays open while you're inside it — otherwise
+              // closing it would hide the only section switcher for the page you're on.
+              const containsActive = list.some((c) => c.id === activeClassId);
+              const open = containsActive || (openOrgs[org] ?? false);
               return (
                 <Collapsible
                   key={org}

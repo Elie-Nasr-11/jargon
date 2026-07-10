@@ -49,10 +49,11 @@ export function AssignmentGrading({
     Record<string, { score: string; feedback: string; saving: boolean }>
   >({});
 
-  const gradable = assignments.filter(
-    (assignment) =>
-      assignment.status !== "archived" &&
-      submissions.some((submission) => submission.assignment_id === assignment.id),
+  // Any assignment with submitted work is gradable — including archived ones (the hotlist/bell
+  // emit items for any submitted row regardless of parent status; filtering archived out here
+  // would dead-end those deep links and leave the submission ungradable anywhere).
+  const gradable = assignments.filter((assignment) =>
+    submissions.some((submission) => submission.assignment_id === assignment.id),
   );
 
   const openFile = async (file: AssignmentSubmissionFile) => {

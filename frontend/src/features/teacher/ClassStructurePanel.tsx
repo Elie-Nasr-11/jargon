@@ -164,7 +164,10 @@ export function ClassStructurePanel({
                 >
                   {course.units.map((unit) => (
                     <div key={unit.unitId}>
-                      {course.units.length > 1 || unit.unitTitle !== course.title ? (
+                      {/* The "__none__" bucket's lessons have no unit — groupByUnit's "Lessons"
+                          fallback header would just restate the bucket. */}
+                      {course.units.length > 1 ||
+                      (course.id !== "__none__" && unit.unitTitle !== course.title) ? (
                         <div className="mb-1 mt-1 px-1.5 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
                           {unit.unitTitle}
                         </div>
