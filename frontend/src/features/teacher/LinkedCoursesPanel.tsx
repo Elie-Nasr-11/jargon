@@ -8,7 +8,15 @@ import type { Lesson } from "@/lib/types";
 // an empty link set means no scoping (the full published catalog). Available courses are derived
 // from the lessons already in the teacher's dashboard scope — no extra fetch. The write goes
 // through curriculum-admin `set_class_courses` (auditable, re-checks author access server-side).
-export function LinkedCoursesPanel({ classId, lessons }: { classId: string; lessons: Lesson[] }) {
+export function LinkedCoursesPanel({
+  classId,
+  lessons,
+  onSaved,
+}: {
+  classId: string;
+  lessons: Lesson[];
+  onSaved?: (courseIds: string[]) => void;
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [initial, setInitial] = useState<Set<string>>(new Set());
 
@@ -81,6 +89,7 @@ export function LinkedCoursesPanel({ classId, lessons }: { classId: string; less
       const courseIds = Array.from(selected);
       await setClassCourses({ accessToken: session.access_token, classId, courseIds });
       setInitial(new Set(courseIds));
+      onSaved?.(courseIds);
       setStatus(
         courseIds.length
           ? "Saved — students in this class now see only these courses."
