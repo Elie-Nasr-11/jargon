@@ -3,6 +3,7 @@ import { Menu, PanelLeft } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { NotificationsMenu } from "@/components/NotificationsMenu";
 import { TeacherSidebar } from "./TeacherSidebar";
+import type { ClassSection } from "./teacherNav";
 import type { TeacherClassSummary } from "@/lib/types";
 
 // The teacher portal's chromeless root — the teacher twin of the student /chat shell: one left
@@ -17,12 +18,14 @@ export function TeacherShell({
   classes,
   activeView,
   activeClassId = null,
+  activeSection = null,
   children,
 }: {
   email: string;
   classes: TeacherClassSummary[];
   activeView: "home" | "class" | "curriculum";
   activeClassId?: string | null;
+  activeSection?: ClassSection | null;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -70,6 +73,7 @@ export function TeacherShell({
         classes={classes}
         activeView={activeView}
         activeClassId={activeClassId}
+        activeSection={activeSection}
         drawerOpen={drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
         collapsed={collapsed}

@@ -18,7 +18,7 @@ import { useTheme } from "@/lib/theme";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 import type { TeacherClassSummary } from "@/lib/types";
-import { groupClassesByOrg } from "./teacherNav";
+import { CLASS_SECTIONS, groupClassesByOrg, type ClassSection } from "./teacherNav";
 
 // The teacher shell's left column — the teacher sibling of the student AppSidebar, same anatomy:
 // wordmark, primary nav rows (Home / Curriculum), a scrollable classes list (grouped by org when
@@ -99,6 +99,8 @@ export type TeacherSidebarProps = {
   classes: TeacherClassSummary[];
   activeView: "home" | "class" | "curriculum";
   activeClassId: string | null;
+  // Which of the active class's sections is on screen; null outside the class routes.
+  activeSection?: ClassSection | null;
   drawerOpen: boolean;
   onCloseDrawer: () => void;
   collapsed: boolean;
@@ -108,7 +110,15 @@ export type TeacherSidebarProps = {
 // The whole column, shared by the desktop aside and the mobile drawer. Account-menu state is
 // per-instance (each instance anchors its own popover to its own account row).
 function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDrawer: boolean }) {
-  const { email, classes, activeView, activeClassId, onCloseDrawer, onToggleCollapse } = props;
+  const {
+    email,
+    classes,
+    activeView,
+    activeClassId,
+    activeSection,
+    onCloseDrawer,
+    onToggleCollapse,
+  } = props;
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutError, setLogoutError] = useState(false);
   const [openOrgs, setOpenOrgs] = useState<Record<string, boolean>>({});
@@ -132,22 +142,57 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
     if (currentOrg) setOpenOrgs((s) => (s[currentOrg] ? s : { ...s, [currentOrg]: true }));
   }, [activeClassId, groups]);
 
+  // The flow spine: the active class expands into its three section rows (Overview / Students /
+  // Structure) right in the list — always visible while you're in the class, no extra disclosure.
+  // The class row itself stays a nav button (lands on the section you're already in, or Overview).
   const classRow = (cls: TeacherClassSummary) => {
     const active = cls.id === activeClassId;
     return (
-      <button
-        key={cls.id}
-        type="button"
-        onClick={go(() => navigate({ to: "/teacher/class/$classId", params: { classId: cls.id } }))}
-        aria-current={active ? "true" : undefined}
-        className={`flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) ${
-          active
-            ? "bg-muted font-medium text-foreground"
-            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-        }`}
-      >
-        <span className="min-w-0 flex-1 truncate">{cls.name}</span>
-      </button>
+      <div key={cls.id}>
+        <button
+          type="button"
+          onClick={go(() =>
+            navigate({ to: "/teacher/class/$classId", params: { classId: cls.id } }),
+          )}
+          aria-current={active && !activeSection ? "true" : undefined}
+          className={`flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) ${
+            active
+              ? "font-medium text-foreground"
+              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+          }`}
+        >
+          <span className="min-w-0 flex-1 truncate">{cls.name}</span>
+        </button>
+        {active ? (
+          <div
+            role="group"
+            aria-label={`${cls.name} sections`}
+            className="mb-1 ml-3 border-l border-border/60 pl-1.5"
+          >
+            {CLASS_SECTIONS.map((section) => (
+              <button
+                key={section.value}
+                type="button"
+                onClick={go(() =>
+                  navigate({
+                    to: "/teacher/class/$classId",
+                    params: { classId: cls.id },
+                    search: { tab: section.value },
+                  }),
+                )}
+                aria-current={activeSection === section.value ? "page" : undefined}
+                className={`flex w-full items-center rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) ${
+                  activeSection === section.value
+                    ? "bg-muted font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate">{section.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
     );
   };
 

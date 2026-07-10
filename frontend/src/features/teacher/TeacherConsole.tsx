@@ -58,9 +58,15 @@ import {
 } from "@/features/teacher/classShared";
 import { INQUIRY_TYPE_LABELS, modeLabel } from "@/lib/modes";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
+import { Collapsible } from "@/components/Collapsible";
 import { PageShell } from "@/components/PageShell";
 import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
-import { groupClassesByOrg, organizationName } from "@/features/teacher/shell/teacherNav";
+import {
+  groupClassesByOrg,
+  normalizeClassSection,
+  organizationName,
+  type ClassSection,
+} from "@/features/teacher/shell/teacherNav";
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { OverflowMenu } from "@/components/OverflowMenu";
@@ -323,16 +329,15 @@ export function TeacherConsole() {
           search: { tab: "overview" },
         });
       } else if (item.classId) {
+        // Grading now lives in the class's Students + performance section.
         navigate({
           to: "/teacher/class/$classId",
           params: { classId: item.classId },
           search: {
             tab:
-              item.kind === "submission_to_grade"
-                ? "assignments"
-                : item.kind === "assessment_to_review"
-                  ? "assessments"
-                  : "overview",
+              item.kind === "submission_to_grade" || item.kind === "assessment_to_review"
+                ? "students"
+                : "overview",
           },
         });
       }
@@ -917,6 +922,9 @@ export function TeacherConsole() {
       classes={dashboard?.classes ?? []}
       activeView={selectedClassId || selectedStudentId ? "class" : "home"}
       activeClassId={selectedClassId}
+      activeSection={
+        selectedStudentId ? "students" : selectedClassId ? normalizeClassSection(search.tab) : null
+      }
     >
       {/* Keyed per navigation level so the page's entrance fade + focus handoff re-run on
           landing → class → student moves, like the student views. */}
@@ -929,6 +937,8 @@ export function TeacherConsole() {
                 navigate({
                   to: "/teacher/class/$classId",
                   params: { classId: selectedClassId ?? "" },
+                  // The drill-down lives under Students + performance — land back there.
+                  search: { tab: "students" },
                 })
             : selectedClassId
               ? () => navigate({ to: "/teacher" })
@@ -1036,7 +1046,7 @@ export function TeacherConsole() {
                                           params: { classId: item.id },
                                           search:
                                             attention.tone === "warning"
-                                              ? { tab: "gradebook" }
+                                              ? { tab: "students" }
                                               : undefined,
                                         })
                                       }
@@ -1091,8 +1101,8 @@ export function TeacherConsole() {
                           params: { classId: selectedClass.id, studentId },
                         })
                       }
-                      tab={search.tab ?? "overview"}
-                      onTabChange={(value) =>
+                      section={normalizeClassSection(search.tab)}
+                      onSectionChange={(value) =>
                         navigate({
                           to: "/teacher/class/$classId",
                           params: { classId: selectedClass.id },
@@ -1294,8 +1304,8 @@ function ClassDetail({
   updatingAlertId,
   onUpdateAlertStatus,
   onUpdateResource,
-  tab,
-  onTabChange,
+  section,
+  onSectionChange,
 }: {
   item: TeacherClassSummary;
   stats: ClassSummary;
@@ -1346,13 +1356,15 @@ function ClassDetail({
   updatingAlertId: string | null;
   onUpdateAlertStatus: (alertId: string, status: InterventionAlert["status"]) => void;
   onUpdateResource: (resource: LessonResource) => void;
-  tab?: string;
-  onTabChange?: (value: string) => void;
+  section: ClassSection;
+  onSectionChange: (value: ClassSection) => void;
 }) {
-  const [localTab, setLocalTab] = useState("overview");
-  const classTab = tab ?? localTab;
-  const setClassTab = (value: string) => (onTabChange ? onTabChange(value) : setLocalTab(value));
   const navigate = useNavigate();
+  // Structure's three authoring benches, folded by default (state is per-visit; Collapsible
+  // keeps the children mounted either way).
+  const [openBuilders, setOpenBuilders] = useState<Record<string, boolean>>({});
+  const toggleBuilder = (key: string) =>
+    setOpenBuilders((current) => ({ ...current, [key]: !current[key] }));
   const studentSet = useMemo(() => new Set(studentIds), [studentIds]);
   const openAlerts = dashboard.interventionAlerts.filter(
     (alert) =>
@@ -1408,18 +1420,12 @@ function ClassDetail({
           </div>
         </div>
 
-        <Tabs value={classTab} onValueChange={setClassTab}>
-          <WorkspaceTabList>
-            <WorkspaceTab value="overview">Overview</WorkspaceTab>
-            <WorkspaceTab value="lessons">Lessons</WorkspaceTab>
-            <WorkspaceTab value="gradebook">Gradebook</WorkspaceTab>
-            <WorkspaceTab value="roster">Roster</WorkspaceTab>
-            <WorkspaceTab value="resources">Resources</WorkspaceTab>
-            <WorkspaceTab value="assignments">Assignments</WorkspaceTab>
-            <WorkspaceTab value="assessments">Assessments</WorkspaceTab>
-          </WorkspaceTabList>
-
-          <WorkspacePanel value="overview">
+        {/* One section at a time — the sidebar's sub-rows under the active class are the
+            switcher (the old 7-tab strip is gone). Sections unmount on switch; the builders
+            live together with their consumers in Structure, so in-progress drafts only reset
+            on an explicit cross-section move. */}
+        {section === "overview" ? (
+          <div className="mt-4">
             <ClassOverviewStrips
               classId={item.id}
               dashboard={dashboard}
@@ -1464,63 +1470,25 @@ function ClassDetail({
               updatingAlertId={updatingAlertId}
               onUpdateAlertStatus={onUpdateAlertStatus}
             />
-          </WorkspacePanel>
+          </div>
+        ) : null}
 
-          <WorkspacePanel value="lessons">
-            <ClassStructurePanel
-              classId={item.id}
-              lessons={lessons}
-              dashboard={dashboard}
-              studentIds={studentIds}
-              onOpenGradebook={(lessonId) => {
-                onSelectLesson(lessonId);
-                setClassTab("gradebook");
-              }}
-            />
-          </WorkspacePanel>
-
-          <WorkspacePanel value="gradebook">
-            <GradebookTable
-              lessons={lessons}
-              lessonsById={lessonsById}
-              studentIds={studentIds}
-              dashboard={dashboard}
-              profilesById={profilesById}
-              selectedLessonId={selectedLessonId}
-              selectedStudentId={selectedStudentId}
-              onSelectLesson={onSelectLesson}
-              onSelectStudent={onSelectStudent}
-            />
-          </WorkspacePanel>
-
-          <WorkspacePanel value="resources">
-            <ResourceManager
-              classSummary={item}
-              lessons={lessons}
-              resources={resources}
-              saving={savingResource}
-              onSaveResource={onSaveResource}
-              onUpdateResource={onUpdateResource}
-            />
-          </WorkspacePanel>
-
-          <WorkspacePanel value="assessments">
-            <AssessmentManager
-              classSummary={item}
-              lessons={lessons}
-              quizItems={quizItems}
-              assessments={assessments}
-              assessmentItems={assessmentItems}
-              assessmentRecipients={assessmentRecipients}
-              studentIds={studentIds}
-              profilesById={profilesById}
-              saving={savingAssessment}
-              onSaveAssessment={onSaveAssessment}
-              onSetAssessmentStatus={onSetAssessmentStatus}
-            />
-            <div className="mt-4">
-              <AssessmentGrading
+        {/* Grading queues lead — they're what the bell and hotlist deep-link to. */}
+        {section === "students" ? (
+          <div className="mt-4">
+            <div className="grid gap-4">
+              <AssignmentGrading
                 key={item.id}
+                assignments={assignments}
+                recipients={assignmentRecipients}
+                submissions={assignmentSubmissions}
+                files={assignmentSubmissionFiles}
+                profilesById={profilesById}
+                lessons={lessons}
+                onReviewSubmission={onReviewSubmission}
+              />
+              <AssessmentGrading
+                key={`${item.id}:assessments`}
                 assessments={assessments}
                 assessmentItems={assessmentItems}
                 assessmentRecipients={assessmentRecipients}
@@ -1533,37 +1501,19 @@ function ClassDetail({
                 onReturnAssessment={onReturnAssessment}
               />
             </div>
-          </WorkspacePanel>
 
-          <WorkspacePanel value="assignments">
-            <AssignmentManager
-              classSummary={item}
+            <GradebookTable
               lessons={lessons}
-              resources={resources}
-              assignments={assignments}
-              recipients={assignmentRecipients}
-              submissions={assignmentSubmissions}
+              lessonsById={lessonsById}
               studentIds={studentIds}
+              dashboard={dashboard}
               profilesById={profilesById}
-              saving={savingAssignment}
-              onSaveAssignment={onSaveAssignment}
-              onSetAssignmentStatus={onSetAssignmentStatus}
+              selectedLessonId={selectedLessonId}
+              selectedStudentId={selectedStudentId}
+              onSelectLesson={onSelectLesson}
+              onSelectStudent={onSelectStudent}
             />
-            <div className="mt-4">
-              <AssignmentGrading
-                key={item.id}
-                assignments={assignments}
-                recipients={assignmentRecipients}
-                submissions={assignmentSubmissions}
-                files={assignmentSubmissionFiles}
-                profilesById={profilesById}
-                lessons={lessons}
-                onReviewSubmission={onReviewSubmission}
-              />
-            </div>
-          </WorkspacePanel>
 
-          <WorkspacePanel value="roster">
             <div className="mt-5 grid gap-3">
               {studentIds.length ? (
                 studentIds.map((studentId) => {
@@ -1627,8 +1577,114 @@ function ClassDetail({
               dashboard={dashboard}
               profilesById={profilesById}
             />
-          </WorkspacePanel>
-        </Tabs>
+          </div>
+        ) : null}
+
+        {section === "structure" ? (
+          <div className="mt-4">
+            <ClassStructurePanel
+              classId={item.id}
+              lessons={lessons}
+              dashboard={dashboard}
+              studentIds={studentIds}
+              onOpenGradebook={(lessonId) => {
+                onSelectLesson(lessonId);
+                onSectionChange("students");
+              }}
+            />
+
+            {/* The authoring benches, folded by default so the section reads as one screen:
+                structure tree → course scoping → three compact builder rows. Collapsible keeps
+                children mounted (height-0 + inert), so builder drafts and chunk-QA state
+                survive folding. */}
+            <div className="mt-4 rounded-3xl border border-border bg-depth-card p-4">
+              <div className="mb-2">
+                <h3 className="text-[15px] font-medium text-foreground">Build for this class</h3>
+                <p className="text-[12.5px] text-muted-foreground">
+                  Resources, assignments, and quizzes you author for these lessons. Submitted work
+                  is graded under Students &amp; performance.
+                </p>
+              </div>
+              <div className="grid gap-1">
+                <Collapsible
+                  open={!!openBuilders.resources}
+                  onToggle={() => toggleBuilder("resources")}
+                  title={<span className="text-[13px] font-medium text-foreground">Resources</span>}
+                  meta={
+                    <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                      {resources.length}
+                    </span>
+                  }
+                  headerClassName="rounded-xl px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  bodyClassName="pb-2"
+                >
+                  <ResourceManager
+                    classSummary={item}
+                    lessons={lessons}
+                    resources={resources}
+                    saving={savingResource}
+                    onSaveResource={onSaveResource}
+                    onUpdateResource={onUpdateResource}
+                  />
+                </Collapsible>
+                <Collapsible
+                  open={!!openBuilders.assignments}
+                  onToggle={() => toggleBuilder("assignments")}
+                  title={
+                    <span className="text-[13px] font-medium text-foreground">Assignments</span>
+                  }
+                  meta={
+                    <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                      {assignments.length}
+                    </span>
+                  }
+                  headerClassName="rounded-xl px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  bodyClassName="pb-2"
+                >
+                  <AssignmentManager
+                    classSummary={item}
+                    lessons={lessons}
+                    resources={resources}
+                    assignments={assignments}
+                    recipients={assignmentRecipients}
+                    submissions={assignmentSubmissions}
+                    studentIds={studentIds}
+                    profilesById={profilesById}
+                    saving={savingAssignment}
+                    onSaveAssignment={onSaveAssignment}
+                    onSetAssignmentStatus={onSetAssignmentStatus}
+                  />
+                </Collapsible>
+                <Collapsible
+                  open={!!openBuilders.assessments}
+                  onToggle={() => toggleBuilder("assessments")}
+                  title={<span className="text-[13px] font-medium text-foreground">Quizzes</span>}
+                  meta={
+                    <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                      {assessments.length}
+                    </span>
+                  }
+                  headerClassName="rounded-xl px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  bodyClassName="pb-2"
+                >
+                  <AssessmentManager
+                    classSummary={item}
+                    lessons={lessons}
+                    quizItems={quizItems}
+                    assessments={assessments}
+                    assessmentItems={assessmentItems}
+                    assessmentRecipients={assessmentRecipients}
+                    studentIds={studentIds}
+                    profilesById={profilesById}
+                    saving={savingAssessment}
+                    onSaveAssessment={onSaveAssessment}
+                    onSetAssessmentStatus={onSetAssessmentStatus}
+                  />
+                </Collapsible>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </GradientCard>
   );

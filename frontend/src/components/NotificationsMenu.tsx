@@ -111,8 +111,8 @@ export function NotificationsMenu() {
       void markNotificationRead(n.id).catch(() => {});
     }
     // Deep-link each kind to the surface where the teacher can act on it:
-    //  - assessment_to_review → the class Assessments tab (review/return controls live there)
-    //  - submission_to_grade → the class Assignments tab (grading lives there)
+    //  - assessment_to_review / submission_to_grade → the class's Students + performance
+    //    section (both grading queues live at its top)
     //  - mentor_recommendation → the student's transcript (to see where they're stuck)
     //  - direct_message → the student's Messages tab (reply to the DM)
     if (n.kind === "direct_message" && n.class_id && n.related_student_id) {
@@ -121,17 +121,14 @@ export function NotificationsMenu() {
         params: { classId: n.class_id, studentId: n.related_student_id },
         search: { tab: "messages" },
       });
-    } else if (n.kind === "assessment_to_review" && n.class_id) {
+    } else if (
+      (n.kind === "assessment_to_review" || n.kind === "submission_to_grade") &&
+      n.class_id
+    ) {
       navigate({
         to: "/teacher/class/$classId",
         params: { classId: n.class_id },
-        search: { tab: "assessments" },
-      });
-    } else if (n.kind === "submission_to_grade" && n.class_id) {
-      navigate({
-        to: "/teacher/class/$classId",
-        params: { classId: n.class_id },
-        search: { tab: "assignments" },
+        search: { tab: "students" },
       });
     } else if (n.kind === "mentor_recommendation" && n.class_id && n.related_student_id) {
       navigate({
