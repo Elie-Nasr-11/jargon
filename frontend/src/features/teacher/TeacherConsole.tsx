@@ -32,6 +32,8 @@ import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
 import { StudentReviewSessions } from "@/features/teacher/StudentReviewSessions";
 import { TeacherStudentMessages } from "@/features/teacher/TeacherStudentMessages";
+import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
+import { AssessmentGrading } from "@/features/teacher/AssessmentGrading";
 import {
   checkpointIndexFor,
   lessonProgressStatus,
@@ -75,8 +77,6 @@ import {
   fetchTeacherDashboard,
   fetchResourceTextChunks,
   getResourcePageAssetSignedUrl,
-  getSubmissionFileSignedUrl,
-  submissionFileState,
   gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
   getSession,
@@ -1610,16 +1610,27 @@ function ClassDetail({
               assessments={assessments}
               assessmentItems={assessmentItems}
               assessmentRecipients={assessmentRecipients}
-              assessmentAttempts={assessmentAttempts}
-              assessmentItemAttempts={assessmentItemAttempts}
               studentIds={studentIds}
               profilesById={profilesById}
               saving={savingAssessment}
               onSaveAssessment={onSaveAssessment}
               onSetAssessmentStatus={onSetAssessmentStatus}
-              onReviewAssessmentItem={onReviewAssessmentItem}
-              onReturnAssessment={onReturnAssessment}
             />
+            <div className="mt-4">
+              <AssessmentGrading
+                key={item.id}
+                assessments={assessments}
+                assessmentItems={assessmentItems}
+                assessmentRecipients={assessmentRecipients}
+                assessmentAttempts={assessmentAttempts}
+                assessmentItemAttempts={assessmentItemAttempts}
+                quizItems={quizItems}
+                profilesById={profilesById}
+                lessons={lessons}
+                onReviewAssessmentItem={onReviewAssessmentItem}
+                onReturnAssessment={onReturnAssessment}
+              />
+            </div>
           </WorkspacePanel>
 
           <WorkspacePanel value="assignments">
@@ -1630,14 +1641,24 @@ function ClassDetail({
               assignments={assignments}
               recipients={assignmentRecipients}
               submissions={assignmentSubmissions}
-              files={assignmentSubmissionFiles}
               studentIds={studentIds}
               profilesById={profilesById}
               saving={savingAssignment}
               onSaveAssignment={onSaveAssignment}
               onSetAssignmentStatus={onSetAssignmentStatus}
-              onReviewSubmission={onReviewSubmission}
             />
+            <div className="mt-4">
+              <AssignmentGrading
+                key={item.id}
+                assignments={assignments}
+                recipients={assignmentRecipients}
+                submissions={assignmentSubmissions}
+                files={assignmentSubmissionFiles}
+                profilesById={profilesById}
+                lessons={lessons}
+                onReviewSubmission={onReviewSubmission}
+              />
+            </div>
           </WorkspacePanel>
 
           <WorkspacePanel value="roster">
@@ -2784,15 +2805,11 @@ function AssessmentManager({
   assessments,
   assessmentItems,
   assessmentRecipients,
-  assessmentAttempts,
-  assessmentItemAttempts,
   studentIds,
   profilesById,
   saving,
   onSaveAssessment,
   onSetAssessmentStatus,
-  onReviewAssessmentItem,
-  onReturnAssessment,
 }: {
   classSummary: TeacherClassSummary;
   lessons: Lesson[];
@@ -2800,31 +2817,16 @@ function AssessmentManager({
   assessments: Assessment[];
   assessmentItems: AssessmentItem[];
   assessmentRecipients: AssessmentRecipient[];
-  assessmentAttempts: AssessmentAttempt[];
-  assessmentItemAttempts: AssessmentItemAttempt[];
   studentIds: string[];
   profilesById: Map<string, Profile>;
   saving: boolean;
   onSaveAssessment: (input: AssessmentFormValues) => Promise<void>;
   onSetAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
-  onReviewAssessmentItem: (input: {
-    itemAttemptId: string;
-    scorePercent: number;
-    feedback: string;
-  }) => Promise<void>;
-  onReturnAssessment: (input: { attemptId: string; feedback: string }) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<AssessmentFormValues>(() =>
     defaultAssessmentForm(classSummary, lessons, studentIds),
   );
   const [assessmentMessage, setAssessmentMessage] = useState("");
-  const [reviewDrafts, setReviewDrafts] = useState<
-    Record<string, { score: string; feedback: string; saving: boolean }>
-  >({});
-  const quizItemsById = useMemo(
-    () => new Map(quizItems.map((quiz) => [quiz.id, quiz])),
-    [quizItems],
-  );
   const lessonQuizItems = quizItems.filter(
     (quiz) => quiz.lesson_id === draft.lessonId && quiz.status !== "archived",
   );
@@ -2832,7 +2834,6 @@ function AssessmentManager({
   useEffect(() => {
     setDraft(defaultAssessmentForm(classSummary, lessons, studentIds));
     setAssessmentMessage("");
-    setReviewDrafts({});
   }, [classSummary, lessons, studentIds]);
 
   const setField = <K extends keyof AssessmentFormValues>(key: K, value: AssessmentFormValues[K]) =>
@@ -2897,53 +2898,6 @@ function AssessmentManager({
       setDraft(defaultAssessmentForm(classSummary, lessons, studentIds));
     } catch (error) {
       setAssessmentMessage((error as Error).message || "Could not create quiz.");
-    }
-  };
-
-  const updateReviewDraft = (
-    itemAttemptId: string,
-    patch: Partial<{ score: string; feedback: string; saving: boolean }>,
-  ) => {
-    setReviewDrafts((current) => ({
-      ...current,
-      [itemAttemptId]: {
-        score: current[itemAttemptId]?.score || "",
-        feedback: current[itemAttemptId]?.feedback || "",
-        saving: current[itemAttemptId]?.saving || false,
-        ...patch,
-      },
-    }));
-  };
-
-  const reviewItem = async (itemAttempt: AssessmentItemAttempt) => {
-    const draft = reviewDrafts[itemAttempt.id] || { score: "", feedback: "", saving: false };
-    const score = Number(draft.score);
-    if (!Number.isFinite(score) || score < 0 || score > 100) {
-      setAssessmentMessage("Enter a score from 0 to 100 before reviewing the question.");
-      return;
-    }
-    updateReviewDraft(itemAttempt.id, { saving: true });
-    try {
-      await onReviewAssessmentItem({
-        itemAttemptId: itemAttempt.id,
-        scorePercent: score,
-        feedback: draft.feedback.trim(),
-      });
-      setAssessmentMessage("Question reviewed.");
-    } catch (error) {
-      setAssessmentMessage((error as Error).message || "Could not review question.");
-    } finally {
-      updateReviewDraft(itemAttempt.id, { saving: false });
-    }
-  };
-
-  const returnAttempt = async (attempt: AssessmentAttempt) => {
-    const feedback = window.prompt("Final feedback for the student", attempt.feedback || "") || "";
-    try {
-      await onReturnAssessment({ attemptId: attempt.id, feedback });
-      setAssessmentMessage("Quiz result returned.");
-    } catch (error) {
-      setAssessmentMessage((error as Error).message || "Could not return quiz result.");
     }
   };
 
@@ -3251,9 +3205,6 @@ function AssessmentManager({
               const recipients = assessmentRecipients.filter(
                 (recipient) => recipient.assessment_id === assessment.id,
               );
-              const attempts = assessmentAttempts.filter(
-                (attempt) => attempt.assessment_id === assessment.id,
-              );
               return (
                 <div
                   key={assessment.id}
@@ -3307,168 +3258,6 @@ function AssessmentManager({
                       />
                     </div>
                   </div>
-
-                  <div className="mt-4 grid gap-2">
-                    {recipients.map((recipient) => {
-                      const profile = profilesById.get(recipient.user_id) || null;
-                      return (
-                        <div
-                          key={recipient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-sub px-3 py-2"
-                        >
-                          <div className="text-[12.5px] text-foreground">
-                            {displayName(profile, recipient.user_id)}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <AssessmentRecipientChip status={recipient.status} />
-                            <span className="text-[11.5px] text-muted-foreground">
-                              {recipient.final_score === null
-                                ? "ungraded"
-                                : formatScore(recipient.final_score)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 grid gap-3">
-                    {attempts.length ? (
-                      attempts.map((attempt) => {
-                        const profile = profilesById.get(attempt.user_id) || null;
-                        const itemAttempts = assessmentItemAttempts.filter(
-                          (item) => item.assessment_attempt_id === attempt.id,
-                        );
-                        const pending = itemAttempts.some(
-                          (item) => item.review_state === "pending_review",
-                        );
-                        return (
-                          <div
-                            key={attempt.id}
-                            className="rounded-2xl border border-border bg-background/45 p-3"
-                          >
-                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                <div className="text-[12.5px] font-medium text-foreground">
-                                  {displayName(profile, attempt.user_id)}
-                                </div>
-                                <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                                  {attempt.status} · {formatDateTime(attempt.created_at)}
-                                </div>
-                              </div>
-                              <span className="text-[11.5px] text-muted-foreground">
-                                {attempt.final_score === null
-                                  ? "pending"
-                                  : formatScore(attempt.final_score)}
-                              </span>
-                            </div>
-                            <div className="grid gap-2">
-                              {itemAttempts.map((itemAttempt) => {
-                                const quiz = quizItemsById.get(itemAttempt.quiz_item_id);
-                                const draft = reviewDrafts[itemAttempt.id] || {
-                                  score:
-                                    itemAttempt.score === null || itemAttempt.score === undefined
-                                      ? ""
-                                      : String(
-                                          Math.round(
-                                            (Number(itemAttempt.score || 0) /
-                                              Number(itemAttempt.max_score || 1)) *
-                                              100,
-                                          ),
-                                        ),
-                                  feedback: itemAttempt.feedback || "",
-                                  saving: false,
-                                };
-                                return (
-                                  <div
-                                    key={itemAttempt.id}
-                                    className="rounded-2xl border border-border bg-background/45 p-3"
-                                  >
-                                    <div className="text-[12.5px] font-medium text-foreground">
-                                      {quiz?.prompt || "Question"}
-                                    </div>
-                                    <div className="mt-1 text-[11.5px] text-muted-foreground">
-                                      {itemAttempt.review_state.replace("_", " ")} · score{" "}
-                                      {itemAttempt.score === null
-                                        ? "pending"
-                                        : `${itemAttempt.score}/${itemAttempt.max_score}`}
-                                    </div>
-                                    {itemAttempt.answer_text ? (
-                                      <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
-                                        {itemAttempt.answer_text}
-                                      </p>
-                                    ) : null}
-                                    {itemAttempt.answer_code ? (
-                                      <pre
-                                        className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap rounded-2xl border border-border bg-[var(--code-background)] p-3 text-[12px] leading-relaxed text-[var(--code-foreground)]"
-                                        style={{
-                                          fontFamily:
-                                            "ui-monospace, SFMono-Regular, Menlo, monospace",
-                                        }}
-                                      >
-                                        {itemAttempt.answer_code}
-                                      </pre>
-                                    ) : null}
-                                    {itemAttempt.review_state === "pending_review" ? (
-                                      <div className="mt-3 grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)_auto]">
-                                        <input
-                                          type="number"
-                                          min={0}
-                                          max={100}
-                                          value={draft.score}
-                                          onChange={(event) =>
-                                            updateReviewDraft(itemAttempt.id, {
-                                              score: event.target.value,
-                                            })
-                                          }
-                                          placeholder="Score"
-                                          className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
-                                        />
-                                        <input
-                                          value={draft.feedback}
-                                          onChange={(event) =>
-                                            updateReviewDraft(itemAttempt.id, {
-                                              feedback: event.target.value,
-                                            })
-                                          }
-                                          placeholder="Feedback"
-                                          className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => void reviewItem(itemAttempt)}
-                                          disabled={draft.saving}
-                                          className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                                        >
-                                          Review
-                                        </button>
-                                      </div>
-                                    ) : itemAttempt.feedback ? (
-                                      <p className="mt-2 text-[12.5px] text-muted-foreground">
-                                        {itemAttempt.feedback}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="mt-3 flex justify-end">
-                              <button
-                                type="button"
-                                onClick={() => void returnAttempt(attempt)}
-                                disabled={pending || attempt.status === "returned"}
-                                className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
-                              >
-                                Return result
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <EmptyState>No attempts yet.</EmptyState>
-                    )}
-                  </div>
                 </div>
               );
             })
@@ -3509,13 +3298,11 @@ function AssignmentManager({
   assignments,
   recipients,
   submissions,
-  files,
   studentIds,
   profilesById,
   saving,
   onSaveAssignment,
   onSetAssignmentStatus,
-  onReviewSubmission,
 }: {
   classSummary: TeacherClassSummary;
   lessons: Lesson[];
@@ -3523,27 +3310,16 @@ function AssignmentManager({
   assignments: Assignment[];
   recipients: AssignmentRecipient[];
   submissions: AssignmentSubmission[];
-  files: AssignmentSubmissionFile[];
   studentIds: string[];
   profilesById: Map<string, Profile>;
   saving: boolean;
   onSaveAssignment: (input: AssignmentFormValues) => Promise<void>;
   onSetAssignmentStatus: (assignmentId: string, status: AssignmentStatus) => void;
-  onReviewSubmission: (input: {
-    assignment: Assignment;
-    submission: AssignmentSubmission;
-    scorePercent: number;
-    feedback: string;
-    decision: "accepted" | "returned";
-  }) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<AssignmentFormValues>(() =>
     defaultAssignmentForm(classSummary, lessons, studentIds),
   );
   const [assignmentMessage, setAssignmentMessage] = useState("");
-  const [reviewDrafts, setReviewDrafts] = useState<
-    Record<string, { score: string; feedback: string; saving: boolean }>
-  >({});
   const resourcesForLesson = resources.filter(
     (resource) => resource.lesson_id === draft.lessonId && resource.status !== "archived",
   );
@@ -3551,7 +3327,6 @@ function AssignmentManager({
   useEffect(() => {
     setDraft(defaultAssignmentForm(classSummary, lessons, studentIds));
     setAssignmentMessage("");
-    setReviewDrafts({});
   }, [classSummary, lessons, studentIds]);
 
   const setField = <K extends keyof AssignmentFormValues>(
@@ -3608,71 +3383,6 @@ function AssignmentManager({
       setDraft(defaultAssignmentForm(classSummary, lessons, studentIds));
     } catch (error) {
       setAssignmentMessage((error as Error).message || "Could not create assignment.");
-    }
-  };
-
-  const openFile = async (file: AssignmentSubmissionFile) => {
-    const state = submissionFileState(file);
-    if (state === "purged") {
-      setAssignmentMessage(
-        "This file was removed under the retention policy and is no longer available.",
-      );
-      return;
-    }
-    if (state === "quarantined") {
-      setAssignmentMessage("This file was flagged by the malware scan and cannot be opened.");
-      return;
-    }
-    try {
-      const url = await getSubmissionFileSignedUrl(file);
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (error) {
-      setAssignmentMessage((error as Error).message || "Could not open submission file.");
-    }
-  };
-
-  const updateReviewDraft = (
-    submissionId: string,
-    patch: Partial<{ score: string; feedback: string; saving: boolean }>,
-  ) => {
-    setReviewDrafts((current) => ({
-      ...current,
-      [submissionId]: {
-        score: current[submissionId]?.score || "",
-        feedback: current[submissionId]?.feedback || "",
-        saving: current[submissionId]?.saving || false,
-        ...patch,
-      },
-    }));
-  };
-
-  const review = async (
-    assignment: Assignment,
-    submission: AssignmentSubmission,
-    decision: "accepted" | "returned",
-  ) => {
-    const draft = reviewDrafts[submission.id] || { score: "", feedback: "", saving: false };
-    const score = Number(draft.score);
-    if (!Number.isFinite(score) || score < 0 || score > 100) {
-      setAssignmentMessage("Enter a score from 0 to 100 before returning a review.");
-      return;
-    }
-    updateReviewDraft(submission.id, { saving: true });
-    try {
-      await onReviewSubmission({
-        assignment,
-        submission,
-        scorePercent: score,
-        feedback: draft.feedback.trim(),
-        decision,
-      });
-      setAssignmentMessage(
-        decision === "accepted" ? "Submission marked complete." : "Submission returned.",
-      );
-    } catch (error) {
-      setAssignmentMessage((error as Error).message || "Could not review submission.");
-    } finally {
-      updateReviewDraft(submission.id, { saving: false });
     }
   };
 
@@ -3942,156 +3652,6 @@ function AssignmentManager({
                         ]}
                       />
                     </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-2">
-                    {assignmentRecipients.map((recipient) => {
-                      const profile = profilesById.get(recipient.user_id) || null;
-                      return (
-                        <div
-                          key={recipient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-sub px-3 py-2"
-                        >
-                          <div className="text-[12.5px] text-foreground">
-                            {displayName(profile, recipient.user_id)}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <AssignmentRecipientChip status={recipient.status} />
-                            <span className="text-[11.5px] text-muted-foreground">
-                              {recipient.score === null ? "ungraded" : formatScore(recipient.score)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 grid gap-3">
-                    {assignmentSubmissions.length ? (
-                      assignmentSubmissions.map((submission) => {
-                        const profile = profilesById.get(submission.user_id) || null;
-                        const submissionFiles = files.filter(
-                          (file) => file.submission_id === submission.id,
-                        );
-                        const draft = reviewDrafts[submission.id] || {
-                          score:
-                            submission.score === null || submission.score === undefined
-                              ? ""
-                              : String(Math.round(submission.score * 100)),
-                          feedback: submission.feedback || "",
-                          saving: false,
-                        };
-                        return (
-                          <div
-                            key={submission.id}
-                            className="rounded-2xl border border-border bg-background/45 p-3"
-                          >
-                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                <div className="text-[12.5px] font-medium text-foreground">
-                                  {displayName(profile, submission.user_id)}
-                                </div>
-                                <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                                  {submission.status} · {formatDateTime(submission.created_at)}
-                                </div>
-                              </div>
-                              <span className="text-[11.5px] text-muted-foreground">
-                                {submission.score === null
-                                  ? "not graded"
-                                  : formatScore(submission.score)}
-                              </span>
-                            </div>
-                            {submission.content ? (
-                              <p className="whitespace-pre-wrap rounded-2xl border border-border bg-background/45 p-3 text-[12.5px] leading-relaxed text-foreground">
-                                {submission.content}
-                              </p>
-                            ) : null}
-                            {submission.code ? (
-                              <pre
-                                className="mt-2 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-2xl border border-border bg-[var(--code-background)] p-3 text-[12px] leading-relaxed text-[var(--code-foreground)]"
-                                style={{
-                                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                                }}
-                              >
-                                {submission.code}
-                              </pre>
-                            ) : null}
-                            {submissionFiles.length ? (
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {submissionFiles.map((file) => {
-                                  const fileState = submissionFileState(file);
-                                  const unavailable = fileState !== "available";
-                                  return (
-                                    <button
-                                      type="button"
-                                      key={file.id}
-                                      onClick={() => void openFile(file)}
-                                      disabled={unavailable}
-                                      title={
-                                        fileState === "purged"
-                                          ? "Removed under the retention policy"
-                                          : fileState === "quarantined"
-                                            ? "Flagged by the malware scan"
-                                            : undefined
-                                      }
-                                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:line-through disabled:hover:bg-transparent"
-                                    >
-                                      <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
-                                      {file.original_filename}
-                                      {fileState === "quarantined" ? " · flagged" : ""}
-                                      {fileState === "purged" ? " · removed" : ""}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
-                            <div className="mt-3 grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={draft.score}
-                                onChange={(event) =>
-                                  updateReviewDraft(submission.id, { score: event.target.value })
-                                }
-                                placeholder="Score"
-                                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
-                              />
-                              <input
-                                value={draft.feedback}
-                                onChange={(event) =>
-                                  updateReviewDraft(submission.id, {
-                                    feedback: event.target.value,
-                                  })
-                                }
-                                placeholder="Feedback for the student"
-                                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
-                              />
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void review(assignment, submission, "accepted")}
-                                disabled={draft.saving}
-                                className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
-                              >
-                                Mark complete
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void review(assignment, submission, "returned")}
-                                disabled={draft.saving}
-                                className="rounded-full border border-warning/35 px-3 py-1.5 text-[11.5px] text-warning transition-colors hover:bg-warning/10 disabled:opacity-45"
-                              >
-                                Return
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <EmptyState>No submissions yet.</EmptyState>
-                    )}
                   </div>
                 </div>
               );
