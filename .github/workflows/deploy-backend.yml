@@ -86,13 +86,17 @@ jobs:
             supabase/migrations/20260803000000_entity_comments.sql \
             supabase/migrations/20260711000000_itf_book_f_seed.sql ; do
             echo "Applying $f"
-            body="$(jq -Rs '{query: .}' "$f")"
+            # Body goes through a temp file, not a shell argument: large seed migrations
+            # (e.g. the Book F content seed, ~254KB) exceed the kernel's per-argument
+            # limit (~128KB) and fail exec with "Argument list too long".
+            body="$(mktemp)"
+            jq -Rs '{query: .}' "$f" > "$body"
             resp="$(mktemp)"
             code="$(curl -sS -o "$resp" -w '%{http_code}' \
               -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
               -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
               -H "Content-Type: application/json" \
-              --data-raw "$body")"
+              --data-binary "@$body")"
             echo "HTTP $code"
             cat "$resp"; echo
             if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
