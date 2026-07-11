@@ -1,0 +1,832 @@
+{
+  "schema": "jargon-book-manifest/v1",
+  "chunk": "itf-f-ch2",
+  "subject": {
+    "slug": "itf-beginner",
+    "title": "IT Frontiers — Beginner Series",
+    "description": "Foundational computing concepts: systems and signals, computer design, instructions and software, and data structures — from the IT Frontiers Beginner series (Chapters & Co.)."
+  },
+  "course": {
+    "slug": "itf-f",
+    "title": "IT Frontiers Book F",
+    "description": "Book F of the IT Frontiers Beginner series: systems & signals, computer design, instructions & software, and data & data structures.",
+    "version_label": "v1"
+  },
+  "units": [
+    {
+      "slug": "itf-f-ch2",
+      "title": "Computer Design",
+      "description": "How performance, electrical energy, and portability shape the design and use of computers.",
+      "lessons": [
+        {
+          "slug": "itf-f-ch2-l1",
+          "title": "Performance",
+          "level": "Beginner",
+          "lesson_type": "discussion",
+          "tutor_prompt": "Guide the learner from the idea of fast input-to-output processing to two careful comparisons: clock rate when core count is fixed, and core count when clock rate is fixed. Watch for the misconception that twice as many cores always means exactly twice the speed.",
+          "sample_code": "",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Computer performance",
+            "objective": "Explain computer performance as the speed of processing, describe how the clock starts input-output cycles, and compare performance using clock rate and core count.",
+            "skill_keys": [
+              "itf.hardware.performance"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch2-l1-s1",
+              "title": "From input to output",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Performance refers to how fast a computer works. More specifically, it is the speed of processing: how quickly the computer changes input to output. The processor is the part of the computer where input is changed to output. Every input-output cycle is initiated by the clock. As Example 1.1 shows, a CPU contains a processor and a clock; input signals wait until the clock sends a \"Go\" signal before entering the processor.",
+              "skill_keys": [
+                "itf.hardware.performance"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l1-s2",
+              "title": "Clock rate",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "One way to measure performance is to count how many input-output cycles a processor can execute in one second. Because the clock controls those cycles, its speed helps determine the processor's speed. This speed is the clock rate, measured in Hertz (Hz). In Example 1.2, a clock that signals \"Go\" 8 times per second lets the processor execute 8 cycles per second, so its clock rate is 8 Hz. Modern processors execute billions of cycles per second. Giga means billion, so a 2 GHz processor executes 2 billion input-output cycles per second.",
+              "skill_keys": [
+                "itf.hardware.performance"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l1-s3",
+              "title": "Ahmed compares clock rates",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "One way to improve performance is to manufacture a CPU with a faster clock rate. In Example 1.3, Ahmed wants a computer that performs better than his old 1 GHz desktop. At the store he compares a laptop with a 3 GHz clock rate and a desktop with a 2 GHz clock rate. He chooses the laptop because its clock rate is fastest in this comparison, so its performance should be better.",
+              "skill_keys": [
+                "itf.hardware.performance"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l1-s4",
+              "title": "Compare core count fairly",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Another way to improve performance is to manufacture a CPU with more processors, called cores. In Example 1.4, Ahmed notices another laptop that looks exactly the same and also runs at 3 GHz, but one laptop has a single-core CPU and the other has a quad-core CPU. At the same clock rate, the quad-core CPU should be faster. Example 1.5 compares one, two, and four cores while keeping the rate at 2 GHz; more cores should be faster. Example 1.6 keeps two cores and compares 1, 2, and 3 GHz; the faster clock rate should be faster. A dual-core CPU is not necessarily exactly twice as fast as a single-core CPU, and a quad-core CPU is not necessarily exactly four times as fast.",
+              "skill_keys": [
+                "itf.hardware.performance"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l1-s5",
+              "title": "Inspect a computer's CPU",
+              "stage": "practice",
+              "mode": "assignment",
+              "prompt": "With the help of your teacher, identify the number of cores and the clock rate of the processor in the computer you are using. Record the two values.",
+              "skill_keys": [
+                "itf.hardware.performance"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l1-s6",
+              "title": "Check performance facts",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "Performance means how fast a computer works."
+                },
+                {
+                  "id": "b",
+                  "text": "The CPU clock signals when each input-output cycle begins."
+                },
+                {
+                  "id": "c",
+                  "text": "The CPU clock tells you the time."
+                },
+                {
+                  "id": "d",
+                  "text": "Processor performance does not affect computer performance."
+                },
+                {
+                  "id": "e",
+                  "text": "Making the clock rate faster is one way to improve performance."
+                },
+                {
+                  "id": "f",
+                  "text": "Adding processors makes performance worse."
+                },
+                {
+                  "id": "g",
+                  "text": "At the same clock rate, four cores should be faster than one core."
+                },
+                {
+                  "id": "h",
+                  "text": "With the same core count, 4 GHz should be faster than 3 GHz."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "Performance means how fast a computer works."
+                  },
+                  {
+                    "id": "b",
+                    "text": "The CPU clock signals when each input-output cycle begins."
+                  },
+                  {
+                    "id": "c",
+                    "text": "The CPU clock tells you the time."
+                  },
+                  {
+                    "id": "d",
+                    "text": "Processor performance does not affect computer performance."
+                  },
+                  {
+                    "id": "e",
+                    "text": "Making the clock rate faster is one way to improve performance."
+                  },
+                  {
+                    "id": "f",
+                    "text": "Adding processors makes performance worse."
+                  },
+                  {
+                    "id": "g",
+                    "text": "At the same clock rate, four cores should be faster than one core."
+                  },
+                  {
+                    "id": "h",
+                    "text": "With the same core count, 4 GHz should be faster than 3 GHz."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a",
+                  "b",
+                  "e",
+                  "g",
+                  "h"
+                ]
+              },
+              "skill_keys": [
+                "itf.hardware.performance"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l1-s7",
+              "title": "Identify CPU specifications",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Three groups show numbered CPUs. Group (a): [1] single-core at 3 GHz, [2] dual-core at 1 GHz, [3] quad-core at 2 GHz. Group (b): [1] single-core at 1 GHz, [2] dual-core at 4 GHz, [3] single-core at 4 GHz. Group (c): [1] dual-core at 2 GHz, [2] quad-core at 2 GHz, [3] quad-core at 4 GHz. Which option-number sequence identifies, in order, (a) dual-core at 1 GHz, (b) single-core at 4 GHz, and (c) quad-core at 2 GHz?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "2, 3, 2"
+                },
+                {
+                  "id": "b",
+                  "text": "1, 2, 1"
+                },
+                {
+                  "id": "c",
+                  "text": "3, 1, 3"
+                },
+                {
+                  "id": "d",
+                  "text": "2, 2, 3"
+                }
+              ],
+              "quiz": {
+                "prompt": "Three groups show numbered CPUs. Group (a): [1] single-core at 3 GHz, [2] dual-core at 1 GHz, [3] quad-core at 2 GHz. Group (b): [1] single-core at 1 GHz, [2] dual-core at 4 GHz, [3] single-core at 4 GHz. Group (c): [1] dual-core at 2 GHz, [2] quad-core at 2 GHz, [3] quad-core at 4 GHz. Which option-number sequence identifies, in order, (a) dual-core at 1 GHz, (b) single-core at 4 GHz, and (c) quad-core at 2 GHz?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "2, 3, 2"
+                  },
+                  {
+                    "id": "b",
+                    "text": "1, 2, 1"
+                  },
+                  {
+                    "id": "c",
+                    "text": "3, 1, 3"
+                  },
+                  {
+                    "id": "d",
+                    "text": "2, 2, 3"
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "itf.hardware.performance"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l1-s8",
+              "title": "Compare fastest and slowest CPUs",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Which pair correctly answers Activity 1.3's two comparisons?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "When core count is the same, option 3 at 4 GHz is fastest; when all rates are 3 GHz, option 1 with one core is slowest."
+                },
+                {
+                  "id": "b",
+                  "text": "When core count is the same, option 2 at 1 GHz is fastest; when all rates are 3 GHz, option 3 with four cores is slowest."
+                },
+                {
+                  "id": "c",
+                  "text": "When core count is the same, option 1 at 3 GHz is fastest; when all rates are 3 GHz, every option is equally fast."
+                },
+                {
+                  "id": "d",
+                  "text": "Clock rate and core count cannot be used for either comparison."
+                }
+              ],
+              "quiz": {
+                "prompt": "Which pair correctly answers Activity 1.3's two comparisons?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "When core count is the same, option 3 at 4 GHz is fastest; when all rates are 3 GHz, option 1 with one core is slowest."
+                  },
+                  {
+                    "id": "b",
+                    "text": "When core count is the same, option 2 at 1 GHz is fastest; when all rates are 3 GHz, option 3 with four cores is slowest."
+                  },
+                  {
+                    "id": "c",
+                    "text": "When core count is the same, option 1 at 3 GHz is fastest; when all rates are 3 GHz, every option is equally fast."
+                  },
+                  {
+                    "id": "d",
+                    "text": "Clock rate and core count cannot be used for either comparison."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "itf.hardware.performance"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch2-l2",
+          "title": "Energy",
+          "level": "Beginner",
+          "lesson_type": "discussion",
+          "tutor_prompt": "Help the learner trace electrical energy from an outlet or battery to the parts that use it. Ask them to hold other features constant when comparing screen or processor energy demand.",
+          "sample_code": "",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Computer energy demand",
+            "objective": "Explain why computers need electrical energy, describe how batteries store it, and compare energy demand using screen size, brightness, clock rate, and core count.",
+            "skill_keys": [
+              "itf.hardware.energy"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch2-l2-s1",
+              "title": "Getting electrical energy",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "A system needs energy to do work, and a computer needs electrical energy. As Example 2.1 shows, electrical outlets may differ in shape, but they all deliver electrical energy to devices and machines. A computer can use that energy directly or store it for later. The battery is the hardware part responsible for storing electrical energy. Laptops, tablets, and smartphones can charge their batteries and later disconnect from the outlet. A desktop has no battery and must remain connected to an outlet.",
+              "skill_keys": [
+                "itf.hardware.energy"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l2-s2",
+              "title": "Screens use energy",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Every hardware part uses electrical energy, but the screen and processor use a lot. A screen converts electronic signals into light signals. The more light it must give out, the more electrical energy it uses. Example 2.2 compares screen sizes: a big screen gives out more light and uses more electrical energy than a small screen. Example 2.3 compares brightness: a bright screen gives out more light and uses more electrical energy than a dim screen.",
+              "skill_keys": [
+                "itf.hardware.energy"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l2-s3",
+              "title": "Processors use energy",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "The processor changes input into output. The more signals it processes, the more electrical energy it uses. In general, a faster processor requires more energy. Example 2.4 compares clock rates: a faster clock rate processes more signals and uses more electrical energy. Example 2.5 compares core counts: a CPU with more cores processes more signals and uses more electrical energy. The book summarizes this trade-off by saying that the price of performance is energy consumption.",
+              "skill_keys": [
+                "itf.hardware.energy"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l2-s4",
+              "title": "Compare screen energy",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Make two controlled comparisons from Activities 2.2 and 2.4. First assume the same brightness and compare a desktop, laptop, tablet, and smartphone screen: identify which uses the most and least electrical energy and explain how screen size leads to your answer. Then assume the same screen size and compare dim, bright, and brightest settings: identify which uses the most and least energy and explain how the amount of light leads to your answer.",
+              "skill_keys": [
+                "itf.hardware.energy"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l2-s5",
+              "title": "Compare processor energy",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Make the two processor comparisons from Activities 2.3 and 2.5. With the same number of cores, compare CPUs at 1 GHz, 3 GHz, and 4 GHz: identify which uses the most and least electrical energy and explain why. Then hold the clock rate at 2 GHz and compare single-core, dual-core, and quad-core CPUs: identify which uses the most and least energy and explain why.",
+              "skill_keys": [
+                "itf.hardware.energy"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l2-s6",
+              "title": "Check energy facts",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "A system does not need energy to do work."
+                },
+                {
+                  "id": "b",
+                  "text": "Computers need electrical energy to work."
+                },
+                {
+                  "id": "c",
+                  "text": "A battery stores electrical energy."
+                },
+                {
+                  "id": "d",
+                  "text": "A desktop can work while disconnected from an electrical outlet."
+                },
+                {
+                  "id": "e",
+                  "text": "Screen size and brightness do not affect electrical energy use."
+                },
+                {
+                  "id": "f",
+                  "text": "A higher clock rate results in more electrical energy being used."
+                },
+                {
+                  "id": "g",
+                  "text": "Adding more CPU cores results in less electrical energy being used."
+                },
+                {
+                  "id": "h",
+                  "text": "Faster performance requires more electrical energy."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "A system does not need energy to do work."
+                  },
+                  {
+                    "id": "b",
+                    "text": "Computers need electrical energy to work."
+                  },
+                  {
+                    "id": "c",
+                    "text": "A battery stores electrical energy."
+                  },
+                  {
+                    "id": "d",
+                    "text": "A desktop can work while disconnected from an electrical outlet."
+                  },
+                  {
+                    "id": "e",
+                    "text": "Screen size and brightness do not affect electrical energy use."
+                  },
+                  {
+                    "id": "f",
+                    "text": "A higher clock rate results in more electrical energy being used."
+                  },
+                  {
+                    "id": "g",
+                    "text": "Adding more CPU cores results in less electrical energy being used."
+                  },
+                  {
+                    "id": "h",
+                    "text": "Faster performance requires more electrical energy."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "b",
+                  "c",
+                  "f",
+                  "h"
+                ]
+              },
+              "skill_keys": [
+                "itf.hardware.energy"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l2-s7",
+              "title": "Explain total computer energy demand",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "open_ended",
+              "prompt": "Computer 1 is a smartphone whose screen is at maximum brightness and whose CPU has one core at 1 GHz. Computer 2 is a laptop whose screen is at maximum brightness and whose CPU has four cores at 4 GHz. Which computer requires more electrical energy to work? Explain your answer using screen size, clock rate, and number of cores.",
+              "skill_keys": [
+                "itf.hardware.energy"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch2-l3",
+          "title": "Portability",
+          "level": "Beginner",
+          "lesson_type": "discussion",
+          "tutor_prompt": "Guide the learner to connect portability with a computer's direct energy source, size, and weight, then trace how those features affect its user interface and energy demand. Encourage comparisons that name specific input and output devices.",
+          "sample_code": "",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Computer portability",
+            "objective": "Explain how energy source, size, and weight determine portability and how greater portability changes a computer's user interface and energy demand.",
+            "skill_keys": [
+              "itf.hardware.portability"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch2-l3-s1",
+              "title": "Portable energy",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "A portable device can be easily carried around while it is being used. Its portability depends on three features: source of energy, size, and weight. A working computer must remain connected to its direct source of electrical energy. For a desktop, that source is the outlet; pulling out its power cable turns it off. For a laptop, tablet, or smartphone, the battery is the direct source. A battery stores electrical energy and is itself portable, allowing the computer to be carried while it works.",
+              "skill_keys": [
+                "itf.hardware.portability"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l3-s2",
+              "title": "Size and weight",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "A portable computer should be easy to carry, so size and weight matter. The desktop is too big and heavy to be portable and is a stationary computer. The laptop is smaller and can be placed on a lap. Tablets and smartphones are smaller and lighter still and can be held in one hand. Battery size follows computer size: a laptop can fit the largest battery of these portable types, while a smartphone can fit the smallest.",
+              "skill_keys": [
+                "itf.hardware.portability"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l3-s3",
+              "title": "The user interface changes",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "The user interface is the sum of a computer's input and output devices. As computers become smaller and lighter, those devices change too. A desktop uses a keyboard and mouse. A laptop also has a keyboard but uses a touchpad; its keyboard-and-touchpad combination is slightly smaller than the desktop's keyboard-and-mouse combination. Tablets and smartphones replace those devices with a smaller, lighter touchscreen, changing interaction from pointing with a device to touching with a finger. Screens also shrink from desktop to laptop to tablet to smartphone. A smaller screen improves portability but fits less content and makes objects smaller.",
+              "skill_keys": [
+                "itf.hardware.portability"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l3-s4",
+              "title": "Portability changes energy demand",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Making a computer smaller requires a smaller battery, and a smaller battery stores less electrical energy. The computer must therefore use less energy if its battery is to last. A smaller screen gives out less light and uses less energy. In the book's general comparison, a smaller computer also uses a less demanding CPU, usually with a slower clock rate and fewer cores. Larger computers demand more energy but have space for larger batteries that store more energy. The book notes that this CPU comparison is simplified and leaves out the complexities of balancing performance with power efficiency.",
+              "skill_keys": [
+                "itf.hardware.portability"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l3-s5",
+              "title": "Compare user interfaces",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Make the interface comparisons from Activities 3.3 and 3.4. Name one output-device feature that distinguishes a desktop from a smartphone. Name two input-device features that distinguish a laptop from a tablet. Then compare the laptop with the desktop: list the keyboard, pointing-device, and screen differences, and explain how having the laptop's input and output devices attached as one unit—rather than detached like the desktop's—affects portability.",
+              "skill_keys": [
+                "itf.hardware.portability"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l3-s6",
+              "title": "Compare energy and batteries",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Make the energy and battery comparisons from Activities 3.5 and 3.6. At the same brightness, decide whether the laptop, tablet, or smartphone screen uses the most energy and explain why. For the same desktop screen, decide whether dim, bright, or brightest uses the most and explain why. Then identify which portable type has the largest battery and which has the smallest, explain how battery size affects weight and ease of carrying, and state which type needs a battery that stores more energy and why.",
+              "skill_keys": [
+                "itf.hardware.portability"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l3-s7",
+              "title": "Check portability facts",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "A portable device cannot be carried while it is used."
+                },
+                {
+                  "id": "b",
+                  "text": "A computer's source of electrical energy does not affect portability."
+                },
+                {
+                  "id": "c",
+                  "text": "A battery is a portable storage device for electrical energy."
+                },
+                {
+                  "id": "d",
+                  "text": "Smaller size and lighter weight make a computer more portable."
+                },
+                {
+                  "id": "e",
+                  "text": "Computer size does not affect the user interface."
+                },
+                {
+                  "id": "f",
+                  "text": "Only input devices are affected when computer size changes."
+                },
+                {
+                  "id": "g",
+                  "text": "Computer size does not affect electrical-energy requirements."
+                },
+                {
+                  "id": "h",
+                  "text": "Battery size affects how much electrical energy it can store."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "A portable device cannot be carried while it is used."
+                  },
+                  {
+                    "id": "b",
+                    "text": "A computer's source of electrical energy does not affect portability."
+                  },
+                  {
+                    "id": "c",
+                    "text": "A battery is a portable storage device for electrical energy."
+                  },
+                  {
+                    "id": "d",
+                    "text": "Smaller size and lighter weight make a computer more portable."
+                  },
+                  {
+                    "id": "e",
+                    "text": "Computer size does not affect the user interface."
+                  },
+                  {
+                    "id": "f",
+                    "text": "Only input devices are affected when computer size changes."
+                  },
+                  {
+                    "id": "g",
+                    "text": "Computer size does not affect electrical-energy requirements."
+                  },
+                  {
+                    "id": "h",
+                    "text": "Battery size affects how much electrical energy it can store."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "c",
+                  "d",
+                  "h"
+                ]
+              },
+              "skill_keys": [
+                "itf.hardware.portability"
+              ]
+            },
+            {
+              "slug": "itf-f-ch2-l3-s8",
+              "title": "Identify the portable computers",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Four groups show numbered computers. Group (a): [1] tablet, [2] smartphone, [3] laptop. Group (b): [1] laptop, [2] tablet, [3] smartphone. Group (c): [1] smartphone, [2] desktop, [3] laptop. Group (d): [1] desktop, [2] tablet, [3] laptop. Which option-number sequence identifies, in order, (a) the computer most easily carried, (b) the most portable computer, (c) the computer without a battery as its direct energy source, and (d) the computer that is not portable?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "2, 3, 2, 1"
+                },
+                {
+                  "id": "b",
+                  "text": "1, 1, 3, 2"
+                },
+                {
+                  "id": "c",
+                  "text": "3, 2, 1, 3"
+                },
+                {
+                  "id": "d",
+                  "text": "2, 2, 1, 3"
+                }
+              ],
+              "quiz": {
+                "prompt": "Four groups show numbered computers. Group (a): [1] tablet, [2] smartphone, [3] laptop. Group (b): [1] laptop, [2] tablet, [3] smartphone. Group (c): [1] smartphone, [2] desktop, [3] laptop. Group (d): [1] desktop, [2] tablet, [3] laptop. Which option-number sequence identifies, in order, (a) the computer most easily carried, (b) the most portable computer, (c) the computer without a battery as its direct energy source, and (d) the computer that is not portable?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "2, 3, 2, 1"
+                  },
+                  {
+                    "id": "b",
+                    "text": "1, 1, 3, 2"
+                  },
+                  {
+                    "id": "c",
+                    "text": "3, 2, 1, 3"
+                  },
+                  {
+                    "id": "d",
+                    "text": "2, 2, 1, 3"
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "itf.hardware.portability"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "book_item": "L1 Example 1.1",
+      "handled_by": "itf-f-ch2-l1-s1"
+    },
+    {
+      "book_item": "L1 Example 1.2",
+      "handled_by": "itf-f-ch2-l1-s2"
+    },
+    {
+      "book_item": "L1 Example 1.3",
+      "handled_by": "itf-f-ch2-l1-s3"
+    },
+    {
+      "book_item": "L1 Example 1.4",
+      "handled_by": "itf-f-ch2-l1-s4"
+    },
+    {
+      "book_item": "L1 Example 1.5",
+      "handled_by": "itf-f-ch2-l1-s4"
+    },
+    {
+      "book_item": "L1 Example 1.6",
+      "handled_by": "itf-f-ch2-l1-s4"
+    },
+    {
+      "book_item": "L1 Activity 1.1",
+      "handled_by": "itf-f-ch2-l1-s6",
+      "note": "all eight true/false statements retained as a select-all check"
+    },
+    {
+      "book_item": "L1 Activity 1.2",
+      "handled_by": "itf-f-ch2-l1-s7",
+      "note": "all three diagram answers retained as one option-number sequence"
+    },
+    {
+      "book_item": "L1 Activity 1.3",
+      "handled_by": "itf-f-ch2-l1-s8",
+      "note": "fastest and slowest comparisons retained together"
+    },
+    {
+      "book_item": "L1 Activity 1.4",
+      "handled_by": "itf-f-ch2-l1-s5"
+    },
+    {
+      "book_item": "L2 Example 2.1",
+      "handled_by": "itf-f-ch2-l2-s1"
+    },
+    {
+      "book_item": "L2 Example 2.2",
+      "handled_by": "itf-f-ch2-l2-s2"
+    },
+    {
+      "book_item": "L2 Example 2.3",
+      "handled_by": "itf-f-ch2-l2-s2"
+    },
+    {
+      "book_item": "L2 Example 2.4",
+      "handled_by": "itf-f-ch2-l2-s3"
+    },
+    {
+      "book_item": "L2 Example 2.5",
+      "handled_by": "itf-f-ch2-l2-s3"
+    },
+    {
+      "book_item": "L2 Activity 2.1",
+      "handled_by": "itf-f-ch2-l2-s6",
+      "note": "all eight true/false statements retained as a select-all check"
+    },
+    {
+      "book_item": "L2 Activity 2.2",
+      "handled_by": "itf-f-ch2-l2-s4",
+      "note": "screen-size and brightness choices retained as controlled comparisons with reasons"
+    },
+    {
+      "book_item": "L2 Activity 2.3",
+      "handled_by": "itf-f-ch2-l2-s5",
+      "note": "clock-rate and core-count choices retained as controlled comparisons with reasons"
+    },
+    {
+      "book_item": "L2 Activity 2.4",
+      "handled_by": "itf-f-ch2-l2-s4",
+      "note": "both source comparisons retained with explanations"
+    },
+    {
+      "book_item": "L2 Activity 2.5",
+      "handled_by": "itf-f-ch2-l2-s5",
+      "note": "both source comparisons retained with explanations"
+    },
+    {
+      "book_item": "L2 Activity 2.6",
+      "handled_by": "itf-f-ch2-l2-s7"
+    },
+    {
+      "book_item": "L3 Activity 3.1",
+      "handled_by": "itf-f-ch2-l3-s7",
+      "note": "all eight true/false statements retained as a select-all check"
+    },
+    {
+      "book_item": "L3 Activity 3.2",
+      "handled_by": "itf-f-ch2-l3-s8",
+      "note": "all four diagram answers retained as one option-number sequence"
+    },
+    {
+      "book_item": "L3 Activity 3.3",
+      "handled_by": "itf-f-ch2-l3-s5"
+    },
+    {
+      "book_item": "L3 Activity 3.4",
+      "handled_by": "itf-f-ch2-l3-s5",
+      "note": "interface features and attached-versus-detached parts retained in the reflection"
+    },
+    {
+      "book_item": "L3 Activity 3.5",
+      "handled_by": "itf-f-ch2-l3-s6"
+    },
+    {
+      "book_item": "L3 Activity 3.6",
+      "handled_by": "itf-f-ch2-l3-s6"
+    }
+  ],
+  "skipped": [
+    {
+      "book_item": "L2 Safety Tips sidebar (p.85)",
+      "reason": "electrical-safety guidance; surface as a teacher resource rather than a lesson step"
+    }
+  ]
+}

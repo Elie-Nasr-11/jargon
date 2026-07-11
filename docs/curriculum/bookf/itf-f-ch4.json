@@ -1,0 +1,1121 @@
+{
+  "schema": "jargon-book-manifest/v1",
+  "chunk": "itf-f-ch4",
+  "subject": {
+    "slug": "itf-beginner",
+    "title": "IT Frontiers — Beginner Series",
+    "description": "Foundational computing concepts: systems and signals, computer design, instructions and software, and data structures — from the IT Frontiers Beginner series (Chapters & Co.)."
+  },
+  "course": {
+    "slug": "itf-f",
+    "title": "IT Frontiers Book F",
+    "description": "Book F of the IT Frontiers Beginner series: systems & signals, computer design, instructions & software, and data & data structures.",
+    "version_label": "v1"
+  },
+  "units": [
+    {
+      "slug": "itf-f-ch4",
+      "title": "Data & Data Structures",
+      "description": "How data and instructions are organized in files, lists and tables, located by addresses, searched, sorted, and managed as queues and stacks.",
+      "lessons": [
+        {
+          "slug": "itf-f-ch4-l1",
+          "title": "Data & Structures",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Help the learner distinguish data from instructions and data files from instruction files, then compare lists with tables. Ask the learner to name the structure and the location of each data item before confirming it.",
+          "sample_code": "SET fruits ([\"apples\", \"oranges\"])\nPRINT fruits",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Data structures",
+            "objective": "Distinguish data and instruction files and organize related data in lists and tables.",
+            "skill_keys": [
+              "jargon.list",
+              "itf.data.structures"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch4-l1-s1",
+              "title": "Data, instructions, and files",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Data is any item of information. Instructions need data; without data, instructions cannot work. Data and instructions enter as input and remain in memory to be processed. In Example 1.1, Ms. Finn tells Sam to add 4 and 1: \"Add\" is the instruction, while 4 and 1 are the data. Example 1.2 follows both through Sam's input, memory, processing, and written output of 5. In a computer, information that belongs together is grouped into a file, and all files are saved in storage. Some files are instruction files, such as apps; others are data files, such as images. In Example 1.3, Jenna's Camera app contains the instructions needed to take a photo, while the photo file contains the data needed to make the image.",
+              "skill_keys": [
+                "itf.data.structures"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l1-s2",
+              "title": "Lists and tables",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Inside a file, data is arranged according to structures. A list is a data structure in which data is arranged in a line, one item after the other. Each item is identified by its place number. In Example 1.4, Ms. Moore writes Omar, Maya, Lana, and Tom in a list; whether the line is vertical or horizontal, Omar is at Place 1 and Tom is at Place 4. A table is a data structure in which data is arranged in rows and columns, with each item in a cell identified by its row and column. In Example 1.5, Ms. Moore's birthday table has four rows and two columns: Row 1, Column 1 contains Omar, while Row 3, Column 2 contains September 29.",
+              "skill_keys": [
+                "jargon.list",
+                "itf.data.structures"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l1-s3",
+              "title": "Structures used by the computer",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Lists and tables are important to a computer's operation. In Example 1.6, BIOS tests the mouse, keyboard, screen, microphone, speaker, memory, WiFi antenna, storage, and printer, then records each device and its OK or NOT OK status in a Device Status Table. The printer is initially NOT OK, so the operating system shows an error instead of printing. After Ms. Moore reconnects the printer, its status is updated to OK. The operating system also prepares device task lists: Files for Opening tells storage to open Section 6A, 6B, and 6C, while Files for Printing tells the printer which files to print. The names of devices and files are all data organized so the computer can use them.",
+              "skill_keys": [
+                "jargon.list",
+                "itf.data.structures"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l1-s4",
+              "title": "Build a list and a table",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "The book's Activities 1.2 and 1.3 organize fruit in a list and animal names with their counts in a table. In Jargon, the fruit list is one list, while the table is represented as a list of rows. Run the program and inspect the two structures and their printed data.",
+              "starter_code": "SET fruits ([\"apples\", \"oranges\", \"bananas\", \"kiwis\", \"mangos\"])\nSET animals ([[\"tigers\", 6], [\"monkeys\", 17], [\"giraffes\", 7], [\"meerkats\", 23]])\nPRINT fruits\nPRINT animals",
+              "expected_output": "['apples', 'oranges', 'bananas', 'kiwis', 'mangos']\n[['tigers', 6], ['monkeys', 17], ['giraffes', 7], ['meerkats', 23]]",
+              "pass_score": 1,
+              "skill_keys": [
+                "jargon.list",
+                "itf.data.structures"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l1-s5",
+              "title": "Apply files, lists, and tables",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "applied",
+              "prompt": "Complete four connected tasks. (1) Liam opens the Word application and then the file \"English Essay\": identify the instruction file and the data file. (2) Jenna uses the Camera app to take a photo and the Photos app to view it: identify the instruction files and data file. (3) BIOS finds the keyboard and screen connected but the speakers and mouse do not respond: write a Device Status Table with device and status columns. (4) Chen saves \"Zoo Trip Essay\", \"Math Homework\", and \"Science Homework\", then prints \"Zoo Trip Essay\" and \"Zoo Photo 1\", \"Zoo Photo 2\", and \"Zoo Photo 5\": write separate Files to Save and Files to Print task lists. Label every structure as a list or table.",
+              "skill_keys": [
+                "itf.data.structures"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l1-s6",
+              "title": "Check: data and structures",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "Instructions need data."
+                },
+                {
+                  "id": "b",
+                  "text": "In a computer, information that belongs together is grouped into files."
+                },
+                {
+                  "id": "c",
+                  "text": "A list and a table are different data structures."
+                },
+                {
+                  "id": "d",
+                  "text": "Data in a list is arranged in rows and columns."
+                },
+                {
+                  "id": "e",
+                  "text": "A list contains data arranged in a line, one item after the other."
+                },
+                {
+                  "id": "f",
+                  "text": "The operating system does not use lists and tables."
+                },
+                {
+                  "id": "g",
+                  "text": "A device status table is a table prepared by BIOS."
+                },
+                {
+                  "id": "h",
+                  "text": "A device task list is a list of tasks a device should perform."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "Instructions need data."
+                  },
+                  {
+                    "id": "b",
+                    "text": "In a computer, information that belongs together is grouped into files."
+                  },
+                  {
+                    "id": "c",
+                    "text": "A list and a table are different data structures."
+                  },
+                  {
+                    "id": "d",
+                    "text": "Data in a list is arranged in rows and columns."
+                  },
+                  {
+                    "id": "e",
+                    "text": "A list contains data arranged in a line, one item after the other."
+                  },
+                  {
+                    "id": "f",
+                    "text": "The operating system does not use lists and tables."
+                  },
+                  {
+                    "id": "g",
+                    "text": "A device status table is a table prepared by BIOS."
+                  },
+                  {
+                    "id": "h",
+                    "text": "A device task list is a list of tasks a device should perform."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a",
+                  "b",
+                  "c",
+                  "e",
+                  "g",
+                  "h"
+                ]
+              },
+              "skill_keys": [
+                "itf.data.structures"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch4-l2",
+          "title": "Names & Addresses",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Guide the learner from data included in an instruction to data located in a list, another file, a folder, or another computer. Require complete addresses in the book's order and watch for missing file, list, place, folder, or computer names.",
+          "sample_code": "SET animals ([\"horse\", \"cow\", \"chicken\"])\nPRINT animals[1]",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Names and addresses",
+            "objective": "Use names and addresses to locate data within instructions, lists, files, folders, and computers.",
+            "skill_keys": [
+              "jargon.set",
+              "itf.data.addressing"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch4-l2-s1",
+              "title": "Where an instruction finds data",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Instructions need data. An instruction either has the data it needs or has an address pointing to where the data may be found. An address points to where a group of data or an item of data is located, and names identify groups such as lists, tables, and files. In Example 2.1, the words \"Start\" and \"End\" appear inside WRITE instructions; quotation marks identify them as data. Data can also be in the same instruction file without being part of the instruction. In Example 2.2, File: Terminator Boxes has List: A = {Start, End}. A READ instruction uses the address List: A / Place 1 to get Start and List: A / Place 2 to get End.",
+              "skill_keys": [
+                "jargon.set",
+                "itf.data.addressing"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l2-s2",
+              "title": "Files inside folders",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Data required by an instruction may be in another file. In that case, the address must name the file and where it is found. Files that belong together are grouped into folders. In Example 2.3, Jenna's Camera app opens the Images folder, creates a new file, writes the captured image data into it, names it Photo 20220929_1604, saves it, and closes it. Later, the Image Viewer app follows the address Folder: Images / File: Photo 20220929_1604, reads the image data, and prints the image to the screen. The folder name and file name let the app find the correct data file.",
+              "skill_keys": [
+                "itf.data.addressing"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l2-s3",
+              "title": "Web addresses reach another computer",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Data may also be in another file on another computer. Then its address must identify the computer, folder, and file. The Internet is used to reach data on another computer, and a web address points to where that data may be found. In Example 2.4, Liam selects a YouTube video thumbnail. Hidden with the thumbnail is the web address of the video file on a YouTube server. The YouTube app follows that address, reads the video data, and plays the images and sounds on Liam's smartphone. A web address therefore serves the same locating purpose across computers that file, list, place, row, and column names serve inside one computer.",
+              "skill_keys": [
+                "itf.data.addressing"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l2-s4",
+              "title": "Read data by address",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "Activities 2.2–2.4 build Farm and Zoo lists by reading data from named places. Jargon list indices begin at 0, so the book's Place 2 is index 1. Run the program: it reads donkey from the second place in Extra, adds it to Farm, then reads the first, third, and fourth places into Zoo.",
+              "starter_code": "SET farm ([\"horse\", \"cow\", \"chicken\"])\nSET extra ([\"zebra\", \"donkey\", \"giraffe\", \"lion\"])\nSET item (extra[1])\nADD item to farm\nSET zoo ([])\nADD extra[0] to zoo\nADD extra[2] to zoo\nADD extra[3] to zoo\nPRINT farm\nPRINT zoo",
+              "expected_output": "['horse', 'cow', 'chicken', 'donkey']\n['zebra', 'giraffe', 'lion']",
+              "pass_score": 1,
+              "skill_keys": [
+                "jargon.set",
+                "itf.data.addressing"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l2-s5",
+              "title": "Write complete addresses",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "applied",
+              "prompt": "Write the full book-style address for each requested item. File Food has List Dairy = {milk, cheese, yogurt} and List Cereals = {rice, wheat, corn}. File Animals has List Farm = {horse, cow, chicken, donkey, duck, goat} and List Zoo = {zebra, giraffe, lion, meerkat, gorilla, monkey, gazelle, flamingo}. Folder Grade 6 / File Section 6A has List Boys = {Chen, Liam, Jon, Ahmed}; Grade 6 / Section 6B has List Girls = {Diana, Sarah, Maya, Deena}; Folder Grade 5 / File Section 5B has List Girls = {Maria, Ronda, Janice, Rachel}. Also, Folder Videos contains Video 1, Video 2, and Video 3. Give addresses for cheese, gorilla, rice, donkey, Ahmed, Maria, Sarah, and Video 2. Then, with teacher assistance, visit the book's three web-address examples: https://pbskids.org, https://www.coolmath.com, and https://kids.nationalgeographic.com.",
+              "skill_keys": [
+                "itf.data.addressing"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l2-s6",
+              "title": "Check: names and addresses",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "An instruction cannot include data."
+                },
+                {
+                  "id": "b",
+                  "text": "An address points to where data may be found."
+                },
+                {
+                  "id": "c",
+                  "text": "A folder is a collection of files that belong together."
+                },
+                {
+                  "id": "d",
+                  "text": "A file does not need a name."
+                },
+                {
+                  "id": "e",
+                  "text": "An instruction and its data must be in the same file."
+                },
+                {
+                  "id": "f",
+                  "text": "The instructions of an app can use data that is in a separate file."
+                },
+                {
+                  "id": "g",
+                  "text": "An image is a data file."
+                },
+                {
+                  "id": "h",
+                  "text": "A web address is needed when data is on a different computer."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "An instruction cannot include data."
+                  },
+                  {
+                    "id": "b",
+                    "text": "An address points to where data may be found."
+                  },
+                  {
+                    "id": "c",
+                    "text": "A folder is a collection of files that belong together."
+                  },
+                  {
+                    "id": "d",
+                    "text": "A file does not need a name."
+                  },
+                  {
+                    "id": "e",
+                    "text": "An instruction and its data must be in the same file."
+                  },
+                  {
+                    "id": "f",
+                    "text": "The instructions of an app can use data that is in a separate file."
+                  },
+                  {
+                    "id": "g",
+                    "text": "An image is a data file."
+                  },
+                  {
+                    "id": "h",
+                    "text": "A web address is needed when data is on a different computer."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "b",
+                  "c",
+                  "f",
+                  "g",
+                  "h"
+                ]
+              },
+              "skill_keys": [
+                "itf.data.addressing"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch4-l3",
+          "title": "Searching",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Guide the learner through a linear search one place at a time. Ask which stopping condition applies before confirming whether a target is found or the end of the list is reached.",
+          "sample_code": "SET names ([\"Donna\", \"Anna\", \"Harvey\", \"Carl\", \"Grace\"])\nSET target (\"Carl\")\nREPEAT_FOR_EACH name in names\n    IF name is equal to target THEN\n        PRINT \"Found \" + target\n        BREAK\n    END\nEND",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Linear search",
+            "objective": "Trace and implement a linear search that stops when the target is found or the end of the list is reached.",
+            "skill_keys": [
+              "itf.data.searching",
+              "jargon.loop"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch4-l3-s1",
+              "title": "Search one place at a time",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Searching for and finding data is an important task performed by computers. A list arranges data in a line, so one strategy is to start at the beginning and check each place in order. If the item is found, the search ends; otherwise, move to the next place. This is called a linear search. In Example 3.1, Ms. Moore searches the Trip List for Carl. At each place she reads a name and asks whether it is Carl. Donna, Anna, and Harvey do not match, so she moves on. At Place 4 she reads Carl, says \"I found Carl!\", and ends the search instead of checking Grace.",
+              "skill_keys": [
+                "itf.data.searching",
+                "jargon.loop"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l3-s2",
+              "title": "The two ways a search ends",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "A linear search also needs a second stopping condition. In Example 3.2, Ms. Moore searches for Kim. She checks Donna, Anna, Harvey, Carl, Grace, Ahmed, and Lana. No name matches, so when she reaches the last name she says, \"I did not find Kim,\" and ends. Example 3.3 extends the same process to a computer searching a list of 100 telephone numbers. The program goes to the first place, reads an item, checks whether it matches, checks whether the search has reached the end, and otherwise moves to the next place and repeats. Computers can use these instructions to search lists containing thousands of items.",
+              "skill_keys": [
+                "itf.data.searching",
+                "jargon.loop"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l3-s3",
+              "title": "Search the field-trip list",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "Activity 3.2 asks for Maya in the Field Trip list. Run a linear search over the book's names. The loop checks each name; because the list contains May but not Maya, the search reaches the end and prints the not-found message.",
+              "starter_code": "SET names ([\"Anne\", \"Dan\", \"Zena\", \"Ren\", \"Lin\", \"Jon\", \"Benjamin\", \"Chen\", \"Donna\", \"Harvey\", \"Loise\", \"Mike\", \"Kirk\", \"Lana\", \"Jenna\", \"Micha\", \"Sarah\", \"Liam\", \"Scot\", \"Tala\", \"Maria\", \"Susan\", \"Charlie\", \"Gabriel\", \"Thomas\", \"Matthew\", \"Ahmed\", \"Akira\", \"Chang\", \"Hana\", \"Choi\", \"Aya\", \"May\", \"Rosanne\", \"Rola\", \"Rana\", \"Samira\", \"Mona\", \"Hana\", \"Fares\", \"Tarek\", \"Chris\", \"Arnold\", \"Dora\", \"Dana\", \"Leya\", \"Karl\", \"Omar\"])\nSET target (\"Maya\")\nSET found (False)\nREPEAT_FOR_EACH name in names\n    IF name is equal to target THEN\n        PRINT \"Found \" + target\n        SET found (True)\n        BREAK\n    END\nEND\nIF found is equal to False THEN\n    PRINT target + \" is not in the list\"\nEND",
+              "expected_output": "Maya is not in the list",
+              "pass_score": 1,
+              "skill_keys": [
+                "itf.data.searching",
+                "jargon.loop"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l3-s4",
+              "title": "Search the locker numbers",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "Activity 3.3 asks whether locker 425 has been assigned. Locker numbers are kept as strings so leading zeros such as 034 and 002 remain part of their data. Run the linear search; it stops as soon as 425 is found.",
+              "starter_code": "SET numbers ([\"323\", \"379\", \"523\", \"100\", \"634\", \"544\", \"277\", \"331\", \"669\", \"412\", \"333\", \"102\", \"034\", \"011\", \"458\", \"512\", \"599\", \"367\", \"273\", \"732\", \"555\", \"486\", \"352\", \"123\", \"370\", \"563\", \"190\", \"684\", \"547\", \"247\", \"391\", \"663\", \"433\", \"312\", \"134\", \"002\", \"058\", \"417\", \"425\", \"592\", \"519\", \"327\", \"373\", \"552\", \"375\", \"406\", \"302\", \"300\", \"309\", \"223\", \"140\", \"614\", \"541\", \"257\", \"361\", \"699\", \"412\", \"353\", \"142\", \"434\", \"111\"])\nSET target (\"425\")\nSET found (False)\nREPEAT_FOR_EACH number in numbers\n    IF number is equal to target THEN\n        PRINT \"Found \" + target\n        SET found (True)\n        BREAK\n    END\nEND\nIF found is equal to False THEN\n    PRINT target + \" is not in the list\"\nEND",
+              "expected_output": "Found 425",
+              "pass_score": 1,
+              "skill_keys": [
+                "itf.data.searching",
+                "jargon.loop"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l3-s5",
+              "title": "Check: linear search",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "A list is a data structure arranged in the form of a line."
+                },
+                {
+                  "id": "b",
+                  "text": "A linear search is a method for searching a list for a data item."
+                },
+                {
+                  "id": "c",
+                  "text": "A computer does not need instructions to perform a linear search."
+                },
+                {
+                  "id": "d",
+                  "text": "A linear search checks each place in a list one after the other."
+                },
+                {
+                  "id": "e",
+                  "text": "A linear search should end when the data item is found."
+                },
+                {
+                  "id": "f",
+                  "text": "A linear search should not end when it reaches the end of the list."
+                },
+                {
+                  "id": "g",
+                  "text": "A linear search loops for every place in the list."
+                },
+                {
+                  "id": "h",
+                  "text": "A linear search does not have any conditions to break the loop."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "A list is a data structure arranged in the form of a line."
+                  },
+                  {
+                    "id": "b",
+                    "text": "A linear search is a method for searching a list for a data item."
+                  },
+                  {
+                    "id": "c",
+                    "text": "A computer does not need instructions to perform a linear search."
+                  },
+                  {
+                    "id": "d",
+                    "text": "A linear search checks each place in a list one after the other."
+                  },
+                  {
+                    "id": "e",
+                    "text": "A linear search should end when the data item is found."
+                  },
+                  {
+                    "id": "f",
+                    "text": "A linear search should not end when it reaches the end of the list."
+                  },
+                  {
+                    "id": "g",
+                    "text": "A linear search loops for every place in the list."
+                  },
+                  {
+                    "id": "h",
+                    "text": "A linear search does not have any conditions to break the loop."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a",
+                  "b",
+                  "d",
+                  "e",
+                  "g"
+                ]
+              },
+              "skill_keys": [
+                "itf.data.searching",
+                "jargon.loop"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch4-l4",
+          "title": "Sorting",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Guide the learner through sorting by comparing consecutive items and recording every switch. Emphasize that reaching the end after a pass with switches means starting another pass, while a complete pass with no switches ends the sort.",
+          "sample_code": "SET names ([\"Cherry\", \"Kiwi\", \"Apple\", \"Banana\"])\nPRINT sorted(names)",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Sorting lists",
+            "objective": "Apply a sorting criterion by comparing consecutive list items until no more switches are required.",
+            "skill_keys": [
+              "itf.data.sorting"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch4-l4-s1",
+              "title": "Sorting changes list order",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Initially, items in a list are organized in the order in which they are added. Sorting means rearranging data based on a criterion, such as alphabetical order; a sorted list is easier to search. In Example 4.1, the Trip List is in signup order: Donna signed up first, followed by Anna, Harvey, Carl, and Grace. Sorting changes the places of those data items. Names can be sorted alphabetically, while numbers can be sorted by increasing numerical value. The chosen criterion supplies the rule for deciding which item should come before another.",
+              "skill_keys": [
+                "itf.data.sorting"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l4-s2",
+              "title": "Compare, switch, and repeat",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Example 4.2 sorts Donna, Anna, Harvey, Carl, and Grace alphabetically. Compare each pair of consecutive items. Donna and Anna are out of order, so they switch. Donna and Harvey stay. Harvey and Carl switch; then Harvey and Grace switch. Reaching the end after making switches means another run is required. On the next run, Carl and Donna switch, while the other compared pairs stay. One last run makes no switches, so the sort ends with Anna, Carl, Donna, Grace, Harvey. The program therefore starts at the first place, compares two consecutive items, switches them only when they are out of order, moves one place, and starts again after the end whenever at least one switch occurred.",
+              "skill_keys": [
+                "itf.data.sorting"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l4-s3",
+              "title": "Check final sorted order in Jargon",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "Activities 4.2 and 4.3 sort the book's name list alphabetically and number list by increasing value. Jargon's sorted function gives the final order so you can check a hand-worked sequence of comparisons and switches. Run the program and compare its two outputs with those criteria.",
+              "starter_code": "SET names ([\"Cherry\", \"Kiwi\", \"Apple\", \"Banana\"])\nSET numbers ([40, 50, 20, 30])\nPRINT sorted(names)\nPRINT sorted(numbers)",
+              "expected_output": "['Apple', 'Banana', 'Cherry', 'Kiwi']\n[20, 30, 40, 50]",
+              "pass_score": 1,
+              "skill_keys": [
+                "itf.data.sorting"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l4-s4",
+              "title": "Trace the alphabetical sort",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "applied",
+              "prompt": "Trace Activity 4.2 by hand, starting with [Cherry, Kiwi, Apple, Banana]. Compare only consecutive items in the order shown by the book's pink brackets. After each comparison, write the whole list and state whether a switch occurred. When you reach the end, begin another pass if any switch occurred. Stop only after a complete pass requires no switches, then state the final alphabetical list.",
+              "skill_keys": [
+                "itf.data.sorting"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l4-s5",
+              "title": "Trace two numerical criteria",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "applied",
+              "prompt": "Use the same consecutive-comparison process on [40, 50, 20, 30] twice. First apply Activity 4.3's criterion of increasing numerical value; then restart from the original list and apply Activity 4.4's criterion of decreasing numerical value. Show the list after every comparison, mark each switch, repeat passes when needed, and stop each sort only after a full pass has no switches.",
+              "skill_keys": [
+                "itf.data.sorting"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l4-s6",
+              "title": "Check: sorting",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "Sorting changes the order of data in a list."
+                },
+                {
+                  "id": "b",
+                  "text": "Alphabetical order is not a criterion for sorting."
+                },
+                {
+                  "id": "c",
+                  "text": "Increasing numerical value is a criterion for sorting."
+                },
+                {
+                  "id": "d",
+                  "text": "A sorting program sorts two data items at a time."
+                },
+                {
+                  "id": "e",
+                  "text": "A sorting program cannot sort a list of numbers."
+                },
+                {
+                  "id": "f",
+                  "text": "A sorting program keeps going through the list until no more changes are required."
+                },
+                {
+                  "id": "g",
+                  "text": "A sorting program always starts at the first place in the list."
+                },
+                {
+                  "id": "h",
+                  "text": "A sorted list is easier to search."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "Sorting changes the order of data in a list."
+                  },
+                  {
+                    "id": "b",
+                    "text": "Alphabetical order is not a criterion for sorting."
+                  },
+                  {
+                    "id": "c",
+                    "text": "Increasing numerical value is a criterion for sorting."
+                  },
+                  {
+                    "id": "d",
+                    "text": "A sorting program sorts two data items at a time."
+                  },
+                  {
+                    "id": "e",
+                    "text": "A sorting program cannot sort a list of numbers."
+                  },
+                  {
+                    "id": "f",
+                    "text": "A sorting program keeps going through the list until no more changes are required."
+                  },
+                  {
+                    "id": "g",
+                    "text": "A sorting program always starts at the first place in the list."
+                  },
+                  {
+                    "id": "h",
+                    "text": "A sorted list is easier to search."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a",
+                  "c",
+                  "d",
+                  "f",
+                  "g",
+                  "h"
+                ]
+              },
+              "skill_keys": [
+                "itf.data.sorting"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch4-l5",
+          "title": "Queues & Stacks",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Use the book's line, printer, book-pile, and Undo stories to contrast first-in-first-out with last-in-first-out. Ask the learner to identify which end receives and removes an item before confirming each queue or stack update.",
+          "sample_code": "SET queue ([\"Section 6A\", \"Section 6B\"])\nSET front (queue[0])\nREMOVE front from queue\nPRINT front",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Queue and stack behavior",
+            "objective": "Apply first-in-first-out queue rules and last-in-first-out stack rules to operating-system tasks.",
+            "skill_keys": [
+              "itf.data.queue",
+              "itf.data.stack",
+              "jargon.list"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch4-l5-s1",
+              "title": "Queues are first in, first out",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "A queue is a type of list. New items are added to the end, while old items are removed from the beginning. Items entering first therefore leave first: first in, first out. In Example 5.1, students who stand in line first return their books or board the bus first, while newcomers join the end. The operating system uses queues to track device tasks in the order received. In Example 5.2, its printer queue contains Section 6A, Section 6B, and Section 6C. It sends Section 6A first, removes that completed task, and then sends Section 6B, which is now at the beginning.",
+              "skill_keys": [
+                "itf.data.queue",
+                "jargon.list"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l5-s2",
+              "title": "Stacks are last in, first out",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "A stack is another type of list. New items are added at the beginning or top, and items are also removed from that top. Items entering last therefore leave first: last in, first out. In Example 5.3, the last book placed on the librarian's pile is on top and returns to the shelf first; the first book is at the bottom and returns last. The operating system uses stacks to reverse user actions. In Example 5.4, Mike types \"This is my homework,\" changes the font size to 24, and then makes it bold. Undo first removes the last action, Bold, then Font Size 24, and then the last typed word at the top of the remaining action stack.",
+              "skill_keys": [
+                "itf.data.stack",
+                "jargon.list"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l5-s3",
+              "title": "Update device-task queues",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "Model Activity 5.2 with Jargon lists. ADD places a new task at a queue's end. To complete the oldest task, read index 0 and REMOVE that value. The program follows Joe's save, print, and upload events, prints the one remaining upload task, completes it, and confirms that all queues are empty.",
+              "starter_code": "SET save_queue ([\"Math Homework\", \"Science Project\", \"English Essay\"])\nSET print_queue ([\"English Essay\"])\nSET upload_queue ([])\nSET front (save_queue[0])\nREMOVE front from save_queue\nADD \"Science Project\" to print_queue\nREPEAT 2 times\n    SET front (save_queue[0])\n    REMOVE front from save_queue\nEND\nSET front (print_queue[0])\nREMOVE front from print_queue\nADD \"Math Homework\" to upload_queue\nADD \"Science Project\" to upload_queue\nSET front (print_queue[0])\nREMOVE front from print_queue\nSET front (upload_queue[0])\nREMOVE front from upload_queue\nPRINT upload_queue\nSET front (upload_queue[0])\nREMOVE front from upload_queue\nPRINT save_queue\nPRINT print_queue\nPRINT upload_queue",
+              "expected_output": "['Science Project']\n[]\n[]\n[]",
+              "pass_score": 1,
+              "skill_keys": [
+                "itf.data.queue",
+                "jargon.list"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l5-s4",
+              "title": "Update an Undo stack",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "Model Activity 5.3. Each word is one action, and punctuation stays with the word before it. In this Jargon list, the rightmost item is the stack's top: each Undo reads the last item and removes it. The program applies Joe's three Undos, adds his next five words, then applies four more Undos.",
+              "starter_code": "SET actions ([\"One\", \"sunny\", \"summer\", \"morning,\", \"I\", \"went\"])\nREPEAT 3 times\n    SET top (actions[len(actions)-1])\n    REMOVE top from actions\nEND\nPRINT actions\nADD \"evening,\" to actions\nADD \"we\" to actions\nADD \"decided\" to actions\nADD \"to\" to actions\nADD \"go\" to actions\nREPEAT 4 times\n    SET top (actions[len(actions)-1])\n    REMOVE top from actions\nEND\nPRINT actions",
+              "expected_output": "['One', 'sunny', 'summer']\n['One', 'sunny', 'summer', 'evening,']",
+              "pass_score": 1,
+              "skill_keys": [
+                "itf.data.stack",
+                "jargon.list"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l5-s5",
+              "title": "Choose the right list behavior",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Activity 5.4 asks whether the two structures can exchange jobs. Could the operating system use a stack to manage device tasks that should be completed in arrival order? Could it use a queue to reverse a user's most recent actions first? Answer both questions and justify each answer by tracing a three-item example through first-in-first-out or last-in-first-out behavior.",
+              "skill_keys": [
+                "itf.data.queue",
+                "itf.data.stack"
+              ]
+            },
+            {
+              "slug": "itf-f-ch4-l5-s6",
+              "title": "Check: queues and stacks",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "There are different types of lists."
+                },
+                {
+                  "id": "b",
+                  "text": "The operating system uses only one type of list."
+                },
+                {
+                  "id": "c",
+                  "text": "A queue is not a type of list."
+                },
+                {
+                  "id": "d",
+                  "text": "A stack is a type of list."
+                },
+                {
+                  "id": "e",
+                  "text": "New items are added to the end of a queue."
+                },
+                {
+                  "id": "f",
+                  "text": "New items are added to the bottom of a stack."
+                },
+                {
+                  "id": "g",
+                  "text": "A queue behaves as first in, first out."
+                },
+                {
+                  "id": "h",
+                  "text": "A stack behaves as last in, first out."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "There are different types of lists."
+                  },
+                  {
+                    "id": "b",
+                    "text": "The operating system uses only one type of list."
+                  },
+                  {
+                    "id": "c",
+                    "text": "A queue is not a type of list."
+                  },
+                  {
+                    "id": "d",
+                    "text": "A stack is a type of list."
+                  },
+                  {
+                    "id": "e",
+                    "text": "New items are added to the end of a queue."
+                  },
+                  {
+                    "id": "f",
+                    "text": "New items are added to the bottom of a stack."
+                  },
+                  {
+                    "id": "g",
+                    "text": "A queue behaves as first in, first out."
+                  },
+                  {
+                    "id": "h",
+                    "text": "A stack behaves as last in, first out."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a",
+                  "d",
+                  "e",
+                  "g",
+                  "h"
+                ]
+              },
+              "skill_keys": [
+                "itf.data.queue",
+                "itf.data.stack"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "book_item": "L1 Example 1.1",
+      "handled_by": "itf-f-ch4-l1-s1"
+    },
+    {
+      "book_item": "L1 Example 1.2",
+      "handled_by": "itf-f-ch4-l1-s1"
+    },
+    {
+      "book_item": "L1 Example 1.3",
+      "handled_by": "itf-f-ch4-l1-s1"
+    },
+    {
+      "book_item": "L1 Example 1.4",
+      "handled_by": "itf-f-ch4-l1-s2"
+    },
+    {
+      "book_item": "L1 Example 1.5",
+      "handled_by": "itf-f-ch4-l1-s2"
+    },
+    {
+      "book_item": "L1 Example 1.6",
+      "handled_by": "itf-f-ch4-l1-s3",
+      "note": "device status table and device task lists retained"
+    },
+    {
+      "book_item": "L1 Activity 1.1",
+      "handled_by": "itf-f-ch4-l1-s6",
+      "note": "all eight true/false statements retained as a select-all check"
+    },
+    {
+      "book_item": "L1 Activity 1.2",
+      "handled_by": "itf-f-ch4-l1-s4",
+      "note": "fruit list recreated in Jargon"
+    },
+    {
+      "book_item": "L1 Activity 1.3",
+      "handled_by": "itf-f-ch4-l1-s4",
+      "note": "animal table represented as a list of rows"
+    },
+    {
+      "book_item": "L1 Activity 1.4",
+      "handled_by": "itf-f-ch4-l1-s5"
+    },
+    {
+      "book_item": "L1 Activity 1.5",
+      "handled_by": "itf-f-ch4-l1-s5"
+    },
+    {
+      "book_item": "L1 Activity 1.6",
+      "handled_by": "itf-f-ch4-l1-s5",
+      "note": "Excel table task converted to applied table construction"
+    },
+    {
+      "book_item": "L1 Activity 1.7",
+      "handled_by": "itf-f-ch4-l1-s5",
+      "note": "storage and printer task lists retained"
+    },
+    {
+      "book_item": "L2 Example 2.1",
+      "handled_by": "itf-f-ch4-l2-s1"
+    },
+    {
+      "book_item": "L2 Example 2.2",
+      "handled_by": "itf-f-ch4-l2-s1"
+    },
+    {
+      "book_item": "L2 Example 2.3",
+      "handled_by": "itf-f-ch4-l2-s2"
+    },
+    {
+      "book_item": "L2 Example 2.4",
+      "handled_by": "itf-f-ch4-l2-s3"
+    },
+    {
+      "book_item": "L2 Activity 2.1",
+      "handled_by": "itf-f-ch4-l2-s6",
+      "note": "all eight true/false statements retained as a select-all check"
+    },
+    {
+      "book_item": "L2 Activity 2.2",
+      "handled_by": "itf-f-ch4-l2-s4",
+      "note": "Farm list initialized in Jargon"
+    },
+    {
+      "book_item": "L2 Activity 2.3",
+      "handled_by": "itf-f-ch4-l2-s4",
+      "note": "addressed donkey item appended to Farm"
+    },
+    {
+      "book_item": "L2 Activity 2.4",
+      "handled_by": "itf-f-ch4-l2-s4",
+      "note": "Zoo list created from addressed items"
+    },
+    {
+      "book_item": "L2 Activity 2.5",
+      "handled_by": "itf-f-ch4-l2-s5"
+    },
+    {
+      "book_item": "L2 Activity 2.6",
+      "handled_by": "itf-f-ch4-l2-s5"
+    },
+    {
+      "book_item": "L2 Activity 2.7",
+      "handled_by": "itf-f-ch4-l2-s5"
+    },
+    {
+      "book_item": "L2 Activity 2.8",
+      "handled_by": "itf-f-ch4-l2-s5",
+      "note": "teacher-assisted web-address visit retained"
+    },
+    {
+      "book_item": "L3 Example 3.1",
+      "handled_by": "itf-f-ch4-l3-s1"
+    },
+    {
+      "book_item": "L3 Example 3.2",
+      "handled_by": "itf-f-ch4-l3-s2"
+    },
+    {
+      "book_item": "L3 Example 3.3",
+      "handled_by": "itf-f-ch4-l3-s2"
+    },
+    {
+      "book_item": "L3 Activity 3.1",
+      "handled_by": "itf-f-ch4-l3-s5",
+      "note": "all eight true/false statements retained as a select-all check"
+    },
+    {
+      "book_item": "L3 Activity 3.2",
+      "handled_by": "itf-f-ch4-l3-s3",
+      "note": "Field Trip list searched for Maya; the book's list contains May but not Maya"
+    },
+    {
+      "book_item": "L3 Activity 3.3",
+      "handled_by": "itf-f-ch4-l3-s4",
+      "note": "locker numbers treated as strings to preserve leading zeros"
+    },
+    {
+      "book_item": "L4 Example 4.1",
+      "handled_by": "itf-f-ch4-l4-s1"
+    },
+    {
+      "book_item": "L4 Example 4.2",
+      "handled_by": "itf-f-ch4-l4-s2",
+      "note": "complete compare-switch-repeat narrative retained"
+    },
+    {
+      "book_item": "L4 Activity 4.1",
+      "handled_by": "itf-f-ch4-l4-s6",
+      "note": "all eight true/false statements retained as a select-all check"
+    },
+    {
+      "book_item": "L4 Activity 4.2",
+      "handled_by": "itf-f-ch4-l4-s4"
+    },
+    {
+      "book_item": "L4 Activity 4.3",
+      "handled_by": "itf-f-ch4-l4-s5"
+    },
+    {
+      "book_item": "L4 Activity 4.4",
+      "handled_by": "itf-f-ch4-l4-s5"
+    },
+    {
+      "book_item": "L5 Example 5.1",
+      "handled_by": "itf-f-ch4-l5-s1"
+    },
+    {
+      "book_item": "L5 Example 5.2",
+      "handled_by": "itf-f-ch4-l5-s1"
+    },
+    {
+      "book_item": "L5 Example 5.3",
+      "handled_by": "itf-f-ch4-l5-s2"
+    },
+    {
+      "book_item": "L5 Example 5.4",
+      "handled_by": "itf-f-ch4-l5-s2"
+    },
+    {
+      "book_item": "L5 Activity 5.1",
+      "handled_by": "itf-f-ch4-l5-s6",
+      "note": "all eight true/false statements retained as a select-all check"
+    },
+    {
+      "book_item": "L5 Activity 5.2",
+      "handled_by": "itf-f-ch4-l5-s3",
+      "note": "save, print, and upload queues executed in Jargon"
+    },
+    {
+      "book_item": "L5 Activity 5.3",
+      "handled_by": "itf-f-ch4-l5-s4",
+      "note": "both Undo sequences executed in Jargon"
+    },
+    {
+      "book_item": "L5 Activity 5.4",
+      "handled_by": "itf-f-ch4-l5-s5"
+    }
+  ],
+  "skipped": [
+    {
+      "book_item": "‘How to’ Appendix (pp.224–257)",
+      "reason": "application how-to guide; import as teacher resources, not lessons"
+    }
+  ]
+}

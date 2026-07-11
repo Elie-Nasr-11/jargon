@@ -1,0 +1,981 @@
+{
+  "schema": "jargon-book-manifest/v1",
+  "chunk": "itf-f-ch1",
+  "subject": {
+    "slug": "itf-beginner",
+    "title": "IT Frontiers — Beginner Series",
+    "description": "Foundational computing concepts: systems and signals, computer design, instructions and software, and data structures — from the IT Frontiers Beginner series (Chapters & Co.)."
+  },
+  "course": {
+    "slug": "itf-f",
+    "title": "IT Frontiers Book F",
+    "description": "Book F of the IT Frontiers Beginner series: systems & signals, computer design, instructions & software, and data & data structures.",
+    "version_label": "v1"
+  },
+  "units": [
+    {
+      "slug": "itf-f-ch1",
+      "title": "Systems & Signals",
+      "description": "How systems use input, processing, output, memory, and interfaces to handle and exchange sound, light, pressure, electronic, and radio wave signals.",
+      "lessons": [
+        {
+          "slug": "itf-f-ch1-l1",
+          "title": "Purpose",
+          "level": "Beginner",
+          "lesson_type": "discussion",
+          "tutor_prompt": "Help the learner connect everyday tools to the purposes they serve, then distinguish general-purpose personal computers from the three specific-purpose categories. Ask for the learner's own examples before using the checks to confirm the book's four computer categories.",
+          "sample_code": "",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Purpose and computer categories",
+            "objective": "Identify the specific purpose of a technology and distinguish general-purpose personal computers from specific-purpose embedded computers, servers, and supercomputers.",
+            "skill_keys": [
+              "process.purpose",
+              "itf.computers.categories"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch1-l1-s1",
+              "title": "Every technology serves a purpose",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Technology is any tool or machine that is made to serve a purpose. Each is used to perform a particular task; each serves a specific purpose. In Example 1.1, the hammer and screwdriver both help us build, but one hammers in nails while the other drives in screws. A bus and a car both provide transportation, but a bus transports many people and a car transports few. A space shuttle and an airplane both fly people and cargo, but the shuttle flies them to space while the airplane flies them to locations on the ground.",
+              "skill_keys": [
+                "process.purpose"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l1-s2",
+              "title": "General-purpose personal computers",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "The computer is also a technology. The four types of personal computer are the desktop, laptop, tablet, and smartphone. They are general-purpose technologies because they serve more than one purpose. Example 1.2 shows those purposes: entertainment such as reading e-books, playing games, and watching videos; work such as attending online classes, finding information, doing homework, reviewing patient records, preparing lessons, and creating digital artwork; and communication with friends, family, teachers, and classmates.",
+              "skill_keys": [
+                "process.purpose",
+                "itf.computers.categories"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l1-s3",
+              "title": "Three specific-purpose categories",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Embedded computers, servers, and supercomputers are specific-purpose computers. Embedded computers sit inside machines and control them, so they are often called control modules. In Example 1.3, an elevator's embedded computer senses a pressed button, moves to that floor, and controls its doors; in Example 1.4, a car's engine control module controls the engine and its brake control module controls the brakes. A server serves requests from many clients at the same time: Example 1.5 describes YouTube video requests, Amazon buying and selling requests, and Google information requests. A supercomputer responds to one big request rather than many small ones; Example 1.6 uses the many calculations needed to predict the weather. The four main computer categories are embedded computers, personal computers, servers, and supercomputers.",
+              "skill_keys": [
+                "process.purpose",
+                "itf.computers.categories"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l1-s4",
+              "title": "Your own purposes",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "First list two tasks, not mentioned in the lesson, that a personal computer can perform. Then name three additional technologies that were not mentioned and state the specific purpose for which each one is made. Explain each purpose in your own words.",
+              "skill_keys": [
+                "process.purpose"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l1-s5",
+              "title": "Match technologies to purposes",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Which option matches every technology with the specific purpose given in the book's matching activity?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "Hammer—hammering in nails; bus—transporting many people; space shuttle—flying people to space; telescope—looking at distant objects; elevator—moving people up and down in a building; server—serving small requests from many clients; supercomputer—solving big problems."
+                },
+                {
+                  "id": "b",
+                  "text": "Hammer—looking at distant objects; bus—transporting many people; space shuttle—flying people to space; telescope—hammering in nails; elevator—moving people up and down in a building; server—serving small requests from many clients; supercomputer—solving big problems."
+                },
+                {
+                  "id": "c",
+                  "text": "Hammer—hammering in nails; bus—transporting few people; space shuttle—flying between locations on the ground; telescope—looking at distant objects; elevator—moving people up and down in a building; server—solving one big problem; supercomputer—serving many clients."
+                },
+                {
+                  "id": "d",
+                  "text": "Hammer—driving in screws; bus—transporting many people; space shuttle—flying people to space; telescope—looking at distant objects; elevator—serving small client requests; server—moving people between floors; supercomputer—solving big problems."
+                }
+              ],
+              "quiz": {
+                "prompt": "Which option matches every technology with the specific purpose given in the book's matching activity?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "Hammer—hammering in nails; bus—transporting many people; space shuttle—flying people to space; telescope—looking at distant objects; elevator—moving people up and down in a building; server—serving small requests from many clients; supercomputer—solving big problems."
+                  },
+                  {
+                    "id": "b",
+                    "text": "Hammer—looking at distant objects; bus—transporting many people; space shuttle—flying people to space; telescope—hammering in nails; elevator—moving people up and down in a building; server—serving small requests from many clients; supercomputer—solving big problems."
+                  },
+                  {
+                    "id": "c",
+                    "text": "Hammer—hammering in nails; bus—transporting few people; space shuttle—flying between locations on the ground; telescope—looking at distant objects; elevator—moving people up and down in a building; server—solving one big problem; supercomputer—serving many clients."
+                  },
+                  {
+                    "id": "d",
+                    "text": "Hammer—driving in screws; bus—transporting many people; space shuttle—flying people to space; telescope—looking at distant objects; elevator—serving small client requests; server—moving people between floors; supercomputer—solving big problems."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "process.purpose"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l1-s6",
+              "title": "Check the four computer categories",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Which summary correctly names and classifies the computer categories described in the lesson?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "Desktop, laptop, tablet, and smartphone are the four types of general-purpose personal computers. Embedded computers, servers, and supercomputers are specific-purpose: embedded computers sit inside and control a larger machine and are often called control modules, servers handle many small client requests, and supercomputers handle one big request."
+                },
+                {
+                  "id": "b",
+                  "text": "Desktop, laptop, server, and supercomputer are the four types of personal computers. Embedded computers are general-purpose, while personal computers are specific-purpose."
+                },
+                {
+                  "id": "c",
+                  "text": "Desktop, laptop, tablet, and smartphone are specific-purpose computers. Servers handle one big request, while supercomputers handle many small client requests."
+                },
+                {
+                  "id": "d",
+                  "text": "Embedded computers are personal computers found outside machines. Servers and supercomputers are both general-purpose computers because they perform every kind of task."
+                }
+              ],
+              "quiz": {
+                "prompt": "Which summary correctly names and classifies the computer categories described in the lesson?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "Desktop, laptop, tablet, and smartphone are the four types of general-purpose personal computers. Embedded computers, servers, and supercomputers are specific-purpose: embedded computers sit inside and control a larger machine and are often called control modules, servers handle many small client requests, and supercomputers handle one big request."
+                  },
+                  {
+                    "id": "b",
+                    "text": "Desktop, laptop, server, and supercomputer are the four types of personal computers. Embedded computers are general-purpose, while personal computers are specific-purpose."
+                  },
+                  {
+                    "id": "c",
+                    "text": "Desktop, laptop, tablet, and smartphone are specific-purpose computers. Servers handle one big request, while supercomputers handle many small client requests."
+                  },
+                  {
+                    "id": "d",
+                    "text": "Embedded computers are personal computers found outside machines. Servers and supercomputers are both general-purpose computers because they perform every kind of task."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "itf.computers.categories"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch1-l2",
+          "title": "Systems & Signals",
+          "level": "Beginner",
+          "lesson_type": "discussion",
+          "tutor_prompt": "Build the lesson around systems as parts working together to produce change, then have the learner classify input and output across personal computers, the human body, and embedded computers. Emphasize that a signal is a message carried in physical form and that actuators are output devices.",
+          "sample_code": "",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Systems, input, and output",
+            "objective": "Classify parts of human, personal-computer, and embedded-computer systems as input or output and identify the physical form of the signals they capture or emit.",
+            "skill_keys": [
+              "systems.input",
+              "systems.process",
+              "systems.output",
+              "itf.signals.types"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch1-l2-s1",
+              "title": "Parts working as one system",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "A system is something that is made up of parts working together as one whole unit. To serve its purpose, a system must do work, and that work results in change. Example 2.1 shows a bicycle changing pressure on a pedal into the spinning of its rear wheel. In Example 2.2, a computer changes pressure on keyboard keys into letters on a screen. Example 2.3 shows that a living thing can also be a system: the human body changes the sound of a question into the sound of an answer.",
+              "skill_keys": [
+                "systems.process"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l2-s2",
+              "title": "Signals, input, and output",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "A signal is a message that is carried in physical form. Example 2.4 shows a question carried by sound to an ear, the word \"Hello\" carried by light to an eye, and letter names carried by pressure to a keyboard. A system that works with signals must capture and emit them. Capturing is input: microphones capture sound, cameras capture light, and mice, keyboards, touchpads, and digitizers capture pressure. Emitting is output: speakers emit sound, screens emit light, and vibration motors exert pressure. The human body inputs through ears, eyes, and skin, then outputs through actions of the mouth, arms, and legs.",
+              "skill_keys": [
+                "systems.input",
+                "systems.output",
+                "itf.signals.types"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l2-s3",
+              "title": "Input and output in an elevator",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "An embedded computer's input and output devices depend on the machine it controls. Input panels accept keys, buttons, and dials; sensors capture particular forms, such as heat sensors sensing temperature and infrared sensors sensing infrared light. In Example 2.5, Alan presses 6 on the elevator's cabin operating panel. In Example 2.6, an infrared sensor receives light across the doorway; if a body blocks that signal, the computer keeps the doors open. Example 2.7 shows a screen displaying the floor and speakers beeping on arrival. Embedded computers also use output devices called actuators. In Example 2.8, a small motor pushes or pulls the doors and a large motor moves the cabin. Actuator output is commonly pressure that causes a push or pull and results in action.",
+              "skill_keys": [
+                "systems.input",
+                "systems.output",
+                "itf.signals.types"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l2-s4",
+              "title": "Classify system parts",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Organize your answer into three groups. First classify each personal-computer device as input or output and name its signal form—sound, light, or pressure: microphone, keyboard, screen, mouse, camera, speaker, digitizer. Second classify the human parts skin, arms, eyes, legs, ears, and mouth as input or output. Third classify the elevator parts screen, door motor, cabin motor, cabin operating panel, and door infrared sensor as input or output. Explain the rule you used.",
+              "skill_keys": [
+                "systems.input",
+                "systems.output",
+                "itf.signals.types"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l2-s5",
+              "title": "Apply the system model to a microwave",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "A microwave oven heats food after a user enters a duration with buttons and dials on its operating panel and presses Start. A turn-tray then rotates while a microwave emitter radiates microwave energy; both stop when the entered duration is reached. Name the three parts mentioned, identify the input device, and identify the two output devices. Explain how the parts work together as one system.",
+              "skill_keys": [
+                "systems.input",
+                "systems.process",
+                "systems.output"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l2-s6",
+              "title": "Check systems and signals",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Which summary is fully consistent with the lesson?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "A system can be living or nonliving and has parts that work together to produce change. A signal is a message carried in physical form; sound and infrared light are signal forms. Input devices capture signals and actuators are output devices: for example, a microphone is sound input, a screen is light output, human skin is input, and an elevator door motor is output."
+                },
+                {
+                  "id": "b",
+                  "text": "Only machines can be systems. Signals are messages without physical form. Input devices emit signals, and actuators are input devices."
+                },
+                {
+                  "id": "c",
+                  "text": "A system cannot change input to output. Sound is a signal form, but infrared light is not. Actuators capture the user's input."
+                },
+                {
+                  "id": "d",
+                  "text": "A system is one part working alone. Input devices capture only light signals, and every output device must be a screen."
+                }
+              ],
+              "quiz": {
+                "prompt": "Which summary is fully consistent with the lesson?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "A system can be living or nonliving and has parts that work together to produce change. A signal is a message carried in physical form; sound and infrared light are signal forms. Input devices capture signals and actuators are output devices: for example, a microphone is sound input, a screen is light output, human skin is input, and an elevator door motor is output."
+                  },
+                  {
+                    "id": "b",
+                    "text": "Only machines can be systems. Signals are messages without physical form. Input devices emit signals, and actuators are input devices."
+                  },
+                  {
+                    "id": "c",
+                    "text": "A system cannot change input to output. Sound is a signal form, but infrared light is not. Actuators capture the user's input."
+                  },
+                  {
+                    "id": "d",
+                    "text": "A system is one part working alone. Input devices capture only light signals, and every output device must be a screen."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "systems.input",
+                "systems.process",
+                "systems.output",
+                "itf.signals.types"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch1-l3",
+          "title": "Signal Processing",
+          "level": "Beginner",
+          "lesson_type": "discussion",
+          "tutor_prompt": "Guide the learner through the input-processing-output path by treating input and output devices as translators at the interface. Ask the learner to trace concrete signal paths and watch for confusion between outside-world signals, electronic signals, and human action potentials.",
+          "sample_code": "",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Signal translation and processing",
+            "objective": "Trace how input devices, a processor, and output devices translate and process signals across an interface.",
+            "skill_keys": [
+              "signals.conversion",
+              "systems.process"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch1-l3-s1",
+              "title": "Translate signals for the processor",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Changing input signals to output signals is called processing, and it happens inside a computer in a part called the processor. Because the processor works on electricity, it understands only electronic signals—not the sound, light, and pressure signals of the outside world. Translation means changing a message from one language into another without changing its meaning. Input devices translate outside-world signals into electronic signals; output devices translate electronic signals back into outside-world signals. Each input or output device is specialized to translate a particular form of signal.",
+              "skill_keys": [
+                "signals.conversion",
+                "systems.process"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l3-s2",
+              "title": "The interface and the processor",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "The interface is the boundary between the outside world and the inside world of a computer, where signals are translated. All input and output devices form the user interface; the auditory interface translates sound and the visual interface translates light. All computer parts are called hardware. The processor is the hardware that changes input to output, so it is the computer's central processing unit. In Example 3.1, Karl says, \"Hey Siri!\" The microphone translates that sound into electronic signals; the processor wakes Siri and sends an electronic message to the speaker; the speaker translates it into the sound \"How can I help you?\"",
+              "skill_keys": [
+                "signals.conversion",
+                "systems.process"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l3-s3",
+              "title": "Humans and embedded computers process signals",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Humans have a brain instead of a processor. The brain also works with electricity, using action potential signals. Ears, eyes, and skin translate outside signals into action potentials, while the mouth, arms, and legs translate action potentials into sound or movement. Embedded computers use electronic signals and have input and output devices suited to their machines; actuators translate electronic signals into movement. In Example 3.2, an elevator's operating panel and call button translate user input into electronic signals. The control module processes them, then makes the doors close and the cabin move; its screen and speakers can also produce output.",
+              "skill_keys": [
+                "signals.conversion",
+                "systems.process"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l3-s4",
+              "title": "Trace five signal paths",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Write each path in order from input device, through the processor, to output device or actuator: (a) taking a friend's picture so it appears on the screen; (b) saying \"Hey Siri\" and hearing \"How can I help you?\"; (c) clicking a mouse so an app starts on the screen; (d) touching a touchscreen so a video starts playing on its screen and speaker; and (e) pressing an elevator floor button so the doors close and the cabin moves up. Name every device in each path.",
+              "skill_keys": [
+                "signals.conversion",
+                "systems.process"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l3-s5",
+              "title": "Identify signal translators",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Complete these identifications using the lesson's device and body-part names. Name the two parts of the visual interface, the two parts of the auditory interface, and the two parts of a touchscreen. State which two stages—input or output—involve translation, which two human limbs perform an actuator-like function, and which two elevator parts have motors and are actuators. Using ear, camera, digitizer, screen, skin, and microphone once each, match these translations: sound to electronic signals; sound to action potentials; electronic to light; pressure to electronic; pressure to action potentials; light to electronic. Then use operating panel, infrared sensor, hand, mechanized cabin, mouth, and actuator once each for: pressure to electronic; infrared to electronic; action potentials to a hand movement; electronic signals to cabin movement; action potentials to sound; electronic signals to any movement.",
+              "skill_keys": [
+                "signals.conversion",
+                "systems.process"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l3-s6",
+              "title": "Check translation and processing",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Which summary is fully correct?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "A processor changes input to output and works with electronic signals. Input devices translate outside-world signals into electronic signals; output devices translate electronic signals outward; actuators translate electronic signals into movement. Embedded computers have processors, and translation happens at the interface."
+                },
+                {
+                  "id": "b",
+                  "text": "A processor works only with light signals. Input devices translate electronic signals outward, while output devices cannot translate. Embedded computers do not have processors."
+                },
+                {
+                  "id": "c",
+                  "text": "A processor captures every outside-world signal directly. An actuator is an input device, and the interface is located only inside the processor."
+                },
+                {
+                  "id": "d",
+                  "text": "Processing happens outside the computer. The interface prevents translation, and a processor changes output back into input without using electronic signals."
+                }
+              ],
+              "quiz": {
+                "prompt": "Which summary is fully correct?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "A processor changes input to output and works with electronic signals. Input devices translate outside-world signals into electronic signals; output devices translate electronic signals outward; actuators translate electronic signals into movement. Embedded computers have processors, and translation happens at the interface."
+                  },
+                  {
+                    "id": "b",
+                    "text": "A processor works only with light signals. Input devices translate electronic signals outward, while output devices cannot translate. Embedded computers do not have processors."
+                  },
+                  {
+                    "id": "c",
+                    "text": "A processor captures every outside-world signal directly. An actuator is an input device, and the interface is located only inside the processor."
+                  },
+                  {
+                    "id": "d",
+                    "text": "Processing happens outside the computer. The interface prevents translation, and a processor changes output back into input without using electronic signals."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "signals.conversion",
+                "systems.process"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch1-l4",
+          "title": "Memory",
+          "level": "Beginner",
+          "lesson_type": "discussion",
+          "tutor_prompt": "Use the saved-photo story to show why a computer needs both main memory and storage. Keep the distinctions concrete: main memory is limited and volatile, storage is larger and nonvolatile, and signals are copied rather than moved between them.",
+          "sample_code": "",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Main memory and storage",
+            "objective": "Explain how main memory and storage hold signals and distinguish volatile main memory from nonvolatile HDD and SSD storage.",
+            "skill_keys": [
+              "memory.storage"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch1-l4-s1",
+              "title": "A holding place for signals",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Memory is the holding place of signals inside a computer. Input electronic signals wait there to be processed, and processed electronic signals wait there to become output. The memory module is the hardware dedicated to main memory, and its capacity limits how many signals it can hold. In Example 4.1, Leena's tiny computer has only six places in memory. When all six are full, a new input signal has nowhere to go and must be dropped; the computer can accept it only after a place becomes available. If a memory module is too small, the system slows while it waits for room.",
+              "skill_keys": [
+                "memory.storage"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l4-s2",
+              "title": "Main memory works with storage",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Storage is a form of memory, but it is much larger than main memory. Signals that need to stay in the computer but do not need processing are sent to storage, freeing main memory for signals that do need processing. In Example 4.2, Leena takes a photograph. The camera translates light into electronic signals and sends them to main memory; a copy is processed, placed back in main memory, and sent to the screen so she can see it. When she saves the photograph, a copy of its signals is sent from main memory to storage before she powers off the smartphone.",
+              "skill_keys": [
+                "memory.storage"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l4-s3",
+              "title": "Save, power off, and retrieve",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Signals in storage stay after a computer is powered off, while signals in main memory are lost. When Leena powers on her phone later and selects the photograph's thumbnail, the stored signals are copied to main memory, processed, and sent as output to the screen, so she sees the photograph again. Signals transferred between main memory and storage are copied, not moved: summoning a signal from storage leaves the original safe in storage. Main memory is therefore volatile—it loses its signals without power—while storage is nonvolatile.",
+              "skill_keys": [
+                "memory.storage"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l4-s4",
+              "title": "HDD and SSD storage",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Storage is performed by a drive. The two drive types are the hard disk drive (HDD) and the solid state drive (SSD), and both provide nonvolatile storage. An HDD uses magnetic rotating disks, while an SSD uses electronic microchips. Magnetic disks need more space and are heavier than microchips, so an HDD is larger and heavier, while an SSD is smaller and lighter. The SSD is based on electronic technology; the HDD is based on magnetic technology.",
+              "skill_keys": [
+                "memory.storage"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l4-s5",
+              "title": "Match memory actions to diagrams",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "The book gives three diagram descriptions: [1] a copy is sent from storage to main memory; [2] a copy is sent from main memory to storage; [3] main memory is empty while storage still holds signals. Match each situation to diagram 1, 2, or 3: turning off a computer; saving an edited photograph; clicking a photograph thumbnail to see it. Explain why each match follows the rules for main memory and storage.",
+              "skill_keys": [
+                "memory.storage"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l4-s6",
+              "title": "Check memory and drives",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Which summary is fully correct?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "Memory holds signals, and main memory and storage are both parts of computer memory. Storage is larger and nonvolatile, preserves original signals because transfers are copies, and is performed by drives. HDDs use magnetic disks and are larger and heavier; SSDs use electronic microchips and are smaller and lighter."
+                },
+                {
+                  "id": "b",
+                  "text": "Main memory is larger than storage and keeps its signals after power is off. Signals are moved out of storage, so no original remains. SSDs use magnetic disks."
+                },
+                {
+                  "id": "c",
+                  "text": "Storage is volatile and is not part of computer memory. HDDs use electronic microchips and are smaller and lighter than SSDs."
+                },
+                {
+                  "id": "d",
+                  "text": "Memory does not hold signals. Storage is performed by the processor, and turning off a computer empties both main memory and storage."
+                }
+              ],
+              "quiz": {
+                "prompt": "Which summary is fully correct?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "Memory holds signals, and main memory and storage are both parts of computer memory. Storage is larger and nonvolatile, preserves original signals because transfers are copies, and is performed by drives. HDDs use magnetic disks and are larger and heavier; SSDs use electronic microchips and are smaller and lighter."
+                  },
+                  {
+                    "id": "b",
+                    "text": "Main memory is larger than storage and keeps its signals after power is off. Signals are moved out of storage, so no original remains. SSDs use magnetic disks."
+                  },
+                  {
+                    "id": "c",
+                    "text": "Storage is volatile and is not part of computer memory. HDDs use electronic microchips and are smaller and lighter than SSDs."
+                  },
+                  {
+                    "id": "d",
+                    "text": "Memory does not hold signals. Storage is performed by the processor, and turning off a computer empties both main memory and storage."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "memory.storage"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch1-l5",
+          "title": "Exchanging Signals",
+          "level": "Beginner",
+          "lesson_type": "discussion",
+          "tutor_prompt": "Guide the learner from the two conditions for exchanging signals to human-computer, Bluetooth, wired, wireless, and Internet interfaces. Use Sarah's examples as one continuous story and ask the learner to identify systems, access points, signal forms, and interface types before confirming them.",
+          "sample_code": "",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Interfaces for exchanging signals",
+            "objective": "Trace how systems exchange signals across human-computer, wireless, wired, and Internet interfaces.",
+            "skill_keys": [
+              "signals.exchange",
+              "systems.output"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch1-l5-s1",
+              "title": "Exchange signals across an interface",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Systems can exchange signals across an interface. Two conditions must be satisfied: signals must be able to travel between the systems, and both systems must be able to translate the signals sent back and forth. The human-computer interface, also called the user interface, lets humans and computers exchange sound, light, and pressure signals even though humans think with action potentials and computers process electronic signals. In the book's misnumbered Example 4.1, Sarah presses her tablet touchscreen; pressure becomes electronic input, the video starts, and its light and sound travel back to her eyes and ears and become action potentials.",
+              "skill_keys": [
+                "signals.exchange",
+                "systems.output"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l5-s2",
+              "title": "Radio waves and Bluetooth",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Computers can exchange radio waves, which travel in all directions and can be sensed and emitted by computers but not by humans. An antenna is both an input and output device: it translates radio waves to electronic signals and electronic signals to radio waves. Bluetooth carries signals over short distances, up to about 10 meters. In Example 4.2, Sarah sends a photograph from smartphone to desktop; the phone sends a copied signal as radio waves and the desktop translates it back. Examples 4.3, 4.4, and 4.5 show her phone exchanging Bluetooth signals with embedded computers in earphones, a smart television, and a car so music or video can play through those devices.",
+              "skill_keys": [
+                "signals.exchange",
+                "systems.output"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l5-s3",
+              "title": "The Internet bridges long distances",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "The Internet is a large system whose parts carry signals between computers across long distances. WiFi is found in all four personal-computer types; its antennas exchange radio waves with a gateway device across about 100 meters. Cellular antennas exchange radio waves with a cell tower across about 1,000 meters and are found only in smartphones and a few select tablets. Gateway devices and cell towers are Internet access points. Network cables carry network electronic signals, and a network port translates between those signals and the internal electronic signals arranged differently inside a computer. Wired interfaces use cables and electronic signals; wireless interfaces use antennas and radio waves through the air. In Example 4.6, Sarah is away from her home gateway, so she requests a YouTube video through a cellular tower. The Internet delivers the request to a server through a wired interface; the server copies the video's stored signals and returns them through the Internet and tower to her smartphone.",
+              "skill_keys": [
+                "signals.exchange",
+                "systems.output"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l5-s4",
+              "title": "Choose systems and wireless technologies",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Classify each exchange as personal-computer with server through the Internet, personal-computer with personal-computer, or personal-computer with embedded-computer: playing phone music through car speakers; using a tablet to search Google; sending a tablet photograph to a desktop; showing a tablet movie on a smart television; watching YouTube on a laptop. Then rank Bluetooth, WiFi, and cellular from shortest to longest useful distance. Finally name the wireless technology or technologies that fit each case: phone-to-laptop photograph transfer; desktop watching YouTube; smartphone watching YouTube; laptop searching Google; laptop playing music through earphones.",
+              "skill_keys": [
+                "signals.exchange"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l5-s5",
+              "title": "Trace a YouTube exchange",
+              "stage": "practice",
+              "mode": "reflection",
+              "prompt": "Answer the interface questions in two parts. First name the human-computer interface; state the two conditions needed for two systems to exchange signals; explain why the Internet is a system and its purpose; name its two access-point devices and which one can provide wired and wireless access; and state what signals antennas and network ports exchange and what those signals travel through. Then trace this case: \"I watched a YouTube video on my smartphone while going to the mall in the car.\" Identify Computer 1 and Computer 2, the wired and wireless interfaces, each access point, and the signal form that bridges each interface.",
+              "skill_keys": [
+                "signals.exchange",
+                "systems.output"
+              ]
+            },
+            {
+              "slug": "itf-f-ch1-l5-s6",
+              "title": "Check interfaces and access points",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Which summary is fully correct?",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "Two systems can exchange signals when signals can travel between them and both can translate them; this includes humans with computers and personal computers with embedded computers. Computers exchange copies. The Internet is a system connecting personal computers with servers; gateway devices and cell towers are access points. Bluetooth and WiFi are wireless radio-wave technologies, a gateway can provide wired and wireless access, and WiFi and cellular can interface with the Internet. Wired interfaces use cables and electronic signals; wireless interfaces use antennas and radio waves. Cellular antennas are found in smartphones and some tablets."
+                },
+                {
+                  "id": "b",
+                  "text": "Signals do not need to travel across an interface. Computers exchange their only original signals. Bluetooth is wired, and neither gateway devices nor cell towers provide Internet access."
+                },
+                {
+                  "id": "c",
+                  "text": "Humans cannot exchange signals with computers. Embedded computers cannot exchange with personal computers. WiFi uses network cables only, and cellular is used only for direct Bluetooth transfers."
+                },
+                {
+                  "id": "d",
+                  "text": "The Internet is not a system. A gateway device can provide only a wired interface, while cell towers exchange signals through network cables with every desktop and laptop."
+                }
+              ],
+              "quiz": {
+                "prompt": "Which summary is fully correct?",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "Two systems can exchange signals when signals can travel between them and both can translate them; this includes humans with computers and personal computers with embedded computers. Computers exchange copies. The Internet is a system connecting personal computers with servers; gateway devices and cell towers are access points. Bluetooth and WiFi are wireless radio-wave technologies, a gateway can provide wired and wireless access, and WiFi and cellular can interface with the Internet. Wired interfaces use cables and electronic signals; wireless interfaces use antennas and radio waves. Cellular antennas are found in smartphones and some tablets."
+                  },
+                  {
+                    "id": "b",
+                    "text": "Signals do not need to travel across an interface. Computers exchange their only original signals. Bluetooth is wired, and neither gateway devices nor cell towers provide Internet access."
+                  },
+                  {
+                    "id": "c",
+                    "text": "Humans cannot exchange signals with computers. Embedded computers cannot exchange with personal computers. WiFi uses network cables only, and cellular is used only for direct Bluetooth transfers."
+                  },
+                  {
+                    "id": "d",
+                    "text": "The Internet is not a system. A gateway device can provide only a wired interface, while cell towers exchange signals through network cables with every desktop and laptop."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a"
+                ]
+              },
+              "skill_keys": [
+                "signals.exchange",
+                "systems.output"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "book_item": "L1 Example 1.1",
+      "handled_by": "itf-f-ch1-l1-s1"
+    },
+    {
+      "book_item": "L1 Example 1.2",
+      "handled_by": "itf-f-ch1-l1-s2"
+    },
+    {
+      "book_item": "L1 Example 1.3",
+      "handled_by": "itf-f-ch1-l1-s3"
+    },
+    {
+      "book_item": "L1 Example 1.4",
+      "handled_by": "itf-f-ch1-l1-s3"
+    },
+    {
+      "book_item": "L1 Example 1.5",
+      "handled_by": "itf-f-ch1-l1-s3"
+    },
+    {
+      "book_item": "L1 Example 1.6",
+      "handled_by": "itf-f-ch1-l1-s3"
+    },
+    {
+      "book_item": "L1 Activity 1.1",
+      "handled_by": "itf-f-ch1-l1-s5",
+      "note": "paper matching converted to an all-correct-matches MCQ"
+    },
+    {
+      "book_item": "L1 Activity 1.2",
+      "handled_by": "itf-f-ch1-l1-s4",
+      "note": "merged with the learner-generated examples in Activity 1.3"
+    },
+    {
+      "book_item": "L1 Activity 1.3",
+      "handled_by": "itf-f-ch1-l1-s4"
+    },
+    {
+      "book_item": "L1 Activity 1.4",
+      "handled_by": "itf-f-ch1-l1-s6",
+      "note": "personal-computer naming merged into the category check"
+    },
+    {
+      "book_item": "L1 Activity 1.5",
+      "handled_by": "itf-f-ch1-l1-s6",
+      "note": "word-bank facts merged into the category check"
+    },
+    {
+      "book_item": "L1 Activity 1.6",
+      "handled_by": "itf-f-ch1-l1-s6",
+      "note": "true/false facts merged into the category check"
+    },
+    {
+      "book_item": "L2 Example 2.1",
+      "handled_by": "itf-f-ch1-l2-s1"
+    },
+    {
+      "book_item": "L2 Example 2.2",
+      "handled_by": "itf-f-ch1-l2-s1"
+    },
+    {
+      "book_item": "L2 Example 2.3",
+      "handled_by": "itf-f-ch1-l2-s1"
+    },
+    {
+      "book_item": "L2 Example 2.4",
+      "handled_by": "itf-f-ch1-l2-s2"
+    },
+    {
+      "book_item": "L2 Example 2.5",
+      "handled_by": "itf-f-ch1-l2-s3"
+    },
+    {
+      "book_item": "L2 Example 2.6",
+      "handled_by": "itf-f-ch1-l2-s3"
+    },
+    {
+      "book_item": "L2 Example 2.7",
+      "handled_by": "itf-f-ch1-l2-s3"
+    },
+    {
+      "book_item": "L2 Example 2.8",
+      "handled_by": "itf-f-ch1-l2-s3"
+    },
+    {
+      "book_item": "L2 Activity 2.1",
+      "handled_by": "itf-f-ch1-l2-s6",
+      "note": "true/false statements consolidated into the systems-and-signals check"
+    },
+    {
+      "book_item": "L2 Activity 2.2",
+      "handled_by": "itf-f-ch1-l2-s4"
+    },
+    {
+      "book_item": "L2 Activity 2.3",
+      "handled_by": "itf-f-ch1-l2-s4",
+      "note": "human input/output sorting merged with the device classification"
+    },
+    {
+      "book_item": "L2 Activity 2.4",
+      "handled_by": "itf-f-ch1-l2-s4",
+      "note": "elevator input/output sorting merged with the device classification"
+    },
+    {
+      "book_item": "L2 Activity 2.5",
+      "handled_by": "itf-f-ch1-l2-s5"
+    },
+    {
+      "book_item": "L3 Example 3.1",
+      "handled_by": "itf-f-ch1-l3-s2"
+    },
+    {
+      "book_item": "L3 Example 3.2",
+      "handled_by": "itf-f-ch1-l3-s3"
+    },
+    {
+      "book_item": "L3 Activity 3.1",
+      "handled_by": "itf-f-ch1-l3-s6",
+      "note": "true/false statements consolidated into the closing processing check"
+    },
+    {
+      "book_item": "L3 Activity 3.2",
+      "handled_by": "itf-f-ch1-l3-s5",
+      "note": "fill-in identifications merged with the signal-translator practice"
+    },
+    {
+      "book_item": "L3 Activity 3.3",
+      "handled_by": "itf-f-ch1-l3-s4"
+    },
+    {
+      "book_item": "L3 Activity 3.4",
+      "handled_by": "itf-f-ch1-l3-s5"
+    },
+    {
+      "book_item": "L3 Activity 3.5",
+      "handled_by": "itf-f-ch1-l3-s5"
+    },
+    {
+      "book_item": "L4 Example 4.1",
+      "handled_by": "itf-f-ch1-l4-s1"
+    },
+    {
+      "book_item": "L4 Example 4.2",
+      "handled_by": "itf-f-ch1-l4-s2",
+      "note": "the save-and-retrieve narrative continues in step 3"
+    },
+    {
+      "book_item": "L4 Activity 4.1",
+      "handled_by": "itf-f-ch1-l4-s6",
+      "note": "true/false statements consolidated into the memory-and-drives check"
+    },
+    {
+      "book_item": "L4 Activity 4.2",
+      "handled_by": "itf-f-ch1-l4-s6",
+      "note": "word-bank comparisons consolidated into the memory-and-drives check"
+    },
+    {
+      "book_item": "L4 Activity 4.3",
+      "handled_by": "itf-f-ch1-l4-s5"
+    },
+    {
+      "book_item": "L5 Example 4.1",
+      "handled_by": "itf-f-ch1-l5-s1",
+      "note": "book misprint retained: Lesson 5 examples are labeled 4.x"
+    },
+    {
+      "book_item": "L5 Example 4.2",
+      "handled_by": "itf-f-ch1-l5-s2"
+    },
+    {
+      "book_item": "L5 Example 4.3",
+      "handled_by": "itf-f-ch1-l5-s2"
+    },
+    {
+      "book_item": "L5 Example 4.4",
+      "handled_by": "itf-f-ch1-l5-s2"
+    },
+    {
+      "book_item": "L5 Example 4.5",
+      "handled_by": "itf-f-ch1-l5-s2"
+    },
+    {
+      "book_item": "L5 Example 4.6",
+      "handled_by": "itf-f-ch1-l5-s3"
+    },
+    {
+      "book_item": "L5 Activity 5.1",
+      "handled_by": "itf-f-ch1-l5-s6",
+      "note": "true/false statements consolidated into the interface check"
+    },
+    {
+      "book_item": "L5 Activity 5.2",
+      "handled_by": "itf-f-ch1-l5-s6",
+      "note": "word-bank facts consolidated into the interface check"
+    },
+    {
+      "book_item": "L5 Activity 5.3",
+      "handled_by": "itf-f-ch1-l5-s4"
+    },
+    {
+      "book_item": "L5 Activity 5.4",
+      "handled_by": "itf-f-ch1-l5-s4"
+    },
+    {
+      "book_item": "L5 Activity 5.5",
+      "handled_by": "itf-f-ch1-l5-s4"
+    },
+    {
+      "book_item": "L5 Activity 5.6",
+      "handled_by": "itf-f-ch1-l5-s5"
+    },
+    {
+      "book_item": "L5 Activity 5.7",
+      "handled_by": "itf-f-ch1-l5-s5"
+    }
+  ],
+  "skipped": [
+    {
+      "book_item": "L1 Safety Tips sidebar (p.15)",
+      "reason": "posture/safety guidance — no interactive step; surface as a teacher resource"
+    }
+  ]
+}

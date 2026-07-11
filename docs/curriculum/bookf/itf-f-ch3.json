@@ -1,0 +1,805 @@
+{
+  "schema": "jargon-book-manifest/v1",
+  "chunk": "itf-f-ch3",
+  "subject": {
+    "slug": "itf-beginner",
+    "title": "IT Frontiers — Beginner Series",
+    "description": "Foundational computing concepts: systems and signals, computer design, instructions and software, and data structures — from the IT Frontiers Beginner series (Chapters & Co.)."
+  },
+  "course": {
+    "slug": "itf-f",
+    "title": "IT Frontiers Book F",
+    "description": "Book F of the IT Frontiers Beginner series: systems & signals, computer design, instructions & software, and data & data structures.",
+    "version_label": "v1"
+  },
+  "units": [
+    {
+      "slug": "itf-f-ch3",
+      "title": "Instructions & Software",
+      "description": "Instructions, programs, software types, conditional instructions, and repetition for completing tasks with computers.",
+      "lessons": [
+        {
+          "slug": "itf-f-ch3-l1",
+          "title": "Instructions",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Guide the learner from single action statements to ordered task instructions, computer programs, shared calls, and flowcharts. Keep the book's school, BIOS, microwave, and elevator scenarios intact, and watch for the difference between an instruction and a complete program.",
+          "sample_code": "SET result (2 * 3)\nSET result (result + 4)\nSET result (result // 2)\nPRINT result",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Ordered instructions and programs",
+            "objective": "Explain how ordered instructions enter a system and form programs that complete specific tasks, including through shared calls and flowcharts.",
+            "skill_keys": [
+              "logic.sequence",
+              "itf.software.instructions"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch3-l1-s1",
+              "title": "Instructions move from input to output",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Instructions are action statements. Each instruction indicates a specific action that should be performed, and both humans and computers are systems capable of following instructions. An instruction enters a system as an input signal, is held in memory, and is followed by the processor to generate an output. Ms. Finn asked Sarah to multiply 2 and 3, add 4, and then divide by 2. Sarah had to remember the three instructions in order. She processed them one after another to reach 5, kept that answer in memory until Ms. Finn was ready, and then gave 5 as the output. When the rest of the class followed the same instructions in the same order, they reached the same result.",
+              "skill_keys": [
+                "logic.sequence",
+                "itf.software.instructions"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l1-s2",
+              "title": "Run Sarah's ordered calculation",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "The book presents Sarah's calculation as three instructions. Run this valid Jargon version and trace how each result is used by the next instruction. The order must remain multiplication, addition, and division so that the final output is 5.",
+              "starter_code": "SET result (2 * 3)\nSET result (result + 4)\nSET result (result // 2)\nPRINT result",
+              "expected_output": "5",
+              "pass_score": 1,
+              "skill_keys": [
+                "logic.sequence"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l1-s3",
+              "title": "Tasks and computer programs",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Instructions occur in sets. Every task has a specific set whose instructions should be performed in order, one after another, until the task is complete. Chen's morning task begins when he wakes up: brush his teeth, comb his hair, wear his clothes, eat breakfast, and get his school bag. A program is a set of instructions written for a computer, and a computer has programs for the many tasks it must perform. BIOS is one program. Each time a computer is powered on, BIOS checks that its devices are connected and working. Its keyboard-test instructions send an 'Are you OK?' signal, wait for and receive the keyboard's reply, write 'KEYBOARD is OK' to memory, and connect the keyboard to the system.",
+              "skill_keys": [
+                "logic.sequence",
+                "itf.software.instructions"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l1-s4",
+              "title": "Shared calls and flowcharts",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "Instructions can be shared. One set may call and use another set, so common instructions can be kept on their own instead of copied into every task. When Chen's getting-ready-for-school instructions say 'brush your teeth,' that instruction calls the older set he memorized: put toothpaste on the toothbrush, brush the outer, inner, and chewing surfaces, then rinse. His getting-ready-for-sleep task calls the same set, so he does not memorize it again. A flowchart is a diagram that shows the steps required to complete a task. Shapes represent steps, and arrows show their order. In the getting-ready-for-school flowchart, terminator boxes mark Start and End, while process boxes carry the five task instructions.",
+              "skill_keys": [
+                "logic.sequence",
+                "itf.software.instructions"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l1-s5",
+              "title": "Build and compare instruction sets",
+              "stage": "practice",
+              "mode": "assignment",
+              "prompt": "Complete the lesson's connected project. First extract action-verb instructions from the microwave and elevator narratives, avoiding the word 'the' as the book advises. Activity 1.2 asks for five microwave instructions and Activity 1.3 asks for six elevator instructions, while the later templates provide seven READ/WRITE slots for each; preserve the printed requests and note this mismatch. Create the Word files 'Using Microwave Oven Instructions' and 'Using Elevator Instructions,' then answer where READ reads from, where WRITE writes to, how many of each instruction appear, and the save names. For each file, select all text; set size 20, Courier New, and Black, Text 1, Lighter 50%; number the lines; color each line's first word RGB 255,0,255; save and close. Count the shared appendix calls, identify which main instructions make them, and explain how the shared 'How to' section saves pages. In PowerPoint, make a blank portrait template with seven centered, vertically distributed process boxes, two terminator boxes, and connecting arrows; save it as 'Flowchart Template.' Fill copies with Start, End, and the microwave or elevator instructions; save them as 'Using Microwave Oven Flowchart' and 'Using Elevator Flowchart.' Compare the common task and changed source or file in the three pairs from Activity 1.9.",
+              "skill_keys": [
+                "logic.sequence",
+                "itf.software.instructions"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l1-s6",
+              "title": "Check instruction facts",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "An instruction is an action statement."
+                },
+                {
+                  "id": "b",
+                  "text": "Computers cannot follow instructions."
+                },
+                {
+                  "id": "c",
+                  "text": "Instructions enter a system as input."
+                },
+                {
+                  "id": "d",
+                  "text": "All instructions are held in memory."
+                },
+                {
+                  "id": "e",
+                  "text": "A set of instructions for a computer is called a program."
+                },
+                {
+                  "id": "f",
+                  "text": "Each set of instructions is designed to perform a specific task."
+                },
+                {
+                  "id": "g",
+                  "text": "A set of instructions may call on another set of instructions for help."
+                },
+                {
+                  "id": "h",
+                  "text": "A set of instructions cannot be shared."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "An instruction is an action statement."
+                  },
+                  {
+                    "id": "b",
+                    "text": "Computers cannot follow instructions."
+                  },
+                  {
+                    "id": "c",
+                    "text": "Instructions enter a system as input."
+                  },
+                  {
+                    "id": "d",
+                    "text": "All instructions are held in memory."
+                  },
+                  {
+                    "id": "e",
+                    "text": "A set of instructions for a computer is called a program."
+                  },
+                  {
+                    "id": "f",
+                    "text": "Each set of instructions is designed to perform a specific task."
+                  },
+                  {
+                    "id": "g",
+                    "text": "A set of instructions may call on another set of instructions for help."
+                  },
+                  {
+                    "id": "h",
+                    "text": "A set of instructions cannot be shared."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a",
+                  "c",
+                  "d",
+                  "e",
+                  "f",
+                  "g"
+                ]
+              },
+              "skill_keys": [
+                "logic.sequence",
+                "itf.software.instructions"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch3-l2",
+          "title": "Software",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Help the learner distinguish user software, system software, and firmware by purpose. Use Sarah's smartphone to connect applications, the operating system, BIOS, storage, and hardware, then have the learner trace how an app starts.",
+          "sample_code": "SET app (\"APP\")\nPRINT \"Accept user input\"\nPRINT \"Search storage for \" + app\nPRINT \"Copy \" + app + \" to memory\"\nPRINT \"Allow \" + app + \" to use processor\"",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Purposes of software",
+            "objective": "Distinguish user software, system software, and firmware and trace how the operating system and BIOS prepare and run applications.",
+            "skill_keys": [
+              "itf.software.types",
+              "jargon.set",
+              "jargon.print"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code",
+              "multiple_choice"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch3-l2-s1",
+              "title": "User software and application size",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Software is the name given to all the programs in a computer. It is grouped by purpose: user software performs tasks for the user, system software performs tasks for the whole system, and firmware performs tasks for only the hardware. A user-software program is called an application or app, and each app has a specific task. On Sarah's smartphone, the calculator multiplies numbers, the camera takes photographs, and the messaging app sends messages. Software size is determined by its number of instructions and is measured in bytes. A simple task needs fewer instructions than a complicated one. Sarah finds that her calculator is 10 MB, her camera 20 MB, and her messaging app 70 MB; together they use 100 MB.",
+              "skill_keys": [
+                "itf.software.types"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l2-s2",
+              "title": "The operating system helps applications",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "The operating system is system software: a set of programs that controls the computer and allows it to operate as a system. Two important tasks are operating the hardware and helping applications work as part of the system. Sarah's messaging app knows how to read and type messages, but it must call the operating system to show a message on the screen or receive a touch from the digitizer. If every app carried all the operating system's hardware instructions, apps would be much larger. Sarah's operating system uses 20 GB of her 50 GB storage. Sharing that one operating system leaves 30 GB for applications, including her three apps that total 100 MB. The operating system also displays app icons and starts the app a user selects.",
+              "skill_keys": [
+                "itf.software.types"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l2-s3",
+              "title": "Trace how the operating system starts an app",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "Starting an app follows four ordered instructions in the book: accept the user's input, search storage for the app, copy the app to memory, and allow the app to use the processor. Run this Jargon translation of the book's generic APP sequence and check that the four lines appear in that order.",
+              "starter_code": "SET app (\"APP\")\nPRINT \"Accept user input\"\nPRINT \"Search storage for \" + app\nPRINT \"Copy \" + app + \" to memory\"\nPRINT \"Allow \" + app + \" to use processor\"",
+              "expected_output": "Accept user input\nSearch storage for APP\nCopy APP to memory\nAllow APP to use processor",
+              "pass_score": 1,
+              "skill_keys": [
+                "jargon.set",
+                "jargon.print",
+                "itf.software.types"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l2-s4",
+              "title": "Firmware prepares the computer",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "BIOS is firmware. It is the first program to run when a computer is powered on, tests the hardware, loads part of the operating system from storage to memory, and hands the operating system control of the processor. On Sarah's smartphone, BIOS searches for connected devices; tests the digitizer, screen, microphone, speaker, camera, antennas, memory, and storage; ends the system test; finds the operating system; copies part of it to memory; and lets it take over. A shared BIOS device-test program can place a device name inside brackets. The main program calls that same test for the screen, keyboard, mouse, memory, and storage instead of keeping a separate test program for each device.",
+              "skill_keys": [
+                "itf.software.types"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l2-s5",
+              "title": "Investigate software and design a BIOS test",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "applied",
+              "prompt": "Investigate your computer as the book directs. Identify three applications and give each name, size, and task; name the storage device and its capacity; record the space used by the operating system and applications; and list the hardware parts. Then state two operating-system tasks, explain how it helps applications, and name the first program after power-on with its tasks. For a desktop with screen, keyboard, mouse, memory, and storage, write the ordered BIOS instructions that test those devices and load the operating system; use them for the Word file 'BIOS - My Desktop Computer,' complete its OPEN line, apply the same font, numbering, and first-word formatting used earlier, and compare the formatting sequence with Activities 1.6 and 1.7. Finally substitute SCREEN and KEYBOARD into the shared device-test brackets, determine how many times the main program calls that test, list every tested device, and adapt the bracket list for a tablet with digitizer, screen, memory, and storage.",
+              "skill_keys": [
+                "itf.software.types",
+                "jargon.set"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l2-s6",
+              "title": "Check the three software types",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "mcq",
+              "prompt": "Select every statement that is true.",
+              "choices": [
+                {
+                  "id": "a",
+                  "text": "User software performs tasks for the user."
+                },
+                {
+                  "id": "b",
+                  "text": "The operating system is a group of programs."
+                },
+                {
+                  "id": "c",
+                  "text": "An application is a type of system software."
+                },
+                {
+                  "id": "d",
+                  "text": "BIOS is not firmware."
+                },
+                {
+                  "id": "e",
+                  "text": "The operating system controls the hardware."
+                },
+                {
+                  "id": "f",
+                  "text": "Applications do not need the operating system."
+                },
+                {
+                  "id": "g",
+                  "text": "BIOS tests all the hardware of the computer."
+                },
+                {
+                  "id": "h",
+                  "text": "The size of software is measured in bytes."
+                }
+              ],
+              "quiz": {
+                "prompt": "Select every statement that is true.",
+                "choices": [
+                  {
+                    "id": "a",
+                    "text": "User software performs tasks for the user."
+                  },
+                  {
+                    "id": "b",
+                    "text": "The operating system is a group of programs."
+                  },
+                  {
+                    "id": "c",
+                    "text": "An application is a type of system software."
+                  },
+                  {
+                    "id": "d",
+                    "text": "BIOS is not firmware."
+                  },
+                  {
+                    "id": "e",
+                    "text": "The operating system controls the hardware."
+                  },
+                  {
+                    "id": "f",
+                    "text": "Applications do not need the operating system."
+                  },
+                  {
+                    "id": "g",
+                    "text": "BIOS tests all the hardware of the computer."
+                  },
+                  {
+                    "id": "h",
+                    "text": "The size of software is measured in bytes."
+                  }
+                ],
+                "correct_choice_ids": [
+                  "a",
+                  "b",
+                  "e",
+                  "g",
+                  "h"
+                ]
+              },
+              "skill_keys": [
+                "itf.software.types"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch3-l3",
+          "title": "Conditionals",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Teach conditionals as decisions whose actions run only when the present condition is met. Contrast the rain decision with the BIOS device-status decision, and ask the learner to trace both branches before confirming an answer.",
+          "sample_code": "SET raining (True)\nIF raining is equal to True THEN\n    PRINT \"Wear a raincoat\"\n    PRINT \"Take an umbrella\"\nEND\nPRINT \"Get your school bag\"",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Conditional decisions",
+            "objective": "Use conditional instructions to choose the correct action for a weather, elevator-door, or BIOS device condition.",
+            "skill_keys": [
+              "jargon.if",
+              "itf.logic.conditionals"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch3-l3-s1",
+              "title": "A condition controls an action",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Instructions that indicate how to make a decision are called conditional instructions. The decision depends on the conditions present when the instruction is performed. Chen's usual school instructions did not account for rain, so his parents added: if it is raining, then wear a raincoat and take an umbrella. Those actions happen only when the condition is met. If it is not raining, no rain action is taken and Chen moves on to get his school bag. In a flowchart, the decision is shown in a diamond-shaped box. Its Yes branch performs the rain actions and its No branch skips them; both paths then continue to the next instruction.",
+              "skill_keys": [
+                "jargon.if",
+                "itf.logic.conditionals"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l3-s2",
+              "title": "Run Chen's rain decision",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "In Chen's story it is raining, so trace and run this valid Jargon translation of the book's conditional instruction. Check the order of the two rain actions and the next school instruction.",
+              "starter_code": "SET raining (True)\nIF raining is equal to True THEN\n    PRINT \"Wear a raincoat\"\n    PRINT \"Take an umbrella\"\nEND\nPRINT \"Get your school bag\"",
+              "expected_output": "Wear a raincoat\nTake an umbrella\nGet your school bag",
+              "pass_score": 1,
+              "skill_keys": [
+                "jargon.if",
+                "itf.logic.conditionals"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l3-s3",
+              "title": "BIOS decides from a device signal",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "A BIOS device test first sends 'Are you OK?' and waits for a reply. It cannot assume that every reply says 'I am OK.' The conditional test asks whether the signal equals 'I am OK.' On Yes, BIOS writes that the device is OK to memory and connects it. On No, BIOS writes that the device is not OK and prints an error saying it is not connected. A keyboard can fail this test by explicitly replying 'I am not OK,' sending an unreadable signal, or not replying at all. In all three cases, the device is not OK, so the No path is followed.",
+              "skill_keys": [
+                "jargon.if",
+                "itf.logic.conditionals"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l3-s4",
+              "title": "Run the failed keyboard branch",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "The keyboard's signal is 'I am not OK,' so the BIOS test must follow the No branch. Run the Jargon program and verify that it records the failed status and prints the same kind of error used in the book.",
+              "starter_code": "SET device (\"KEYBOARD\")\nSET signal (\"I am not OK\")\nIF signal is equal to \"I am OK\" THEN\n    PRINT device + \" is OK\"\n    PRINT \"Connect \" + device\nELSE\n    PRINT device + \" is NOT OK\"\n    PRINT \"Error! \" + device + \" is not connected.\"\nEND",
+              "expected_output": "KEYBOARD is NOT OK\nError! KEYBOARD is not connected.",
+              "pass_score": 1,
+              "skill_keys": [
+                "jargon.if",
+                "itf.logic.conditionals"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l3-s5",
+              "title": "Complete two decision flowcharts",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "applied",
+              "prompt": "Write the process steps and Yes/No branches for two decisions. For Lin, test whether it is raining: state what happens when it is raining and when it is not. For the elevator's embedded computer, test whether something blocks the doorway: if the doorway is clear, close the doors; if it is blocked, wait and check again. State what happens for each branch and what happens if the blocking object never moves. Present each as an ordered instruction list or a text description of the matching flowchart.",
+              "skill_keys": [
+                "jargon.if",
+                "itf.logic.conditionals"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l3-s6",
+              "title": "Assess a desktop BIOS test",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "open_ended",
+              "prompt": "A desktop BIOS tests KEYBOARD, MOUSE, SCREEN, MEMORY, and STORAGE with the device-test conditional. First state everything written to memory if all five reply 'I am OK.' Then assume the keyboard is disconnected and the mouse battery is out of charge while the other three devices are OK: state everything BIOS writes to memory and give the two error messages shown on the screen. Explain which branch each device takes.",
+              "skill_keys": [
+                "jargon.if",
+                "itf.logic.conditionals"
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "itf-f-ch3-l4",
+          "title": "Repetition",
+          "level": "Beginner",
+          "lesson_type": "code",
+          "tutor_prompt": "Use MI7's walking program to distinguish an infinite loop from repetition with a stopping rule. Have the learner compare a fixed number of steps with walking until the path is blocked, and insist that every loop identify how it ends.",
+          "sample_code": "REPEAT 3 times\n    PRINT \"Lift foot up\"\n    PRINT \"Swing leg forward\"\n    PRINT \"Set foot down\"\n    PRINT \"Switch leg\"\nEND\nPRINT \"Stop\"",
+          "policy": {
+            "help_ceiling": "guided",
+            "require_attempt_first": true,
+            "final_answer_policy": "after_attempt",
+            "tutor_tone": "encouraging",
+            "tutor_pace": "guided",
+            "grade_band": "lower"
+          },
+          "milestone": {
+            "title": "Loops with stopping rules",
+            "objective": "Construct and explain a repeating instruction sequence that stops after a count or when a condition is met.",
+            "skill_keys": [
+              "jargon.loop",
+              "itf.logic.repetition"
+            ],
+            "allowed_response_modes": [
+              "text",
+              "code"
+            ]
+          },
+          "steps": [
+            {
+              "slug": "itf-f-ch3-l4-s1",
+              "title": "A loop repeats instructions",
+              "stage": "intro",
+              "mode": "explanation",
+              "prompt": "Repeating instructions is sometimes needed to complete a task. A robot's embedded computer needs a program for every task. MI7's walking program lifts a foot, swings the leg forward, sets the foot down, and then switches legs. One pass makes only one step, so the program repeats from its first instruction. This creates a loop. Without a number of repetitions or a stopping condition, it is an infinite loop: MI7 keeps walking forever, and the processor is stuck doing that one task only.",
+              "skill_keys": [
+                "jargon.loop",
+                "itf.logic.repetition"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l4-s2",
+              "title": "A stopping condition breaks the loop",
+              "stage": "teach",
+              "mode": "explanation",
+              "prompt": "To avoid an infinite loop, the instructions need a stopping rule. One rule specifies the number of repetitions. The processor counts each repetition, and when the specified number is reached, it breaks the loop and ends the program. In MI7's flowchart, the robot lifts, swings, sets down, and switches legs before a decision asks whether the repetition count has reached the limit. No returns to the first walking instruction; Yes breaks the loop. If MI7 must walk 14 steps, the condition uses 14 as that limit.",
+              "skill_keys": [
+                "jargon.loop",
+                "itf.logic.repetition"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l4-s3",
+              "title": "Make MI7 walk three steps",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "code",
+              "prompt": "Maya wants MI7 to walk three steps forward and then stop. Run this Jargon version of the walking loop. The four walking actions repeat exactly three times, and then the program prints Stop.",
+              "starter_code": "REPEAT 3 times\n    PRINT \"Lift foot up\"\n    PRINT \"Swing leg forward\"\n    PRINT \"Set foot down\"\n    PRINT \"Switch leg\"\nEND\nPRINT \"Stop\"",
+              "expected_output": "Lift foot up\nSwing leg forward\nSet foot down\nSwitch leg\nLift foot up\nSwing leg forward\nSet foot down\nSwitch leg\nLift foot up\nSwing leg forward\nSet foot down\nSwitch leg\nStop",
+              "pass_score": 1,
+              "skill_keys": [
+                "jargon.loop",
+                "itf.logic.repetition"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l4-s4",
+              "title": "Walk until the path is blocked",
+              "stage": "practice",
+              "mode": "practice",
+              "mode_type": "applied",
+              "prompt": "Maya next wants MI7 to walk until it senses an object blocking its path. Write an ordered instruction list or a text description of the matching flowchart: perform the four walking actions, test whether the path is blocked, stop when the answer is Yes, and repeat from the first walking action when the answer is No. Explain why this stopping condition prevents an infinite loop.",
+              "skill_keys": [
+                "jargon.loop",
+                "itf.logic.repetition"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l4-s5",
+              "title": "Compare two stopping rules",
+              "stage": "assessment",
+              "mode": "assessment",
+              "mode_type": "open_ended",
+              "prompt": "Compare MI7 walking exactly three steps with MI7 walking until its path is blocked. For each program, identify the repeated actions and the rule that ends the loop. Then explain what would happen if a walking program repeated from its first instruction but had neither a repetition limit nor a stopping condition.",
+              "skill_keys": [
+                "jargon.loop",
+                "itf.logic.repetition"
+              ]
+            },
+            {
+              "slug": "itf-f-ch3-l4-s6",
+              "title": "Recall the chapter's program ideas",
+              "stage": "review",
+              "mode": "revision",
+              "mode_type": "recall",
+              "prompt": "Without looking back, give one ordered response that recalls: the difference between an instruction and a program; the purposes of user software, system software, and firmware; what makes an instruction conditional; and the two kinds of stopping rules used for repetition in this lesson.",
+              "skill_keys": [
+                "jargon.loop",
+                "itf.logic.repetition"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "book_item": "L1 Example 1.1",
+      "handled_by": "itf-f-ch3-l1-s1",
+      "note": "Sarah follows multiplication, addition, and division from input through memory and processing to the output 5; the sequence is also run in Jargon in s2."
+    },
+    {
+      "book_item": "L1 Example 1.2",
+      "handled_by": "itf-f-ch3-l1-s3",
+      "note": "Chen's getting-ready-for-school task is retained as an ordered instruction set."
+    },
+    {
+      "book_item": "L1 Example 1.3",
+      "handled_by": "itf-f-ch3-l1-s3",
+      "note": "The BIOS keyboard-test program is retold with its signal, memory, and connection sequence."
+    },
+    {
+      "book_item": "L1 Example 1.4",
+      "handled_by": "itf-f-ch3-l1-s4",
+      "note": "Getting ready for school calls the remembered How to Brush Teeth instructions."
+    },
+    {
+      "book_item": "L1 Example 1.5",
+      "handled_by": "itf-f-ch3-l1-s4",
+      "note": "The school and sleep tasks share the same brushing instructions."
+    },
+    {
+      "book_item": "L1 Example 1.6",
+      "handled_by": "itf-f-ch3-l1-s4",
+      "note": "The school flowchart and its terminator and process boxes are explained."
+    },
+    {
+      "book_item": "L1 Activity 1.1",
+      "handled_by": "itf-f-ch3-l1-s6",
+      "note": "The eight true/false statements become one select-all MCQ with eight choices."
+    },
+    {
+      "book_item": "L1 Activity 1.2",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The microwave narrative is converted into an action-verb instruction-list assignment."
+    },
+    {
+      "book_item": "L1 Activity 1.3",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The elevator narrative is converted into an action-verb instruction-list assignment."
+    },
+    {
+      "book_item": "L1 Activity 1.4",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The microwave Word-document sequence and its READ/WRITE questions remain in the connected assignment."
+    },
+    {
+      "book_item": "L1 Activity 1.5",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The elevator Word-document sequence and its READ/WRITE questions remain in the connected assignment."
+    },
+    {
+      "book_item": "L1 Activity 1.6",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The microwave formatting sequence, shared How-to calls, and call-count questions are retained."
+    },
+    {
+      "book_item": "L1 Activity 1.7",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The elevator formatting sequence and comparison of shared calls are retained."
+    },
+    {
+      "book_item": "L1 Activity 1.8a",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The PowerPoint Flowchart Template build remains part of the assignment."
+    },
+    {
+      "book_item": "L1 Activity 1.8b",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The microwave flowchart built from the template remains part of the assignment."
+    },
+    {
+      "book_item": "L1 Activity 1.8c",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The elevator flowchart built from the template remains part of the assignment."
+    },
+    {
+      "book_item": "L1 Activity 1.9",
+      "handled_by": "itf-f-ch3-l1-s5",
+      "note": "The three pairs of instruction sets are compared by common task and changed source or file."
+    },
+    {
+      "book_item": "L2 Example 2.1",
+      "handled_by": "itf-f-ch3-l2-s1",
+      "note": "Sarah's calculator, camera, and messaging applications are tied to their user tasks."
+    },
+    {
+      "book_item": "L2 Example 2.2",
+      "handled_by": "itf-f-ch3-l2-s1",
+      "note": "The three application sizes, including their 100 MB total, are preserved."
+    },
+    {
+      "book_item": "L2 Example 2.3",
+      "handled_by": "itf-f-ch3-l2-s2",
+      "note": "The messaging app calls the operating system to use the screen."
+    },
+    {
+      "book_item": "L2 Example 2.4",
+      "handled_by": "itf-f-ch3-l2-s2",
+      "note": "The operating system carries touchscreen digitizer input to the messaging app."
+    },
+    {
+      "book_item": "L2 Example 2.5",
+      "handled_by": "itf-f-ch3-l2-s2",
+      "note": "The 20 GB operating system, 50 GB storage, and oversized duplicated-app scenario are explained."
+    },
+    {
+      "book_item": "L2 Example 2.6",
+      "handled_by": "itf-f-ch3-l2-s2",
+      "note": "Sharing the operating system leaves 30 GB for Sarah's applications."
+    },
+    {
+      "book_item": "L2 Example 2.7",
+      "handled_by": "itf-f-ch3-l2-s3",
+      "note": "The four app-start instructions are transliterated into runnable Jargon."
+    },
+    {
+      "book_item": "L2 Example 2.8",
+      "handled_by": "itf-f-ch3-l2-s4",
+      "note": "Sarah's power-on BIOS sequence is retained through hardware tests and the OS handoff."
+    },
+    {
+      "book_item": "L2 Activity 2.1",
+      "handled_by": "itf-f-ch3-l2-s6",
+      "note": "The eight true/false statements become one select-all MCQ with eight choices."
+    },
+    {
+      "book_item": "L2 Activity 2.2",
+      "handled_by": "itf-f-ch3-l2-s5",
+      "note": "The learner inventories applications, storage use, and hardware on their computer."
+    },
+    {
+      "book_item": "L2 Activity 2.3",
+      "handled_by": "itf-f-ch3-l2-s5",
+      "note": "Operating-system tasks, application support, and BIOS's power-on role are answered in the applied task."
+    },
+    {
+      "book_item": "L2 Activity 2.4",
+      "handled_by": "itf-f-ch3-l2-s3",
+      "note": "The requested four-step app-start flow is represented by the runnable Jargon output."
+    },
+    {
+      "book_item": "L2 Activity 2.5",
+      "handled_by": "itf-f-ch3-l2-s5",
+      "note": "The learner writes a desktop BIOS test and keeps the specified Word filename."
+    },
+    {
+      "book_item": "L2 Activity 2.6",
+      "handled_by": "itf-f-ch3-l2-s5",
+      "note": "The OPEN filename and formatting-sequence comparisons remain in the applied task."
+    },
+    {
+      "book_item": "L2 Activity 2.7",
+      "handled_by": "itf-f-ch3-l2-s5",
+      "note": "Device-name substitution, five calls, the desktop list, and the tablet adaptation are all requested."
+    },
+    {
+      "book_item": "L3 Example 3.1",
+      "handled_by": "itf-f-ch3-l3-s1",
+      "note": "Chen's rain condition, two actions, and branching flowchart are retained."
+    },
+    {
+      "book_item": "L3 Example 3.2",
+      "handled_by": "itf-f-ch3-l3-s3",
+      "note": "The BIOS device-test decision and all three not-OK response cases are explained."
+    },
+    {
+      "book_item": "L3 Activity 3.1",
+      "handled_by": "itf-f-ch3-l3-s5",
+      "note": "Lin's umbrella decision and both weather branches are completed in the applied flowchart task."
+    },
+    {
+      "book_item": "L3 Activity 3.2",
+      "handled_by": "itf-f-ch3-l3-s5",
+      "note": "The elevator doorway decision is completed as an instruction list or text flowchart."
+    },
+    {
+      "book_item": "L3 Activity 3.3",
+      "handled_by": "itf-f-ch3-l3-s5",
+      "note": "All rain and doorway branch outcomes, including a blocker that never moves, are requested."
+    },
+    {
+      "book_item": "L3 Activity 3.4",
+      "handled_by": "itf-f-ch3-l3-s6",
+      "note": "The all-OK and keyboard/mouse-failure memory records and error messages form the open-ended assessment."
+    },
+    {
+      "book_item": "L4 Example 4.1",
+      "handled_by": "itf-f-ch3-l4-s1",
+      "note": "MI7's repeated walking instructions and infinite loop are retained."
+    },
+    {
+      "book_item": "L4 Example 4.2",
+      "handled_by": "itf-f-ch3-l4-s2",
+      "note": "The repetition counter, break condition, and 14-step example are retained."
+    },
+    {
+      "book_item": "L4 Activity 4.1",
+      "handled_by": "itf-f-ch3-l4-s3",
+      "note": "MI7's three-step walking task is implemented as a bounded Jargon loop."
+    },
+    {
+      "book_item": "L4 Activity 4.2",
+      "handled_by": "itf-f-ch3-l4-s4",
+      "note": "Walking until an object blocks the path is converted to an applied instruction-list or flowchart task without inventing a sensor timeline."
+    }
+  ],
+  "skipped": []
+}
