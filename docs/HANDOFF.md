@@ -6,6 +6,27 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-11 (Student-portal video demo v2 — refinement pass, FINISHED)
+
+Status: Finished (demo asset only; no app/runtime code touched)
+
+Summary: v2 of the demo film per user feedback. (1) Structural: the dark-mode flip moved from the
+finale to the exact midpoint (31.2s of 62.5s) — the theme toggles with the hero chat still on screen
+and the whole back half (Classes, Class, Quiz, Overview, Mentor) plays in dark; a NEW closing beat
+returns to the dark tutor chat with the app's real "Lesson complete" banner ("Nice work. Pick your
+next lesson, or keep chatting about this one." + both action pills) landing on the track's strongest
+onset (53.85s), then black + "Learn with Jargon". (2) Start upgraded: aurora bloom-in, animated
+grad-border ring around the J mark, letter-stagger wordmark, grad-text tagline accent; login now
+types the email deterministically with caret, fills password dots, and swaps the button to the real
+"Signing in..." string on press. (3) Polish: chat stream now scrolls under a mask-image top fade (no
+more bubble/stepper collision), thinking-dots no longer reserve layout space, card faces use the true
+#f6f6fb surface instead of gray color-mixes, aurora vignette reduced + blob alpha raised (cleaner
+pastels), sidebar/borders/shadows tuned, and a 4/8px spacing pass across all surfaces.
+
+Files changed: `demo/jargon-portal-demo.html` (rewrite), `demo/jargon-portal-demo.standalone.html`
+(regenerated), `demo/jargon-portal-demo.mp4` (re-rendered). Verified: 21 smoke keyframes reviewed +
+encoded-mp4 frame extraction at the flip/close; probe = 1:02.50, 1920x1080 h264 + aac.
+
 ## Claude -> Codex / Human - 2026-07-11 (Student-portal 60s video demo — FINISHED)
 
 Status: Finished (demo asset only; no app/runtime code touched)
