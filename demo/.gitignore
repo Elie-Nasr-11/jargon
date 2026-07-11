@@ -1,0 +1,9 @@
+# build tooling / intermediates — not committed
+node_modules/
+package-lock.json
+_smoke/
+demo.raw.mp4
+audio.m4a
+
+# raw source track (user upload); the rendered mp4 carries the music
+clair-de-lune.src.mp3

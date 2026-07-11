@@ -6,6 +6,43 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-11 (Student-portal 60s video demo — FINISHED)
+
+Status: Finished (demo asset only; no app/runtime code touched)
+
+Summary: A ~62.5s demo film of the student portal, entirely rebuilt in code from the real design
+tokens/components/copy in `src/styles.css` + `src/features/student/**` (NOT screenshots), rendered to
+a 1920x1080 / 30fps H.264 MP4 scored to the user's Clair de Lune track (music only, no VO). The reel
+is a single time-driven page — every frame is a pure function of a master clock (`window.__seek(ms)`)
+so Playwright can capture it deterministically. Scene cuts are snapped to phrase onsets detected in
+the actual audio (tender open 0-13s, arrivals ~19/35/44/48s, strongest ~54s, lull ~60s). Arc: cold-open
+J mark -> login ("Learn anything, in your own words.") -> shell assembles -> HERO (dictated speech ->
+Baby Jargon -> real runnable Jargon types out -> Run -> `[6, 12, 18]` -> "Exactly right!") -> Classes ->
+a Class -> Quiz focus-lock -> Overview (calendar/grades/proficiency) -> Mentor settings -> the closing
+FEATURE: the light->dark theme toggle flips the whole dashboard, then cut to black + "Learn with Jargon".
+
+Files changed (all NEW, scoped to `demo/`):
+- `demo/jargon-portal-demo.html` — the master reel (tokens + all surfaces + timeline engine + aurora).
+- `demo/jargon-portal-demo.standalone.html` — same, with fonts inlined (double-click to play).
+- `demo/fonts.embed.css` — Inter + Instrument Serif (latin) base64.
+- `demo/capture.mjs` — Playwright frame-accurate capture piped to ffmpeg.
+- `demo/build.sh` — audio trim/fade + capture + mux; `demo/inline.mjs` — builds the standalone.
+- `demo/jargon-portal-demo.mp4` — the rendered deliverable (8.4 MB).
+
+Verified: probed output = 00:01:02.50, 1920x1080 h264 yuv420p + aac stereo; frames extracted from the
+ENCODED mp4 at the hero beat, the dark reveal, and the close all render correctly; full smoke pass over
+15 keyframes reviewed. Rebuild: `cd demo && bash build.sh` (needs `pip install imageio-ffmpeg numpy` +
+`npm i` in demo/; Chromium at /opt/pw-browsers).
+
+Remaining concerns / notes: the ambient aurora is a lightweight canvas approximation of the three.js
+`AmbientCanvas`, not the exact GLSL. Class/lesson names + the ava.reyes profile are plausible inventions
+(most such text is fetched at runtime). Source mp3 (`clair-de-lune.src.mp3`) is gitignored — the mp4
+carries the (user-provided) music. No interpreter/syntax/sandbox/example-loader code changed, so the
+Python test suite is unaffected.
+
+Suggested next task: if a vertical (9:16) social cut is wanted, re-compose the shell (stacked, no fixed
+sidebar) and re-run the same pipeline; otherwise none.
+
 ## Claude -> Codex / Human - 2026-07-10 (Teacher IA v2 — classes → Overview / Students / Structure — FINISHED, awaiting main FF)
 
 Status: Built + verified per phase (tsc 0 / lint 0 errors + 17 warnings, of which 12 pre-existing

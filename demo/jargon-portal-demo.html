@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Jargon — Student Portal Demo</title>
+<link rel="stylesheet" href="./fonts.embed.css"/>
+<style>
+/* ============================================================
+   Jargon student-portal demo reel — built from the real app tokens
+   (src/styles.css). Every frame is a pure function of the master
+   clock so Playwright can capture it deterministically.
+   ============================================================ */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#ffffff; --surface:#f6f6fb; --surface-hover:#f9f9fe;
+  --fg:rgba(10,10,10,.92); --emph:#0a0a0a; --primary-fg:#ffffff;
+  --muted-fg:rgba(10,10,10,.45); --faint-fg:rgba(10,10,10,.62);
+  --border:rgba(10,10,10,.08); --border-2:rgba(10,10,10,.14); --ring:rgba(10,10,10,.34);
+  --success:#1f8a5b; --info:#2f6fd6; --warning:#b07400; --danger:#d64545; --pink:#c4498b;
+  --depth-card:color-mix(in oklab, var(--bg) 91%, var(--fg));
+  --depth-sub:color-mix(in oklab, var(--bg) 95.5%, var(--fg));
+  --depth-field:color-mix(in oklab, var(--bg) 98.5%, var(--fg));
+  --sidebar-bg:color-mix(in oklab, var(--bg) 78%, transparent);
+  --grad-1:#f6d36b; --grad-2:#f9a86b; --grad-3:#f585bb; --grad-4:#8fa4ef; --grad-5:#72b8f5;
+  --radius-control:14px; --radius-card:18px; --radius-pill:999px;
+  --elev-card:0 1px 2px rgba(10,12,20,.05), 0 8px 24px rgba(10,12,20,.06);
+  --elev-raised:0 2px 4px rgba(10,12,20,.06), 0 10px 32px rgba(10,12,20,.10);
+  --elev-pop:0 12px 40px rgba(10,12,20,.16), 0 2px 8px rgba(10,12,20,.08);
+  --font-sans:'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --font-serif:'Instrument Serif','Times New Roman',serif;
+  --code-bg:#eef0f6; --code-fg:#1f2026;
+  --c-cmd:#5266d8; --c-cond:#c4498b; --c-str:#25845a; --c-num:#b86b00; --c-cmt:#777984;
+}
+html.dark{
+  --bg:#0b0b0d; --surface:#161619; --surface-hover:#1f1f23;
+  --fg:rgba(245,245,247,.92); --emph:#f0f0f2; --primary-fg:#0b0b0d;
+  --muted-fg:rgba(245,245,247,.45); --faint-fg:rgba(245,245,247,.62);
+  --border:rgba(245,245,247,.10); --border-2:rgba(245,245,247,.16); --ring:rgba(245,245,247,.40);
+  --success:#5ec98f; --info:#6ea8f0; --warning:#e3a949; --danger:#f0716f; --pink:#f585bb;
+  --sidebar-bg:color-mix(in oklab, var(--bg) 72%, transparent);
+  --elev-card:0 0 0 1px rgba(245,245,247,.055), 0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.42);
+  --elev-raised:0 0 0 1px rgba(245,245,247,.07), 0 2px 4px rgba(0,0,0,.5), 0 10px 32px rgba(0,0,0,.5);
+  --elev-pop:0 0 0 1px rgba(245,245,247,.09), 0 12px 40px rgba(0,0,0,.6), 0 2px 8px rgba(0,0,0,.5);
+  --code-bg:#161619; --code-fg:#e6e6ea;
+  --c-cmd:#8fa4ef; --c-cond:#f585bb; --c-str:#8ad0a8; --c-num:#f0a868;
+}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#000;
+  font-family:var(--font-sans);color:var(--fg);
+  -webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01";}
+#frame{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;background:var(--bg)}
+#aurora{position:absolute;inset:0;z-index:0}
+#stage{position:absolute;top:0;left:0;width:1280px;height:720px;transform:scale(1.5);transform-origin:top left;z-index:1}
+
+.serif{font-family:var(--font-serif);letter-spacing:-.01em}
+.grad-text{background:linear-gradient(90deg,var(--grad-1),var(--grad-2),var(--grad-3),var(--grad-4),var(--grad-5));
+  -webkit-background-clip:text;background-clip:text;color:transparent;background-size:200% 200%}
+.grad-border{position:relative;border-radius:var(--radius-card);
+  background:linear-gradient(135deg,var(--grad-1) 0%,var(--grad-2) 25%,var(--grad-3) 50%,var(--grad-4) 75%,var(--grad-5) 100%);
+  background-size:220% 220%;padding:1.25px}
+.grad-border>.inner{background:var(--surface);border-radius:calc(var(--radius-card) - 1.25px);height:100%}
+.pill{border-radius:var(--radius-pill)}
+.center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+
+/* ---------- app shell ---------- */
+#app{display:flex;height:720px;width:1280px;position:relative;opacity:0}
+.sidebar{width:250px;flex:none;height:100%;border-right:1px solid var(--border);
+  background:var(--sidebar-bg);backdrop-filter:blur(6px);display:flex;flex-direction:column;padding:0 8px}
+.sb-head{height:52px;display:flex;align-items:center;padding:0 8px 0 12px;justify-content:space-between}
+.sb-brand{font-family:var(--font-serif);font-size:20px;color:var(--emph);letter-spacing:-.01em}
+.sb-nav{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+.nav-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-control);
+  font-size:13px;color:var(--faint-fg);position:relative}
+.nav-row .ic{width:17px;height:17px;flex:none;color:var(--muted-fg)}
+.nav-row.active{background:var(--surface);color:var(--fg);font-weight:500}
+.nav-row.active .ic{color:var(--fg)}
+.nav-badge{margin-left:auto;font-size:10.5px;font-weight:600;background:var(--emph);color:var(--primary-fg);
+  min-width:18px;height:18px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.sb-over{margin:16px 10px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-fg);font-weight:500}
+.lesson-row{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--radius-control);font-size:12.5px;color:var(--faint-fg)}
+.lesson-row.cur{background:var(--surface);color:var(--fg);font-weight:500}
+.lesson-row.done{color:var(--muted-fg)}
+.lesson-row .lt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ring{width:15px;height:15px;flex:none}
+.ring .trk{stroke:var(--muted-fg);opacity:.3}
+.ring .arc{stroke:var(--fg);stroke-linecap:round}
+.sb-acct{margin-top:auto;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px;padding:12px 10px}
+.avatar{width:28px;height:28px;border-radius:999px;background:var(--emph);color:var(--primary-fg);
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:none}
+.acct-mail{font-size:12px;color:var(--faint-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.chev{width:15px;height:15px;color:var(--muted-fg);flex:none}
+
+.main{flex:1;position:relative;overflow:hidden}
+.view{position:absolute;inset:0;opacity:0;overflow:hidden}
+.col{max-width:600px;margin:0 auto;padding:24px 22px 0;height:100%;overflow:hidden}
+.col-wide{max-width:660px;margin:0 auto;padding:26px 26px 0;height:100%;overflow:hidden}
+.disp{font-family:var(--font-serif);font-size:27px;color:var(--emph);letter-spacing:-.01em;line-height:1.15}
+.overline{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-fg);font-weight:500}
+.meta{font-size:12px;color:var(--muted-fg)}
+.card{background:var(--depth-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--elev-card)}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:500}
+.chip.warn{background:color-mix(in oklab,var(--warning) 16%,transparent);color:var(--warning)}
+.chip.ok{background:color-mix(in oklab,var(--success) 16%,transparent);color:var(--success)}
+.chip.info{background:color-mix(in oklab,var(--info) 16%,transparent);color:var(--info)}
+
+/* ---------- chat / hero ---------- */
+.step{margin:0 auto 14px;max-width:600px;display:flex;align-items:center;gap:10px}
+.step-bar{flex:1;height:3px;border-radius:2px;background:var(--border-2);overflow:hidden}
+.step-fill{height:100%;width:0;border-radius:2px;background:linear-gradient(90deg,var(--grad-4),var(--grad-3))}
+.step-lbl{font-size:11.5px;color:var(--muted-fg);white-space:nowrap}
+.stream{display:flex;flex-direction:column;gap:13px}
+.bubble{max-width:86%;border-radius:var(--radius-card);padding:11px 14px;font-size:14px;line-height:1.55}
+.b-user{align-self:flex-end;background:var(--depth-card);border:1px solid var(--border)}
+.b-bot{align-self:flex-start;color:var(--fg)}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--muted-fg);
+  border:1px solid var(--border);border-radius:999px;padding:2px 8px;margin-top:7px}
+.lad{display:flex;flex-direction:column;gap:8px;align-self:flex-start;width:88%}
+.lad-row{display:flex;gap:11px;align-items:flex-start;opacity:0}
+.lad-tag{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted-fg);width:96px;flex:none;padding-top:3px;font-weight:600}
+.lad-txt{font-size:14.5px;color:var(--fg)}
+.composer{align-self:stretch;margin-top:2px}
+.comp-top{display:flex;align-items:center;gap:10px;padding:10px 12px 0}
+.seg{display:inline-flex;background:var(--depth-sub);border:1px solid var(--border);border-radius:999px;padding:3px;position:relative}
+.seg .opt{position:relative;z-index:1;font-size:11.5px;padding:4px 11px;border-radius:999px;color:var(--muted-fg)}
+.seg .opt.on{color:var(--fg);font-weight:500}
+.seg .thumb{position:absolute;top:3px;left:0;height:calc(100% - 6px);width:0;background:var(--bg);border-radius:999px;box-shadow:var(--elev-card);z-index:0}
+.comp-status{font-size:11.5px;color:var(--muted-fg)}
+.code-wrap{margin:10px 12px 0;background:var(--code-bg);border-radius:var(--radius-control);padding:12px 14px;min-height:148px}
+pre.code{font-family:ui-monospace,'SFMono-Regular','JetBrains Mono',Menlo,Consolas,monospace;
+  font-size:12.5px;line-height:1.62;color:var(--code-fg);white-space:pre;tab-size:4}
+pre.code .cmd{color:var(--c-cmd);font-weight:600}
+pre.code .cond{color:var(--c-cond)}
+pre.code .str{color:var(--c-str)}
+pre.code .num{color:var(--c-num)}
+pre.code .cmt{color:var(--c-cmt);font-style:italic}
+.caret{display:inline-block;width:7px;height:14px;background:var(--fg);transform:translateY(2px);opacity:.85}
+.comp-bot{display:flex;justify-content:flex-end;padding:10px 12px 12px}
+.run-btn{display:inline-flex;align-items:center;gap:7px;background:var(--emph);color:var(--primary-fg);
+  border-radius:999px;padding:7px 15px;font-size:12.5px;font-weight:500}
+.run-btn .ic{width:14px;height:14px}
+.run-btn.press{transform:scale(.96)}
+.out{align-self:flex-start;width:88%;background:var(--code-bg);border-radius:var(--radius-control);padding:10px 14px}
+.out-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted-fg);margin-bottom:5px}
+.out pre{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--code-fg)}
+.beat{font-family:var(--font-serif);font-size:26px;line-height:1.15;letter-spacing:-.005em;align-self:flex-start;
+  background:linear-gradient(90deg,var(--grad-1),var(--grad-2),var(--grad-3),var(--grad-4),var(--grad-5));
+  background-size:200%;-webkit-background-clip:text;background-clip:text;color:transparent}
+.dots{display:inline-flex;gap:5px;align-items:center;align-self:flex-start;padding:6px 2px}
+.dots i{width:6px;height:6px;border-radius:999px;background:var(--muted-fg);display:block}
+
+/* ---------- classes grid ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+.cl-card{position:relative;background:var(--depth-card);border:1px solid var(--border);border-radius:var(--radius-card);
+  box-shadow:var(--elev-card);padding:16px;height:118px;overflow:hidden}
+.cl-ic{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.cl-ic svg{width:19px;height:19px}
+.cl-name{font-size:15px;font-weight:500;color:var(--fg)}
+.cl-sub{font-size:12px;color:var(--muted-fg);margin-top:3px}
+.cl-stats{position:absolute;inset:16px;top:60px;opacity:0;display:flex;flex-direction:column;gap:7px}
+.cl-stat{display:flex;justify-content:space-between;font-size:12px}
+.cl-stat .k{color:var(--muted-fg)} .cl-stat .v{color:var(--fg);font-weight:500}
+.cl-due{position:absolute;top:14px;right:14px}
+
+/* ---------- class canvas ---------- */
+.back{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--depth-card);
+  border-radius:999px;padding:5px 11px;font-size:11.5px;color:var(--muted-fg);box-shadow:var(--elev-card)}
+.back .ic{width:13px;height:13px}
+.sec-t{font-size:13px;font-weight:600;color:var(--fg);margin:18px 2px 9px}
+.ru{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ru-col .rl{display:flex;justify-content:space-between;font-size:12.5px;padding:7px 0;border-bottom:1px solid var(--border)}
+.ru-col .rl .d{color:var(--muted-fg)}
+.unit{padding:14px 16px}
+.unit-h{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.unit-h .ut{font-size:13.5px;font-weight:500;color:var(--fg)}
+.assign{margin-top:10px;background:var(--depth-sub);border:1px solid var(--border);border-radius:var(--radius-control);
+  padding:10px 12px;display:flex;align-items:center;gap:10px;font-size:12.5px}
+.assign .ic{width:15px;height:15px;color:var(--muted-fg)}
+
+/* ---------- quiz focus lock ---------- */
+.quiz-scrim{position:absolute;inset:0;background:color-mix(in oklab,var(--bg) 55%,transparent);backdrop-filter:blur(3px)}
+.quiz-card{width:560px;background:var(--depth-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--elev-pop);padding:24px}
+.qlabel{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted-fg);font-weight:500}
+.qprompt{font-family:var(--font-serif);font-size:23px;color:var(--emph);margin:8px 0 16px}
+.qopt{display:flex;align-items:center;gap:11px;border:1px solid var(--border);border-radius:var(--radius-control);
+  padding:11px 13px;font-size:13.5px;margin-bottom:9px;background:var(--depth-field)}
+.qradio{width:16px;height:16px;border-radius:999px;border:2px solid var(--border-2);flex:none}
+.qopt.sel{border-color:var(--success);background:color-mix(in oklab,var(--success) 9%,var(--depth-field))}
+.qopt.sel .qradio{border-color:var(--success);background:var(--success);position:relative}
+.qopt.sel .qradio:after{content:"";position:absolute;inset:3px;border-radius:999px;background:var(--bg)}
+.q-submit{display:flex;justify-content:flex-end;margin-top:6px}
+.q-score{background:var(--depth-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--elev-pop);
+  padding:26px 40px;text-align:center;opacity:0}
+.q-score .big{font-family:var(--font-serif);font-size:46px;color:var(--emph);line-height:1}
+
+/* ---------- overview ---------- */
+.upnext-seg{margin-left:auto}
+.cal{margin-top:14px;background:var(--depth-card);border:1px solid var(--border);border-radius:var(--radius-card);
+  box-shadow:var(--elev-card);padding:16px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:8px}
+.cal-dow{font-size:10px;color:var(--muted-fg);text-align:center;padding-bottom:2px}
+.cal-cell{aspect-ratio:1.5/1;border-radius:9px;border:1px solid var(--border);padding:4px 6px;position:relative;font-size:11px;color:var(--faint-fg)}
+.cal-cell.mut{opacity:.35}
+.cal-dot{position:absolute;bottom:5px;left:6px;display:flex;gap:3px}
+.cal-dot i{width:5px;height:5px;border-radius:999px;display:block;transform:scale(0)}
+.legend{display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--muted-fg)}
+.legend i{width:7px;height:7px;border-radius:999px;display:inline-block;margin-right:5px;vertical-align:middle}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.tile{background:var(--depth-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--elev-card);padding:14px 16px}
+.tile .n{font-family:var(--font-serif);font-size:30px;color:var(--emph);line-height:1}
+.tile .k{font-size:11.5px;color:var(--muted-fg);margin-top:4px}
+.prof{margin-top:12px}
+.prof-row{display:flex;align-items:center;gap:12px;padding:6px 0}
+.prof-name{font-size:12.5px;color:var(--fg);width:120px;flex:none}
+.pmeter{flex:1;height:6px;border-radius:6px;background:var(--border-2);overflow:hidden}
+.pmeter i{display:block;height:100%;width:0;border-radius:6px;background:var(--fg)}
+.prof-v{font-size:12px;color:var(--muted-fg);width:38px;text-align:right;flex:none}
+
+/* ---------- mentor modal ---------- */
+.modal-scrim{position:absolute;inset:0;background:color-mix(in oklab,var(--bg) 50%,transparent);backdrop-filter:blur(4px)}
+.modal{width:520px;background:var(--depth-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--elev-pop);padding:24px;opacity:0}
+.m-title{font-family:var(--font-serif);font-size:24px;color:var(--emph)}
+.m-sub{font-size:12.5px;color:var(--muted-fg);margin:4px 0 16px}
+.m-row{margin-bottom:13px}
+.m-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted-fg);margin-bottom:6px;font-weight:500}
+.m-seg{position:relative;display:flex;background:var(--depth-sub);border:1px solid var(--border);border-radius:999px;padding:3px}
+.m-seg .opt{flex:1;text-align:center;font-size:12px;padding:6px 0;border-radius:999px;color:var(--muted-fg);position:relative;z-index:1}
+.m-seg .opt.on{color:var(--fg);font-weight:500}
+.m-thumb{position:absolute;top:3px;left:0;height:calc(100% - 6px);width:0;background:var(--bg);border-radius:999px;box-shadow:var(--elev-card);z-index:0}
+
+/* ---------- floating theme toggle ---------- */
+#themeToggle{position:absolute;right:26px;bottom:22px;left:auto;width:40px;height:40px;border-radius:999px;
+  border:1px solid var(--border);background:color-mix(in oklab,var(--surface) 80%,transparent);backdrop-filter:blur(8px);
+  box-shadow:0 6px 24px rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center;z-index:5;opacity:0}
+#tgIcon{width:19px;height:19px;color:var(--fg);display:flex;align-items:center;justify-content:center}
+#tgIcon .ico{width:19px;height:19px}
+
+/* ---------- overlays ---------- */
+.overlay{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;flex-direction:column}
+.hide{display:none!important}
+#coldopen .mark{width:118px;height:118px;border-radius:26px;background:#fafaf9;display:flex;align-items:center;justify-content:center;box-shadow:var(--elev-raised)}
+#coldopen .mark span{font-family:'Times New Roman',var(--font-serif);font-style:italic;font-size:92px;color:#0a0a0a;line-height:1;transform:translateY(4px)}
+#coldopen .word{font-family:var(--font-serif);font-size:52px;color:var(--emph);margin-top:22px;opacity:0}
+#coldopen .tag{font-size:14px;color:var(--muted-fg);margin-top:8px;opacity:0}
+
+.login-wrap{display:flex;flex-direction:column;align-items:center;width:430px}
+.login-pill{align-self:center;margin-bottom:20px;opacity:0}
+.login-pill .inner{padding:6px 16px;font-size:12.5px;font-weight:500;display:flex;align-items:center}
+.login-h{font-family:var(--font-serif);font-size:46px;line-height:1.08;text-align:center;color:var(--emph);letter-spacing:-.01em}
+.login-h .w{display:inline-block;opacity:0}
+.login-sub{font-size:14px;color:var(--muted-fg);text-align:center;margin:14px 0 24px;max-width:380px;opacity:0}
+.login-card{width:390px;opacity:0}
+.login-card .inner{padding:26px}
+.lc-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-fg);margin-bottom:6px}
+.lc-field{border-bottom:1px solid var(--border-2);padding:7px 2px;font-size:14px;color:var(--fg);margin-bottom:16px}
+.lc-btn{width:100%;background:var(--emph);color:var(--primary-fg);border-radius:999px;padding:11px;text-align:center;font-size:14px;font-weight:500;margin-top:4px}
+.lc-btn.press{transform:scale(.985);opacity:.9}
+
+#close{z-index:6;background:#000;opacity:0}
+#close .cmark{font-family:'Times New Roman',var(--font-serif);font-style:italic;font-size:60px;color:#fff;opacity:0;line-height:1}
+#close .cline{font-size:40px;margin-top:14px;opacity:0}
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="aurora" width="1920" height="1080"></canvas>
+  <div id="stage">
+    <div id="app">
+      <aside class="sidebar" id="sb"></aside>
+      <div class="main" id="main"></div>
+    </div>
+    <button id="themeToggle"><span id="tgIcon"></span></button>
+    <div id="coldopen" class="overlay">
+      <div class="mark" id="coMark"><span>J</span></div>
+      <div class="word" id="coWord">Jargon</div>
+      <div class="tag" id="coTag">Hyper‑personal learning, one conversation at a time.</div>
+    </div>
+    <div id="login" class="overlay"></div>
+    <div id="close" class="overlay">
+      <div class="cmark" id="clMark">J</div>
+      <div class="cline serif grad-text" id="clLine">Learn with Jargon</div>
+    </div>
+  </div>
+</div>
+<script>
+/* ===================== ICONS (lucide-ish) ===================== */
+const IC={
+ msg:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7.9 20A9 9 0 1 0 4 16.1L3 21l4.9-1z"/></svg>',
+ grid:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+ act:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l2 7 4-16 2 9h6"/></svg>',
+ sun:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+ moon:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+ arrow:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 18l-6-6 6-6"/></svg>',
+ play:'<svg class="ic" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5v14l11-7z"/></svg>',
+ chev:'<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>',
+ code:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>',
+ sigma:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 4h12M6 4l6 8-6 8h12"/></svg>',
+ flask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></svg>',
+ clock:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+};
+const $=(s,r=document)=>r.querySelector(s);
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const RINGC=2*Math.PI*6.2;
+function ring(cls){const r=6.2,C=RINGC;
+  return `<svg class="ring ${cls||''}" viewBox="0 0 16 16"><circle class="trk" cx="8" cy="8" r="${r}" fill="none" stroke-width="2"/><circle class="arc" cx="8" cy="8" r="${r}" fill="none" stroke-width="2" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${C.toFixed(2)}" transform="rotate(-90 8 8)"/></svg>`;}
+
+/* ===================== BUILD DOM ===================== */
+$('#sb').innerHTML=`
+  <div class="sb-head"><div class="sb-brand serif">Jargon</div></div>
+  <div class="sb-nav">
+    <div class="nav-row active" id="navChat">${IC.msg}<span>Tutor chat</span></div>
+    <div class="nav-row" id="navClasses">${IC.grid}<span>Classes</span></div>
+    <div class="nav-row" id="navOverview">${IC.act}<span>Overview</span><span class="nav-badge">3</span></div>
+  </div>
+  <div class="sb-over">Lessons</div>
+  <div id="lessonList"></div>
+  <div class="sb-acct"><div class="avatar">A</div><div class="acct-mail">ava.reyes@northgate.edu</div>${IC.chev}</div>`;
+const LESSONS=[['Turn a process into code','done'],['Variables remember things','done'],['Decisions and comparisons','cur'],['Lists and looping','todo'],['Inputs and outputs','todo'],['Final logic lab','todo']];
+const ll=$('#lessonList');
+LESSONS.forEach(([t,st])=>{const r=el('div','lesson-row'+(st==='cur'?' cur':st==='done'?' done':''));
+  r.innerHTML=(st==='cur'?ring('r-cur'):st==='done'?ring('r-done'):`<span class="ring"></span>`)+`<span class="lt">${t}</span>`;ll.appendChild(r);});
+
+$('#tgIcon').innerHTML=IC.sun;
+
+$('#login').innerHTML=`<div class="login-wrap">
+    <div class="grad-border pill login-pill" id="lgPill"><div class="inner pill"><span class="grad-text" style="font-weight:600">Jargon AI tutor</span></div></div>
+    <div class="login-h" id="lgH"></div>
+    <div class="login-sub" id="lgSub">Hyper‑personal lessons that meet you where you are. One conversation at a time.</div>
+    <div class="grad-border login-card" id="lgCard"><div class="inner">
+      <div class="lc-lbl">Email</div><div class="lc-field">ava.reyes@northgate.edu</div>
+      <div class="lc-lbl">Password</div><div class="lc-field">••••••••••</div>
+      <div class="lc-btn" id="lgBtn">Continue</div>
+    </div></div></div>`;
+$('#lgH').innerHTML='Learn anything, in your own words.'.split(' ').map(w=>`<span class="w">${w}&nbsp;</span>`).join('');
+
+const main=$('#main');
+
+/* CHAT / HERO */
+const vChat=el('div','view'); vChat.id='vChat';
+vChat.innerHTML=`
+ <div class="col">
+   <div class="step" id="step">
+     <div class="step-bar"><div class="step-fill" id="stepFill"></div></div>
+     <div class="step-lbl" id="stepLbl">Step 3/6 · Decisions and comparisons</div>
+   </div>
+   <div class="stream" id="stream">
+     <div class="bubble b-user" id="uBubble" style="opacity:0">keep the even numbers that divide by three<div class="tag">● Dictated</div></div>
+     <div class="lad" id="ladder">
+       <div class="lad-row" id="lad1"><div class="lad-tag">Natural speech</div><div class="lad-txt">“keep the even numbers that divide by three”</div></div>
+       <div class="lad-row" id="lad2"><div class="lad-tag">Baby Jargon</div><div class="lad-txt">go through the list · if a number is even <b>and</b> a multiple of 3 · keep it</div></div>
+       <div class="lad-row" id="lad3"><div class="lad-tag">Jargon</div><div class="lad-txt">now let’s make it run ↓</div></div>
+     </div>
+     <div class="grad-border composer" id="composer" style="opacity:0"><div class="inner">
+        <div class="comp-top">
+          <div class="seg" id="langSeg"><div class="thumb" id="langThumb"></div><div class="opt on">Jargon</div><div class="opt">JS</div><div class="opt">Py</div></div>
+          <div class="comp-status">Jargon runs on the live classroom engine.</div>
+        </div>
+        <div class="code-wrap"><pre class="code" id="code"></pre></div>
+        <div class="comp-bot"><div class="run-btn" id="runBtn">${IC.play}<span>Run</span></div></div>
+     </div></div>
+     <div class="dots" id="thinking" style="opacity:0"><i></i><i></i><i></i></div>
+     <div class="out" id="outBubble" style="opacity:0"><div class="out-lbl">Output · Jargon</div><pre>[6, 12, 18]</pre></div>
+     <div class="beat" id="beat" style="opacity:0">Exactly right!</div>
+     <div class="bubble b-bot" id="beatSub" style="opacity:0">You filtered the list with a <b>loop</b> and a <b>condition</b> — that’s the whole idea.</div>
+   </div>
+ </div>`;
+main.appendChild(vChat);
+
+/* CLASSES */
+const SUBJ=[['Computer Science',IC.code,'var(--info)','Module 2 · Coding'],['Algebra I',IC.sigma,'var(--warning)','Linear equations'],['Biology',IC.flask,'var(--success)','Cells & energy'],['English',IC.msg,'var(--info)','Persuasive writing']];
+const vClasses=el('div','view'); vClasses.id='vClasses';
+let cg=`<div class="col-wide"><div class="disp">Classes</div><div class="grid2">`;
+SUBJ.forEach((s,i)=>{cg+=`<div class="cl-card" id="clc${i}">
+     <div class="cl-ic" style="background:color-mix(in oklab,${s[2]} 15%,transparent);color:${s[2]}">${s[1]}</div>
+     <div class="cl-front" id="clf${i}"><div class="cl-name">${s[0]}</div><div class="cl-sub">${s[3]}</div></div>
+     <div class="cl-stats" id="cls${i}">
+       <div class="cl-stat"><span class="k">Next lesson</span><span class="v">${s[3]}</span></div>
+       <div class="cl-stat"><span class="k">To do</span><span class="v">${i===0?'3 items':i===1?'1 item':'Nothing due'}</span></div>
+       <div class="cl-stat"><span class="k">Average</span><span class="v">${['88%','91%','84%','—'][i]}</span></div>
+     </div>${i<2?`<div class="chip warn cl-due">${i===0?2:1} due</div>`:''}</div>`;});
+cg+=`</div></div>`; vClasses.innerHTML=cg; main.appendChild(vClasses);
+
+/* CLASS CANVAS */
+const vClass=el('div','view'); vClass.id='vClass';
+vClass.innerHTML=`<div class="col-wide">
+   <div class="back">${IC.arrow}<span>All classes</span></div>
+   <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:14px">
+     <div><div class="disp">Computer Science</div><div class="meta" style="margin-top:2px">Northgate School · Module 2</div></div>
+     <div style="text-align:right"><div class="meta">5 graded · avg 88%</div><div class="chip warn" style="margin-top:6px">2 due</div></div>
+   </div>
+   <div class="sec-t">Recent &amp; upcoming</div>
+   <div class="card" style="padding:14px 16px"><div class="ru">
+     <div class="ru-col"><div class="overline" style="margin-bottom:6px">Upcoming</div>
+       <div class="rl"><span>Loops practice set</span><span class="d">due Mar 4</span></div>
+       <div class="rl"><span>Checkpoint quiz</span><span class="d">due Mar 6</span></div></div>
+     <div class="ru-col"><div class="overline" style="margin-bottom:6px">Recent</div>
+       <div class="rl"><span>Variables quiz</span><span style="color:var(--success)">92%</span></div>
+       <div class="rl"><span>Sequence lab</span><span style="color:var(--success)">Submitted</span></div></div>
+   </div></div>
+   <div class="sec-t">Lessons</div>
+   <div class="card unit" id="unitCard">
+     <div class="unit-h"><span class="ut">Unit 2 · Decisions &amp; loops</span><span class="chip info">In progress</span><span class="meta" style="margin-left:auto">avg 88%</span></div>
+     <div id="unitRows"></div>
+     <div class="assign" id="assignRow">${IC.clock}<span style="flex:1">Loops practice set</span><span class="meta">due Mar 4</span><span class="chip warn">To do</span></div>
+   </div></div>`;
+main.appendChild(vClass);
+[['Comparisons and IF','done'],['Combining conditions','cur'],['Looping over a list','todo']].forEach(([t,st])=>{
+  const r=el('div','lesson-row'+(st==='cur'?' cur':st==='done'?' done':''));r.style.fontSize='13px';
+  r.innerHTML=(st==='cur'?ring('r-cur2'):st==='done'?ring('r-done2'):`<span class="ring"></span>`)+`<span class="lt">${t}</span>`;
+  $('#unitRows',vClass).appendChild(r);});
+
+/* QUIZ */
+const vQuiz=el('div','view'); vQuiz.id='vQuiz';
+vQuiz.innerHTML=`<div class="quiz-scrim"></div>
+ <div class="center"><div class="quiz-card" id="quizCard">
+   <div class="qlabel">Question 1 · multiple choice · 2 pt</div>
+   <div class="qprompt">What does <span style="font-family:var(--font-sans);color:var(--c-cmd);font-size:19px">REPEAT_FOR_EACH</span> do?</div>
+   <div class="qopt" id="qo1"><span class="qradio"></span>Runs a block of code exactly once</div>
+   <div class="qopt" id="qo2"><span class="qradio"></span>Loops over every item in a list</div>
+   <div class="qopt" id="qo3"><span class="qradio"></span>Asks the student for input</div>
+   <div class="q-submit"><div class="run-btn" id="qSubmit"><span>Submit quiz</span></div></div>
+ </div></div>
+ <div class="center"><div class="q-score" id="qScore"><div class="big">2/2</div><div class="meta" style="margin-top:6px">Nice work — checkpoint passed</div></div></div>`;
+main.appendChild(vQuiz);
+
+/* OVERVIEW */
+const vOv=el('div','view'); vOv.id='vOverview';
+vOv.innerHTML=`<div class="col-wide">
+   <div style="display:flex;align-items:center"><div class="disp">Overview</div>
+     <div class="seg upnext-seg" id="ovSeg"><div class="thumb" id="ovThumb"></div><div class="opt">Agenda</div><div class="opt on">Calendar</div></div>
+   </div>
+   <div class="cal">
+     <div style="font-size:13px;font-weight:600">March 2026</div>
+     <div class="cal-grid" id="calGrid"></div>
+     <div class="legend"><span><i style="background:var(--warning)"></i>Due</span><span><i style="background:var(--success)"></i>Submitted</span></div>
+   </div>
+   <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px"><div class="sec-t" style="margin:0">Grades</div><div class="meta">5 graded · avg 88%</div></div>
+   <div class="tiles"><div class="tile"><div class="n" id="tileN1">12</div><div class="k">Lessons completed</div></div><div class="tile"><div class="n" id="tileN2">15</div><div class="k">Lessons started</div></div></div>
+   <div class="sec-t">Proficiency</div>
+   <div class="prof" id="profList"></div>
+ </div>`;
+main.appendChild(vOv);
+const cal=$('#calGrid',vOv);
+['S','M','T','W','T','F','S'].forEach(d=>cal.appendChild(el('div','cal-dow',d)));
+const DUE={4:'w',6:'w',12:'g',13:'w',18:'g',20:'w',25:'g',26:'w',27:'w'};
+let day=0;
+for(let i=0;i<35;i++){day++;const inM=day>=1&&day<=31;
+  const c=el('div','cal-cell'+(inM?'':' mut'),inM?`${day}`:'');
+  if(inM&&DUE[day]){const kind=DUE[day];c.innerHTML+=`<div class="cal-dot"><i style="background:${kind==='g'?'var(--success)':'var(--warning)'}"></i>${day===13||day===20?'<i style="background:var(--success)"></i>':''}</div>`;}
+  cal.appendChild(c);}
+const PROF=[['Loops','82'],['Conditionals','76'],['Variables','90'],['Sequencing','88']];
+const pl=$('#profList',vOv);
+PROF.forEach(([n,v])=>{pl.appendChild(el('div','prof-row',`<div class="prof-name">${n}</div><div class="pmeter"><i data-v="${v}"></i></div><div class="prof-v">${v}%</div>`));});
+
+/* MENTOR MODAL */
+const mMentor=el('div','view'); mMentor.id='mMentor';
+const MROWS=[['Tone',['Friendly','Direct','Socratic'],2],['Verbosity',['Concise','Balanced','Detailed'],1],['Difficulty',['Gentle','Standard','Challenging'],1],['Voice',['Marin','Cedar','Coral','Nova','Shimmer'],1]];
+let mh=`<div class="modal-scrim"></div><div class="center"><div class="modal" id="mCard"><div class="m-title serif">Mentor</div><div class="m-sub">Shape how the tutor talks — and sounds.</div>`;
+MROWS.forEach((r,i)=>{mh+=`<div class="m-row"><div class="m-lbl">${r[0]}</div><div class="m-seg" id="mseg${i}"><div class="m-thumb" id="mth${i}"></div>${r[1].map((o,j)=>`<div class="opt${j===r[2]?' on':''}">${o}</div>`).join('')}</div></div>`;});
+mh+=`</div></div>`; mMentor.innerHTML=mh; main.appendChild(mMentor);
+
+/* ===================== JARGON SYNTAX HIGHLIGHT (single-pass tokenizer, partial-safe) ===================== */
+const CODE_SRC=`SET nums ([1, 6, 9, 12, 14, 18])
+SET selected ([])
+
+REPEAT_FOR_EACH x in nums
+    IF x is even AND (x % 3) is equal to 0 THEN
+        ADD x to selected
+    END
+END
+
+PRINT selected`;
+const PHRASES=['is equal to','is not equal to','is greater than or equal to','is greater than','is less than or equal to','is less than','is even','is odd','is in','is not in'];
+const CMD_RE=/^(SET|PRINT|ADD|REMOVE|ASK|IF|THEN|ELSE|END|REPEAT_FOR_EACH|REPEAT_UNTIL|REPEAT|BREAK)\b/;
+const COND_RE=/^(AND|OR)\b/;
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function hlLine(line){
+  let code=line,com='';
+  const m=line.match(/(#|\/\/)/);
+  if(m){code=line.slice(0,m.index);com=line.slice(m.index);}
+  let out='',i=0;
+  while(i<code.length){
+    const rest=code.slice(i); let mm;
+    if(mm=rest.match(/^"[^"]*"/)){out+=`<span class="str">${esc(mm[0])}</span>`;i+=mm[0].length;continue;}
+    let ph=null; for(const p of PHRASES){if(rest.startsWith(p)){ph=p;break;}}
+    if(ph){out+=`<span class="cond">${esc(ph)}</span>`;i+=ph.length;continue;}
+    if(mm=rest.match(CMD_RE)){out+=`<span class="cmd">${esc(mm[0])}</span>`;i+=mm[0].length;continue;}
+    if(mm=rest.match(COND_RE)){out+=`<span class="cond">${esc(mm[0])}</span>`;i+=mm[0].length;continue;}
+    if(mm=rest.match(/^\d+/)){out+=`<span class="num">${mm[0]}</span>`;i+=mm[0].length;continue;}
+    if(mm=rest.match(/^[A-Za-z_]\w*/)){out+=esc(mm[0]);i+=mm[0].length;continue;}
+    out+=esc(code[i]);i++;
+  }
+  if(com)out+=`<span class="cmt">${esc(com)}</span>`;
+  return out;
+}
+function hl(src){return src.split('\n').map(hlLine).join('\n');}
+
+/* ===================== TIMELINE ENGINE (pure function of t) ===================== */
+const DURATION=62500, DARK_T=57700;
+const E={out3:p=>1-Math.pow(1-p,3),out2:p=>1-Math.pow(1-p,2),in2:p=>p*p,in3:p=>p*p*p,io:p=>p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2,lin:p=>p};
+const TW=[],CL=[],NUM=[];
+function q(sel){return typeof sel==='string'?$(sel):sel;}
+function A(sel,prop,kfs){const e=q(sel);if(e)TW.push({el:e,prop,kfs});}
+function cls(sel,cn,ranges){const e=q(sel);if(e)CL.push({el:e,cn,ranges});}
+function evalKfs(kfs,t){
+  if(t<=kfs[0][0])return kfs[0][1];
+  const last=kfs[kfs.length-1]; if(t>=last[0])return last[1];
+  for(let i=1;i<kfs.length;i++){if(t<=kfs[i][0]){const [t0,v0]=kfs[i-1],[t1,v1,ez]=kfs[i];const p=(t-t0)/(t1-t0);return v0+(v1-v0)*E[ez||'out3'](p);}}
+  return last[1];
+}
+const CODE_T0=20400,CODE_T1=28800;
+function codeType(t){const pre=$('#code');if(!pre)return;
+  if(t<CODE_T0){pre.innerHTML='';return;}
+  const p=Math.max(0,Math.min(1,(t-CODE_T0)/(CODE_T1-CODE_T0)));
+  const n=Math.round(p*CODE_SRC.length);
+  const caret=(p<1&&Math.floor(t/450)%2===0)?'<span class="caret"></span>':'';
+  pre.innerHTML=hl(CODE_SRC.slice(0,n))+caret;}
+function seek(t){
+  aurora(t);
+  const TF=new Map(),FL=new Map();
+  const gx=e=>{let o=TF.get(e);if(!o){o={x:0,y:0,s:1,rot:0};TF.set(e,o);}return o;};
+  for(const tw of TW){const v=evalKfs(tw.kfs,t),e=tw.el,p=tw.prop;
+    if(p==='op')e.style.opacity=v;
+    else if(p==='y')gx(e).y=v; else if(p==='x')gx(e).x=v; else if(p==='s')gx(e).s=v; else if(p==='rot')gx(e).rot=v;
+    else if(p==='w')e.style.width=v+'px'; else if(p==='fillw')e.style.width=v+'%';
+    else if(p==='ring')e.style.strokeDashoffset=(RINGC*(1-v)).toFixed(2);
+    else if(p==='bgpos')e.style.backgroundPosition=v+'% 50%';}
+  for(const [e,o] of TF){e.style.transform=`translate(${o.x}px,${o.y}px) scale(${o.s}) rotate(${o.rot}deg)`;}
+  for(const c of CL){const on=c.ranges.some(r=>t>=r[0]&&t<r[1]);c.el.classList.toggle(c.cn,on);}
+  for(const n of NUM){const p=Math.max(0,Math.min(1,(t-n.t0)/(n.t1-n.t0)));n.el.textContent=(n.pre||'')+Math.round(n.from+(n.to-n.from)*E.out3(p))+(n.suf||'');}
+  codeType(t);
+  document.documentElement.classList.toggle('dark',t>=DARK_T);
+  const tg=$('#tgIcon'); if(tg&&tg.dataset.mode!==(t>=DARK_T?'d':'l')){tg.dataset.mode=(t>=DARK_T?'d':'l');tg.innerHTML=t>=DARK_T?IC.moon:IC.sun;}
+}
+
+/* ===================== AURORA ===================== */
+const ac=$('#aurora').getContext('2d');
+const RGB=[[246,211,107],[249,168,107],[245,133,187],[143,164,239],[114,184,245]];
+function aurora(t){const W=1920,H=1080,dark=t>=DARK_T,T=t/1000;
+  ac.globalCompositeOperation='source-over';ac.globalAlpha=1;
+  ac.fillStyle=dark?'#0b0b0d':'#ffffff';ac.fillRect(0,0,W,H);
+  let base=dark?0.20:(t<13600?0.15:0.10);
+  RGB.forEach((c,i)=>{const a=base*(0.72+0.30*Math.sin(T*0.16+i*1.7));
+    const cx=W*(0.5+0.40*Math.sin(T*0.05+i*1.3)),cy=H*(0.5+0.40*Math.cos(T*0.043+i*2.1)),r=Math.min(W,H)*(0.60+0.10*Math.sin(T*0.07+i));
+    const g=ac.createRadialGradient(cx,cy,0,cx,cy,r);g.addColorStop(0,`rgba(${c[0]},${c[1]},${c[2]},${a})`);g.addColorStop(1,`rgba(${c[0]},${c[1]},${c[2]},0)`);
+    ac.fillStyle=g;ac.fillRect(0,0,W,H);});
+  const vg=ac.createRadialGradient(W/2,H*0.46,H*0.28,W/2,H/2,H*0.8);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,dark?'rgba(5,5,7,0.55)':'rgba(255,255,255,0.32)');
+  ac.fillStyle=vg;ac.fillRect(0,0,W,H);}
+
+/* ===================== CHOREOGRAPHY (ms; cuts on detected onsets) ===================== */
+function view(sel,inA,inB,outA,outB){A(sel,'op',[[0,0],[inA,0],[inB,1,'out2'],[outA||DURATION,1],[outB||DURATION,0,'in2']]);}
+
+/* S0 cold open 0–8500 */
+A('#coMark','s',[[0,.7],[1000,1,'out3']]);
+A('#coMark','y',[[0,10],[1000,0,'out3'],[4200,0],[4900,-8,'in2']]);
+A('#coMark','op',[[0,0],[500,1,'out2'],[4200,1],[4900,0,'in2']]);
+A('#coWord','op',[[3600,0],[4300,1,'out2'],[7600,1],[8300,0,'in2']]);
+A('#coWord','y',[[3600,12],[4300,0,'out3']]);
+A('#coTag','op',[[4400,0],[5200,1,'out2'],[7600,1],[8300,0,'in2']]);
+A('#coldopen','op',[[0,1],[7900,1],[8500,0,'in2']]);
+cls('#coldopen','hide',[[8600,DURATION]]);
+
+/* S1 login 8000–13800 */
+A('#login','op',[[7800,0],[8500,1,'out2'],[13000,1],[13800,0,'in2']]);
+cls('#login','hide',[[0,7800],[13900,DURATION]]);
+A('#lgPill','op',[[8600,0],[9200,1,'out2']]);A('#lgPill','y',[[8600,8],[9200,0,'out3']]);
+/* headline word stagger set after DOM (below) */
+A('#lgSub','op',[[10200,0],[10900,1,'out2']]);A('#lgSub','y',[[10200,10],[10900,0,'out3']]);
+A('#lgCard','op',[[10000,0],[10900,1,'out2']]);A('#lgCard','y',[[10000,18],[10900,0,'out3']]);
+cls('#lgBtn','press',[[12750,13050]]);
+A('.login-wrap','op',[[0,1],[12900,1],[13800,0,'in2']]);
+A('.login-wrap','y',[[12900,0],[13800,-10,'in2']]);
+$('#lgH').querySelectorAll('.w').forEach((w,i)=>{const s=8800+i*70;A(w,'op',[[s,0],[s+520,1,'out2']]);A(w,'y',[[s,18],[s+620,0,'out3']]);});
+
+/* S2 shell 13000–16700 */
+A('#app','op',[[13000,0],[13600,1,'out2'],[59000,1],[59900,0,'in2']]);
+A('#sb','x',[[13000,-70],[13800,0,'out3']]);
+A('#sb','op',[[13000,0],[13700,1,'out2']]);
+A('#themeToggle','op',[[15200,0],[16000,1,'out2'],[59200,1],[59800,0,'in2']]);
+A('.r-cur .arc','ring',[[14000,0],[15000,.5,'out3']]);
+A('.r-done .arc','ring',[[13900,0],[14700,1,'out3']]);
+
+/* S3 HERO 16700–36000 */
+view('#vChat',15400,16300,35800,36300);
+A('#step','op',[[15900,0],[16600,1,'out2']]);
+A('#stepFill','fillw',[[16600,33],[24000,33],[34800,50,'out3']]);
+A('#uBubble','op',[[16800,0],[17300,1,'out2'],[23500,1],[25200,0,'in2']]);A('#uBubble','y',[[16800,8],[17300,0,'out3']]);
+[['#lad1',17800],['#lad2',18700],['#lad3',19500]].forEach(([s,tm])=>{A(s,'op',[[tm,0],[tm+520,1,'out2']]);A(s,'y',[[tm,8],[tm+620,0,'out3']]);});
+A('#composer','op',[[19900,0],[20500,1,'out2']]);A('#composer','y',[[19900,10],[20500,0,'out3']]);
+A('#stream','y',[[16000,0],[21000,0],[26000,-70,'out2'],[31000,-150,'out2'],[34600,-215,'out3']]);
+cls('#runBtn','press',[[29400,29800]]);
+A('#thinking','op',[[29700,0],[30000,1,'out2'],[31200,1],[31500,0,'in2']]);
+A('#outBubble','op',[[31500,0],[32100,1,'out2']]);A('#outBubble','y',[[31500,8],[32100,0,'out3']]);
+A('#beat','op',[[34900,0],[35500,1,'out2']]);A('#beat','y',[[34900,6],[35500,0,'out3']]);
+A('#beat','bgpos',[[34900,0],[42000,130,'lin']]);
+A('#beatSub','op',[[35500,0],[36000,1,'out2']]);A('#beatSub','y',[[35500,6],[36000,0,'out3']]);
+
+/* S4 CLASSES 36000–39300 */
+view('#vClasses',35800,36500,39000,39400);
+SUBJ.forEach((s,i)=>{const tm=36300+i*130;A('#clc'+i,'op',[[tm,0],[tm+520,1,'out2']]);A('#clc'+i,'y',[[tm,12],[tm+620,0,'out3']]);A('#clc'+i,'s',[[tm,.98],[tm+620,1,'out3']]);});
+A('#clf0','op',[[37650,1],[37980,0,'in2']]);
+A('#cls0','op',[[38020,0],[38400,1,'out2']]);
+A('#clc0','y',[[37700,0],[38150,-3,'out3']]);
+
+/* S5 CLASS 39300–44000 */
+view('#vClass',39100,39800,43700,44100);
+A('.back','op',[[39500,0],[40000,1,'out2']]);A('.back','x',[[39500,-8],[40000,0,'out3']]);
+A('#unitCard','op',[[40000,0],[40600,1,'out2']]);A('#unitCard','y',[[40000,12],[40600,0,'out3']]);
+A('.r-cur2 .arc','ring',[[40400,0],[41200,.5,'out3']]);
+A('.r-done2 .arc','ring',[[40300,0],[41000,1,'out3']]);
+A('#assignRow','op',[[41400,0],[42000,1,'out2']]);A('#assignRow','y',[[41400,8],[42000,0,'out3']]);
+
+/* S6 QUIZ 44000–48250 */
+view('#vQuiz',43800,44400,48000,48400);
+A('#quizCard','op',[[44100,0],[44700,1,'out2'],[46900,1],[47300,0,'in2']]);
+A('#quizCard','s',[[44100,.96],[44700,1,'out3']]);
+cls('#qo2','sel',[[45600,48250]]);
+cls('#qSubmit','press',[[46600,46950]]);
+A('#qScore','op',[[47200,0],[47700,1,'out2']]);A('#qScore','s',[[47200,.9],[47700,1,'out3']]);
+
+/* S7 OVERVIEW 48250–53850 (held behind the mentor modal + through the dark reveal) */
+view('#vOverview',48050,48800,59000,59900);
+cls('#ovSeg .opt:nth-child(2)','on',[[0,49400]]);
+cls('#ovSeg .opt:nth-child(3)','on',[[49400,DURATION]]);
+Array.from($('#calGrid').querySelectorAll('.cal-dot i')).forEach((d,i)=>{const tm=49600+i*70;A(d,'s',[[tm,0],[tm+420,1,'out3']]);});
+NUM.push({el:$('#tileN1'),from:0,to:12,t0:50600,t1:51800});
+NUM.push({el:$('#tileN2'),from:0,to:15,t0:50700,t1:51900});
+Array.from($('#profList').querySelectorAll('.pmeter i')).forEach((b,i)=>{const v=+b.dataset.v;const tm=51400+i*180;A(b,'fillw',[[tm,0],[tm+900,v,'out3']]);});
+
+/* S8 MENTOR 53850–57500 */
+view('#mMentor',53650,54300,57200,57550);
+A('#mCard','op',[[53900,0],[54500,1,'out2']]);A('#mCard','y',[[53900,12],[54500,0,'out3']]);
+
+/* S9 THEME TOGGLE 57500–59900 */
+A('#tgIcon','rot',[[57500,-90],[57950,0,'out3']]);
+A('#tgIcon','s',[[57500,.6],[57950,1,'out3']]);
+A('#tgIcon','op',[[57500,.4],[57950,1,'out2']]);
+A('#themeToggle','s',[[57450,1],[57620,1.14,'out3'],[58050,1,'out3']]);
+
+/* S10 BLACK + LEARN WITH JARGON 59900–62500 */
+A('#close','op',[[59700,0],[60500,1,'out2']]);
+A('#clMark','op',[[60300,0],[61000,1,'out2']]);A('#clMark','y',[[60300,10],[61000,0,'out3']]);
+A('#clLine','op',[[60700,0],[61500,1,'out2']]);A('#clLine','y',[[60700,10],[61500,0,'out3']]);
+A('#clLine','bgpos',[[60700,0],[62500,80,'lin']]);
+
+/* nav active states */
+cls('#navChat','active',[[0,36000]]);
+cls('#navClasses','active',[[36000,48250]]);
+cls('#navOverview','active',[[48250,59000]]);
+
+/* ===================== MEASURED THUMBS + PLAYBACK ===================== */
+let measured=false;
+function setThumb(segSel,thSel){const seg=$(segSel);return {seg,th:$(thSel),opts:seg.querySelectorAll('.opt')};}
+function initMeasured(){ if(measured)return; measured=true;
+  // lang toggle thumb (static under "Jargon")
+  {const {th,opts}=setThumb('#langSeg','#langThumb');const o=opts[0];th.style.width=o.offsetWidth+'px';th.style.transform=`translateX(${o.offsetLeft}px)`;}
+  // overview seg thumb Agenda -> Calendar
+  {const {th,opts}=setThumb('#ovSeg','#ovThumb');const x0=opts[0].offsetLeft,x1=opts[1].offsetLeft;
+    A('#ovThumb','w',[[48250,opts[0].offsetWidth],[49700,opts[1].offsetWidth,'out3']]);
+    A('#ovThumb','x',[[48250,x0],[49200,x0],[49700,x1,'out3']]);}
+  // mentor thumbs slide from first option to target
+  MROWS.forEach((r,i)=>{const {th,opts}=setThumb('#mseg'+i,'#mth'+i);
+    th.style.width=opts[r[2]].offsetWidth+'px';
+    const startX=opts[0].offsetLeft,tx=opts[r[2]].offsetLeft,tm=54700+i*260;
+    A('#mth'+i,'x',[[54600,startX],[tm,tx,'out3']]);});
+}
+window.__duration=DURATION;
+window.__ready=false;
+let capturing=false,raf0=null,playStart=null;
+window.__seek=(ms)=>{capturing=true;if(raf0)cancelAnimationFrame(raf0);if(!measured)initMeasured();seek(Math.max(0,Math.min(DURATION,ms)));};
+function loop(ts){if(capturing)return;if(playStart==null)playStart=ts;let t=ts-playStart;if(t>DURATION+1400){playStart=ts;t=0;}seek(Math.min(t,DURATION));raf0=requestAnimationFrame(loop);}
+window.__play=()=>{capturing=false;playStart=null;raf0=requestAnimationFrame(loop);};
+(async()=>{try{await document.fonts.ready;}catch(e){}initMeasured();seek(0);window.__ready=true;setTimeout(()=>{if(!capturing)window.__play();},250);})();
+</script>
+</body>
+</html>
