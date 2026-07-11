@@ -85,7 +85,8 @@ jobs:
             supabase/migrations/20260802000000_comms_dm_notify.sql \
             supabase/migrations/20260803000000_entity_comments.sql \
             supabase/migrations/20260711000000_itf_book_f_seed.sql \
-            supabase/migrations/20260712000000_retire_demo_catalog.sql ; do
+            supabase/migrations/20260712000000_retire_demo_catalog.sql \
+            supabase/migrations/20260713000000_book_f_only_catalog.sql ; do
             echo "Applying $f"
             # Body goes through a temp file, not a shell argument: large seed migrations
             # (e.g. the Book F content seed, ~254KB) exceed the kernel's per-argument

@@ -6,6 +6,19 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-11 (Book F only — sweep remaining pilot lessons)
+
+Summary: Two studio-authored pilot lessons ("Instructions and Systems" / "What Is An Instruction?",
+"Claims, Reasons, Evidence" / "What Makes a Good Reason?") were still visible to student2 after the
+demo-chain archive — they were created at runtime via /teacher/curriculum, so no migration covered
+them. 20260713000000_book_f_only_catalog.sql now archives EVERY published subject/course/version/
+lesson (+ quiz items) that isn't Book F (id not like 'itf-f-ch%', ids <> itf-beginner/itf-f/
+itf-f-v1), catching those two and any other strays in one idempotent, self-healing sweep (appended
+to the deploy workflow list). History-safe archive, not delete. Reverse by removing the file from
+the workflow list + re-publishing. Files changed: the migration (new),
+.github/workflows/deploy-backend.yml, docs/HANDOFF.md. Verify: green deploy + student2 live pass
+(only IT Frontiers Book F units remain). Suggested next: main FF after the user's live check.
+
 ## Claude -> Codex / Human - 2026-07-11 (Retire demo catalog — Book F only)
 
 Summary: The original demo catalog (subject logic-coding-foundations, course jargon-foundations
