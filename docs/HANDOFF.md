@@ -6,6 +6,24 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-11 (Retire demo catalog — Book F only)
+
+Summary: The original demo catalog (subject logic-coding-foundations, course jargon-foundations
++ v1, lessons lesson1-5/coding1-5, their 2 quiz items) is ARCHIVED, not deleted, via
+20260712000000_retire_demo_catalog.sql (appended to the deploy workflow's migration list after the
+Book F seed). Students now see only IT Frontiers Book F: the student catalog, RLS read policies,
+and the chat runtime all filter on published status. History-safe — rows remain; student1/student2
+had zero runtime records on old lessons. The archive sticks: the old seed files (0002/0005/0006)
+are not in the deploy whitelist and never re-run, while the retire migration re-asserts archived on
+every deploy. Ops notes: units have no status column (they hide via the archived parent chain);
+teacher dashboards using includeDrafts may still list archived rows — expected; to bring the old
+course back, remove the retire file from the workflow list and re-publish the chain.
+Files changed: supabase/migrations/20260712000000_retire_demo_catalog.sql (new),
+.github/workflows/deploy-backend.yml, docs/HANDOFF.md.
+Tests run: deploy workflow (fail-loudly per file) — see run result on branch push.
+Suggested next task: user live pass as student2 (catalog should show only IT Frontiers), then
+main FF.
+
 ## Claude -> Codex / Human - 2026-07-11 (Book F imported — LIVE)
 
 Summary: Book F is live as a global published subject ("IT Frontiers — Beginner Series" →
