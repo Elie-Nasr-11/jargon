@@ -8,7 +8,8 @@ values ('itf-beginner', 'IT Frontiers — Beginner Series', 'Foundational comput
 on conflict (id) do update set
   title = excluded.title,
   description = excluded.description,
-  status = excluded.status;
+  status = excluded.status,
+  updated_at = now();
 
 insert into public.courses (id, subject_id, title, description, status)
 values ('itf-f', 'itf-beginner', 'IT Frontiers Book F', 'Book F of the IT Frontiers Beginner series: systems & signals, computer design, instructions & software, and data & data structures.', 'published')
@@ -16,7 +17,8 @@ on conflict (id) do update set
   subject_id = excluded.subject_id,
   title = excluded.title,
   description = excluded.description,
-  status = excluded.status;
+  status = excluded.status,
+  updated_at = now();
 
 insert into public.course_versions (id, course_id, version_label, status, is_current)
 values ('itf-f-v1', 'itf-f', 'v1', 'published', true)
@@ -24,7 +26,7 @@ on conflict (id) do update set
   course_id = excluded.course_id,
   version_label = excluded.version_label,
   status = excluded.status,
-  is_current = excluded.is_current;
+  updated_at = now();
 
 insert into public.units (id, course_version_id, position, title, description)
 values ('itf-f-ch1', 'itf-f-v1', 1, 'Systems & Signals', 'How systems use input, processing, output, memory, and interfaces to handle and exchange sound, light, pressure, electronic, and radio wave signals.')
@@ -32,7 +34,8 @@ on conflict (id) do update set
   course_version_id = excluded.course_version_id,
   position = excluded.position,
   title = excluded.title,
-  description = excluded.description;
+  description = excluded.description,
+  updated_at = now();
 
 insert into public.lessons (id, position, title, tutor_prompt, sample_code, module, level, unit_id, unit_position, publication_status, help_ceiling, require_attempt_first, final_answer_policy, tutor_tone, tutor_pace, grade_band, curriculum_metadata)
 values ('itf-f-ch1-l1', 101, 'Purpose', 'Help the learner connect everyday tools to the purposes they serve, then distinguish general-purpose personal computers from the three specific-purpose categories. Ask for the learner''s own examples before using the checks to confirm the book''s four computer categories.', '', 'IT Frontiers', 'Beginner', 'itf-f-ch1', 1, 'published', 'guided', true, 'after_attempt', 'encouraging', 'guided', 'lower', '{"course_id": "itf-f", "course_version_id": "itf-f-v1", "lesson_type": "discussion"}'::jsonb)
@@ -906,7 +909,8 @@ on conflict (id) do update set
   course_version_id = excluded.course_version_id,
   position = excluded.position,
   title = excluded.title,
-  description = excluded.description;
+  description = excluded.description,
+  updated_at = now();
 
 insert into public.lessons (id, position, title, tutor_prompt, sample_code, module, level, unit_id, unit_position, publication_status, help_ceiling, require_attempt_first, final_answer_policy, tutor_tone, tutor_pace, grade_band, curriculum_metadata)
 values ('itf-f-ch2-l1', 106, 'Performance', 'Guide the learner from the idea of fast input-to-output processing to two careful comparisons: clock rate when core count is fixed, and core count when clock rate is fixed. Watch for the misconception that twice as many cores always means exactly twice the speed.', '', 'IT Frontiers', 'Beginner', 'itf-f-ch2', 1, 'published', 'guided', true, 'after_attempt', 'encouraging', 'guided', 'lower', '{"course_id": "itf-f", "course_version_id": "itf-f-v1", "lesson_type": "discussion"}'::jsonb)
@@ -1572,7 +1576,8 @@ on conflict (id) do update set
   course_version_id = excluded.course_version_id,
   position = excluded.position,
   title = excluded.title,
-  description = excluded.description;
+  description = excluded.description,
+  updated_at = now();
 
 insert into public.lessons (id, position, title, tutor_prompt, sample_code, module, level, unit_id, unit_position, publication_status, help_ceiling, require_attempt_first, final_answer_policy, tutor_tone, tutor_pace, grade_band, curriculum_metadata)
 values ('itf-f-ch3-l1', 109, 'Instructions', 'Guide the learner from single action statements to ordered task instructions, computer programs, shared calls, and flowcharts. Keep the book''s school, BIOS, microwave, and elevator scenarios intact, and watch for the difference between an instruction and a complete program.', 'SET result (2 * 3)
@@ -2290,7 +2295,8 @@ on conflict (id) do update set
   course_version_id = excluded.course_version_id,
   position = excluded.position,
   title = excluded.title,
-  description = excluded.description;
+  description = excluded.description,
+  updated_at = now();
 
 insert into public.lessons (id, position, title, tutor_prompt, sample_code, module, level, unit_id, unit_position, publication_status, help_ceiling, require_attempt_first, final_answer_policy, tutor_tone, tutor_pace, grade_band, curriculum_metadata)
 values ('itf-f-ch4-l1', 113, 'Data & Structures', 'Help the learner distinguish data from instructions and data files from instruction files, then compare lists with tables. Ask the learner to name the structure and the location of each data item before confirming it.', 'SET fruits (["apples", "oranges"])

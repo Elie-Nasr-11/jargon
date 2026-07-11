@@ -178,10 +178,14 @@ def sql_json(value) -> str:
     return sql_str(json.dumps(value, ensure_ascii=False, sort_keys=True)) + "::jsonb"
 
 
-def upsert(table: str, row: dict[str, str], update_cols: list[str]) -> str:
+def upsert(table: str, row: dict[str, str], update_cols: list[str], touch: bool = False) -> str:
+    """insert-on-conflict-update. touch=True also stamps updated_at = now() on conflict
+    (only for tables that have the column)."""
     cols = ", ".join(row.keys())
     vals = ", ".join(row.values())
     sets = ",\n  ".join(f"{c} = excluded.{c}" for c in update_cols)
+    if touch:
+        sets += ",\n  updated_at = now()"
     return (
         f"insert into public.{table} ({cols})\nvalues ({vals})\n"
         f"on conflict (id) do update set\n  {sets};\n"
@@ -204,21 +208,23 @@ def emit_sql(chunks: dict[str, dict]) -> str:
         "title": sql_str(subject["title"]),
         "description": sql_str(subject.get("description", "")),
         "status": "'published'",
-    }, ["title", "description", "status"]))
+    }, ["title", "description", "status"], touch=True))
     out.append(upsert("courses", {
         "id": sql_str(course["slug"]),
         "subject_id": sql_str(subject["slug"]),
         "title": sql_str(course["title"]),
         "description": sql_str(course.get("description", "")),
         "status": "'published'",
-    }, ["subject_id", "title", "description", "status"]))
+    }, ["subject_id", "title", "description", "status"], touch=True))
+    # is_current is set on first insert only — NOT re-forced on conflict, so a future v2
+    # made current in the studio survives redeploys of this seed.
     out.append(upsert("course_versions", {
         "id": sql_str(version_id),
         "course_id": sql_str(course["slug"]),
         "version_label": "'v1'",
         "status": "'published'",
         "is_current": "true",
-    }, ["course_id", "version_label", "status", "is_current"]))
+    }, ["course_id", "version_label", "status"], touch=True))
 
     position = GLOBAL_POSITION_BASE
     for unit_pos, chunk_slug in enumerate(CHUNK_LESSONS, start=1):
@@ -229,7 +235,7 @@ def emit_sql(chunks: dict[str, dict]) -> str:
             "position": str(unit_pos),
             "title": sql_str(unit["title"]),
             "description": sql_str(unit.get("description", "")),
-        }, ["course_version_id", "position", "title", "description"]))
+        }, ["course_version_id", "position", "title", "description"], touch=True))
         for unit_position, lesson in enumerate(unit["lessons"], start=1):
             position += 1
             ls = lesson["slug"]
@@ -276,8 +282,8 @@ def emit_sql(chunks: dict[str, dict]) -> str:
                 "allowed_response_modes": sql_arr(mil.get("allowed_response_modes", ["text"])),
             }, [
                 "lesson_id", "position", "title", "objective", "level", "skill_keys",
-                "allowed_response_modes", "updated_at",
-            ]).replace("excluded.updated_at", "now()"))
+                "allowed_response_modes",
+            ], touch=True))
             out.append(
                 f"update public.lessons set milestone_id = {sql_str(milestone_id)} "
                 f"where id = {sql_str(ls)};\n"
@@ -327,8 +333,8 @@ def emit_sql(chunks: dict[str, dict]) -> str:
                     }, [
                         "lesson_id", "milestone_id", "activity_id", "position", "prompt",
                         "question_type", "choices", "correct_choice_ids", "rubric",
-                        "skill_keys", "status", "updated_at",
-                    ]).replace("excluded.updated_at", "now()"))
+                        "skill_keys", "status",
+                    ], touch=True))
     return "\n".join(out)
 
 
