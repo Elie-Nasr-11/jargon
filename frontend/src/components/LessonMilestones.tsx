@@ -1,10 +1,11 @@
-import { Check } from "lucide-react";
+import { Check, Undo2 } from "lucide-react";
 import type { LessonActivity, LessonArc } from "@/lib/types";
 
 // The step-by-step milestone list for the current lesson (done / current / upcoming), enriched per
 // step from the lesson's activities with a stage/type chip and a one-line description so every
 // milestone shows what it actually is. Rendered inside the roadmap popover opened from the chat
-// progress strip.
+// progress strip. Flow v3: completed steps are clickable — tapping one posts a navigate control
+// turn that revisits it (the server validates the target against its own completion history).
 
 const STAGE_LABELS: Record<string, string> = {
   intro: "Warm-up",
@@ -33,9 +34,14 @@ function clampOneLine(text: string, max = 90): string {
 export function LessonMilestones({
   arc,
   activities = [],
+  onNavigate,
+  navigateDisabled = false,
 }: {
   arc: LessonArc;
   activities?: LessonActivity[];
+  // Flow v3: revisit a completed step. Absent = the stepper is display-only.
+  onNavigate?: (activityId: string) => void;
+  navigateDisabled?: boolean;
 }) {
   const sorted = [...activities].sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
   // Match an arc step to its activity: prefer a unique title match, else fall back to position index
@@ -50,13 +56,22 @@ export function LessonMilestones({
     return sorted[step - 1];
   };
 
-  const steps: { step: number; title: string; state: "done" | "current" | "upcoming" }[] = [
+  const steps: {
+    step: number;
+    title: string;
+    state: "done" | "current" | "upcoming";
+    activity_id?: string;
+  }[] = [
     ...arc.completed.map((s) => ({ ...s, state: "done" as const })),
     ...(arc.current
       ? [{ step: arc.step, title: arc.current.title, state: "current" as const }]
       : []),
     ...arc.upcoming.map((s) => ({ ...s, state: "upcoming" as const })),
   ];
+  // The authoritative clickable set: the server's steps_done when present (during a
+  // revisit, completed steps sit AFTER the cursor, so arc state alone under-reports),
+  // else the cursor-derived "done" state.
+  const doneIds = arc.steps_done ? new Set(arc.steps_done) : null;
   return (
     <div>
       <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
@@ -66,26 +81,28 @@ export function LessonMilestones({
         {steps.map((s) => {
           const activity = activityForStep(s.step, s.title);
           const kind = stepKind(activity);
+          const activityId = s.activity_id || activity?.id;
+          const completed = doneIds
+            ? Boolean(activityId && doneIds.has(activityId))
+            : s.state === "done";
+          const clickable = Boolean(onNavigate && activityId && completed && s.state !== "current");
           // Show the current step's live prompt from the arc; otherwise the activity's prompt.
           const desc =
             s.state === "current" && arc.current?.prompt
               ? arc.current.prompt
               : activity?.prompt || "";
-          return (
-            <li
-              key={s.step}
-              className="flex items-start gap-2.5 rounded-control px-1 py-1 text-body"
-            >
+          const body = (
+            <>
               <span
                 className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-meta font-medium tabular-nums ${
-                  s.state === "done"
+                  completed
                     ? "bg-success/15 text-success"
                     : s.state === "current"
                       ? "bg-foreground text-background"
                       : "border border-border text-muted-foreground"
                 }`}
               >
-                {s.state === "done" ? <Check className="h-3 w-3" strokeWidth={3} /> : s.step}
+                {completed ? <Check className="h-3 w-3" strokeWidth={3} /> : s.step}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
@@ -93,14 +110,19 @@ export function LessonMilestones({
                     className={`min-w-0 flex-1 ${
                       s.state === "current"
                         ? "font-medium text-foreground"
-                        : s.state === "done"
+                        : completed
                           ? "text-muted-foreground"
                           : "text-foreground"
                     }`}
                   >
                     {s.title}
                   </span>
-                  {kind ? (
+                  {clickable ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 text-overline uppercase tracking-[0.06em] text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100 group-focus-visible:opacity-100">
+                      <Undo2 className="h-3 w-3" strokeWidth={2} />
+                      Revisit
+                    </span>
+                  ) : kind ? (
                     <span className="shrink-0 text-overline uppercase tracking-[0.06em] text-muted-foreground">
                       {kind}
                     </span>
@@ -112,6 +134,22 @@ export function LessonMilestones({
                   </span>
                 ) : null}
               </span>
+            </>
+          );
+          return (
+            <li key={s.step} className="text-body">
+              {clickable ? (
+                <button
+                  type="button"
+                  disabled={navigateDisabled}
+                  onClick={() => activityId && onNavigate?.(activityId)}
+                  className="group flex w-full items-start gap-2.5 rounded-control px-1 py-1 text-left transition-colors duration-(--dur-fast) hover:bg-surface-hover disabled:opacity-50"
+                >
+                  {body}
+                </button>
+              ) : (
+                <div className="flex items-start gap-2.5 rounded-control px-1 py-1">{body}</div>
+              )}
             </li>
           );
         })}

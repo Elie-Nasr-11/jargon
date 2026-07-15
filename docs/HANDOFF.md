@@ -6028,3 +6028,60 @@ Remaining concerns: frontend-only, NOT live until a main fast-forward (user's ca
 on a real browser still worth doing: drawer at <lg, lockdown dimming, chat draft survival across
 page round-trips, the empty-composer voice button on a phone.
 Suggested next task: live review of v6 with the user; then whatever the review surfaces.
+
+## Claude -> Codex / Human - 2026-07-15 09:45
+
+Status: Finished
+Summary: Flow v3 Phase 3 — backtracking. Students can now revisit any completed step and
+return to exactly where they left off. Server: learning_sessions gained durable
+steps_done (merged on every step finish, lazily backfilled from cursor position for old
+sessions) and a nav jsonb frame ({frontier_activity_id, paused_step_state, revisit_of});
+client control turns {type:"navigate", target_activity_id} / {type:"resume"} drive it.
+While a frame is live ("revisit"): every gate is neutralized, the flow is forced to a
+conversational stage-"review" shape (with all-false requirements stepDone is trivially
+true — without the override, revisiting step 2 would have completed the whole lesson),
+grading + attempt/evidence/independence writes are suppressed, advancement/completion/
+status/stage are frozen, and dedicated directives (revisit_open / revisit_converse /
+resume_recap) steer the mentor. Resume restores the frontier + its paused step_state
+(validated by activity_id) and — critically — RE-SCOPES quiz/milestone to the frontier
+(loadContext keyed them on the persisted cursor, i.e. the revisit target; without the
+rescope a frontier step's quiz gate silently vanished — found by the adversarial review,
+would have let two clicks skip a quiz permanently). Invalid navigate targets get a
+deterministic refusal reply (no writes). The router gained a navigate_back kind (LLM +
+narrow heuristic) whose directive points at the clickable stepper. Envelope gained
+navigation {mode, target, frontier} (+ makeEnvelope now passes through
+continue_offer/turn_kind/navigation so dedup replays keep them — fixed a P1 gap; the
+absent-vs-null tri-state is deliberate so held/error envelopes don't clear client state).
+lesson_arc steps now carry activity_id + a steps_done id list (the authoritative
+clickable set — during a revisit, completed steps sit AFTER the cursor). Client:
+completed steps in the roadmap popover are clickable ("Revisit" affordance), a
+"return to where you were" chip renders while revisiting (boot-seeds from session.nav on
+reload), error-bubble Retry re-sends control turns faithfully, and revisiting a complete
+lesson un-hides the composer. Adversarial review findings folded: the quiz-rescope
+CRITICAL, resume-with-deleted-frontier keeps the frame instead of rebasing the lesson,
+re-completion/status/stage all frozen mid-revisit (stage freeze preserves the "intro"
+marker loadStepState needs for a never-presented frontier), empty control turns no
+longer write blank lesson_attempts rows or dilute independence, the lesson's FINAL step
+now enters steps_done (was advance-only), inquiry evidence skipped mid-revisit.
+Files changed: supabase/functions/chat/index.ts (control block + rescopeActivity +
+revisit overrides + directives + router kind + arc + envelope passthrough),
+frontend/src/{components/LessonMilestones.tsx, features/student/chat/ChatStepper.tsx,
+routes/chat.tsx, lib/types.ts}, tests/test_flow_v3_router.py (FlowV3Backtracking, 10 new
+invariants), tests/e2e_scenarios/backtrack.json (new), tools/e2e_chat_script.py
+(navigation_mode assertion). No new migration (20260815000000_flow_v3_session_nav.sql
+from P1 already carries steps_done/preempted/nav and is whitelisted).
+Tests run: esbuild syntax check on the edge fn; python3 -m unittest
+tests.test_flow_v3_router (24 OK; full suite has the 4 known pre-existing errors from
+tests reading deleted frontend files); frontend tsc 0 errors / eslint 0 errors (17
+pre-existing warnings) / vite build green.
+Remaining concerns: (1) if a teacher DELETES the frontier step mid-revisit, resume keeps
+the frame (safe, no corruption) but the student can only keep revisiting — acceptable
+since deleting mid-lesson steps already breaks sessions generally. (2) The e2e
+backtrack scenario (tests/e2e_scenarios/backtrack.json) needs a network that can reach
+the Supabase project — run via tools/e2e_chat_script.py from CI or a dev machine.
+(3) steps_done `via` records "gates" for the whole frame even when only one gate closed
+it — cosmetic. (4) Positions are assumed unique (curriculum-admin guarantees it);
+duplicate positions would make earlier steps unrevisitable via the position fallback.
+Suggested next task: Fv3 P4 — pre-emption credit + grader scoping (grade
+latest-message-only + upcoming objectives + preempted[] output + compressed-delivery
+directive), then P5 media binding.

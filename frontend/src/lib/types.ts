@@ -677,6 +677,10 @@ export type LearningSession = {
   activities_complete: boolean;
   created_at: string;
   updated_at: string;
+  // Flow v3 (optional — rows predating the migration don't carry them): durable
+  // per-step completion history, and the live revisit frame (null unless revisiting).
+  steps_done?: Record<string, unknown> | null;
+  nav?: { frontier_activity_id?: string | null; revisit_of?: string | null } | null;
 };
 
 export type LearningTurn = {
@@ -1246,7 +1250,7 @@ export type TypedChatAnswer = {
   attachments?: ChatAttachment[];
 };
 
-export type LessonArcStep = { step: number; title: string };
+export type LessonArcStep = { step: number; title: string; activity_id?: string };
 export type LessonArc = {
   step: number;
   total: number;
@@ -1254,6 +1258,9 @@ export type LessonArc = {
   completed: LessonArcStep[];
   upcoming: LessonArcStep[];
   next: LessonArcStep | null;
+  // Flow v3: activity ids the student has actually completed — the clickable-stepper
+  // set (cursor position alone can't express this during a revisit).
+  steps_done?: string[];
 };
 
 export type TypedChatEnvelope = {
@@ -1290,6 +1297,13 @@ export type TypedChatEnvelope = {
   continue_offer?: { label: string } | null;
   turn_kind?: string;
   router_disagreement?: boolean;
+  // Flow v3 backtracking: non-null while revisiting a completed step ("revisit") or on
+  // the turn that returned to the frontier ("resume"); null on normal turns.
+  navigation?: {
+    mode: "revisit" | "resume";
+    target_activity_id: string;
+    frontier_activity_id: string;
+  } | null;
 };
 
 // Flow v3 structured client affordances: the Continue button (and, later, stepper

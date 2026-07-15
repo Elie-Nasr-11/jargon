@@ -15,16 +15,34 @@ function RoadmapPanel({
   arc,
   activities,
   onRestart,
+  onNavigate,
+  navigateDisabled,
   onClose,
 }: {
   arc: LessonArc;
   activities: LessonActivity[];
   onRestart?: () => void;
+  onNavigate?: (activityId: string) => void;
+  navigateDisabled?: boolean;
   onClose: () => void;
 }) {
   return (
     <div className="max-h-[70vh] w-[min(320px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-card border border-border bg-depth-card p-3 shadow-pop">
-      <LessonMilestones arc={arc} activities={activities} />
+      <LessonMilestones
+        arc={arc}
+        activities={activities}
+        navigateDisabled={navigateDisabled}
+        // Close the roadmap before posting the navigate turn so the revisit lands in
+        // the visible stream, not behind the popover.
+        onNavigate={
+          onNavigate
+            ? (activityId) => {
+                onClose();
+                onNavigate(activityId);
+              }
+            : undefined
+        }
+      />
       {onRestart ? (
         <button
           type="button"
@@ -46,10 +64,14 @@ export function ChatStepperStrip({
   arc,
   activities = [],
   onRestart,
+  onNavigate,
+  navigateDisabled,
 }: {
   arc: LessonArc;
   activities?: LessonActivity[];
   onRestart?: () => void;
+  onNavigate?: (activityId: string) => void;
+  navigateDisabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const fillRef = useRef<HTMLSpanElement>(null);
@@ -105,6 +127,8 @@ export function ChatStepperStrip({
           arc={arc}
           activities={activities}
           onRestart={onRestart}
+          onNavigate={onNavigate}
+          navigateDisabled={navigateDisabled}
           onClose={() => setOpen(false)}
         />
       </Popover>

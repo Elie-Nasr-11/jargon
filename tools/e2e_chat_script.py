@@ -25,7 +25,8 @@ Scenario file shape (JSON; kept trivially hand-editable):
     }
 
 Each step's `expect` supports: advanced (bool — did current_activity_id change from the
-previous turn), continue_offer (bool — pill offered), turn_kind (exact string), and
+previous turn), continue_offer (bool — pill offered), turn_kind (exact string),
+navigation_mode ("revisit" | "resume" | null — the envelope's navigation frame), and
 completed (bool — session complete). Paced to respect the 30-turns/60s session limit.
 
 NOTE: must run from a network that can reach the Supabase project (CI or a dev machine;
@@ -118,6 +119,12 @@ def main() -> int:
         if "turn_kind" in expect:
             checks.append(
                 (f"turn_kind={expect['turn_kind']}", envelope.get("turn_kind") == expect["turn_kind"])
+            )
+        if "navigation_mode" in expect:
+            nav = envelope.get("navigation")
+            mode = nav.get("mode") if isinstance(nav, dict) else None
+            checks.append(
+                (f"navigation_mode={expect['navigation_mode']}", mode == expect["navigation_mode"])
             )
         if "completed" in expect:
             done = envelope.get("stage") == "complete" or (

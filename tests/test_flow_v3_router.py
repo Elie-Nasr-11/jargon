@@ -12,6 +12,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 CHAT = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
 CHAT_TSX = (REPO / "frontend" / "src" / "routes" / "chat.tsx").read_text()
+MILESTONES = (
+    REPO / "frontend" / "src" / "components" / "LessonMilestones.tsx"
+).read_text()
 WORKFLOW = (REPO / ".github" / "workflows" / "deploy-backend.yml").read_text()
 MIGRATION = (
     REPO / "supabase" / "migrations" / "20260815000000_flow_v3_session_nav.sql"
@@ -99,6 +102,66 @@ class FlowV3PromptLoosening(unittest.TestCase):
         miss = re.search(r"const openEndedMiss.*?: null;", CHAT, re.S)
         self.assertIsNotNone(miss)
         self.assertIn("routedKind", miss.group(0))
+
+
+class FlowV3Backtracking(unittest.TestCase):
+    """Phase 3: the cursor can move backward — revisit/resume with hard safety rails."""
+
+    def test_navigate_and_resume_controls_parsed(self):
+        self.assertIn('controlType === "navigate"', CHAT)
+        self.assertIn('controlType === "resume"', CHAT)
+        self.assertIn("target_activity_id", CHAT)
+
+    def test_revisit_neutralizes_every_gate(self):
+        # A revisited step must never re-grade or re-pass: requirements go all-false…
+        self.assertIn("const requirements: StepRequirements = inRevisit", CHAT)
+        # …and deterministic grading + record writes are suppressed outright.
+        self.assertIn("staleQuizAnswer || inRevisit", CHAT)
+        self.assertIn("!staleQuizAnswer && !inRevisit", CHAT)
+
+    def test_revisit_flow_forced_conversational(self):
+        # With all-false requirements stepDone is trivially true — the flow override is
+        # what stops a revisit of step 2 from completing the whole lesson.
+        self.assertIn("const draftFlow = inRevisit", CHAT)
+        self.assertIn("const finalFlow = inRevisit", CHAT)
+        done_guard = re.search(
+            r"activitiesDoneThisTurn =\s*!advancing &&\s*(?://[^\n]*\n\s*)*!inRevisit",
+            CHAT,
+        )
+        self.assertIsNotNone(done_guard)
+
+    def test_advancement_blocked_inside_revisit(self):
+        advance_guard = re.search(
+            r"finishedCurrentActivity =\s*(?://[^\n]*\n\s*)*!inRevisit &&",
+            CHAT,
+        )
+        self.assertIsNotNone(advance_guard)
+
+    def test_nav_frame_and_steps_done_persisted(self):
+        self.assertIn("nav: navFrame", CHAT)
+        self.assertIn("...stepsDoneBefore", CHAT)
+        # Resume restores the frontier's snapshot, validated by activity_id.
+        self.assertIn("paused_step_state", CHAT)
+
+    def test_navigation_on_envelope(self):
+        self.assertIn("envelope.navigation", CHAT)
+
+    def test_navigate_back_router_kind(self):
+        self.assertIn('"navigate_back"', CHAT)
+        self.assertIn('key: "navigate_back_offer"', CHAT)
+
+    def test_revisit_directives_present(self):
+        for key in ("revisit_open", "revisit_converse", "resume_recap"):
+            self.assertIn(f'key: "{key}"', CHAT)
+
+    def test_arc_carries_done_set(self):
+        self.assertIn("steps_done?", CHAT)
+
+    def test_client_stepper_and_resume_wired(self):
+        self.assertIn('control: { type: "navigate", target_activity_id:', CHAT_TSX)
+        self.assertIn('control: { type: "resume" }', CHAT_TSX)
+        self.assertIn("revisitFrontier", CHAT_TSX)
+        self.assertIn("onNavigate", MILESTONES)
 
 
 if __name__ == "__main__":

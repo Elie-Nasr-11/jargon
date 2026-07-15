@@ -19,13 +19,13 @@ import {
   Play,
   Send,
   Square,
+  Undo2,
   Volume2,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { MaterialComments } from "@/features/comms/MaterialComments";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
-import { LessonMilestones } from "@/components/LessonMilestones";
 import { FocusLock } from "@/components/FocusLock";
 import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
@@ -152,8 +152,10 @@ type Msg =
       // Error bubbles must never become the "latest mentor message" — that would strip the
       // live quiz choices off the real question with no recovery path.
       isError?: boolean;
-      // The failed turn's answer payload, so the error bubble's Retry can re-send it.
+      // The failed turn's answer (and control, for navigate/resume/continue turns), so
+      // the error bubble's Retry can re-send it faithfully.
       retryAnswer?: TypedChatAnswer;
+      retryControl?: TypedChatControl;
       // The choice the student picked on this (quiz) message — kept so history shows WHICH
       // option was selected after the live buttons retire.
       chosen?: string;
@@ -396,6 +398,9 @@ function ChatPage() {
   const [activities, setActivities] = useState<LessonActivity[]>([]);
   const [learningSession, setLearningSession] = useState<LearningSession | null>(null);
   const [lessonArc, setLessonArc] = useState<LessonArc | null>(null);
+  // Flow v3 backtracking: non-null while revisiting a completed step (the value is the
+  // frontier activity id we return to). Drives the "Return to where you were" chip.
+  const [revisitFrontier, setRevisitFrontier] = useState<string | null>(null);
   const [lessonId, setLessonId] = useState<string>("lesson1");
   const [sessionId, setSessionId] = useState<string | null>(null);
   // v9: the current lesson's published teacher resources, surfaced in the chat's top-right launcher.
@@ -616,6 +621,12 @@ function ChatPage() {
       setLearningSession(latest);
       setSessionId(latest?.id || null);
       setLessonComplete(latest?.status === "complete");
+      // Flow v3: a reload mid-revisit restores the Return chip from the persisted frame.
+      setRevisitFrontier(
+        latest?.nav && typeof latest.nav.frontier_activity_id === "string"
+          ? latest.nav.frontier_activity_id
+          : null,
+      );
       // Show progress immediately (envelopes will supersede with the authoritative arc).
       setLessonArc(deriveLessonArc(lessonActivities, latest?.current_activity_id || null));
 
@@ -896,6 +907,18 @@ function ChatPage() {
             : previous,
         );
         if (envelope.lesson_arc) setLessonArc(envelope.lesson_arc);
+        // Flow v3 backtracking: track the live revisit frame (drives the Return chip).
+        // `undefined` = an envelope that doesn't carry the field (held/legacy) — no change.
+        if (envelope.navigation !== undefined) {
+          setRevisitFrontier(
+            envelope.navigation?.mode === "revisit"
+              ? envelope.navigation.frontier_activity_id || null
+              : null,
+          );
+          // A revisit on a completed lesson must not leave the composer hidden behind
+          // the "Lesson complete" banner — the directive invites free conversation.
+          if (envelope.navigation?.mode === "revisit") setFollowUp(true);
+        }
         // Server-authoritative hold: a turn submitted while paused comes back held → re-lock.
         if (envelope.held) setSessionHeld(true);
         if (
@@ -913,8 +936,11 @@ function ChatPage() {
           role: "bot",
           isError: true,
           text: (error as Error).message || input.errorText,
-          // Keep the payload so the error bubble's Retry re-sends the same turn.
+          // Keep the payload so the error bubble's Retry re-sends the same turn —
+          // including its control (a failed navigate/resume must retry as navigation,
+          // not degrade into a bare empty text turn).
           retryAnswer: input.answer,
+          retryControl: input.control,
         });
         return null;
       } finally {
@@ -998,13 +1024,44 @@ function ChatPage() {
     });
   };
 
+  // Flow v3 backtracking: revisit a completed step from the clickable stepper. The server
+  // validates the target against its own completion history and opens a revisit frame.
+  const sendNavigate = async (targetActivityId: string) => {
+    const target = activities.find((a) => a.id === targetActivityId);
+    await sendTurn({
+      answer: { mode: "text", text: "" },
+      control: { type: "navigate", target_activity_id: targetActivityId },
+      optimistic: [
+        { id: uid(), role: "user", text: `Revisit: ${target?.title || "an earlier step"}` },
+      ],
+      errorText: "The mentor could not open that step just now.",
+    });
+  };
+
+  // Return from a revisit to exactly where the lesson left off (the server restores the
+  // paused step state and clears the frame).
+  const sendResume = async () => {
+    await sendTurn({
+      answer: { mode: "text", text: "" },
+      control: { type: "resume" },
+      optimistic: [{ id: uid(), role: "user", text: "Return to where I was" }],
+      errorText: "The mentor could not return just now.",
+    });
+  };
+
   // Re-send a failed turn from its error bubble (the bubble is removed; the original user
   // message is already in the stream, so no new optimistic message is added).
   const retryTurn = async (msg: Msg) => {
     if (msg.role !== "bot" || !msg.retryAnswer) return;
     const answer = msg.retryAnswer;
+    const control = msg.retryControl;
     setMsgs((prev) => prev.filter((m) => m.id !== msg.id));
-    await sendTurn({ answer, optimistic: [], errorText: "The mentor could not answer." });
+    await sendTurn({
+      answer,
+      control,
+      optimistic: [],
+      errorText: "The mentor could not answer.",
+    });
   };
 
   // Start the lesson over: a turn WITHOUT a session id makes the server open a FRESH session
@@ -1020,6 +1077,7 @@ function ChatPage() {
     setLessonComplete(false);
     setFollowUp(false);
     setSurfaceError("");
+    setRevisitFrontier(null);
     setLessonArc(deriveLessonArc(activities, null));
     setSending(true);
     setMsgs([{ id: uid(), role: "thinking" }]);
@@ -1423,7 +1481,22 @@ function ChatPage() {
                   arc={lessonArc}
                   activities={activities}
                   onRestart={restartLesson}
+                  onNavigate={sendNavigate}
+                  navigateDisabled={sending || runInFlight || sessionHeld}
                 />
+              ) : null}
+              {revisitFrontier ? (
+                <div className="mb-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={sendResume}
+                    disabled={sending || runInFlight || sessionHeld}
+                    className="elev-hover inline-flex items-center gap-2 rounded-pill border border-info/40 bg-info/12 px-3.5 py-1.5 text-[12px] text-info disabled:opacity-50"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" strokeWidth={2} />
+                    Revisiting an earlier step — return to where you were
+                  </button>
+                </div>
               ) : null}
               {activeLiveViewers.length ? (
                 <div className="mb-3 flex justify-center">

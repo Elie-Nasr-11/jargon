@@ -1,0 +1,18 @@
+{
+  "comment": "Flow v3 P3: navigate back to a completed step (revisit — nothing grades or advances there), then resume to the frontier. Assumes a fresh session on itf-f-ch1-l1 (step 1 is explanation-mode; step ids follow the Book F slug scheme).",
+  "lesson_id": "itf-f-ch1-l1",
+  "steps": [
+    { "send": { "text": "hi!" },
+      "expect": { "navigation_mode": null } },
+    { "send": { "control": "continue" },
+      "expect": { "advanced": true } },
+    { "send": { "control": "navigate", "target_activity_id": "itf-f-ch1-l1-s1" },
+      "expect": { "advanced": true, "navigation_mode": "revisit", "continue_offer": false } },
+    { "send": { "text": "so why do we call a hammer technology again?" },
+      "expect": { "advanced": false, "navigation_mode": "revisit" } },
+    { "send": { "control": "resume" },
+      "expect": { "advanced": true, "navigation_mode": "resume" } },
+    { "send": { "text": "what does this step want me to do?" },
+      "expect": { "advanced": false, "navigation_mode": null } }
+  ]
+}

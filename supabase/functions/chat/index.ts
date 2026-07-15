@@ -232,6 +232,14 @@ type Envelope = {
   continue_offer?: { label: string } | null;
   turn_kind?: string;
   router_disagreement?: boolean;
+  // Flow v3 backtracking: non-null while revisiting a completed step ("revisit") or on
+  // the turn that returned to the frontier ("resume"); null on normal turns; ABSENT on
+  // envelopes that never touched navigation (held/error) so the client keeps its state.
+  navigation?: {
+    mode: "revisit" | "resume";
+    target_activity_id: string;
+    frontier_activity_id: string;
+  } | null;
 };
 
 type EnvelopeSession = {
@@ -383,6 +391,34 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     // Optional; only the review path sets it.
     review_session_id:
       typeof partial.review_session_id === "string" ? partial.review_session_id : undefined,
+    // Flow v3 passthrough (shape-tolerant), so a dedup REPLAY of a stored envelope keeps
+    // its Continue offer and navigation frame. Tri-state matters: absent stays absent —
+    // a held/error envelope must not read as "navigation cleared" on the client.
+    continue_offer:
+      partial.continue_offer &&
+      typeof (partial.continue_offer as { label?: unknown }).label === "string"
+        ? { label: (partial.continue_offer as { label: string }).label }
+        : partial.continue_offer === null
+          ? null
+          : undefined,
+    turn_kind:
+      typeof partial.turn_kind === "string" ? partial.turn_kind : undefined,
+    router_disagreement:
+      partial.router_disagreement === true ? true : undefined,
+    navigation:
+      partial.navigation &&
+      (partial.navigation.mode === "revisit" ||
+        partial.navigation.mode === "resume")
+        ? {
+            mode: partial.navigation.mode,
+            target_activity_id: String(partial.navigation.target_activity_id || ""),
+            frontier_activity_id: String(
+              partial.navigation.frontier_activity_id || "",
+            ),
+          }
+        : partial.navigation === null
+          ? null
+          : undefined,
   };
 }
 
@@ -1382,6 +1418,7 @@ type RoutedKind =
   | "answer_attempt"
   | "question"
   | "continue_signal"
+  | "navigate_back"
   | "tangent"
   | "meta";
 
@@ -1391,6 +1428,7 @@ const ROUTED_KINDS = new Set<string>([
   "answer_attempt",
   "question",
   "continue_signal",
+  "navigate_back",
   "tangent",
   "meta",
 ]);
@@ -1398,12 +1436,22 @@ const ROUTED_KINDS = new Set<string>([
 const CONTINUE_SIGNAL_RE =
   /^(ok(ay)?|yes|yep|yeah|sure|got it|ready|next|continue|let'?s (go|move on|continue)|i'?m (ready|done|good)|done|move on)\b[\s!.]*$/i;
 
+// "Take me back to the loops step" — a navigation WISH, not a movement command: the
+// mentor points at the clickable stepper (movement stays on explicit control turns).
+// Deliberately narrow ("get back"/"be back" are idioms, not navigation) — this is only
+// the router-outage fallback; the LLM router owns the nuanced cases.
+const NAVIGATE_BACK_RE =
+  /\b(go|going|take me|jump|head) back\b|\bredo (the|that|an?) (earlier|last|previous)\b|\brevisit\b/i;
+
 // The pre-router heuristics, composed. Used when the router call fails or is skipped —
 // its classifications intentionally mirror what the old code paths keyed on.
 function heuristicKind(text: string): RouterVerdict {
   const trimmed = (text || "").trim();
   if (trimmed.length <= 48 && CONTINUE_SIGNAL_RE.test(trimmed)) {
     return { kind: "continue_signal", confidence: 0.4 };
+  }
+  if (trimmed.length <= 120 && NAVIGATE_BACK_RE.test(trimmed)) {
+    return { kind: "navigate_back", confidence: 0.4 };
   }
   const intent = detectIntent(trimmed);
   if (intent === "wants_summary" || intent === "frustrated") {
@@ -1440,11 +1488,12 @@ async function classifyTurn(
     '"answer_attempt" (they are answering/attempting the current step\'s task), ' +
     '"question" (they are asking the tutor something — clarification, curiosity, help), ' +
     '"continue_signal" (they clearly signal readiness to move on: "ok", "next", "got it"), ' +
+    '"navigate_back" (they want to RETURN to an earlier step: "can we go back to…", "redo the last part"), ' +
     '"tangent" (related-but-off-step exploration or chatter), ' +
     '"meta" (about the lesson/process itself: summaries, frustration, logistics). ' +
     "A message can contain both an attempt and a question — prefer answer_attempt when a " +
     "substantive attempt is present. Return ONLY JSON: " +
-    '{"kind":"answer_attempt|question|continue_signal|tangent|meta","confidence":0.0-1.0}.';
+    '{"kind":"answer_attempt|question|continue_signal|navigate_back|tangent|meta","confidence":0.0-1.0}.';
   const userMsg = `${stepLine}\nUpcoming steps: ${upcomingTitles.slice(0, 3).join(" | ") || "none"}\n\nRecent turns:\n${recent || "(none)"}\n\nStudent message:\n${text}`;
   try {
     const result = await callModel(
@@ -2274,6 +2323,10 @@ function turnDirective(args: {
   assessment: Assessment | null;
   attachedResources: LessonChatResource[];
   routedKind: RoutedKind | null;
+  // Flow v3 navigation: this turn is inside a revisit of a completed step (inRevisit),
+  // and/or IS the navigate/resume control turn itself (navAction).
+  inRevisit: boolean;
+  navAction: "revisit" | "resume" | null;
 }): TurnDirective {
   const {
     currentStage,
@@ -2292,6 +2345,8 @@ function turnDirective(args: {
     assessment,
     attachedResources,
     routedKind,
+    inRevisit,
+    navAction,
   } = args;
 
   const quizActive = draftFlow.nextAction === "choose";
@@ -2302,6 +2357,32 @@ function turnDirective(args: {
     stepMode === "assessment" && stepModeType === "open_ended";
 
   const pick = (): TurnDirective => {
+    // --- Flow v3 navigation branches (win over everything: a revisit turn must never
+    // read as an attempt, a completion, or a post-completion follow-up) ---------------
+    if (navAction === "revisit") {
+      return {
+        key: "revisit_open",
+        text: "The student clicked BACK to revisit this earlier step, which they already completed — this is a refresher, not a redo. Recap the step's key idea in two or three plain sentences, then invite their questions. Nothing grades or advances during a revisit; the \"Return to where you were\" button on screen takes them back to where they left off.",
+      };
+    }
+    if (inRevisit) {
+      return {
+        key: "revisit_converse",
+        text: "They are revisiting an earlier, already-completed step. Converse freely about this material — answer questions fully, re-explain from a different angle if asked, work an example together. Nothing grades or advances here. When they seem satisfied, remind them the \"Return to where you were\" button picks the lesson back up where they left off.",
+      };
+    }
+    if (navAction === "resume") {
+      return {
+        key: "resume_recap",
+        text: "They just returned from revisiting an earlier step, back to where they left off. Welcome them back in ONE short line, restate this step's open task or question plainly, and continue as normal — do not re-teach what they were revisiting.",
+      };
+    }
+    if (routedKind === "navigate_back") {
+      return {
+        key: "navigate_back_offer",
+        text: "The student wants to go BACK to an earlier step. You cannot move them yourself — tell them the completed steps in the progress bar at the top are clickable: tapping one revisits it, and a Return button brings them back here. If it's clear WHICH step they mean, name it; answer any question they folded in.",
+      };
+    }
     if (currentStage === "complete" && answer) {
       return {
         key: "post_completion",
@@ -2801,7 +2882,46 @@ async function loadContext(
   };
 }
 
-type ArcStep = { step: number; title: string };
+// Re-resolve the activity-scoped context rows (quiz + milestone) after a navigation
+// control retargets the cursor mid-request. loadContext keyed these on the PERSISTED
+// cursor; requirementsFor must see the effective step's OWN quiz — otherwise a frontier
+// step with a bound quiz would inherit the revisit target's null quiz on the resume turn
+// and its quiz gate would silently vanish (the step could complete without the quiz).
+async function rescopeActivity(
+  config: SupabaseConfig,
+  lessonId: string,
+  activity: DbRow,
+  activityCount: number,
+): Promise<{ quiz: DbRow | null; milestone: DbRow | null }> {
+  const milestoneId =
+    typeof activity.milestone_id === "string" ? activity.milestone_id : "";
+  const [milestone, activityQuiz, fallbackQuiz] = await Promise.all([
+    milestoneId
+      ? loadFirst(
+          config,
+          `milestones?id=eq.${encodeURIComponent(milestoneId)}&select=*`,
+        )
+      : loadFirst(
+          config,
+          `milestones?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
+        ),
+    activity.id
+      ? loadFirst(
+          config,
+          `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=eq.${encodeURIComponent(String(activity.id))}&status=eq.published&order=position.asc&limit=1&select=*`,
+        )
+      : Promise.resolve(null),
+    activityCount <= 1
+      ? loadFirst(
+          config,
+          `quiz_items?lesson_id=eq.${encodeURIComponent(lessonId)}&activity_id=is.null&status=eq.published&order=position.asc&limit=1&select=*`,
+        )
+      : Promise.resolve(null),
+  ]);
+  return { milestone, quiz: activityQuiz ?? fallbackQuiz };
+}
+
+type ArcStep = { step: number; title: string; activity_id?: string };
 type LessonArc = {
   step: number;
   total: number;
@@ -2809,6 +2929,10 @@ type LessonArc = {
   completed: ArcStep[];
   upcoming: ArcStep[];
   next: ArcStep | null;
+  // Flow v3: activity ids the student has actually completed (steps_done keys) — the
+  // client's clickable-stepper set. Cursor position alone can't express this during a
+  // revisit, where completed steps sit AFTER the cursor.
+  steps_done?: string[];
 };
 
 // Build the lesson-arc view (step N of M, what's done, what's next) so the mentor can
@@ -2818,6 +2942,7 @@ type LessonArc = {
 function buildLessonArc(
   activities: DbRow[],
   currentActivity: DbRow | null,
+  stepsDone: DbRow | null = null,
 ): LessonArc | null {
   if (!Array.isArray(activities) || activities.length <= 1) return null;
   const sorted = [...activities].sort(
@@ -2825,15 +2950,20 @@ function buildLessonArc(
   );
   const titleOf = (a: DbRow, i: number) =>
     String(a.title || `Step ${i + 1}`);
+  const idOf = (a: DbRow) => (typeof a.id === "string" ? a.id : undefined);
   const currentId = currentActivity?.id ? String(currentActivity.id) : "";
   let idx = sorted.findIndex((a) => String(a.id) === currentId);
   if (idx < 0) idx = 0;
   const completed = sorted
     .slice(0, idx)
-    .map((a, i) => ({ step: i + 1, title: titleOf(a, i) }));
+    .map((a, i) => ({ step: i + 1, title: titleOf(a, i), activity_id: idOf(a) }));
   const upcoming = sorted
     .slice(idx + 1)
-    .map((a, i) => ({ step: idx + 2 + i, title: titleOf(a, idx + 1 + i) }));
+    .map((a, i) => ({
+      step: idx + 2 + i,
+      title: titleOf(a, idx + 1 + i),
+      activity_id: idOf(a),
+    }));
   return {
     step: idx + 1,
     total: sorted.length,
@@ -2846,6 +2976,13 @@ function buildLessonArc(
     completed,
     upcoming,
     next: upcoming[0] || null,
+    ...(stepsDone
+      ? {
+          steps_done: sorted
+            .map((a) => idOf(a))
+            .filter((id): id is string => Boolean(id && stepsDone[id])),
+        }
+      : {}),
   };
 }
 
@@ -3151,20 +3288,191 @@ async function handleTypedRequest(
     // Fail-open: proceed with the normal turn.
   }
 
+  // --- Flow v3 control turns + navigation (revisit/resume) --------------------
+  // Structured client affordances route deterministically — no model needed. Navigate
+  // re-points the session at a COMPLETED earlier step inside a nav frame (frontier +
+  // in-progress step_state snapshotted); resume restores the frontier exactly. Both then
+  // fall through to the normal turn path, which simply sees the retargeted activity.
+  const control =
+    body.control && typeof body.control === "object"
+      ? (body.control as DbRow)
+      : null;
+  const controlType = control ? String(control.type || "") : "";
+
+  // Durable per-step completion history, lazily backfilled from cursor position for
+  // sessions that predate the steps_done column (every step before the cursor was, by
+  // construction, completed — the cursor only ever moved forward until Flow v3).
+  const stepsDoneRaw =
+    session.steps_done &&
+    typeof session.steps_done === "object" &&
+    !Array.isArray(session.steps_done)
+      ? (session.steps_done as DbRow)
+      : {};
+  let stepsDoneBefore: DbRow = { ...stepsDoneRaw };
+  let stepsDoneBackfilled = false;
+  if (!Object.keys(stepsDoneBefore).length && context.activity) {
+    const cursorPosition = Number(context.activity.position ?? 0);
+    for (const row of context.activities) {
+      if (Number(row.position ?? 0) < cursorPosition && typeof row.id === "string") {
+        stepsDoneBefore[row.id] = { done_at: null, via: "backfill" };
+        stepsDoneBackfilled = true;
+      }
+    }
+  }
+
+  const navBefore =
+    session.nav && typeof session.nav === "object" && !Array.isArray(session.nav)
+      ? (session.nav as DbRow)
+      : null;
+  let navFrame: DbRow | null = navBefore;
+  let navAction: "revisit" | "resume" | null = null;
+  if (controlType === "navigate") {
+    const targetId =
+      typeof control?.target_activity_id === "string"
+        ? control.target_activity_id
+        : "";
+    const target = targetId
+      ? context.activities.find((row) => String(row.id) === targetId)
+      : null;
+    const frontierId =
+      (navBefore && typeof navBefore.frontier_activity_id === "string"
+        ? navBefore.frontier_activity_id
+        : null) ??
+      (typeof session.current_activity_id === "string"
+        ? session.current_activity_id
+        : null);
+    const frontier = context.activities.find((row) => String(row.id) === frontierId);
+    const targetCompleted =
+      Boolean(stepsDoneBefore[targetId]) ||
+      (target &&
+        frontier &&
+        Number(target.position ?? 0) < Number(frontier.position ?? 0));
+    if (!target || !targetCompleted) {
+      // A target that's unknown, missing, or not yet completed refuses DETERMINISTICALLY:
+      // falling through to a normal mentor turn with an empty message would render an
+      // unrelated reply under the client's "Revisit: …" bubble. Nothing is written; the
+      // live frame (if any) is untouched.
+      return json(
+        makeEnvelope({
+          status: "ok",
+          reply:
+            "You can revisit any step you've already completed — tap one of the checked steps in the progress bar. That one isn't finished yet.",
+          session_id: sessionId,
+          lesson_id: lessonId,
+          stage: currentStage,
+          next_action: "reply",
+          session: {
+            status: String(session.status || "active"),
+            current_activity_id:
+              typeof session.current_activity_id === "string"
+                ? session.current_activity_id
+                : null,
+            activities_complete: session.activities_complete === true,
+          },
+          navigation: navBefore
+            ? {
+                mode: "revisit",
+                target_activity_id:
+                  typeof session.current_activity_id === "string"
+                    ? session.current_activity_id
+                    : "",
+                frontier_activity_id:
+                  typeof navBefore.frontier_activity_id === "string"
+                    ? navBefore.frontier_activity_id
+                    : "",
+              }
+            : null,
+        }),
+      );
+    }
+    navAction = "revisit";
+    navFrame = {
+      frontier_activity_id: frontierId,
+      // Snapshot the frontier's in-progress state ONCE (first navigate); later
+      // navigations inside the same revisit keep the original snapshot.
+      paused_step_state: navBefore?.paused_step_state ?? session.step_state ?? {},
+      revisit_of: targetId,
+      started_at: new Date().toISOString(),
+    };
+    session.current_activity_id = targetId;
+    session.step_state = {};
+    context = { ...context, activity: target };
+    // Re-key the activity-scoped rows (quiz/milestone) to the target. Prompt-correctness
+    // only here — every gate is neutralized during a revisit — so a failure is safe to
+    // swallow (the stale rows never grade anything).
+    try {
+      const scoped = await rescopeActivity(
+        config,
+        lessonId,
+        target,
+        context.activities.length,
+      );
+      context = { ...context, quiz: scoped.quiz, milestone: scoped.milestone };
+    } catch {
+      // Revisit gates are neutralized; stale quiz/milestone rows are prompt-only.
+    }
+  } else if (controlType === "resume" && navBefore) {
+    const frontierId =
+      typeof navBefore.frontier_activity_id === "string"
+        ? navBefore.frontier_activity_id
+        : null;
+    const frontier = frontierId
+      ? context.activities.find((row) => String(row.id) === frontierId)
+      : null;
+    // The frontier's OWN quiz/milestone must be in scope before requirementsFor runs —
+    // resume gates are REAL. A rescope failure aborts the resume (frame kept) rather
+    // than proceeding with the revisit target's rows and silently dropping a quiz gate.
+    let scoped: { quiz: DbRow | null; milestone: DbRow | null } | null = null;
+    if (frontier) {
+      try {
+        scoped = await rescopeActivity(
+          config,
+          lessonId,
+          frontier,
+          context.activities.length,
+        );
+      } catch {
+        scoped = null;
+      }
+    }
+    if (frontier && scoped) {
+      navAction = "resume";
+      const paused =
+        navBefore.paused_step_state &&
+        typeof navBefore.paused_step_state === "object" &&
+        !Array.isArray(navBefore.paused_step_state)
+          ? (navBefore.paused_step_state as DbRow)
+          : {};
+      session.current_activity_id = frontierId;
+      // Restore the snapshot only when it belongs to the frontier step; a mismatch means
+      // a corrupted frame — fall back to empty (worst case: redo one step; passed gates
+      // are safe in steps_done, and reset-on-advance semantics are unchanged).
+      session.step_state =
+        String((paused as DbRow).activity_id || "") === String(frontierId || "")
+          ? paused
+          : {};
+      context = {
+        ...context,
+        activity: frontier,
+        quiz: scoped.quiz,
+        milestone: scoped.milestone,
+      };
+      navFrame = null;
+    }
+    // An unresolvable frontier (deleted step / corrupt frame) or a failed rescope keeps
+    // the frame: the turn proceeds as a normal revisit turn instead of rebasing the
+    // whole lesson onto the revisited step.
+  }
+  // In-revisit = a nav frame is live after this turn's action (normal turns while
+  // revisiting keep the frame; resume clears it).
+  const inRevisit = Boolean(navFrame) && navAction !== "resume";
+
   // Everything from answer-normalization onward runs inside the context-aware try so a
   // throw in the pedagogy computation returns a typed error with session/stage instead of
   // falling through to the bare outer catch.
   try {
   const answer = normalizeAnswer(body.answer);
   const content = answerContent(answer);
-  // Flow v3 control turns: structured client affordances (Continue button now; navigate/
-  // resume in a later phase). A control turn routes deterministically — no model needed —
-  // and usually carries no answer text.
-  const control =
-    body.control && typeof body.control === "object"
-      ? (body.control as DbRow)
-      : null;
-  const controlType = control ? String(control.type || "") : "";
   const mentorPreferences = normalizeMentorPreferences(body.mentor_preferences);
   const skillKeys = skillKeysFor(
     context.activity,
@@ -3176,7 +3484,13 @@ async function handleTypedRequest(
   // v4 learning mode (null = legacy step; the whole mode layer is inert then).
   const stepMode = modeOf(context.activity);
   const stepModeType = modeTypeOf(context.activity);
-  const requirements = requirementsFor(context.activity, context.quiz);
+  // Revisit mode neutralizes every gate: a revisited step can never re-grade, re-pass,
+  // or advance — its authoritative completion lives in steps_done, and the lazy
+  // step_state backfill can't accidentally mark it "done again" and stomp the frame.
+  const realRequirements = requirementsFor(context.activity, context.quiz);
+  const requirements: StepRequirements = inRevisit
+    ? { code: false, quiz: false, understanding: false, acknowledge: false, quizChoices: [] }
+    : realRequirements;
   const { state: stepStateBefore, seedFailed: stepSeedFailed } =
     await loadStepState(config, session, context.activity, requirements);
   const presentedBefore = Boolean(stepStateBefore.presented_at);
@@ -3188,8 +3502,10 @@ async function handleTypedRequest(
   // nothing and writes nothing.
   const staleQuizAnswer =
     answer?.mode === "multiple_choice" && !quizEligibleBefore;
+  // A revisit never grades: the step is already complete (steps_done is authoritative),
+  // so re-running its code or re-answering must not write attempts, fails, or mastery.
   const orchestratorAssessment =
-    !presentedBefore || staleQuizAnswer
+    !presentedBefore || staleQuizAnswer || inRevisit
       ? null
       : assessAnswer(answer, context.lesson, context.activity, context.quiz);
 
@@ -3484,7 +3800,11 @@ async function handleTypedRequest(
     // detectors (intent/helpRequest/isQuestionShaped), used as the fallback when the mentor omits a tag.
 
     // Lesson-arc view (step N of M, done, next) so the mentor can situate this turn.
-    const lessonArc = buildLessonArc(context.activities, context.activity);
+    const lessonArc = buildLessonArc(
+      context.activities,
+      context.activity,
+      stepsDoneBefore,
+    );
 
     const draftState = applyTurn(
       stepStateBefore,
@@ -3496,12 +3816,18 @@ async function handleTypedRequest(
       stepMode,
       routedKind,
     );
-    const draftFlow = deriveTurn(
-      draftState,
-      requirements,
-      presentedBefore,
-      activityMode,
-    );
+    // Revisit turns are pure conversation. With every gate neutralized, deriveTurn would
+    // read the step as trivially "complete" — which must NEVER reach the envelope or the
+    // completion gate below (revisiting step 2 would otherwise complete the lesson).
+    const revisitFlow: FlowDecision = {
+      stage: "review",
+      responseMode: "text",
+      nextAction: "reply",
+      choices: [],
+    };
+    const draftFlow = inRevisit
+      ? revisitFlow
+      : deriveTurn(draftState, requirements, presentedBefore, activityMode);
     // Resource cards attached to THIS reply (opening turn, or the student asked for one).
     const attachedResources = resourcesForResponse(
       context.resources,
@@ -3530,6 +3856,8 @@ async function handleTypedRequest(
       assessment: effectiveOrchestratorAssessment,
       attachedResources,
       routedKind,
+      inRevisit,
+      navAction,
     });
     // Media steps: record that the material was shown (the presentation turn attaches the
     // card). Best-effort telemetry — interactions never gate and never block the turn.
@@ -3865,12 +4193,9 @@ async function handleTypedRequest(
       stepMode,
       routedKind,
     );
-    const finalFlow = deriveTurn(
-      finalState,
-      requirements,
-      presentedBefore,
-      activityMode,
-    );
+    const finalFlow = inRevisit
+      ? revisitFlow
+      : deriveTurn(finalState, requirements, presentedBefore, activityMode);
     // First attach of an eligible quiz: remember it so later prompts can say the options
     // are already on screen (the mentor points at them instead of re-reading them).
     if (finalFlow.nextAction === "choose" && !finalState.quiz_presented_at) {
@@ -3883,7 +4208,9 @@ async function handleTypedRequest(
     // of completing the lesson. A single-activity lesson has no next step, so this is
     // a no-op and the runtime behaves exactly as before.
     const finishedCurrentActivity =
-      finalFlow.stage === "complete" || finalFlow.nextAction === "complete";
+      // Never advance from inside a revisit — the Resume control is the only exit.
+      !inRevisit &&
+      (finalFlow.stage === "complete" || finalFlow.nextAction === "complete");
     let advanceToActivityId: string | null = null;
     if (finishedCurrentActivity && context.activity) {
       // context.activities is already the full position-ordered step list — no query.
@@ -3920,15 +4247,38 @@ async function handleTypedRequest(
     });
     // Flow v3: the Continue pill renders whenever a content step is presented but not yet
     // acknowledged — the deterministic escape hatch that replaces "any message advances".
+    // Suppressed during a revisit (the Resume chip is the exit there).
     envelope.continue_offer =
       requirements.acknowledge &&
       !finalState.acknowledged_at &&
       Boolean(finalState.presented_at) &&
-      !advancing
+      !advancing &&
+      !inRevisit
         ? { label: "Continue" }
         : null;
     envelope.turn_kind = routedKind ?? undefined;
     if (routerDisagreement) envelope.router_disagreement = true;
+    // Revisit frame surfaced to the client (renders the "Return to where you were" chip
+    // and marks the stepper). null on normal turns; a resume turn reports mode "resume".
+    envelope.navigation = inRevisit
+      ? {
+          mode: "revisit",
+          target_activity_id:
+            typeof context.activity?.id === "string" ? context.activity.id : "",
+          frontier_activity_id:
+            navFrame && typeof navFrame.frontier_activity_id === "string"
+              ? navFrame.frontier_activity_id
+              : "",
+        }
+      : navAction === "resume"
+        ? {
+            mode: "resume",
+            target_activity_id:
+              typeof context.activity?.id === "string" ? context.activity.id : "",
+            frontier_activity_id:
+              typeof context.activity?.id === "string" ? context.activity.id : "",
+          }
+        : null;
 
     // Deterministic integrity backstop: if a full answer isn't allowed this turn,
     // redact any verbatim expected output the model may have leaked.
@@ -3962,9 +4312,16 @@ async function handleTypedRequest(
           : "That completes this part — send a message when you're ready for the next part.";
       envelope.reply = `${envelope.reply}\n\n${arcSuffix}`.trim();
       // Advance the progress indicator in sync with the hand-off (the session cursor just
-      // moved to the next activity), so the client shows the new step immediately.
+      // moved to the next activity), so the client shows the new step immediately. The
+      // done-set includes the step that just finished (mirrors the steps_done merge below).
       envelope.lesson_arc =
-        buildLessonArc(context.activities, nextActivityRow) ?? envelope.lesson_arc;
+        buildLessonArc(
+          context.activities,
+          nextActivityRow,
+          typeof context.activity?.id === "string"
+            ? { ...stepsDoneBefore, [context.activity.id]: { via: "gates" } }
+            : stepsDoneBefore,
+        ) ?? envelope.lesson_arc;
     }
 
     // Unified completion gate (checkpoint unification P1): a lesson is complete only when its
@@ -3975,6 +4332,9 @@ async function handleTypedRequest(
     const checkpointsOk = context.pendingCheckpointsOk;
     const activitiesDoneThisTurn =
       !advancing &&
+      // A revisit turn can never finish the activities (its flow is forced conversational
+      // above; this guard keeps the invariant even if that derivation changes).
+      !inRevisit &&
       (finalFlow.stage === "complete" || finalFlow.nextAction === "complete");
     const activitiesComplete =
       activitiesDoneThisTurn || session.activities_complete === true;
@@ -4004,6 +4364,10 @@ async function handleTypedRequest(
       activitiesComplete &&
       !activitiesDoneThisTurn &&
       unifiedComplete &&
+      // Never celebrate completion mid-revisit (e.g. a required checkpoint cleared in
+      // another panel while the student was revisiting) — the resume/next normal turn
+      // picks it up. A revisit turn must never read as a completion.
+      !inRevisit &&
       session.status !== "complete"
     ) {
       // Re-completion: the student finished the required checkpoints since last time.
@@ -4028,15 +4392,19 @@ async function handleTypedRequest(
     // step (never from raw attempts: side questions to the mentor are not struggling).
     const nextStatus = advancing
       ? "active"
-      : unifiedComplete
-        ? "complete"
-        : activitiesComplete
-          ? "active"
-          : finalGradedFails >= 4 && !finalStepDone
-            ? "needs_rescue"
-            : gradedFail && finalGradedFails >= 2
-              ? "needs_retry"
-              : "active";
+      : inRevisit
+        ? // A revisit turn never changes completion/attention status — it neither earns
+          // a completion nor demotes an already-complete session back to active.
+          String(session.status || "active")
+        : unifiedComplete
+          ? "complete"
+          : activitiesComplete
+            ? "active"
+            : finalGradedFails >= 4 && !finalStepDone
+              ? "needs_rescue"
+              : gradedFail && finalGradedFails >= 2
+                ? "needs_retry"
+                : "active";
 
     // Authoritative session snapshot on the wire, so the client can track status/cursor/
     // completion without refetching. Assigned before the mentor-turn insert so the stored
@@ -4065,9 +4433,10 @@ async function handleTypedRequest(
       payload: envelope,
     });
 
-    // Rolling independence signal (only updated on real graded-eligible attempts).
+    // Rolling independence signal (only updated on real graded-eligible attempts —
+    // never on empty control turns or revisit conversation).
     let nextIndependence: number | undefined;
-    if (answer && presentedBefore && !staleQuizAnswer) {
+    if (answer && content && presentedBefore && !staleQuizAnswer && !inRevisit) {
       const turnInd = independenceFor(
         assessment,
         attemptedBeforeHelp,
@@ -4104,7 +4473,9 @@ async function handleTypedRequest(
     const mentorInquiry = normalizeInquiry(parsed.inquiry);
     let inquiryEventType = "";
     let inquirySource = "";
-    if (answer?.mode === "text" && content && presentedBefore) {
+    // Skipped during a revisit: questions about already-mastered material are review
+    // conversation, not confusion/curiosity evidence against the revisited step.
+    if (answer?.mode === "text" && content && presentedBefore && !inRevisit) {
       if (mentorInquiry === "confusion" || intent === "confused" || helpRequest) {
         inquiryEventType = "confusion";
         inquirySource = mentorInquiry === "confusion" ? "mentor" : "heuristic";
@@ -4147,8 +4518,11 @@ async function handleTypedRequest(
       );
     }
     // Record writes gate on grading eligibility (B11): a presentation turn never writes
-    // (the step wasn't on screen yet), and a stale/ineligible quiz tap writes nothing.
-    if (answer && presentedBefore && !staleQuizAnswer) {
+    // (the step wasn't on screen yet), a stale/ineligible quiz tap writes nothing, a
+    // revisit turn writes nothing (the step's real record was made when it was
+    // completed), and an EMPTY control turn (Continue/resume — no student content)
+    // writes nothing: an attempt row with a blank answer records noise, not work.
+    if (answer && content && presentedBefore && !staleQuizAnswer && !inRevisit) {
       recordWrites.push(
         (async () => {
           const attempt = await insertRow(config, "lesson_attempts", {
@@ -4246,7 +4620,15 @@ async function handleTypedRequest(
               : null,
           // Stage stays a teacher-transcript label; the advance still resets it to "intro"
           // for continuity, but control lives in step_state (reset to {} on advance).
-          stage: advancing ? "intro" : envelope.stage,
+          // Frozen during a revisit: loadStepState reads "intro" as "fresh step" for the
+          // PAUSED frontier, and a revisit overwriting it with "review" would make resume
+          // skip the frontier's presentation beat (per-turn labels still ride the
+          // learning_turns rows, so the teacher transcript is unaffected).
+          stage: advancing
+            ? "intro"
+            : inRevisit
+              ? stage(session.stage)
+              : envelope.stage,
           status: nextStatus,
           // Sticky: once the activities are done it stays done, even while gated on checkpoints.
           activities_complete: advancing ? false : activitiesComplete,
@@ -4259,6 +4641,32 @@ async function handleTypedRequest(
             : stepSeedFailed
               ? {}
               : { step_state: finalState }),
+          // Flow v3: durable per-step completion history (merge, never replace) — the
+          // clickable stepper and revisit validation key on this, not cursor position.
+          // Keyed on finishedCurrentActivity (not advancing) so the LESSON'S FINAL step
+          // is recorded too; an existing entry is preserved (post-completion chat turns
+          // re-derive "finished" every turn and must not churn done_at). A lazy backfill
+          // (old session) persists even without an advance so the stepper stays
+          // clickable across reloads without re-deriving every turn.
+          ...(finishedCurrentActivity && typeof context.activity?.id === "string"
+            ? {
+                steps_done: {
+                  ...stepsDoneBefore,
+                  [context.activity.id]: stepsDoneBefore[context.activity.id] ?? {
+                    done_at: new Date().toISOString(),
+                    via: finalState.understanding_at || finalState.code_passed_at ||
+                        finalState.quiz_passed_at || finalState.acknowledged_at
+                      ? "gates"
+                      : "stuck_cap",
+                  },
+                },
+              }
+            : stepsDoneBackfilled
+              ? { steps_done: stepsDoneBefore }
+              : {}),
+          // Flow v3 nav frame: live while revisiting (frontier + paused step_state),
+          // null otherwise — resume and normal turns both write the cleared frame.
+          nav: navFrame,
           score:
             typeof assessment?.score === "number"
               ? Math.max(Number(session.score || 0), assessment.score)
