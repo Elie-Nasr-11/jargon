@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, RotateCcw, Volume2 } from "lucide-react";
 import { getMentorAudio } from "@/lib/api";
+import { stripMarkdown } from "@/lib/format";
 import type { VoiceSettings } from "@/lib/jargon-store";
 import type { VoiceInteractionEvent } from "@/lib/types";
 
@@ -42,6 +43,9 @@ export function ReadAloudAction({
 
   if (!text.trim()) return null;
 
+  // Speak clean prose: markdown marks would be read out literally ("asterisk asterisk").
+  const speechText = stripMarkdown(text);
+
   const finish = () => {
     setSpeaking(false);
     setPaused(false);
@@ -59,7 +63,7 @@ export function ReadAloudAction({
   const playFallback = () => {
     if (!fallbackSupported) throw new Error("Browser speech is not available.");
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(speechText);
     utterance.rate = voice.readAloudRate;
     utterance.onend = finish;
     utterance.onerror = finish;
@@ -87,7 +91,7 @@ export function ReadAloudAction({
     try {
       const audio = await getMentorAudio({
         accessToken,
-        text,
+        text: speechText,
         lessonId,
         sessionId,
         voice: voice.voiceName,

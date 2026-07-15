@@ -27,3 +27,17 @@ export function relativeTime(iso: string, now = Date.now()): string {
   if (diff < 86_400_000) return `${Math.round(diff / 3_600_000)}h ago`;
   return `${Math.round(diff / 86_400_000)}d ago`;
 }
+
+// Strip mentor-reply markdown down to speakable/plain text (TTS, the chat headline).
+// Mirrors the renderer's grammar in routes/chat.tsx: fences keep their content, inline
+// marks unwrap, links keep their label, heading/list markers drop.
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[a-zA-Z0-9_+-]*[ \t]*\n?([\s\S]*?)```/g, "$1")
+    .replace(/`([^`\n]+)`/g, "$1")
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/\*([^\s*][^*\n]*)\*/g, "$1")
+    .replace(/\[([^\]\n]+)\]\(https?:\/\/[^\s)]+\)/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s{0,3}-\s+/gm, "");
+}

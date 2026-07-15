@@ -79,7 +79,7 @@ import {
   MAX_SUBMISSION_FILES,
   MAX_SUBMISSION_FILE_BYTES,
 } from "@/lib/api";
-import { formatScore } from "@/lib/format";
+import { formatScore, stripMarkdown } from "@/lib/format";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
 import { supabase } from "@/lib/supabase";
@@ -3006,10 +3006,29 @@ function formatChatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-// Minimal inline markdown for tutor prose: **bold** -> emphasized key term. Everything else
-// stays plain text (newlines preserved by the parent's whitespace-pre-wrap).
+// Minimal inline markdown for tutor prose: `code`, **bold**, *italic*, and https-only
+// [text](url) links. Everything renders as React nodes (text nodes ARE the sanitizer —
+// no dangerouslySetInnerHTML anywhere); anything unmatched passes through as literal
+// text, so a malformed reply can never drop content or inject markup. Alternation order
+// matters: code first (its content is verbatim), then bold before italic. The italic
+// opener guard [^\s*] keeps "3 * 4 and 2 * 5" plain; the literal https:// in the link
+// branch enforces the scheme lexically (no javascript:/data: vector exists).
+const INLINE_MD_RE =
+  /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^\s*][^*\n]*\*|\[[^\]\n]+\]\(https:\/\/[^\s)]+\))/g;
+
 function renderInline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, i) => {
+  return text.split(INLINE_MD_RE).map((part, i) => {
+    const code = part.match(/^`([^`\n]+)`$/);
+    if (code) {
+      return (
+        <code
+          key={i}
+          className="rounded-md bg-[var(--code-background)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--code-foreground)]"
+        >
+          {code[1]}
+        </code>
+      );
+    }
     const bold = part.match(/^\*\*([^*\n]+)\*\*$/);
     if (bold) {
       return (
@@ -3018,8 +3037,111 @@ function renderInline(text: string): ReactNode[] {
         </b>
       );
     }
+    const italic = part.match(/^\*([^\s*][^*\n]*)\*$/);
+    if (italic) {
+      return <i key={i}>{italic[1]}</i>;
+    }
+    const link = part.match(/^\[([^\]\n]+)\]\((https:\/\/[^\s)]+)\)$/);
+    if (link) {
+      return (
+        <a
+          key={i}
+          href={link[2]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 decoration-foreground/40 transition-colors hover:decoration-foreground"
+        >
+          {link[1]}
+        </a>
+      );
+    }
     return <Fragment key={i}>{part}</Fragment>;
   });
+}
+
+// Structured replies only: a cheap block-syntax test gates the block renderer so plain
+// replies (the overwhelming majority) keep rendering through the untouched legacy
+// pre-wrap path bit-identically.
+const BLOCK_MD_RE = /^\s{0,3}(#{2,3}\s+\S|-\s+\S|\d{1,3}\.\s+\S)/m;
+
+// Line-based block pass: ##/### headings, consecutive -/1. lists, blank-line-separated
+// paragraphs. Unsupported syntax (# h1, > quotes, tables) stays literal paragraph text.
+function renderBlocks(text: string): ReactNode[] {
+  const lines = text.split("\n");
+  const nodes: ReactNode[] = [];
+  let paragraph: string[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+
+  const flushParagraph = () => {
+    const joined = paragraph.join("\n");
+    paragraph = [];
+    if (!joined.trim()) return;
+    nodes.push(
+      <p key={nodes.length} className="whitespace-pre-wrap">
+        {renderInline(joined)}
+      </p>,
+    );
+  };
+  const flushList = () => {
+    if (!list) return;
+    const { ordered, items } = list;
+    list = null;
+    const rows = items.map((item, i) => <li key={i}>{renderInline(item)}</li>);
+    nodes.push(
+      ordered ? (
+        <ol key={nodes.length} className="list-decimal space-y-1 pl-5">
+          {rows}
+        </ol>
+      ) : (
+        <ul key={nodes.length} className="list-disc space-y-1 pl-5">
+          {rows}
+        </ul>
+      ),
+    );
+  };
+
+  for (const line of lines) {
+    const h3 = line.match(/^\s{0,3}###\s+(.+)$/);
+    const h2 = h3 ? null : line.match(/^\s{0,3}##\s+(.+)$/);
+    if (h3 || h2) {
+      flushParagraph();
+      flushList();
+      nodes.push(
+        h3 ? (
+          <div key={nodes.length} className="pt-1 text-[15px] font-semibold text-foreground">
+            {renderInline(h3[1])}
+          </div>
+        ) : (
+          <div key={nodes.length} className="pt-1 font-serif text-title text-foreground">
+            {renderInline(h2![1])}
+          </div>
+        ),
+      );
+      continue;
+    }
+    const ol = line.match(/^\s{0,3}\d{1,3}\.\s+(.+)$/);
+    const ul = ol ? null : line.match(/^\s{0,3}-\s+(.+)$/);
+    if (ol || ul) {
+      flushParagraph();
+      const ordered = Boolean(ol);
+      if (!list || list.ordered !== ordered) {
+        flushList();
+        list = { ordered, items: [] };
+      }
+      list.items.push((ol ?? ul)![1]);
+      continue;
+    }
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    flushList();
+    paragraph.push(line);
+  }
+  flushParagraph();
+  flushList();
+  return nodes;
 }
 
 // A short affirming lead sentence ending in "!" ("Nice work!") becomes the shiny headline.
@@ -3065,13 +3187,20 @@ function MessageContent({
           body = split.rest;
         }
 
+        // Only segments that actually use block syntax take the block renderer; plain
+        // prose keeps the legacy pre-wrap path so ordinary replies render unchanged.
+        const structured = BLOCK_MD_RE.test(body);
         return (
           <div
             key={`${segment.kind}-${index}`}
-            className="whitespace-pre-wrap text-body-lg text-foreground"
+            className={
+              structured
+                ? "space-y-2 text-body-lg text-foreground"
+                : "whitespace-pre-wrap text-body-lg text-foreground"
+            }
           >
-            {beat ? <span className="tutor-beat">{beat.replace(/\*\*/g, "")}</span> : null}
-            {body.trim() ? renderInline(body) : null}
+            {beat ? <span className="tutor-beat">{stripMarkdown(beat)}</span> : null}
+            {body.trim() ? (structured ? renderBlocks(body) : renderInline(body)) : null}
           </div>
         );
       })}

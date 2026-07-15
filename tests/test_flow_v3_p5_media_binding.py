@@ -100,5 +100,42 @@ class TeacherAttachInvariants(unittest.TestCase):
         self.assertIn("Drafts never reach students", CURRICULUM)
 
 
+class SafeMarkdownInvariants(unittest.TestCase):
+    """P5c: the markdown pass stays React-node-only, https-only, dependency-free."""
+
+    def test_no_dangerous_html(self):
+        # The JSX attribute form — a comment may name it, but nothing may USE it.
+        self.assertNotIn("dangerouslySetInnerHTML=", CHAT_TSX)
+
+    def test_links_are_https_only_with_rel(self):
+        self.assertIn('rel="noopener noreferrer"', CHAT_TSX)
+        # The scheme is enforced LEXICALLY in the inline regex — no javascript:/data:
+        # vector can ever parse as a link.
+        self.assertIn("https:\\/\\/[^\\s)]+", CHAT_TSX)
+
+    def test_no_markdown_dependency(self):
+        deps = {
+            **PACKAGE.get("dependencies", {}),
+            **PACKAGE.get("devDependencies", {}),
+        }
+        for name in ("react-markdown", "marked", "remark", "rehype", "dompurify", "markdown-it"):
+            self.assertNotIn(name, deps)
+
+    def test_plain_replies_keep_legacy_path(self):
+        # The block renderer is gated: no block syntax → the untouched pre-wrap path.
+        self.assertIn("BLOCK_MD_RE", CHAT_TSX)
+        self.assertIn("whitespace-pre-wrap text-body-lg text-foreground", CHAT_TSX)
+
+    def test_tts_speaks_clean_text(self):
+        self.assertIn("export function stripMarkdown", FORMAT_TS)
+        self.assertIn("stripMarkdown(text)", READ_ALOUD)
+        self.assertIn("SpeechSynthesisUtterance(speechText)", READ_ALOUD)
+        self.assertIn("text: speechText", READ_ALOUD)
+
+    def test_style_prompt_extension_landed(self):
+        self.assertIn("dash list", CHAT)
+        self.assertIn("Never use headings or links in replies.", CHAT)
+
+
 if __name__ == "__main__":
     unittest.main()
