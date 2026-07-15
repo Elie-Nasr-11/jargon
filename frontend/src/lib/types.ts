@@ -1,4 +1,4 @@
-import type { ArtifactConfig } from "./artifact-schema";
+import type { ArtifactConfig, DeckSpec } from "./artifact-schema";
 
 export type Lesson = {
   id: string;
@@ -275,6 +275,11 @@ export type CurriculumAdminResponse = {
   mode?: string;
   outline?: CurriculumOutlineDraft;
   steps?: CurriculumStepDraft[];
+  // P7 artifact generation (mode "artifact"): one of these is set per artifact_kind.
+  artifact_kind?: "html_sim" | "deck";
+  artifact_html?: string;
+  deck?: DeckSpec;
+  lint?: { ok: boolean; violations: string[] };
   templates?: CurriculumTemplate[];
   template_id?: string;
   id?: string;

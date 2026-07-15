@@ -1,6 +1,7 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { functionUrl, supabase, supabaseAnonKey } from "@/lib/supabase";
 import { parseArtifactConfig } from "@/lib/artifact-schema";
+import type { DeckSpec } from "@/lib/artifact-schema";
 import type { RenderedPdfPageAsset } from "@/lib/pdf-extract";
 import type {
   Assignment,
@@ -2049,16 +2050,19 @@ export function deleteCurriculumStep(input: {
 export function generateCurriculumDraft(input: {
   accessToken: string;
   classId?: string | null;
-  mode: "course_outline" | "lesson_steps";
+  mode: "course_outline" | "lesson_steps" | "artifact";
   prompt?: string;
   organizationId?: string;
   lessonId?: string;
   courseId?: string;
   templateId?: string;
   referenceText?: string;
-  current?: CurriculumOutlineDraft | CurriculumStepDraft[];
+  current?: CurriculumOutlineDraft | CurriculumStepDraft[] | Record<string, unknown>;
   feedback?: string;
   target?: string;
+  // P7 artifact generation.
+  artifactKind?: "html_sim" | "deck";
+  brief?: string;
 }) {
   return callCurriculumAdmin(input.accessToken, {
     action: "generate",
@@ -2073,6 +2077,8 @@ export function generateCurriculumDraft(input: {
     current: input.current,
     feedback: input.feedback || undefined,
     target: input.target || undefined,
+    artifact_kind: input.artifactKind || undefined,
+    brief: input.brief || undefined,
   });
 }
 
@@ -3230,6 +3236,79 @@ export async function createLessonResource(input: {
   if (placementError) throw placementError;
 
   return created;
+}
+
+// P7: create a published artifact resource bound to a step, from generated content. The id
+// is client-generated so the storage path is known before the insert; the html/deck lands
+// in the private lesson-resources bucket and the config lives in metadata.artifact. Mirrors
+// createLessonResource's client-direct upload+insert (RLS authorizes a teacher's own write);
+// a best-effort object cleanup covers an insert failure.
+export async function createArtifactResource(input: {
+  teacherId: string;
+  organizationId: string | null;
+  classId: string | null;
+  lessonId: string;
+  activityId: string;
+  title: string;
+  posterText?: string;
+  studentInstructions?: string;
+  heightHint?: number;
+  kind: "html_sim" | "deck";
+  html?: string;
+  deck?: DeckSpec;
+}): Promise<LessonResource> {
+  const id = uniqueId();
+  const isDeck = input.kind === "deck";
+  const path = `artifacts/${id}/${isDeck ? "deck.json" : "index.html"}`;
+  const body = isDeck ? JSON.stringify(input.deck ?? {}) : (input.html ?? "");
+  const file = isDeck
+    ? new File([body], "deck.json", { type: "application/json" })
+    : new File([body], "index.html", { type: "text/plain" });
+
+  const artifact: Record<string, unknown> = { kind: input.kind, version: 1 };
+  if (typeof input.heightHint === "number") artifact.height_hint = input.heightHint;
+  if (input.posterText?.trim()) artifact.poster_text = input.posterText.trim();
+  if (isDeck && input.deck) artifact.deck = input.deck;
+
+  const { error: uploadError } = await supabase.storage
+    .from("lesson-resources")
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (uploadError) throw uploadError;
+
+  const { error: insertError } = await supabase.from("lesson_resources").insert({
+    id,
+    organization_id: input.organizationId,
+    class_id: input.classId,
+    lesson_id: input.lessonId,
+    activity_id: input.activityId,
+    created_by: input.teacherId,
+    title: input.title.trim() || "Activity",
+    resource_type: "artifact",
+    source_type: "upload",
+    storage_bucket: "lesson-resources",
+    storage_path: path,
+    mime_type: file.type,
+    file_size_bytes: file.size,
+    student_instructions: input.studentInstructions?.trim() || "",
+    status: "published",
+    visibility: "class_private",
+    metadata: { artifact },
+  });
+  if (insertError) {
+    await supabase.storage
+      .from("lesson-resources")
+      .remove([path])
+      .catch(() => {});
+    throw insertError;
+  }
+
+  const { data, error: fetchError } = await supabase
+    .from("lesson_resources")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (fetchError) throw fetchError;
+  return data as LessonResource;
 }
 
 export async function updateLessonResource(

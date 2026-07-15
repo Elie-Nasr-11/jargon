@@ -1470,23 +1470,55 @@ async function deleteStep(config: Config, actorId: string, body: DbRow): Promise
 // draft through the existing create/upsert actions (review-before-save by design).
 // ---------------------------------------------------------------------------
 
-async function callModelJson(systemPrompt: string, userPrompt: string): Promise<DbRow> {
+// P7: artifact generation runs on a stronger model than the step/outline drafter (a full
+// interactive sim outstrips gpt-4o-mini) and needs a bigger token budget + a timeout.
+// OPENAI_MODEL_ARTIFACT is optional — falls back to the default model, then gpt-4o.
+function artifactModel(): string {
+  return (
+    Deno.env.get("OPENAI_MODEL_ARTIFACT")?.trim() ||
+    Deno.env.get("OPENAI_MODEL_DEFAULT")?.trim() ||
+    "gpt-4o"
+  );
+}
+
+async function callModelJson(
+  systemPrompt: string,
+  userPrompt: string,
+  opts?: { model?: string; maxTokens?: number; timeoutMs?: number },
+): Promise<DbRow> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("AI authoring is not configured (OPENAI_API_KEY missing).");
-  const model = Deno.env.get("OPENAI_MODEL_DEFAULT")?.trim() || "gpt-4o-mini";
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.4,
-      response_format: { type: "json_object" },
-    }),
-  });
+  const model = opts?.model?.trim() || Deno.env.get("OPENAI_MODEL_DEFAULT")?.trim() || "gpt-4o-mini";
+  const controller = new AbortController();
+  const timer = opts?.timeoutMs
+    ? setTimeout(() => controller.abort(), opts.timeoutMs)
+    : null;
+  let res: Response;
+  try {
+    res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.4,
+        ...(opts?.maxTokens ? { max_tokens: opts.maxTokens } : {}),
+        response_format: { type: "json_object" },
+      }),
+    });
+  } catch (err) {
+    throw new Error(
+      (err as Error)?.name === "AbortError"
+        ? "The model took too long. Try again."
+        : "Model request failed.",
+    );
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   const data = await res.json();
   if (!res.ok) {
     const message =
@@ -1502,6 +1534,120 @@ async function callModelJson(systemPrompt: string, userPrompt: string): Promise<
   } catch {
     throw new Error("The model returned invalid JSON. Try again.");
   }
+}
+
+// P7 server-side artifact lint — a DUPLICATE of frontend/src/lib/artifact-lint.ts's FORBIDDEN
+// table (Deno can't import from frontend/src). Keep the two in sync. Defense-in-depth: the
+// student-side sandbox (allow-scripts only, opaque origin) is THE boundary; this rejects
+// obviously-unsafe generated HTML before a teacher previews or publishes it.
+const ARTIFACT_FORBIDDEN: Array<{ label: string; re: RegExp }> = [
+  { label: "network: fetch()", re: /\bfetch\s*\(/i },
+  { label: "network: XMLHttpRequest", re: /XMLHttpRequest/i },
+  { label: "network: WebSocket", re: /\bWebSocket\b/i },
+  { label: "network: EventSource", re: /\bEventSource\b/i },
+  { label: "network: navigator.sendBeacon", re: /navigator\s*\.\s*sendBeacon/i },
+  { label: "code loading: dynamic import()", re: /\bimport\s*\(/ },
+  { label: "code loading: importScripts", re: /\bimportScripts\s*\(/i },
+  { label: "code loading: remote module import", re: /\bfrom\s+["']https?:\/\//i },
+  { label: "storage: document.cookie", re: /document\s*\.\s*cookie/i },
+  { label: "storage: localStorage", re: /\blocalStorage\b/i },
+  { label: "storage: sessionStorage", re: /\bsessionStorage\b/i },
+  { label: "storage: indexedDB", re: /\bindexedDB\b/i },
+  { label: "embedding: <iframe>", re: /<iframe/i },
+  { label: "external src/href", re: /\b(?:src|href)\s*=\s*["']?\s*(?:https?:)?\/\//i },
+];
+
+function lintArtifactHtml(html: string): { ok: boolean; violations: string[] } {
+  const violations = ARTIFACT_FORBIDDEN.filter(({ re }) => re.test(html)).map(
+    ({ label }) => label,
+  );
+  return { ok: violations.length === 0, violations };
+}
+
+// P7 deck validator — mirrors frontend/src/lib/artifact-schema.ts parseArtifactConfig caps and
+// chat/index.ts's ARTIFACT_DECK_MAX_BYTES so a generated deck can be persisted verbatim safely.
+const ARTIFACT_DECK_MAX_BYTES = 65536;
+const DECK_MAX_SLIDES = 40;
+
+function cleanDeckText(value: unknown, max: number): string {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function cleanDeckList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => cleanDeckText(item, 300))
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function validateDeckSlide(raw: unknown): DbRow | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const slide = raw as DbRow;
+  const notes = cleanDeckText(slide.speaker_notes, 1000);
+  const withNotes = (out: DbRow): DbRow => (notes ? { ...out, speaker_notes: notes } : out);
+  switch (slide.layout) {
+    case "title": {
+      const title = cleanDeckText(slide.title, 500);
+      if (!title) return null;
+      return withNotes({ layout: "title", title, subtitle: cleanDeckText(slide.subtitle, 500) });
+    }
+    case "bullets": {
+      const bullets = cleanDeckList(slide.bullets);
+      if (!bullets.length) return null;
+      return withNotes({ layout: "bullets", title: cleanDeckText(slide.title, 500), bullets });
+    }
+    case "two_col": {
+      const left = cleanDeckList(slide.left);
+      const right = cleanDeckList(slide.right);
+      if (!left.length && !right.length) return null;
+      return withNotes({
+        layout: "two_col",
+        title: cleanDeckText(slide.title, 500),
+        left_title: cleanDeckText(slide.left_title, 80),
+        right_title: cleanDeckText(slide.right_title, 80),
+        left,
+        right,
+      });
+    }
+    case "quote": {
+      const quote = cleanDeckText(slide.quote, 600);
+      if (!quote) return null;
+      return withNotes({ layout: "quote", quote, attribution: cleanDeckText(slide.attribution, 120) });
+    }
+    case "code": {
+      const code = typeof slide.code === "string" ? slide.code.slice(0, 4000) : "";
+      if (!code.trim()) return null;
+      return withNotes({
+        layout: "code",
+        title: cleanDeckText(slide.title, 500),
+        code,
+        language: cleanDeckText(slide.language, 24),
+        caption: cleanDeckText(slide.caption, 500),
+      });
+    }
+    default:
+      return null;
+  }
+}
+
+function validateDeck(raw: unknown): DbRow | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const deck = raw as DbRow;
+  const slides = (Array.isArray(deck.slides) ? deck.slides : [])
+    .slice(0, DECK_MAX_SLIDES)
+    .map(validateDeckSlide)
+    .filter((slide): slide is DbRow => slide !== null);
+  if (!slides.length) return null;
+  const out: DbRow = { slides };
+  const title = cleanDeckText(deck.title, 500);
+  if (title) out.title = title;
+  try {
+    if (JSON.stringify(out).length > ARTIFACT_DECK_MAX_BYTES) return null;
+  } catch {
+    return null;
+  }
+  return out;
 }
 
 function clampText(value: string, max: number): string {
@@ -2069,6 +2215,101 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
     }
     const result = await callModelJson(system, parts.join("\n\n"));
     return json({ status: "ok", mode, steps: parseStepDrafts(result) });
+  }
+
+  // P7: generate an interactive artifact (html_sim / deck) from a teacher brief. Still a
+  // pure draft — NO DB write; the studio previews it and a separate approve step persists.
+  if (mode === "artifact") {
+    const lessonId = cleanText(body.lesson_id);
+    if (!lessonId) throw new Error("lesson_id is required.");
+    const ctx = await lessonStepsContext(config, lessonId);
+    await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
+    const artifactKind =
+      body.artifact_kind === "deck" ? "deck" : body.artifact_kind === "html_sim" ? "html_sim" : "";
+    if (!artifactKind) throw new Error("artifact_kind must be 'html_sim' or 'deck'.");
+    const brief = clampText(cleanText(body.brief) || prompt, 2000);
+    if (!isRefine && !brief) throw new Error("brief is required.");
+
+    if (artifactKind === "deck") {
+      const system =
+        "You design a short slide DECK to teach a concept. Return ONLY JSON of the form " +
+        '{"deck":{"title":string,"slides":[Slide]}}. A Slide is one of: ' +
+        '{"layout":"title","title":string,"subtitle"?:string}, ' +
+        '{"layout":"bullets","title"?:string,"bullets":string[]}, ' +
+        '{"layout":"two_col","title"?:string,"left_title"?:string,"right_title"?:string,"left":string[],"right":string[]}, ' +
+        '{"layout":"quote","quote":string,"attribution"?:string}, ' +
+        '{"layout":"code","title"?:string,"code":string,"language"?:string,"caption"?:string}. ' +
+        "Every slide MAY include \"speaker_notes\":string — a natural read-aloud narration of that slide. " +
+        "Use 4-10 slides; open with a title slide. Bullets: at most 5 per slide, each at most ~12 words. " +
+        "Plain text only — NO markdown. Keep it age-appropriate and grounded in the lesson context and any reference material.";
+      const parts: string[] = [];
+      if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
+      if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
+      if (isRefine) {
+        parts.push(`Current draft deck (JSON):\n${currentJson}`);
+        parts.push(
+          `Revise the deck per this feedback: ${feedback}\nChange only what the feedback asks; return the full updated deck.`,
+        );
+      } else {
+        parts.push(`Design a slide deck for this brief:\n${brief}`);
+      }
+      const result = await callModelJson(system, parts.join("\n\n"), {
+        model: artifactModel(),
+        maxTokens: 4000,
+        timeoutMs: 60000,
+      });
+      const deck = validateDeck(result.deck);
+      if (!deck) throw new Error("Couldn't produce a valid deck. Try again with a clearer brief.");
+      return json({ status: "ok", mode, artifact_kind: "deck", deck });
+    }
+
+    // html_sim
+    const system =
+      "You build a small, self-contained INTERACTIVE learning activity as ONE HTML document. " +
+      'Return ONLY JSON of the form {"html":"<!DOCTYPE html>...the complete document..."}. ' +
+      "HARD RULES: the html is a SINGLE self-contained file — inline ALL CSS in <style> and ALL " +
+      "JavaScript in <script>. ZERO network: no fetch, no XMLHttpRequest, no WebSocket, no CDN " +
+      "links, no external <script src>/<link href>/<img src=http...>; draw with canvas or inline " +
+      "SVG and embed any image as a data: URI. Vanilla JS only (no frameworks, no imports). " +
+      "Support BOTH mouse and touch (pointer events). Do NOT use cookies, localStorage, " +
+      "sessionStorage, or indexedDB. The activity must TEACH the objective — the interactivity " +
+      "should expose the concept (a slider that changes a wave, a draggable that shows a force). " +
+      "Keep it visually clean and responsive; size to its content.";
+    const parts: string[] = [];
+    if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
+    if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
+    if (isRefine) {
+      const prevHtml =
+        body.current && typeof body.current === "object"
+          ? cleanText((body.current as DbRow).html)
+          : "";
+      if (prevHtml) parts.push(`Current activity HTML:\n${clampText(prevHtml, 12000)}`);
+      parts.push(
+        `Revise the activity per this feedback: ${feedback}\nReturn the FULL updated HTML document.`,
+      );
+    } else {
+      parts.push(`Build an interactive activity for this brief:\n${brief}`);
+    }
+    const userMsg = parts.join("\n\n");
+    const opts = { model: artifactModel(), maxTokens: 8000, timeoutMs: 90000 };
+    let result = await callModelJson(system, userMsg, opts);
+    let html = cleanText(result.html);
+    let lint = lintArtifactHtml(html);
+    // One server-side self-repair pass: feed the violations back so the model fixes them.
+    if (html && !lint.ok) {
+      const repair =
+        `${userMsg}\n\nThe previous version failed these safety checks: ${lint.violations.join(", ")}. ` +
+        "Rebuild it WITHOUT any of those — no network calls, no external resources, no storage APIs, " +
+        "no nested iframes. Return the full corrected HTML document.";
+      result = await callModelJson(system, repair, opts);
+      const repaired = cleanText(result.html);
+      if (repaired) {
+        html = repaired;
+        lint = lintArtifactHtml(html);
+      }
+    }
+    if (!html) throw new Error("Couldn't produce the activity. Try again with a clearer brief.");
+    return json({ status: "ok", mode, artifact_kind: "html_sim", artifact_html: html, lint });
   }
 
   throw new Error("Unsupported generate mode.");
