@@ -26,8 +26,15 @@ import { PageShell } from "@/components/PageShell";
 import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { RouteLoader } from "@/components/RouteLoader";
+import { ArtifactFrame } from "@/components/ArtifactFrame";
+import { DeckRenderer } from "@/components/DeckRenderer";
+import { DEFAULT_VOICE } from "@/lib/jargon-store";
+import { parseArtifactConfig } from "@/lib/artifact-schema";
+import type { DeckSpec } from "@/lib/artifact-schema";
+import { lintArtifactHtml } from "@/lib/artifact-lint";
 import {
   archiveCurriculumNode,
+  createArtifactResource,
   createCurriculumCourse,
   createCurriculumLessonStub,
   createCurriculumSubject,
@@ -53,6 +60,7 @@ import {
   upsertCurriculumStep,
 } from "@/lib/api";
 import type {
+  CurriculumAdminResponse,
   CurriculumAuthoringData,
   CurriculumCourse,
   CurriculumCourseVersion,
@@ -95,6 +103,20 @@ type StepsGenArgs = {
   current?: CurriculumStepDraft[];
   feedback?: string;
   target?: string;
+};
+// P7 artifact authoring.
+type ArtifactGenArgs = {
+  kind: "html_sim" | "deck";
+  brief: string;
+  feedback?: string;
+  current?: Record<string, unknown>;
+};
+type ArtifactApprovePayload = {
+  kind: "html_sim" | "deck";
+  title: string;
+  posterText?: string;
+  html?: string;
+  deck?: DeckSpec;
 };
 
 type CurriculumSearch = {
@@ -759,6 +781,69 @@ function CurriculumPage() {
       { successMessage: "Steps added." },
     );
 
+  // P7: generate an artifact (html_sim / deck) — read-only draft round-trip; the studio
+  // previews it, and approveArtifact persists it as a published resource bound to the step.
+  const generateArtifact = async (
+    lessonId: string,
+    args: {
+      kind: "html_sim" | "deck";
+      brief: string;
+      feedback?: string;
+      current?: Record<string, unknown>;
+    },
+  ): Promise<CurriculumAdminResponse | null> => {
+    if (!selectedClass) return null;
+    try {
+      const session = await getSession();
+      if (!session) throw new Error("Sign in to use AI authoring.");
+      return await generateCurriculumDraft({
+        accessToken: session.access_token,
+        classId: selectedClass.id,
+        mode: "artifact",
+        lessonId,
+        artifactKind: args.kind,
+        brief: args.brief,
+        feedback: args.feedback,
+        current: args.current,
+      });
+    } catch (error) {
+      setMessage((error as Error).message || "Could not generate the activity.");
+      return null;
+    }
+  };
+
+  const approveArtifact = (
+    lessonId: string,
+    activityId: string,
+    payload: {
+      kind: "html_sim" | "deck";
+      title: string;
+      posterText?: string;
+      html?: string;
+      deck?: DeckSpec;
+    },
+  ) =>
+    reloading(
+      async () => {
+        const session = await getSession();
+        if (!session) throw new Error("Sign in to add an activity.");
+        if (!selectedClass) throw new Error("Pick a class first.");
+        await createArtifactResource({
+          teacherId: session.user.id,
+          organizationId: selectedClass.organization_id,
+          classId: selectedClass.id,
+          lessonId,
+          activityId,
+          title: payload.title,
+          posterText: payload.posterText,
+          kind: payload.kind,
+          html: payload.html,
+          deck: payload.deck,
+        });
+      },
+      { successMessage: "Activity added to the step." },
+    );
+
   const setPublication = (action: "publish_lesson" | "archive_lesson", lessonId: string) => {
     if (!selectedClass || !lessonId || !data) return;
     const organizationId = selectedClass.organization_id;
@@ -945,6 +1030,8 @@ function CurriculumPage() {
                   onReorderSteps={reorderSteps}
                   onDeleteStep={deleteStep}
                   onBindResource={bindResource}
+                  onGenerateArtifact={generateArtifact}
+                  onApproveArtifact={approveArtifact}
                   onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
                   onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
                   onGenerateOutline={generateOutline}
@@ -1368,6 +1455,8 @@ function DetailPane({
   onReorderSteps,
   onDeleteStep,
   onBindResource,
+  onGenerateArtifact,
+  onApproveArtifact,
   onPublishLesson,
   onArchiveLesson,
   onGenerateOutline,
@@ -1411,6 +1500,15 @@ function DetailPane({
   onReorderSteps: (lessonId: string, orderedIds: string[]) => void;
   onDeleteStep: (lessonId: string, activityId: string) => void;
   onBindResource: (resourceId: string, activityId: string | null) => void;
+  onGenerateArtifact: (
+    lessonId: string,
+    args: ArtifactGenArgs,
+  ) => Promise<CurriculumAdminResponse | null>;
+  onApproveArtifact: (
+    lessonId: string,
+    activityId: string,
+    payload: ArtifactApprovePayload,
+  ) => void;
   onPublishLesson: (lessonId: string) => void;
   onArchiveLesson: (lessonId: string) => void;
   onGenerateOutline: (
@@ -1547,6 +1645,8 @@ function DetailPane({
       onReorderSteps={(ids) => onReorderSteps(lesson.id, ids)}
       onDeleteStep={(activityId) => onDeleteStep(lesson.id, activityId)}
       onBindResource={onBindResource}
+      onGenerateArtifact={(args) => onGenerateArtifact(lesson.id, args)}
+      onApproveArtifact={(activityId, payload) => onApproveArtifact(lesson.id, activityId, payload)}
       onPublish={() => onPublishLesson(lesson.id)}
       onArchiveLesson={() => onArchiveLesson(lesson.id)}
       onMove={(targetUnitId) => onMoveLesson(lesson.id, targetUnitId)}
@@ -2079,6 +2179,8 @@ function LessonDetail({
   onReorderSteps,
   onDeleteStep,
   onBindResource,
+  onGenerateArtifact,
+  onApproveArtifact,
   onPublish,
   onArchiveLesson,
   onMove,
@@ -2098,6 +2200,8 @@ function LessonDetail({
   onReorderSteps: (orderedIds: string[]) => void;
   onDeleteStep: (activityId: string) => void;
   onBindResource: (resourceId: string, activityId: string | null) => void;
+  onGenerateArtifact: (args: ArtifactGenArgs) => Promise<CurriculumAdminResponse | null>;
+  onApproveArtifact: (activityId: string, payload: ArtifactApprovePayload) => void;
   onPublish: () => void;
   onArchiveLesson: () => void;
   onMove: (targetUnitId: string) => void;
@@ -2191,6 +2295,8 @@ function LessonDetail({
                           canDelete={steps.length > 1}
                           resources={lessonResources}
                           onBind={onBindResource}
+                          onGenerateArtifact={onGenerateArtifact}
+                          onApproveArtifact={onApproveArtifact}
                           onSave={onUpsertStep}
                           onDelete={() => onDeleteStep(activity.id)}
                         />
@@ -2538,6 +2644,8 @@ function StepCard({
   canDelete,
   resources,
   onBind,
+  onGenerateArtifact,
+  onApproveArtifact,
   onSave,
   onDelete,
 }: {
@@ -2551,6 +2659,9 @@ function StepCard({
   // the chat runtime attaches a step's bound materials on its presentation turn.
   resources: LessonResource[];
   onBind: (resourceId: string, activityId: string | null) => void;
+  // P7: generate an interactive artifact for this step, preview it, and approve → publish.
+  onGenerateArtifact: (args: ArtifactGenArgs) => Promise<CurriculumAdminResponse | null>;
+  onApproveArtifact: (activityId: string, payload: ArtifactApprovePayload) => void;
   onSave: (step: CurriculumStepInput) => void;
   onDelete: () => void;
 }) {
@@ -2877,6 +2988,15 @@ function StepCard({
               </select>
             ) : null}
           </div>
+
+          {/* P7: generate an interactive activity (sim / deck), preview it, approve → it
+              becomes a published material bound to THIS step. Gated on a saved step id. */}
+          <ArtifactGeneratePanel
+            busy={busy}
+            bindable={bindable}
+            onGenerate={onGenerateArtifact}
+            onApprove={(payload) => onApproveArtifact(activity.id, payload)}
+          />
 
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -3571,6 +3691,209 @@ function AiStepsPanel({
                 Discard
               </button>
             </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// P7: generate → preview → approve an interactive artifact for a step. Mirrors AiStepsPanel:
+// a brief drives a read-only generate, the draft renders in the SAME ArtifactFrame/DeckRenderer
+// the student sees, and Approve persists it as a published resource bound to this step.
+function ArtifactGeneratePanel({
+  busy,
+  bindable,
+  onGenerate,
+  onApprove,
+}: {
+  busy: boolean;
+  bindable: boolean;
+  onGenerate: (args: ArtifactGenArgs) => Promise<CurriculumAdminResponse | null>;
+  onApprove: (payload: ArtifactApprovePayload) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<"html_sim" | "deck">("html_sim");
+  const [brief, setBrief] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [html, setHtml] = useState("");
+  const [deck, setDeck] = useState<DeckSpec | null>(null);
+  const [lintViolations, setLintViolations] = useState<string[]>([]);
+  const hasDraft = Boolean(html) || Boolean(deck);
+
+  const artifactConfig = useMemo(
+    () => (html ? parseArtifactConfig({ kind: "html_sim", version: 1 }) : null),
+    [html],
+  );
+
+  const generate = async () => {
+    if (!brief.trim()) return;
+    setLoading(true);
+    try {
+      const result = await onGenerate({
+        kind,
+        brief,
+        feedback: hasDraft ? feedback : undefined,
+        current: hasDraft ? (kind === "deck" ? { deck: deck ?? undefined } : { html }) : undefined,
+      });
+      if (result) {
+        if (result.artifact_kind === "deck" && result.deck) {
+          setDeck(result.deck);
+          setHtml("");
+          setLintViolations([]);
+        } else if (result.artifact_html) {
+          setHtml(result.artifact_html);
+          setDeck(null);
+          setLintViolations(result.lint?.ok === false ? result.lint.violations : []);
+        }
+        setFeedback("");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reset = () => {
+    setHtml("");
+    setDeck(null);
+    setLintViolations([]);
+    setFeedback("");
+  };
+
+  const approve = () => {
+    if (html) {
+      // Courtesy re-lint before publishing (the sandbox is the real boundary).
+      if (!lintArtifactHtml(html).ok) {
+        setLintViolations(lintArtifactHtml(html).violations);
+        return;
+      }
+      onApprove({
+        kind: "html_sim",
+        title: brief.trim().slice(0, 80) || "Activity",
+        posterText: brief.trim(),
+        html,
+      });
+    } else if (deck) {
+      onApprove({
+        kind: "deck",
+        title: deck.title || brief.trim().slice(0, 80) || "Slides",
+        deck,
+      });
+    }
+    setOpen(false);
+    reset();
+  };
+
+  return (
+    <div className="rounded-2xl border border-border bg-depth-sub">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+      >
+        <Sparkles className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
+        <span className="flex-1 text-[13px] text-foreground">Generate an activity</span>
+        <ChevronRight
+          className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+          strokeWidth={1.7}
+        />
+      </button>
+      {open ? (
+        <div className="grid gap-3 border-t border-border p-3">
+          {!bindable ? (
+            <div className="rounded-xl border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground">
+              Save this step first, then generate an activity for it.
+            </div>
+          ) : null}
+          <div className="flex items-center gap-1 rounded-full border border-border p-0.5 justify-self-start">
+            <ViewToggle
+              active={kind === "html_sim"}
+              onClick={() => {
+                setKind("html_sim");
+                reset();
+              }}
+              label="Simulation"
+            />
+            <ViewToggle
+              active={kind === "deck"}
+              onClick={() => {
+                setKind("deck");
+                reset();
+              }}
+              label="Slide deck"
+            />
+          </div>
+          <TextArea
+            label={
+              kind === "html_sim" ? "Describe the interactive activity" : "Describe the slide deck"
+            }
+            value={brief}
+            onChange={setBrief}
+          />
+          <button
+            type="button"
+            onClick={() => void generate()}
+            disabled={busy || loading || !bindable || !brief.trim()}
+            className="inline-flex items-center gap-2 self-start rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
+            {loading ? "Generating…" : hasDraft ? "Regenerate" : "Generate"}
+          </button>
+
+          {lintViolations.length ? (
+            <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] text-warning">
+              This activity tripped a safety check ({lintViolations.join(", ")}). Regenerate before
+              approving.
+            </div>
+          ) : null}
+
+          {html && artifactConfig ? (
+            <ArtifactFrame
+              title={brief.trim().slice(0, 80) || "Preview"}
+              artifact={artifactConfig}
+              fetchHtml={async () => html}
+              onTelemetry={() => {}}
+            />
+          ) : deck ? (
+            <DeckRenderer
+              deck={deck}
+              title={deck.title || "Preview"}
+              voice={DEFAULT_VOICE}
+              accessToken=""
+              lessonId=""
+              sessionId={null}
+              onVoiceEvent={() => {}}
+              readAloud={false}
+            />
+          ) : null}
+
+          {hasDraft ? (
+            <>
+              <TextArea
+                label="Feedback to refine (optional)"
+                value={feedback}
+                onChange={setFeedback}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={approve}
+                  disabled={busy || loading || lintViolations.length > 0}
+                  className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-50"
+                >
+                  <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  Approve &amp; add to step
+                </button>
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="text-[12px] text-muted-foreground hover:text-foreground"
+                >
+                  Discard
+                </button>
+              </div>
+            </>
           ) : null}
         </div>
       ) : null}

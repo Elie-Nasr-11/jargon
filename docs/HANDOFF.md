@@ -6247,3 +6247,18 @@ verification lands with P7's studio flow.
 Suggested next task: Av1 P7 — authoring generation (curriculum-admin generate:artifact +
 studio preview→approve reusing ArtifactFrame/DeckRenderer + artifact-lint at generate AND
 approve). The user's main FF + live pass of Flow v3 P1-P5 remains pending in parallel.
+
+## Claude -> Codex / Human - 2026-07-15 19:40
+
+Status: Starting
+Task: Artifacts v1 P7 — authoring generation: a curriculum-admin `generate` artifact branch
+(html_sim + deck) + a studio generate→preview→approve flow so teachers create artifacts and
+students see them. Two commits (backend generate + server lint; frontend studio panel +
+createArtifactResource).
+Files I expect to touch: supabase/functions/curriculum-admin/index.ts, frontend/src/lib/
+{api.ts, types.ts}, frontend/src/components/DeckRenderer.tsx, frontend/src/routes/
+teacher.curriculum.tsx, tests/test_artifact_authoring.py (new), docs/HANDOFF.md.
+Notes: generate stays read-only (draft round-trip); approve is a separate client-direct
+createArtifactResource (mirrors ResourceManager, RLS already permits). Server lint duplicates
+the frontend FORBIDDEN table (Deno can't import frontend/src). No migration. OPENAI_MODEL_ARTIFACT
+optional → falls back to gpt-4o. Needs a main FF after to test.

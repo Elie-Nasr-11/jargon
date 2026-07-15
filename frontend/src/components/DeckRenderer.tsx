@@ -110,6 +110,7 @@ export function DeckRenderer({
   sessionId,
   onVoiceEvent,
   onCompleted,
+  readAloud = true,
 }: {
   deck: DeckSpec;
   title: string;
@@ -120,6 +121,8 @@ export function DeckRenderer({
   onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
   // Fires ONCE, the first time the last slide is reached.
   onCompleted?: () => void;
+  // P7: the studio preview has no student session — hide read-aloud there (default on).
+  readAloud?: boolean;
 }) {
   const [api, setApi] = useState<CarouselApi>();
   const [index, setIndex] = useState(0);
@@ -167,7 +170,7 @@ export function DeckRenderer({
             <CarouselNext className="static translate-x-0 translate-y-0" />
           </div>
           <div className="flex items-center gap-2.5">
-            {active ? (
+            {active && readAloud ? (
               <ReadAloudAction
                 key={index}
                 text={active.speaker_notes || deckSlideText(active)}
