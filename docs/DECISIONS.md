@@ -514,3 +514,22 @@ Reason:
 - The platform's promise is mediation: teachers build simply, students live in one
   conversation, and the mode dimension is what lets the platform adapt and report honestly.
 - docs/PLATFORM.md is the canonical spec; code follows it.
+
+## 2026-07-15 — Step→resource binding uses lesson_resources.activity_id; placements stay legacy
+
+Decision:
+
+- A lesson resource binds to a specific step via the existing `lesson_resources.activity_id`
+  column (single-step binding). The chat runtime selects it and attaches a step's bound
+  resources on that step's presentation turn (all bound, cap 3); step-bound resources rank
+  first for mid-step "show me the…" requests. Lessons with no bindings behave exactly as
+  before (first-resource on boot + request-regex attach).
+- `lesson_resource_placements` is NOT dual-written or read: it is legacy, written only by the
+  single-activity `save_lesson_blueprint` path and consumed by nothing. If per-step ordering,
+  display_mode authoring, or multi-step placement is ever needed, revive placements as the
+  richer model then.
+
+Reason:
+
+- The column already exists with teacher-writable RLS and rides the runtime's existing select —
+  one binding surface, no migration, no second source of truth to drift.

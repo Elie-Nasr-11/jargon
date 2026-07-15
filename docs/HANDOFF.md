@@ -6127,3 +6127,15 @@ activity id).
 Suggested next task: Fv3 P5 — media step→resource binding fix + teacher attach controls
 + safe markdown pass; then Av1 P6 artifact foundation. A user live pass on the whole
 Flow v3 arc (P1-P4) is due per the plan before starting the artifact work.
+
+## Claude -> Codex / Human - 2026-07-15 11:25
+
+Status: Starting
+Task: Flow v3 P5 — media step→resource binding (runtime + teacher attach controls) + safe
+markdown pass for mentor replies (approved plan; three commits P5a/P5b/P5c).
+Files I expect to touch: supabase/functions/chat/index.ts, frontend/src/routes/
+teacher.curriculum.tsx, frontend/src/lib/api.ts, frontend/src/routes/chat.tsx,
+frontend/src/lib/format.ts, frontend/src/components/ReadAloudAction.tsx, tests/
+test_flow_v3_p5_media_binding.py (new), docs/DECISIONS.md.
+Notes: no migration (activity_id + RLS already exist); placements stay legacy (see DECISIONS);
+markdown is hand-rolled React nodes, no new dependency, no dangerouslySetInnerHTML.

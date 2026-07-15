@@ -2683,7 +2683,9 @@ function turnDirective(args: {
         stepMode === "explanation"
           ? "This is a DIRECT-TEACHING step, not yet shown. Present the material in the step prompt fully and plainly at the student's grade level — for THIS step you should state the ideas outright (the student-produces-the-conclusion rule does not apply here). Invite their questions and thoughts, and tell them to tap the Continue button when they're ready to move on."
           : stepMode === "media"
-            ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, ask anything they like here, and tap Continue when they're ready."
+            ? attachedResources.length
+              ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, ask anything they like here, and tap Continue when they're ready."
+              : "This SOURCE-MATERIAL step is being shown for the first time, but NO resource card is attached to your reply (this step has no bound materials). Teach the material from the step prompt and any resource_chunks yourself — never claim a card is below your reply — and tell the student to tap Continue when they're ready."
             : stepMode === "inquiry"
               ? "This OPEN-QUESTIONS step is being shown for the first time. Invite the student's questions about the topic — anything they're unsure or curious about — and make clear that when they have none (or none left), they can tap Continue to move on."
               : stepMode === "assignment"
@@ -2850,7 +2852,7 @@ async function loadContext(
     ),
     loadMany(
       config,
-      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=5&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata`,
+      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=12&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata,activity_id`,
     ),
     loadMany(
       config,
@@ -3095,13 +3097,36 @@ function resourcesForResponse(
   resources: DbRow[],
   answer: DbRow | null,
   studentText = "",
+  // P5: the EFFECTIVE step (P3 revisit-retargeted), so teacher-bound materials surface
+  // on their own step. Empty/no bindings ⇒ every rung below reduces to the pre-P5
+  // behavior exactly — that's the compatibility contract for unbound lessons.
+  activityId = "",
+  presentedBefore = true,
 ): LessonChatResource[] {
   if (resources.length === 0) return [];
-  // Opening turn (no answer yet): surface the first resource, as before.
-  if (!answer) return [resourceForEnvelope(resources[0])];
+  const bound = activityId
+    ? resources.filter(
+        (resource) => String(resource.activity_id || "") === activityId,
+      )
+    : [];
+  // Presentation turn of a step with bound materials: attach ALL of them (cap 3),
+  // any step mode — the teacher bound them to THIS step on purpose. This is the fix
+  // for media steps, whose directive says "the card(s) below are the material" while
+  // (pre-P5) nothing ever attached on that turn.
+  if (bound.length && !presentedBefore) {
+    return bound.slice(0, 3).map(resourceForEnvelope);
+  }
+  // Session boot/reload (no answer yet): surface the current step's materials, else
+  // the first resource, as before.
+  if (!answer) {
+    return (bound.length ? bound.slice(0, 3) : [resources[0]]).map(
+      resourceForEnvelope,
+    );
+  }
   const text = studentText.toLowerCase();
   if (!text || !RESOURCE_REQUEST_RE.test(text)) return [];
-  // Prefer a title match ("the Smoke Purpose PDF"), then a type match ("the video"), else all.
+  // Prefer a title match ("the Smoke Purpose PDF"), then a type match ("the video"),
+  // then this step's bound materials, else all.
   const titleMatches = resources.filter((resource) => {
     const title = String(resource.title || "").toLowerCase();
     if (!title) return false;
@@ -3118,8 +3143,16 @@ function resourcesForResponse(
     ? titleMatches
     : typeMatches.length
       ? typeMatches
-      : resources;
-  return chosen.slice(0, 3).map(resourceForEnvelope);
+      : bound.length
+        ? bound
+        : resources;
+  // Bound-first stable re-rank on a COPY (resources aliases context — never mutate).
+  const ranked = [...chosen].sort(
+    (a, b) =>
+      Number(activityId !== "" && String(b.activity_id || "") === activityId) -
+      Number(activityId !== "" && String(a.activity_id || "") === activityId),
+  );
+  return ranked.slice(0, 3).map(resourceForEnvelope);
 }
 
 async function writeEvidenceAndMastery(
@@ -3935,11 +3968,14 @@ async function handleTypedRequest(
     const draftFlow = inRevisit
       ? revisitFlow
       : deriveTurn(draftState, requirements, presentedBefore, activityMode);
-    // Resource cards attached to THIS reply (opening turn, or the student asked for one).
+    // Resource cards attached to THIS reply: the step's bound materials on its
+    // presentation turn, the opening turn, or when the student asked for one.
     const attachedResources = resourcesForResponse(
       context.resources,
       answer,
       content,
+      typeof context.activity?.id === "string" ? context.activity.id : "",
+      presentedBefore,
     );
     const attachedResourceIds = new Set(
       attachedResources.map((resource) => String(resource.id)),
