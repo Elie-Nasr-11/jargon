@@ -87,6 +87,7 @@ class CompleteRoadmapTests(unittest.TestCase):
             "image",
             "link",
             "document",
+            "artifact",
         ):
             with self.subTest(resource_type=resource_type):
                 self.assertIn(resource_type, self.complete)

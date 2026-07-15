@@ -6185,3 +6185,19 @@ select by design (StepCard is the single binding surface — follow-up if teache
 improvement, noted as a live-behavior delta).
 Suggested next task: main FF (P1-P5 frontend all rides the branch) + user live pass of
 the whole Flow v3 arc; then Av1 P6 artifact foundation.
+
+## Claude -> Codex / Human - 2026-07-15 13:55
+
+Status: Starting
+Task: Artifacts v1 P6 — artifact foundation: new lesson_resources resource_type 'artifact'
+(html_sim in a hard sandbox + native deck renderer), migration + chat-fn wire + ArtifactFrame/
+DeckRenderer/artifact-lint + ResourceCard branch. Approved plan; two commits (backend, frontend).
+Files I expect to touch: supabase/migrations/20260820000000_artifact_resources.sql (new),
+.github/workflows/deploy-backend.yml, supabase/functions/chat/index.ts, frontend/src/lib/
+{artifact-schema.ts,artifact-lint.ts} (new), frontend/src/components/{ArtifactFrame.tsx,
+DeckRenderer.tsx} (new), frontend/src/routes/chat.tsx, frontend/src/lib/{types.ts,api.ts},
+docs/COMPLETE_ROADMAP.md, tests/{test_artifact_foundation.py (new),test_complete_roadmap.py}.
+Notes: sandbox allow-scripts-only is THE security boundary (static-test enforced); no new
+dependency (embla + carousel wrapper exist); no storage policy change (single-file artifacts);
+authoring arrives in P7. Workspace note: container was recycled mid-day — tree re-synced to
+origin/claude/happy-johnson-wseex8 (6f23fe9) before starting.

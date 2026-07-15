@@ -279,6 +279,16 @@ type LessonChatResource = {
   thumbnail_bucket?: string | null;
   thumbnail_path?: string | null;
   student_instructions?: string;
+  // Artifacts v1 (P6): validated, size-capped passthrough of metadata.artifact — present
+  // only on resource_type 'artifact'. The client renders html_sim in a sandboxed iframe
+  // and deck natively; the raw metadata jsonb never rides the wire.
+  artifact?: {
+    kind: "html_sim" | "deck";
+    version: 1;
+    height_hint?: number;
+    poster_text?: string;
+    deck?: unknown;
+  };
 };
 
 type SupabaseConfig = {
@@ -2686,9 +2696,11 @@ function turnDirective(args: {
         stepMode === "explanation"
           ? "This is a DIRECT-TEACHING step, not yet shown. Present the material in the step prompt fully and plainly at the student's grade level — for THIS step you should state the ideas outright (the student-produces-the-conclusion rule does not apply here). Invite their questions and thoughts, and tell them to tap the Continue button when they're ready to move on."
           : stepMode === "media"
-            ? attachedResources.length
-              ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, ask anything they like here, and tap Continue when they're ready."
-              : "This SOURCE-MATERIAL step is being shown for the first time, but NO resource card is attached to your reply (this step has no bound materials). Teach the material from the step prompt and any resource_chunks yourself — never claim a card is below your reply — and tell the student to tap Continue when they're ready."
+            ? attachedResources.some((r) => r.resource_type === "artifact")
+              ? "This SOURCE-MATERIAL step is being shown for the first time. An interactive activity card is attached below your reply — tell the student to tap Run on the card and explore it, then ask them what they notice. They can ask anything here, and tap Continue when they're ready."
+              : attachedResources.length
+                ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, ask anything they like here, and tap Continue when they're ready."
+                : "This SOURCE-MATERIAL step is being shown for the first time, but NO resource card is attached to your reply (this step has no bound materials). Teach the material from the step prompt and any resource_chunks yourself — never claim a card is below your reply — and tell the student to tap Continue when they're ready."
             : stepMode === "inquiry"
               ? "This OPEN-QUESTIONS step is being shown for the first time. Invite the student's questions about the topic — anything they're unsure or curious about — and make clear that when they have none (or none left), they can tap Continue to move on."
               : stepMode === "assignment"
@@ -2717,7 +2729,14 @@ function turnDirective(args: {
     const titles = attachedResources
       .map((resource) => `"${resource.title}"`)
       .join(", ");
-    directive.text += ` The resource card(s) ${titles} are attached below your reply — tell the student to tap Open on the card; never say you can't share it.`;
+    // Honest verb: interactive artifacts run right on the card (Run), other resources
+    // open (Open) — the mentor must never promise a button that isn't there.
+    const hasArtifact = attachedResources.some(
+      (resource) => resource.resource_type === "artifact",
+    );
+    directive.text += hasArtifact
+      ? ` The card(s) ${titles} are attached below your reply — the interactive activity runs right on the card: tell the student to tap Run and explore, then ask them what they notice; never say you can't share it.`
+      : ` The resource card(s) ${titles} are attached below your reply — tell the student to tap Open on the card; never say you can't share it.`;
   }
   return directive;
 }
@@ -3052,6 +3071,44 @@ function buildLessonArc(
   };
 }
 
+// Artifacts v1 (P6): validated passthrough of ONLY the metadata.artifact subtree.
+// Anything malformed or oversized degrades to undefined (the client shows a friendly
+// "isn't available" card) — this must never throw or leak arbitrary metadata.
+const ARTIFACT_DECK_MAX_BYTES = 65536;
+
+function artifactForEnvelope(resource: DbRow): LessonChatResource["artifact"] {
+  if (String(resource.resource_type) !== "artifact") return undefined;
+  const metadata = resource.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return undefined;
+  }
+  const raw = (metadata as DbRow).artifact;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const cfg = raw as DbRow;
+  const kind =
+    cfg.kind === "html_sim" || cfg.kind === "deck" ? cfg.kind : null;
+  if (!kind) return undefined;
+  const out: NonNullable<LessonChatResource["artifact"]> = { kind, version: 1 };
+  if (typeof cfg.height_hint === "number" && Number.isFinite(cfg.height_hint)) {
+    out.height_hint = Math.min(1200, Math.max(200, Math.round(cfg.height_hint)));
+  }
+  if (typeof cfg.poster_text === "string" && cfg.poster_text) {
+    out.poster_text = cfg.poster_text.slice(0, 500);
+  }
+  if (kind === "deck") {
+    if (!cfg.deck || typeof cfg.deck !== "object") return undefined;
+    try {
+      if (JSON.stringify(cfg.deck).length > ARTIFACT_DECK_MAX_BYTES) {
+        return undefined;
+      }
+    } catch {
+      return undefined;
+    }
+    out.deck = cfg.deck;
+  }
+  return out;
+}
+
 function resourceForEnvelope(resource: DbRow): LessonChatResource {
   const sourceType =
     resource.source_type === "external_url" ? "external_url" : "upload";
@@ -3087,6 +3144,7 @@ function resourceForEnvelope(resource: DbRow): LessonChatResource {
       typeof resource.student_instructions === "string"
         ? resource.student_instructions
         : "",
+    artifact: artifactForEnvelope(resource),
   };
 }
 

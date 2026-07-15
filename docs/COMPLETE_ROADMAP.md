@@ -159,14 +159,28 @@ type LessonChatResource = {
   id: string;
   title: string;
   description?: string;
-  resource_type: "video" | "audio" | "pdf" | "flipbook" | "youtube" | "image" | "link" | "document";
+  resource_type: "video" | "audio" | "pdf" | "flipbook" | "youtube" | "image" | "link" | "document" | "artifact";
   display_mode: "inline" | "modal" | "card";
   signed_url?: string;
   external_url?: string;
   thumbnail_url?: string;
   student_instructions?: string;
+  artifact?: ArtifactConfig; // resource_type "artifact" only — validated metadata.artifact
 };
 ```
+
+Artifacts (v1, P6): `resource_type: "artifact"` carries its config in
+`lesson_resources.metadata.artifact` — `{kind: "html_sim" | "deck", version: 1,
+height_hint?, poster_text?, deck?}`. An `html_sim` is ONE self-contained HTML file
+(inline CSS/JS, zero network) at `artifacts/{resource_id}/index.html` in the
+lesson-resources bucket, with the resource's `storage_path` pointing at it; the client
+renders it in an iframe with `sandbox="allow-scripts"` ONLY — never `allow-same-origin`
+(the sandbox is the security boundary; the client lint is defense-in-depth). A `deck`'s
+slide JSON lives in `metadata.artifact.deck` (server-capped at 65536 serialized bytes —
+authoring/generation must respect this) with layouts `title | bullets | two_col | quote |
+code` (image layout deferred: no asset pipeline yet), mirrored to
+`artifacts/{resource_id}/deck.json`. Authoring arrives in P7 (studio generate → preview →
+approve); the manual teacher resource form intentionally does not offer the type.
 
 Orchestrator changes:
 
