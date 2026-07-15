@@ -49,6 +49,7 @@ import {
   roleHome,
   saveCurriculumLessonMeta,
   saveCurriculumTemplate,
+  updateLessonResource,
   upsertCurriculumStep,
 } from "@/lib/api";
 import type {
@@ -549,6 +550,15 @@ function CurriculumPage() {
         reorderCurriculumSteps({ accessToken, classId, lessonId, orderedIds }),
     );
 
+  // P5: bind/unbind a lesson resource to a step (null unbinds). Direct RLS-gated write —
+  // the chat runtime attaches a step's bound materials on its presentation turn.
+  const bindResource = (resourceId: string, activityId: string | null) =>
+    optimistic(
+      (d) => patchResourceLocal(d, resourceId, activityId),
+      () => updateLessonResource(resourceId, { activity_id: activityId }),
+      { successMessage: activityId ? "Material attached to step." : "Material detached." },
+    );
+
   // --- Org-shared templates (v4.0 Phase 2) --------------------------------
   const loadTemplates = useCallback(async () => {
     if (!selectedClass) return;
@@ -934,6 +944,7 @@ function CurriculumPage() {
                   onUpsertStep={upsertStep}
                   onReorderSteps={reorderSteps}
                   onDeleteStep={deleteStep}
+                  onBindResource={bindResource}
                   onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
                   onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
                   onGenerateOutline={generateOutline}
@@ -1356,6 +1367,7 @@ function DetailPane({
   onUpsertStep,
   onReorderSteps,
   onDeleteStep,
+  onBindResource,
   onPublishLesson,
   onArchiveLesson,
   onGenerateOutline,
@@ -1398,6 +1410,7 @@ function DetailPane({
   onUpsertStep: (lessonId: string, step: CurriculumStepInput) => void;
   onReorderSteps: (lessonId: string, orderedIds: string[]) => void;
   onDeleteStep: (lessonId: string, activityId: string) => void;
+  onBindResource: (resourceId: string, activityId: string | null) => void;
   onPublishLesson: (lessonId: string) => void;
   onArchiveLesson: (lessonId: string) => void;
   onGenerateOutline: (
@@ -1533,6 +1546,7 @@ function DetailPane({
       onUpsertStep={(step) => onUpsertStep(lesson.id, step)}
       onReorderSteps={(ids) => onReorderSteps(lesson.id, ids)}
       onDeleteStep={(activityId) => onDeleteStep(lesson.id, activityId)}
+      onBindResource={onBindResource}
       onPublish={() => onPublishLesson(lesson.id)}
       onArchiveLesson={() => onArchiveLesson(lesson.id)}
       onMove={(targetUnitId) => onMoveLesson(lesson.id, targetUnitId)}
@@ -2064,6 +2078,7 @@ function LessonDetail({
   onUpsertStep,
   onReorderSteps,
   onDeleteStep,
+  onBindResource,
   onPublish,
   onArchiveLesson,
   onMove,
@@ -2082,6 +2097,7 @@ function LessonDetail({
   onUpsertStep: (step: CurriculumStepInput) => void;
   onReorderSteps: (orderedIds: string[]) => void;
   onDeleteStep: (activityId: string) => void;
+  onBindResource: (resourceId: string, activityId: string | null) => void;
   onPublish: () => void;
   onArchiveLesson: () => void;
   onMove: (targetUnitId: string) => void;
@@ -2109,6 +2125,14 @@ function LessonDetail({
   const quizFor = (activityId: string) =>
     data.quizzes.find((quiz) => quiz.activity_id === activityId && quiz.status !== "archived") ||
     null;
+  // P5: this lesson's materials, for the per-step attach controls.
+  const lessonResources = useMemo(
+    () =>
+      resources.filter(
+        (resource) => resource.lesson_id === lesson.id && resource.status !== "archived",
+      ),
+    [resources, lesson.id],
+  );
 
   return (
     <GradientCard innerClassName="!bg-depth-card">
@@ -2165,6 +2189,8 @@ function LessonDetail({
                           busy={busy}
                           dragging={state.dragging}
                           canDelete={steps.length > 1}
+                          resources={lessonResources}
+                          onBind={onBindResource}
                           onSave={onUpsertStep}
                           onDelete={() => onDeleteStep(activity.id)}
                         />
@@ -2510,6 +2536,8 @@ function StepCard({
   busy,
   dragging,
   canDelete,
+  resources,
+  onBind,
   onSave,
   onDelete,
 }: {
@@ -2519,6 +2547,10 @@ function StepCard({
   busy: boolean;
   dragging: boolean;
   canDelete: boolean;
+  // P5: this lesson's materials — bind/unbind writes lesson_resources.activity_id, and
+  // the chat runtime attaches a step's bound materials on its presentation turn.
+  resources: LessonResource[];
+  onBind: (resourceId: string, activityId: string | null) => void;
   onSave: (step: CurriculumStepInput) => void;
   onDelete: () => void;
 }) {
@@ -2576,6 +2608,12 @@ function StepCard({
     setChoices((current) =>
       current.map((choice, idx) => (idx === i ? { ...choice, ...patch } : choice)),
     );
+
+  // P5 attach controls: a just-created step carries a temp id until the server swap —
+  // binding to it would violate the resource's FK, so the controls wait it out.
+  const attached = resources.filter((resource) => resource.activity_id === activity.id);
+  const attachable = resources.filter((resource) => resource.activity_id !== activity.id);
+  const bindable = !activity.id.startsWith("temp-");
 
   const save = () => {
     const isCode = showCodeFields;
@@ -2763,6 +2801,81 @@ function StepCard({
               </button>
             </div>
           ) : null}
+
+          {/* P5: per-step materials. The chat runtime attaches these on the step's
+              presentation turn (all bound, up to 3) — the fix that makes Media steps
+              actually show their material. Binding saves immediately, outside Save step. */}
+          <div className="grid gap-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Attached materials
+              </div>
+              <span className="text-[11px] text-muted-foreground/70">
+                Attach/detach saves immediately
+              </span>
+            </div>
+            {attached.map((resource) => (
+              <div
+                key={resource.id}
+                className="flex items-center gap-2 rounded-2xl border border-border bg-depth-sub px-3 py-2"
+              >
+                <Paperclip
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  strokeWidth={1.7}
+                />
+                <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                  {resource.title}
+                </span>
+                <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                  {resource.resource_type}
+                </span>
+                {resource.status !== "published" ? (
+                  <span
+                    title="Drafts never reach students — the mentor only presents published materials."
+                    className="shrink-0 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-warning"
+                  >
+                    draft
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onBind(resource.id, null)}
+                  disabled={busy || !bindable}
+                  title="Detach from this step"
+                  className="shrink-0 rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  <X className="h-3 w-3" strokeWidth={2} />
+                </button>
+              </div>
+            ))}
+            {attached.length === 0 && stepMode === "media" ? (
+              <div className="rounded-2xl border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground">
+                {resources.length === 0
+                  ? "No lesson materials yet — add them in the class console's Resources tab, then attach them here."
+                  : "Media steps present their attached materials when the step opens — attach one below."}
+              </div>
+            ) : null}
+            {attachable.length > 0 ? (
+              <select
+                value=""
+                disabled={busy || !bindable}
+                onChange={(event) => {
+                  if (event.target.value) onBind(event.target.value, activity.id);
+                  event.target.value = "";
+                }}
+                title={bindable ? undefined : "Save the new step first, then attach materials."}
+                className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] text-muted-foreground outline-none disabled:opacity-50"
+              >
+                <option value="">Attach a material…</option>
+                {attachable.map((resource) => (
+                  <option key={resource.id} value={resource.id}>
+                    {resource.title}
+                    {resource.activity_id ? " — attached to another step" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -3757,6 +3870,20 @@ function patchStepLocal(
     activities: data.activities.map((a) => (a.id === id ? activity : a)),
     // Replace this step's quiz to match the edit (removing it when no longer a checkpoint).
     quizzes: [...data.quizzes.filter((q) => q.activity_id !== id), ...(quiz ? [quiz] : [])],
+  };
+}
+
+// P5: bind/unbind a resource to a step in local state (mirror of the DB write).
+function patchResourceLocal(
+  data: CurriculumAuthoringData,
+  resourceId: string,
+  activityId: string | null,
+): CurriculumAuthoringData {
+  return {
+    ...data,
+    resources: data.resources.map((resource) =>
+      resource.id === resourceId ? { ...resource, activity_id: activityId } : resource,
+    ),
   };
 }
 

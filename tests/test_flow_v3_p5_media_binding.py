@@ -71,5 +71,34 @@ class MediaBindingRuntimeInvariants(unittest.TestCase):
         self.assertIn("NO resource card is attached", CHAT)
 
 
+class TeacherAttachInvariants(unittest.TestCase):
+    """P5b: the curriculum studio binds materials to steps via activity_id."""
+
+    def test_step_card_has_attach_section(self):
+        self.assertIn("Attached materials", CURRICULUM)
+        self.assertIn("patchResourceLocal", CURRICULUM)
+        self.assertIn(
+            "updateLessonResource(resourceId, { activity_id: activityId })",
+            CURRICULUM,
+        )
+
+    def test_temp_step_ids_cannot_bind(self):
+        # A just-created step's temp id would violate the resource FK — the controls
+        # must wait for the server id swap.
+        self.assertIn('startsWith("temp-")', CURRICULUM)
+
+    def test_api_pick_widened(self):
+        pick = re.search(
+            r"export async function updateLessonResource\(.*?\)\s*\{",
+            API,
+            re.S,
+        )
+        self.assertIsNotNone(pick)
+        self.assertIn('"activity_id"', pick.group(0))
+
+    def test_drafts_flagged(self):
+        self.assertIn("Drafts never reach students", CURRICULUM)
+
+
 if __name__ == "__main__":
     unittest.main()

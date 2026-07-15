@@ -3236,7 +3236,15 @@ export async function updateLessonResource(
   patch: Partial<
     Pick<
       LessonResource,
-      "title" | "description" | "student_instructions" | "teacher_notes" | "status" | "visibility"
+      // activity_id = the step this material is bound to (P5: the chat runtime attaches
+      // bound materials on that step's presentation turn). Null unbinds.
+      | "title"
+      | "description"
+      | "student_instructions"
+      | "teacher_notes"
+      | "status"
+      | "visibility"
+      | "activity_id"
     >
   >,
 ) {
