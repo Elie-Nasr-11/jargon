@@ -6201,3 +6201,49 @@ Notes: sandbox allow-scripts-only is THE security boundary (static-test enforced
 dependency (embla + carousel wrapper exist); no storage policy change (single-file artifacts);
 authoring arrives in P7. Workspace note: container was recycled mid-day — tree re-synced to
 origin/claude/happy-johnson-wseex8 (6f23fe9) before starting.
+
+## Claude -> Codex / Human - 2026-07-15 14:20
+
+Status: Finished
+Summary: Artifacts v1 P6 — the artifact foundation (two commits + review folds). New
+lesson_resources resource_type 'artifact' (idempotent CHECK swap, whitelisted). Config in
+metadata.artifact {kind html_sim|deck, version 1, height_hint, poster_text, deck}. The
+chat envelope carries a VALIDATED, size-capped artifact field (artifactForEnvelope —
+never the raw metadata; oversize/malformed degrades to undefined); directives use the
+honest verb ("tap Run") when an artifact card is attached. Client: html_sim renders
+behind a poster→Run gate in a sandboxed iframe — sandbox="allow-scripts" ONLY (never
+allow-same-origin; static tests pin the literal AND forbid the expression form), srcdoc
+composed from a signed-URL TEXT fetch (the URL is never navigable), doctype-preserving
+bootstrap with a token+event.source-gated ready/height protocol (5s watchdog → Retry;
+height clamped 200px–70vh), Stop unmounts, Expand mounts a fresh autoRun instance in
+ModalCard size="large"; a run-sequence guard prevents stale fetch continuations from
+resurrecting stopped sims. artifact-lint.ts (network/storage/external-src tokens) is
+documented defense-in-depth — the sandbox is the boundary. Decks render natively on the
+existing embla carousel wrapper (title/bullets/two_col/quote/code; image layout deferred
+— no asset pipeline), per-slide ReadAloud (speaker_notes || visible text), completed
+telemetry on last slide. ResourceCard: artifact branch at both mount sites (badge
+"activity", NO Open-in-tab), read-aloud props threaded. Wire: types union + typed
+artifact field; the launcher fetch selects ONLY metadata->artifact (review fold — whole-
+metadata select would ship internal keys to students); parseArtifactConfig caps slides
+BEFORE parsing (adversarial-size guard); server rejects array decks like the client.
+Review verdict: sandbox boundary sound, zero critical/major; folds as listed. NOT built
+(P7): authoring/generation — the teacher form intentionally lacks the type; artifacts
+seed via ops SQL + storage upload (procedure in the plan file/COMPLETE_ROADMAP).
+Workspace note: the container recycled mid-day; tree was re-synced from origin (6f23fe9)
+before P6 started — pushes are the durable record.
+Files changed: supabase/migrations/20260820000000_artifact_resources.sql (new),
+.github/workflows/deploy-backend.yml, supabase/functions/chat/index.ts,
+frontend/src/lib/{artifact-schema.ts (new), artifact-lint.ts (new), types.ts, api.ts},
+frontend/src/components/{ArtifactFrame.tsx (new), DeckRenderer.tsx (new)},
+frontend/src/routes/chat.tsx, docs/COMPLETE_ROADMAP.md,
+tests/{test_artifact_foundation.py (new, 16 invariants), test_complete_roadmap.py}.
+Tests run: esbuild syntax check; python unittest (16 new OK; full discover = the 4 known
+pre-existing errors only); frontend tsc 0 / eslint 0 errors (17 pre-existing warnings) /
+build green.
+Remaining concerns: (1) Expand re-fetches the HTML + double-fires played/opened telemetry
+(accepted — inflation only); (2) the deck byte cap counts UTF-16 code units (documented
+slack); (3) E2E needs the seeded sim+deck rows (ops SQL, steps in the plan) — full
+verification lands with P7's studio flow.
+Suggested next task: Av1 P7 — authoring generation (curriculum-admin generate:artifact +
+studio preview→approve reusing ArtifactFrame/DeckRenderer + artifact-lint at generate AND
+approve). The user's main FF + live pass of Flow v3 P1-P5 remains pending in parallel.

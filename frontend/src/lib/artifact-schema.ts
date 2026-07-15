@@ -138,10 +138,12 @@ export function parseArtifactConfig(raw: unknown): ArtifactConfig | null {
     const deckRaw = cfg.deck;
     if (!deckRaw || typeof deckRaw !== "object" || Array.isArray(deckRaw)) return null;
     const deck = deckRaw as Record<string, unknown>;
+    // Cap BEFORE mapping: an adversarially long slides array must never cost more than
+    // 40 parses (the per-field truncation bounds each of those).
     const slides = (Array.isArray(deck.slides) ? deck.slides : [])
+      .slice(0, DECK_MAX_SLIDES)
       .map(parseSlide)
-      .filter((slide): slide is DeckSlide => slide !== null)
-      .slice(0, DECK_MAX_SLIDES);
+      .filter((slide): slide is DeckSlide => slide !== null);
     if (!slides.length) return null;
     out.deck = { title: cleanText(deck.title) || undefined, slides };
   }

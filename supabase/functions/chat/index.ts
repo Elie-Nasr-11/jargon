@@ -3096,8 +3096,13 @@ function artifactForEnvelope(resource: DbRow): LessonChatResource["artifact"] {
     out.poster_text = cfg.poster_text.slice(0, 500);
   }
   if (kind === "deck") {
-    if (!cfg.deck || typeof cfg.deck !== "object") return undefined;
+    // Reject arrays too (the client's parser does) so both validators agree.
+    if (!cfg.deck || typeof cfg.deck !== "object" || Array.isArray(cfg.deck)) {
+      return undefined;
+    }
     try {
+      // A DoS guard, not an exact limit: .length counts UTF-16 code units, so heavy
+      // non-ASCII decks can slightly exceed 64KB of true UTF-8 — acceptable slack.
       if (JSON.stringify(cfg.deck).length > ARTIFACT_DECK_MAX_BYTES) {
         return undefined;
       }

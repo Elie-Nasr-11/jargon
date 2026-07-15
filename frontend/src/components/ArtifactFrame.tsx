@@ -96,17 +96,22 @@ export function ArtifactFrame({
   const tokenRef = useRef("");
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const readyRef = useRef(false);
+  // Sequence guard: a stop() (or a newer run) invalidates any fetch still in flight,
+  // so a stale continuation can never resurrect a stopped sim.
+  const runSeqRef = useRef(0);
 
   const run = useCallback(async () => {
+    const seq = ++runSeqRef.current;
     onTelemetry("played");
     setStatus("loading");
     let html = "";
     try {
       html = await fetchHtml();
     } catch {
-      setStatus("failed");
+      if (runSeqRef.current === seq) setStatus("failed");
       return;
     }
+    if (runSeqRef.current !== seq) return;
     const lint = lintArtifactHtml(html);
     if (!lint.ok) {
       // Details go to the console for teachers/devs; students just see the safety card.
@@ -123,6 +128,7 @@ export function ArtifactFrame({
   }, [fetchHtml, onTelemetry]);
 
   const stop = useCallback(() => {
+    runSeqRef.current += 1;
     tokenRef.current = "";
     setDoc("");
     setStatus("poster");

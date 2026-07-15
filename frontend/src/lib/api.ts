@@ -3342,8 +3342,9 @@ type LessonResourceListRow = {
   external_url: string | null;
   thumbnail_path: string | null;
   student_instructions: string | null;
-  // P6: carries metadata.artifact for artifact resources (validated client-side).
-  metadata: Record<string, unknown> | null;
+  // P6: ONLY the metadata->artifact subtree (validated client-side) — selecting the
+  // whole metadata jsonb would ship every resource's internal keys to the student.
+  artifact: unknown;
 };
 
 export async function fetchLessonResources(lessonId: string): Promise<LessonChatResource[]> {
@@ -3351,13 +3352,13 @@ export async function fetchLessonResources(lessonId: string): Promise<LessonChat
   const { data, error } = await supabase
     .from("lesson_resources")
     .select(
-      "id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata",
+      "id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,artifact:metadata->artifact",
     )
     .eq("lesson_id", lessonId)
     .eq("status", "published")
     .order("created_at", { ascending: true });
   if (error) throw error;
-  return ((data ?? []) as LessonResourceListRow[]).map((r) => ({
+  return ((data ?? []) as unknown as LessonResourceListRow[]).map((r) => ({
     id: r.id,
     title: r.title,
     description: r.description ?? undefined,
@@ -3370,9 +3371,7 @@ export async function fetchLessonResources(lessonId: string): Promise<LessonChat
     thumbnail_path: r.thumbnail_path,
     student_instructions: r.student_instructions ?? undefined,
     artifact:
-      r.resource_type === "artifact" && r.metadata && typeof r.metadata === "object"
-        ? (parseArtifactConfig((r.metadata as Record<string, unknown>).artifact) ?? undefined)
-        : undefined,
+      r.resource_type === "artifact" ? (parseArtifactConfig(r.artifact) ?? undefined) : undefined,
   }));
 }
 

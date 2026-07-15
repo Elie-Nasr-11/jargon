@@ -86,12 +86,15 @@ class ArtifactSandboxInvariants(unittest.TestCase):
     """THE security boundary: allow-scripts only, opaque origin, no navigable URL."""
 
     def test_sandbox_is_scripts_only(self):
-        # Every sandbox attribute in the file must be EXACTLY allow-scripts (comments may
-        # name allow-same-origin to forbid it; the attribute itself never carries it).
+        # Every sandbox attribute in the file must be EXACTLY the allow-scripts string
+        # literal (comments may name allow-same-origin to forbid it; the attribute never
+        # carries it), and the expression form sandbox={...} — which could smuggle a
+        # computed value past this pin — must not exist at all.
         sandboxes = re.findall(r'sandbox="([^"]*)"', FRAME)
         self.assertTrue(sandboxes)
         for value in sandboxes:
             self.assertEqual(value, "allow-scripts")
+        self.assertNotIn("sandbox={", FRAME)
         self.assertIn("srcDoc", FRAME)
         # The iframe must never navigate to a URL (the signed URL would render the raw
         # HTML on the storage origin) — only srcDoc, never src=.
@@ -131,8 +134,11 @@ class ArtifactClientWireInvariants(unittest.TestCase):
         self.assertIn('| "artifact"', TYPES)
         self.assertIn("artifact?: ArtifactConfig", TYPES)
 
-    def test_api_selects_and_parses_metadata(self):
-        self.assertIn("student_instructions,metadata", API)
+    def test_api_selects_only_the_artifact_subtree(self):
+        # Selecting the whole metadata jsonb would ship every resource's internal keys
+        # to the student — only the artifact subtree may ride the launcher fetch.
+        self.assertIn("artifact:metadata->artifact", API)
+        self.assertNotIn("student_instructions,metadata,", API)
         self.assertIn("parseArtifactConfig", API)
 
     def test_resource_card_branches_and_threads_voice(self):
