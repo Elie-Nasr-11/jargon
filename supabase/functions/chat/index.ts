@@ -316,6 +316,12 @@ type Understanding = {
   note: string;
 };
 
+// Flow v3 P4: the understanding grader may ALSO flag upcoming steps the student's latest
+// message already covered ("pre-emption"). Hits are recorded as NOTES ONLY — they drive a
+// compressed delivery when the step arrives; they never set a future step's gates.
+type PreemptedHit = { step: number; note: string };
+type GradedUnderstanding = Understanding & { preempted?: PreemptedHit[] };
+
 type FlowDecision = {
   stage: Stage;
   responseMode: ResponseMode;
@@ -1297,7 +1303,10 @@ async function checkUnderstanding(
   milestone: DbRow | null,
   studentText: string,
   recentTurns: DbRow[],
-): Promise<Understanding | null> {
+  // Flow v3 P4: upcoming step objectives (≤3) so the grader can flag pre-emption —
+  // "the student's message ALSO covered a future step's idea". Detection only.
+  upcomingSteps: { id: string; title: string; prompt: string }[] = [],
+): Promise<GradedUnderstanding | null> {
   const text = (studentText || "").trim();
   if (!text) return null;
   const objective = [
@@ -1314,14 +1323,31 @@ async function checkUnderstanding(
     .reverse()
     .map((t) => `${String(t.role)}: ${String(t.content || "").slice(0, 200)}`)
     .join("\n");
+  const upcoming = upcomingSteps
+    .slice(0, 3)
+    .map(
+      (step, index) =>
+        `${index + 1}. ${step.title || `Step ${index + 1}`} — ${step.prompt.slice(0, 140)}`,
+    )
+    .join("\n");
+  // Grade the LATEST message only: crediting things said in earlier turns is exactly the
+  // stale-credit bug this grader exists to prevent (the conversation model already
+  // handles continuity; the GATE must reflect what the student can produce now).
   const system =
-    "You are a strict but fair grader for a children's tutoring app. Given the step's " +
-    "objective and the student's latest explanation, judge ONLY whether the student's own " +
-    "words demonstrate understanding of THIS objective. Do not credit vague, circular, or " +
-    "off-topic answers. Return ONLY a JSON object: " +
+    "You are a strict but fair grader for a children's tutoring app. Judge ONLY the " +
+    "student's LATEST message, quoted at the end: does it, BY ITSELF, demonstrate " +
+    "understanding of THIS step's objective? The earlier turns are background for " +
+    "resolving references (\"it\", \"that one\") — they are NEVER evidence; understanding " +
+    "shown in an earlier turn but absent from the latest message does not count. Do not " +
+    "credit vague, circular, or off-topic answers. Separately: if the latest message ALSO " +
+    "clearly covers one of the numbered UPCOMING step objectives, report it under " +
+    '"preempted" with that step\'s number and a short note capturing the student\'s ' +
+    "insight (only clear cases — never stretch; return an EMPTY preempted array when " +
+    "none, which is the normal case). Return ONLY a JSON object: " +
     '{"demonstrated": boolean, "level": "none|partial|solid", "note": "one short phrase ' +
-    'naming what is still missing, or empty when solid"}.';
-  const userMsg = `${objective || "Objective: explain the concept in the student's own words."}\n\nRecent conversation:\n${recent}\n\nStudent's latest explanation:\n${text}`;
+    'naming what is still missing, or empty when solid", "preempted": []} — each ' +
+    'preempted entry, when any, is {"step": number, "note": "short paraphrase of their insight"}.';
+  const userMsg = `${objective || "Objective: explain the concept in the student's own words."}\n\nUpcoming step objectives (pre-emption detection ONLY — never grade the current step against these):\n${upcoming || "(none)"}\n\nRecent conversation (background only — NOT evidence):\n${recent}\n\nStudent's LATEST message (grade this):\n${text}`;
   try {
     const result = await callModel(
       [
@@ -1335,7 +1361,28 @@ async function checkUnderstanding(
     scheduleBackground(
       recordModelUsage(config, userId, sessionId, lessonId, result, "grading"),
     );
-    return parsedUnderstanding(JSON.parse(extractJsonObject(result.content)));
+    const raw = JSON.parse(extractJsonObject(result.content)) as DbRow;
+    const verdict = parsedUnderstanding(raw);
+    if (!verdict) return null;
+    // Tolerant pre-emption parse: anything malformed just drops (the feature is additive).
+    const preempted: PreemptedHit[] = Array.isArray(raw.preempted)
+      ? (raw.preempted as unknown[])
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") return null;
+            const hit = entry as DbRow;
+            const step = Number(hit.step);
+            if (!Number.isInteger(step) || step < 1 || step > upcomingSteps.length) {
+              return null;
+            }
+            const note =
+              typeof hit.note === "string" ? hit.note.trim().slice(0, 240) : "";
+            // A hit with no note is dropped outright: the arrival directive would
+            // otherwise credit a fabricated "insight" the student never voiced.
+            return note ? { step, note } : null;
+          })
+          .filter((hit): hit is PreemptedHit => hit !== null)
+      : [];
+    return preempted.length ? { ...verdict, preempted } : verdict;
   } catch {
     return null;
   }
@@ -2327,6 +2374,9 @@ function turnDirective(args: {
   // and/or IS the navigate/resume control turn itself (navAction).
   inRevisit: boolean;
   navAction: "revisit" | "resume" | null;
+  // Flow v3 P4: the student already covered this (unpresented) step's idea earlier —
+  // the note captured then; null when no pre-emption was recorded.
+  preemptedNote: string | null;
 }): TurnDirective {
   const {
     currentStage,
@@ -2347,6 +2397,7 @@ function turnDirective(args: {
     routedKind,
     inRevisit,
     navAction,
+    preemptedNote,
   } = args;
 
   const quizActive = draftFlow.nextAction === "choose";
@@ -2612,10 +2663,20 @@ function turnDirective(args: {
         : "";
       return {
         key: "explanation_pending",
-        text: `This step needs the STUDENT to articulate the idea in their own words, and they have not yet.${gap} Work toward that without handing them the conclusion — address the specific gap; do not merely re-ask a question they already answered.`,
+        text: `This step needs the STUDENT to articulate the idea in their own words, and they have not yet.${gap} Work toward that without handing them the conclusion — address the specific gap; do not merely re-ask a question they already answered. When only a piece is missing, ask them to put the WHOLE idea together in one message (the grader credits only what their latest message contains by itself — fragments alone never pass).`,
       };
     }
     if (!presentedBefore) {
+      // Pre-empted step (P4): the student already covered this idea on an earlier step —
+      // deliver it COMPRESSED instead of re-teaching from scratch (and never skip it).
+      // Wins over the mode-specific presentation; assessment steps keep their no-coaching
+      // presentation (crediting the insight there would leak the answer).
+      if (preemptedNote && !openEndedAssessment && !quizActive) {
+        return {
+          key: "present_step_preempted",
+          text: `The student ALREADY covered this step's core idea earlier in the lesson — noted then: "${preemptedNote}". Deliver this step COMPRESSED: open by crediting that insight in one line ("you actually spotted this earlier when…"), add only what they haven't covered yet, then ONE quick check question to confirm it stuck. Do not re-teach from scratch, and do not skip the step — if it centers on material or a task (a resource card, the work panel), still point them at it; compressed means shorter framing, not skipping the work.`,
+        };
+      }
       // Content-delivery and assessment modes REPLACE the generic presentation text —
       // the generic "don't give anything away" line directly contradicts direct teaching.
       const modePresent =
@@ -3688,6 +3749,19 @@ async function handleTypedRequest(
     // turns and code/MCQ answers route deterministically without a model call.
     const routerEligible =
       !controlType && answer?.mode === "text" && Boolean(content) && presentedBefore;
+    // Upcoming steps in position order (≤3), shared by the router (titles for context)
+    // and the understanding grader (objectives for pre-emption detection).
+    const upcomingSteps = (context.activities || [])
+      .filter(
+        (a) => Number(a.position) > Number(context.activity?.position ?? 0),
+      )
+      .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))
+      .slice(0, 3)
+      .map((a) => ({
+        id: typeof a.id === "string" ? a.id : "",
+        title: String(a.title || ""),
+        prompt: String(a.prompt || ""),
+      }));
     const [gradedUnderstanding, gradedCode, routerResult] = await Promise.all([
       isTextExplanation
         ? checkUnderstanding(
@@ -3699,6 +3773,7 @@ async function handleTypedRequest(
             context.milestone,
             content,
             context.recentTurns,
+            upcomingSteps,
           )
         : Promise.resolve(null),
       codeNeedsJudge
@@ -3723,13 +3798,7 @@ async function handleTypedRequest(
             context.activity,
             content,
             context.recentTurns,
-            (context.activities || [])
-              .filter(
-                (a) =>
-                  Number(a.position) > Number(context.activity?.position ?? 0),
-              )
-              .slice(0, 3)
-              .map((a) => String(a.title || "")),
+            upcomingSteps.map((step) => step.title),
           )
         : Promise.resolve(null),
       studentTurnPromise,
@@ -3753,6 +3822,44 @@ async function handleTypedRequest(
         routerResult.kind !== "answer_attempt" &&
         gradedUnderstanding?.demonstrated === true,
     );
+    // --- Flow v3 P4: pre-emption notes ---------------------------------------
+    // The grader may flag that this message ALSO covered upcoming step objectives.
+    // Recorded as NOTES only — when the step arrives it's delivered compressed (credit
+    // the insight, add what's missing, one quick check) instead of being skipped or
+    // re-taught from scratch. A note NEVER sets a future step's gates: every step is
+    // still visited and still closes through its own gates.
+    const preemptedBefore =
+      session.preempted &&
+      typeof session.preempted === "object" &&
+      !Array.isArray(session.preempted)
+        ? (session.preempted as DbRow)
+        : {};
+    const preemptedHits = (gradedUnderstanding?.preempted ?? [])
+      .map((hit) => {
+        // Map the grader's 1-based step number back to the activity id it was shown;
+        // forward-of-cursor by construction (only upcoming steps were offered). First
+        // note wins — a later, vaguer mention must not overwrite the original insight.
+        const step = upcomingSteps[hit.step - 1];
+        return step && step.id && !preemptedBefore[step.id]
+          ? { id: step.id, note: hit.note }
+          : null;
+      })
+      .filter((hit): hit is { id: string; note: string } => hit !== null)
+      // First note wins WITHIN a response too (Object.fromEntries would let the last).
+      .filter(
+        (hit, index, hits) => hits.findIndex((h) => h.id === hit.id) === index,
+      );
+    // The CURRENT step's note (recorded back when the student pre-empted it): drives
+    // compressed delivery at presentation. Once the step has been shown, it's spent.
+    const preemptedNote = (() => {
+      const id = typeof context.activity?.id === "string" ? context.activity.id : "";
+      const entry = id ? preemptedBefore[id] : null;
+      if (!entry || typeof entry !== "object") return null;
+      return (
+        String((entry as DbRow).note || "") ||
+        "They already touched this step's idea earlier in the lesson."
+      );
+    })();
     // Open-ended ASSESSMENT (v4): the understanding grader's verdict is the grade in BOTH
     // directions — a clear miss records a graded fail (mirrors quiz_wrong) instead of the
     // reflection coaching path. Only a genuine ANSWER ATTEMPT can record a miss: a help
@@ -3858,7 +3965,14 @@ async function handleTypedRequest(
       routedKind,
       inRevisit,
       navAction,
+      preemptedNote,
     });
+    // P4: on the turn that DETECTED pre-emption, let the mentor nod at it without
+    // teaching ahead — the credit is delivered when the pre-empted step arrives.
+    if (preemptedHits.length) {
+      directive.text +=
+        ' Their message also touched an UPCOMING step\'s idea — acknowledge it in passing if natural ("we\'ll dig into exactly that shortly"), but do NOT teach ahead or skip toward it.';
+    }
     // Media steps: record that the material was shown (the presentation turn attaches the
     // card). Best-effort telemetry — interactions never gate and never block the turn.
     if (stepMode === "media" && !presentedBefore && attachedResources.length) {
@@ -4031,6 +4145,17 @@ async function handleTypedRequest(
             quiz_presented: Boolean(stepStateBefore.quiz_presented_at),
             attempts: draftState.attempts,
             quiz_active: draftFlow.nextAction === "choose",
+            // P4: the student pre-empted this step's idea on an earlier step — the note
+            // captured then (null when none). Presentation-scoped (once shown, the
+            // credit was delivered) and withheld on assessment/quiz steps, mirroring
+            // the directive exclusion: the note paraphrases the insight, i.e. plausibly
+            // the answer, and must not sit in the prompt beside "no hints".
+            preempted_note:
+              presentedBefore ||
+              (stepMode === "assessment" && stepModeType === "open_ended") ||
+              draftFlow.nextAction === "choose"
+                ? null
+                : preemptedNote,
           },
           // The live quiz, only while its choices are on screen — and never the answer key.
           quiz:
@@ -4667,6 +4792,21 @@ async function handleTypedRequest(
           // Flow v3 nav frame: live while revisiting (frontier + paused step_state),
           // null otherwise — resume and normal turns both write the cleared frame.
           nav: navFrame,
+          // Flow v3 P4: pre-emption notes for upcoming steps (merge, never replace;
+          // first note per step wins). Notes only — never gate credit.
+          ...(preemptedHits.length
+            ? {
+                preempted: {
+                  ...preemptedBefore,
+                  ...Object.fromEntries(
+                    preemptedHits.map((hit) => [
+                      hit.id,
+                      { note: hit.note, at: new Date().toISOString() },
+                    ]),
+                  ),
+                },
+              }
+            : {}),
           score:
             typeof assessment?.score === "number"
               ? Math.max(Number(session.score || 0), assessment.score)

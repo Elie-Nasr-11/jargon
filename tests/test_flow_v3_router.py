@@ -164,5 +164,44 @@ class FlowV3Backtracking(unittest.TestCase):
         self.assertIn("onNavigate", MILESTONES)
 
 
+class FlowV3Preemption(unittest.TestCase):
+    """Phase 4: latest-message-only grading + pre-emption notes (credit, never skip)."""
+
+    def test_grader_scopes_to_latest_message(self):
+        # The stale-credit fix: the gate reflects what the student can produce NOW.
+        self.assertIn("LATEST message", CHAT)
+        self.assertIn("NEVER evidence", CHAT)
+
+    def test_grader_receives_upcoming_objectives(self):
+        self.assertIn("const upcomingSteps", CHAT)
+        self.assertIn("pre-emption detection ONLY", CHAT)
+
+    def test_preempted_parse_is_typed_and_tolerant(self):
+        self.assertIn("type PreemptedHit", CHAT)
+        self.assertIn('"preempted"', CHAT)
+
+    def test_preempted_notes_never_gate(self):
+        # Notes are keyed by activity id and consumed only by the directive and the
+        # step_contract — the gate machinery (whole function bodies, not just the
+        # signatures) must never see them.
+        self.assertIn("const preemptedHits", CHAT)
+        apply_turn = re.search(r"function applyTurn\(.*?\n\}", CHAT, re.S)
+        self.assertIsNotNone(apply_turn)
+        self.assertNotIn("preempted", apply_turn.group(0))
+        requirements_fn = re.search(
+            r"function requirementsFor\(.*?\n\}", CHAT, re.S
+        )
+        self.assertIsNotNone(requirements_fn)
+        self.assertNotIn("preempted", requirements_fn.group(0))
+
+    def test_compressed_delivery_directive(self):
+        self.assertIn('key: "present_step_preempted"', CHAT)
+        self.assertIn("preempted_note", CHAT)
+
+    def test_preempted_merged_never_replaced(self):
+        merge = re.search(r"preempted: \{\s*\.\.\.preemptedBefore", CHAT)
+        self.assertIsNotNone(merge)
+
+
 if __name__ == "__main__":
     unittest.main()

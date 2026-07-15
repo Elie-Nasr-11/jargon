@@ -6085,3 +6085,45 @@ duplicate positions would make earlier steps unrevisitable via the position fall
 Suggested next task: Fv3 P4 — pre-emption credit + grader scoping (grade
 latest-message-only + upcoming objectives + preempted[] output + compressed-delivery
 directive), then P5 media binding.
+
+## Claude -> Codex / Human - 2026-07-15 10:30
+
+Status: Finished
+Summary: Flow v3 Phase 4 — pre-emption credit + grader scoping (backend-only, in
+supabase/functions/chat/index.ts). Two changes to the understanding grader that
+hard-gates free-text steps: (1) it now grades ONLY the student's LATEST message — earlier
+turns are background for resolving references, never evidence — killing the stale-credit
+bug where things said turns ago (or about future steps) closed the current gate; the
+explanation_pending directive was updated in step so the mentor asks for the whole idea
+in one message when only a fragment remains (otherwise fragment-by-fragment coaching
+could never satisfy the single-message gate). (2) It receives the next ≤3 step
+objectives (numbered) and may flag "preempted" hits — upcoming steps the student's
+message already covered. Hits are recorded as NOTES ONLY in the new
+learning_sessions.preempted jsonb (merge, first-note-wins, forward-of-cursor by
+construction; nothing ever feeds them into applyTurn/requirementsFor/gates — pinned by a
+whole-function-body static test). When a pre-empted step arrives, a new
+present_step_preempted directive delivers it COMPRESSED: credit the insight in one line,
+add what's missing, one quick check — never skip the step. The note also rides
+step_contract.preempted_note, presentation-scoped AND withheld on open-ended-assessment/
+quiz steps (the note paraphrases the insight, i.e. plausibly the answer — it must not
+sit in the prompt beside "no hints"; the directive has the same exclusion). On the
+DETECTING turn the mentor is told to nod at the pre-empted idea without teaching ahead.
+A shared upcomingSteps list now feeds both the router and the grader. Review findings
+folded before ship: prompt-leak exclusion on assessment/quiz contract field; the
+fragment-loop directive fix; empty-array example in the grader JSON contract + hits with
+empty notes dropped at parse (a fabricated "insight" must never be credited); in-response
+dedup so first-note-wins holds; applyTurn gate-isolation test now scans the whole body.
+Files changed: supabase/functions/chat/index.ts, tests/test_flow_v3_router.py
+(FlowV3Preemption, 6 new invariants). No migration (preempted column shipped in
+20260815000000_flow_v3_session_nav.sql, already whitelisted). No frontend changes.
+Tests run: esbuild syntax check; python3 -m unittest tests.test_flow_v3_router (30 OK).
+Remaining concerns: (1) the latest-message-only gate is deliberately stricter — watch the
+first live sessions for students who build answers incrementally (the directive now
+coaches them to consolidate; the attempts>=4 stuck cap still backstops). (2) The
+pre-emption note is student-derived text interpolated into the directive on a later turn
+— bounded to 240 chars, same trust level as the existing gradedUnderstanding.note
+interpolation; noted, not fixed. (3) preempted entries are never pruned (tiny; keyed by
+activity id).
+Suggested next task: Fv3 P5 — media step→resource binding fix + teacher attach controls
++ safe markdown pass; then Av1 P6 artifact foundation. A user live pass on the whole
+Flow v3 arc (P1-P4) is due per the plan before starting the artifact work.
