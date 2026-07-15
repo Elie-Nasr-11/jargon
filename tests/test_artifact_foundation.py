@@ -21,6 +21,18 @@ BASELINE = (
 WORKFLOW = (REPO / ".github" / "workflows" / "deploy-backend.yml").read_text()
 CHAT = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
 ROADMAP = (REPO / "docs" / "COMPLETE_ROADMAP.md").read_text()
+FRONTEND = REPO / "frontend" / "src"
+FRAME = (FRONTEND / "components" / "ArtifactFrame.tsx").read_text()
+DECK = (FRONTEND / "components" / "DeckRenderer.tsx").read_text()
+LINT = (FRONTEND / "lib" / "artifact-lint.ts").read_text()
+SCHEMA = (FRONTEND / "lib" / "artifact-schema.ts").read_text()
+TYPES = (FRONTEND / "lib" / "types.ts").read_text()
+API = (FRONTEND / "lib" / "api.ts").read_text()
+CHAT_TSX = (FRONTEND / "routes" / "chat.tsx").read_text()
+TEACHER = (
+    FRONTEND / "features" / "teacher" / "TeacherConsole.tsx"
+).read_text()
+PACKAGE = (REPO / "frontend" / "package.json").read_text()
 
 
 class ArtifactMigrationInvariants(unittest.TestCase):
@@ -68,6 +80,98 @@ class ArtifactWireInvariants(unittest.TestCase):
         self.assertIn('"artifact"', ROADMAP)
         self.assertIn("allow-scripts", ROADMAP)
         self.assertIn("65536", ROADMAP)
+
+
+class ArtifactSandboxInvariants(unittest.TestCase):
+    """THE security boundary: allow-scripts only, opaque origin, no navigable URL."""
+
+    def test_sandbox_is_scripts_only(self):
+        # Every sandbox attribute in the file must be EXACTLY allow-scripts (comments may
+        # name allow-same-origin to forbid it; the attribute itself never carries it).
+        sandboxes = re.findall(r'sandbox="([^"]*)"', FRAME)
+        self.assertTrue(sandboxes)
+        for value in sandboxes:
+            self.assertEqual(value, "allow-scripts")
+        self.assertIn("srcDoc", FRAME)
+        # The iframe must never navigate to a URL (the signed URL would render the raw
+        # HTML on the storage origin) — only srcDoc, never src=.
+        self.assertIsNone(re.search(r"<iframe[^>]*\bsrc=", FRAME))
+        self.assertNotIn("allow=", FRAME)
+
+    def test_frame_never_autoruns_by_default(self):
+        self.assertIn("autoRun = false", FRAME)
+        self.assertIn(">Run<", FRAME.replace("\n", "").replace("  ", "")[:100000] or FRAME)
+
+    def test_lint_is_wired_as_defense_in_depth(self):
+        for token in (
+            "fetch",
+            "XMLHttpRequest",
+            "WebSocket",
+            "EventSource",
+            "sendBeacon",
+            "importScripts",
+            "document\\s*\\.\\s*cookie",
+            "localStorage",
+            "sessionStorage",
+            "indexedDB",
+            "<iframe",
+        ):
+            self.assertIn(token, LINT)
+        self.assertIn("https?:", LINT)
+        self.assertIn("lintArtifactHtml", FRAME)
+
+    def test_ready_watchdog_and_token_gate(self):
+        self.assertIn("READY_TIMEOUT_MS", FRAME)
+        self.assertIn("data.token !== tokenRef.current", FRAME)
+        self.assertIn("event.source !== iframeRef.current?.contentWindow", FRAME)
+
+
+class ArtifactClientWireInvariants(unittest.TestCase):
+    def test_types_carry_artifact(self):
+        self.assertIn('| "artifact"', TYPES)
+        self.assertIn("artifact?: ArtifactConfig", TYPES)
+
+    def test_api_selects_and_parses_metadata(self):
+        self.assertIn("student_instructions,metadata", API)
+        self.assertIn("parseArtifactConfig", API)
+
+    def test_resource_card_branches_and_threads_voice(self):
+        self.assertIn('resource.resource_type === "artifact"', CHAT_TSX)
+        self.assertIn("<ArtifactFrame", CHAT_TSX)
+        self.assertIn("<DeckRenderer", CHAT_TSX)
+        # Inline set keeps the original five AND gains artifact.
+        inline = re.search(r"function shouldRenderInline.*?\n\}", CHAT_TSX, re.S)
+        self.assertIsNotNone(inline)
+        for value in ("youtube", "pdf", "video", "audio", "image", "artifact"):
+            self.assertIn(f'"{value}"', inline.group(0))
+        # Both mount sites pass the read-aloud plumbing.
+        self.assertGreaterEqual(len(re.findall(r"onVoiceEvent=\{", CHAT_TSX)), 4)
+
+    def test_deck_renderer_is_native(self):
+        self.assertIn('from "@/components/ui/carousel"', DECK)
+        self.assertIn("ReadAloudAction", DECK)
+        for layout in ("two_col", "quote", "code"):
+            self.assertIn(layout, DECK)
+        # The image layout is deferred (no asset pipeline) — neither the type union nor
+        # the parser may recognize it (a comment naming it is fine).
+        self.assertNotIn('layout: "image"', SCHEMA)
+        self.assertNotIn('case "image"', SCHEMA)
+
+    def test_no_new_dependencies(self):
+        self.assertIn('"embla-carousel-react"', PACKAGE)
+        for name in ("dompurify", "react-markdown", "iframe-resizer"):
+            self.assertNotIn(name, PACKAGE)
+        for source in (FRAME, DECK, LINT, SCHEMA):
+            imports = re.findall(r'from\s+"([^"]+)"', source)
+            for spec in imports:
+                self.assertTrue(
+                    spec.startswith("@/") or spec.startswith(".") or spec in ("react", "lucide-react"),
+                    f"unexpected import {spec}",
+                )
+
+    def test_teacher_form_has_no_artifact_option(self):
+        # Authoring arrives in P7 (generate → preview → approve), never the manual form.
+        self.assertNotIn('value="artifact"', TEACHER)
 
 
 if __name__ == "__main__":

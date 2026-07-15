@@ -29,6 +29,9 @@ import { GradientCard } from "@/components/GradientCard";
 import { FocusLock } from "@/components/FocusLock";
 import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
+import { ArtifactFrame } from "@/components/ArtifactFrame";
+import { DeckRenderer } from "@/components/DeckRenderer";
+import { parseArtifactConfig } from "@/lib/artifact-schema";
 import { QuizPanel } from "@/features/student/QuizPanel";
 import { AppSidebar } from "@/features/student/shell/AppSidebar";
 import { PageShell } from "@/components/PageShell";
@@ -1456,6 +1459,11 @@ function ChatPage() {
                   key={resource.id}
                   resource={resource}
                   onResourceEvent={handleResourceEvent}
+                  voice={voice}
+                  accessToken={accessToken || ""}
+                  lessonId={lessonId}
+                  sessionId={sessionId}
+                  onVoiceEvent={handleVoiceEvent}
                 />
               ))}
             </div>
@@ -2774,6 +2782,11 @@ function MessageRow({
                 key={resource.id}
                 resource={resource}
                 onResourceEvent={onResourceEvent}
+                voice={voice}
+                accessToken={accessToken}
+                lessonId={lessonId}
+                sessionId={sessionId}
+                onVoiceEvent={onVoiceEvent}
               />
             ))}
           </div>
@@ -2811,6 +2824,11 @@ function MessageRow({
 function ResourceCard({
   resource,
   onResourceEvent,
+  voice,
+  accessToken,
+  lessonId,
+  sessionId,
+  onVoiceEvent,
 }: {
   resource: LessonChatResource;
   onResourceEvent: (
@@ -2818,10 +2836,22 @@ function ResourceCard({
     eventType: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded",
     progress?: { progress_seconds?: number; progress_percent?: number },
   ) => Promise<void>;
+  // P6: read-aloud plumbing for deck slides (both mount sites have these in scope).
+  voice: VoiceSettings;
+  accessToken: string;
+  lessonId: string;
+  sessionId: string | null;
+  onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
 }) {
   const [openedUrl, setOpenedUrl] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  // P6: artifacts carry a validated config; parse is idempotent (envelope resources are
+  // already server-sanitized, launcher resources come from raw metadata).
+  const artifact = useMemo(
+    () => (resource.resource_type === "artifact" ? parseArtifactConfig(resource.artifact) : null),
+    [resource],
+  );
 
   useEffect(() => {
     void onResourceEvent(resource, "shown");
@@ -2891,8 +2921,12 @@ function ResourceCard({
             ) : null}
             <div className="min-w-0">
               <div className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                <FileText className="h-3.5 w-3.5" strokeWidth={1.6} />
-                {resource.resource_type}
+                {resource.resource_type === "artifact" ? (
+                  <Play className="h-3.5 w-3.5" strokeWidth={1.6} />
+                ) : (
+                  <FileText className="h-3.5 w-3.5" strokeWidth={1.6} />
+                )}
+                {resource.resource_type === "artifact" ? "activity" : resource.resource_type}
               </div>
               <h3 className="text-[14px] font-medium text-foreground">{resource.title}</h3>
               {resource.student_instructions ? (
@@ -2906,20 +2940,61 @@ function ResourceCard({
               ) : null}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void openResource()}
-            disabled={busy}
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            {shouldRenderInline(resource) ? (
-              <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
-            ) : (
-              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
-            )}
-            {busy ? "Opening..." : "Open"}
-          </button>
+          {/* Artifacts have no Open button: raw HTML must never open in a tab (the
+              ArtifactFrame's Run is the affordance; decks render immediately below). */}
+          {resource.resource_type !== "artifact" ? (
+            <button
+              type="button"
+              onClick={() => void openResource()}
+              disabled={busy}
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            >
+              {shouldRenderInline(resource) ? (
+                <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
+              ) : (
+                <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
+              )}
+              {busy ? "Opening..." : "Open"}
+            </button>
+          ) : null}
         </div>
+
+        {artifact?.kind === "html_sim" ? (
+          <div className="mt-4">
+            <ArtifactFrame
+              title={resource.title}
+              artifact={artifact}
+              fetchHtml={async () => {
+                void onResourceEvent(resource, "opened");
+                const url = await getLessonResourceSignedUrl(resource);
+                if (!url) throw new Error("Artifact URL is missing.");
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Artifact fetch failed.");
+                return response.text();
+              }}
+              onTelemetry={(event) => void onResourceEvent(resource, event)}
+            />
+          </div>
+        ) : artifact?.kind === "deck" && artifact.deck ? (
+          <div className="mt-4">
+            <DeckRenderer
+              deck={artifact.deck}
+              title={resource.title}
+              voice={voice}
+              accessToken={accessToken}
+              lessonId={lessonId}
+              sessionId={sessionId}
+              onVoiceEvent={onVoiceEvent}
+              onCompleted={() =>
+                void onResourceEvent(resource, "completed", { progress_percent: 100 })
+              }
+            />
+          </div>
+        ) : resource.resource_type === "artifact" ? (
+          <p className="mt-3 text-[12.5px] text-muted-foreground">
+            This activity isn't available right now.
+          </p>
+        ) : null}
 
         {openedUrl ? (
           <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-[var(--code-background)]">
@@ -2978,7 +3053,7 @@ function ResourceCard({
 }
 
 function shouldRenderInline(resource: LessonChatResource) {
-  return ["youtube", "pdf", "video", "audio", "image"].includes(resource.resource_type);
+  return ["youtube", "pdf", "video", "audio", "image", "artifact"].includes(resource.resource_type);
 }
 
 function youtubeEmbedUrl(rawUrl: string) {

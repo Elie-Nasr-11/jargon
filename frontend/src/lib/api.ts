@@ -1,5 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { functionUrl, supabase, supabaseAnonKey } from "@/lib/supabase";
+import { parseArtifactConfig } from "@/lib/artifact-schema";
 import type { RenderedPdfPageAsset } from "@/lib/pdf-extract";
 import type {
   Assignment,
@@ -3341,6 +3342,8 @@ type LessonResourceListRow = {
   external_url: string | null;
   thumbnail_path: string | null;
   student_instructions: string | null;
+  // P6: carries metadata.artifact for artifact resources (validated client-side).
+  metadata: Record<string, unknown> | null;
 };
 
 export async function fetchLessonResources(lessonId: string): Promise<LessonChatResource[]> {
@@ -3348,7 +3351,7 @@ export async function fetchLessonResources(lessonId: string): Promise<LessonChat
   const { data, error } = await supabase
     .from("lesson_resources")
     .select(
-      "id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions",
+      "id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata",
     )
     .eq("lesson_id", lessonId)
     .eq("status", "published")
@@ -3366,6 +3369,10 @@ export async function fetchLessonResources(lessonId: string): Promise<LessonChat
     external_url: r.external_url,
     thumbnail_path: r.thumbnail_path,
     student_instructions: r.student_instructions ?? undefined,
+    artifact:
+      r.resource_type === "artifact" && r.metadata && typeof r.metadata === "object"
+        ? (parseArtifactConfig((r.metadata as Record<string, unknown>).artifact) ?? undefined)
+        : undefined,
   }));
 }
 

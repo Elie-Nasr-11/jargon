@@ -1,3 +1,5 @@
+import type { ArtifactConfig } from "./artifact-schema";
+
 export type Lesson = {
   id: string;
   position: number;
@@ -297,7 +299,9 @@ export type LessonResourceType =
   | "youtube"
   | "image"
   | "link"
-  | "document";
+  | "document"
+  // Artifacts v1 (P6): interactive html_sim / native deck; config in metadata.artifact.
+  | "artifact";
 
 export type LessonResourceSource = "upload" | "external_url";
 export type LessonResourceStatus = "draft" | "published" | "archived";
@@ -372,6 +376,9 @@ export type LessonChatResource = {
   thumbnail_bucket?: string | null;
   thumbnail_path?: string | null;
   student_instructions?: string;
+  // Artifacts v1 (P6): validated artifact config — present only on resource_type
+  // "artifact" (server-sanitized on the envelope; parsed from metadata on direct reads).
+  artifact?: ArtifactConfig;
 };
 
 export type ResourceInteractionEvent = {
