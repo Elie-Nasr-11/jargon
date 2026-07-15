@@ -1801,12 +1801,17 @@ export async function fetchCurriculumAuthoringData(
 async function callCurriculumAdmin(
   accessToken: string,
   payload: Record<string, unknown>,
+  timeoutMs?: number,
 ): Promise<CurriculumAdminResponse> {
-  const response = await fetchWithTimeout(functionUrl("curriculum-admin"), {
-    method: "POST",
-    headers: authHeaders(accessToken),
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchWithTimeout(
+    functionUrl("curriculum-admin"),
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    },
+    timeoutMs,
+  );
   const data = (await response.json()) as CurriculumAdminResponse;
   if (!response.ok || data.status === "error") {
     throw new Error(data.error || "Curriculum update failed.");
@@ -2064,22 +2069,28 @@ export function generateCurriculumDraft(input: {
   artifactKind?: "html_sim" | "deck";
   brief?: string;
 }) {
-  return callCurriculumAdmin(input.accessToken, {
-    action: "generate",
-    class_id: input.classId || undefined,
-    mode: input.mode,
-    prompt: input.prompt,
-    organization_id: input.organizationId,
-    lesson_id: input.lessonId,
-    course_id: input.courseId,
-    template_id: input.templateId || undefined,
-    reference_text: input.referenceText || undefined,
-    current: input.current,
-    feedback: input.feedback || undefined,
-    target: input.target || undefined,
-    artifact_kind: input.artifactKind || undefined,
-    brief: input.brief || undefined,
-  });
+  return callCurriculumAdmin(
+    input.accessToken,
+    {
+      action: "generate",
+      class_id: input.classId || undefined,
+      mode: input.mode,
+      prompt: input.prompt,
+      organization_id: input.organizationId,
+      lesson_id: input.lessonId,
+      course_id: input.courseId,
+      template_id: input.templateId || undefined,
+      reference_text: input.referenceText || undefined,
+      current: input.current,
+      feedback: input.feedback || undefined,
+      target: input.target || undefined,
+      artifact_kind: input.artifactKind || undefined,
+      brief: input.brief || undefined,
+    },
+    // Artifact generation runs a larger model + (for sims) a self-repair pass, well past
+    // the default 30s. Give the client room to outlast the server's ~135s worst case.
+    input.mode === "artifact" ? 150000 : undefined,
+  );
 }
 
 // --- Org-shared lesson templates (v4.0 Phase 2) ---------------------------

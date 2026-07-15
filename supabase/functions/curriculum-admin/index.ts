@@ -2283,7 +2283,9 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
         body.current && typeof body.current === "object"
           ? cleanText((body.current as DbRow).html)
           : "";
-      if (prevHtml) parts.push(`Current activity HTML:\n${clampText(prevHtml, 12000)}`);
+      // Show the whole prior doc on refine (a near-cap sim is ~24KB) so "return the FULL
+      // updated document" isn't working from a truncated copy.
+      if (prevHtml) parts.push(`Current activity HTML:\n${clampText(prevHtml, 28000)}`);
       parts.push(
         `Revise the activity per this feedback: ${feedback}\nReturn the FULL updated HTML document.`,
       );
@@ -2291,8 +2293,14 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
       parts.push(`Build an interactive activity for this brief:\n${brief}`);
     }
     const userMsg = parts.join("\n\n");
-    const opts = { model: artifactModel(), maxTokens: 8000, timeoutMs: 90000 };
-    let result = await callModelJson(system, userMsg, opts);
+    // Budget both calls under the edge gateway's ~150s wall clock: 85s first pass + a
+    // shorter 55s repair (rare — only on a lint failure) = 140s worst case.
+    const model = artifactModel();
+    let result = await callModelJson(system, userMsg, {
+      model,
+      maxTokens: 6000,
+      timeoutMs: 85000,
+    });
     let html = cleanText(result.html);
     let lint = lintArtifactHtml(html);
     // One server-side self-repair pass: feed the violations back so the model fixes them.
@@ -2301,7 +2309,7 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
         `${userMsg}\n\nThe previous version failed these safety checks: ${lint.violations.join(", ")}. ` +
         "Rebuild it WITHOUT any of those — no network calls, no external resources, no storage APIs, " +
         "no nested iframes. Return the full corrected HTML document.";
-      result = await callModelJson(system, repair, opts);
+      result = await callModelJson(system, repair, { model, maxTokens: 6000, timeoutMs: 55000 });
       const repaired = cleanText(result.html);
       if (repaired) {
         html = repaired;
@@ -2377,7 +2385,11 @@ Deno.serve(async (req: Request) => {
               lower.includes("different lesson") ||
               lower.includes("duplicate") ||
               lower.includes("at least one") ||
-              lower.includes("can be archived")
+              lower.includes("can be archived") ||
+              // Retryable model soft-failures (bad JSON / timeout / couldn't produce a
+              // valid artifact) are the teacher's cue to retry, not a server fault.
+              lower.includes("try again") ||
+              lower.includes("must be")
             ? 400
             : 500;
     return errorResponse(message, status);

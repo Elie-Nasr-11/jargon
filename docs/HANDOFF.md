@@ -6262,3 +6262,43 @@ Notes: generate stays read-only (draft round-trip); approve is a separate client
 createArtifactResource (mirrors ResourceManager, RLS already permits). Server lint duplicates
 the frontend FORBIDDEN table (Deno can't import frontend/src). No migration. OPENAI_MODEL_ARTIFACT
 optional → falls back to gpt-4o. Needs a main FF after to test.
+
+## Claude -> Codex / Human - 2026-07-15 20:05
+
+Status: Finished
+Summary: Artifacts v1 P7 — studio artifact authoring (generate → preview → approve), two
+commits + review folds. curriculum-admin gained a generate mode 'artifact' (html_sim | deck)
+that drafts an interactive sim or slide deck from a teacher brief — READ-ONLY (a separate
+approve persists), assertCanAuthor-gated on both kinds, org resolved from lesson_id.
+callModelJson gained {model, maxTokens, timeoutMs} opts + an OPENAI_MODEL_ARTIFACT override
+(falls back to gpt-4o). html_sim: model returns {"html":...}, a server-side lint (a
+byte-identical DUPLICATE of frontend artifact-lint.ts's FORBIDDEN table — a test now pins
+them equal) with ONE self-repair pass; deck: validateDeck mirrors parseArtifactConfig caps +
+the 64KB byte cap. Studio: StepCard gained an "Generate an activity" panel (kind toggle,
+brief, generate/regenerate with feedback, PREVIEW in the SAME ArtifactFrame/DeckRenderer
+students see — DeckRenderer gained a readAloud flag, off in the session-less preview — then
+Approve → createArtifactResource uploads the html/deck to artifacts/{id}/… + inserts a
+published lesson_resources row bound to the step, client-direct like ResourceManager with
+best-effort orphan cleanup). Gated on a saved (non-temp) step; approve re-lints before
+publish (the sandbox is the real boundary). Review verdict: no critical; one MAJOR folded —
+the client's default 30s fetch timeout would have aborted nearly every generation before the
+60–85s server budget returned, now a 150s artifact-mode timeout end to end with the server
+capped under the ~150s edge gateway (85s + 55s repair); plus soft model failures now return
+400 not 500, the refine clamp widened 12KB→28KB, maxTokens trimmed 8000→6000, and the real
+lint-parity test. Everything else verified sound (read-only generate, RLS on the direct
+insert, exact-name storage read, preview reuses the sandbox with no new surface).
+Files changed: supabase/functions/curriculum-admin/index.ts, frontend/src/lib/{api.ts,
+types.ts}, frontend/src/components/DeckRenderer.tsx, frontend/src/routes/teacher.curriculum.tsx,
+tests/test_artifact_authoring.py (new, 13 invariants), docs/HANDOFF.md.
+Tests run: esbuild syntax check on curriculum-admin; python unittest (P7 + P6 = 29 OK; full
+discover = the 4 known pre-existing errors only); frontend tsc 0 / eslint 0 errors (17
+pre-existing warnings) / build green.
+Remaining concerns: (1) a full sim near the 6000-token cap can still take a while — the 150s
+budget covers typical sims; a very elaborate one may time out and want a re-Generate;
+(2) approve is fire-and-forget via reloading() — a failed persist surfaces an error but the
+draft clears (regenerate; accepted); (3) OPENAI_MODEL_ARTIFACT is optional — set it to a
+stronger model in Supabase secrets if gpt-4o sims come out weak.
+Suggested next task: the STUDIO IS FRONTEND — it needs a main FF before the user can test the
+visuals. Then the user's visual pass (teacher curriculum studio → open a lesson step →
+Generate an activity → Simulation → brief → preview renders → Approve → open as student2).
+P8 (live mentor-generated artifacts mid-lesson) is design-only next.

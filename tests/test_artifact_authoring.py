@@ -33,20 +33,20 @@ class ArtifactGenerateBackend(unittest.TestCase):
         self.assertIn("timeoutMs", ADMIN)
         self.assertIn("AbortController", ADMIN)
 
-    def test_server_lint_mirrors_frontend_table(self):
-        for token in (
-            "fetch",
-            "XMLHttpRequest",
-            "WebSocket",
-            "EventSource",
-            "sendBeacon",
-            "importScripts",
-            "localStorage",
-            "sessionStorage",
-            "indexedDB",
-            "<iframe",
-        ):
-            self.assertIn(token, ADMIN)
+    def test_server_lint_is_byte_identical_to_frontend(self):
+        # The two FORBIDDEN tables (Deno can't import frontend/src) must not drift — pin
+        # their regex source sets equal, not just "some tokens present".
+        lint_ts = (REPO / "frontend" / "src" / "lib" / "artifact-lint.ts").read_text()
+
+        def labels_and_res(text: str) -> set:
+            return set(re.findall(r'\{\s*label:\s*"([^"]+)",\s*re:\s*(/[^\n]+?/[a-z]*)\s*\}', text))
+
+        front = labels_and_res(lint_ts)
+        back = labels_and_res(ADMIN)
+        self.assertTrue(front, "frontend FORBIDDEN table not parsed")
+        self.assertEqual(front, back)
+
+    def test_deck_validator_present(self):
         self.assertIn("ARTIFACT_DECK_MAX_BYTES", ADMIN)
         self.assertIn("function validateDeck(", ADMIN)
 
