@@ -3248,8 +3248,18 @@ export async function updateLessonResource(
     >
   >,
 ) {
-  const { error } = await supabase.from("lesson_resources").update(patch).eq("id", resourceId);
+  const { data: updated, error } = await supabase
+    .from("lesson_resources")
+    .update(patch)
+    .eq("id", resourceId)
+    .select("id");
   if (error) throw error;
+  // RLS silently matches ZERO rows when the caller can VIEW but not MANAGE the resource
+  // (view is broader than manage) — surface that instead of faking success, or the
+  // optimistic bind UI would toast "attached" while the DB stays untouched.
+  if (!updated?.length) {
+    throw new Error("You don't have permission to edit this material.");
+  }
 
   const { data, error: fetchError } = await supabase
     .from("lesson_resources")

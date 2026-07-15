@@ -3199,7 +3199,11 @@ function MessageContent({
                 : "whitespace-pre-wrap text-body-lg text-foreground"
             }
           >
-            {beat ? <span className="tutor-beat">{stripMarkdown(beat)}</span> : null}
+            {beat ? (
+              // stripMarkdown unwraps PAIRED marks; the trailing replace also drops a
+              // stray unpaired "**" so a malformed beat never shows literal asterisks.
+              <span className="tutor-beat">{stripMarkdown(beat).replace(/\*\*/g, "")}</span>
+            ) : null}
             {body.trim() ? (structured ? renderBlocks(body) : renderInline(body)) : null}
           </div>
         );

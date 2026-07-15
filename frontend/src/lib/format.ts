@@ -29,15 +29,22 @@ export function relativeTime(iso: string, now = Date.now()): string {
 }
 
 // Strip mentor-reply markdown down to speakable/plain text (TTS, the chat headline).
-// Mirrors the renderer's grammar in routes/chat.tsx: fences keep their content, inline
-// marks unwrap, links keep their label, heading/list markers drop.
+// Mirrors the renderer's grammar in routes/chat.tsx: fence MARKERS drop but fence
+// CONTENT stays verbatim (it's code — "print(2**3)" must not lose its asterisks);
+// inline marks unwrap, links keep their label, heading/list markers drop.
 export function stripMarkdown(text: string): string {
   return text
-    .replace(/```[a-zA-Z0-9_+-]*[ \t]*\n?([\s\S]*?)```/g, "$1")
-    .replace(/`([^`\n]+)`/g, "$1")
-    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
-    .replace(/\*([^\s*][^*\n]*)\*/g, "$1")
-    .replace(/\[([^\]\n]+)\]\(https?:\/\/[^\s)]+\)/g, "$1")
-    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
-    .replace(/^\s{0,3}-\s+/gm, "");
+    .split(/(```[a-zA-Z0-9_+-]*[ \t]*\n?[\s\S]*?```)/g)
+    .map((part) => {
+      const fence = part.match(/^```[a-zA-Z0-9_+-]*[ \t]*\n?([\s\S]*?)```$/);
+      if (fence) return fence[1];
+      return part
+        .replace(/`([^`\n]+)`/g, "$1")
+        .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+        .replace(/\*([^\s*][^*\n]*)\*/g, "$1")
+        .replace(/\[([^\]\n]+)\]\(https?:\/\/[^\s)]+\)/g, "$1")
+        .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+        .replace(/^\s{0,3}-\s+/gm, "");
+    })
+    .join("");
 }

@@ -51,8 +51,9 @@ class MediaBindingRuntimeInvariants(unittest.TestCase):
         self.assertIn("presentedBefore", call.group(0))
 
     def test_unbound_fallback_preserved(self):
-        # Lessons with no bindings must keep today's behavior byte-for-byte: first
-        # resource on the boot turn, request-regex attach mid-conversation.
+        # Pins the load-bearing pieces of the unbound-lesson fallback (first resource on
+        # the boot turn, the request regex); the full equivalence argument lives in the
+        # resourcesForResponse ladder comments and the P5 review.
         self.assertIn("[resources[0]]", CHAT)
         self.assertIn("RESOURCE_REQUEST_RE", CHAT)
         self.assertIn("pull up", CHAT)

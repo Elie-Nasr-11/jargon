@@ -4014,7 +4014,10 @@ async function handleTypedRequest(
     }
     // Media steps: record that the material was shown (the presentation turn attaches the
     // card). Best-effort telemetry — interactions never gate and never block the turn.
-    if (stepMode === "media" && !presentedBefore && attachedResources.length) {
+    // Not during a revisit: a just-advanced-then-revisit corner can reach here with
+    // presentedBefore=false, and re-counting material already shown skews analytics
+    // (the cards themselves still re-attach — that part is good UX).
+    if (stepMode === "media" && !presentedBefore && !inRevisit && attachedResources.length) {
       for (const resource of attachedResources) {
         scheduleBackground(
           insertRow(config, "resource_interactions", {
@@ -4104,12 +4107,14 @@ async function handleTypedRequest(
               }
             : null,
           arc: lessonArc,
+          // Capped text fields: up to 12 rows ride this listing now (P5 raised the
+          // select limit), and teacher-authored descriptions are unbounded.
           resources: context.resources.map((resource) => ({
             id: resource.id,
             title: resource.title,
-            description: resource.description,
+            description: String(resource.description || "").slice(0, 240),
             resource_type: resource.resource_type,
-            student_instructions: resource.student_instructions,
+            student_instructions: String(resource.student_instructions || "").slice(0, 240),
           })),
           policy: {
             help_ceiling: helpPolicy.helpCeiling,

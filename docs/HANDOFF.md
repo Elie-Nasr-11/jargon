@@ -6139,3 +6139,49 @@ frontend/src/lib/format.ts, frontend/src/components/ReadAloudAction.tsx, tests/
 test_flow_v3_p5_media_binding.py (new), docs/DECISIONS.md.
 Notes: no migration (activity_id + RLS already exist); placements stay legacy (see DECISIONS);
 markdown is hand-rolled React nodes, no new dependency, no dangerouslySetInnerHTML.
+
+## Claude -> Codex / Human - 2026-07-15 12:05
+
+Status: Finished
+Summary: Flow v3 P5 — media step→resource binding, teacher attach controls, safe markdown
+(three commits P5a/P5b/P5c + review folds). ROOT CAUSE FIXED: media steps never actually
+attached their material — cards only surfaced on the !answer session-boot turn or a
+request-regex match, so a media step's presentation turn ("ok" → next step) attached
+NOTHING while the directive claimed "the card(s) below are the material", and only
+resources[0] (oldest) ever appeared. Now: loadContext selects lesson_resources.activity_id
+(limit 12); resourcesForResponse attaches a step's BOUND materials on its presentation
+turn (all bound, cap 3, any step mode — teacher intent wins) and ranks them first for
+mid-step "show me the…" requests; unbound lessons keep the pre-P5 behavior on every rung
+(verified byte-equivalent incl. sort stability); the media presentation directive is
+honest when nothing is bound. Binding = lesson_resources.activity_id only; placements
+stay legacy write-only (DECISIONS entry). Teacher side: StepCard gained an "Attached
+materials" section (attach select + unbind, draft chips + "(draft)" option labels,
+"mentor presents up to 3" note, temp-id guard until the server id swap) writing through
+updateLessonResource — whose RLS fake-success hole is now closed (an update matching 0
+rows under the manage policy throws instead of toasting success; found by the review).
+Markdown: mentor replies render ##/### headings, dash/numbered lists, *italic*, `inline
+code`, and https-only links — hand-rolled React nodes, no dangerouslySetInnerHTML, no new
+dependency; a BLOCK_MD_RE gate keeps plain replies on the untouched pre-wrap path
+bit-identically; the inline regex was probed for backtracking (linear) and the https
+scheme is enforced lexically. Read Aloud speaks stripMarkdown()'d text on both TTS paths
+(raw ** was being spoken); fence CONTENT stays verbatim in speech (print(2**3) keeps its
+asterisks). SYSTEM_PROMPT STYLE invites short dash lists + backticked code identifiers;
+headings/links are renderer-defensive only. Review folds: the RLS fake-success fix; media
+"shown" telemetry gated !inRevisit (a just-advanced-then-revisit corner re-counted
+material); prompt resource description/instructions capped at 240 chars (12 rows ride the
+listing now); beat headline drops stray unpaired **.
+Files changed: supabase/functions/chat/index.ts, frontend/src/routes/
+teacher.curriculum.tsx, frontend/src/routes/chat.tsx, frontend/src/lib/{api.ts,
+format.ts}, frontend/src/components/ReadAloudAction.tsx, tests/
+test_flow_v3_p5_media_binding.py (new, 16 invariants), docs/DECISIONS.md.
+Tests run: esbuild syntax check on the edge fn; python3 -m unittest (46 OK across the two
+Flow v3 suites); frontend tsc 0 / eslint 0 errors (17 pre-existing warnings) / build
+green; Node probes of every new regex (inline/block/strip) incl. adversarial inputs.
+Remaining concerns: (1) accepted — unspaced `a*b*c` prose now italicizes "b" (STYLE
+pushes backticks for code; watch live replies); (2) getMentorAudio cache keys change once
+post-deploy (stripped text) — one-time regeneration; (3) ResourceManager has no step
+select by design (StepCard is the single binding surface — follow-up if teachers ask);
+(4) request-regex matches can now reach resources 6-12 on unbound lessons (intended
+improvement, noted as a live-behavior delta).
+Suggested next task: main FF (P1-P5 frontend all rides the branch) + user live pass of
+the whole Flow v3 arc; then Av1 P6 artifact foundation.

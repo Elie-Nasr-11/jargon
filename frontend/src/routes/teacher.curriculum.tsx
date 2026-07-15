@@ -2811,7 +2811,7 @@ function StepCard({
                 Attached materials
               </div>
               <span className="text-[11px] text-muted-foreground/70">
-                Attach/detach saves immediately
+                Saves immediately · the mentor presents up to 3
               </span>
             </div>
             {attached.map((resource) => (
@@ -2870,6 +2870,7 @@ function StepCard({
                 {attachable.map((resource) => (
                   <option key={resource.id} value={resource.id}>
                     {resource.title}
+                    {resource.status !== "published" ? " (draft)" : ""}
                     {resource.activity_id ? " — attached to another step" : ""}
                   </option>
                 ))}
