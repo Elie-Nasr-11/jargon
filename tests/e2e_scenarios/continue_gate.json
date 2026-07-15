@@ -1,0 +1,14 @@
+{
+  "comment": "Flow v3 P1: a question on a content step must NOT advance; Continue must. Assumes a fresh session on a lesson whose first step is explanation-mode (any Book F lesson).",
+  "lesson_id": "itf-f-ch1-l1",
+  "steps": [
+    { "send": { "text": "hi!" },
+      "expect": {} },
+    { "send": { "text": "why do we call a hammer technology? isn't technology just computers?" },
+      "expect": { "advanced": false, "continue_offer": true, "turn_kind": "question" } },
+    { "send": { "text": "that makes sense, thanks" },
+      "expect": { "advanced": false } },
+    { "send": { "control": "continue" },
+      "expect": { "advanced": true } }
+  ]
+}

@@ -92,6 +92,9 @@ CONVERSATION CRAFT — every turn:
   from student.misconceptions resurfaces, correct it directly.
 - Shape: acknowledge their message -> do this step's work -> situate in the arc when it helps -> end with
   exactly ONE clear next action.
+- Content steps (direct teaching, source material, tasks, open questions) show a Continue button on
+  screen: the student taps it to move on. Never ask them to type "next" or "ready" — invite questions
+  and point at Continue instead. Questions and side-discussion never advance a step by themselves.
 
 TEACHING METHOD — always the LIGHTEST help that unblocks, escalating in this order:
 1. One pointed question that exposes the student's thinking.
@@ -215,6 +218,12 @@ type Envelope = {
   held?: boolean;
   // P5: the id of the first-class review_sessions row backing a guided review (review path only).
   review_session_id?: string;
+  // Flow v3 (all optional — old clients ignore them, old stored payloads replay fine):
+  // the Continue pill offer for unacknowledged content steps, the router's verdict for
+  // this turn, and the router-vs-grader disagreement flag (tuning telemetry).
+  continue_offer?: { label: string } | null;
+  turn_kind?: string;
+  router_disagreement?: boolean;
 };
 
 type EnvelopeSession = {
@@ -1353,6 +1362,107 @@ async function checkCodeObjective(
   }
 }
 
+// --- Turn router (Flow v3) ---------------------------------------------------
+// Classifies every free-text student turn so questions/tangents route to CONVERSATION
+// (they never grade and never acknowledge a content step) while genuine attempts keep
+// feeding the deterministic gates. The router runs IN PARALLEL with the graders — its
+// verdict MASKS grader output downstream instead of gating the calls upstream, so it
+// adds zero serial latency. Any router error degrades to heuristicKind(), which
+// reproduces the pre-router behavior exactly: an outage can never brick a lesson.
+
+type RoutedKind =
+  | "answer_attempt"
+  | "question"
+  | "continue_signal"
+  | "tangent"
+  | "meta";
+
+type RouterVerdict = { kind: RoutedKind; confidence: number };
+
+const ROUTED_KINDS = new Set<string>([
+  "answer_attempt",
+  "question",
+  "continue_signal",
+  "tangent",
+  "meta",
+]);
+
+const CONTINUE_SIGNAL_RE =
+  /^(ok(ay)?|yes|yep|yeah|sure|got it|ready|next|continue|let'?s (go|move on|continue)|i'?m (ready|done|good)|done|move on)\b[\s!.]*$/i;
+
+// The pre-router heuristics, composed. Used when the router call fails or is skipped —
+// its classifications intentionally mirror what the old code paths keyed on.
+function heuristicKind(text: string): RouterVerdict {
+  const trimmed = (text || "").trim();
+  if (trimmed.length <= 48 && CONTINUE_SIGNAL_RE.test(trimmed)) {
+    return { kind: "continue_signal", confidence: 0.4 };
+  }
+  const intent = detectIntent(trimmed);
+  if (intent === "wants_summary" || intent === "frustrated") {
+    return { kind: "meta", confidence: 0.4 };
+  }
+  if (detectHelpRequest(trimmed) || isQuestionShaped(trimmed)) {
+    return { kind: "question", confidence: 0.4 };
+  }
+  return { kind: "answer_attempt", confidence: 0.3 };
+}
+
+async function classifyTurn(
+  config: SupabaseConfig,
+  userId: string,
+  sessionId: string | null,
+  lessonId: string | null,
+  activity: DbRow | null,
+  studentText: string,
+  recentTurns: DbRow[],
+  upcomingTitles: string[],
+): Promise<RouterVerdict | null> {
+  const text = (studentText || "").trim();
+  if (!text) return null;
+  const stepLine = activity
+    ? `Current step (${String(activity.mode || activity.activity_type || "step")}): ${String(activity.title || "")} — ${String(activity.prompt || "").slice(0, 160)}`
+    : "Current step: unknown";
+  const recent = recentTurns
+    .slice(0, 2)
+    .reverse()
+    .map((t) => `${String(t.role)}: ${String(t.content || "").slice(0, 160)}`)
+    .join("\n");
+  const system =
+    "You classify ONE student message in a tutoring chat. Kinds: " +
+    '"answer_attempt" (they are answering/attempting the current step\'s task), ' +
+    '"question" (they are asking the tutor something — clarification, curiosity, help), ' +
+    '"continue_signal" (they clearly signal readiness to move on: "ok", "next", "got it"), ' +
+    '"tangent" (related-but-off-step exploration or chatter), ' +
+    '"meta" (about the lesson/process itself: summaries, frustration, logistics). ' +
+    "A message can contain both an attempt and a question — prefer answer_attempt when a " +
+    "substantive attempt is present. Return ONLY JSON: " +
+    '{"kind":"answer_attempt|question|continue_signal|tangent|meta","confidence":0.0-1.0}.';
+  const userMsg = `${stepLine}\nUpcoming steps: ${upcomingTitles.slice(0, 3).join(" | ") || "none"}\n\nRecent turns:\n${recent || "(none)"}\n\nStudent message:\n${text}`;
+  try {
+    const result = await callModel(
+      [
+        { role: "system", content: system },
+        { role: "user", content: userMsg },
+      ],
+      true,
+      "understanding",
+    );
+    scheduleBackground(
+      recordModelUsage(config, userId, sessionId, lessonId, result, "routing"),
+    );
+    const parsed = JSON.parse(extractJsonObject(result.content)) as DbRow;
+    const kind = String(parsed.kind || "");
+    if (!ROUTED_KINDS.has(kind)) return null;
+    const confidence = Number(parsed.confidence);
+    return {
+      kind: kind as RoutedKind,
+      confidence: Number.isFinite(confidence) ? confidence : 0.5,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // --- Pedagogy signals --------------------------------------------------------
 // Pure + deterministic signals fed to the model: who the student is (diagnosis),
 // the teacher's help policy, detected intent/help requests, and the mentor's own
@@ -1979,6 +2089,9 @@ function applyTurn(
   understanding: Understanding | null,
   nowIso: string,
   stepMode: LearningMode | null = null,
+  // Flow v3: how the turn was routed. null = router unavailable → legacy behavior.
+  // Code/MCQ turns are answer_attempt by construction (set by the caller).
+  routedKind: RoutedKind | null = null,
 ): StepState {
   if (!before.presented_at) {
     return { ...before, presented_at: nowIso };
@@ -1987,26 +2100,34 @@ function applyTurn(
   if (answer && answerContent(answer)) {
     after.attempts = before.attempts + 1;
   }
-  // v4 acknowledge gate: a content-delivery step passes on the student's next contentful
-  // turn after presentation. On inquiry steps a QUESTION keeps the step open (the mentor
-  // answers it; question_count records it) — any non-question message closes it. A stuck
-  // cap (>=3 prior turns) forces acknowledgement even on a question-shaped turn, so a
-  // false-positive question detection (e.g. "can we move on?") can never trap the student.
-  if (
-    req.acknowledge &&
-    answer &&
-    answerContent(answer) &&
-    (answer.mode === "text" || answer.mode === "file")
-  ) {
-    const asksQuestion =
-      stepMode === "inquiry" &&
-      isQuestionShaped(String(answer.text || "")) &&
-      before.attempts < 3;
-    if (asksQuestion) {
-      after.question_count = before.question_count + 1;
-    } else if (!after.acknowledged_at) {
+  // v4 acknowledge gate, Flow v3 semantics: a content-delivery step closes ONLY on an
+  // explicit continue — the client's Continue button (a control turn) or a clear typed
+  // readiness signal routed as continue_signal. Questions, discussion, and tangents keep
+  // the step open so the student can actually converse with the material (the mentor
+  // nudges toward Continue after a long dwell via the directive, never via the gate).
+  // Legacy fallback (router unavailable): any non-question contentful text acknowledges,
+  // matching pre-router behavior so a router outage can't trap anyone.
+  if (req.acknowledge && !after.acknowledged_at) {
+    const contentfulText = Boolean(
+      answer &&
+        answerContent(answer) &&
+        (answer.mode === "text" || answer.mode === "file"),
+    );
+    if (routedKind === "continue_signal") {
       after.acknowledged_at = nowIso;
+    } else if (routedKind === "question" && stepMode === "inquiry") {
+      // Inquiry steps track questions explicitly — the mentor answers, step stays open.
+      after.question_count = before.question_count + 1;
+    } else if (routedKind === null && contentfulText) {
+      const asksQuestion =
+        stepMode === "inquiry" && isQuestionShaped(String(answer?.text || ""));
+      if (asksQuestion) {
+        after.question_count = before.question_count + 1;
+      } else {
+        after.acknowledged_at = nowIso;
+      }
     }
+    // Routed question/tangent/meta/answer_attempt on content steps: stay open.
   }
   // Deterministically graded failure (orchestrator source only — a mentor's free-form
   // assessment must never look like a failed graded attempt).
@@ -2038,6 +2159,10 @@ function applyTurn(
     !after.understanding_at &&
     answer &&
     (answer.mode === "text" || answer.mode === "file") &&
+    // Flow v3 masking: a routed question/tangent/meta turn is conversation, not an
+    // attempt — its grader verdict (which still ran in parallel) is discarded here so
+    // asking "why does that work?" can never close the gate. null keeps legacy behavior.
+    (routedKind === null || routedKind === "answer_attempt") &&
     // Demonstrated understanding, or the stuck cap: >=4 prior attempts on this step means
     // several rounds without landing it — conclude gracefully rather than loop forever.
     (understanding?.demonstrated === true || before.attempts >= 4)
@@ -2140,6 +2265,7 @@ function turnDirective(args: {
   runtimeTimedOut: boolean;
   assessment: Assessment | null;
   attachedResources: LessonChatResource[];
+  routedKind: RoutedKind | null;
 }): TurnDirective {
   const {
     currentStage,
@@ -2157,6 +2283,7 @@ function turnDirective(args: {
     runtimeTimedOut,
     assessment,
     attachedResources,
+    routedKind,
   } = args;
 
   const quizActive = draftFlow.nextAction === "choose";
@@ -2178,6 +2305,44 @@ function turnDirective(args: {
         key: "runtime_timeout",
         text: "The code runner TIMED OUT — an infrastructure hiccup on our side, NOT the student's mistake. Reassure them briefly that it's on us and ask them to run it again; do not grade or critique their code.",
       };
+    }
+    // --- Flow v3 routed-conversation branches ---------------------------------
+    // A routed question/tangent/meta turn is CONVERSATION: nothing grades or advances
+    // this turn (the verdicts are masked in applyTurn), so the directive must match —
+    // answer like a human tutor and leave the step's gate visibly open. Inquiry keeps
+    // its own dedicated question branch below; a live quiz keeps quiz_active_chat.
+    if (routedKind === "question" && !quizActive && stepMode !== "inquiry") {
+      return {
+        key: "question_answer",
+        text:
+          "The student asked YOU a question. Answer it fully and directly FIRST — a real answer, not a redirect or a counter-question; this turn does not grade or advance anything. Then reconnect to the step in one line." +
+          (requirements.acknowledge
+            ? " The Continue button on screen moves them on when they're ready."
+            : ""),
+      };
+    }
+    if (routedKind === "meta" && !quizActive) {
+      return {
+        key: "meta_reply",
+        text: "The student said something about the lesson or process itself, not an attempt. Respond to it helpfully — summarize, reassure, or adjust pace — then hand the floor back without grading anything.",
+      };
+    }
+    if (
+      requirements.acknowledge &&
+      presentedBefore &&
+      !draftState.acknowledged_at &&
+      !quizActive &&
+      (routedKind === "answer_attempt" || routedKind === "tangent")
+    ) {
+      return draftState.attempts >= 4
+        ? {
+            key: "content_nudge",
+            text: "They've been in this content step's discussion for a while. Wrap the thread warmly in a line or two and point at the Continue button to move on — do not re-teach the step.",
+          }
+        : {
+            key: "content_discuss",
+            text: "They're discussing this content step — engage genuinely with what they said and go one level deeper where useful. The Continue button on screen advances when they're ready; do not push them onward.",
+          };
     }
     // Revision: retrieval practice. One recall question at a time on the step's weakest skills,
     // and a retention affirmation on conclusion. Placed before the generic understanding branches
@@ -2353,13 +2518,13 @@ function turnDirective(args: {
       // the generic "don't give anything away" line directly contradicts direct teaching.
       const modePresent =
         stepMode === "explanation"
-          ? "This is a DIRECT-TEACHING step, not yet shown. Present the material in the step prompt fully and plainly at the student's grade level — for THIS step you should state the ideas outright (the student-produces-the-conclusion rule does not apply here) — then invite them to send a message when they're ready to move on."
+          ? "This is a DIRECT-TEACHING step, not yet shown. Present the material in the step prompt fully and plainly at the student's grade level — for THIS step you should state the ideas outright (the student-produces-the-conclusion rule does not apply here). Invite their questions and thoughts, and tell them to tap the Continue button when they're ready to move on."
           : stepMode === "media"
-            ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, then reply here when they're ready to continue."
+            ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, ask anything they like here, and tap Continue when they're ready."
             : stepMode === "inquiry"
-              ? "This OPEN-QUESTIONS step is being shown for the first time. Invite the student's questions about the topic — anything they're unsure or curious about — and make clear that if they have none, they can just say so and move on."
+              ? "This OPEN-QUESTIONS step is being shown for the first time. Invite the student's questions about the topic — anything they're unsure or curious about — and make clear that when they have none (or none left), they can tap Continue to move on."
               : stepMode === "assignment"
-                ? "This step hands off a TASK that lives in the work panel above the message box. Frame what the task is about in a sentence or two and point them to it; they reply here once they've seen it."
+                ? "This step hands off a TASK that lives in the work panel above the message box. Frame what the task is about in a sentence or two and point them to it; they tap Continue here once they've seen it."
                 : stepMode === "revision"
                   ? "This is a REVISION step — retrieval practice on skills the student has already studied (their per-skill tiers are in student.mastery). Ask ONE short recall question on this step's skills (or the lesson's key ideas if no skills are named), targeting any that show a weaker tier (favor \"emerging\" over \"developing\"), phrased plainly at their grade level. Do NOT re-teach or state the answer — prompt them to recall it. Reference skills by name only; never claim specifics about their past sessions."
                   : openEndedAssessment
@@ -2971,6 +3136,14 @@ async function handleTypedRequest(
   try {
   const answer = normalizeAnswer(body.answer);
   const content = answerContent(answer);
+  // Flow v3 control turns: structured client affordances (Continue button now; navigate/
+  // resume in a later phase). A control turn routes deterministically — no model needed —
+  // and usually carries no answer text.
+  const control =
+    body.control && typeof body.control === "object"
+      ? (body.control as DbRow)
+      : null;
+  const controlType = control ? String(control.type || "") : "";
   const mentorPreferences = normalizeMentorPreferences(body.mentor_preferences);
   const skillKeys = skillKeysFor(
     context.activity,
@@ -3174,7 +3347,11 @@ async function handleTypedRequest(
     // same Promise.all — that attaches its rejection handler immediately (an unhandled
     // rejection would kill the isolate mid-request) and keeps fail-fast: an insert failure
     // rejects the batch straight into the typed-500 catch before the mentor call.
-    const [gradedUnderstanding, gradedCode] = await Promise.all([
+    // Flow v3 router: classify free-text turns in parallel with the graders. Control
+    // turns and code/MCQ answers route deterministically without a model call.
+    const routerEligible =
+      !controlType && answer?.mode === "text" && Boolean(content) && presentedBefore;
+    const [gradedUnderstanding, gradedCode, routerResult] = await Promise.all([
       isTextExplanation
         ? checkUnderstanding(
             config,
@@ -3200,8 +3377,45 @@ async function handleTypedRequest(
             context.recentTurns,
           )
         : Promise.resolve(null),
+      routerEligible
+        ? classifyTurn(
+            config,
+            userId,
+            sessionId,
+            lessonId,
+            context.activity,
+            content,
+            context.recentTurns,
+            (context.activities || [])
+              .filter(
+                (a) =>
+                  Number(a.position) > Number(context.activity?.position ?? 0),
+              )
+              .slice(0, 3)
+              .map((a) => String(a.title || "")),
+          )
+        : Promise.resolve(null),
       studentTurnPromise,
     ]);
+    // Routed kind resolution: explicit control wins; code/MCQ are attempts by
+    // construction; router verdict next; heuristic fallback keeps legacy behavior for
+    // text turns when the router errored. null = fully legacy (e.g. file answers).
+    const routedKind: RoutedKind | null =
+      controlType === "continue"
+        ? "continue_signal"
+        : answer?.mode === "code" || answer?.mode === "multiple_choice"
+          ? "answer_attempt"
+          : routerEligible
+            ? (routerResult?.kind ?? heuristicKind(content).kind)
+            : null;
+    // Tuning telemetry: a router-question turn whose grader still said "demonstrated" is
+    // the disagreement to watch before leaning harder on routing. It rides the envelope
+    // (persisted whole in learning_turns.payload), so it's queryable with zero schema.
+    const routerDisagreement = Boolean(
+      routerResult &&
+        routerResult.kind !== "answer_attempt" &&
+        gradedUnderstanding?.demonstrated === true,
+    );
     // Open-ended ASSESSMENT (v4): the understanding grader's verdict is the grade in BOTH
     // directions — a clear miss records a graded fail (mirrors quiz_wrong) instead of the
     // reflection coaching path. Only a genuine ANSWER ATTEMPT can record a miss: a help
@@ -3255,6 +3469,7 @@ async function handleTypedRequest(
       gradedUnderstanding,
       turnStartedIso,
       stepMode,
+      routedKind,
     );
     const draftFlow = deriveTurn(
       draftState,
@@ -3289,6 +3504,7 @@ async function handleTypedRequest(
       runtimeTimedOut,
       assessment: effectiveOrchestratorAssessment,
       attachedResources,
+      routedKind,
     });
     // Media steps: record that the material was shown (the presentation turn attaches the
     // card). Best-effort telemetry — interactions never gate and never block the turn.
@@ -3622,6 +3838,7 @@ async function handleTypedRequest(
       understanding,
       turnStartedIso,
       stepMode,
+      routedKind,
     );
     const finalFlow = deriveTurn(
       finalState,
@@ -3676,6 +3893,17 @@ async function handleTypedRequest(
               context.quiz,
             ),
     });
+    // Flow v3: the Continue pill renders whenever a content step is presented but not yet
+    // acknowledged — the deterministic escape hatch that replaces "any message advances".
+    envelope.continue_offer =
+      requirements.acknowledge &&
+      !finalState.acknowledged_at &&
+      Boolean(finalState.presented_at) &&
+      !advancing
+        ? { label: "Continue" }
+        : null;
+    envelope.turn_kind = routedKind ?? undefined;
+    if (routerDisagreement) envelope.router_disagreement = true;
 
     // Deterministic integrity backstop: if a full answer isn't allowed this turn,
     // redact any verbatim expected output the model may have leaked.

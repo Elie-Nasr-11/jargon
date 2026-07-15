@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import {
   AlertCircle,
+  ArrowRight,
   AudioLines,
   Check,
   ChevronDown,
@@ -100,6 +101,7 @@ import type {
   StudentAssessmentBundle,
   TeacherLiveComment,
   TypedChatAnswer,
+  TypedChatControl,
   TypedChatEnvelope,
   VoiceInteractionEvent,
 } from "@/lib/types";
@@ -143,6 +145,9 @@ type Msg =
       code?: ChatCodeBlock;
       choices?: ChatChoice[];
       resources?: LessonChatResource[];
+      // Flow v3: this message offered the Continue pill (content step awaiting an
+      // explicit continue). Only the latest bot message's offer renders live.
+      continueOffer?: { label: string };
       createdAt?: string;
       // Error bubbles must never become the "latest mentor message" — that would strip the
       // live quiz choices off the real question with no recovery path.
@@ -268,6 +273,9 @@ function envelopeMessage(envelope: TypedChatEnvelope): Msg {
     text: envelope.reply || "I'm ready.",
     choices: envelope.choices?.length ? envelope.choices : undefined,
     resources: envelope.resources?.length ? envelope.resources : undefined,
+    // Flow v3: the Continue pill rides the message that offered it, so (like retired
+    // quiz choices) it stays anchored to its turn and only the LATEST offer is live.
+    continueOffer: envelope.continue_offer ?? undefined,
     createdAt: new Date().toISOString(),
   };
 }
@@ -836,6 +844,7 @@ function ChatPage() {
   // client_msg_id so the server can recognize duplicate deliveries.
   const sendTurn = async (input: {
     answer: TypedChatAnswer;
+    control?: TypedChatControl;
     optimistic: Msg[];
     errorText: string;
   }): Promise<TypedChatEnvelope | null | "busy"> => {
@@ -864,6 +873,7 @@ function ChatPage() {
           lessonId,
           sessionId,
           answer: { ...input.answer, client_msg_id: newClientMsgId() },
+          control: input.control,
           mentorPreferences: mentorToPreferences(mentor),
         });
         setSessionId(envelope.session_id);
@@ -974,6 +984,17 @@ function ChatPage() {
       answer: { mode: "multiple_choice", choice_id: selectedValue },
       optimistic: [{ id: uid(), role: "user", text: `Selected: ${selected}` }],
       errorText: "The mentor could not check that answer.",
+    });
+  };
+
+  // Flow v3: the Continue pill on a content step. Posts a structured control turn (no
+  // answer text) — the server acknowledges the step deterministically and advances.
+  const sendContinue = async () => {
+    await sendTurn({
+      answer: { mode: "text", text: "" },
+      control: { type: "continue" },
+      optimistic: [{ id: uid(), role: "user", text: "Continue" }],
+      errorText: "The mentor could not continue just now.",
     });
   };
 
@@ -1447,6 +1468,7 @@ function ChatPage() {
                     choicesDisabled={sending || runInFlight || sessionHeld}
                     onUseCode={useCodeInEditor}
                     onChooseChoice={sendChoice}
+                    onContinue={sendContinue}
                     onRetry={retryTurn}
                     onResourceEvent={handleResourceEvent}
                     voice={voice}
@@ -2442,6 +2464,7 @@ function MessageRow({
   choicesDisabled = false,
   onUseCode,
   onChooseChoice,
+  onContinue,
   onRetry,
   onResourceEvent,
   voice,
@@ -2456,6 +2479,8 @@ function MessageRow({
   choicesDisabled?: boolean;
   onUseCode: (code: ChatCodeBlock) => void;
   onChooseChoice: (choice: ChatChoice) => void;
+  // Flow v3: taps the Continue pill (content steps). Live only on the newest message.
+  onContinue?: () => void;
   onRetry: (msg: Msg) => void;
   onResourceEvent: (
     resource: LessonChatResource,
@@ -2678,6 +2703,19 @@ function MessageRow({
                 onResourceEvent={onResourceEvent}
               />
             ))}
+          </div>
+        ) : null}
+        {msg.continueOffer && choicesActive && onContinue ? (
+          <div className="flex">
+            <button
+              type="button"
+              disabled={choicesDisabled}
+              onClick={onContinue}
+              className="inline-flex items-center gap-1.5 rounded-full border border-foreground/30 bg-foreground/5 px-4 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50"
+            >
+              {msg.continueOffer.label || "Continue"}
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
           </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">

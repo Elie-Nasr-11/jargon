@@ -103,6 +103,7 @@ import type {
   StudentAssessmentBundle,
   StudentAssignmentBundle,
   TypedChatAnswer,
+  TypedChatControl,
   TypedChatEnvelope,
   TeacherLiveComment,
   SessionHold,
@@ -4087,6 +4088,7 @@ export async function invokeTypedChat(input: {
   lessonId: string;
   sessionId?: string | null;
   answer?: TypedChatAnswer;
+  control?: TypedChatControl;
   mentorPreferences: MentorPreferences;
 }) {
   const response = await fetchWithTimeout(functionUrl("chat"), {
@@ -4096,6 +4098,7 @@ export async function invokeTypedChat(input: {
       lesson_id: input.lessonId,
       session_id: input.sessionId || undefined,
       answer: input.answer,
+      control: input.control,
       mentor_preferences: input.mentorPreferences,
     }),
   });

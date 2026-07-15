@@ -6,6 +6,25 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-12
+
+Status: Starting
+Task: FLOW v3 + ARTIFACTS v1 — (1) conversational smoothness rethink: parallel turn router with
+verdict masking, explicit Continue for content steps, backtracking via clickable stepper +
+revisit/resume state, pre-emption credit (never skip), prompt loosening; (2) generative UI:
+author-time artifact generation (sandboxed HTML sims + native slide decks) bound to steps,
+fixing the media-mode step→resource binding gap, plus a safe markdown pass in the transcript.
+7 phases, each app-whole; backend deploys per push via the workflow.
+Files I expect to touch: supabase/functions/chat/index.ts (major), frontend/src/routes/chat.tsx,
+frontend/src/lib/{api,types}.ts, frontend/src/components/LessonMilestones.tsx,
+frontend/src/features/student/chat/{ChatStepper,ArtifactFrame,DeckRenderer}.tsx (last two new),
+frontend/src/routes/teacher.curriculum.tsx, frontend/src/features/teacher/TeacherConsole.tsx,
+supabase/functions/curriculum-admin/index.ts, supabase/migrations/20260815000000_flow_v3_
+session_nav.sql + 20260820000000_artifact_resources.sql (new), .github/workflows/
+deploy-backend.yml, tests/, tools/e2e_chat_script.py (new).
+Notes: envelope/step_state stay backward-compatible (all additions optional); the chat runtime
+deploys to live students on push — every phase gated by static tests + scripted E2E.
+
 ## Claude -> Codex / Human - 2026-07-11 (Book F only — sweep remaining pilot lessons)
 
 Summary: Two studio-authored pilot lessons ("Instructions and Systems" / "What Is An Instruction?",

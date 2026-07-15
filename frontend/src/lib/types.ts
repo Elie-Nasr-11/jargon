@@ -1285,6 +1285,18 @@ export type TypedChatEnvelope = {
   held?: boolean;
   // P5: the review path returns the backing review_sessions row id (for continuation + completion).
   review_session_id?: string;
+  // Flow v3 (all optional — old stored envelopes replay fine): the Continue pill offer for
+  // unacknowledged content steps, and the turn router's verdict (telemetry/hinting).
+  continue_offer?: { label: string } | null;
+  turn_kind?: string;
+  router_disagreement?: boolean;
+};
+
+// Flow v3 structured client affordances: the Continue button (and, later, stepper
+// navigation) post a control turn instead of synthetic text.
+export type TypedChatControl = {
+  type: "continue" | "navigate" | "resume";
+  target_activity_id?: string;
 };
 
 export type JargonRunResponse = {
