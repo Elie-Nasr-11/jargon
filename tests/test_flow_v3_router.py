@@ -79,5 +79,27 @@ class FlowV3RouterInvariants(unittest.TestCase):
         self.assertIn("add column if not exists", MIGRATION)
 
 
+
+
+class FlowV3PromptLoosening(unittest.TestCase):
+    """Phase 2: the prompt allows real conversation; misses key on routing."""
+
+    def test_shape_rule_split(self):
+        self.assertIn("Shape on ATTEMPT turns", CHAT)
+        self.assertIn("Shape on CONVERSATION turns", CHAT)
+
+    def test_tangent_budget_replaces_wall(self):
+        self.assertIn("Tangents get a budget, not a wall", CHAT)
+        self.assertIn('key: "tangent_engage"', CHAT)
+
+    def test_question_carveout(self):
+        self.assertIn("when the student asks YOU a question", CHAT)
+
+    def test_open_ended_miss_keys_on_routing(self):
+        miss = re.search(r"const openEndedMiss.*?: null;", CHAT, re.S)
+        self.assertIsNotNone(miss)
+        self.assertIn("routedKind", miss.group(0))
+
+
 if __name__ == "__main__":
     unittest.main()

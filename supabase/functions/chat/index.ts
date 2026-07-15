@@ -90,8 +90,11 @@ CONVERSATION CRAFT — every turn:
   it and change tactic. A breakthrough ("oh, I get it") -> affirm briefly and move on.
 - If they say something incorrect, correct that specific point clearly and kindly. If a known misconception
   from student.misconceptions resurfaces, correct it directly.
-- Shape: acknowledge their message -> do this step's work -> situate in the arc when it helps -> end with
-  exactly ONE clear next action.
+- Shape on ATTEMPT turns (the directive names grading/attempt situations): acknowledge their message ->
+  do this step's work -> situate in the arc when it helps -> end with exactly ONE clear next action.
+- Shape on CONVERSATION turns (questions, tangents, discussion — the directive names these too): reply
+  like a person, not a lesson plan. Multiple beats are fine; answer fully first; you do NOT need to end
+  with a question or next action every time — the step's gate or Continue button is still on screen.
 - Content steps (direct teaching, source material, tasks, open questions) show a Continue button on
   screen: the student taps it to move on. Never ask them to type "next" or "ready" — invite questions
   and point at Continue instead. Questions and side-discussion never advance a step by themselves.
@@ -109,7 +112,10 @@ true, never give the final answer or complete solution this turn.
 
 Explanation / reflection steps: the STUDENT must produce the conclusion in their own words. Never answer your
 own reflection question, and never hand them the target answer — not directly, not as a "model answer", not
-as a thin analogy they can restate. You MAY correct a wrong claim, explain what the question is really
+as a thin analogy they can restate. This rule is about the reflection conclusion the STUDENT must produce —
+when the student asks YOU a question (about the material, a word, why something works), answer it completely
+and directly; a real answer to their question is teaching, not leaking, unless it IS the step's target
+conclusion verbatim. You MAY correct a wrong claim, explain what the question is really
 asking, narrow it, or offer a sentence starter ("One reason is ..."). If a genuinely lost student still can't
 get there, teach the underlying idea with a fresh concrete example — but let THEM form the conclusion.
 (Worked examples for CODE mechanics stay fine under the help policy; this rule is about the reflection
@@ -158,7 +164,9 @@ GOVERNANCE:
   congratulations. If they ask to be quizzed or want more practice, improvise short retrieval
   questions ONE at a time on what the lesson covered and respond to their answers — never
   refuse practice.
-- Stay on the current lesson goal; if the student drifts, briefly acknowledge and redirect.
+- Tangents get a budget, not a wall: when the student wanders somewhere related, engage genuinely
+  for up to one full reply — real curiosity is fuel — and end by connecting it back to the step.
+  Redirect firmly (but warmly) only on repeated or far-off drift.
 - policy.mentor_mode, policy.tone and policy.pace bias your approach; the directive always wins.
 
 STYLE: short, concrete replies with vocabulary matched to student.grade_band. No emojis. When you affirm,
@@ -2327,6 +2335,19 @@ function turnDirective(args: {
         text: "The student said something about the lesson or process itself, not an attempt. Respond to it helpfully — summarize, reassure, or adjust pace — then hand the floor back without grading anything.",
       };
     }
+    // Tangents on GRADED steps (content steps take the discuss branch below): engage
+    // once, bridge back. Nothing grades this turn (verdict masked).
+    if (
+      routedKind === "tangent" &&
+      !quizActive &&
+      !requirements.acknowledge &&
+      presentedBefore
+    ) {
+      return {
+        key: "tangent_engage",
+        text: "The student went on a related tangent. Engage with it genuinely for this reply — real curiosity is fuel — then connect it back to the step's task in your closing line. This turn does not grade anything.",
+      };
+    }
     if (
       requirements.acknowledge &&
       presentedBefore &&
@@ -3430,7 +3451,11 @@ async function handleTypedRequest(
       gradedUnderstanding.demonstrated !== true &&
       !inferredHelp &&
       intent !== "confused" &&
-      !isQuestionShaped(content)
+      // Flow v3: only a routed ANSWER ATTEMPT can record a miss — a question, tangent, or
+      // meta turn is never a fail. Heuristic fallback preserves the pre-router behavior.
+      (routedKind !== null
+        ? routedKind === "answer_attempt"
+        : !isQuestionShaped(content))
         ? {
             score: 0,
             passed: false,
