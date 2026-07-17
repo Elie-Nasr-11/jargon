@@ -1251,6 +1251,10 @@ async function saveLessonMeta(config: Config, actorId: string, body: DbRow): Pro
   if (meta.tutor_tone !== undefined) policyPatch.tutor_tone = cleanText(meta.tutor_tone) || null;
   if (meta.tutor_pace !== undefined) policyPatch.tutor_pace = cleanText(meta.tutor_pace) || null;
   if (meta.grade_band !== undefined) policyPatch.grade_band = cleanText(meta.grade_band) || null;
+  // P8: per-lesson opt-in for live mentor-built activities (default off).
+  if (typeof meta.allow_live_artifacts === "boolean") {
+    policyPatch.allow_live_artifacts = meta.allow_live_artifacts;
+  }
 
   const lessonRow = await selectFirst(
     config,
@@ -1882,6 +1886,7 @@ async function saveTemplate(config: Config, actorId: string, body: DbRow): Promi
     final_answer_policy: cleanText(lesson.final_answer_policy) || null,
     tutor_tone: cleanText(lesson.tutor_tone) || null,
     tutor_pace: cleanText(lesson.tutor_pace) || null,
+    allow_live_artifacts: lesson.allow_live_artifacts === true,
     grade_band: cleanText(lesson.grade_band) || null,
     objective: cleanText(milestone?.objective),
     skill_keys: cleanStringArray(milestone?.skill_keys),
@@ -2056,6 +2061,9 @@ async function instantiateTemplate(config: Config, actorId: string, body: DbRow)
   if (cleanText(meta.tutor_tone)) policy.tutor_tone = cleanText(meta.tutor_tone);
   if (cleanText(meta.tutor_pace)) policy.tutor_pace = cleanText(meta.tutor_pace);
   if (cleanText(meta.grade_band)) policy.grade_band = cleanText(meta.grade_band);
+  if (typeof meta.allow_live_artifacts === "boolean") {
+    policy.allow_live_artifacts = meta.allow_live_artifacts;
+  }
 
   await insertRow(config, "lessons", {
     id: lessonId,

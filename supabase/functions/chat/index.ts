@@ -235,6 +235,9 @@ type Envelope = {
   continue_offer?: { label: string } | null;
   turn_kind?: string;
   router_disagreement?: boolean;
+  // P8: consent-first offer to build a live activity for THIS student (never
+  // auto-build). Same tri-state contract as continue_offer.
+  artifact_offer?: { label: string; kind: "html_sim" | "deck"; activity_id: string } | null;
   // Flow v3 backtracking: non-null while revisiting a completed step ("revisit") or on
   // the turn that returned to the frontier ("resume"); null on normal turns; ABSENT on
   // envelopes that never touched navigation (held/error) so the client keeps its state.
@@ -424,6 +427,22 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
       typeof partial.turn_kind === "string" ? partial.turn_kind : undefined,
     router_disagreement:
       partial.router_disagreement === true ? true : undefined,
+    artifact_offer:
+      partial.artifact_offer &&
+      typeof (partial.artifact_offer as { label?: unknown }).label === "string"
+        ? {
+            label: (partial.artifact_offer as { label: string }).label,
+            kind:
+              (partial.artifact_offer as { kind?: unknown }).kind === "deck"
+                ? ("deck" as const)
+                : ("html_sim" as const),
+            activity_id: String(
+              (partial.artifact_offer as { activity_id?: unknown }).activity_id || "",
+            ),
+          }
+        : partial.artifact_offer === null
+          ? null
+          : undefined,
     navigation:
       partial.navigation &&
       (partial.navigation.mode === "revisit" ||
@@ -2049,6 +2068,11 @@ type StepState = {
   // other pass timestamp. question_count tracks answered questions on inquiry steps.
   acknowledged_at: string | null;
   question_count: number;
+  // P8 live-artifact bookkeeping (per step; reset-on-advance comes free): one offer
+  // per step, and the id of the last mentor-built card so "show it again" can find it.
+  artifact_offer_at: string | null;
+  artifact_generated: number;
+  artifact_last_resource_id: string | null;
 };
 
 function emptyStepState(activityId: string | null): StepState {
@@ -2063,6 +2087,9 @@ function emptyStepState(activityId: string | null): StepState {
     graded_fails: 0,
     acknowledged_at: null,
     question_count: 0,
+    artifact_offer_at: null,
+    artifact_generated: 0,
+    artifact_last_resource_id: null,
   };
 }
 
@@ -2098,6 +2125,9 @@ function parseStepState(session: DbRow, activityId: string | null): StepState {
     graded_fails: count(raw.graded_fails),
     acknowledged_at: iso(raw.acknowledged_at),
     question_count: count(raw.question_count),
+    artifact_offer_at: iso(raw.artifact_offer_at),
+    artifact_generated: count(raw.artifact_generated),
+    artifact_last_resource_id: iso(raw.artifact_last_resource_id),
   };
 }
 
@@ -2858,7 +2888,7 @@ async function loadContext(
   ] = await Promise.all([
     loadFirst(
       config,
-      `lessons?id=eq.${encodeURIComponent(lessonId)}&publication_status=eq.published&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id,help_ceiling,require_attempt_first,final_answer_policy,tutor_tone,tutor_pace,grade_band`,
+      `lessons?id=eq.${encodeURIComponent(lessonId)}&publication_status=eq.published&select=id,title,module,level,tutor_prompt,sample_code,expected_output,unit_id,help_ceiling,require_attempt_first,final_answer_policy,tutor_tone,tutor_pace,grade_band,allow_live_artifacts`,
     ),
     loadMany(
       config,
@@ -2874,7 +2904,7 @@ async function loadContext(
     ),
     loadMany(
       config,
-      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=12&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata,activity_id`,
+      `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=16&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata,activity_id`,
     ),
     loadMany(
       config,
@@ -3158,6 +3188,14 @@ function resourceForEnvelope(resource: DbRow): LessonChatResource {
 // (which left the mentor advertising resources it could never hand over).
 const RESOURCE_REQUEST_RE =
   /\b(open|show|give|send|share|see|view|find|where|link|pull up|watch|read)\b[\s\S]{0,60}\b(pdf|video|resource|file|worksheet|slides?|doc(ument)?|card|link)\b|\b(pdf|video|worksheet|resource)\b/i;
+
+// P8: an explicit student ask that makes a live-build offer eligible even before the
+// struggle thresholds fire ("can you make me a simulation?").
+const ARTIFACT_REQUEST_RE =
+  /\b(make|build|create|show)\b[\s\S]{0,40}\b(sim(ulation)?|interactive|activity|visual(ization)?|demo|game)\b/i;
+// P8: re-attach the last mentor-built card ("show me that activity again").
+const ARTIFACT_AGAIN_RE =
+  /\b(activity|sim(ulation)?|game|demo)\b[\s\S]{0,30}\b(again|back|once more)\b|\b(again|back)\b[\s\S]{0,30}\b(activity|sim(ulation)?|game|demo)\b/i;
 
 function resourcesForResponse(
   resources: DbRow[],
@@ -3627,6 +3665,53 @@ async function handleTypedRequest(
   // revisiting keep the frame; resume clears it).
   const inRevisit = Boolean(navFrame) && navAction !== "resume";
 
+  // --- P8: artifact_ready — the client just finished a live artifact build ---------
+  // artifact-live (service role) persisted the student_private row; this control turn
+  // makes the mentor PRESENT it. Validation is belt-and-braces on top of RLS: the row
+  // must be in this student's RLS-visible context, be an artifact, carry mentor
+  // provenance, and belong to THIS session. Invalid → deterministic benign refusal
+  // (mirrors the navigate refusal — a mentor turn under a stale card request would
+  // render an unrelated reply); nothing is written.
+  let artifactReadyResource: DbRow | null = null;
+  if (controlType === "artifact_ready") {
+    const requestedId = typeof control?.resource_id === "string" ? control.resource_id : "";
+    const candidate = requestedId
+      ? context.resources.find((row) => String(row.id) === requestedId)
+      : null;
+    const generated =
+      candidate &&
+      candidate.metadata &&
+      typeof candidate.metadata === "object" &&
+      ((candidate.metadata as DbRow).generated as DbRow | undefined);
+    if (
+      candidate &&
+      String(candidate.resource_type) === "artifact" &&
+      generated &&
+      String(generated.session_id || "") === String(sessionId)
+    ) {
+      artifactReadyResource = candidate;
+    } else {
+      return json(
+        makeEnvelope({
+          status: "ok",
+          reply: "That activity isn't ready yet — ask me to build it again if you'd like one.",
+          session_id: sessionId,
+          lesson_id: lessonId,
+          stage: currentStage,
+          next_action: "reply",
+          session: {
+            status: String(session.status || "active"),
+            current_activity_id:
+              typeof session.current_activity_id === "string"
+                ? session.current_activity_id
+                : null,
+            activities_complete: session.activities_complete === true,
+          },
+        }),
+      );
+    }
+  }
+
   // Everything from answer-normalization onward runs inside the context-aware try so a
   // throw in the pedagogy computation returns a typed error with session/stage instead of
   // falling through to the bare outer catch.
@@ -4034,15 +4119,40 @@ async function handleTypedRequest(
     const draftFlow = inRevisit
       ? revisitFlow
       : deriveTurn(draftState, requirements, presentedBefore, activityMode);
+    // P8 loader hygiene: mentor-built rows (metadata.generated) never ride the ordinary
+    // attach rungs — they are presented ONCE via the artifact_ready control, and again
+    // only when the student explicitly asks for the activity back.
+    const isGeneratedResource = (row: DbRow) =>
+      Boolean(
+        row.metadata &&
+          typeof row.metadata === "object" &&
+          (row.metadata as DbRow).generated,
+      );
+    const curatedResources = context.resources.filter(
+      (row) => !isGeneratedResource(row),
+    );
     // Resource cards attached to THIS reply: the step's bound materials on its
     // presentation turn, the opening turn, or when the student asked for one.
-    const attachedResources = resourcesForResponse(
-      context.resources,
-      answer,
-      content,
-      typeof context.activity?.id === "string" ? context.activity.id : "",
-      presentedBefore,
-    );
+    let attachedResources = artifactReadyResource
+      ? [resourceForEnvelope(artifactReadyResource)]
+      : resourcesForResponse(
+          curatedResources,
+          answer,
+          content,
+          typeof context.activity?.id === "string" ? context.activity.id : "",
+          presentedBefore,
+        );
+    // "Show me that activity again" re-attaches the last mentor-built card by id.
+    if (
+      !attachedResources.length &&
+      stepStateBefore.artifact_last_resource_id &&
+      ARTIFACT_AGAIN_RE.test(content)
+    ) {
+      const lastBuilt = context.resources.find(
+        (row) => String(row.id) === stepStateBefore.artifact_last_resource_id,
+      );
+      if (lastBuilt) attachedResources = [resourceForEnvelope(lastBuilt)];
+    }
     const attachedResourceIds = new Set(
       attachedResources.map((resource) => String(resource.id)),
     );
@@ -4074,6 +4184,43 @@ async function handleTypedRequest(
     if (preemptedHits.length) {
       directive.text +=
         ' Their message also touched an UPCOMING step\'s idea — acknowledge it in passing if natural ("we\'ll dig into exactly that shortly"), but do NOT teach ahead or skip toward it.';
+    }
+    // P8: the student just accepted the build offer and artifact-live finished — this
+    // turn PRESENTS the card. Full override: the composed directive would otherwise
+    // read this empty-text control turn as ordinary conversation.
+    if (artifactReadyResource) {
+      directive.text =
+        "You just built a small interactive activity for this student — the card is " +
+        "attached below your reply. In one or two short lines, invite them to tap Run " +
+        "and explore it, then ask what they notice. Do not re-teach the idea first, do " +
+        "not repeat the step prompt, and do not grade anything this turn.";
+    }
+    // P8: consent-first live-build offer. Decided ONCE here (pre-model, so the mentor's
+    // prose and the client pill agree); the envelope emission below re-checks only the
+    // advance/complete corner. Never on assessment-family or quiz-gated steps (answer
+    // leak), never during a revisit, at most once per step — artifact-live enforces the
+    // hard caps regardless of what this soft layer decides.
+    const artifactOfferEligible =
+      context.lesson?.allow_live_artifacts === true &&
+      !artifactReadyResource &&
+      stepMode !== "assessment" &&
+      stepMode !== "revision" &&
+      stepModeType !== "open_ended" &&
+      String(context.activity?.stage || "") !== "assessment" &&
+      !(requirements.quiz && !draftState.quiz_passed_at) &&
+      presentedBefore &&
+      !inRevisit &&
+      !stepStateBefore.artifact_offer_at &&
+      stepStateBefore.artifact_generated < 1 &&
+      typeof context.activity?.id === "string" &&
+      (draftState.graded_fails >= 2 ||
+        hintRung >= 3 ||
+        ARTIFACT_REQUEST_RE.test(content));
+    if (artifactOfferEligible) {
+      directive.text +=
+        " They've been struggling here. Offer in ONE natural line to build them a quick" +
+        " interactive activity for this idea — a button appears under your reply; if" +
+        " they ignore or decline it, drop the subject.";
     }
     // Media steps: record that the material was shown (the presentation turn attaches the
     // card). Best-effort telemetry — interactions never gate and never block the turn.
@@ -4433,6 +4580,12 @@ async function handleTypedRequest(
     if (finalFlow.nextAction === "choose" && !finalState.quiz_presented_at) {
       finalState.quiz_presented_at = turnStartedIso;
     }
+    // P8 bookkeeping on the presenting turn (finalState is what persists — applyTurn
+    // spreads the prior state, so the offer timestamp set below also survives).
+    if (artifactReadyResource) {
+      finalState.artifact_generated += 1;
+      finalState.artifact_last_resource_id = String(artifactReadyResource.id);
+    }
     const finalStepDone = stepDone(finalState, requirements);
 
     // Multi-step lessons: if the current activity is finished but later activities
@@ -4490,6 +4643,20 @@ async function handleTypedRequest(
         : null;
     envelope.turn_kind = routedKind ?? undefined;
     if (routerDisagreement) envelope.router_disagreement = true;
+    // P8: the live-build offer pill. The eligibility decision was made pre-model (the
+    // mentor's prose already offered); here only the advance/complete corner is
+    // re-checked so a pill never renders under a step that just finished.
+    envelope.artifact_offer =
+      artifactOfferEligible && !advancing && !finalStepDone
+        ? {
+            label: "Build me a quick activity",
+            kind: "html_sim",
+            activity_id: String(context.activity?.id || ""),
+          }
+        : null;
+    if (envelope.artifact_offer) {
+      finalState.artifact_offer_at = turnStartedIso;
+    }
     // Revisit frame surfaced to the client (renders the "Return to where you were" chip
     // and marks the stepper). null on normal turns; a resume turn reports mode "resume".
     envelope.navigation = inRevisit

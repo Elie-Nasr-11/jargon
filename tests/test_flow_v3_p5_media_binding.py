@@ -30,7 +30,9 @@ class MediaBindingRuntimeInvariants(unittest.TestCase):
         select = re.search(r"lesson_resources\?lesson_id=[^`]*", CHAT)
         self.assertIsNotNone(select)
         self.assertIn("activity_id", select.group(0))
-        self.assertIn("limit=12", select.group(0))
+        # P8 bumped 12 -> 16 so the student's own mentor-built rows (RLS-visible now)
+        # can't evict curated materials from the window.
+        self.assertIn("limit=16", select.group(0))
 
     def test_selection_is_step_aware(self):
         signature = re.search(
@@ -45,7 +47,9 @@ class MediaBindingRuntimeInvariants(unittest.TestCase):
         self.assertIn('String(resource.activity_id || "") === activityId', CHAT)
 
     def test_call_site_passes_effective_step(self):
-        call = re.search(r"resourcesForResponse\(\s*context\.resources,.*?\);", CHAT, re.S)
+        # P8: the call site feeds curatedResources (context.resources minus mentor-built
+        # rows) — generated cards only attach via the artifact_ready control.
+        call = re.search(r"resourcesForResponse\(\s*curatedResources,.*?\);", CHAT, re.S)
         self.assertIsNotNone(call)
         self.assertIn("context.activity", call.group(0))
         self.assertIn("presentedBefore", call.group(0))

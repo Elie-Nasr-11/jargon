@@ -147,5 +147,83 @@ class ArtifactLiveFunction(unittest.TestCase):
             self.assertIn(token, LIVE)
 
 
+class ChatLiveArtifactWire(unittest.TestCase):
+    def test_envelope_offer_field_with_tristate(self):
+        self.assertIn("artifact_offer?: { label: string;", CHAT)
+        # makeEnvelope must normalize it like continue_offer (absent stays absent).
+        self.assertIn("partial.artifact_offer === null", CHAT)
+
+    def test_offer_gates(self):
+        block = re.search(
+            r"const artifactOfferEligible =.*?ARTIFACT_REQUEST_RE\.test\(content\)\);",
+            CHAT,
+            re.S,
+        )
+        self.assertIsNotNone(block)
+        gates = block.group(0)
+        for token in (
+            "allow_live_artifacts === true",
+            '!== "assessment"',
+            '!== "revision"',
+            '!== "open_ended"',
+            "!inRevisit",
+            "!stepStateBefore.artifact_offer_at",
+            "graded_fails >= 2",
+            "hintRung >= 3",
+        ):
+            self.assertIn(token, gates)
+        # The pill never renders under a just-finished step.
+        self.assertIn("artifactOfferEligible && !advancing && !finalStepDone", CHAT)
+
+    def test_artifact_ready_control_is_validated(self):
+        branch = re.search(
+            r'controlType === "artifact_ready".*?artifactReadyResource = candidate;',
+            CHAT,
+            re.S,
+        )
+        self.assertIsNotNone(branch)
+        body = branch.group(0)
+        # Belt-and-braces: RLS-loaded row + artifact type + mentor provenance + session.
+        self.assertIn('String(candidate.resource_type) === "artifact"', body)
+        self.assertIn("generated.session_id", body)
+        # Invalid ids refuse deterministically (no mentor turn, no writes).
+        self.assertIn("That activity isn't ready yet", CHAT)
+
+    def test_step_state_gains_bookkeeping(self):
+        for token in (
+            "artifact_offer_at: null",
+            "artifact_generated: 0",
+            "artifact_last_resource_id: null",
+            "iso(raw.artifact_offer_at)",
+            "count(raw.artifact_generated)",
+        ):
+            self.assertIn(token, CHAT)
+
+    def test_loader_hygiene(self):
+        # Mentor-built rows never ride the ordinary attach rungs...
+        self.assertIn("const curatedResources = context.resources.filter", CHAT)
+        self.assertIn("isGeneratedResource", CHAT)
+        # ...and the pinned loader select prefix survives, now carrying the student's
+        # own student_private rows via RLS with headroom for curated materials.
+        self.assertIn("lesson_resources?lesson_id=eq.", CHAT)
+        self.assertIn("limit=16", CHAT)
+
+    def test_lesson_select_carries_toggle(self):
+        self.assertIn("grade_band,allow_live_artifacts`", CHAT)
+
+    def test_admin_passes_toggle_through(self):
+        admin = (
+            REPO / "supabase" / "functions" / "curriculum-admin" / "index.ts"
+        ).read_text()
+        # Write path (save_lesson_meta + create-lesson) and the studio read path.
+        self.assertIn(
+            "policyPatch.allow_live_artifacts = meta.allow_live_artifacts", admin
+        )
+        self.assertIn("policy.allow_live_artifacts = meta.allow_live_artifacts", admin)
+        self.assertIn(
+            "allow_live_artifacts: lesson.allow_live_artifacts === true", admin
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
