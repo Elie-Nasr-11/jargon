@@ -6302,3 +6302,18 @@ Suggested next task: the STUDIO IS FRONTEND — it needs a main FF before the us
 visuals. Then the user's visual pass (teacher curriculum studio → open a lesson step →
 Generate an activity → Simulation → brief → preview renders → Approve → open as student2).
 P8 (live mentor-generated artifacts mid-lesson) is design-only next.
+
+## Claude -> Codex / Human - 2026-07-17 09:10
+
+Status: Starting
+Task: Artifacts v1 P8 — live mentor-generated artifacts (consent-first offer pill in chat →
+student-invoked service-role artifact-live fn → student_private lesson_resources row →
+artifact_ready control presents the card). Product owner decisions: student-private but
+teacher-shareable; offer + tap (never auto-build).
+Files I expect to touch: supabase/migrations/20260901000000_live_artifact_scoping.sql (new),
+supabase/functions/artifact-live/index.ts (new), supabase/functions/chat/index.ts,
+supabase/functions/curriculum-admin/index.ts, .github/workflows/deploy-backend.yml,
+frontend/src/lib/{types,api,supabase}.ts, frontend/src/routes/{chat,teacher.curriculum}.tsx,
+tests/test_artifact_live.py (new), tests/test_artifact_authoring.py, docs/*.
+Notes: chat stays student-JWT only (will be test-pinned); can_view_lesson_resource's legacy
+class-null org fallback must be fenced from student_private or private artifacts leak org-wide.

@@ -29,6 +29,7 @@ on:
       - "supabase/functions/resource-processing/**"
       - "supabase/functions/admin-ops/**"
       - "supabase/functions/submission-maintenance/**"
+      - "supabase/functions/artifact-live/**"
       - "supabase/migrations/**"
       - ".github/workflows/deploy-backend.yml"
 
@@ -88,7 +89,8 @@ jobs:
             supabase/migrations/20260712000000_retire_demo_catalog.sql \
             supabase/migrations/20260713000000_book_f_only_catalog.sql \
             supabase/migrations/20260815000000_flow_v3_session_nav.sql \
-            supabase/migrations/20260820000000_artifact_resources.sql ; do
+            supabase/migrations/20260820000000_artifact_resources.sql \
+            supabase/migrations/20260901000000_live_artifact_scoping.sql ; do
             echo "Applying $f"
             # Body goes through a temp file, not a shell argument: large seed migrations
             # (e.g. the Book F content seed, ~254KB) exceed the kernel's per-argument
@@ -126,3 +128,6 @@ jobs:
           # submission-maintenance is system-only (accepts ONLY the service-role bearer); invoked
           # by the scheduled submission-maintenance.yml workflow.
           supabase functions deploy submission-maintenance --project-ref "$PROJECT_REF"
+          # artifact-live: P8 live mentor-generated artifacts — student-JWT identity,
+          # service-role writes (student_private lesson_resources rows + storage).
+          supabase functions deploy artifact-live --project-ref "$PROJECT_REF"
