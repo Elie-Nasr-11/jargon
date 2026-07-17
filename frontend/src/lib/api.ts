@@ -3336,6 +3336,8 @@ export async function updateLessonResource(
       | "status"
       | "visibility"
       | "activity_id"
+      // P8: cleared when a teacher promotes a mentor-built activity to the class.
+      | "student_id"
     >
   >,
 ) {
@@ -4221,6 +4223,45 @@ export async function invokeTypedChat(input: {
     throw new Error(data.reply || "Chat request failed.");
   }
   return data;
+}
+
+// P8: ask artifact-live to build a mentor activity for the current step. A long call by
+// design (the model writes a whole interactive document, ~30-90s; the server budgets
+// itself under the ~150s gateway wall) — the caller shows its own "building…" state.
+// On success the caller posts an artifact_ready control turn so the mentor presents the
+// card through the normal envelope path.
+export async function generateLiveArtifact(input: {
+  accessToken: string;
+  lessonId: string;
+  sessionId: string;
+  activityId: string;
+  kind: "html_sim" | "deck";
+}): Promise<{ resource_id: string; title: string }> {
+  const response = await fetchWithTimeout(
+    functionUrl("artifact-live"),
+    {
+      method: "POST",
+      headers: authHeaders(await freshAccessToken(input.accessToken)),
+      body: JSON.stringify({
+        lesson_id: input.lessonId,
+        session_id: input.sessionId,
+        activity_id: input.activityId,
+        kind: input.kind,
+        trigger: "offer",
+      }),
+    },
+    150000,
+  );
+  const data = (await response.json()) as {
+    status: string;
+    resource_id?: string;
+    title?: string;
+    error?: string;
+  };
+  if (!response.ok || data.status !== "ok" || !data.resource_id) {
+    throw new Error(data.error || "The mentor couldn't build that this time.");
+  }
+  return { resource_id: data.resource_id, title: data.title || "Quick activity" };
 }
 
 // Post-v4.0 Phase 4b + 5: a spaced-review turn on one skill. Hits the same chat fn with `review: true`,

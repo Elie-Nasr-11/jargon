@@ -26,7 +26,8 @@ export function functionUrl(
     | "voice-session"
     | "resource-processing"
     | "google-classroom"
-    | "canvas",
+    | "canvas"
+    | "artifact-live",
 ) {
   return `${supabaseUrl}/functions/v1/${slug}`;
 }

@@ -581,6 +581,18 @@ function CurriculumPage() {
       { successMessage: activityId ? "Material attached to step." : "Material detached." },
     );
 
+  // P8: promote a mentor-built (student-private) activity to the whole class. After the
+  // promote it behaves like any teacher material (attachable, class-visible).
+  const shareArtifact = (resourceId: string) =>
+    reloading(
+      () =>
+        updateLessonResource(resourceId, {
+          visibility: "class_private",
+          student_id: null,
+        }),
+      { successMessage: "Activity shared with the class." },
+    );
+
   // --- Org-shared templates (v4.0 Phase 2) --------------------------------
   const loadTemplates = useCallback(async () => {
     if (!selectedClass) return;
@@ -1030,6 +1042,7 @@ function CurriculumPage() {
                   onReorderSteps={reorderSteps}
                   onDeleteStep={deleteStep}
                   onBindResource={bindResource}
+                  onShareResource={shareArtifact}
                   onGenerateArtifact={generateArtifact}
                   onApproveArtifact={approveArtifact}
                   onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
@@ -1455,6 +1468,7 @@ function DetailPane({
   onReorderSteps,
   onDeleteStep,
   onBindResource,
+  onShareResource,
   onGenerateArtifact,
   onApproveArtifact,
   onPublishLesson,
@@ -1500,6 +1514,7 @@ function DetailPane({
   onReorderSteps: (lessonId: string, orderedIds: string[]) => void;
   onDeleteStep: (lessonId: string, activityId: string) => void;
   onBindResource: (resourceId: string, activityId: string | null) => void;
+  onShareResource: (resourceId: string) => void;
   onGenerateArtifact: (
     lessonId: string,
     args: ArtifactGenArgs,
@@ -1645,6 +1660,7 @@ function DetailPane({
       onReorderSteps={(ids) => onReorderSteps(lesson.id, ids)}
       onDeleteStep={(activityId) => onDeleteStep(lesson.id, activityId)}
       onBindResource={onBindResource}
+      onShareResource={onShareResource}
       onGenerateArtifact={(args) => onGenerateArtifact(lesson.id, args)}
       onApproveArtifact={(activityId, payload) => onApproveArtifact(lesson.id, activityId, payload)}
       onPublish={() => onPublishLesson(lesson.id)}
@@ -2179,6 +2195,7 @@ function LessonDetail({
   onReorderSteps,
   onDeleteStep,
   onBindResource,
+  onShareResource,
   onGenerateArtifact,
   onApproveArtifact,
   onPublish,
@@ -2200,6 +2217,7 @@ function LessonDetail({
   onReorderSteps: (orderedIds: string[]) => void;
   onDeleteStep: (activityId: string) => void;
   onBindResource: (resourceId: string, activityId: string | null) => void;
+  onShareResource: (resourceId: string) => void;
   onGenerateArtifact: (args: ArtifactGenArgs) => Promise<CurriculumAdminResponse | null>;
   onApproveArtifact: (activityId: string, payload: ArtifactApprovePayload) => void;
   onPublish: () => void;
@@ -2295,6 +2313,7 @@ function LessonDetail({
                           canDelete={steps.length > 1}
                           resources={lessonResources}
                           onBind={onBindResource}
+                          onShare={onShareResource}
                           onGenerateArtifact={onGenerateArtifact}
                           onApproveArtifact={onApproveArtifact}
                           onSave={onUpsertStep}
@@ -2490,6 +2509,10 @@ function LessonMetaForm({
   const [tutorTone, setTutorTone] = useState<string>(lesson.tutor_tone || "");
   const [tutorPace, setTutorPace] = useState<string>(lesson.tutor_pace || "");
   const [gradeBand, setGradeBand] = useState<string>(lesson.grade_band || "");
+  // P8: live mentor-built activities (default off; the runtime re-checks server-side).
+  const [allowLiveArtifacts, setAllowLiveArtifacts] = useState<boolean>(
+    lesson.allow_live_artifacts === true,
+  );
 
   const toggleMode = (mode: ResponseMode) => {
     setAllowedModes((current) => {
@@ -2513,6 +2536,7 @@ function LessonMetaForm({
         tutor_tone: tutorTone,
         tutor_pace: tutorPace,
         grade_band: gradeBand,
+        allow_live_artifacts: allowLiveArtifacts,
       },
       {
         objective: objective.trim(),
@@ -2618,6 +2642,24 @@ function LessonMetaForm({
             {requireAttemptFirst ? <Check className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
             Require an attempt before the mentor helps
           </button>
+          <div className="grid gap-1">
+            <button
+              type="button"
+              onClick={() => setAllowLiveArtifacts((current) => !current)}
+              className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
+                allowLiveArtifacts
+                  ? "border-foreground/25 bg-foreground text-background"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {allowLiveArtifacts ? <Check className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
+              Live mentor-built activities
+            </button>
+            <p className="text-[12px] text-muted-foreground">
+              Lets the mentor offer to build a one-off interactive activity for a struggling student
+              — private to that student until you share it.
+            </p>
+          </div>
         </div>
         <div>
           <button
@@ -2644,6 +2686,7 @@ function StepCard({
   canDelete,
   resources,
   onBind,
+  onShare,
   onGenerateArtifact,
   onApproveArtifact,
   onSave,
@@ -2659,6 +2702,8 @@ function StepCard({
   // the chat runtime attaches a step's bound materials on its presentation turn.
   resources: LessonResource[];
   onBind: (resourceId: string, activityId: string | null) => void;
+  // P8: promote a mentor-built (student-private) activity to the whole class.
+  onShare: (resourceId: string) => void;
   // P7: generate an interactive artifact for this step, preview it, and approve → publish.
   onGenerateArtifact: (args: ArtifactGenArgs) => Promise<CurriculumAdminResponse | null>;
   onApproveArtifact: (activityId: string, payload: ArtifactApprovePayload) => void;
@@ -2723,7 +2768,18 @@ function StepCard({
   // P5 attach controls: a just-created step carries a temp id until the server swap —
   // binding to it would violate the resource's FK, so the controls wait it out.
   const attached = resources.filter((resource) => resource.activity_id === activity.id);
-  const attachable = resources.filter((resource) => resource.activity_id !== activity.id);
+  // P8: mentor-built rows are student-private and carry their step in
+  // metadata.generated.activity_id (activity_id stays null so they never enter the
+  // step-binding machinery). They get their own oversight list below; a still-private
+  // one can't be attached for the class (RLS would silently hide it from everyone else).
+  const generatedFor = (resource: LessonResource) =>
+    (resource.metadata?.generated as { activity_id?: string } | undefined)?.activity_id ?? null;
+  const mentorBuilt = resources.filter((resource) => generatedFor(resource) === activity.id);
+  const attachable = resources.filter(
+    (resource) =>
+      resource.activity_id !== activity.id &&
+      !(generatedFor(resource) && resource.visibility === "student_private"),
+  );
   const bindable = !activity.id.startsWith("temp-");
 
   const save = () => {
@@ -2988,6 +3044,45 @@ function StepCard({
               </select>
             ) : null}
           </div>
+
+          {/* P8: mentor-built activities for this step (live-generated for one student).
+              Oversight list: the teacher can share one with the class — after the promote
+              it becomes an ordinary attachable material. */}
+          {mentorBuilt.length ? (
+            <div className="grid gap-1.5">
+              <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Mentor-built activities
+              </div>
+              {mentorBuilt.map((resource) => (
+                <div
+                  key={resource.id}
+                  className="flex items-center gap-2 rounded-2xl border border-border bg-depth-field px-3 py-2"
+                >
+                  <Sparkles
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    strokeWidth={1.7}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                    {resource.title}
+                  </span>
+                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
+                    {resource.visibility === "student_private" ? "student-private" : "shared"}
+                  </span>
+                  {resource.visibility === "student_private" ? (
+                    <button
+                      type="button"
+                      onClick={() => onShare(resource.id)}
+                      disabled={busy}
+                      title="Make this activity visible to the whole class"
+                      className="shrink-0 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                    >
+                      Share with class
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           {/* P7: generate an interactive activity (sim / deck), preview it, approve → it
               becomes a published material bound to THIS step. Gated on a saved step id. */}

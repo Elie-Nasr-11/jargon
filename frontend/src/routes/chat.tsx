@@ -18,6 +18,7 @@ import {
   Pause,
   Play,
   Send,
+  Sparkles,
   Square,
   Undo2,
   Volume2,
@@ -74,6 +75,7 @@ import {
   fetchPrimaryRole,
   roleHome,
   invokeJargonRun,
+  generateLiveArtifact,
   invokeTypedChat,
   recordResourceInteraction,
   recordVoiceInteraction,
@@ -151,6 +153,9 @@ type Msg =
       // Flow v3: this message offered the Continue pill (content step awaiting an
       // explicit continue). Only the latest bot message's offer renders live.
       continueOffer?: { label: string };
+      // P8: this message offered a live mentor-built activity. Live-turn only, like
+      // continueOffer (never replayed from history).
+      artifactOffer?: { label: string; kind: "html_sim" | "deck"; activity_id: string };
       createdAt?: string;
       // Error bubbles must never become the "latest mentor message" — that would strip the
       // live quiz choices off the real question with no recovery path.
@@ -281,6 +286,7 @@ function envelopeMessage(envelope: TypedChatEnvelope): Msg {
     // Flow v3: the Continue pill rides the message that offered it, so (like retired
     // quiz choices) it stays anchored to its turn and only the LATEST offer is live.
     continueOffer: envelope.continue_offer ?? undefined,
+    artifactOffer: envelope.artifact_offer ?? undefined,
     createdAt: new Date().toISOString(),
   };
 }
@@ -1052,6 +1058,61 @@ function ChatPage() {
     });
   };
 
+  // P8: the student accepted the mentor's build offer. Generation is a LONG call by
+  // design (~30-90s: the model writes a whole interactive document), so it runs outside
+  // sendTurn behind a dedicated status bubble — which, as a plain bot message, also
+  // becomes the latest bot message and naturally hides the offer pill while building.
+  // On success an artifact_ready control turn makes the mentor present the card (and
+  // persists it in the turn payload for replay); on failure the bubble turns into an
+  // error and the pill comes back for a manual retry (server-side caps bound the spend).
+  const buildingArtifactRef = useRef(false);
+  const buildArtifact = async (offer: {
+    label: string;
+    kind: "html_sim" | "deck";
+    activity_id: string;
+  }) => {
+    if (!accessToken || !sessionId || buildingArtifactRef.current || sendingRef.current) return;
+    buildingArtifactRef.current = true;
+    const statusId = uid();
+    addMsg({ id: uid(), role: "user", text: "Yes — build me an activity" });
+    addMsg({
+      id: statusId,
+      role: "bot",
+      text: "Building your activity — this can take a minute or two. You can keep chatting while I work.",
+    });
+    try {
+      const built = await generateLiveArtifact({
+        accessToken,
+        lessonId,
+        sessionId,
+        activityId: offer.activity_id,
+        kind: offer.kind,
+      });
+      setMsgs((p) => p.filter((m) => m.id !== statusId));
+      await sendTurn({
+        answer: { mode: "text", text: "" },
+        control: { type: "artifact_ready", resource_id: built.resource_id },
+        optimistic: [],
+        errorText: "The mentor couldn't attach the activity — ask for it again.",
+      });
+    } catch (error) {
+      setMsgs((p) =>
+        p.map((m) =>
+          m.id === statusId
+            ? {
+                id: statusId,
+                role: "bot" as const,
+                isError: true,
+                text: (error as Error).message || "The mentor couldn't build that this time.",
+              }
+            : m,
+        ),
+      );
+    } finally {
+      buildingArtifactRef.current = false;
+    }
+  };
+
   // Re-send a failed turn from its error bubble (the bubble is removed; the original user
   // message is already in the stream, so no new optimistic message is added).
   const retryTurn = async (msg: Msg) => {
@@ -1550,6 +1611,7 @@ function ChatPage() {
                     onUseCode={useCodeInEditor}
                     onChooseChoice={sendChoice}
                     onContinue={sendContinue}
+                    onBuildArtifact={buildArtifact}
                     onRetry={retryTurn}
                     onResourceEvent={handleResourceEvent}
                     voice={voice}
@@ -2546,6 +2608,7 @@ function MessageRow({
   onUseCode,
   onChooseChoice,
   onContinue,
+  onBuildArtifact,
   onRetry,
   onResourceEvent,
   voice,
@@ -2562,6 +2625,12 @@ function MessageRow({
   onChooseChoice: (choice: ChatChoice) => void;
   // Flow v3: taps the Continue pill (content steps). Live only on the newest message.
   onContinue?: () => void;
+  // P8: taps the build-me-an-activity pill. Live only on the newest message.
+  onBuildArtifact?: (offer: {
+    label: string;
+    kind: "html_sim" | "deck";
+    activity_id: string;
+  }) => void;
   onRetry: (msg: Msg) => void;
   onResourceEvent: (
     resource: LessonChatResource,
@@ -2801,6 +2870,19 @@ function MessageRow({
             >
               {msg.continueOffer.label || "Continue"}
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
+          </div>
+        ) : null}
+        {msg.artifactOffer && choicesActive && onBuildArtifact ? (
+          <div className="flex">
+            <button
+              type="button"
+              disabled={choicesDisabled}
+              onClick={() => onBuildArtifact(msg.artifactOffer!)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-foreground/30 bg-foreground/5 px-4 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50"
+            >
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+              {msg.artifactOffer.label || "Build me a quick activity"}
             </button>
           </div>
         ) : null}

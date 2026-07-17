@@ -27,6 +27,8 @@ export type Lesson = {
   tutor_tone?: string | null;
   tutor_pace?: string | null;
   grade_band?: string | null;
+  // P8: per-lesson opt-in for live mentor-built activities.
+  allow_live_artifacts?: boolean | null;
 };
 
 // v4.0 learning modes (docs/PLATFORM.md). A step with mode null is a legacy step whose
@@ -231,6 +233,8 @@ export type CurriculumLessonMetaInput = {
   tutor_tone?: string;
   tutor_pace?: string;
   grade_band?: string;
+  // P8: per-lesson opt-in for live mentor-built activities.
+  allow_live_artifacts?: boolean;
 };
 
 export type CurriculumMilestoneInput = {
@@ -310,7 +314,12 @@ export type LessonResourceType =
 
 export type LessonResourceSource = "upload" | "external_url";
 export type LessonResourceStatus = "draft" | "published" | "archived";
-export type LessonResourceVisibility = "class_private" | "org_private" | "public";
+export type LessonResourceVisibility =
+  | "class_private"
+  | "org_private"
+  | "public"
+  // P8: a mentor-built artifact scoped to ONE student (teacher can promote it).
+  | "student_private";
 export type LessonResourceDisplayMode = "inline" | "modal" | "card";
 
 export type LessonResource = {
@@ -325,6 +334,8 @@ export type LessonResource = {
   activity_id: string | null;
   assignment_id: string | null;
   created_by: string | null;
+  // P8: set (with visibility student_private) on mentor-built rows.
+  student_id: string | null;
   title: string;
   description: string;
   resource_type: LessonResourceType;
@@ -1309,6 +1320,9 @@ export type TypedChatEnvelope = {
   continue_offer?: { label: string } | null;
   turn_kind?: string;
   router_disagreement?: boolean;
+  // P8: consent-first offer to build a live activity for this student. Live-turn only
+  // (never replayed on reload, like continue_offer).
+  artifact_offer?: { label: string; kind: "html_sim" | "deck"; activity_id: string } | null;
   // Flow v3 backtracking: non-null while revisiting a completed step ("revisit") or on
   // the turn that returned to the frontier ("resume"); null on normal turns.
   navigation?: {
@@ -1321,8 +1335,10 @@ export type TypedChatEnvelope = {
 // Flow v3 structured client affordances: the Continue button (and, later, stepper
 // navigation) post a control turn instead of synthetic text.
 export type TypedChatControl = {
-  type: "continue" | "navigate" | "resume";
+  type: "continue" | "navigate" | "resume" | "artifact_ready";
   target_activity_id?: string;
+  // artifact_ready: the lesson_resources row artifact-live just created.
+  resource_id?: string;
 };
 
 export type JargonRunResponse = {

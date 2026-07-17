@@ -2,6 +2,36 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-17: Artifacts P8 — live mentor artifacts are student-private, consent-first, and service-role-isolated
+
+Three coupled decisions for live mentor-generated artifacts (product owner chose "student-private
+but shareable" scoping and "offer + tap" triggering):
+
+- **Student-private scoping via first-class columns, not metadata.** `lesson_resources.student_id`
+  + visibility `'student_private'` + a scope CHECK, enforced in `can_view_lesson_resource` — a
+  metadata-only scope would have been advisory (RLS, the chat loader, and teacher lists never read
+  metadata for authorization). CRITICAL detail: the function's legacy class-null org fallback
+  branch (0009) was never visibility-gated, so the P8 migration fences it with
+  `visibility <> 'student_private'`; without the fence a student-private row carrying an
+  organization_id would be readable by every org member. The storage read policy needed no change
+  (the exact-name policy delegates to the function). Teachers keep oversight via can_manage and
+  promote with "Share with class" (visibility → class_private, student_id cleared).
+- **Consent-first offer over mentor auto-build.** A chat turn is one blocking POST with a 30s
+  client budget; generation takes 30–90s — it cannot run inside a turn, and hiding it there would
+  need streaming/queue infrastructure that doesn't exist. So chat emits `artifact_offer`
+  (continue_offer's tri-state contract, decided pre-model so prose and pill agree), the client
+  calls artifact-live directly (150s timeout, its own "building…" bubble), and an
+  `artifact_ready` control turn re-enters the normal loop so the card persists in
+  learning_turns.payload like every other resource. Offers never fire on
+  assessment/revision/open-ended/quiz-gated steps (answer leak) and at most once per step.
+- **Service-role isolation.** chat/index.ts stays student-JWT-only forever (now pinned by
+  `assertNotIn("SERVICE_ROLE", CHAT)`); the privileged writes live in the dedicated artifact-live
+  function following voice-session's posture (caller JWT proves identity, service key writes).
+  Every gate — session ownership, lesson opt-in, step-kind exclusions, duplicate reuse, hard caps
+  counted from model_usage_events with failures included — runs BEFORE the first model call (a
+  tested string-offset invariant). The FORBIDDEN lint table is now triplicated
+  (frontend / curriculum-admin / artifact-live); the parity test pins all three byte-identical.
+
 ## 2026-07-06: Post-v4.0 Phase 5 — ad-hoc review sessions via a GREENFIELD table (not the lesson_id relaxation)
 
 The roadmap framed P5 as "relax `learning_sessions.lesson_id` NOT NULL" so an ad-hoc review could be a

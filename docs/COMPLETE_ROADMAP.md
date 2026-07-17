@@ -182,6 +182,25 @@ code` (image layout deferred: no asset pipeline yet), mirrored to
 `artifacts/{resource_id}/deck.json`. Authoring arrives in P7 (studio generate → preview →
 approve); the manual teacher resource form intentionally does not offer the type.
 
+Artifacts (v1, P8 — live mentor-generated): when a student struggles on an eligible step
+(never assessment/revision/open-ended/quiz-gated) in a lesson whose teacher enabled
+`lessons.allow_live_artifacts` (default off), the mentor OFFERS to build an activity —
+consent-first: the envelope's `artifact_offer` renders a pill; nothing generates until
+the student taps it. The tap calls the dedicated `artifact-live` edge function
+(student-JWT identity + service-role writes — the chat function itself NEVER holds a
+service key): it verifies session ownership, the lesson opt-in, step-kind exclusions,
+a two-tap reuse window, and hard per-student caps (2/step, 4/lesson/day, 6/hour counted
+from model_usage_events, failures included) BEFORE generating with the same P7
+model/lint/deck pipeline (`allow-scripts` sandbox unchanged; deck capped at 65536
+bytes), then inserts a `visibility: 'student_private'` + `student_id` row
+(`created_by` null, `activity_id` null, provenance in `metadata.generated`). The client
+then posts an `artifact_ready` control turn; chat validates the row (RLS + provenance +
+session match) and presents the card through the normal envelope, so it replays like
+any other resource. `can_view_lesson_resource` gained the student_private branch with
+the legacy class-null org fallback explicitly fenced. Teachers see mentor-built rows in
+the studio step editor with a "Share with class" promote (visibility → class_private,
+student_id cleared).
+
 Orchestrator changes:
 
 - Load resources attached to the current lesson, milestone, or activity.

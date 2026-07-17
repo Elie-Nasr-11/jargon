@@ -6317,3 +6317,48 @@ frontend/src/lib/{types,api,supabase}.ts, frontend/src/routes/{chat,teacher.curr
 tests/test_artifact_live.py (new), tests/test_artifact_authoring.py, docs/*.
 Notes: chat stays student-JWT only (will be test-pinned); can_view_lesson_resource's legacy
 class-null org fallback must be fenced from student_private or private artifacts leak org-wide.
+
+## Claude -> Codex / Human - 2026-07-17 10:35
+
+Status: Finished
+Summary: Artifacts v1 P8 — live mentor-generated artifacts, three commits. When a student
+struggles on an eligible step (never assessment/revision/open-ended/quiz-gated) in a lesson whose
+teacher enabled the new "Live mentor-built activities" toggle (lessons.allow_live_artifacts,
+default OFF — the feature is fully inert until a teacher opts in), the mentor offers in one line
+and a "Build me a quick activity" pill renders (envelope artifact_offer, continue_offer's
+tri-state contract, decided pre-model so prose and pill agree; struggle = 2+ graded fails, hint
+rung 3+, or an explicit ask; once per step). The tap calls the NEW artifact-live edge function —
+student-JWT identity + service-role writes, voice-session's posture; chat itself still holds NO
+service key (now test-pinned) — which verifies EVERYTHING before the first model call (session
+ownership, lesson opt-in re-check, step-kind answer-leak exclusions incl. legacy assessment
+stage + published quiz rows, 120s two-tap reuse, hard caps 2/step + 4/lesson/day + 6/hour counted
+from model_usage_events with failures included), composes the brief from teacher-authored
+curriculum fields + structured struggle counters ONLY (raw student text and expected outputs
+excluded), generates via the ported P7 pipeline (third FORBIDDEN copy — parity test now pins all
+three byte-identical), uploads + inserts a visibility='student_private' + student_id row
+(created_by null, activity_id null, provenance in metadata.generated). The client then posts an
+artifact_ready control turn: chat validates the row (RLS-loaded + provenance + session match;
+invalid → deterministic refusal), attaches exactly that card under a dedicated directive, and it
+persists in learning_turns.payload → replays like any resource. Migration adds student_id +
+'student_private' + re-declares can_view_lesson_resource with the student branch AND the fence on
+the legacy class-null org fallback (un-fenced it would leak student-private rows org-wide — found
+in design review). Mentor rows are filtered out of chat's ordinary attach rungs ("show it again"
+re-attaches by id; window 12→16 so they can't evict curated materials) and surface in the studio
+step editor as an oversight list with a "Share with class" promote (visibility→class_private,
+student_id cleared; after promote it's ordinary attachable material).
+Files changed: supabase/migrations/20260901000000_live_artifact_scoping.sql (new),
+supabase/functions/artifact-live/index.ts (new), supabase/functions/chat/index.ts,
+supabase/functions/curriculum-admin/index.ts, .github/workflows/deploy-backend.yml,
+frontend/src/lib/{types,api,supabase}.ts, frontend/src/routes/{chat,teacher.curriculum}.tsx,
+tests/test_artifact_live.py (new, 20 tests), tests/{test_artifact_authoring,
+test_flow_v3_p5_media_binding}.py, docs/{COMPLETE_ROADMAP,DECISIONS,OPEN_QUESTIONS,HANDOFF}.md.
+Tests run: esbuild syntax checks (artifact-live, chat, curriculum-admin); python unittest full
+discover (261 tests — green except the 4 known pre-existing setUpClass errors on deleted-file
+readers); frontend tsc 0 / eslint 0 errors (17 pre-existing warnings) / build green.
+Remaining concerns: see OPEN_QUESTIONS 2026-07-17 (deck offers, orphan sweep,
+TeacherConsole's 3-option visibility select can silently promote a student_private row, offer
+threshold tuning). E2E needs a teacher to flip the toggle on a test lesson; the frontend pill
+ships only on the next main FF.
+Suggested next task: adversarial review folds (in progress this session), push + deploy verify,
+main FF on user OK, then the live E2E (fail a practice step twice → pill → build → Run →
+teacher Share with class).

@@ -267,3 +267,17 @@ listener. This predates the nav v3 restructure (openLesson is unchanged) but v3 
 calls the in-scope `loadLesson(id, accessToken, mentor)` directly (cleanest); (b) listen for the
 `jargon:store` event in ChatPage and bump `bootAttempt` when the store lesson id differs; (c) key the
 ChatPage subtree on lessonId. Deferred from the nav change to keep it scoped + avoid boot-flow risk.
+
+## 2026-07-17: Artifacts P8 follow-ups
+
+- Deck offers: the live offer pill always requests `html_sim` (v1). artifact-live accepts
+  `kind: "deck"` — when should the orchestrator (or student) choose a deck instead?
+- Storage orphan sweep: a crash between artifact-live's upload and insert leaves an
+  unreadable, size-bounded object (the exact-name policy needs a row). A periodic sweep
+  could ride submission-maintenance; explicitly not v1.
+- TeacherConsole's resource edit form has a three-option visibility select
+  (class/org/public) — editing a student_private mentor row there and saving would
+  silently promote it. Add "student-private (mentor-built)" as a disabled option, or
+  badge mentor rows there like the studio does?
+- Live-offer tuning: thresholds are graded_fails >= 2 / hint_rung >= 3 / explicit ask,
+  one offer per step. Revisit once real acceptance/latency data exists.

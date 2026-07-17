@@ -211,6 +211,32 @@ class ChatLiveArtifactWire(unittest.TestCase):
     def test_lesson_select_carries_toggle(self):
         self.assertIn("grade_band,allow_live_artifacts`", CHAT)
 
+    def test_frontend_wire(self):
+        front = REPO / "frontend" / "src"
+        types = (front / "lib" / "types.ts").read_text()
+        api = (front / "lib" / "api.ts").read_text()
+        supa = (front / "lib" / "supabase.ts").read_text()
+        chat_tsx = (front / "routes" / "chat.tsx").read_text()
+        studio = (front / "routes" / "teacher.curriculum.tsx").read_text()
+        # Types: the control union + per-student visibility.
+        self.assertIn('"continue" | "navigate" | "resume" | "artifact_ready"', types)
+        self.assertIn('"student_private"', types)
+        # API: the long-call budget matches the server's ~150s gateway wall.
+        self.assertIn("export async function generateLiveArtifact(", api)
+        gen = api[api.index("export async function generateLiveArtifact(") :]
+        self.assertIn("150000", gen[:1600])
+        self.assertIn('"artifact-live"', supa)
+        # Chat: the pill is live-turn only (never replayed) and the ready control rides
+        # the normal turn path.
+        self.assertIn("artifactOffer: envelope.artifact_offer ?? undefined", chat_tsx)
+        self.assertIn('control: { type: "artifact_ready", resource_id:', chat_tsx)
+        self.assertIn("Building your activity", chat_tsx)
+        # Studio: the opt-in toggle + student-private oversight with the promote action.
+        self.assertIn("allow_live_artifacts: allowLiveArtifacts", studio)
+        self.assertIn("Share with class", studio)
+        self.assertIn('visibility: "class_private"', studio)
+        self.assertIn("student_id: null", studio)
+
     def test_admin_passes_toggle_through(self):
         admin = (
             REPO / "supabase" / "functions" / "curriculum-admin" / "index.ts"
