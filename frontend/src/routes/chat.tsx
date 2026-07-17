@@ -1066,6 +1066,10 @@ function ChatPage() {
   // persists it in the turn payload for replay); on failure the bubble turns into an
   // error and the pill comes back for a manual retry (server-side caps bound the spend).
   const buildingArtifactRef = useRef(false);
+  // Mirror ref so the long-running build can detect a lesson switch that happened
+  // while it awaited (state closures go stale over a 30-90s call).
+  const lessonIdRef = useRef(lessonId);
+  lessonIdRef.current = lessonId;
   const buildArtifact = async (offer: {
     label: string;
     kind: "html_sim" | "deck";
@@ -1073,6 +1077,16 @@ function ChatPage() {
   }) => {
     if (!accessToken || !sessionId || buildingArtifactRef.current || sendingRef.current) return;
     buildingArtifactRef.current = true;
+    // The tapped offer is consumed — clear it off its message (like a picked quiz
+    // choice) so the retired pill can't flash back between bubbles.
+    setMsgs((p) =>
+      p.map((m) =>
+        m.role === "bot" && m.artifactOffer?.activity_id === offer.activity_id
+          ? { ...m, artifactOffer: undefined }
+          : m,
+      ),
+    );
+    const builtForLesson = lessonId;
     const statusId = uid();
     addMsg({ id: uid(), role: "user", text: "Yes — build me an activity" });
     addMsg({
@@ -1083,18 +1097,44 @@ function ChatPage() {
     try {
       const built = await generateLiveArtifact({
         accessToken,
-        lessonId,
+        lessonId: builtForLesson,
         sessionId,
         activityId: offer.activity_id,
         kind: offer.kind,
       });
+      // Belt-and-braces on top of the lesson-switch guards: a build that resolves
+      // after the lesson changed is dropped, never smeared into the new session.
+      if (lessonIdRef.current !== builtForLesson) return;
       setMsgs((p) => p.filter((m) => m.id !== statusId));
-      await sendTurn({
-        answer: { mode: "text", text: "" },
-        control: { type: "artifact_ready", resource_id: built.resource_id },
-        optimistic: [],
+      const readyTurn = {
+        answer: { mode: "text", text: "" } as TypedChatAnswer,
+        control: {
+          type: "artifact_ready",
+          resource_id: built.resource_id,
+        } as TypedChatControl,
+        optimistic: [] as Msg[],
         errorText: "The mentor couldn't attach the activity — ask for it again.",
-      });
+      };
+      // The bubble invites chatting during the build, so a normal turn may be in
+      // flight when generation resolves — sendTurn then returns "busy" WITHOUT
+      // sending. Wait the turn out and retry (the code-run review pattern) so a
+      // successful build is never silently dropped.
+      let outcome = await sendTurn(readyTurn);
+      for (let attempt = 0; attempt < 3 && outcome === "busy"; attempt++) {
+        await inFlightTurnRef.current?.catch(() => {});
+        outcome = await sendTurn(readyTurn);
+      }
+      if (outcome === "busy") {
+        // Practically unreachable (each retry waits the in-flight turn out first).
+        // The honest recovery: an explicit ask re-opens the offer, and the server's
+        // duplicate-reuse window returns this same build instantly.
+        addMsg({
+          id: uid(),
+          role: "bot",
+          isError: true,
+          text: 'Your activity is ready but the chat was busy — type "build me the activity" to get it.',
+        });
+      }
     } catch (error) {
       setMsgs((p) =>
         p.map((m) =>
@@ -1132,7 +1172,7 @@ function ChatPage() {
   // (which becomes the newest, so future visits resume it). The old session's transcript stays
   // saved server-side; only this screen resets.
   const restartLesson = async () => {
-    if (!accessToken || sendingRef.current) return;
+    if (!accessToken || sendingRef.current || buildingArtifactRef.current) return;
     if (!window.confirm("Start this lesson over from step 1? Your previous work stays saved."))
       return;
     setVoiceMode(false);
@@ -1208,7 +1248,11 @@ function ChatPage() {
     // Never switch lessons under an in-flight turn OR an in-flight lesson load (loadLesson and
     // restartLesson set only the `sending` state, not sendingRef): the old lesson's resolving
     // envelope would smear its session id, arc, and reply into the new one.
-    if (nextLessonId !== lessonId && (sending || sendingRef.current || runInFlight)) return;
+    if (
+      nextLessonId !== lessonId &&
+      (sending || sendingRef.current || runInFlight || buildingArtifactRef.current)
+    )
+      return;
     store.setLessonId(nextLessonId);
     goView(null);
     if (nextLessonId === lessonId) return; // already the open lesson — just come back to it

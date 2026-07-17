@@ -3667,17 +3667,28 @@ async function handleTypedRequest(
 
   // --- P8: artifact_ready — the client just finished a live artifact build ---------
   // artifact-live (service role) persisted the student_private row; this control turn
-  // makes the mentor PRESENT it. Validation is belt-and-braces on top of RLS: the row
-  // must be in this student's RLS-visible context, be an artifact, carry mentor
-  // provenance, and belong to THIS session. Invalid → deterministic benign refusal
-  // (mirrors the navigate refusal — a mentor turn under a stale card request would
-  // render an unrelated reply); nothing is written.
+  // makes the mentor PRESENT it. The row is fetched BY ID under the student's JWT (RLS
+  // enforces ownership) — never looked up in the capped context.resources window, which
+  // orders created_at.asc and would silently drop the newest row on resource-rich
+  // lessons (review fold). Validation on top of RLS: artifact type, mentor provenance,
+  // THIS session, and THIS step — a card built for step N must not present (or write
+  // bookkeeping) on a different step the student advanced to mid-build, and never
+  // during an assessment. Invalid → deterministic benign refusal (mirrors the navigate
+  // refusal); nothing is written.
   let artifactReadyResource: DbRow | null = null;
   if (controlType === "artifact_ready") {
     const requestedId = typeof control?.resource_id === "string" ? control.resource_id : "";
-    const candidate = requestedId
-      ? context.resources.find((row) => String(row.id) === requestedId)
-      : null;
+    let candidate: DbRow | null = null;
+    if (requestedId) {
+      try {
+        candidate = await loadFirst(
+          config,
+          `lesson_resources?id=eq.${encodeURIComponent(requestedId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata,activity_id`,
+        );
+      } catch {
+        candidate = null;
+      }
+    }
     const generated =
       candidate &&
       candidate.metadata &&
@@ -3687,7 +3698,10 @@ async function handleTypedRequest(
       candidate &&
       String(candidate.resource_type) === "artifact" &&
       generated &&
-      String(generated.session_id || "") === String(sessionId)
+      String(generated.session_id || "") === String(sessionId) &&
+      String(generated.activity_id || "") ===
+        String(context.activity?.id || "") &&
+      !inRevisit
     ) {
       artifactReadyResource = candidate;
     } else {
@@ -3993,11 +4007,16 @@ async function handleTypedRequest(
     const routedKind: RoutedKind | null =
       controlType === "continue"
         ? "continue_signal"
-        : answer?.mode === "code" || answer?.mode === "multiple_choice"
-          ? "answer_attempt"
-          : routerEligible
-            ? (routerResult?.kind ?? heuristicKind(content).kind)
-            : null;
+        : controlType === "artifact_ready"
+          ? // P8: presenting a built card is pure conversation — "meta" keeps the
+            // masking branches closed (review fold: with routedKind null, the empty-text
+            // control turn could stamp understanding_at via the stuck cap and advance).
+            "meta"
+          : answer?.mode === "code" || answer?.mode === "multiple_choice"
+            ? "answer_attempt"
+            : routerEligible
+              ? (routerResult?.kind ?? heuristicKind(content).kind)
+              : null;
     // Tuning telemetry: a router-question turn whose grader still said "demonstrated" is
     // the disagreement to watch before leaning harder on routing. It rides the envelope
     // (persisted whole in learning_turns.payload), so it's queryable with zero schema.
@@ -4119,15 +4138,18 @@ async function handleTypedRequest(
     const draftFlow = inRevisit
       ? revisitFlow
       : deriveTurn(draftState, requirements, presentedBefore, activityMode);
-    // P8 loader hygiene: mentor-built rows (metadata.generated) never ride the ordinary
-    // attach rungs — they are presented ONCE via the artifact_ready control, and again
-    // only when the student explicitly asks for the activity back.
+    // P8 loader hygiene: UNBOUND mentor-built rows (metadata.generated + no step
+    // binding) never ride the ordinary attach rungs — they are presented ONCE via the
+    // artifact_ready control, and again only when the student explicitly asks. A row a
+    // teacher promoted AND bound to a step (activity_id set) is ordinary class material
+    // and rides the normal rungs (review fold: filtering all generated rows broke the
+    // studio's "Share with class" promise in chat).
     const isGeneratedResource = (row: DbRow) =>
       Boolean(
         row.metadata &&
           typeof row.metadata === "object" &&
           (row.metadata as DbRow).generated,
-      );
+      ) && !row.activity_id;
     const curatedResources = context.resources.filter(
       (row) => !isGeneratedResource(row),
     );
@@ -4142,15 +4164,27 @@ async function handleTypedRequest(
           typeof context.activity?.id === "string" ? context.activity.id : "",
           presentedBefore,
         );
-    // "Show me that activity again" re-attaches the last mentor-built card by id.
+    // "Show me that activity again" re-attaches the last mentor-built card by id —
+    // fetched directly (RLS-scoped) because the capped context window orders
+    // created_at.asc and can miss the newest rows on resource-rich lessons.
     if (
       !attachedResources.length &&
       stepStateBefore.artifact_last_resource_id &&
       ARTIFACT_AGAIN_RE.test(content)
     ) {
-      const lastBuilt = context.resources.find(
-        (row) => String(row.id) === stepStateBefore.artifact_last_resource_id,
-      );
+      const lastId = stepStateBefore.artifact_last_resource_id;
+      let lastBuilt =
+        context.resources.find((row) => String(row.id) === lastId) ?? null;
+      if (!lastBuilt) {
+        try {
+          lastBuilt = await loadFirst(
+            config,
+            `lesson_resources?id=eq.${encodeURIComponent(lastId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata,activity_id`,
+          );
+        } catch {
+          lastBuilt = null;
+        }
+      }
       if (lastBuilt) attachedResources = [resourceForEnvelope(lastBuilt)];
     }
     const attachedResourceIds = new Set(
@@ -4210,9 +4244,14 @@ async function handleTypedRequest(
       !(requirements.quiz && !draftState.quiz_passed_at) &&
       presentedBefore &&
       !inRevisit &&
-      !stepStateBefore.artifact_offer_at &&
+      // One passive offer per step — but an EXPLICIT ask re-opens it (review fold:
+      // a student who typed "yes please" instead of tapping was dead-ended).
+      (!stepStateBefore.artifact_offer_at || ARTIFACT_REQUEST_RE.test(content)) &&
       stepStateBefore.artifact_generated < 1 &&
       typeof context.activity?.id === "string" &&
+      // Prose/pill agreement in the completion corner: a turn whose deterministic
+      // grade just finished the step must not have the mentor offer a build.
+      !stepDone(draftState, requirements) &&
       (draftState.graded_fails >= 2 ||
         hintRung >= 3 ||
         ARTIFACT_REQUEST_RE.test(content));

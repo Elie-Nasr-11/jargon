@@ -229,8 +229,14 @@ class ChatLiveArtifactWire(unittest.TestCase):
         # Chat: the pill is live-turn only (never replayed) and the ready control rides
         # the normal turn path.
         self.assertIn("artifactOffer: envelope.artifact_offer ?? undefined", chat_tsx)
-        self.assertIn('control: { type: "artifact_ready", resource_id:', chat_tsx)
+        self.assertIn('type: "artifact_ready"', chat_tsx)
+        self.assertIn("resource_id: built.resource_id", chat_tsx)
         self.assertIn("Building your activity", chat_tsx)
+        # Review folds: a busy in-flight turn is waited out and retried (a finished
+        # build is never dropped), and lesson switches are blocked/detected mid-build.
+        self.assertIn('outcome === "busy"', chat_tsx)
+        self.assertIn("buildingArtifactRef.current", chat_tsx)
+        self.assertIn("lessonIdRef.current !== builtForLesson", chat_tsx)
         # Studio: the opt-in toggle + student-private oversight with the promote action.
         self.assertIn("allow_live_artifacts: allowLiveArtifacts", studio)
         self.assertIn("Share with class", studio)
