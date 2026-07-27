@@ -1,14 +1,23 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  Activity,
+  BarChart3,
+  Bell,
+  BookOpen,
   ChevronsUpDown,
   ExternalLink,
+  HelpCircle,
+  House,
   LayoutGrid,
+  LifeBuoy,
   LogOut,
   MessageCircle,
   Moon,
   PanelLeftClose,
+  Plus,
+  Repeat,
+  Settings,
+  SlidersHorizontal,
   Sparkles,
   Sun,
   User,
@@ -25,14 +34,22 @@ import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
 import type { Lesson } from "@/lib/types";
-import type { StudentView } from "@/features/student/shell/studentViews";
+import {
+  canonicalView,
+  type CanonicalStudentView,
+  type StudentView,
+} from "@/features/student/shell/studentViews";
 
-// The v6 shell: ONE left column carries all navigation, ChatGPT-style — wordmark, the three
-// primary views (Tutor chat / Classes / Pulse), a scrollable lessons list (the boot-time catalog,
-// current lesson highlighted), and an account row at the bottom opening a MINIMAL popover menu
-// (plain depth-card — no gradient chrome, no hover peeks, no motion beyond color). Mentor settings
-// open as a centered modal card that blurs the whole background. Desktop: a docked aside at lg+
-// (hideable via collapse). Mobile: the same content in a left Sheet drawer.
+// The v5.0 shell: ONE left column carries all navigation, ChatGPT-style. Top to bottom — wordmark,
+// the PRIMARY Home/Learn split, a New action, the secondary destinations (Classes, Resources,
+// Routines, Customize, Reports), a scrollable lessons list (the boot-time catalog, current lesson
+// highlighted), and an account row at the bottom opening a MINIMAL popover menu (plain depth-card —
+// no gradient chrome, no hover peeks, no motion beyond color). Mentor settings open as a centered
+// modal card that blurs the whole background. Desktop: a docked aside at lg+ (hideable via
+// collapse). Mobile: the same content in a left Sheet drawer.
+//
+// Home vs Learn is the spine: Home is the LMS (coursework, agenda, signal), Learn is the tutor
+// chat. `view` absent means Learn — see studentViews.ts for why that convention is load-bearing.
 
 function NavRow({
   icon: Icon,
@@ -114,10 +131,13 @@ export type AppSidebarProps = {
   // never reads as a broken click.
   switchBlocked: boolean;
   onOpenLesson: (lessonId: string) => void;
+  // Learn = the chat (clears `view`). Every other destination goes through onOpenView.
   onGoChat: () => void;
-  onOpenClasses: () => void;
-  onOpenPulse: () => void;
-  pulseBadge: number;
+  onOpenView: (view: CanonicalStudentView) => void;
+  // Starts a fresh conversation on the current lesson.
+  onNewChat: () => void;
+  // Unread notification count — surfaces on Home, which is where the feed lives.
+  notificationsBadge: number;
   locked: boolean;
   drawerOpen: boolean;
   onCloseDrawer: () => void;
@@ -146,12 +166,15 @@ function SidebarContent({
     switchBlocked,
     onOpenLesson,
     onGoChat,
-    onOpenClasses,
-    onOpenPulse,
-    pulseBadge,
+    onOpenView,
+    onNewChat,
+    notificationsBadge,
     onCloseDrawer,
     onToggleCollapse,
   } = props;
+  // Collapse the legacy `pulse` alias once, here, so every active-state check below compares
+  // against a canonical value and a stale ?view=pulse link still lights up Home.
+  const active = canonicalView(view);
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutError, setLogoutError] = useState(false);
   const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
@@ -234,19 +257,49 @@ function SidebarContent({
       </div>
 
       <nav aria-label="Main" className="shrink-0 px-2">
-        <NavRow icon={MessageCircle} label="Tutor chat" active={!view} onClick={go(onGoChat)} />
+        {/* The primary split. Home is the LMS; Learn is the conversation (view absent). */}
+        <NavRow
+          icon={House}
+          label="Home"
+          active={active === "home"}
+          badge={notificationsBadge}
+          onClick={go(() => onOpenView("home"))}
+        />
+        <NavRow icon={MessageCircle} label="Learn" active={!active} onClick={go(onGoChat)} />
+
+        <NavRow icon={Plus} label="New" active={false} onClick={go(onNewChat)} />
+
+        <div className="my-2 h-px bg-border/60" />
+
         <NavRow
           icon={LayoutGrid}
           label="Classes"
-          active={view === "classes"}
-          onClick={go(onOpenClasses)}
+          active={active === "classes"}
+          onClick={go(() => onOpenView("classes"))}
         />
         <NavRow
-          icon={Activity}
-          label="Overview"
-          active={view === "pulse"}
-          badge={pulseBadge}
-          onClick={go(onOpenPulse)}
+          icon={BookOpen}
+          label="Resources"
+          active={active === "resources"}
+          onClick={go(() => onOpenView("resources"))}
+        />
+        <NavRow
+          icon={Repeat}
+          label="Routines"
+          active={active === "routines"}
+          onClick={go(() => onOpenView("routines"))}
+        />
+        <NavRow
+          icon={SlidersHorizontal}
+          label="Customize"
+          active={active === "customize"}
+          onClick={go(() => onOpenView("customize"))}
+        />
+        <NavRow
+          icon={BarChart3}
+          label="Reports"
+          active={active === "reports"}
+          onClick={go(() => onOpenView("reports"))}
         />
       </nav>
 
@@ -315,6 +368,15 @@ function SidebarContent({
           }
         >
           <MenuRow
+            icon={Bell}
+            label="Notifications"
+            trailing={notificationsBadge ? String(notificationsBadge) : undefined}
+            onClick={() => {
+              setMenuOpen(false);
+              go(() => onOpenView("home"))();
+            }}
+          />
+          <MenuRow
             icon={Sparkles}
             label="Mentor"
             onClick={() => {
@@ -323,6 +385,14 @@ function SidebarContent({
               // restore on close) — the drawer closes first.
               if (inDrawer) onCloseDrawer();
               onOpenMentor();
+            }}
+          />
+          <MenuRow
+            icon={Settings}
+            label="Settings"
+            onClick={() => {
+              setMenuOpen(false);
+              go(() => onOpenView("customize"))();
             }}
           />
           <MenuRow

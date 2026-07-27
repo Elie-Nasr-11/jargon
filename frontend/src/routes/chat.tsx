@@ -36,10 +36,19 @@ import { parseArtifactConfig } from "@/lib/artifact-schema";
 import { QuizPanel } from "@/features/student/QuizPanel";
 import { AppSidebar } from "@/features/student/shell/AppSidebar";
 import { PageShell } from "@/components/PageShell";
-import { isStudentView, type StudentView } from "@/features/student/shell/studentViews";
+import {
+  canonicalView,
+  isStudentView,
+  VIEW_TITLES,
+  type StudentView,
+} from "@/features/student/shell/studentViews";
 import { ClassesGrid } from "@/features/student/panels/ClassesGrid";
 import { ClassCanvas } from "@/features/student/panels/ClassCanvas";
 import { PulsePanel } from "@/features/student/panels/PulsePanel";
+import { ResourcesPanel } from "@/features/student/panels/ResourcesPanel";
+import { RoutinesPanel } from "@/features/student/panels/RoutinesPanel";
+import { MentorControls } from "@/features/student/MentorControls";
+import { GradesPanel } from "@/features/student/GradesPanel";
 import { ChatStepperStrip } from "@/features/student/chat/ChatStepper";
 import { Popover } from "@/components/Popover";
 import { useStudentNavData } from "@/hooks/useStudentNavData";
@@ -1214,7 +1223,9 @@ function ChatPage() {
     });
   };
 
-  const openPulse = () => goView("pulse");
+  // Collapse the legacy ?view=pulse alias once so the panel switch and the sidebar agree on a
+  // single canonical value (see studentViews.ts).
+  const activeView = canonicalView(view);
 
   // One launcher for both quiz surfaces: a finished attempt opens as a relaxed result view
   // instead of flashing the locked frame while QuizPanel boots. The ref remembers HOW it opened
@@ -1491,9 +1502,14 @@ function ChatPage() {
         switchBlocked={sending || runInFlight}
         onOpenLesson={openLessonFromView}
         onGoChat={() => goView(null)}
-        onOpenClasses={() => goView("classes")}
-        onOpenPulse={openPulse}
-        pulseBadge={navData.notificationsUnread}
+        onOpenView={(next) => goView(next)}
+        // "New" = a fresh conversation on this lesson. restartLesson confirms first and leaves
+        // previously saved work intact, so this is non-destructive despite the name.
+        onNewChat={() => {
+          goView(null);
+          void restartLesson();
+        }}
+        notificationsBadge={navData.notificationsUnread}
         locked={locked}
         drawerOpen={drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
@@ -1769,7 +1785,7 @@ function ChatPage() {
             key={`${view}:${classParam ?? ""}:${workVersion}`}
             className="col-start-1 row-start-1 flex min-h-0 flex-col"
           >
-            {view === "classes" ? (
+            {activeView === "classes" ? (
               classParam ? (
                 // The class canvas carries its own name header — the back pill is the only shell.
                 <PageShell onBack={() => goView("classes")} backLabel="All classes">
@@ -1785,7 +1801,7 @@ function ChatPage() {
                   />
                 </PageShell>
               ) : (
-                <PageShell title="Classes">
+                <PageShell title={VIEW_TITLES.classes}>
                   <ClassesGrid
                     dueByClass={navData.dueByClass}
                     avgByClass={navData.avgByClass}
@@ -1793,8 +1809,31 @@ function ChatPage() {
                   />
                 </PageShell>
               )
+            ) : activeView === "resources" ? (
+              <PageShell title={VIEW_TITLES.resources}>
+                <ResourcesPanel />
+              </PageShell>
+            ) : activeView === "routines" ? (
+              <PageShell title={VIEW_TITLES.routines}>
+                <RoutinesPanel />
+              </PageShell>
+            ) : activeView === "customize" ? (
+              <PageShell title={VIEW_TITLES.customize}>
+                <MentorControls
+                  mentor={mentor}
+                  onChange={updateMentor}
+                  voice={voice}
+                  onVoiceChange={updateVoice}
+                />
+              </PageShell>
+            ) : activeView === "reports" ? (
+              <PageShell title={VIEW_TITLES.reports}>
+                <GradesPanel grades={navData.grades} />
+              </PageShell>
             ) : (
-              <PageShell title="Overview">
+              // Home — the LMS overview. Renders exactly what v4.0's "Overview" rendered, so the
+              // legacy ?view=pulse alias resolves to an identical surface.
+              <PageShell title={VIEW_TITLES.home}>
                 <PulsePanel
                   grades={navData.grades}
                   notifications={navData.notifications}

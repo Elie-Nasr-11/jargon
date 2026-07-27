@@ -6406,3 +6406,52 @@ column that does not exist — I checked the other REST calls against the 0009 b
 Suggested next task: the live E2E from the previous entry, now with a two-class student so the
 linkage branch is actually exercised (fail a practice step twice → pill → build → Run → teacher
 Share with class), then main FF.
+
+## Claude -> Codex / Human - 2026-07-27 18:21
+
+Status: Starting
+Task: v5.0 P1 — student shell + IA. Home/Learn split, new sidebar nav (New, Resources, Routines,
+Customize, Reports alongside Classes), bottom account menu. Groundwork only; no runtime/mode change
+(that is P2).
+Files I expect to touch: frontend/src/features/student/shell/{studentViews.ts,AppSidebar.tsx},
+frontend/src/routes/chat.tsx (panel wiring), new panels under features/student/panels/,
+docs/{PLATFORM,DECISIONS,HANDOFF}.md
+Notes: Plan approved this session (v5.0). P1 is deliberately behavior-safe: the chat runtime and the
+v4.0 mode vocabulary are untouched until P2, which is where the deterministic-gate invariant and the
+eight-mode constraint actually change. Approved architecture separates student-chosen MODE from a
+requirement ledger that owns progression, so "Driver" mode selection cannot bypass a gate.
+
+## Claude -> Codex / Human - 2026-07-27 18:40
+
+Status: Done (v5.0 P1 — shell + IA only)
+Summary: Rebuilt the student navigation around the Home (LMS) / Learn (chat) split and widened the
+view vocabulary. `studentViews.ts` goes from ["classes","pulse"] to home/classes/resources/routines/
+customize/reports, keeping two load-bearing conventions: `view` absent still means the chat (every
+deep link, `goView(null)`, and the close-panel gesture rely on it), and `pulse` survives as a
+validated LEGACY ALIAS resolving to Home via a new `canonicalView()` helper, so v4.0 bookmarks
+carrying ?view=pulse still land somewhere real. Home renders exactly what v4.0's "Overview"
+rendered (PulsePanel), so the alias is surface-identical, not just non-404.
+The sidebar gains the Home/Learn primary rows, a New action, and the secondary destinations;
+the account menu gains Notifications and Settings. Reports reuses GradesPanel and Customize reuses
+MentorControls — both already existed. Resources and Routines are honest empty states: the nav
+entries are real, the data layers are explicitly pending (a student-scoped resource listing that
+respects can_view_lesson_resource, and a routine scheduler, are each their own slice).
+NOTHING in the chat runtime changed — no mode selector, no gate change, no migration. That is P2.
+Files changed: frontend/src/features/student/shell/{studentViews.ts,AppSidebar.tsx},
+frontend/src/features/student/panels/{ResourcesPanel,RoutinesPanel}.tsx (new),
+frontend/src/routes/chat.tsx, docs/{DECISIONS,HANDOFF}.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact pre-existing baseline);
+vite build green; python unittest full discover 263 tests, 4 errors — the 4 are the known
+pre-existing setUpClass FileNotFoundErrors on deleted frontend readers, unchanged from baseline.
+Remaining concerns: (1) NOT verified in a running browser — tsc/lint/build only; the sidebar layout
+and drawer behavior want a real E2E pass. (2) Four requested account-menu items (Profile, What's
+new, Help, Contact) were deliberately NOT added: none has a destination that exists, and dead menu
+rows are worse than absent ones. They need destinations decided. (3) `restartLesson` is wired to
+"New" — it confirms and preserves saved work, so it is non-destructive, but its confirm copy still
+says "Start this lesson over from step 1" and should be reworded for the New framing.
+(4) chat.tsx is now ~3,560 lines; the plan calls for extracting the chat shell into
+features/student/chat/ BEFORE P2 adds a mode state machine — do not skip that.
+Suggested next task: P2 — rewrite PLATFORM.md §2/§7 to v5.0 first (the doc is canonical), then the
+mode constraint migration + requirement ledger in step_state, then the chat.tsx mode branch, then
+the Composer selector (rename its local `Mode = "text"|"code"` to `InputSurface` in the same commit
+— the collision with LearningMode will otherwise make the file unreadable).
