@@ -6362,3 +6362,47 @@ ships only on the next main FF.
 Suggested next task: adversarial review folds (in progress this session), push + deploy verify,
 main FF on user OK, then the live E2E (fail a practice step twice → pill → build → Run →
 teacher Share with class).
+
+## Claude -> Codex / Human - 2026-07-27 14:22
+
+Status: Starting
+Task: Fix the class-scoping join in artifact-live — `units?select=course_id` queries a column
+that does not exist (units has `course_version_id`; `course_id` lives on `course_versions`).
+Files I expect to touch: supabase/functions/artifact-live/index.ts, tests/test_artifact_live.py,
+docs/HANDOFF.md
+Notes: PostgREST 400s on the unknown column and serviceFetch throws, so this is a hard 500 on the
+build path (not the documented soft fallback) for any student with >1 active membership.
+
+## Claude -> Codex / Human - 2026-07-27 14:35
+
+Status: Done
+Summary: Fixed a hard 500 on the artifact-live build path introduced by the P8 review-fold
+class-scoping block (0061947). That block resolved lesson→class with a single hop,
+`units?id=eq.X&select=course_id` — but `units` has no `course_id` column; it carries
+`course_version_id`, and `course_id` lives on `course_versions`. PostgREST answers an unknown
+select column with a 400, `serviceFetch` throws on !ok, and the call sat outside any try/catch,
+so the outer Deno.serve handler returned "Couldn't build the activity. Try again." The blast
+radius is narrow but real: the branch is gated on `membershipClassIds.length > 1`, so a student
+in exactly one class never reached it (which is why the P8 E2E path missed it), but any student
+in two or more active classes could never build a live artifact at all. Fix does the join in two
+hops (units → course_versions → course), matching the existing reference resolve in
+curriculum-admin/index.ts:599-604, and wraps the whole linkage refinement in try/catch so it
+degrades to the newest-membership default the surrounding comment already promised instead of
+sinking a build the student had passed every gate for.
+Files changed: supabase/functions/artifact-live/index.ts (join + soft-fail + corrected comment),
+tests/test_artifact_live.py (+1 test), docs/HANDOFF.md.
+Tests run: python unittest tests.test_artifact_live (21 tests, green); full python discover
+(263 tests, 4 errors — all the known pre-existing setUpClass FileNotFoundErrors on deleted
+frontend readers: test_assessment_expansion, test_curriculum_authoring_studio, test_review_due,
+test_review_sessions). Verified against a stashed baseline: 262 tests / same 4 errors before,
+263 / same 4 after, so this change adds one test and no regressions. esbuild syntax check on
+artifact-live clean. Frontend untouched.
+Remaining concerns: the new test is a static source invariant (this repo's house style) — it
+pins the select column and the catch, not live PostgREST behavior, so it cannot prove the
+two-hop join returns the right course for real data. That still wants the live E2E already
+queued in OPEN_QUESTIONS. Worth noting the class-linkage path has no runtime coverage at all;
+a student in 2+ classes is the only way to exercise it. Nothing else in this function selects a
+column that does not exist — I checked the other REST calls against the 0009 baseline schema.
+Suggested next task: the live E2E from the previous entry, now with a two-class student so the
+linkage branch is actually exercised (fail a practice step twice → pill → build → Run → teacher
+Share with class), then main FF.

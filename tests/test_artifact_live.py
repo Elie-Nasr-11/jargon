@@ -125,6 +125,19 @@ class ArtifactLiveFunction(unittest.TestCase):
         cleanup = LIVE[LIVE.index("catch (insertError)"):]
         self.assertIn('method: "DELETE"', cleanup)
 
+    def test_class_linkage_joins_through_course_versions(self):
+        # units has NO course_id column — it carries course_version_id, and course_id
+        # lives on course_versions. A one-hop `units?...select=course_id` is a PostgREST
+        # 400 on an unknown column, and serviceFetch throws on !ok, so the regression
+        # 500s every build for a student in more than one class.
+        unit_select = re.search(r"units\?id=eq\.[^`]*select=([a-z_,]+)", LIVE)
+        self.assertIsNotNone(unit_select)
+        self.assertEqual(unit_select.group(1), "course_version_id")
+        self.assertIn("course_versions?id=eq.", LIVE)
+        # Refinement is best-effort: a linkage failure must not sink the build.
+        linkage = LIVE[LIVE.index("units?id=eq.") : LIVE.index("let organizationId")]
+        self.assertIn("catch (linkageError)", linkage)
+
     def test_brief_excludes_raw_student_text_and_answers(self):
         # The generator's input is composed ONLY from structured fields — the activity
         # select must not pull expected_output/starter_code, and no student answer text

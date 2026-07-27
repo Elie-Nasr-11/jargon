@@ -501,7 +501,7 @@ async function handleGenerate(config: Config, body: DbRow): Promise<Response> {
   }
 
   // Class/org scoping: bind the row to the class actually RUNNING this lesson
-  // (lesson → unit → course → class_courses ∩ the student's active memberships), so
+  // (lesson → unit → course version → course → class_courses ∩ the student's memberships), so
   // oversight and Share-with-class land with the right teacher (review fold: the
   // newest membership could belong to a different class entirely). Falls back to the
   // newest membership when no linkage resolves; nulls are safe — the fenced view
@@ -516,25 +516,45 @@ async function handleGenerate(config: Config, body: DbRow): Promise<Response> {
   let classId = membershipClassIds[0] || "";
   const unitId = cleanText(lesson.unit_id);
   if (unitId && membershipClassIds.length > 1) {
-    const unit = firstRow(
-      await serviceFetch(
-        config,
-        `/rest/v1/units?id=eq.${encodeURIComponent(unitId)}&select=course_id`,
-      ),
-    );
-    const courseId = unit ? cleanText(unit.course_id) : "";
-    if (courseId) {
-      const courseClasses = await serviceFetch(
-        config,
-        `/rest/v1/class_courses?course_id=eq.${encodeURIComponent(courseId)}&select=class_id&limit=50`,
-      );
-      const lessonClassIds = new Set(
-        (Array.isArray(courseClasses) ? courseClasses : []).map((row) =>
-          cleanText((row as DbRow).class_id),
+    // Two hops, not one: units carries course_version_id, and course_id lives on
+    // course_versions (same shape as curriculum-admin's lesson→course resolve). A
+    // one-hop units?select=course_id is a PostgREST 400 on an unknown column, and
+    // serviceFetch throws — which would 500 the whole build instead of falling back.
+    try {
+      const unit = firstRow(
+        await serviceFetch(
+          config,
+          `/rest/v1/units?id=eq.${encodeURIComponent(unitId)}&select=course_version_id&limit=1`,
         ),
       );
-      const linked = membershipClassIds.find((id) => lessonClassIds.has(id));
-      if (linked) classId = linked;
+      const courseVersionId = unit ? cleanText(unit.course_version_id) : "";
+      let courseId = "";
+      if (courseVersionId) {
+        const version = firstRow(
+          await serviceFetch(
+            config,
+            `/rest/v1/course_versions?id=eq.${encodeURIComponent(courseVersionId)}&select=course_id&limit=1`,
+          ),
+        );
+        courseId = version ? cleanText(version.course_id) : "";
+      }
+      if (courseId) {
+        const courseClasses = await serviceFetch(
+          config,
+          `/rest/v1/class_courses?course_id=eq.${encodeURIComponent(courseId)}&select=class_id&limit=50`,
+        );
+        const lessonClassIds = new Set(
+          (Array.isArray(courseClasses) ? courseClasses : []).map((row) =>
+            cleanText((row as DbRow).class_id),
+          ),
+        );
+        const linked = membershipClassIds.find((id) => lessonClassIds.has(id));
+        if (linked) classId = linked;
+      }
+    } catch (linkageError) {
+      // Best-effort refinement only: keep the newest-membership default rather than
+      // failing a build the student already passed every gate for.
+      console.error("artifact-live class linkage failed", linkageError);
     }
   }
   let organizationId = "";
