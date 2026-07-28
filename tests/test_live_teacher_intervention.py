@@ -7,6 +7,13 @@ MIGRATION = ROOT / "supabase" / "migrations" / "0012_live_teacher_intervention_r
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 CHAT_ROUTE = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
+# The v5.0 P2a extraction split the student chat surface: the route keeps component state and
+# effects, chatMessages.ts holds the transcript model and its pure adapters (including the
+# teacher-live-comment → Msg mapping this file asserts on). Both are read as one blob below so
+# these invariants pin behavior rather than file layout.
+CHAT_MESSAGES = (
+    ROOT / "frontend" / "src" / "features" / "student" / "chat" / "chatMessages.ts"
+)
 # routes/teacher.tsx is now a thin route wrapper; the live-intervention teacher
 # UI lives in the TeacherConsole feature component.
 TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
@@ -18,7 +25,9 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
         cls.migration = MIGRATION.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.chat = CHAT_ROUTE.read_text(encoding="utf-8")
+        cls.chat = CHAT_ROUTE.read_text(encoding="utf-8") + CHAT_MESSAGES.read_text(
+            encoding="utf-8"
+        )
         cls.teacher = TEACHER_ROUTE.read_text(encoding="utf-8")
 
     def test_realtime_publication_is_enabled_for_live_tables(self):

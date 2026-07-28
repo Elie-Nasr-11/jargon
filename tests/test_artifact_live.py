@@ -229,7 +229,12 @@ class ChatLiveArtifactWire(unittest.TestCase):
         types = (front / "lib" / "types.ts").read_text()
         api = (front / "lib" / "api.ts").read_text()
         supa = (front / "lib" / "supabase.ts").read_text()
-        chat_tsx = (front / "routes" / "chat.tsx").read_text()
+        # The student chat surface is two files since the v5.0 P2a extraction: the route holds
+        # component state and effects, chatMessages.ts holds the transcript model and its pure
+        # adapters. Assert against both so these invariants pin BEHAVIOR, not file layout.
+        chat_tsx = (front / "routes" / "chat.tsx").read_text() + (
+            front / "features" / "student" / "chat" / "chatMessages.ts"
+        ).read_text()
         studio = (front / "routes" / "teacher.curriculum.tsx").read_text()
         # Types: the control union + per-student visibility.
         self.assertIn('"continue" | "navigate" | "resume" | "artifact_ready"', types)
