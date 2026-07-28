@@ -593,3 +593,26 @@ Also decided: a linear stepper is a lie once mode is student-chosen, so the less
 "N of M requirements met" with the outstanding ones tappable (tapping switches to the mode that can
 discharge it). Phasing is shell → runtime → theming, each behind a flag, because a real student is
 live on the platform.
+
+## 2026-07-27 (amended) — v5.0 P2 as built: two mode axes, no requirement-ledger rebuild
+
+Amends the entry above. That entry described building a new "requirement ledger" to make
+student-driven modes safe. Research before implementing showed **the ledger already exists** and the
+rebuild was unnecessary:
+
+- `StepState` (chat/index.ts) is already a monotonic per-step ledger; `stepRequirements()` already
+  derives what a step needs from its authored mode; `stepDone()` already decides completion.
+- Flow v3 already enforces "conversation never closes a gate": the router classifies each turn and
+  `applyTurn` discards grader verdicts for conversation kinds.
+
+So P2 shipped the smaller, safer change: the student's declared mode is an authoritative input to
+the EXISTING routing/masking layer — declaring what the LLM previously inferred — rather than a
+parallel progression system.
+
+The correction that mattered most: the earlier entry conflated two different axes. The authored
+`lesson_activities.mode` describes a STEP; the new selector describes a MESSAGE. They coexist, so
+"rebuild the vocabulary" applies only to the student-facing selector. The eight authored step types
+are untouched in P2, no migration was needed, and no live curriculum changed behavior.
+
+Unchanged from the original entry: the Home/Learn shell (shipped in P1), and that §9's "visual
+redesign — deferred" is lifted.

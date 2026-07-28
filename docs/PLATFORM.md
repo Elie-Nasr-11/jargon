@@ -234,3 +234,44 @@ DONE since (moved out of "deferred"):
   round-trip), preferred over the loose `isQuestionShaped` regex, which survives only as the
   no-mentor-tag fallback. Confusion stays broad (mentor OR the deterministic detectors). Still
   logging-only (`learning_evidence` mode='inquiry'); feeds the teacher's confusion-vs-curiosity split.
+
+---
+
+## 10. v5.0 addendum — the turn-level mode axis
+
+Status: canonical for v5.0. §2's eight modes are UNCHANGED by this section.
+
+v4.0 had one thing called "mode": `lesson_activities.mode`, a property of a **step**, answering
+*what finishes this step?* It feeds `stepRequirements()` and therefore the deterministic gates.
+
+v5.0 adds a second, independent axis: a **student-declared turn mode**, a property of a **message**,
+answering *what am I doing right now?* The student picks it from the chatbox — `lesson` (default),
+`practice`, `discuss`, `quiz`, `assignment`, `open`. (`checkpoints` appears in the selector but is a
+view-only surface that opens the work dock and never sends a turn.)
+
+These do not compete. A step authored as `assessment` stays an assessment while the student asks a
+question about it in `discuss` and then answers it in `quiz`.
+
+### How it preserves the progression invariant
+
+§1 requires that deterministic gates own progression and the LLM never grades its own completion.
+Student-chosen modes threaten that only if a mode can talk past a gate. It cannot, because:
+
+- The declared mode sets a **ceiling** on what a turn may discharge; the Flow v3 router still
+  classifies *within* that ceiling. The ceiling restricts, it never relabels — otherwise declaring
+  `practice` would turn a mid-practice question into a graded failure.
+- `discuss` and `open` are capped to a conversation kind, which `applyTurn` already refuses to
+  grade. No new gate logic and no second guard: `applyTurn` remains the only writer of the four gate
+  timestamps in the turn path (`loadStepState`'s one-time v2 backfill is the only other writer, and
+  is not on the turn path).
+- Explicit control turns (Continue, navigate) bypass the ceiling deliberately. A button press is
+  intent, not conversation.
+- Absent or unrecognized mode → v4.0 behavior exactly, the same defensive posture as
+  `routedKind === null`.
+
+### What v5.0 P2 deliberately does NOT do
+
+Rebuild the authored eight. The two axes serve different purposes, and remapping live curricula
+(Book F alone is 106 activities) buys nothing the turn-level axis doesn't already deliver. Whether
+the eight still fit is an open question to revisit after the selector has been used — see
+OPEN_QUESTIONS.

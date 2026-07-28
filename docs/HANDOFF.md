@@ -6455,3 +6455,46 @@ Suggested next task: P2 — rewrite PLATFORM.md §2/§7 to v5.0 first (the doc i
 mode constraint migration + requirement ledger in step_state, then the chat.tsx mode branch, then
 the Composer selector (rename its local `Mode = "text"|"code"` to `InputSurface` in the same commit
 — the collision with LearningMode will otherwise make the file unreadable).
+
+## Claude -> Codex / Human - 2026-07-27 19:05
+
+Status: Done (v5.0 P2a + P2b backend). P2c frontend selector NOT started.
+Summary: Two commits. P2a is a pure extraction — the transcript data model and its pure adapters
+(Msg union, LearningTurn/TypedChatEnvelope/TeacherLiveComment → Msg, formatting/parsing helpers)
+moved out of routes/chat.tsx into features/student/chat/chatMessages.ts. chat.tsx 3,564 → 3,300
+lines; no behavior change, proven by the suite being byte-identical in outcome afterwards. Two
+static tests asserted those fragments lived in chat.tsx specifically; both now read the route and
+the module as one blob so they pin behavior rather than file layout (same precedent as the teacher
+assertions that already follow TeacherConsole.tsx).
+P2b adds the backend half of the mode selector. The student declares a turn mode and that sets a
+CEILING on what the turn may discharge. The design point worth remembering: this is a property of
+the MESSAGE and is a SEPARATE AXIS from lesson_activities.mode, which is a property of the STEP.
+The original plan conflated them and would have migrated the eight authored modes; research showed
+that buys nothing, so P2 leaves them alone — no migration, no live curriculum affected.
+Discuss/Open cannot close a gate because they are handed a routedKind applyTurn already refuses to
+grade (Flow v3 masking), NOT because of a new guard — one choke point preserved. The null kind is
+lifted too, or the stuck cap could stamp understanding_at from a discuss turn. Control turns bypass
+the ceiling deliberately (a button press is intent, not conversation).
+Files changed: frontend/src/features/student/chat/chatMessages.ts (new), frontend/src/routes/chat.tsx,
+supabase/functions/chat/index.ts, tests/test_turn_modes.py (new, 7 tests),
+tests/{test_artifact_live,test_live_teacher_intervention}.py, docs/{PLATFORM,DECISIONS,HANDOFF}.md.
+Tests run: python unittest full discover 270 tests, 4 errors — the same 4 pre-existing setUpClass
+FileNotFoundErrors on deleted frontend readers, unchanged from the 263/4 baseline (+7 new tests).
+Frontend tsc 0 errors, eslint 0 errors / 17 warnings (baseline), vite build green. esbuild syntax
+check on chat/index.ts clean. Scope of `declaredMode` verified by hand (both its declaration and its
+use are inside handleTypedRequest) because esbuild does not do scope analysis and an out-of-scope
+reference would be a production ReferenceError.
+Remaining concerns: (1) THE FEATURE IS NOT USABLE YET — no UI sends `mode`, so the ceiling is inert
+by construction. That is a safe resting state, not a broken one. (2) The per-mode DIRECTIVE branch
+was not written: Discuss currently declines to grade but the mentor's framing is unchanged, so
+Discuss will not yet FEEL different. turnDirective() is the place. (3) Declared mode is not yet
+recorded on learning_turns.payload, so there is no telemetry on which modes students pick.
+(4) Deliberately not done: skipping the understanding-grader call on Discuss/Open. The verdict is
+discarded anyway, so it is a real cost/latency saving (~$0.0006 + a round trip per turn), but
+changing routing and grader invocation together would make a regression hard to localize.
+(5) Further chat.tsx extraction (RealtimeVoicePanel ~430 lines, WorkDock) remains available.
+Suggested next task: P2c — types.ts StudentTurnMode + api.ts passthrough + the Composer selector.
+When touching Composer.tsx, rename its local `type Mode = "text" | "code"` (:98) to `InputSurface`
+in the SAME commit; it is the input-surface axis and the collision with the new turn mode will make
+the file unreadable otherwise. Have a quiz-choice click auto-switch the student to Quiz mode — the
+server fails closed on a choice sent in Discuss, which is correct but would read as a dead button.
