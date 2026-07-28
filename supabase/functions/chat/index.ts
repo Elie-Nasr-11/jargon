@@ -1503,6 +1503,56 @@ type RoutedKind =
 
 type RouterVerdict = { kind: RoutedKind; confidence: number };
 
+// --- v5.0: student-declared turn mode ----------------------------------------
+// The student picks how they're engaging from the chatbox. This is a property of the
+// MESSAGE ("what am I doing right now?"), and is a different axis from
+// lesson_activities.mode, which is a property of the STEP ("what finishes this step?").
+// The eight authored step types are untouched by this.
+//
+// The declared mode sets a CEILING on what a turn may discharge; the router still
+// classifies WITHIN that ceiling. That distinction matters: if declaring "practice"
+// forced every message to be an answer_attempt, asking a question mid-practice would
+// count as a graded failure. Declared mode restricts, it never relabels.
+//
+// 'checkpoints' is deliberately absent — it is a view-only surface that opens the work
+// dock and never sends a turn.
+type StudentTurnMode = "lesson" | "practice" | "discuss" | "quiz" | "assignment" | "open";
+
+const STUDENT_TURN_MODES = new Set<string>([
+  "lesson",
+  "practice",
+  "discuss",
+  "quiz",
+  "assignment",
+  "open",
+]);
+
+// null = absent or unrecognized → today's behavior exactly, matching the defensive
+// posture of `routedKind === null` (an old client, or a typo, can never brick a lesson).
+function studentTurnMode(value: unknown): StudentTurnMode | null {
+  return typeof value === "string" && STUDENT_TURN_MODES.has(value)
+    ? (value as StudentTurnMode)
+    : null;
+}
+
+// Conversation-only modes never discharge a gate. Rather than adding a new guard to
+// applyTurn (which would create a second place gates can be reasoned about), we hand it a
+// routedKind it ALREADY refuses to grade — the Flow v3 masking at applyTurn's
+// understanding/acknowledge branches does the rest. One choke point, unchanged.
+function applyModeCeiling(
+  mode: StudentTurnMode | null,
+  kind: RoutedKind | null,
+): RoutedKind | null {
+  if (mode !== "discuss" && mode !== "open") return kind;
+  // 'question' is the safe floor: non-grading, non-acknowledging, and already handled
+  // everywhere downstream. null must ALSO be lifted here — legacy-null lets the stuck cap
+  // stamp understanding_at, which would let a discuss turn close a gate.
+  if (kind === null || kind === "answer_attempt" || kind === "continue_signal") {
+    return "question";
+  }
+  return kind;
+}
+
 const ROUTED_KINDS = new Set<string>([
   "answer_attempt",
   "question",
@@ -3406,6 +3456,9 @@ async function handleTypedRequest(
 ): Promise<Response> {
   const requestStartedAt = Date.now();
   const lessonId = typeof body.lesson_id === "string" ? body.lesson_id : "";
+  // v5.0 student-declared turn mode. Absent (any client older than the selector) or
+  // unrecognized → null → today's behavior, unchanged.
+  const declaredMode = studentTurnMode(body.mode);
   if (!lessonId) return typedError("lesson_id is required.", 400);
 
   let config: SupabaseConfig;
@@ -4004,7 +4057,7 @@ async function handleTypedRequest(
     // Routed kind resolution: explicit control wins; code/MCQ are attempts by
     // construction; router verdict next; heuristic fallback keeps legacy behavior for
     // text turns when the router errored. null = fully legacy (e.g. file answers).
-    const routedKind: RoutedKind | null =
+    const routedKindRaw: RoutedKind | null =
       controlType === "continue"
         ? "continue_signal"
         : controlType === "artifact_ready"
@@ -4017,6 +4070,13 @@ async function handleTypedRequest(
             : routerEligible
               ? (routerResult?.kind ?? heuristicKind(content).kind)
               : null;
+    // v5.0: the student's declared mode caps what this turn may discharge. Explicit
+    // CONTROL turns are exempt on purpose — Continue and the navigation controls are
+    // deliberate button presses, not conversation, so a student in Discuss can still
+    // press Continue on a content step. Everything else routes through the ceiling.
+    const routedKind: RoutedKind | null = controlType
+      ? routedKindRaw
+      : applyModeCeiling(declaredMode, routedKindRaw);
     // Tuning telemetry: a router-question turn whose grader still said "demonstrated" is
     // the disagreement to watch before leaning harder on routing. It rides the envelope
     // (persisted whole in learning_turns.payload), so it's queryable with zero schema.
