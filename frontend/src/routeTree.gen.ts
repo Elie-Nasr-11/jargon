@@ -13,6 +13,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as LearnRouteImport } from './routes/learn'
 import { Route as TeacherRouteImport } from './routes/teacher'
 import { Route as TeacherCurriculumRouteImport } from './routes/teacher.curriculum'
 import { Route as TeacherClassClassIdRouteImport } from './routes/teacher.class.$classId'
@@ -37,6 +38,11 @@ const LoginRoute = LoginRouteImport.update({
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LearnRoute = LearnRouteImport.update({
+  id: '/learn',
+  path: '/learn',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TeacherRoute = TeacherRouteImport.update({
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/platform': typeof PlatformRoute
   '/chat': typeof ChatRoute
+  '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/platform': typeof PlatformRoute
   '/chat': typeof ChatRoute
+  '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/platform': typeof PlatformRoute
   '/chat': typeof ChatRoute
+  '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
   '/teacher/curriculum': typeof TeacherCurriculumRoute
@@ -102,10 +111,10 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
+  fullPaths: '/' | '/admin' | '/platform' | '/chat' | '/learn' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/platform' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
-  id: '__root__' | '/' | '/admin' | '/platform' | '/chat' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
+  to: '/' | '/admin' | '/platform' | '/chat' | '/learn' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
+  id: '__root__' | '/' | '/admin' | '/platform' | '/chat' | '/learn' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -113,6 +122,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   PlatformRoute: typeof PlatformRoute
   ChatRoute: typeof ChatRoute
+  LearnRoute: typeof LearnRoute
   LoginRoute: typeof LoginRoute
   TeacherRoute: typeof TeacherRoute
   TeacherCurriculumRoute: typeof TeacherCurriculumRoute
@@ -148,6 +158,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/learn': {
+      id: '/learn'
+      path: '/learn'
+      fullPath: '/learn'
+      preLoaderRoute: typeof LearnRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/teacher': {
@@ -193,6 +210,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   PlatformRoute: PlatformRoute,
   ChatRoute: ChatRoute,
+  LearnRoute: LearnRoute,
   LoginRoute: LoginRoute,
   TeacherRoute: TeacherRoute,
   TeacherCurriculumRoute: TeacherCurriculumRoute,

@@ -6498,3 +6498,58 @@ When touching Composer.tsx, rename its local `type Mode = "text" | "code"` (:98)
 in the SAME commit; it is the input-surface axis and the collision with the new turn mode will make
 the file unreadable otherwise. Have a quiz-choice click auto-switch the student to Quiz mode — the
 server fails closed on a choice sent in Discuss, which is correct but would read as a dead button.
+
+## Claude -> Codex / Human - 2026-07-28 08:52
+
+Status: Starting
+Task: v6 student surface — rebuild the student-facing frontend from scratch, component by component,
+in a clean namespace (frontend/src/student/). Keeps the plumbing (lib/api, lib/types, lib/supabase,
+components/ui primitives + design tokens) and the live backend; replaces routes + student feature
+components.
+Files I expect to touch: frontend/src/student/** (new), a new route, docs.
+Notes: All prior work is preserved on branch archive/v4-flow-v3-artifacts-v5 (01f5461) — nothing was
+deleted. Rationale for keeping the backend: deploy-backend.yml deploys from this branch, so the edge
+functions and migrations are LIVE; the schema already holds a real student's progress and Book F's
+106 teacher-authored activities. Scratching backend code would not un-apply migrations, and would
+force re-deriving the gate/RLS invariants against a live user. The frontend is the layer that is
+actually frozen (main is 23 commits behind) and safe to replace.
+Naming discipline from commit 1 — the overloaded word "mode" is what caused the v5.0 P2 planning
+error, so the new surface uses distinct names: TurnMode (what the student is doing in a message),
+StepKind (the authored step type), InputSurface (text vs code composer). No bare "Mode".
+
+## Claude -> Codex / Human - 2026-07-28 09:20
+
+Status: Done (v6 student surface — slice 1 of N: shell, nav, mode selector, mode-skinned chat window)
+Summary: Started the from-scratch student surface under frontend/src/student/ on a new route
+(/learn), alongside the existing /chat which stays the shipping surface until the new one is better.
+Nothing was deleted; all prior work is on archive/v4-flow-v3-artifacts-v5 (01f5461).
+Naming discipline is the point of this rebuild: the word "mode" meant seven different things in the
+old surface and that ambiguity caused the v5.0 P2 planning error. The new surface uses TurnMode
+(what the student is doing in a message), StepKind (the authored step type), and InputSurface
+(text vs code composer). No bare "Mode" anywhere.
+Built: turnModes.ts (the 7-mode vocabulary with per-mode hint/canProgress/accent), navigation.ts
+(section vs destination vs menu-item, three distinct concepts), StudentSidebar (Home/Learn segmented
+selector, New, five destinations, account menu with the six requested items), ModeSelector (picker
+with per-mode hints; unavailable modes render disabled-with-reason, never hidden), Chatbox
+(attachments, mode selector, audio, speak/send — the primary action swaps Mic→Send when there's
+text), ChatWindow (mode-tinted panel, own border, centered eyebrow pill ON the top border), and the
+StudentApp shell. Per-mode colour is one hue per mode in styles.css plus two utility classes that
+derive surface/border via color-mix against --background — the same auto-inverting trick the
+existing depth ramp uses, so light/dark both work from a single definition and no component
+hardcodes a hex.
+Files changed: frontend/src/student/{turnModes,navigation}.ts,
+frontend/src/student/{StudentSidebar,ModeSelector,Chatbox,ChatWindow,StudentApp}.tsx,
+frontend/src/routes/learn.tsx, frontend/src/routeTree.gen.ts, frontend/src/styles.css, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact pre-existing baseline); vite
+build green; python unittest 270 tests, 4 errors — the known pre-existing setUpClass
+FileNotFoundErrors, unchanged.
+Remaining concerns: (1) NOT verified in a browser — tsc/lint/build only. The eyebrow-pill
+positioning and the segmented control want real eyes. (2) The chat window is not wired to the API:
+onSend is a no-op and the transcript is placeholder text. It renders and the mode selector works,
+but it does not converse yet. (3) Home and all five destinations are honest "not built yet" panels.
+(4) routeTree.gen.ts is hand-maintained in this repo (no TanStack router vite plugin), so adding a
+route means editing it in 8 places — worth wiring the plugin before adding more routes.
+(5) The account menu items are wired to a no-op handler; they need destinations.
+Suggested next task: wire ChatWindow to the live chat API (invokeTypedChat already accepts the mode
+field the backend reads — see supabase/functions/chat/index.ts applyModeCeiling), reusing
+features/student/chat/chatMessages.ts for the transcript model rather than rewriting it.
