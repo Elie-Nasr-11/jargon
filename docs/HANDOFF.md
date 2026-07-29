@@ -6625,3 +6625,26 @@ with network access and a signed-in student.
 bubble even though retryAnswer is stored.
 Suggested next task: run /learn signed in from a networked machine and fix what boot gets wrong —
 that is now the only thing standing between this surface and being usable.
+
+## Claude -> Codex / Human - 2026-07-29 09:45
+
+Status: Aborted before implementing — the premise was wrong.
+Task (as scoped): build a teacher confirm/edit page for extracted resource content.
+Finding: THE PAGE ALREADY EXISTS. TeacherConsole.tsx imports and uses all eight resource-processing
+wrappers (fetchResourceTextChunks, saveExtractedPdfChunks, uploadPdfPageAssets, ocrPdfPages,
+transcribeMediaResource, saveResourceChunkEdits, approveResourceChunks, rejectResourceChunks) and
+renders a full "Extracted text / transcript review" panel per resource with draft/approved/rejected
+counts, per-chunk editing, per-chunk approve/reject, and an "Approve drafts" bulk action.
+My scoping grep searched for the raw edge-function action strings ("approve_chunks") which appear
+ONLY in api.ts; the UI calls the wrapper names, so the grep returned api.ts alone and I concluded
+no UI existed. A duplicate ResourceReview.tsx was written against that false premise and has been
+deleted unbuilt — shipping a second review surface would have been the exact duplication this
+codebase is being cleaned up to remove.
+What is ACTUALLY missing against the request: (1) extraction is MANUAL — a teacher uploads, then
+must click "Extract PDF text" / "Transcribe"; nothing fires on upload. (2) The extraction model is
+OPENAI_OCR_MODEL, defaulting to gpt-5.4-mini — making it "a powerful model" is a deploy-workflow
+env change, not code. (3) The existing review renders chunk cards rather than one continuous
+document, which is a UX improvement but not a missing capability.
+Corrected next task: auto-extract on upload (dispatch by resource type after createLessonResource
+in TeacherConsole.tsx, non-blocking, surfacing status in the materials list) plus the model config.
+Everything else asked for is already built.
