@@ -54,11 +54,15 @@ export function ChatWindow({
           {spec.label}
         </span>
 
+        {/* Both the transcript and the composer sit in the same centered, width-capped column.
+            Full-bleed text across a 1440px window is unreadable — every LLM chat caps the
+            measure for the same reason, and keeping the composer on the same axis is what makes
+            the conversation read as one column rather than two stacked panels. */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-7">
-          {children}
+          <div className="mx-auto w-full max-w-3xl">{children}</div>
         </div>
 
-        <div className="shrink-0 px-3 pb-3">
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3">
           <Chatbox
             mode={mode}
             onModeChange={onModeChange}

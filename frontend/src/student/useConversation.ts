@@ -33,8 +33,38 @@ export type ConversationState = {
   error: string;
 };
 
+// Network and auth failures surface to a student, not a developer. "TypeError: Failed to fetch"
+// is what the browser throws when a request never lands, and showing it verbatim reads as a
+// crash — so the small set of failures we can recognise get plain-English copy, and anything
+// unrecognised falls back to a neutral sentence rather than the raw message.
+function friendlyError(err: unknown, fallback: string): string {
+  // supabase-js rejects with PLAIN OBJECTS carrying a message, not Error instances, so an
+  // `instanceof Error` check alone falls through to String(err) and renders "[object Object]"
+  // to the student. Verified live — read the message off any shape that has one.
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : err &&
+            typeof err === "object" &&
+            typeof (err as { message?: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : "";
+
+  if (!raw) return fallback;
+  if (/failed to fetch|networkerror|load failed/i.test(raw)) {
+    return "Couldn't reach the server. Check your connection and try again.";
+  }
+  if (/signed in/i.test(raw)) return raw;
+  // Anything still shaped like a developer exception gets the neutral fallback rather than
+  // being shown verbatim.
+  return /^(TypeError|ReferenceError|SyntaxError)\b/i.test(raw) ? fallback : raw;
+}
+
 export function useConversation() {
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -45,59 +75,75 @@ export function useConversation() {
   // (a changing callback identity would re-run effects in the consumer).
   const sessionRef = useRef<string | null>(null);
   const lessonRef = useRef<Lesson | null>(null);
+  const lessonsRef = useRef<Lesson[]>([]);
   const sendingRef = useRef(false);
+  // Monotonic token identifying the most recent lesson switch (see openLesson).
+  const switchTokenRef = useRef(0);
 
   const setSession = (id: string | null) => {
     sessionRef.current = id;
     setSessionId(id);
   };
 
+  // Point the conversation at a lesson: resume its existing session or create one, then load
+  // the transcript. Shared by boot and by switching lessons from the sidebar so the two paths
+  // can never drift — a lesson opened from the tree behaves exactly like one opened on load.
+  //
+  // `isStale` lets the caller abandon a slow load (unmount, or a second lesson clicked before
+  // the first finished) without writing state that no longer belongs to the visible lesson.
+  const loadLesson = useCallback(async (target: Lesson, isStale: () => boolean) => {
+    lessonRef.current = target;
+    setLesson(target);
+    setMessages([]);
+    setError("");
+
+    const session = await getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error("You must be signed in.");
+
+    // RESUME BEFORE SEND. invokeTypedChat with no session_id creates a NEW session every
+    // call, so opening a lesson without this lookup would fragment the student's history
+    // into a fresh session every time.
+    const existing = await fetchLatestLearningSession(target.id);
+    if (isStale()) return;
+
+    if (existing?.id) {
+      setSession(existing.id);
+      const turns = await fetchLearningTurns(existing.id);
+      if (isStale()) return;
+      setMessages(sortTimedMessages(turns.map(turnToMessage).filter(Boolean) as Msg[]));
+    } else {
+      // No session yet: the opening call creates one and returns the mentor's first turn.
+      const envelope = await invokeTypedChat({
+        accessToken: token,
+        lessonId: target.id,
+        mentorPreferences: mentorToPreferences(DEFAULT_MENTOR),
+      });
+      if (isStale()) return;
+      setSession(envelope.session_id ?? null);
+      setMessages([envelopeMessage(envelope)]);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    const stale = () => cancelled;
 
     const boot = async () => {
       try {
-        const session = await getSession();
-        const token = session?.access_token;
-        if (!token) throw new Error("You must be signed in.");
-
         const catalog = await fetchStudentCatalog();
-        const first = catalog[0] ?? null;
+        if (cancelled) return;
+        lessonsRef.current = catalog;
+        setLessons(catalog);
+
+        const first = catalog[0];
         if (!first) {
-          if (!cancelled) {
-            setError("No lessons are published for you yet.");
-            setBooting(false);
-          }
+          setError("No lessons are published for you yet.");
           return;
         }
-        if (cancelled) return;
-        lessonRef.current = first;
-        setLesson(first);
-
-        // RESUME BEFORE SEND. invokeTypedChat with no session_id creates a NEW session every
-        // call, so opening the app without this lookup would fragment the student's history
-        // into a fresh session on every mount.
-        const existing = await fetchLatestLearningSession(first.id);
-        if (cancelled) return;
-
-        if (existing?.id) {
-          setSession(existing.id);
-          const turns = await fetchLearningTurns(existing.id);
-          if (cancelled) return;
-          setMessages(sortTimedMessages(turns.map(turnToMessage).filter(Boolean) as Msg[]));
-        } else {
-          // No session yet: the opening call creates one and returns the mentor's first turn.
-          const envelope = await invokeTypedChat({
-            accessToken: token,
-            lessonId: first.id,
-            mentorPreferences: mentorToPreferences(DEFAULT_MENTOR),
-          });
-          if (cancelled) return;
-          setSession(envelope.session_id ?? null);
-          setMessages([envelopeMessage(envelope)]);
-        }
+        await loadLesson(first, stale);
       } catch (err) {
-        if (!cancelled) setError((err as Error).message || "Could not open the conversation.");
+        if (!cancelled) setError(friendlyError(err, "Could not open the conversation."));
       } finally {
         if (!cancelled) setBooting(false);
       }
@@ -107,7 +153,30 @@ export function useConversation() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadLesson]);
+
+  // Switching lesson from the sidebar. Refused mid-turn so a reply can never land in the wrong
+  // lesson's transcript.
+  const openLesson = useCallback(
+    async (lessonId: string) => {
+      if (sendingRef.current) return;
+      const target = lessonsRef.current.find((l) => l.id === lessonId);
+      if (!target || target.id === lessonRef.current?.id) return;
+
+      setBooting(true);
+      // Each switch owns a token; a later switch invalidates an earlier in-flight one so a slow
+      // first load can't overwrite the lesson the student actually landed on.
+      const token = ++switchTokenRef.current;
+      try {
+        await loadLesson(target, () => token !== switchTokenRef.current);
+      } catch (err) {
+        setError(friendlyError(err, "Could not open that lesson."));
+      } finally {
+        if (token === switchTokenRef.current) setBooting(false);
+      }
+    },
+    [loadLesson],
+  );
 
   const sendAnswer = useCallback(async (answer: TypedChatAnswer, mode: TurnMode, echo: string) => {
     const activeLesson = lessonRef.current;
@@ -143,7 +212,7 @@ export function useConversation() {
         envelopeMessage(envelope),
       ]);
     } catch (err) {
-      const message = (err as Error).message || "That didn't send.";
+      const message = friendlyError(err, "That didn't send.");
       // The error bubble carries the failed answer so Retry can re-send it faithfully, and is
       // flagged isError so it never becomes the "latest mentor message" (which would strip live
       // quiz choices off the real question with no way back).
@@ -174,5 +243,16 @@ export function useConversation() {
     [sendAnswer],
   );
 
-  return { messages, lesson, sessionId, sending, booting, error, sendText, sendChoice };
+  return {
+    messages,
+    lessons,
+    lesson,
+    sessionId,
+    sending,
+    booting,
+    error,
+    sendText,
+    sendChoice,
+    openLesson,
+  };
 }

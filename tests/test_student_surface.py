@@ -54,6 +54,18 @@ class StudentSurfaceWire(unittest.TestCase):
         block = MODES[MODES.index('id: "checkpoints"') :][:260]
         self.assertIn("sendsTurn: false", block)
 
+    def test_errors_are_humanised_for_any_thrown_shape(self):
+        # supabase-js rejects with PLAIN OBJECTS carrying a message, not Error instances. An
+        # `instanceof Error` check alone renders "[object Object]" to the student — caught by
+        # running the surface live, so pin it.
+        fn = HOOK[HOOK.index("function friendlyError(") :]
+        fn = fn[: fn.index("\n}")]
+        self.assertIn("err instanceof Error", fn)
+        self.assertIn('typeof err === "string"', fn)
+        self.assertIn('typeof (err as { message?: unknown }).message === "string"', fn)
+        # Raw developer exceptions never reach the student verbatim.
+        self.assertIn("TypeError|ReferenceError|SyntaxError", fn)
+
     def test_client_holds_no_gate_logic(self):
         # canProgress is a UI hint. If gate vocabulary shows up in the frontend, the
         # enforcement point has drifted off the server.

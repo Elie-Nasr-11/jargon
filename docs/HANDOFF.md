@@ -6587,3 +6587,41 @@ wants its own slice. The Chatbox renders attachment and audio buttons that are i
 Suggested next task: run /learn against the live backend and fix what the boot path gets wrong,
 before adding more surface. After that, the sidebar lesson tree (groupByUnit in
 features/student/lessonGroups.ts already does the grouping).
+
+## Claude -> Codex / Human - 2026-07-28 10:50
+
+Status: Done (v6 student surface — slice 3: sidebar lesson tree + FIRST LIVE BROWSER RUN)
+Summary: Added the class→unit→lesson tree to the sidebar and ran the surface in a real browser for
+the first time. LessonTree delegates grouping to the existing groupByUnit helper rather than
+reimplementing unit ordering. useConversation was restructured so boot and lesson-switching share
+ONE loader (loadLesson), which means a lesson opened from the tree behaves identically to one
+opened on load — the two paths cannot drift. Switching is refused mid-turn and carries a monotonic
+token so a slow first load can never overwrite the lesson the student actually landed on.
+LIVE RUN (headless Chromium against the vite dev server) — the verification that had been missing
+for three slices, and it found a real bug immediately: the error surface rendered "[object Object]".
+Cause: supabase-js rejects with PLAIN OBJECTS carrying a message, not Error instances, so an
+`instanceof Error` check falls through to String(err). friendlyError now reads the message off any
+shape that has one, maps network failures to plain English, and never shows a raw
+TypeError/ReferenceError/SyntaxError to a student. Pinned by a new test.
+Also fixed from the screenshots: the transcript and composer were full-bleed across the window;
+both now sit in one centered max-w-3xl column, which is what makes it read as a conversation rather
+than two stacked panels.
+VERIFIED VISUALLY: sidebar structure and segmented Home/Learn control; the mode picker with
+per-mode hints and colour dots; per-mode theming end to end — switching to Take quiz turns the
+panel, its border, and the eyebrow pill red, and the eyebrow sits correctly centered ON the top
+border in both modes.
+Files changed: frontend/src/student/{LessonTree.tsx (new),useConversation.ts,ChatWindow.tsx,
+StudentApp.tsx}, tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green;
+python unittest 277 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged. Live: headless Chromium on /learn, screenshots reviewed.
+Remaining concerns: (1) THE AUTHENTICATED DATA PATH IS STILL UNVERIFIED. Supabase is unreachable
+from this sandbox — curl to the project returns 000 even through the agent proxy — so boot always
+lands on the network-error branch. The shell, theming, and error path are confirmed; catalog →
+resume → turns → send has still never executed against real data. That needs a run from a machine
+with network access and a signed-in student.
+(2) The empty transcript is a large void; it wants an empty state once real content is in.
+(3) Chatbox attachment and audio buttons remain inert. (4) No Retry control renders for the error
+bubble even though retryAnswer is stored.
+Suggested next task: run /learn signed in from a networked machine and fix what boot gets wrong —
+that is now the only thing standing between this surface and being usable.

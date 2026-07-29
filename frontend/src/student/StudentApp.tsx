@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChatWindow } from "@/student/ChatWindow";
 import { StudentSidebar } from "@/student/StudentSidebar";
+import { LessonTree } from "@/student/LessonTree";
 import { Transcript } from "@/student/Transcript";
 import { useConversation } from "@/student/useConversation";
 import { DEFAULT_TURN_MODE, turnModeSpec, type TurnMode } from "@/student/turnModes";
@@ -63,7 +64,19 @@ export function StudentApp({
           onSelectDestination={onSelectDestination}
           onNewConversation={onNewConversation}
           onSelectMenuItem={onSelectMenuItem}
-        />
+        >
+          <LessonTree
+            lessons={conversation.lessons}
+            currentLessonId={conversation.lesson?.id ?? null}
+            onOpenLesson={(lessonId) => {
+              // Opening a lesson is a Learn act — jump back to the conversation so the switch
+              // is visible rather than happening behind whatever panel is open.
+              onSelectSection("learn");
+              void conversation.openLesson(lessonId);
+            }}
+            disabled={conversation.sending || conversation.booting}
+          />
+        </StudentSidebar>
       </aside>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
