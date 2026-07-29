@@ -1,0 +1,67 @@
+"""Static invariants for the v6 student surface (frontend/src/student/).
+
+The load-bearing rules this file pins:
+- ONE transcript model. The new surface imports Msg + its adapters from
+  features/student/chat/chatMessages.ts; a second copy is the duplication this rebuild
+  exists to avoid.
+- The declared TurnMode reaches the wire. The server-side ceiling is meaningless if the
+  client never sends the field.
+- Resume-before-send. invokeTypedChat with no session_id creates a NEW session on every
+  call, so the boot path must look for an existing session first or each mount fragments
+  the student's history.
+- The client is not the enforcement point. `canProgress` drives UI affordances only; no
+  gate logic may live in the frontend.
+"""
+
+import unittest
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+FRONT = REPO / "frontend" / "src"
+API = (FRONT / "lib" / "api.ts").read_text()
+HOOK = (FRONT / "student" / "useConversation.ts").read_text()
+MODES = (FRONT / "student" / "turnModes.ts").read_text()
+TRANSCRIPT = (FRONT / "student" / "Transcript.tsx").read_text()
+
+
+class StudentSurfaceWire(unittest.TestCase):
+    def test_turn_mode_reaches_the_request_body(self):
+        fn = API[API.index("export async function invokeTypedChat(") :][:1400]
+        self.assertIn("mode?: string", fn)
+        self.assertIn("mode: input.mode", fn)
+
+    def test_hook_sends_the_declared_mode(self):
+        self.assertIn("mode,", HOOK)
+        self.assertIn("invokeTypedChat(", HOOK)
+
+    def test_resume_before_send(self):
+        # The existing-session lookup must precede the session-creating call, or every mount
+        # spawns a fresh session.
+        self.assertIn("fetchLatestLearningSession(", HOOK)
+        self.assertLess(
+            HOOK.index("fetchLatestLearningSession("),
+            HOOK.index("const envelope = await invokeTypedChat("),
+        )
+
+    def test_single_transcript_model(self):
+        # Imported, never redeclared.
+        self.assertIn("@/features/student/chat/chatMessages", HOOK)
+        self.assertIn("@/features/student/chat/chatMessages", TRANSCRIPT)
+        for src in (HOOK, TRANSCRIPT):
+            self.assertNotIn("type Msg =", src)
+
+    def test_checkpoints_never_sends_a_turn(self):
+        block = MODES[MODES.index('id: "checkpoints"') :][:260]
+        self.assertIn("sendsTurn: false", block)
+
+    def test_client_holds_no_gate_logic(self):
+        # canProgress is a UI hint. If gate vocabulary shows up in the frontend, the
+        # enforcement point has drifted off the server.
+        for banned in ("code_passed_at", "quiz_passed_at", "understanding_at", "acknowledged_at"):
+            self.assertNotIn(banned, MODES)
+            self.assertNotIn(banned, HOOK)
+            self.assertNotIn(banned, TRANSCRIPT)
+
+
+if __name__ == "__main__":
+    unittest.main()

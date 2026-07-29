@@ -4206,6 +4206,10 @@ export async function invokeTypedChat(input: {
   answer?: TypedChatAnswer;
   control?: TypedChatControl;
   mentorPreferences: MentorPreferences;
+  // v6: the student-declared TurnMode for THIS message (see src/student/turnModes.ts). The
+  // server validates it against a closed set and caps what the turn may discharge; absent or
+  // unrecognized means today's behavior, so older callers are unaffected.
+  mode?: string;
 }) {
   const response = await fetchWithTimeout(functionUrl("chat"), {
     method: "POST",
@@ -4216,6 +4220,7 @@ export async function invokeTypedChat(input: {
       answer: input.answer,
       control: input.control,
       mentor_preferences: input.mentorPreferences,
+      mode: input.mode,
     }),
   });
   const data = (await response.json()) as TypedChatEnvelope;

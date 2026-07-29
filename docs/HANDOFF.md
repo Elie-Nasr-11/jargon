@@ -6553,3 +6553,37 @@ route means editing it in 8 places — worth wiring the plugin before adding mor
 Suggested next task: wire ChatWindow to the live chat API (invokeTypedChat already accepts the mode
 field the backend reads — see supabase/functions/chat/index.ts applyModeCeiling), reusing
 features/student/chat/chatMessages.ts for the transcript model rather than rewriting it.
+
+## Claude -> Codex / Human - 2026-07-28 10:05
+
+Status: Done (v6 student surface — slice 2: the chat window converses)
+Summary: /learn now holds a real conversation. useConversation.ts owns the turn loop: resolve a
+lesson from the student catalog, RESUME the latest session (or create one), load its turns through
+the existing transcript adapters, and send turns carrying the student's declared TurnMode.
+invokeTypedChat gained an additive `mode` passthrough — the server has read and validated
+`body.mode` since v5.0 P2b, so this closes the loop end to end.
+The transcript model is IMPORTED from features/student/chat/chatMessages.ts, not redeclared. That
+file is the one piece of the old frontend worth keeping and it is already pinned by tests; a second
+Msg union would be exactly the duplication this rebuild exists to remove.
+Two mode behaviors worth knowing: `checkpoints` has sendsTurn:false, so selecting it swaps the
+whole pane for the checkpoints surface instead of leaving a chatbox that silently swallows
+messages; and clicking a quiz choice switches the student into Quiz mode first, because the server
+correctly fails closed on a choice sent from a conversation mode and that would otherwise read as a
+dead button.
+Files changed: frontend/src/student/{useConversation.ts,Transcript.tsx} (new),
+frontend/src/student/StudentApp.tsx, frontend/src/lib/api.ts, tests/test_student_surface.py (new,
+6 tests), docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact baseline); vite build green;
+python unittest 276 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged from the 270/4 baseline (+6 new).
+Remaining concerns: (1) STILL NOT RUN IN A BROWSER. tsc/lint/build/static-tests only. The boot
+path in particular (catalog → resume → turns) has never executed against the real API in this
+session; that is the first thing to check. (2) The lesson is hardcoded to catalog[0] — there is no
+lesson switcher yet, so a student cannot change lesson on /learn. The sidebar class/unit/lesson
+tree is the natural next slice. (3) Deliberately NOT ported: attachments, live voice, code running
+and the Jargon runtime, artifacts, resource cards, markdown rendering. All exist on /chat and each
+wants its own slice. The Chatbox renders attachment and audio buttons that are inert until then.
+(4) The error bubble stores retryAnswer but nothing renders a Retry control yet.
+Suggested next task: run /learn against the live backend and fix what the boot path gets wrong,
+before adding more surface. After that, the sidebar lesson tree (groupByUnit in
+features/student/lessonGroups.ts already does the grouping).
