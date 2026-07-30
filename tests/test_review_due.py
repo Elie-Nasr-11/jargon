@@ -1,7 +1,11 @@
-"""Trimmed 2026-07-30: ProfilePanel was removed in the MVP strip; the review-due
-surface is now the chat header ReviewDueChip + the Practice mode pane in chat.tsx
-(see docs/MVP_SCOPE.md §8 "practice"). The SM-2-lite queue and the isolated chat-fn
-review path are KEPT and stay pinned below against their current shape."""
+"""Trimmed 2026-07-30 (trunk unification): the student review surface is gone —
+ReviewDueChip, its /chat mount, and the client helpers (fetchReviewDue,
+invokeReview, completeReviewSession) retired with the old /chat route (v7
+deliberately removed the student review feature; the v6 /learn surface does not
+reconnect it). KEPT below: the SM-2-lite due queue (computeReviewDue feeds the
+profile-stats bundle and remains deterministic/testable), the review types, the
+isolated chat-fn review path, and the lib/review.ts display helpers (the teacher's
+StudentReviewSessions view uses humanizeSkillKey)."""
 from pathlib import Path
 import unittest
 
@@ -10,8 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 REVIEW = ROOT / "frontend" / "src" / "lib" / "review.ts"
-CHIP = ROOT / "frontend" / "src" / "features" / "student" / "ReviewDueChip.tsx"
-CHAT = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
 CHAT_FN = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 
 
@@ -21,8 +23,6 @@ class ReviewDueStaticTests(unittest.TestCase):
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
         cls.review = REVIEW.read_text(encoding="utf-8")
-        cls.chip = CHIP.read_text(encoding="utf-8")
-        cls.chat = CHAT.read_text(encoding="utf-8")
         cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
 
     def test_sm2lite_due_queue_in_api(self):
@@ -32,7 +32,6 @@ class ReviewDueStaticTests(unittest.TestCase):
             "developing: 3",
             "secure: 7",
             "export function computeReviewDue",
-            "export async function fetchReviewDue",
             # Only include actually-practiced skills, and only when overdue.
             "if (!m.last_practiced_at) continue;",
             "daysOverdue >= 0",
@@ -45,31 +44,6 @@ class ReviewDueStaticTests(unittest.TestCase):
     def test_types_carry_review_due(self):
         self.assertIn("export type ReviewDueSkill", self.types)
         self.assertIn("reviewDue: ReviewDueSkill[]", self.types)
-
-    def test_chip_renders_only_when_due(self):
-        # The chip hides itself when nothing is due; the chat surface owns the due
-        # queue (fetchReviewDue) and passes the count down.
-        self.assertIn("export function ReviewDueChip", self.chip)
-        self.assertIn("if (count <= 0) return null;", self.chip)
-        # And it is mounted in the student chat header, fed from the SM-2-lite queue.
-        self.assertIn("<ReviewDueChip", self.chat)
-        self.assertIn("fetchReviewDue", self.chat)
-
-    def test_guided_review_loop_close(self):
-        # MVP §8 practice: the guided review runs retrieval + refreshes the spacing
-        # clock, and completes the backing review_sessions row when wrapped up.
-        self.assertIn("export async function invokeReview", self.api)
-        self.assertIn("review: true", self.api)
-        self.assertIn("skill_key: input.skillKey", self.api)
-        for fragment in ("useGuidedReview", "invokeReview", "completeReviewSession"):
-            with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.chip)
-
-    def test_practice_surface_shows_review_due(self):
-        # The completion banner offers Practice when reviews are due, and the chat
-        # surface tracks the due queue in state.
-        self.assertIn("Practice review ·", self.chat)
-        self.assertIn("const [reviewDue, setReviewDue]", self.chat)
 
     def test_chat_fn_review_handler_is_isolated_and_closes_loop(self):
         # Fires ONLY on review:true (normal turn loop untouched), and refreshes the spacing clock.

@@ -34,7 +34,7 @@ exactly.
 | ------------------------------------------------ | ---------------------------------------------- |
 | `index.tsx`                                      | `/`                                            |
 | `login.tsx`                                      | `/login`                                       |
-| `chat.tsx`                                       | `/chat`                                        |
+| `learn.tsx`                                      | `/learn` (student surface)                     |
 | `teacher.tsx`                                    | `/teacher` (home — class picker + queue)       |
 | `teacher.class.$classId.tsx`                     | `/teacher/class/:classId` (`?tab=`)            |
 | `teacher.class.$classId.student.$studentId.tsx` | `/teacher/class/:classId/student/:studentId`   |

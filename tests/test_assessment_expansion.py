@@ -1,7 +1,11 @@
-"""Trimmed 2026-07-30: the dedicated /quiz/$assessmentId route was removed in the
-MVP strip — formal assessments (KEPT, docs/MVP_SCOPE.md §8 "assessment") now run
-through the QuizPanel surface mounted inside the student chat's assessment mode.
-Teacher review/return UI split into AssessmentGrading.tsx."""
+"""Trimmed 2026-07-30 (first: /quiz/$assessmentId route removed in the MVP strip;
+then, trunk unification): the old /chat route and its QuizPanel assessment surface
+retired with the v6 /learn student surface, whose quiz-taking runs through the
+"quiz" TurnMode on the chat function instead — no student-side consumer of the
+attempt API (fetchStudentAssessments/startAssessment/submitAssessment) exists
+today, so those pins moved to presence-in-lib only. The migration/RLS, the
+service-role assessment-admin function, the client API surface, and the teacher
+create/review/return UI (TeacherConsole + AssessmentGrading) are KEPT and pinned."""
 from pathlib import Path
 import unittest
 
@@ -12,8 +16,6 @@ FUNCTION = ROOT / "supabase" / "functions" / "assessment-admin" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-CHAT_ROUTE = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
-QUIZ_PANEL = ROOT / "frontend" / "src" / "features" / "student" / "QuizPanel.tsx"
 # The teacher console UI moved out of the thin routes/teacher.tsx into the
 # feature module; the assessment surfaces live in TeacherConsole.tsx now,
 # with the attempt review/return half in AssessmentGrading.tsx.
@@ -29,8 +31,6 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
         cls.api = API.read_text(encoding="utf-8")
         cls.supabase = SUPABASE.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.chat_route = CHAT_ROUTE.read_text(encoding="utf-8")
-        cls.quiz_panel = QUIZ_PANEL.read_text(encoding="utf-8")
         cls.teacher_route = TEACHER_ROUTE.read_text(encoding="utf-8")
         cls.grading = GRADING.read_text(encoding="utf-8")
 
@@ -110,7 +110,7 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.function)
 
-    def test_frontend_exposes_assessment_api_and_in_chat_quiz_surface(self):
+    def test_frontend_exposes_assessment_api(self):
         for fragment in (
             '"assessment-admin"',
             'functionUrl("assessment-admin")',
@@ -123,15 +123,8 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
         ):
             with self.subTest(fragment=fragment):
                 self.assertTrue(fragment in self.supabase or fragment in self.api)
-
-        # The assessment entry lives inside the student chat (MVP §8 "assessment"
-        # mode) and the attempt runs through QuizPanel — no dedicated route.
-        self.assertIn('chatMode === "assessment"', self.chat_route)
-        self.assertIn("AssessmentSurface", self.chat_route)
-        self.assertIn("<QuizPanel", self.chat_route)
-        for fragment in ("fetchStudentAssessments", "startAssessment", "submitAssessment"):
-            with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.quiz_panel)
+        # The old /chat QuizPanel mount is gone (see module docstring); the v6 surface
+        # runs quizzes through the "quiz" TurnMode instead of the attempt API.
 
     def test_teacher_ui_can_create_assign_review_and_return_assessments(self):
         for fragment in (

@@ -6,7 +6,7 @@ import { TeacherSidebar } from "./TeacherSidebar";
 import type { ClassSection } from "./teacherNav";
 import type { TeacherClassSummary } from "@/lib/types";
 
-// The teacher portal's chromeless root — the teacher twin of the student /chat shell: one left
+// The teacher portal's chromeless root — the teacher twin of the student /learn shell: one left
 // column (TeacherSidebar) carries ALL navigation, the rest of the screen is whatever page is
 // active. No sticky header: the mobile hamburger and the collapsed-reopen button float top-left,
 // and the notifications bell floats top-right (mirroring the student resources launcher), so

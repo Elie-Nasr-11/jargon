@@ -229,10 +229,13 @@ class ChatLiveArtifactWire(unittest.TestCase):
         types = (front / "lib" / "types.ts").read_text()
         api = (front / "lib" / "api.ts").read_text()
         supa = (front / "lib" / "supabase.ts").read_text()
-        # The student chat surface is two files since the v5.0 P2a extraction: the route holds
-        # component state and effects, chatMessages.ts holds the transcript model and its pure
-        # adapters. Assert against both so these invariants pin BEHAVIOR, not file layout.
-        chat_tsx = (front / "routes" / "chat.tsx").read_text() + (
+        # Trunk unification 2026-07-30: routes/chat.tsx retired, and with it the client
+        # build loop (offer pill -> generateLiveArtifact -> artifact_ready control post,
+        # busy retry, mid-build lesson-switch guard). The v6 /learn surface has not
+        # reconnected it — recorded in docs/OPEN_QUESTIONS.md. What survives client-side
+        # is pinned below: the shared transcript model still maps the offer off the
+        # envelope, and the API/type/studio contracts are unchanged.
+        chat_messages = (
             front / "features" / "student" / "chat" / "chatMessages.ts"
         ).read_text()
         studio = (front / "routes" / "teacher.curriculum.tsx").read_text()
@@ -244,17 +247,9 @@ class ChatLiveArtifactWire(unittest.TestCase):
         gen = api[api.index("export async function generateLiveArtifact(") :]
         self.assertIn("150000", gen[:1600])
         self.assertIn('"artifact-live"', supa)
-        # Chat: the pill is live-turn only (never replayed) and the ready control rides
-        # the normal turn path.
-        self.assertIn("artifactOffer: envelope.artifact_offer ?? undefined", chat_tsx)
-        self.assertIn('type: "artifact_ready"', chat_tsx)
-        self.assertIn("resource_id: built.resource_id", chat_tsx)
-        self.assertIn("Building your activity", chat_tsx)
-        # Review folds: a busy in-flight turn is waited out and retried (a finished
-        # build is never dropped), and lesson switches are blocked/detected mid-build.
-        self.assertIn('outcome === "busy"', chat_tsx)
-        self.assertIn("buildingArtifactRef.current", chat_tsx)
-        self.assertIn("lessonIdRef.current !== builtForLesson", chat_tsx)
+        # Model: the offer is live-turn only (never replayed from history) and rides the
+        # envelope adapter, so a resubscribing surface gets the data path for free.
+        self.assertIn("artifactOffer: envelope.artifact_offer ?? undefined", chat_messages)
         # Studio: the opt-in toggle + student-private oversight with the promote action.
         self.assertIn("allow_live_artifacts: allowLiveArtifacts", studio)
         self.assertIn("Share with class", studio)

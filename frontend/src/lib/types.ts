@@ -1159,9 +1159,6 @@ export type TypedChatEnvelope = {
   held?: boolean;
   // P5: the review path returns the backing review_sessions row id (for continuation + completion).
   review_session_id?: string;
-  // MVP chat modes (docs/MVP_SCOPE.md §8): echoed on side-mode turns (open/discuss/quiz).
-  // Absent on lesson-flow turns.
-  chat_mode?: "open" | "discuss" | "quiz";
   // Flow v3 (all optional — old stored envelopes replay fine): the Continue pill offer for
   // unacknowledged content steps, and the turn router's verdict (telemetry/hinting).
   continue_offer?: { label: string } | null;

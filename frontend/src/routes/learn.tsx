@@ -9,8 +9,8 @@ import {
   type StudentSection,
 } from "@/student/navigation";
 
-// The v6 student surface. Lives alongside the existing /chat route while it's built out;
-// /chat stays the shipping surface until this one is better, then /chat redirects here.
+// The v6 student surface — the ONLY student surface (the old /chat route retired at trunk
+// unification; roleHome sends students here).
 //
 // Nav state lives in the URL (?section=home&to=classes) so back/forward, refresh, and deep
 // links all work — the same contract the previous surface depended on.

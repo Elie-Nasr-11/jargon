@@ -1,3 +1,18 @@
+"""Trimmed 2026-07-30 (trunk unification): the old /chat route retired in favor of the
+v6 /learn surface, which does NOT (yet) resubscribe to live_session_viewers /
+teacher_live_comments — the student-side realtime wiring ("Teacher viewing" presence,
+live comments streaming into the transcript) has no v6 counterpart today; only the
+transcript model's teacher-comment adapter (liveCommentToMessage, the "teacher" Msg
+role) survives in chatMessages.ts and stays pinned. The migration, API helpers, and
+the teacher dashboard's watch/comment/alert surfaces are all still live and pinned.
+The student-side reconnection gap is recorded in docs/OPEN_QUESTIONS.md.
+
+Also trimmed (pre-existing on the MVP trunk, surfaced by this run): the intervention-
+alert acknowledge/resolve workflow (updateInterventionAlertStatus + the console's
+updateAlertStatus/onUpdateAlertStatus + the alert-detail rendering) was cut in the MVP
+strip — the hotlist (HotlistFeed/deriveHotlist) superseded the alert queue UX. The
+intervention_alerts read and the InterventionAlert type (message column) remain and
+stay pinned."""
 from pathlib import Path
 import unittest
 
@@ -6,11 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase" / "migrations" / "0012_live_teacher_intervention_realtime.sql"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-CHAT_ROUTE = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
-# The v5.0 P2a extraction split the student chat surface: the route keeps component state and
-# effects, chatMessages.ts holds the transcript model and its pure adapters (including the
-# teacher-live-comment → Msg mapping this file asserts on). Both are read as one blob below so
-# these invariants pin behavior rather than file layout.
+# chatMessages.ts holds the transcript model and its pure adapters (including the
+# teacher-live-comment → Msg mapping this file asserts on); the v6 surface imports it.
 CHAT_MESSAGES = (
     ROOT / "frontend" / "src" / "features" / "student" / "chat" / "chatMessages.ts"
 )
@@ -25,9 +37,7 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
         cls.migration = MIGRATION.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.chat = CHAT_ROUTE.read_text(encoding="utf-8") + CHAT_MESSAGES.read_text(
-            encoding="utf-8"
-        )
+        cls.chat_messages = CHAT_MESSAGES.read_text(encoding="utf-8")
         cls.teacher = TEACHER_ROUTE.read_text(encoding="utf-8")
 
     def test_realtime_publication_is_enabled_for_live_tables(self):
@@ -42,8 +52,10 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
                 self.assertIn(fragment, self.migration)
 
     def test_frontend_uses_real_intervention_alert_message_column(self):
+        # The alert-queue UI is gone (module docstring) but the type still models the
+        # real DB column: `message`, never the phantom `detail` the original bug used.
+        self.assertIn("export type InterventionAlert", self.types)
         self.assertIn("message: string", self.types)
-        self.assertIn("detail: alert.message", self.teacher)
         self.assertNotIn("alert.detail", self.teacher)
 
     def test_live_intervention_api_helpers_are_present(self):
@@ -55,7 +67,6 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
             "heartbeatLiveSessionViewer",
             "stopLiveSessionViewer",
             "sendTeacherLiveComment",
-            "updateInterventionAlertStatus",
             'event_type: "teacher_intervention"',
             '.from("teacher_live_comments")',
             '.from("live_session_viewers")',
@@ -64,21 +75,20 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.api)
 
-    def test_student_chat_subscribes_to_viewers_and_teacher_comments(self):
+    def test_transcript_model_keeps_the_teacher_comment_adapter(self):
+        # The surviving student-side piece: teacher live comments have a first-class Msg
+        # role and a pure adapter, so a surface that resubscribes gets rendering for free.
+        # (The subscription itself is the open gap noted in the module docstring.)
         for fragment in (
-            "fetchLiveSessionViewers",
-            "fetchTeacherLiveComments",
-            "postgres_changes",
-            'table: "live_session_viewers"',
-            'table: "teacher_live_comments"',
             'role: "teacher"',
-            "Teacher viewing",
             "liveCommentToMessage",
+            "TeacherLiveComment",
         ):
             with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.chat)
+                self.assertIn(fragment, self.chat_messages)
 
-    def test_teacher_dashboard_can_watch_comment_and_update_alerts(self):
+    def test_teacher_dashboard_can_watch_and_comment(self):
+        # (alert acknowledge/resolve controls trimmed — see module docstring)
         for fragment in (
             "Watch live",
             "Stop watching",
@@ -87,8 +97,6 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
             "startWatchingSelectedSession",
             "stopWatchingSelectedSession",
             "sendLiveComment",
-            "updateAlertStatus",
-            "onUpdateAlertStatus",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.teacher)

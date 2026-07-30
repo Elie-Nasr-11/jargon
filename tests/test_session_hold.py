@@ -1,3 +1,11 @@
+"""Trimmed 2026-07-30 (trunk unification): the old /chat route's client-side hold lock
+(realtime session_holds subscription + composer lock + "Your teacher paused the
+session" notice) retired with that surface; the v6 /learn surface has not reconnected
+it — recorded in docs/OPEN_QUESTIONS.md. The hold is still ENFORCED server-side (the
+chat fn's fail-open hold gate below returns a held envelope instead of running), so
+the security property survives; what's missing is only the student-facing UX. The
+migration/RLS, chat-fn gate, API helpers, types, and teacher pause/resume UI pins
+are all KEPT."""
 from pathlib import Path
 import unittest
 
@@ -7,7 +15,6 @@ MIGRATION = ROOT / "supabase" / "migrations" / "20260729000000_session_holds.sql
 CHAT_FN = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-CHAT_ROUTE = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
 TEACHER = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-backend.yml"
 
@@ -19,7 +26,6 @@ class SessionHoldStaticTests(unittest.TestCase):
         cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.chat = CHAT_ROUTE.read_text(encoding="utf-8")
         cls.teacher = TEACHER.read_text(encoding="utf-8")
         cls.deploy = DEPLOY.read_text(encoding="utf-8")
 
@@ -74,16 +80,9 @@ class SessionHoldStaticTests(unittest.TestCase):
         self.assertIn("export type SessionHold", self.types)
         self.assertIn("held?: boolean", self.types)
 
-    def test_student_chat_locks_on_hold(self):
-        for fragment in (
-            "setSessionHeld",
-            'table: "session_holds"',
-            "fetchSessionHold",
-            "sending={sending || sessionHeld}",
-            "Your teacher paused the session",
-        ):
-            with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.chat)
+    # removed 2026-07-30: test_student_chat_locks_on_hold — the /chat client lock
+    # retired with the old surface and the v6 /learn surface has not reconnected it
+    # (see module docstring; server-side enforcement is pinned above and unchanged).
 
     def test_teacher_console_has_pause_resume(self):
         for fragment in (

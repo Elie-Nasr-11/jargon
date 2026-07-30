@@ -13,7 +13,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CHAT = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
-CHAT_TSX = (REPO / "frontend" / "src" / "routes" / "chat.tsx").read_text()
+# Trunk unification 2026-07-30: routes/chat.tsx (and its P5c block-markdown renderer)
+# retired. The v6 transcript deliberately has NO general markdown pass — replies render
+# as pre-wrap text with fence-only code handling — so the injection surface P5c guarded
+# is gone by construction; the pins below assert the v6 renderer stays that way.
+TRANSCRIPT = (REPO / "frontend" / "src" / "student" / "Transcript.tsx").read_text()
 CURRICULUM = (REPO / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text()
 API = (REPO / "frontend" / "src" / "lib" / "api.ts").read_text()
 FORMAT_TS = (REPO / "frontend" / "src" / "lib" / "format.ts").read_text()
@@ -106,17 +110,22 @@ class TeacherAttachInvariants(unittest.TestCase):
 
 
 class SafeMarkdownInvariants(unittest.TestCase):
-    """P5c: the markdown pass stays React-node-only, https-only, dependency-free."""
+    """P5c, post-unification: reply rendering stays React-node-only and dependency-free.
+
+    The old /chat block-markdown renderer (BLOCK_MD_RE, the https-only link regex)
+    retired with that surface; the v6 transcript renders replies as pre-wrap text with
+    fence-only code handling and produces no links from mentor text at all, which is a
+    strictly smaller surface. These pins keep it that way.
+    """
 
     def test_no_dangerous_html(self):
         # The JSX attribute form — a comment may name it, but nothing may USE it.
-        self.assertNotIn("dangerouslySetInnerHTML=", CHAT_TSX)
+        self.assertNotIn("dangerouslySetInnerHTML=", TRANSCRIPT)
 
-    def test_links_are_https_only_with_rel(self):
-        self.assertIn('rel="noopener noreferrer"', CHAT_TSX)
-        # The scheme is enforced LEXICALLY in the inline regex — no javascript:/data:
-        # vector can ever parse as a link.
-        self.assertIn("https:\\/\\/[^\\s)]+", CHAT_TSX)
+    def test_replies_render_as_plain_prewrap_text(self):
+        # No markdown/HTML pass: mentor text reaches the DOM as text nodes only.
+        self.assertIn("whitespace-pre-wrap", TRANSCRIPT)
+        self.assertIn("no general Markdown", TRANSCRIPT)
 
     def test_no_markdown_dependency(self):
         deps = {
@@ -125,11 +134,6 @@ class SafeMarkdownInvariants(unittest.TestCase):
         }
         for name in ("react-markdown", "marked", "remark", "rehype", "dompurify", "markdown-it"):
             self.assertNotIn(name, deps)
-
-    def test_plain_replies_keep_legacy_path(self):
-        # The block renderer is gated: no block syntax → the untouched pre-wrap path.
-        self.assertIn("BLOCK_MD_RE", CHAT_TSX)
-        self.assertIn("whitespace-pre-wrap text-body-lg text-foreground", CHAT_TSX)
 
     def test_tts_speaks_clean_text(self):
         self.assertIn("export function stripMarkdown", FORMAT_TS)

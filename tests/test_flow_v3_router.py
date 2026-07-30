@@ -3,6 +3,13 @@
 Repo convention: these tests read the TypeScript source of the chat edge function and
 assert structural contracts, so a regression that would loosen the gates or silently
 drop the router shows up in CI without a Deno toolchain.
+
+Trimmed 2026-07-30 (trunk unification): the client-wiring pins (Continue pill posting
+`control: {type:"continue"}`, the LessonMilestones stepper posting navigate/resume)
+retired with routes/chat.tsx — the v6 /learn surface maps `continue_offer` into its
+transcript model (pinned below) but does not yet SEND control turns; that
+reconnection gap is recorded in docs/OPEN_QUESTIONS.md. All server-side invariants
+are unchanged and stay pinned.
 """
 
 import re
@@ -11,9 +18,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CHAT = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
-CHAT_TSX = (REPO / "frontend" / "src" / "routes" / "chat.tsx").read_text()
-MILESTONES = (
-    REPO / "frontend" / "src" / "components" / "LessonMilestones.tsx"
+CHAT_MESSAGES = (
+    REPO / "frontend" / "src" / "features" / "student" / "chat" / "chatMessages.ts"
 ).read_text()
 WORKFLOW = (REPO / ".github" / "workflows" / "deploy-backend.yml").read_text()
 MIGRATION = (
@@ -71,9 +77,13 @@ class FlowV3RouterInvariants(unittest.TestCase):
         )
         self.assertIsNotNone(batch)
 
-    def test_client_continue_pill_wired(self):
-        self.assertIn("continueOffer", CHAT_TSX)
-        self.assertIn('control: { type: "continue" }', CHAT_TSX)
+    def test_client_model_carries_the_continue_offer(self):
+        # The surviving client piece: the shared transcript model (consumed by the v6
+        # surface) maps envelope.continue_offer, so a surface that renders/sends the
+        # affordance gets the data path for free. (Send-side wiring is the open gap
+        # noted in the module docstring.)
+        self.assertIn("continueOffer", CHAT_MESSAGES)
+        self.assertIn("continue_offer", CHAT_MESSAGES)
 
     def test_migration_whitelisted_and_additive(self):
         self.assertIn("20260815000000_flow_v3_session_nav.sql", WORKFLOW)
@@ -157,11 +167,9 @@ class FlowV3Backtracking(unittest.TestCase):
     def test_arc_carries_done_set(self):
         self.assertIn("steps_done?", CHAT)
 
-    def test_client_stepper_and_resume_wired(self):
-        self.assertIn('control: { type: "navigate", target_activity_id:', CHAT_TSX)
-        self.assertIn('control: { type: "resume" }', CHAT_TSX)
-        self.assertIn("revisitFrontier", CHAT_TSX)
-        self.assertIn("onNavigate", MILESTONES)
+    # removed 2026-07-30: test_client_stepper_and_resume_wired — the /chat stepper
+    # (LessonMilestones) and its navigate/resume control turns retired with the old
+    # surface; the v6 /learn surface has not reconnected them (see module docstring).
 
 
 class FlowV3Preemption(unittest.TestCase):

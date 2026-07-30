@@ -7391,3 +7391,36 @@ frontend agent — none touch the chat fn.
 Remaining concerns: none for the graft itself; the frontend test modules still pin retired
 routes and need the other agent's pass.
 Suggested next task: frontend test re-anchoring, then a deployed-environment memory-loop pass.
+
+## Claude -> Codex / Human - 2026-07-30 21:40
+
+Status: Finished (sub-task of the 19:55 trunk-unification entry; NOT committed by design)
+Task: Retire the /chat student surface; v6 /learn becomes the only student surface.
+Summary: Deleted routes/chat.tsx + the old student tree (panels/, shell/, ChatStepper,
+QuizPanel, ReviewDueChip) + orphaned components/hooks (ConfirmButton, FocusLock,
+LessonMilestones, ProgressRing, StateNote, useCoarsePointer, useStudentNavData) +
+lib/modes.ts. routeTree.gen.ts hand-edited (all 8 /chat sites removed). roleHome
+student -> "/learn". api.ts: fetchReviewDue/invokeReview/completeReviewSession removed
+(zero importers; v7 review-drop honored); computeReviewDue + lib/review.ts kept
+(teacher StudentReviewSessions). types.ts: chat_mode echo removed; `available` offers
+block already present and matches the server. Kept per coordinator amendment:
+ArtifactFrame, DeckRenderer, ReadAloudAction, artifact-lint, artifact-schema (all had
+live importers anyway).
+Files changed: frontend/src/** (see git status), tests/test_review_sessions.py,
+test_review_due.py, test_resource_autoextract.py, test_student_surface.py (no change
+needed — already pins v6), test_live_teacher_intervention.py, test_session_hold.py,
+test_assessment_expansion.py, test_curriculum_authoring_studio.py,
+test_flow_v3_router.py, test_flow_v3_p5_media_binding.py, test_artifact_foundation.py,
+test_artifact_live.py, docs/OPEN_QUESTIONS.md, docs/HANDOFF.md.
+Tests run: python3 -m unittest over all modules EXCEPT test_chat_modes_memory/
+test_turn_modes (other agent's, mid-edit): 325 tests OK, 4 pre-existing Flask skips.
+Frontend: tsc --noEmit 0 errors; eslint 0 errors (17 pre-existing warnings);
+production build green.
+Remaining concerns: the /chat retirement leaves real client gaps (student live-
+intervention UX, hold lock, Continue pill/stepper controls, inline artifact/media,
+voice threading) — server halves intact; itemized in docs/OPEN_QUESTIONS.md
+2026-07-30 entry. Pre-existing find: the intervention-alert acknowledge workflow
+(updateInterventionAlertStatus) was already gone on the MVP trunk; test trimmed.
+Suggested next task: the announced inline-media port into the /learn transcript
+(ArtifactFrame/DeckRenderer/ReadAloudAction are kept ready), then the student-side
+live-intervention + hold-lock reconnection.

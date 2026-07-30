@@ -29,7 +29,7 @@ export function relativeTime(iso: string, now = Date.now()): string {
 }
 
 // Strip mentor-reply markdown down to speakable/plain text (TTS, the chat headline).
-// Mirrors the renderer's grammar in routes/chat.tsx: fence MARKERS drop but fence
+// Mirrors the transcript renderer's grammar (student/Transcript.tsx): fence MARKERS drop but fence
 // CONTENT stays verbatim (it's code — "print(2**3)" must not lose its asterisks);
 // inline marks unwrap, links keep their label, heading/list markers drop.
 export function stripMarkdown(text: string): string {

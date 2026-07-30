@@ -28,7 +28,12 @@ LINT = (FRONTEND / "lib" / "artifact-lint.ts").read_text()
 SCHEMA = (FRONTEND / "lib" / "artifact-schema.ts").read_text()
 TYPES = (FRONTEND / "lib" / "types.ts").read_text()
 API = (FRONTEND / "lib" / "api.ts").read_text()
-CHAT_TSX = (FRONTEND / "routes" / "chat.tsx").read_text()
+# Trunk unification 2026-07-30: routes/chat.tsx retired. The v6 /learn surface's
+# inline resource card deliberately does NOT embed artifacts (see the comment in
+# student/ResourceCard.tsx) — ArtifactFrame/DeckRenderer keep their sandbox posture
+# and their teacher-studio mount; the v6 inline mount + voice threading is an open
+# reconnection gap recorded in docs/OPEN_QUESTIONS.md.
+RESOURCE_CARD = (FRONTEND / "student" / "ResourceCard.tsx").read_text()
 TEACHER = (
     FRONTEND / "features" / "teacher" / "TeacherConsole.tsx"
 ).read_text()
@@ -141,17 +146,18 @@ class ArtifactClientWireInvariants(unittest.TestCase):
         self.assertNotIn("student_instructions,metadata,", API)
         self.assertIn("parseArtifactConfig", API)
 
-    def test_resource_card_branches_and_threads_voice(self):
-        self.assertIn('resource.resource_type === "artifact"', CHAT_TSX)
-        self.assertIn("<ArtifactFrame", CHAT_TSX)
-        self.assertIn("<DeckRenderer", CHAT_TSX)
-        # Inline set keeps the original five AND gains artifact.
-        inline = re.search(r"function shouldRenderInline.*?\n\}", CHAT_TSX, re.S)
-        self.assertIsNotNone(inline)
-        for value in ("youtube", "pdf", "video", "audio", "image", "artifact"):
-            self.assertIn(f'"{value}"', inline.group(0))
-        # Both mount sites pass the read-aloud plumbing.
-        self.assertGreaterEqual(len(re.findall(r"onVoiceEvent=\{", CHAT_TSX)), 4)
+    def test_resource_card_never_half_renders_an_artifact(self):
+        # The v6 inline card handles artifacts by NOT handling them: an artifact gets a
+        # plain card with no Open action (no signed/external URL is ever synthesized for
+        # it), never a non-sandboxed embed. The sandboxed ArtifactFrame/DeckRenderer are
+        # the only components allowed to run artifact content.
+        self.assertIn('resource.resource_type === "artifact" ? null', RESOURCE_CARD)
+        # A comment may NAME ArtifactFrame (it documents the deliberate non-handling);
+        # the card must never import or mount it, nor open any embed surface itself.
+        self.assertNotIn("components/ArtifactFrame", RESOURCE_CARD)
+        self.assertNotIn("<ArtifactFrame", RESOURCE_CARD)
+        self.assertNotIn("iframe", RESOURCE_CARD)
+        self.assertNotIn("dangerouslySetInnerHTML", RESOURCE_CARD)
 
     def test_deck_renderer_is_native(self):
         self.assertIn('from "@/components/ui/carousel"', DECK)

@@ -299,3 +299,34 @@ per-user processing rate limit.
 
 Open: should the review panel render chunks as one continuous document rather than per-chunk cards?
 Asked and not yet answered — deliberately not assumed.
+
+## 2026-07-30 — Trunk unification: /chat client behaviors NOT yet reconnected in /learn
+
+Retiring routes/chat.tsx (v6 /learn is now the only student surface) dropped several
+client-side wirings whose server halves are intact. Each needs an owner decision:
+reconnect into the v6 surface, or declare deliberately dropped and trim the server side.
+
+- **Student live-intervention UX**: /learn does not subscribe to `live_session_viewers` /
+  `teacher_live_comments` — no "Teacher viewing" presence, and teacher live tips never
+  appear in the student transcript. The transcript model still has the `teacher` Msg role
+  + `liveCommentToMessage` adapter, so rendering is free once a subscription exists.
+  (Teacher watch/comment UI and RLS are all still live.)
+- **Student hold lock**: the chat fn still enforces `session_holds` server-side (held
+  envelope), but /learn shows no "teacher paused" state and does not lock the composer —
+  a paused student just sees turns not run.
+- **Continue pill / stepper navigation**: the v6 model maps `continue_offer`, but nothing
+  renders it or posts `control: {type: "continue"|"navigate"|"resume"}` — Flow v3
+  backtracking and the Continue affordance are server-complete, client-absent.
+- **Inline artifact/media rendering**: student/ResourceCard.tsx deliberately renders
+  artifacts as inert cards (documented there); ArtifactFrame/DeckRenderer/ReadAloudAction
+  are kept for the announced follow-up phase porting inline media into /learn. The
+  artifact-live build loop (offer pill → generateLiveArtifact → artifact_ready control)
+  is likewise client-absent; `generateLiveArtifact` stays in api.ts.
+- **Voice**: Composer still supports `onVoiceEvent`, but the v6 surface does not thread
+  voice events to resource/deck rendering (read-aloud works only via DeckRenderer in the
+  teacher studio preview).
+
+Also noted: `fetchStudentProfileStats` (api.ts) now has zero UI consumers — the old /chat
+profile popup was its only caller. Kept (out of the cleanup's mandated scope, and the
+planned memory-panel-on-Home work is its natural consumer); `computeReviewDue` stays via
+its `reviewDue` field.

@@ -1,4 +1,6 @@
-// The chat transcript's data model and its pure transforms, extracted from routes/chat.tsx.
+// The chat transcript's data model and its pure transforms (originally extracted from the
+// retired routes/chat.tsx; today the v6 student surface — student/Transcript.tsx and
+// student/useConversation.ts — is its consumer).
 //
 // Everything here is side-effect free and independently testable: the `Msg` union the transcript
 // renders, the adapters that turn server shapes (LearningTurn, TypedChatEnvelope,

@@ -312,11 +312,11 @@ export async function fetchPrimaryRole(accessToken: string, userId: string): Pro
   return "student";
 }
 
-export function roleHome(role: PrimaryRole): "/chat" | "/teacher" | "/admin" | "/platform" {
+export function roleHome(role: PrimaryRole): "/learn" | "/teacher" | "/admin" | "/platform" {
   if (role === "platform_admin") return "/platform";
   if (role === "org_admin") return "/admin";
   if (role === "teacher") return "/teacher";
-  return "/chat";
+  return "/learn";
 }
 
 export async function signIn(email: string, password: string) {
@@ -569,7 +569,8 @@ export async function fetchStudentMastery(): Promise<StudentMastery[]> {
 
 // Post-v4.0 Phase 4: SM-2-lite spacing. A skill is "due" for review when its last practice is
 // older than its tier's interval — weaker tiers resurface sooner (emerging < developing < secure).
-// Pure + injectable `now` so it's deterministically testable; drives the review-due chip.
+// Pure + injectable `now` so it's deterministically testable; feeds the profile-stats bundle
+// (the student-facing review-due chip retired with the old /chat surface).
 export const REVIEW_INTERVAL_DAYS: Record<string, number> = {
   emerging: 1,
   developing: 3,
@@ -602,12 +603,6 @@ export function computeReviewDue(
   }
   due.sort((a, b) => b.days_overdue - a.days_overdue);
   return due;
-}
-
-// Own-read + derive: the signed-in student's skills due for spaced review (drives the header chip).
-export async function fetchReviewDue(): Promise<ReviewDueSkill[]> {
-  const mastery = await fetchStudentMastery();
-  return computeReviewDue(mastery);
 }
 
 // v4.0 deferred: the student's own mode-dimensioned learning evidence (for the profile's
@@ -3078,57 +3073,9 @@ export async function generateLiveArtifact(input: {
   return { resource_id: data.resource_id, title: data.title || "Quick activity" };
 }
 
-// Post-v4.0 Phase 4b + 5: a spaced-review turn on one skill. Hits the same chat fn with `review: true`,
-// which routes to the isolated review handler (refreshes the skill's spacing clock and backs the
-// review with a first-class review_sessions row — returned as review_session_id for continuation).
-export async function invokeReview(input: {
-  accessToken: string;
-  skillKey: string;
-  answer?: TypedChatAnswer;
-  mentorPreferences: MentorPreferences;
-  reviewSessionId?: string | null;
-}) {
-  const response = await fetchWithTimeout(functionUrl("chat"), {
-    method: "POST",
-    headers: authHeaders(await freshAccessToken(input.accessToken)),
-    body: JSON.stringify({
-      review: true,
-      skill_key: input.skillKey,
-      answer: input.answer,
-      mentor_preferences: input.mentorPreferences,
-      review_session_id: input.reviewSessionId || undefined,
-    }),
-  });
-  const data = (await response.json()) as TypedChatEnvelope;
-  if (!response.ok || data.status === "error") {
-    throw new Error(data.reply || "Review request failed.");
-  }
-  return data;
-}
-
-// P5: finalize a review session (no model call server-side; question_count/score are server-tracked
-// per turn). Best-effort — a failure just leaves the row 'active'; never throws so it can't disrupt
-// closing the review UI.
-export async function completeReviewSession(input: {
-  accessToken: string;
-  skillKey: string;
-  reviewSessionId: string;
-}) {
-  try {
-    await fetchWithTimeout(functionUrl("chat"), {
-      method: "POST",
-      headers: authHeaders(await freshAccessToken(input.accessToken)),
-      body: JSON.stringify({
-        review: true,
-        review_action: "complete",
-        skill_key: input.skillKey,
-        review_session_id: input.reviewSessionId,
-      }),
-    });
-  } catch {
-    // best-effort
-  }
-}
+// (Post-v4.0 Phase 4b + 5's invokeReview/completeReviewSession — the student-side spaced-review
+// turn loop — left with the retired /chat surface; v7 deliberately dropped the student review UI.
+// The server's review handler and the teacher-facing reads below remain.)
 
 // A student's recent review sessions. Used by the teacher's student-detail view (RLS
 // review_sessions_teacher_read via can_view_student) AND by the student's own profile

@@ -1,3 +1,9 @@
+"""Trimmed 2026-07-30 (trunk unification): the ReviewDueChip pins are gone — the
+student-facing review chip retired with the old /chat surface (v7 deliberately
+removed the student review feature; the v6 /learn surface does not reconnect it),
+and its client helpers (invokeReview/completeReviewSession) left lib/api.ts with it.
+The migration, chat-fn review lifecycle, and teacher-view pins below are KEPT —
+the server path and the teacher-facing reads are still live."""
 from pathlib import Path
 import unittest
 
@@ -7,7 +13,6 @@ MIGRATION = ROOT / "supabase" / "migrations" / "20260730000000_review_sessions.s
 CHAT_FN = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-CHIP = ROOT / "frontend" / "src" / "features" / "student" / "ReviewDueChip.tsx"
 TEACHER_VIEW = ROOT / "frontend" / "src" / "features" / "teacher" / "StudentReviewSessions.tsx"
 TEACHER = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-backend.yml"
@@ -21,7 +26,6 @@ class ReviewSessionsStaticTests(unittest.TestCase):
         cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.chip = CHIP.read_text(encoding="utf-8")
         cls.teacher_view = TEACHER_VIEW.read_text(encoding="utf-8")
         cls.teacher = TEACHER.read_text(encoding="utf-8")
         cls.deploy = DEPLOY.read_text(encoding="utf-8")
@@ -66,12 +70,11 @@ class ReviewSessionsStaticTests(unittest.TestCase):
         self.assertIn("NEVER reads this table", self.chat_fn)
 
     def test_frontend_wiring(self):
+        # Teacher-facing reads only: the student chip and its invoke/complete client
+        # helpers retired with /chat (see module docstring).
         self.assertIn("export type ReviewSession", self.types)
         self.assertIn("review_session_id?: string", self.types)
-        self.assertIn("completeReviewSession", self.api)
         self.assertIn("fetchStudentReviewSessions", self.api)
-        self.assertIn("reviewSessionId", self.chip)
-        self.assertIn("completeReviewSession", self.chip)
         self.assertIn("export function StudentReviewSessions", self.teacher_view)
         self.assertIn("<StudentReviewSessions studentId={studentId} />", self.teacher)
 
