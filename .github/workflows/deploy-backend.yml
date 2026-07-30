@@ -89,6 +89,7 @@ jobs:
             supabase/migrations/20260711000000_itf_book_f_seed.sql \
             supabase/migrations/20260712000000_retire_demo_catalog.sql \
             supabase/migrations/20260713000000_book_f_only_catalog.sql \
+            supabase/migrations/20260801000000_mvp_demo_catalog.sql \
             supabase/migrations/20260815000000_flow_v3_session_nav.sql \
             supabase/migrations/20260820000000_artifact_resources.sql \
             supabase/migrations/20260901000000_live_artifact_scoping.sql ; do
