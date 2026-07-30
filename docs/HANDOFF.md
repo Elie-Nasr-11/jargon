@@ -6442,3 +6442,62 @@ snapshot / chunk-pipeline / intervention-alert wrappers — owned by the api/typ
 task. components/NotificationsMenu.tsx still deep-links direct_message → tab=messages
 (degrades to Overview); goes away with the comms strip.
 Suggested next task: api.ts/types.ts prune (execution-order step 3).
+
+## Claude -> Codex / Human - 2026-07-30 17:05
+
+Status: Starting
+Task: MVP backend slice — (A) chat_mode student chat modes (open/discuss/quiz) as
+directive postures in the chat fn turn pipeline (no-chat_mode requests byte-identical);
+(B) Memory v1 (session_summaries + student_memory tables, prompt-side student.memory,
+background summary write on session completion, common_error_patterns merge).
+Files I expect to touch: supabase/functions/chat/index.ts,
+supabase/migrations/20260731100000_memory_v1.sql (new),
+.github/workflows/deploy-backend.yml, tests/test_chat_modes_memory.py (new).
+Notes: server-side only; frontend wiring is a separate task. No commits.
+
+## Claude -> Codex / Human - 2026-07-30 17:55
+
+Status: Finished
+Summary: MVP backend slice (docs/MVP_SCOPE.md §8-9), server-side only.
+(A) Chat modes: typed body gains optional `chat_mode: "open"|"discuss"|"quiz"`; absent
+= lesson flow byte-identical (every mode branch gated on the parsed value). Modes ride
+the SHARED turn pipeline (context load, hold gate, rate limit, dedupe replay,
+learning_turns persistence, telemetry): gates neutralized like a revisit, controls
+ignored, flow forced conversational, session row NEVER patched (no step_state/cursor/
+stage/status/steps_done/nav/completion). Directive postures open_conversation /
+discussion / quiz_practice sit at the top of turnDirective's ladder; SYSTEM_PROMPT
+gained a compact CHAT MODES section. open/discuss skip all graders+router; quiz grades
+text answers with the existing understanding grader against the milestone objective
+(only after a quiz-mode mentor turn exists) and writes revision/recall evidence +
+mastery via writeEvidenceAndMastery. Envelope echoes chat_mode (makeEnvelope
+passthrough keeps it on dedup replays).
+(B) Memory v1: new migration 20260731100000_memory_v1.sql (session_summaries append-
+only + student_memory, owner RLS + can_view_student teacher reads, authenticated
+grants, no anon). loadContext wave 1 best-effort-reads the profile row + last 3
+summaries (current session excluded); prompt gains capped student.memory
+(narrative<=600, summaries<=240x3) before recent_questions; the past-session
+guardrail in SYSTEM_PROMPT is now memory-scoped (STUDENT MEMORY block). The turn that
+transitions status to complete schedules writeSessionMemory via scheduleBackground:
+one understanding-route model call over the last 20 turns -> session_summaries insert
+(ignore-duplicates on session_id) + student_memory upsert (narrative replaced, lists
+unioned newest-first, cap 6) — all under the student JWT, fully best-effort.
+upsertMisconception also mirrors patterns into student_mastery.common_error_patterns
+(dedupe, cap 5, only when the mastery row exists), best-effort.
+Files changed: supabase/functions/chat/index.ts,
+supabase/migrations/20260731100000_memory_v1.sql (new),
+.github/workflows/deploy-backend.yml (migration list),
+tests/test_chat_modes_memory.py (new).
+Tests run: esbuild bundle syntax check on chat/index.ts (deno unavailable) — clean;
+python3 -m unittest discover -s tests: 285 tests, 60 failures + 4 errors, ALL
+pre-existing frontend-strip breakage (missing/stripped frontend files from the
+parallel MVP frontend agents — zero failures in backend/chat modules); the 147 tests
+across the chat-related modules pass, including the new 23 in
+test_chat_modes_memory.py. No existing fingerprint test needed edits ("never invent
+or claim" and all Flow-v3 regex pins preserved by construction).
+Remaining concerns: quiz-mode "a question was asked" detection keys on any recent
+mentor turn with payload.chat_mode === "quiz" (12-turn window) — a student who left
+quiz mode days ago mid-question re-enters as "already asked"; harmless (grades their
+first message as recall) but worth a UX pass. Frontend wiring (mode switcher, quiz
+feedback chip) is the separate later task.
+Suggested next task: frontend chat-mode switcher + memory-aware UI; repoint
+deploy-backend.yml branch at go-live.
