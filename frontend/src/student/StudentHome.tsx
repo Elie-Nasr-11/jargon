@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
+import { AMBIENT_FOCUS_EVENT } from "@/components/AmbientCanvas";
 import {
   ArrowRight,
   Brain,
@@ -33,8 +34,8 @@ import type {
 // everything here either resumes work or reports on it; nothing competes with Learn.
 //
 // The memory card is the premium moment: it reveals with a slow rise+fade the first time its
-// data lands (reduced motion snaps). The ambient uFocus pulse belongs to the AmbientCanvas
-// slice — this component only does its own reveal.
+// data lands (reduced motion snaps), and announces that reveal on the ambient focus event so
+// the shell's AmbientCanvas blooms once in sync.
 //
 // Data: every read is an existing api.ts call. Resume = the newest learning session across all
 // lessons resolved against the catalog the shell already holds; memory = student_memory +
@@ -101,7 +102,12 @@ function MemoryCard() {
 
   // The premium reveal: once, when the data first lands. Reduced motion renders in place.
   useEffect(() => {
-    if (!loaded || !cardRef.current || prefersReducedMotion()) return;
+    if (!loaded || !cardRef.current) return;
+    // The ambient uFocus pulse on first reveal (DESIGN_V6 §6): announced on window; the shell
+    // that owns the AmbientCanvas listens and bumps its focusSignal. Dispatched regardless of
+    // reduced motion — the canvas itself suppresses blooms under that preference.
+    window.dispatchEvent(new Event(AMBIENT_FOCUS_EVENT));
+    if (prefersReducedMotion()) return;
     gsap.fromTo(
       cardRef.current,
       { y: 12, opacity: 0 },

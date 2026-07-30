@@ -7590,3 +7590,84 @@ is still gone — due assignments only surface via the chat Homework pill; Home'
 covers assessments only.
 Suggested next task: assignment submission surface (or fold into chat Homework mode), then
 the ambient uFocus hook for the memory-card reveal once AmbientCanvas mounts in /learn.
+
+## Claude -> Codex / Human - 2026-07-30 22:15
+
+Status: Starting
+Task: Slice B2 — inline media + artifacts in the v6 transcript per DESIGN_V6 §5. ResourceCard
+becomes the universal renderer (pdf iframe, youtube nocookie, video/audio with telemetry,
+image, link/document/other cards, all firing recordResourceInteraction); artifacts render
+inline via ArtifactFrame (html_sim) and DeckRenderer (deck); the live artifact offer flow
+(artifact_offer pill -> generateLiveArtifact -> artifact_ready control turn) is ported from
+the old surface; mentor-turn markdown subset + ReadAloudAction return to the transcript;
+persisted turns replay identically.
+Files I expect to touch: frontend/src/student/{Transcript,ResourceCard,OfferPills,
+ChatWindow}.tsx, useConversation.ts, features/student/chat/chatMessages.ts,
+components/{ArtifactFrame,DeckRenderer,ReadAloudAction}.tsx (wiring only),
+lib/artifact-schema.ts, tests/{test_artifact_foundation,test_artifact_live,
+test_flow_v3_p5_media_binding}.py.
+Notes: not touching StudentApp/StudentHome/StudentSidebar/LessonTree/navigation/learn.tsx/
+AmbientCanvas/styles.css (another agent owns them), supabase/**. Not committing.
+
+## Claude -> Codex / Human - 2026-07-30 22:30
+
+Status: Starting
+Task: Ambient slice per DESIGN_V6 §2 — extend AmbientCanvas (uHue/uFocus/uBlend uniforms,
+hue + focusSignal props), mount it in /learn via StudentApp (0.22 working / 0.35 Home,
+per-TurnMode hue, focus blooms on reply arrival / mode change / completion / memory-card
+reveal), add hue props to the login/teacher/admin mounts.
+Files I expect to touch: frontend/src/components/AmbientCanvas.tsx,
+frontend/src/student/{StudentApp,StudentHome}.tsx (mount/wiring only),
+frontend/src/styles.css (additive ambient hue tokens), the AmbientCanvas mount lines in
+routes/{login,admin}.tsx + features/teacher/shell/TeacherShell.tsx.
+Notes: not touching Transcript/ResourceCard/OfferPills/ChatWindow/useConversation/
+chatMessages/ArtifactFrame/DeckRenderer (concurrent agent), lib/api.ts, supabase/**.
+Not committing.
+
+## Claude -> Codex / Human - 2026-07-30 23:05
+
+Status: Finished
+Summary: Ambient slice per DESIGN_V6 §2. AmbientCanvas extended in place (same single
+WebGL context / shader plane): new `hue` prop (CSS custom-prop name or any CSS color value,
+resolved via a probe element + 1x1 canvas pick so var()/color-mix()/oklch all work, re-resolved
+on change and on theme flips via a class MutationObserver) feeding uHue/uHueMix, with a
+JS-side framerate-independent lerp (τ=0.24s ≈ 720ms settle — inside the §2 600-900ms window,
+no hard cuts); new `focusSignal` prop (monotonic counter) firing one uFocus bloom per
+increment (instant rise, exponential ~2s ease-out decay in the frame loop, capped at +45%
+center-weighted alpha). Reduced motion renders one static frame INCLUDING the current hue,
+snaps on prop changes, and suppresses blooms; RAF still pauses on document.hidden; fragment
+shader stays branchless (mix/smoothstep only); zero frame-loop allocations; DPR cap 1.5
+unchanged. /learn now mounts the surface's single canvas in StudentApp: intensity 0.22
+working / 0.35 on Home / dimmed to 0.10 while an AssessmentSurface attempt is open (§6
+"ambient dims while locked"); hue = modeAccentValue(active TurnMode) during Learn (keeps the
+Discuss/Open desaturation), neutral on Home/destinations. focusSignal bumps on mentor reply
+arrival (prev-array-had-thinking edge, so transcript hydration never blooms), TurnMode
+change, lesson completion (conservative arc detector: fires only on an incomplete->complete
+transition within the same lesson, when completed/steps_done reach total), and the Home
+memory card's first reveal (StudentHome dispatches the exported AMBIENT_FOCUS_EVENT on
+window; the shell listens). Other surfaces (props only): login hue={null} (the untinted
+rainbow IS the brand hue) at 0.5; teacher hue="--ambient-neutral" at 0.18; admin
+hue="--ambient-admin" at 0.22 — both tokens added to styles.css :root (additive only).
+Files changed: frontend/src/components/AmbientCanvas.tsx; frontend/src/student/
+{StudentApp,StudentHome}.tsx (wiring only); frontend/src/styles.css (+2 tokens);
+mount lines in frontend/src/routes/{login,admin}.tsx +
+frontend/src/features/teacher/shell/TeacherShell.tsx. routes/learn.tsx untouched (the mount
+lives in StudentApp, which owns section/destination/turnMode).
+Tests run: cd frontend && npx tsc --noEmit (0); npx eslint over all touched files (0 errors;
+1 pre-existing react-refresh warning in admin.tsx line 45, untouched by this slice);
+npm run build green; python3 -m unittest tests.test_student_surface (38 OK) +
+tests.{test_admin_ops,test_admin_seed_pilot,test_assessment_expansion,
+test_phase11_reliability_model_routing} (32 OK). Grep confirms AmbientCanvas holds the only
+WebGLRenderer/three import in src/.
+Remaining concerns: (1) lesson completion is not explicitly observable from the
+conversation channel (envelope.next_action === "complete" never reaches Msg/state) — the
+arc-based detector is conservative and may stay silent if the server never emits a
+fully-done arc; plumbing next_action through chatMessages/useConversation (other agent's
+files) would make it exact. (2) The in-chat live quiz has no focus-lock/dim hook reachable
+from this slice's files — only the AssessmentSurface overlay dims; if ChatWindow grows a
+FocusLock surface, wire its open-state into the same intensity expression in StudentApp.
+(3) RouteLoader's transient mount keeps the default rainbow (not this slice's file; it is a
+solo loading frame, so the single-context rule still holds).
+Suggested next task: thread envelope.next_action into the channel so the completion bloom
+fires deterministically, and sync the ChatWindow mode-chrome cross-fade (§3) to the ambient
+hue lerp.

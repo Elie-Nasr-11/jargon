@@ -1326,9 +1326,10 @@ function AdminShell({
 }) {
   return (
     // admin-wash = the neutral page mixed a step toward the info blue: the cooler admin
-    // tint (DESIGN_V6 §2/§6). Ambient held at the 0.22 working-surface intensity (§2).
+    // tint (DESIGN_V6 §2/§6). Ambient held at the 0.22 working-surface intensity (§2), its
+    // wash tinted toward the cooler --ambient-admin token to match.
     <div className="admin-wash relative flex min-h-screen flex-col overflow-hidden">
-      <AmbientCanvas intensity={0.22} />
+      <AmbientCanvas intensity={0.22} hue="--ambient-admin" />
       <header
         className="relative z-20 shrink-0 backdrop-blur-md"
         style={{ background: "color-mix(in oklab, var(--background) 72%, transparent)" }}

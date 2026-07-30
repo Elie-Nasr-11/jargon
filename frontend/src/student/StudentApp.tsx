@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu } from "lucide-react";
+import { AMBIENT_FOCUS_EVENT, AmbientCanvas } from "@/components/AmbientCanvas";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { MentorControls } from "@/features/student/MentorControls";
 import {
@@ -28,7 +29,12 @@ import { LessonTree } from "@/student/LessonTree";
 import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import { useConversation } from "@/student/useConversation";
-import { DEFAULT_TURN_MODE, type TurnMode } from "@/student/turnModes";
+import {
+  DEFAULT_TURN_MODE,
+  modeAccentValue,
+  turnModeSpec,
+  type TurnMode,
+} from "@/student/turnModes";
 import {
   DESTINATIONS,
   type StudentDestination,
@@ -180,6 +186,80 @@ export function StudentApp({
 
   const destinationSpec = destination ? DESTINATIONS.find((d) => d.id === destination) : undefined;
 
+  // ---- Ambient wiring (DESIGN_V6 §2): the student surface's single AmbientCanvas. ----------
+  // focusSignal is a monotonic counter; each bump fires one uFocus bloom in the canvas.
+  const [focusSignal, setFocusSignal] = useState(0);
+  const bumpFocus = useCallback(() => setFocusSignal((n) => n + 1), []);
+
+  // Bloom on mentor reply arrival. A reply lands as [..., thinking] -> [..., bot]: the previous
+  // array holding a "thinking" placeholder is what distinguishes a live reply from transcript
+  // hydration (boot / lesson switch set the whole array at once, no placeholder) — so history
+  // loads never bloom.
+  const prevMessagesRef = useRef(conversation.messages);
+  useEffect(() => {
+    const prev = prevMessagesRef.current;
+    const next = conversation.messages;
+    prevMessagesRef.current = next;
+    const last = next[next.length - 1];
+    if (prev.some((m) => m.role === "thinking") && last && last.role === "bot" && !last.isError) {
+      bumpFocus();
+    }
+  }, [conversation.messages, bumpFocus]);
+
+  // Bloom on TurnMode change (the ambient hue lerps in sync — same state drives both).
+  const prevModeRef = useRef(turnMode);
+  useEffect(() => {
+    if (prevModeRef.current !== turnMode) {
+      prevModeRef.current = turnMode;
+      bumpFocus();
+    }
+  }, [turnMode, bumpFocus]);
+
+  // Bloom on lesson completion, observed off the lesson arc: only an incomplete -> complete
+  // transition WITHIN the same lesson fires (resuming an already-finished lesson hydrates the
+  // arc complete on load and must not bloom). Conservative by design — see the arc note below.
+  const arcSeenRef = useRef<{ lessonId: string | null; incomplete: boolean }>({
+    lessonId: null,
+    incomplete: false,
+  });
+  useEffect(() => {
+    const arc = conversation.lessonArc;
+    const lessonId = conversation.lesson?.id ?? null;
+    // "Complete" = every step reported done. An arc merely sitting ON its last step still has
+    // completed.length === total - 1, so this cannot fire early; if the server never emits a
+    // fully-done arc, this detector simply stays silent rather than guessing.
+    const complete =
+      !!arc &&
+      arc.total > 0 &&
+      (arc.completed.length >= arc.total || (arc.steps_done?.length ?? 0) >= arc.total);
+    const seen = arcSeenRef.current;
+    if (seen.lessonId === lessonId && seen.incomplete && complete) bumpFocus();
+    arcSeenRef.current = { lessonId, incomplete: !!arc && !complete };
+  }, [conversation.lessonArc, conversation.lesson, bumpFocus]);
+
+  // Bloom on the Home memory card's first reveal — StudentHome announces it via the ambient
+  // focus DOM event (the least-invasive channel: no prop threading through the Home tree).
+  useEffect(() => {
+    const onAmbientFocus = () => bumpFocus();
+    window.addEventListener(AMBIENT_FOCUS_EVENT, onAmbientFocus);
+    return () => window.removeEventListener(AMBIENT_FOCUS_EVENT, onAmbientFocus);
+  }, [bumpFocus]);
+
+  // Hue: the active TurnMode's accent while the conversation is on stage; neutral (the brand
+  // rainbow) on Home and destinations. modeAccentValue keeps the progression-honesty
+  // desaturation for Discuss/Open — the ambient tells the same truth as the chat chrome.
+  const ambientHue =
+    !destinationSpec && section === "learn" ? modeAccentValue(turnModeSpec(turnMode)) : null;
+  // Intensity: 0.22 on working surfaces, raised to 0.35 for Home's entry moment (§2 allows up
+  // to 0.5 on entry surfaces; Home stays below the login ceiling). While an assessment attempt
+  // has the screen focus-locked, the ambient dims out of the way (§6: "ambient dims while
+  // locked") — the canvas glides between targets, so none of these are hard cuts.
+  const ambientIntensity = openAssessmentId
+    ? 0.1
+    : !destinationSpec && section === "home"
+      ? 0.35
+      : 0.22;
+
   // Every nav action closes the drawer; the docked column is unaffected.
   const closeDrawer = () => setDrawerOpen(false);
   const openLesson = (lessonId: string) => {
@@ -221,9 +301,12 @@ export function StudentApp({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
+      {/* The ONE ambient layer for the whole student surface (DESIGN_V6 §2 — no second WebGL
+          context per page). Sidebar and main sit at z-base so the wash stays underneath. */}
+      <AmbientCanvas intensity={ambientIntensity} hue={ambientHue} focusSignal={focusSignal} />
       <aside
         aria-label="Sidebar"
-        className="hidden h-full w-[260px] shrink-0 border-r border-border/60 lg:block"
+        className="relative z-[var(--z-base)] hidden h-full w-[260px] shrink-0 border-r border-border/60 lg:block"
       >
         {sidebar}
       </aside>
@@ -249,7 +332,7 @@ export function StudentApp({
         <Menu className="h-[18px] w-[18px]" strokeWidth={1.6} />
       </button>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <main className="relative z-[var(--z-base)] flex min-h-0 min-w-0 flex-1 flex-col">
         {destinationSpec ? (
           <section className="flex min-h-0 flex-1 flex-col px-6 py-6">
             <header className="mb-4 flex items-baseline gap-3">

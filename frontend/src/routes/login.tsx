@@ -123,8 +123,9 @@ function LoginPage() {
       style={{ background: "var(--background)" }}
     >
       {/* The brand moment: full ambient presence, capped at the entry-surface ceiling
-          (DESIGN_V6 §2: up to 0.5 on entry surfaces). */}
-      <AmbientCanvas intensity={0.5} />
+          (DESIGN_V6 §2: up to 0.5 on entry surfaces). hue null = the untinted rainbow —
+          the brand gradient itself, deliberately not pulled toward any single accent. */}
+      <AmbientCanvas intensity={0.5} hue={null} />
       <ThemeToggle floating />
       <div
         ref={wrapRef}

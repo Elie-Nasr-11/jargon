@@ -66,8 +66,9 @@ export function TeacherShell({
       className="relative flex h-dvh overflow-hidden"
       style={{ background: "var(--background)" }}
     >
-      {/* DESIGN_V6 §6: the teacher console sits on a calm neutral ambient at 0.18. */}
-      <AmbientCanvas intensity={0.18} />
+      {/* DESIGN_V6 §6: the teacher console sits on a calm neutral ambient at 0.18, tinted
+          toward the neutral ambient token (§2's "neutral teacher tint"). */}
+      <AmbientCanvas intensity={0.18} hue="--ambient-neutral" />
 
       <TeacherSidebar
         email={email}

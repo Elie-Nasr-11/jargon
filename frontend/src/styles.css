@@ -159,6 +159,14 @@
      practice green, so the studio's 8-mode picker gets a distinct hue per StepCard mode. */
   --mode-media: oklch(0.64 0.09 200);
 
+  /* Ambient hue tokens (DESIGN_V6 §2/§6) — the uHue targets the AmbientCanvas mounts tint
+     toward: a calm near-gray for the teacher console, a cooler blue for admin. Mid-lightness
+     oklch reads on both themes, so one definition serves light and dark; defined here so no
+     mount line ever hardcodes a color. /learn derives its hue from the --mode-* accents above
+     instead; /login passes none (the untinted rainbow IS the brand hue). */
+  --ambient-neutral: oklch(0.62 0.02 250);
+  --ambient-admin: oklch(0.6 0.07 235);
+
   /* focus ring */
   --ring: rgba(10, 10, 10, 0.34);
 
@@ -264,8 +272,8 @@
   src: url("https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2")
     format("woff2");
   unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
-    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 html,
@@ -575,11 +583,11 @@ select {
    component/utility focus styles still win where they exist. */
 @layer base {
   :where(a, button, [role="button"], summary, [tabindex]):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-  /* outline (not box-shadow): shadow-* utilities on elevated controls would override a
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    /* outline (not box-shadow): shadow-* utilities on elevated controls would override a
      box-shadow ring; nothing touches outline. */
-}
+  }
 }
 
 /* Respect reduced-motion globally: neutralize the CSS keyframes (grad-shift,
