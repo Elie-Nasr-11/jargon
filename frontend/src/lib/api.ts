@@ -3015,10 +3015,10 @@ export async function invokeTypedChat(input: {
   answer?: TypedChatAnswer;
   control?: TypedChatControl;
   mentorPreferences: MentorPreferences;
-  // MVP chat modes (docs/MVP_SCOPE.md §8): open/discuss/quiz side-mode turns on the SAME session.
-  // Absent/null = the lesson flow — JSON.stringify drops the undefined so the request body stays
-  // byte-identical to the pre-mode contract (the key is omitted entirely, never sent as null).
-  chatMode?: "open" | "discuss" | "quiz" | null;
+  // v6: the student-declared TurnMode for THIS message (see src/student/turnModes.ts). The
+  // server validates it against a closed set and caps what the turn may discharge; absent or
+  // unrecognized means today's behavior, so older callers are unaffected.
+  mode?: string;
 }) {
   const response = await fetchWithTimeout(functionUrl("chat"), {
     method: "POST",
@@ -3029,7 +3029,7 @@ export async function invokeTypedChat(input: {
       answer: input.answer,
       control: input.control,
       mentor_preferences: input.mentorPreferences,
-      chat_mode: input.chatMode || undefined,
+      mode: input.mode,
     }),
   });
   const data = (await response.json()) as TypedChatEnvelope;

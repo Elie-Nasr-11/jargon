@@ -6363,6 +6363,668 @@ Suggested next task: adversarial review folds (in progress this session), push +
 main FF on user OK, then the live E2E (fail a practice step twice → pill → build → Run →
 teacher Share with class).
 
+## Claude -> Codex / Human - 2026-07-27 14:22
+
+Status: Starting
+Task: Fix the class-scoping join in artifact-live — `units?select=course_id` queries a column
+that does not exist (units has `course_version_id`; `course_id` lives on `course_versions`).
+Files I expect to touch: supabase/functions/artifact-live/index.ts, tests/test_artifact_live.py,
+docs/HANDOFF.md
+Notes: PostgREST 400s on the unknown column and serviceFetch throws, so this is a hard 500 on the
+build path (not the documented soft fallback) for any student with >1 active membership.
+
+## Claude -> Codex / Human - 2026-07-27 14:35
+
+Status: Done
+Summary: Fixed a hard 500 on the artifact-live build path introduced by the P8 review-fold
+class-scoping block (0061947). That block resolved lesson→class with a single hop,
+`units?id=eq.X&select=course_id` — but `units` has no `course_id` column; it carries
+`course_version_id`, and `course_id` lives on `course_versions`. PostgREST answers an unknown
+select column with a 400, `serviceFetch` throws on !ok, and the call sat outside any try/catch,
+so the outer Deno.serve handler returned "Couldn't build the activity. Try again." The blast
+radius is narrow but real: the branch is gated on `membershipClassIds.length > 1`, so a student
+in exactly one class never reached it (which is why the P8 E2E path missed it), but any student
+in two or more active classes could never build a live artifact at all. Fix does the join in two
+hops (units → course_versions → course), matching the existing reference resolve in
+curriculum-admin/index.ts:599-604, and wraps the whole linkage refinement in try/catch so it
+degrades to the newest-membership default the surrounding comment already promised instead of
+sinking a build the student had passed every gate for.
+Files changed: supabase/functions/artifact-live/index.ts (join + soft-fail + corrected comment),
+tests/test_artifact_live.py (+1 test), docs/HANDOFF.md.
+Tests run: python unittest tests.test_artifact_live (21 tests, green); full python discover
+(263 tests, 4 errors — all the known pre-existing setUpClass FileNotFoundErrors on deleted
+frontend readers: test_assessment_expansion, test_curriculum_authoring_studio, test_review_due,
+test_review_sessions). Verified against a stashed baseline: 262 tests / same 4 errors before,
+263 / same 4 after, so this change adds one test and no regressions. esbuild syntax check on
+artifact-live clean. Frontend untouched.
+Remaining concerns: the new test is a static source invariant (this repo's house style) — it
+pins the select column and the catch, not live PostgREST behavior, so it cannot prove the
+two-hop join returns the right course for real data. That still wants the live E2E already
+queued in OPEN_QUESTIONS. Worth noting the class-linkage path has no runtime coverage at all;
+a student in 2+ classes is the only way to exercise it. Nothing else in this function selects a
+column that does not exist — I checked the other REST calls against the 0009 baseline schema.
+Suggested next task: the live E2E from the previous entry, now with a two-class student so the
+linkage branch is actually exercised (fail a practice step twice → pill → build → Run → teacher
+Share with class), then main FF.
+
+## Claude -> Codex / Human - 2026-07-27 18:21
+
+Status: Starting
+Task: v5.0 P1 — student shell + IA. Home/Learn split, new sidebar nav (New, Resources, Routines,
+Customize, Reports alongside Classes), bottom account menu. Groundwork only; no runtime/mode change
+(that is P2).
+Files I expect to touch: frontend/src/features/student/shell/{studentViews.ts,AppSidebar.tsx},
+frontend/src/routes/chat.tsx (panel wiring), new panels under features/student/panels/,
+docs/{PLATFORM,DECISIONS,HANDOFF}.md
+Notes: Plan approved this session (v5.0). P1 is deliberately behavior-safe: the chat runtime and the
+v4.0 mode vocabulary are untouched until P2, which is where the deterministic-gate invariant and the
+eight-mode constraint actually change. Approved architecture separates student-chosen MODE from a
+requirement ledger that owns progression, so "Driver" mode selection cannot bypass a gate.
+
+## Claude -> Codex / Human - 2026-07-27 18:40
+
+Status: Done (v5.0 P1 — shell + IA only)
+Summary: Rebuilt the student navigation around the Home (LMS) / Learn (chat) split and widened the
+view vocabulary. `studentViews.ts` goes from ["classes","pulse"] to home/classes/resources/routines/
+customize/reports, keeping two load-bearing conventions: `view` absent still means the chat (every
+deep link, `goView(null)`, and the close-panel gesture rely on it), and `pulse` survives as a
+validated LEGACY ALIAS resolving to Home via a new `canonicalView()` helper, so v4.0 bookmarks
+carrying ?view=pulse still land somewhere real. Home renders exactly what v4.0's "Overview"
+rendered (PulsePanel), so the alias is surface-identical, not just non-404.
+The sidebar gains the Home/Learn primary rows, a New action, and the secondary destinations;
+the account menu gains Notifications and Settings. Reports reuses GradesPanel and Customize reuses
+MentorControls — both already existed. Resources and Routines are honest empty states: the nav
+entries are real, the data layers are explicitly pending (a student-scoped resource listing that
+respects can_view_lesson_resource, and a routine scheduler, are each their own slice).
+NOTHING in the chat runtime changed — no mode selector, no gate change, no migration. That is P2.
+Files changed: frontend/src/features/student/shell/{studentViews.ts,AppSidebar.tsx},
+frontend/src/features/student/panels/{ResourcesPanel,RoutinesPanel}.tsx (new),
+frontend/src/routes/chat.tsx, docs/{DECISIONS,HANDOFF}.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact pre-existing baseline);
+vite build green; python unittest full discover 263 tests, 4 errors — the 4 are the known
+pre-existing setUpClass FileNotFoundErrors on deleted frontend readers, unchanged from baseline.
+Remaining concerns: (1) NOT verified in a running browser — tsc/lint/build only; the sidebar layout
+and drawer behavior want a real E2E pass. (2) Four requested account-menu items (Profile, What's
+new, Help, Contact) were deliberately NOT added: none has a destination that exists, and dead menu
+rows are worse than absent ones. They need destinations decided. (3) `restartLesson` is wired to
+"New" — it confirms and preserves saved work, so it is non-destructive, but its confirm copy still
+says "Start this lesson over from step 1" and should be reworded for the New framing.
+(4) chat.tsx is now ~3,560 lines; the plan calls for extracting the chat shell into
+features/student/chat/ BEFORE P2 adds a mode state machine — do not skip that.
+Suggested next task: P2 — rewrite PLATFORM.md §2/§7 to v5.0 first (the doc is canonical), then the
+mode constraint migration + requirement ledger in step_state, then the chat.tsx mode branch, then
+the Composer selector (rename its local `Mode = "text"|"code"` to `InputSurface` in the same commit
+— the collision with LearningMode will otherwise make the file unreadable).
+
+## Claude -> Codex / Human - 2026-07-27 19:05
+
+Status: Done (v5.0 P2a + P2b backend). P2c frontend selector NOT started.
+Summary: Two commits. P2a is a pure extraction — the transcript data model and its pure adapters
+(Msg union, LearningTurn/TypedChatEnvelope/TeacherLiveComment → Msg, formatting/parsing helpers)
+moved out of routes/chat.tsx into features/student/chat/chatMessages.ts. chat.tsx 3,564 → 3,300
+lines; no behavior change, proven by the suite being byte-identical in outcome afterwards. Two
+static tests asserted those fragments lived in chat.tsx specifically; both now read the route and
+the module as one blob so they pin behavior rather than file layout (same precedent as the teacher
+assertions that already follow TeacherConsole.tsx).
+P2b adds the backend half of the mode selector. The student declares a turn mode and that sets a
+CEILING on what the turn may discharge. The design point worth remembering: this is a property of
+the MESSAGE and is a SEPARATE AXIS from lesson_activities.mode, which is a property of the STEP.
+The original plan conflated them and would have migrated the eight authored modes; research showed
+that buys nothing, so P2 leaves them alone — no migration, no live curriculum affected.
+Discuss/Open cannot close a gate because they are handed a routedKind applyTurn already refuses to
+grade (Flow v3 masking), NOT because of a new guard — one choke point preserved. The null kind is
+lifted too, or the stuck cap could stamp understanding_at from a discuss turn. Control turns bypass
+the ceiling deliberately (a button press is intent, not conversation).
+Files changed: frontend/src/features/student/chat/chatMessages.ts (new), frontend/src/routes/chat.tsx,
+supabase/functions/chat/index.ts, tests/test_turn_modes.py (new, 7 tests),
+tests/{test_artifact_live,test_live_teacher_intervention}.py, docs/{PLATFORM,DECISIONS,HANDOFF}.md.
+Tests run: python unittest full discover 270 tests, 4 errors — the same 4 pre-existing setUpClass
+FileNotFoundErrors on deleted frontend readers, unchanged from the 263/4 baseline (+7 new tests).
+Frontend tsc 0 errors, eslint 0 errors / 17 warnings (baseline), vite build green. esbuild syntax
+check on chat/index.ts clean. Scope of `declaredMode` verified by hand (both its declaration and its
+use are inside handleTypedRequest) because esbuild does not do scope analysis and an out-of-scope
+reference would be a production ReferenceError.
+Remaining concerns: (1) THE FEATURE IS NOT USABLE YET — no UI sends `mode`, so the ceiling is inert
+by construction. That is a safe resting state, not a broken one. (2) The per-mode DIRECTIVE branch
+was not written: Discuss currently declines to grade but the mentor's framing is unchanged, so
+Discuss will not yet FEEL different. turnDirective() is the place. (3) Declared mode is not yet
+recorded on learning_turns.payload, so there is no telemetry on which modes students pick.
+(4) Deliberately not done: skipping the understanding-grader call on Discuss/Open. The verdict is
+discarded anyway, so it is a real cost/latency saving (~$0.0006 + a round trip per turn), but
+changing routing and grader invocation together would make a regression hard to localize.
+(5) Further chat.tsx extraction (RealtimeVoicePanel ~430 lines, WorkDock) remains available.
+Suggested next task: P2c — types.ts StudentTurnMode + api.ts passthrough + the Composer selector.
+When touching Composer.tsx, rename its local `type Mode = "text" | "code"` (:98) to `InputSurface`
+in the SAME commit; it is the input-surface axis and the collision with the new turn mode will make
+the file unreadable otherwise. Have a quiz-choice click auto-switch the student to Quiz mode — the
+server fails closed on a choice sent in Discuss, which is correct but would read as a dead button.
+
+## Claude -> Codex / Human - 2026-07-28 08:52
+
+Status: Starting
+Task: v6 student surface — rebuild the student-facing frontend from scratch, component by component,
+in a clean namespace (frontend/src/student/). Keeps the plumbing (lib/api, lib/types, lib/supabase,
+components/ui primitives + design tokens) and the live backend; replaces routes + student feature
+components.
+Files I expect to touch: frontend/src/student/** (new), a new route, docs.
+Notes: All prior work is preserved on branch archive/v4-flow-v3-artifacts-v5 (01f5461) — nothing was
+deleted. Rationale for keeping the backend: deploy-backend.yml deploys from this branch, so the edge
+functions and migrations are LIVE; the schema already holds a real student's progress and Book F's
+106 teacher-authored activities. Scratching backend code would not un-apply migrations, and would
+force re-deriving the gate/RLS invariants against a live user. The frontend is the layer that is
+actually frozen (main is 23 commits behind) and safe to replace.
+Naming discipline from commit 1 — the overloaded word "mode" is what caused the v5.0 P2 planning
+error, so the new surface uses distinct names: TurnMode (what the student is doing in a message),
+StepKind (the authored step type), InputSurface (text vs code composer). No bare "Mode".
+
+## Claude -> Codex / Human - 2026-07-28 09:20
+
+Status: Done (v6 student surface — slice 1 of N: shell, nav, mode selector, mode-skinned chat window)
+Summary: Started the from-scratch student surface under frontend/src/student/ on a new route
+(/learn), alongside the existing /chat which stays the shipping surface until the new one is better.
+Nothing was deleted; all prior work is on archive/v4-flow-v3-artifacts-v5 (01f5461).
+Naming discipline is the point of this rebuild: the word "mode" meant seven different things in the
+old surface and that ambiguity caused the v5.0 P2 planning error. The new surface uses TurnMode
+(what the student is doing in a message), StepKind (the authored step type), and InputSurface
+(text vs code composer). No bare "Mode" anywhere.
+Built: turnModes.ts (the 7-mode vocabulary with per-mode hint/canProgress/accent), navigation.ts
+(section vs destination vs menu-item, three distinct concepts), StudentSidebar (Home/Learn segmented
+selector, New, five destinations, account menu with the six requested items), ModeSelector (picker
+with per-mode hints; unavailable modes render disabled-with-reason, never hidden), Chatbox
+(attachments, mode selector, audio, speak/send — the primary action swaps Mic→Send when there's
+text), ChatWindow (mode-tinted panel, own border, centered eyebrow pill ON the top border), and the
+StudentApp shell. Per-mode colour is one hue per mode in styles.css plus two utility classes that
+derive surface/border via color-mix against --background — the same auto-inverting trick the
+existing depth ramp uses, so light/dark both work from a single definition and no component
+hardcodes a hex.
+Files changed: frontend/src/student/{turnModes,navigation}.ts,
+frontend/src/student/{StudentSidebar,ModeSelector,Chatbox,ChatWindow,StudentApp}.tsx,
+frontend/src/routes/learn.tsx, frontend/src/routeTree.gen.ts, frontend/src/styles.css, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact pre-existing baseline); vite
+build green; python unittest 270 tests, 4 errors — the known pre-existing setUpClass
+FileNotFoundErrors, unchanged.
+Remaining concerns: (1) NOT verified in a browser — tsc/lint/build only. The eyebrow-pill
+positioning and the segmented control want real eyes. (2) The chat window is not wired to the API:
+onSend is a no-op and the transcript is placeholder text. It renders and the mode selector works,
+but it does not converse yet. (3) Home and all five destinations are honest "not built yet" panels.
+(4) routeTree.gen.ts is hand-maintained in this repo (no TanStack router vite plugin), so adding a
+route means editing it in 8 places — worth wiring the plugin before adding more routes.
+(5) The account menu items are wired to a no-op handler; they need destinations.
+Suggested next task: wire ChatWindow to the live chat API (invokeTypedChat already accepts the mode
+field the backend reads — see supabase/functions/chat/index.ts applyModeCeiling), reusing
+features/student/chat/chatMessages.ts for the transcript model rather than rewriting it.
+
+## Claude -> Codex / Human - 2026-07-28 10:05
+
+Status: Done (v6 student surface — slice 2: the chat window converses)
+Summary: /learn now holds a real conversation. useConversation.ts owns the turn loop: resolve a
+lesson from the student catalog, RESUME the latest session (or create one), load its turns through
+the existing transcript adapters, and send turns carrying the student's declared TurnMode.
+invokeTypedChat gained an additive `mode` passthrough — the server has read and validated
+`body.mode` since v5.0 P2b, so this closes the loop end to end.
+The transcript model is IMPORTED from features/student/chat/chatMessages.ts, not redeclared. That
+file is the one piece of the old frontend worth keeping and it is already pinned by tests; a second
+Msg union would be exactly the duplication this rebuild exists to remove.
+Two mode behaviors worth knowing: `checkpoints` has sendsTurn:false, so selecting it swaps the
+whole pane for the checkpoints surface instead of leaving a chatbox that silently swallows
+messages; and clicking a quiz choice switches the student into Quiz mode first, because the server
+correctly fails closed on a choice sent from a conversation mode and that would otherwise read as a
+dead button.
+Files changed: frontend/src/student/{useConversation.ts,Transcript.tsx} (new),
+frontend/src/student/StudentApp.tsx, frontend/src/lib/api.ts, tests/test_student_surface.py (new,
+6 tests), docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact baseline); vite build green;
+python unittest 276 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged from the 270/4 baseline (+6 new).
+Remaining concerns: (1) STILL NOT RUN IN A BROWSER. tsc/lint/build/static-tests only. The boot
+path in particular (catalog → resume → turns) has never executed against the real API in this
+session; that is the first thing to check. (2) The lesson is hardcoded to catalog[0] — there is no
+lesson switcher yet, so a student cannot change lesson on /learn. The sidebar class/unit/lesson
+tree is the natural next slice. (3) Deliberately NOT ported: attachments, live voice, code running
+and the Jargon runtime, artifacts, resource cards, markdown rendering. All exist on /chat and each
+wants its own slice. The Chatbox renders attachment and audio buttons that are inert until then.
+(4) The error bubble stores retryAnswer but nothing renders a Retry control yet.
+Suggested next task: run /learn against the live backend and fix what the boot path gets wrong,
+before adding more surface. After that, the sidebar lesson tree (groupByUnit in
+features/student/lessonGroups.ts already does the grouping).
+
+## Claude -> Codex / Human - 2026-07-28 10:50
+
+Status: Done (v6 student surface — slice 3: sidebar lesson tree + FIRST LIVE BROWSER RUN)
+Summary: Added the class→unit→lesson tree to the sidebar and ran the surface in a real browser for
+the first time. LessonTree delegates grouping to the existing groupByUnit helper rather than
+reimplementing unit ordering. useConversation was restructured so boot and lesson-switching share
+ONE loader (loadLesson), which means a lesson opened from the tree behaves identically to one
+opened on load — the two paths cannot drift. Switching is refused mid-turn and carries a monotonic
+token so a slow first load can never overwrite the lesson the student actually landed on.
+LIVE RUN (headless Chromium against the vite dev server) — the verification that had been missing
+for three slices, and it found a real bug immediately: the error surface rendered "[object Object]".
+Cause: supabase-js rejects with PLAIN OBJECTS carrying a message, not Error instances, so an
+`instanceof Error` check falls through to String(err). friendlyError now reads the message off any
+shape that has one, maps network failures to plain English, and never shows a raw
+TypeError/ReferenceError/SyntaxError to a student. Pinned by a new test.
+Also fixed from the screenshots: the transcript and composer were full-bleed across the window;
+both now sit in one centered max-w-3xl column, which is what makes it read as a conversation rather
+than two stacked panels.
+VERIFIED VISUALLY: sidebar structure and segmented Home/Learn control; the mode picker with
+per-mode hints and colour dots; per-mode theming end to end — switching to Take quiz turns the
+panel, its border, and the eyebrow pill red, and the eyebrow sits correctly centered ON the top
+border in both modes.
+Files changed: frontend/src/student/{LessonTree.tsx (new),useConversation.ts,ChatWindow.tsx,
+StudentApp.tsx}, tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green;
+python unittest 277 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged. Live: headless Chromium on /learn, screenshots reviewed.
+Remaining concerns: (1) THE AUTHENTICATED DATA PATH IS STILL UNVERIFIED. Supabase is unreachable
+from this sandbox — curl to the project returns 000 even through the agent proxy — so boot always
+lands on the network-error branch. The shell, theming, and error path are confirmed; catalog →
+resume → turns → send has still never executed against real data. That needs a run from a machine
+with network access and a signed-in student.
+(2) The empty transcript is a large void; it wants an empty state once real content is in.
+(3) Chatbox attachment and audio buttons remain inert. (4) No Retry control renders for the error
+bubble even though retryAnswer is stored.
+Suggested next task: run /learn signed in from a networked machine and fix what boot gets wrong —
+that is now the only thing standing between this surface and being usable.
+
+## Claude -> Codex / Human - 2026-07-29 09:45
+
+Status: Aborted before implementing — the premise was wrong.
+Task (as scoped): build a teacher confirm/edit page for extracted resource content.
+Finding: THE PAGE ALREADY EXISTS. TeacherConsole.tsx imports and uses all eight resource-processing
+wrappers (fetchResourceTextChunks, saveExtractedPdfChunks, uploadPdfPageAssets, ocrPdfPages,
+transcribeMediaResource, saveResourceChunkEdits, approveResourceChunks, rejectResourceChunks) and
+renders a full "Extracted text / transcript review" panel per resource with draft/approved/rejected
+counts, per-chunk editing, per-chunk approve/reject, and an "Approve drafts" bulk action.
+My scoping grep searched for the raw edge-function action strings ("approve_chunks") which appear
+ONLY in api.ts; the UI calls the wrapper names, so the grep returned api.ts alone and I concluded
+no UI existed. A duplicate ResourceReview.tsx was written against that false premise and has been
+deleted unbuilt — shipping a second review surface would have been the exact duplication this
+codebase is being cleaned up to remove.
+What is ACTUALLY missing against the request: (1) extraction is MANUAL — a teacher uploads, then
+must click "Extract PDF text" / "Transcribe"; nothing fires on upload. (2) The extraction model is
+OPENAI_OCR_MODEL, defaulting to gpt-5.4-mini — making it "a powerful model" is a deploy-workflow
+env change, not code. (3) The existing review renders chunk cards rather than one continuous
+document, which is a UX improvement but not a missing capability.
+Corrected next task: auto-extract on upload (dispatch by resource type after createLessonResource
+in TeacherConsole.tsx, non-blocking, surfacing status in the materials list) plus the model config.
+Everything else asked for is already built.
+
+## Claude -> Codex / Human - 2026-07-30 07:19
+
+Status: Starting
+Task: Auto-extract resource content on upload. The review UI, all four extraction handlers, and the
+approve/reject flow already exist in TeacherConsole.tsx; what is missing is that nothing fires on
+upload, so a teacher must notice and click "Extract PDF text" (or, for a scanned PDF, click through
+three buttons in the right order) or the content never reaches the mentor.
+Files I expect to touch: frontend/src/features/teacher/TeacherConsole.tsx, tests/, docs/.
+Notes: The scanned-PDF fallback (text extract → page previews → OCR) is the real value; today the
+teacher has to diagnose and drive that sequence by hand. extractChunks signals "scanned" by throwing
+a string-matched Error — the orchestrator must branch on a RETURN VALUE instead, or a copy edit
+silently breaks auto-OCR. Non-blocking: never hold the upload form on a model call. Do NOT touch
+chat/index.ts — status=eq.approved and the 18-chunk cap are the contract this feeds.
+
+## Claude -> Codex / Human - 2026-07-30 07:40
+
+Status: Done (auto-extract on upload)
+Summary: Uploading a lesson resource now scans it automatically. Previously a teacher had to notice
+and click "Extract PDF text" — or, for a scanned PDF, click three buttons in the right order — and
+forgetting was silent: the resource looked fine and the mentor never saw its contents.
+A new `autoExtract(resource)` in ResourceManager dispatches by type: PDF → browser text extraction,
+and only if the file has no selectable text, page previews → OCR; audio/video → transcription;
+links → no-op. Each step reuses the same handler the manual buttons call, so there is one code path
+and the buttons remain a working override.
+Two details worth keeping: (1) `extractChunks` now RETURNS "extracted" | "no_text" | "failed"
+instead of signalling the scanned case by throwing a string-matched Error — the OCR fallback branches
+on that value, so rewording a message can no longer silently disable automatic OCR. (2)
+`ocrPdfResource` takes an optional `freshAssets`, because reading `assetsByResource` in the same tick
+the previews were saved yields an empty page list before React re-renders. That happened to work (the
+server treats an empty list as "every asset") but only by accident; the assets are now passed
+explicitly.
+Wiring note: `saveResource` lives in TeacherConsole but the extraction handlers live in
+ResourceManager — different components. `onSaveResource` now returns the created resource so the
+child can scan it. Editing existing metadata returns nothing, so a re-save never re-scans.
+Files changed: frontend/src/features/teacher/TeacherConsole.tsx,
+tests/test_resource_autoextract.py (new, 7 tests), docs/{OPEN_QUESTIONS,HANDOFF}.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact baseline); vite build green;
+python unittest 284 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged from the 277/4 baseline (+7 new).
+Remaining concerns: (1) NOT run against a real upload. Static checks only; the OCR chain in
+particular (browser render → upload assets → server OCR) has never executed end to end in this
+session. (2) The chain is three sequential steps, two in the browser — a teacher navigating away
+mid-chain leaves page assets with no OCR'd chunks; recoverable via the manual buttons, but the
+status message will not say so. (3) Status messages churn between steps because each reused handler
+sets and clears its own; acceptable, but it reads as flicker. (4) `OPENAI_OCR_MODEL` is a Supabase
+dashboard variable — the "use a powerful model" half of the original request cannot be done from the
+repo. See OPEN_QUESTIONS 2026-07-30.
+Suggested next task: upload a text PDF and a scanned PDF to a lesson and watch the chain; then decide
+the chunk-cards-vs-document question in OPEN_QUESTIONS.
+
+## Claude -> Codex / Human - 2026-07-30 08:15
+
+Status: Done (v6 /learn — slice 4: finish the transcript)
+Summary: Closed the three gaps that made /learn's chat window incomplete rather than adding new
+surface on top of it.
+(1) FENCED CODE BLOCKS. The mentor teaches with code, so a reply containing ``` was rendering as
+flat text. Now parsed and highlighted, reusing parseFencedBlocks / jargonTokenClass /
+tokenizeJargon — the same helpers the previous surface used. Wide code scrolls inside its own box
+so the transcript column never scrolls sideways. Note: there is NO general Markdown pipeline in
+this codebase and this slice deliberately does not add one; fenced blocks are what the old surface
+handled too.
+(2) EMPTY STATE. An empty transcript was a large void; it now says what will happen.
+(3) RETRY. The Msg union has carried retryAnswer since the extraction, with nothing rendering a
+button. Error bubbles now offer "Try again" and re-send the original answer verbatim rather than
+asking the student to retype. sendAnswer's `echo` became optional for this — a retry's user bubble
+is already in the transcript, so echoing again would duplicate it — and sending now strips any
+trailing error bubble, which otherwise would sit above its own successful retry.
+Files changed: frontend/src/student/{Transcript.tsx,useConversation.ts,StudentApp.tsx},
+docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact baseline); vite build green;
+python unittest 284 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged. Live: headless Chromium on /learn — shell renders, friendly error copy, ZERO page errors,
+no regression from slice 3.
+Remaining concerns: (1) The three things added here CANNOT be exercised in this sandbox. Supabase is
+unreachable, so boot always lands on the network-error branch: the transcript never populates, which
+means code-block rendering, the empty state, and the Retry button have all been type-checked and
+built but never SEEN. They need the signed-in run.
+(2) Still unported from /chat: attachments, live voice, code running, artifacts, resource cards. The
+Chatbox renders attachment and audio buttons that remain inert.
+(3) Home and all five sidebar destinations are still honest "not built yet" panels.
+Suggested next task: Home / the LMS view — it is half the primary nav and the largest remaining
+placeholder. The old surface's PulsePanel, ClassesGrid, and AgendaCalendar already exist; decide
+whether the new Home reuses them or is rebuilt in src/student/ before starting.
+
+## Claude -> Codex / Human - 2026-07-30 09:05
+
+Status: Done (UI) / Backend writer NOT done
+Summary: Restructured the chatbox mode controls. The dropdown is now exactly four always-available
+modes — Lesson, Practice, Discuss, Open. Quiz and Homework left the dropdown and became inline
+pills beside it, shown ONLY when the lesson has one; Resources joined them as a third pill.
+`checkpoints` is deleted outright.
+Reasoning worth keeping: a dropdown whose length changes per lesson is harder to learn than a fixed
+list plus visible extras, and a pill's PRESENCE is itself the signal — a student can see "this
+lesson has a quiz" without opening anything. Chose icon+label pills over the hover-expanding
+circles that were floated: hover does not exist on touch, and a control whose meaning is hidden
+until hover costs discoverability for exactly the person least able to afford it.
+Two things that would have been easy to get wrong: (1) Homework keeps the wire id "assignment"
+because that is what the server's mode whitelist accepts — only the LABEL says Homework; renaming
+the id would silently fall through to legacy server behaviour. Pinned by a test. (2) Resources is
+NOT a TurnMode — opening materials sends no turn and cannot change the conversation's contract — so
+it lives in a separate LessonOffers type and calls its own handler.
+Availability comes from a new optional envelope field `available: {quiz, homework, resources}`,
+with a client fallback: quiz from live choices/next_action, resources from attached resources.
+Homework has NO client-side proxy and stays hidden until the server sends it — a pill that guessed
+would point a student at work that may not exist.
+Files changed: frontend/src/student/{turnModes.ts,ModeSelector.tsx,Chatbox.tsx,ChatWindow.tsx,
+StudentApp.tsx,useConversation.ts,OfferPills.tsx (new)}, frontend/src/lib/types.ts,
+tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green;
+python unittest 288 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged (+4 new). Live: headless Chromium — dropdown confirmed as exactly the four modes, zero
+page errors.
+Remaining concerns: (1) THE BACKEND WRITER IS NOT DONE. Nothing populates envelope.available, so
+the Homework pill can never appear and Quiz relies on the client fallback. chat/index.ts already has
+what it needs — stepRequirements(activity).quiz for the quiz flag and the checkpoints it loads at
+:2811 for homework — so this is a small additive change to the envelope builder, deliberately left
+out of a UI commit to keep the diff attributable. THIS IS THE NEXT TASK.
+(2) The pills have never been SEEN. Supabase is unreachable from this sandbox so offers are always
+false; the pill row is type-checked and built but unrendered.
+(3) Removing checkpoints leaves no student route to "what's due" — it was a placeholder pane, but
+that information now has no home until Home is built.
+Suggested next task: populate envelope.available in chat/index.ts (quiz from stepRequirements,
+homework from the lesson's checkpoints, resources from what it already attaches), then look at the
+pills with real data.
+
+## Claude -> Codex / Human - 2026-07-30 10:10
+
+Status: Done (mode sections)
+Summary: The mode border and eyebrow pill moved from the CHAT WINDOW to the stretch of conversation
+they describe. One lesson can contain several modes, so a single window-level border was a lie about
+which part was which. Transcript now groups consecutive messages sharing a TurnMode into a bordered,
+labelled section; a student scrolling back sees at a glance that this part was Discuss and that part
+was Quiz. ChatWindow has no border and no label of its own; the chatbox still tints to the mode you
+are about to send in.
+This needed the backend: the declared mode was accepted but never recorded, so a reloaded transcript
+had no idea which mode anything happened in. chat/index.ts now stamps `turn_mode` into BOTH turn
+payloads — the student turn and the mentor reply — so a reply groups with the turn it answers rather
+than opening a new unlabelled section. Both writes are inside handleTypedRequest (scope verified by
+hand; esbuild does not do scope analysis and an out-of-scope read would be a production
+ReferenceError).
+Design decision worth keeping: a message whose mode is UNKNOWN renders with NO section chrome at
+all. Every turn written before this commit has no turn_mode, and relabelling those as "Lesson" would
+be inventing history we cannot verify. Only user and mentor messages open a section — thinking
+placeholders, code output, and teacher interjections continue whatever section is open, or a reply
+and its "Thinking…" bubble would split across two boxes.
+Files changed: supabase/functions/chat/index.ts, frontend/src/features/student/chat/chatMessages.ts,
+frontend/src/student/{Transcript.tsx,ChatWindow.tsx,useConversation.ts},
+tests/{test_student_surface,test_supabase_chat_function}.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green;
+esbuild syntax check on chat/index.ts clean; python unittest 293 tests, 4 errors — the known
+pre-existing setUpClass FileNotFoundErrors, unchanged (+5 new). Live: headless Chromium — confirmed
+the window-level eyebrow is gone and zero page errors.
+Remaining concerns: (1) EXISTING HISTORY WILL SHOW NO SECTIONS. turn_mode is only written from this
+commit forward, so any lesson with prior turns renders them unchromed. That is correct-by-design, not
+a bug, but it will look like the feature is not working — only NEW turns are sectioned.
+(2) A test also had to change: test_supabase_chat_function pinned the literal `payload: answer` as
+proof voice metadata persists. The spread preserves every answer field; the assertion now pins the
+new form.
+(3) The sections themselves have never been SEEN — Supabase is unreachable here so the transcript
+never populates.
+(4) The backend half of the offer pills (envelope.available) is STILL not written; the Homework pill
+remains impossible. That is the outstanding backend task.
+Suggested next task: populate envelope.available in chat/index.ts (quiz from stepRequirements,
+homework from the lesson's checkpoints), then look at pills and sections together with real data.
+
+## Claude -> Codex / Human - 2026-07-30 11:00
+
+Status: Done (Home + UI polish)
+Summary: Built Home and closed two honesty gaps in the chat surface.
+HOME is real. It answers the three questions a student opens an LMS to ask — what is due, what have
+I handed in, how did I do — as three columns (To do / Handed in / Marked). Built FRESH in
+src/student/ rather than importing the old surface's PulsePanel: that component is ~700 lines and
+carries the previous shell's assumptions, and pulling it in would undo the point of rebuilding in a
+clean namespace. The DATA layer is reused untouched — fetchStudentGrades already resolves checkpoint
+recipients into titles, due dates, submissions and scores, so Home needs one call and no new
+endpoint. Undated work sorts last on purpose: it is not urgent, just unscheduled.
+RESOURCES IS NO LONGER A DEAD END. The Resources pill I added last session pointed at a "not built
+yet" placeholder — a prominent control leading nowhere is worse than no control. It now lists the
+lesson's actual materials, accumulated from the envelopes this session (a later turn attaching
+nothing must not clear what was already shown).
+INERT CONTROLS REMOVED. The attachment and audio buttons rendered permanently disabled because no
+handler is wired. They are now rendered only when a handler exists, and Send no longer swaps to a
+Mic icon when there is no voice handler to call. A greyed-forever button reads as broken; absent
+reads as "not a feature here".
+Files changed: frontend/src/student/{StudentHome.tsx (new),StudentApp.tsx,Chatbox.tsx,
+useConversation.ts}, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 293 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged.
+Live: headless Chromium — Home renders its three columns, the chatbox is down to two controls (mode
++ send), zero page errors.
+Remaining concerns: (1) Home shows empty columns here because fetchStudentGrades returns [] without
+a session (it does not throw), so the layout is verified but never seen WITH DATA.
+(2) Home covers only work and grades. Classes, the agenda calendar, and per-mode strengths are the
+next additions; there is no class navigation from Home yet.
+(3) envelope.available STILL has no server writer — the Homework pill remains impossible and Quiz
+runs off a client fallback. This is now blocking two features and is the top backend task.
+(4) Three sidebar destinations remain placeholders: Routines, Customize, Reports. Reports overlaps
+Home's "Marked" column — decide whether it is a deeper view or should be dropped.
+(5) Attachments, voice, code running, artifacts and resource cards are still unported from /chat.
+Suggested next task: the envelope.available writer, then Classes navigation on Home.
+
+## Claude -> Codex / Human - 2026-07-30 11:35
+
+Status: Done (envelope.available — the offer pills are now server-driven)
+Summary: Closed the backend gap that had been deferred three times. chat/index.ts now populates
+`envelope.available = { quiz, homework, resources }`, so the chatbox's inline pills reflect what the
+lesson actually offers instead of a client-side guess. The Homework pill was previously IMPOSSIBLE —
+it had no client-side proxy signal and stayed hidden by design rather than guessing; it can now
+appear.
+Each flag reads state the turn already computed, with no new queries — three booleans must not add
+latency to every turn:
+  quiz      → requirements.quiz, so it tracks a bound quiz appearing or being passed
+  homework  → a PENDING assignment checkpoint for this lesson, from context.pendingCheckpoints.
+              Deliberately kind === "assignment" only: an assessment is not homework, and counting
+              it would show the Homework pill for a quiz.
+  resources → whatever the mentor actually attached to this turn
+Set post-hoc next to envelope.continue_offer, following the existing pattern rather than threading
+three more fields through makeEnvelope's defaults. The field is OPTIONAL so envelopes stored before
+v6 replay unchanged, and the client's existing fallback for quiz/resources still applies when it is
+absent.
+Files changed: supabase/functions/chat/index.ts, tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: esbuild syntax check on chat/index.ts clean; python unittest 297 tests, 4 errors — the
+known pre-existing setUpClass FileNotFoundErrors, unchanged (+4 new); frontend tsc 0 errors, eslint
+0 errors / 17 warnings (baseline), vite build green.
+Remaining concerns: (1) NOT verified against real data — Supabase is unreachable from this sandbox,
+so no pill has ever been seen. The homework flag in particular depends on the `kind` values in the
+unified checkpoints table being exactly "assignment"/"assessment"; that is what loadPendingCheckpoints
+selects and what the runtime comment at :2845 describes, but it has not been observed live. If the
+Homework pill never appears with real data, check that first.
+(2) This deploys automatically on push (deploy-backend triggers on supabase/functions/chat/**), so
+the change is live on the backend before any client has been verified against it. It is additive and
+optional, so old clients ignore it.
+(3) Reports still overlaps Home's "Marked" column — undecided.
+(4) Still unported from /chat: attachments, voice, code running, artifacts, resource cards.
+Suggested next task: the signed-in run. Five slices of student surface plus this writer have never
+executed against real data, and the homework `kind` assumption is the first thing it would confirm.
+
+## Claude -> Codex / Human - 2026-07-30 12:10
+
+Status: Done (mobile navigation, Customize, Reports, and a mentor-settings bug)
+Summary: Three placeholders became real surfaces and one genuine bug got fixed.
+MOBILE NAVIGATION existed nowhere. The sidebar was `hidden … lg:block`, so below 1024px the student
+surface had NO navigation at all — no lesson switching, no Home, nothing. The column is now hoisted
+into a variable shared by the docked aside and a Radix Sheet drawer, with a fixed hamburger below lg.
+Every nav action closes the drawer; the docked column is unaffected. Verified at 390px.
+BUG: useConversation sent mentorToPreferences(DEFAULT_MENTOR) — the HARDCODED default — on every
+turn. Customize would have let a student change tone, verbosity and difficulty and had none of it
+reach the tutor. It now reads store.getMentor() per turn, so a change lands on the next message
+without a reload. This was latent from the first slice; it only became visible once Customize existed.
+CUSTOMIZE reuses MentorControls (already built and working) with store-backed state.
+REPORTS reuses GradesPanel, which fetches its own rows — it is the deeper view of Home's "Marked"
+column, with class and unit context rather than the recent few. That resolves the overlap question
+raised earlier: Home summarises, Reports is the full list.
+Files changed: frontend/src/student/{StudentApp.tsx,useConversation.ts}, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 297 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged.
+Live: headless Chromium at 390px (drawer opens and lists nav) and 1180px (Customize renders real tone
+/ verbosity controls); zero page errors.
+Remaining concerns: (1) Routines is the last placeholder destination, and correctly so — it has no
+backend. Spaced repetition works via review_sessions but has no student-facing home yet; digests and
+summaries need a scheduler that does not exist.
+(2) Home has no Classes navigation and no agenda calendar.
+(3) Still unported from /chat: attachments, live voice, code running (the whole Jargon runtime),
+artifacts, resource cards. These are the largest remaining chunk of the student end by far and each
+wants its own slice — the Chatbox deliberately renders no attach/audio button until they are wired.
+(4) /chat still exists. The bar proposed earlier — once /learn handles boot, send, quiz choices and
+Home, /chat redirects and features/student/ is deleted in the same commit — is now MET on paper, but
+should not be acted on until someone has run /learn signed in.
+(5) NOTHING on this surface has been verified against real data.
+Suggested next task: the signed-in run, then code running (it is the one unported feature the Jargon
+curriculum cannot work without).
+
+## Claude -> Codex / Human - 2026-07-30 13:00
+
+Status: Done (code running — the student can now write and run code on /learn)
+Summary: Ported the piece the Jargon curriculum cannot work without. The chatbox gains a CODE
+SURFACE: a toggle swaps the message field for a Monaco editor plus a language picker (Jargon /
+JavaScript / Python), and the primary action becomes Run.
+This is where the reserved word finally earns its keep. Text-vs-code is an INPUT SURFACE, a
+different axis from TurnMode — a student can write code in Practice or in Discuss; the surface says
+HOW they are typing, the mode says WHAT the turn is for. The old surface called both "mode", and
+that collision is what made the previous architecture hard to reason about. `type InputSurface` is
+local to Chatbox and never leaks.
+RUN IS THE TURN, deliberately one action rather than Run-then-Send. The server's code gate only
+passes on a real execution result, so "submit without running" has no meaning here — and a single
+action makes a stale run_result impossible.
+Two runners, two result shapes, deliberately NOT flattened: Jargon executes server-side via
+invokeJargonRun and its whole response (status, truncated, errors) is what the gate inspects, so it
+is passed through as run_result untouched; JavaScript and Python run sandboxed in the browser and
+only produce {ok, output}. Flattening Jargon into {ok, output} would discard what the server grades
+on. A runner failure renders as OUTPUT rather than a chat error — the student's code is still worth
+discussing when the runtime could not be reached.
+Also fixed a latent trap in tests/test_student_surface.py: an appended `if __name__ == "__main__"`
+block had ended up ABOVE two later test classes, so running that file directly silently skipped 9
+tests (unittest discover imports the module and still found them, which is why it went unnoticed).
+Moved to the end; direct runs now execute all 24.
+Files changed: frontend/src/student/{Chatbox.tsx,ChatWindow.tsx,StudentApp.tsx,useConversation.ts},
+tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 301 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged
+(+4 new). Live: headless Chromium — the code surface renders with editor, language picker and Run.
+Remaining concerns: (1) THE MONACO EDITOR SHOWS "Loading…" IN THIS SANDBOX. @monaco-editor/react
+fetches the Monaco runtime from its CDN (there is no loader.config anywhere in the repo), and this
+environment has no outbound network. CodeArea is already shipped in QuizPanel and routes/chat.tsx, so
+it is a working component — this is an environment artifact, NOT a bug. But it does mean the editor
+itself has not been seen working on this surface, and neither has a single code execution.
+(2) Still unported: attachments, live voice (WebRTC), artifacts, resource cards. The Chatbox renders
+no attach or audio button until they are wired.
+(3) Routines remains the only placeholder destination, correctly — it has no backend.
+(4) Nothing on this surface has run against real data.
+Suggested next task: the signed-in run. Code running is exactly the path that cannot be trusted
+until a real execution has happened once.
+
+## Claude -> Codex / Human - 2026-07-30 13:35
+
+Status: Done (resource cards in the transcript)
+Summary: Attached materials now render inline under the reply that attached them. Without this the
+mentor could say "have a look at this" and NOTHING appeared — the resource existed on the envelope
+and in the Resources panel, but not where the student was looking. That was the most misleading gap
+left on the surface.
+New student/ResourceCard.tsx: icon by type, title, description, and the teacher's
+student_instructions treated as emphasis rather than more grey metadata (the instructions are the
+reason the material was attached). Open links to the envelope's server-signed URL for uploads or the
+external URL for links.
+Deliberately NOT handling resource_type "artifact". Interactive artifacts need the sandboxed
+ArtifactFrame and DeckRenderer, which carry their own security posture; an artifact renders as a
+plain card with NO Open action rather than being half-shown.
+Resource cards stay rendered on older messages, unlike quiz choices which retire — a material does
+not expire the way a live question does.
+Files changed: frontend/src/student/{ResourceCard.tsx (new),Transcript.tsx}, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 301 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged.
+Remaining concerns: (1) Never rendered with a real resource — no envelope has ever arrived in this
+sandbox, so the card has been type-checked and built but not seen.
+(2) Still unported: ATTACHMENTS (the student sending files up) and LIVE VOICE (WebRTC), plus
+interactive ARTIFACTS. Voice is the largest and least verifiable of the three.
+(3) Routines remains the only placeholder destination, correctly — no backend exists for it.
+(4) Twelve slices now sit on a foundation where not one line has executed against real data.
+Suggested next task: the signed-in run, still. After that, attachments (getStudentUploadSignedUrl
+already exists in api.ts) then artifacts, leaving voice last.
+
+## Claude -> Codex / Human - 2026-07-30 14:20
+
+Status: Done (attachments)
+Summary: Students can attach files to a message on /learn. The paperclip now opens a real picker,
+uploads run AS THE FILES ARE PICKED rather than at send time (a 20 MB file should be moving while
+the student is still typing), each settles independently so one failure does not lose the others,
+and resolved attachments show as removable chips above the composer. Sent attachments render as
+chips on the message so the transcript still shows them after a reload — the filename is the only
+part a student will recognise later.
+Reuses the existing upload path wholesale: uploadStudentUpload, MAX_CHAT_UPLOAD_FILES,
+MAX_CHAT_UPLOAD_FILE_BYTES and CHAT_UPLOAD_ACCEPT from lib/api.ts. That accept list deliberately
+EXCLUDES PDF — the edge function only inlines text and images, so accepting one would attach a file
+the tutor silently cannot read. A test pins that the picker uses the shared constant rather than a
+hardcoded accept string, because hardcoding would quietly reintroduce exactly that bug.
+Three details: send is blocked while an upload is in flight (otherwise the tutor gets a reference to
+a file that is not there yet); an attachment ALONE is a valid message, since "here, look at this"
+needs no text; and attachments are omitted rather than sent as an empty array, because the edge
+function branches on presence.
+Also removed the vestigial onAttach prop — the real file input replaced it, and leaving it would
+have rendered a second paperclip for any caller that passed one.
+Files changed: frontend/src/student/{Chatbox.tsx,ChatWindow.tsx,StudentApp.tsx,Transcript.tsx,
+useConversation.ts}, tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 306 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged
+(+5 new). Live: headless Chromium — file input present, accept excludes PDF, exactly ONE paperclip
+(the duplicate-button regression that removing onAttach prevented), zero page errors.
+Remaining concerns: (1) No file has ever been uploaded from this surface. Storage is unreachable
+here, so the picker renders but the upload → student_uploads → attachment path is unexercised.
+(2) Remaining unported: LIVE VOICE (WebRTC) and interactive ARTIFACTS (ArtifactFrame/DeckRenderer,
+which carry their own sandbox posture). Voice is the largest and least verifiable thing left.
+(3) Routines is the only placeholder destination, correctly — no backend exists for it.
+(4) Thirteen slices, none executed against real data.
+Suggested next task: the signed-in run. Attachments in particular fail in ways static checks cannot
+see — RLS on student_uploads, the storage path policy binding foldername[1] to the uid, and scan
+status all only show up live.
 ## Claude -> Codex / Human - 2026-07-30 12:30
 
 Status: Starting

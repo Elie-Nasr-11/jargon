@@ -281,3 +281,21 @@ ChatPage subtree on lessonId. Deferred from the nav change to keep it scoped + a
   badge mentor rows there like the studio does?
 - Live-offer tuning: thresholds are graded_fails >= 2 / hint_rung >= 3 / explicit ask,
   one offer per step. Revisit once real acceptance/latency data exists.
+
+## 2026-07-30 — Resource extraction model is dashboard config, not code
+
+`resource-processing` picks its OCR/vision model from `OPENAI_OCR_MODEL`, defaulting to
+`gpt-5.4-mini` (index.ts:824 and :1071). The deploy workflow sets only `SUPABASE_ACCESS_TOKEN`, so
+**function runtime env lives in the Supabase dashboard** — pointing extraction at a stronger model is
+a config action there, not a commit. Nothing in the repo can change it.
+
+Audio/video transcription is pinned to `whisper-1` in three places and is **not** env-driven. Making
+it configurable would be a code change.
+
+Cost note: OCR is per-page vision on upload, now firing automatically. It is teacher-side and
+amortised across a whole class, so it barely moves per-student cost, but a stronger model multiplies
+the per-page price. Existing bounds: `MAX_OCR_PAGES` 30, `MAX_PDF_PAGE_ASSETS` 60, and a 10/hour
+per-user processing rate limit.
+
+Open: should the review panel render chunks as one continuous document rather than per-chunk cards?
+Asked and not yet answered — deliberately not assumed.

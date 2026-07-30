@@ -143,6 +143,19 @@
   --depth-sub: color-mix(in oklab, var(--background) 95.5%, var(--foreground));
   --depth-field: color-mix(in oklab, var(--background) 98.5%, var(--foreground));
 
+  /* v6 student surface — per-TurnMode accents (see src/student/turnModes.ts).
+     ONE hue per mode; the surface/border tints derive from it by color-mix against
+     --background, the same trick as the depth ramp above, so a single definition works in
+     both themes and no component ever hardcodes a hex. A wrapper sets --mode-accent and the
+     .mode-surface / .mode-eyebrow classes below read it. */
+  --mode-lesson: oklch(0.62 0.1 250);
+  --mode-practice: oklch(0.63 0.13 150);
+  --mode-discuss: oklch(0.65 0.11 300);
+  --mode-checkpoints: oklch(0.66 0.1 90);
+  --mode-quiz: oklch(0.62 0.14 25);
+  --mode-assignment: oklch(0.64 0.12 60);
+  --mode-open: oklch(0.6 0.02 250);
+
   /* focus ring */
   --ring: rgba(10, 10, 10, 0.34);
 
@@ -578,4 +591,20 @@ select {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* --- v6 student surface: TurnMode skin -------------------------------------
+   A mode wrapper sets --mode-accent; everything below derives from it. Keeping the
+   derivation in CSS (not JS) means the theme toggle needs no re-render to stay correct. */
+.mode-surface {
+  background-color: color-mix(in oklab, var(--background) 95%, var(--mode-accent, transparent));
+  border-color: color-mix(in oklab, var(--border) 45%, var(--mode-accent, transparent));
+}
+
+/* The eyebrow pill sits ON the top border, centered — so the mode reads as a label on the
+   container rather than as another chip inside the conversation. */
+.mode-eyebrow {
+  color: color-mix(in oklab, var(--foreground) 62%, var(--mode-accent, transparent));
+  background-color: color-mix(in oklab, var(--background) 88%, var(--mode-accent, transparent));
+  border-color: color-mix(in oklab, var(--border) 40%, var(--mode-accent, transparent));
 }

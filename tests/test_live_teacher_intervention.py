@@ -1,8 +1,3 @@
-"""Trimmed 2026-07-30: all intervention_alerts UI (alert status updates included)
-was removed in the MVP strip — no writer for that table ever existed, so the
-surface was provably dead (see docs/MVP_SCOPE.md §4). The live watch/comment
-loop (viewers, teacher live comments, realtime publication) is KEPT and stays
-pinned below."""
 from pathlib import Path
 import unittest
 
@@ -10,8 +5,16 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase" / "migrations" / "0012_live_teacher_intervention_realtime.sql"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
+TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 CHAT_ROUTE = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
-# routes/teacher.tsx is now a thin route wrapper; the live watch/comment teacher
+# The v5.0 P2a extraction split the student chat surface: the route keeps component state and
+# effects, chatMessages.ts holds the transcript model and its pure adapters (including the
+# teacher-live-comment → Msg mapping this file asserts on). Both are read as one blob below so
+# these invariants pin behavior rather than file layout.
+CHAT_MESSAGES = (
+    ROOT / "frontend" / "src" / "features" / "student" / "chat" / "chatMessages.ts"
+)
+# routes/teacher.tsx is now a thin route wrapper; the live-intervention teacher
 # UI lives in the TeacherConsole feature component.
 TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 
@@ -21,7 +24,10 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
     def setUpClass(cls):
         cls.migration = MIGRATION.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
-        cls.chat = CHAT_ROUTE.read_text(encoding="utf-8")
+        cls.types = TYPES.read_text(encoding="utf-8")
+        cls.chat = CHAT_ROUTE.read_text(encoding="utf-8") + CHAT_MESSAGES.read_text(
+            encoding="utf-8"
+        )
         cls.teacher = TEACHER_ROUTE.read_text(encoding="utf-8")
 
     def test_realtime_publication_is_enabled_for_live_tables(self):
@@ -35,6 +41,11 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.migration)
 
+    def test_frontend_uses_real_intervention_alert_message_column(self):
+        self.assertIn("message: string", self.types)
+        self.assertIn("detail: alert.message", self.teacher)
+        self.assertNotIn("alert.detail", self.teacher)
+
     def test_live_intervention_api_helpers_are_present(self):
         for fragment in (
             "supabase.realtime.setAuth",
@@ -44,6 +55,7 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
             "heartbeatLiveSessionViewer",
             "stopLiveSessionViewer",
             "sendTeacherLiveComment",
+            "updateInterventionAlertStatus",
             'event_type: "teacher_intervention"',
             '.from("teacher_live_comments")',
             '.from("live_session_viewers")',
@@ -66,7 +78,7 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.chat)
 
-    def test_teacher_dashboard_can_watch_and_comment(self):
+    def test_teacher_dashboard_can_watch_comment_and_update_alerts(self):
         for fragment in (
             "Watch live",
             "Stop watching",
@@ -75,6 +87,8 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
             "startWatchingSelectedSession",
             "stopWatchingSelectedSession",
             "sendLiveComment",
+            "updateAlertStatus",
+            "onUpdateAlertStatus",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.teacher)

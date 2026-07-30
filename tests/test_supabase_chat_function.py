@@ -144,7 +144,9 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
             '"audio_session"',
             "Number.isFinite(raw.transcript_confidence)",
             "input_modality: answer.input_modality || \"typed\"",
-            "payload: answer",
+            # The student turn's payload IS the answer, so voice metadata persists with it. v6
+            # spreads the answer to add turn_mode; both branches still carry every answer field.
+            "{ ...answer, turn_mode: declaredMode } : answer",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.source)

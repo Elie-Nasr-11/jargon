@@ -39,10 +39,6 @@ const MENTOR_MODE_OPTIONS = new Set([
   "challenge",
 ]);
 const HELP_REQUEST_OPTIONS = new Set(["hint", "show_me_how", "explain"]);
-// MVP chat modes (docs/MVP_SCOPE.md §8): student-switchable side postures for the SAME
-// session. A request without chat_mode is the lesson flow, byte-identical to before.
-const CHAT_MODE_OPTIONS = new Set(["open", "discuss", "quiz"]);
-type ChatMode = "open" | "discuss" | "quiz";
 const CHAT_RATE_LIMIT_WINDOW_MS = 60_000;
 const CHAT_RATE_LIMIT_MAX = 30;
 // The review path has no session (so the turn-based limiter can't apply); bound its model spend by
@@ -136,13 +132,8 @@ Revision steps are RETRIEVAL PRACTICE on material the student has already studie
 question at a time on the step's skills, targeting the ones they are weakest at (their per-skill tiers are in
 student.mastery — favor "emerging" over "developing" over "secure"). Let them retrieve the answer from memory
 — do NOT re-teach, summarize, or hand them the answer before they try; affirm accurate recall briefly and
-correct gaps gently. Speak only about the named skills and tiers you are given.
-
-STUDENT MEMORY: student.memory (when present) is the ONLY record of the student's past sessions you may
-draw on — a short profile (narrative, strengths, struggles, preferences) and up to three recent session
-summaries. Reference past sessions ONLY as described there; beyond what student.memory states,
-never invent or claim specifics about the student's past sessions or earlier answers. When it is
-absent, say nothing about their past sessions at all.
+correct gaps gently. Speak only about the named skills and tiers you are given — never invent or claim
+specifics about the student's past sessions or earlier answers.
 
 Quiz steps: while options are on screen the student answers by tapping them — point at the options, do not
 re-read or re-narrate them (introduce the question briefly only when the directive says it is the first
@@ -158,15 +149,6 @@ Never invent requirements the task does not state. When a task asks for the stud
 correct on-topic answer is acceptable — accept it and move on; a shown example is one model answer, never the
 only one. If the student correctly points out their answer already met the task, acknowledge that plainly and
 progress — do not restate the same demand.
-
-CHAT MODES: the student can switch this chat into a side mode; when one is active the directive names it
-and it wins over the step flow. In open_conversation the student leads a free chat — follow their
-interests warmly, teach what they ask about, ground yourself in the lesson and what you know of them; no
-grading, no pushing them back to the task. In discussion you explore the current step's topic
-Socratically — one genuine probing question at a time, build on their ideas, never deliver a full lecture
-and never grade. In quiz_practice you ask exactly ONE short recall or application question per turn on
-the lesson's skills and give brief feedback on their answers. In every mode nothing advances or completes
-the lesson — it resumes exactly where it left off — and your JSON output contract is unchanged.
 
 GOVERNANCE:
 - The lesson arc ("arc": step N of M, done, next): situate naturally ("now that you've got loops, ..."),
@@ -247,14 +229,14 @@ type Envelope = {
   held?: boolean;
   // P5: the id of the first-class review_sessions row backing a guided review (review path only).
   review_session_id?: string;
-  // MVP chat modes: echoed when this turn ran in a side chat mode (open/discuss/quiz);
-  // absent on ordinary lesson turns. Mode turns never advance, complete, or grade the
-  // lesson flow — the envelope is conversational only.
-  chat_mode?: ChatMode;
   // Flow v3 (all optional — old clients ignore them, old stored payloads replay fine):
   // the Continue pill offer for unacknowledged content steps, the router's verdict for
   // this turn, and the router-vs-grader disagreement flag (tuning telemetry).
   continue_offer?: { label: string } | null;
+  // v6: what this lesson currently offers, for the student chatbox's inline pills. Computed from
+  // what the turn already knows — no extra queries. Optional so stored envelopes from before v6
+  // replay unchanged; the client hides a pill it has no signal for rather than guessing.
+  available?: { quiz: boolean; homework: boolean; resources: boolean };
   turn_kind?: string;
   router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for THIS student (never
@@ -435,13 +417,6 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     // Optional; only the review path sets it.
     review_session_id:
       typeof partial.review_session_id === "string" ? partial.review_session_id : undefined,
-    // Optional; set on side-mode turns (and preserved by the dedup replay of a stored
-    // mode envelope). Absent on ordinary lesson turns.
-    chat_mode:
-      typeof partial.chat_mode === "string" &&
-      CHAT_MODE_OPTIONS.has(partial.chat_mode)
-        ? (partial.chat_mode as ChatMode)
-        : undefined,
     // Flow v3 passthrough (shape-tolerant), so a dedup REPLAY of a stored envelope keeps
     // its Continue offer and navigation frame. Tri-state matters: absent stays absent —
     // a held/error envelope must not read as "navigation cleared" on the client.
@@ -1532,6 +1507,56 @@ type RoutedKind =
 
 type RouterVerdict = { kind: RoutedKind; confidence: number };
 
+// --- v5.0: student-declared turn mode ----------------------------------------
+// The student picks how they're engaging from the chatbox. This is a property of the
+// MESSAGE ("what am I doing right now?"), and is a different axis from
+// lesson_activities.mode, which is a property of the STEP ("what finishes this step?").
+// The eight authored step types are untouched by this.
+//
+// The declared mode sets a CEILING on what a turn may discharge; the router still
+// classifies WITHIN that ceiling. That distinction matters: if declaring "practice"
+// forced every message to be an answer_attempt, asking a question mid-practice would
+// count as a graded failure. Declared mode restricts, it never relabels.
+//
+// 'checkpoints' is deliberately absent — it is a view-only surface that opens the work
+// dock and never sends a turn.
+type StudentTurnMode = "lesson" | "practice" | "discuss" | "quiz" | "assignment" | "open";
+
+const STUDENT_TURN_MODES = new Set<string>([
+  "lesson",
+  "practice",
+  "discuss",
+  "quiz",
+  "assignment",
+  "open",
+]);
+
+// null = absent or unrecognized → today's behavior exactly, matching the defensive
+// posture of `routedKind === null` (an old client, or a typo, can never brick a lesson).
+function studentTurnMode(value: unknown): StudentTurnMode | null {
+  return typeof value === "string" && STUDENT_TURN_MODES.has(value)
+    ? (value as StudentTurnMode)
+    : null;
+}
+
+// Conversation-only modes never discharge a gate. Rather than adding a new guard to
+// applyTurn (which would create a second place gates can be reasoned about), we hand it a
+// routedKind it ALREADY refuses to grade — the Flow v3 masking at applyTurn's
+// understanding/acknowledge branches does the rest. One choke point, unchanged.
+function applyModeCeiling(
+  mode: StudentTurnMode | null,
+  kind: RoutedKind | null,
+): RoutedKind | null {
+  if (mode !== "discuss" && mode !== "open") return kind;
+  // 'question' is the safe floor: non-grading, non-acknowledging, and already handled
+  // everywhere downstream. null must ALSO be lifted here — legacy-null lets the stuck cap
+  // stamp understanding_at, which would let a discuss turn close a gate.
+  if (kind === null || kind === "answer_attempt" || kind === "continue_signal") {
+    return "question";
+  }
+  return kind;
+}
+
 const ROUTED_KINDS = new Set<string>([
   "answer_attempt",
   "question",
@@ -1917,37 +1942,6 @@ async function upsertMisconception(
       last_seen_at: now,
       updated_at: now,
     });
-  }
-
-  // Memory v1: mirror the pattern into student_mastery.common_error_patterns for the
-  // matching skill row, IF the student already has one (never creates a mastery row —
-  // mastery rows are earned through graded evidence). Deduped, newest kept, capped at
-  // 5. Best-effort: the misconception row above is the source of truth, so a merge
-  // failure never fails the turn.
-  try {
-    const masteryRow = await loadFirst(
-      config,
-      `student_mastery?user_id=eq.${encodeURIComponent(userId)}&skill_key=eq.${encodeURIComponent(skillKey)}&select=common_error_patterns&limit=1`,
-    );
-    if (masteryRow) {
-      const existingPatterns = Array.isArray(masteryRow.common_error_patterns)
-        ? (masteryRow.common_error_patterns as unknown[]).map((entry) =>
-            String(entry),
-          )
-        : [];
-      if (!existingPatterns.includes(pattern)) {
-        await patchRows(
-          config,
-          `student_mastery?user_id=eq.${encodeURIComponent(userId)}&skill_key=eq.${encodeURIComponent(skillKey)}`,
-          {
-            common_error_patterns: [...existingPatterns, pattern].slice(-5),
-            updated_at: now,
-          },
-        );
-      }
-    }
-  } catch {
-    // Best-effort mirror only.
   }
 }
 
@@ -2480,9 +2474,6 @@ function turnDirective(args: {
   // Flow v3 P4: the student already covered this (unpresented) step's idea earlier —
   // the note captured then; null when no pre-emption was recorded.
   preemptedNote: string | null;
-  // MVP chat modes: when set, the turn is a side-mode conversation — the mode posture
-  // wins over every flow branch below (nothing grades or advances on a mode turn).
-  chatMode: ChatMode | null;
 }): TurnDirective {
   const {
     currentStage,
@@ -2504,7 +2495,6 @@ function turnDirective(args: {
     inRevisit,
     navAction,
     preemptedNote,
-    chatMode,
   } = args;
 
   const quizActive = draftFlow.nextAction === "choose";
@@ -2515,58 +2505,6 @@ function turnDirective(args: {
     stepMode === "assessment" && stepModeType === "open_ended";
 
   const pick = (): TurnDirective => {
-    // --- MVP chat modes (win over everything, including navigation: a mode turn is
-    // pure conversation — controls are ignored, nothing grades or advances) -----------
-    if (chatMode === "open") {
-      return {
-        key: "open_conversation",
-        text:
-          "OPEN CHAT MODE: the student switched to free conversation with you, outside the lesson flow. " +
-          "Follow their lead — answer what they ask, explore what they bring up, warm and educational, " +
-          "grounded in this lesson's material and what you know of them (student.mastery, " +
-          "student.misconceptions, student.memory). Nothing grades or advances in this mode and the lesson " +
-          "resumes exactly where it left off when they switch back — do not push them toward the step's task.",
-      };
-    }
-    if (chatMode === "discuss") {
-      return {
-        key: "discussion",
-        text:
-          "DISCUSSION MODE: a Socratic exploration of the current step's topic. Probe the student's " +
-          "thinking with ONE genuine question at a time, build on their ideas, and let them do most of the " +
-          "reasoning — never deliver a full lecture, never grade, never advance the lesson. Connect their " +
-          "ideas back to the lesson's concepts as the discussion deepens.",
-      };
-    }
-    if (chatMode === "quiz") {
-      if (gradedUnderstanding) {
-        return gradedUnderstanding.demonstrated
-          ? {
-              key: "quiz_practice",
-              text:
-                `QUIZ MODE: the student's answer to your last practice question was graded CORRECT (grader level=${gradedUnderstanding.level}). ` +
-                "Affirm briefly, reinforce in one sentence WHY it's right, then ask the NEXT single recall or " +
-                "application question drawn from this lesson's skills and objectives — exactly one question per " +
-                "turn, and never a long re-teach.",
-            }
-          : {
-              key: "quiz_practice",
-              text:
-                "QUIZ MODE: the student's answer to your last practice question was graded not-quite-there " +
-                "(see turn.understanding_check). Give brief, specific feedback on what was missing without " +
-                "handing them the full answer, then ask ONE new short recall or application question on this " +
-                "lesson's skills — exactly one question per turn.",
-            };
-      }
-      return {
-        key: "quiz_practice",
-        text:
-          "QUIZ MODE: the student wants to be quizzed on this lesson. Ask exactly ONE short recall or " +
-          "application question drawn from the lesson's skill keys and objectives (milestone.objective, the " +
-          "step prompts), targeting their weaker tiers in student.mastery where you can. One question per " +
-          "turn — wait for their answer; do not answer it yourself and do not stack questions.",
-      };
-    }
     // --- Flow v3 navigation branches (win over everything: a revisit turn must never
     // read as an attempt, a completion, or a post-completion follow-up) ---------------
     if (navAction === "revisit") {
@@ -2985,11 +2923,6 @@ async function loadContext(
   misconceptions: DbRow[];
   pendingCheckpoints: PendingCheckpoint[];
   pendingCheckpointsOk: boolean;
-  // Memory v1: the student's rolling profile row and their last few completed-session
-  // summaries (newest first, current session excluded). Both BEST-EFFORT — a read
-  // failure yields absent memory and never blocks the turn.
-  memory: DbRow | null;
-  recentSummaries: DbRow[];
 }> {
   // Reads run in TWO parallel waves (wave 2 holds only the queries that genuinely
   // depend on a wave-1 result), with the checkpoints chain overlapping both.
@@ -3006,8 +2939,6 @@ async function loadContext(
     resources,
     resourceInteractions,
     profile,
-    memory,
-    recentSummaries,
   ] = await Promise.all([
     loadFirst(
       config,
@@ -3037,15 +2968,6 @@ async function loadContext(
       config,
       `profiles?id=eq.${encodeURIComponent(userId)}&select=name,grade&limit=1`,
     ),
-    // Memory v1 (both best-effort — absent on any failure, never blocks the turn).
-    loadFirst(
-      config,
-      `student_memory?user_id=eq.${encodeURIComponent(userId)}&select=profile,updated_at&limit=1`,
-    ).catch(() => null),
-    loadMany(
-      config,
-      `session_summaries?user_id=eq.${encodeURIComponent(userId)}&session_id=neq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=3&select=lesson_id,summary,created_at`,
-    ).catch(() => [] as DbRow[]),
   ]);
 
   const currentActivityId =
@@ -3126,8 +3048,6 @@ async function loadContext(
     misconceptions,
     pendingCheckpoints: pendingResult ?? [],
     pendingCheckpointsOk: pendingResult !== null,
-    memory,
-    recentSummaries,
   };
 }
 
@@ -3238,71 +3158,6 @@ function buildLessonArc(
 // Artifacts v1 (P6): validated passthrough of ONLY the metadata.artifact subtree.
 // Anything malformed or oversized degrades to undefined (the client shows a friendly
 // "isn't available" card) — this must never throw or leak arbitrary metadata.
-// --- Memory v1: prompt-side view --------------------------------------------------
-// Compact, hard-capped view of the student's cross-session memory for the prompt
-// payload: the profile narrative tops out at 600 chars, each recent-session summary is
-// flattened to one <=240-char line, and at most 3 summaries ride. Returns null when
-// there is nothing to say (fresh student, or the best-effort reads failed) so the
-// prompt simply omits the key.
-const MEMORY_NARRATIVE_MAX = 600;
-const MEMORY_SUMMARY_MAX = 240;
-const MEMORY_LIST_MAX = 6;
-
-function memoryForPrompt(
-  memoryRow: DbRow | null,
-  summaryRows: DbRow[],
-): DbRow | null {
-  const profileRaw =
-    memoryRow?.profile &&
-    typeof memoryRow.profile === "object" &&
-    !Array.isArray(memoryRow.profile)
-      ? (memoryRow.profile as DbRow)
-      : null;
-  const narrative = profileRaw
-    ? String(profileRaw.narrative || "").slice(0, MEMORY_NARRATIVE_MAX)
-    : "";
-  const profile =
-    profileRaw &&
-    (narrative ||
-      stringArray(profileRaw.strengths).length ||
-      stringArray(profileRaw.struggles).length ||
-      stringArray(profileRaw.preferences).length)
-      ? {
-          narrative,
-          strengths: stringArray(profileRaw.strengths).slice(0, MEMORY_LIST_MAX),
-          struggles: stringArray(profileRaw.struggles).slice(0, MEMORY_LIST_MAX),
-          preferences: stringArray(profileRaw.preferences).slice(0, MEMORY_LIST_MAX),
-        }
-      : null;
-  const recent = summaryRows
-    .slice(0, 3)
-    .map((row) => {
-      const summary =
-        row.summary && typeof row.summary === "object" && !Array.isArray(row.summary)
-          ? (row.summary as DbRow)
-          : {};
-      const parts = [
-        stringArray(summary.covered).length
-          ? `covered: ${stringArray(summary.covered).join(", ")}`
-          : "",
-        stringArray(summary.wins).length
-          ? `wins: ${stringArray(summary.wins).join(", ")}`
-          : "",
-        stringArray(summary.struggles).length
-          ? `struggles: ${stringArray(summary.struggles).join(", ")}`
-          : "",
-        typeof summary.note === "string" ? summary.note : "",
-      ].filter(Boolean);
-      return {
-        lesson_id: typeof row.lesson_id === "string" ? row.lesson_id : null,
-        summary: parts.join("; ").slice(0, MEMORY_SUMMARY_MAX),
-      };
-    })
-    .filter((entry) => entry.summary);
-  if (!profile && !recent.length) return null;
-  return { profile, recent };
-}
-
 const ARTIFACT_DECK_MAX_BYTES = 65536;
 
 function artifactForEnvelope(resource: DbRow): LessonChatResource["artifact"] {
@@ -3599,178 +3454,16 @@ async function maybeWriteRecommendation(
   // here; the notifications table is fed by the service-role edge fns (assessment-admin) instead.
 }
 
-// --- Memory v1: completion-time summary writer ------------------------------------
-// Scheduled as a BACKGROUND task (scheduleBackground/EdgeRuntime.waitUntil) on the
-// exact turn that transitions a session to complete. ONE cheap-route model call turns
-// the session's last ~20 turns into {summary, profile}; the summary is inserted into
-// session_summaries (duplicate session_id conflicts ignored — a re-completion can
-// never fork history) and the profile is upserted into student_memory (narrative
-// replaced; strengths/struggles/preferences unioned newest-first and capped at 6).
-// Everything runs under the student's OWN JWT (this fn holds no service key), so the
-// writes rely on the owner RLS policies in 20260731100000_memory_v1.sql. Fully
-// best-effort: any failure logs and never affects the student's turn.
-const MEMORY_TURNS_LIMIT = 20;
-const MEMORY_TURN_CHARS = 280;
-const MEMORY_TRANSCRIPT_CHARS = 6000;
-const MEMORY_LIST_ENTRY_CHARS = 80;
-
-async function writeSessionMemory(
-  config: SupabaseConfig,
-  userId: string,
-  sessionId: string,
-  lessonId: string,
-): Promise<void> {
-  try {
-    const turns = await loadMany(
-      config,
-      `learning_turns?session_id=eq.${encodeURIComponent(sessionId)}&order=created_at.desc&limit=${MEMORY_TURNS_LIMIT}&select=role,content`,
-    );
-    if (!turns.length) return;
-    const transcript = turns
-      .slice()
-      .reverse()
-      .map(
-        (turn) =>
-          `${String(turn.role || "student")}: ${String(turn.content || "").slice(0, MEMORY_TURN_CHARS)}`,
-      )
-      .join("\n")
-      .slice(0, MEMORY_TRANSCRIPT_CHARS);
-    const existing = await loadFirst(
-      config,
-      `student_memory?user_id=eq.${encodeURIComponent(userId)}&select=profile&limit=1`,
-    ).catch(() => null);
-    const priorProfile =
-      existing?.profile &&
-      typeof existing.profile === "object" &&
-      !Array.isArray(existing.profile)
-        ? (existing.profile as DbRow)
-        : {};
-
-    const system =
-      "You maintain a lightweight tutoring memory for a children's coding mentor. From the session " +
-      "transcript (and the student's existing profile, when given), produce ONLY this JSON object: " +
-      '{"summary": {"covered": ["short topic phrases"], "wins": ["what went well"], "struggles": ' +
-      '["what was hard"], "note": "one-sentence takeaway for the next session"}, "profile": ' +
-      '{"narrative": "a warm 2-4 sentence picture of this student as a learner, under 600 characters", ' +
-      '"strengths": [], "struggles": [], "preferences": []}}. Keep every list entry a short phrase. ' +
-      "The profile REPLACES the old narrative, so fold forward anything still true from the existing " +
-      "profile. Never include the student's name or personal details beyond how they learn.";
-    const result = await callModel(
-      [
-        { role: "system", content: system },
-        {
-          role: "user",
-          content: JSON.stringify({
-            existing_profile: priorProfile,
-            transcript,
-          }),
-        },
-      ],
-      true,
-      "understanding",
-    );
-    scheduleBackground(
-      recordModelUsage(config, userId, sessionId, lessonId, result, "grading"),
-    );
-    const raw = JSON.parse(extractJsonObject(result.content)) as DbRow;
-    const capList = (value: unknown, max = MEMORY_LIST_MAX) =>
-      stringArray(value)
-        .map((entry) => entry.slice(0, MEMORY_LIST_ENTRY_CHARS))
-        .slice(0, max);
-    const summaryRaw =
-      raw.summary && typeof raw.summary === "object" && !Array.isArray(raw.summary)
-        ? (raw.summary as DbRow)
-        : {};
-    const profileRaw =
-      raw.profile && typeof raw.profile === "object" && !Array.isArray(raw.profile)
-        ? (raw.profile as DbRow)
-        : {};
-    const summary = {
-      covered: capList(summaryRaw.covered),
-      wins: capList(summaryRaw.wins),
-      struggles: capList(summaryRaw.struggles),
-      note: String(summaryRaw.note || "").slice(0, MEMORY_SUMMARY_MAX),
-    };
-
-    // Insert the per-session summary; a duplicate session_id (double-complete, retried
-    // background task) is silently ignored rather than erroring or overwriting.
-    try {
-      await supabaseFetch(config, "session_summaries?on_conflict=session_id", {
-        method: "POST",
-        headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
-        body: JSON.stringify({
-          user_id: userId,
-          session_id: sessionId,
-          lesson_id: lessonId || null,
-          summary,
-        }),
-      });
-    } catch (summaryErr) {
-      console.error("memory_summary_insert_failed", errorMessage(summaryErr));
-    }
-
-    // Rolling profile: replace the narrative (fall back to the prior one so a thin
-    // model response can't blank it), union the lists newest-first, cap at 6.
-    const unionCapped = (next: unknown, prior: unknown) =>
-      uniqueStrings([...capList(next), ...capList(prior, MEMORY_LIST_MAX * 2)]).slice(
-        0,
-        MEMORY_LIST_MAX,
-      );
-    const profile = {
-      narrative: String(profileRaw.narrative || priorProfile.narrative || "").slice(
-        0,
-        MEMORY_NARRATIVE_MAX,
-      ),
-      strengths: unionCapped(profileRaw.strengths, priorProfile.strengths),
-      struggles: unionCapped(profileRaw.struggles, priorProfile.struggles),
-      preferences: unionCapped(profileRaw.preferences, priorProfile.preferences),
-    };
-    if (
-      profile.narrative ||
-      profile.strengths.length ||
-      profile.struggles.length ||
-      profile.preferences.length
-    ) {
-      await upsertRows(
-        config,
-        "student_memory",
-        [{ user_id: userId, profile, updated_at: new Date().toISOString() }],
-        "user_id",
-      );
-    }
-  } catch (err) {
-    // Best-effort by contract: memory must never affect the student's turn.
-    console.error("memory_write_failed", errorMessage(err));
-  }
-}
-
 async function handleTypedRequest(
   req: Request,
   body: Record<string, unknown>,
 ): Promise<Response> {
   const requestStartedAt = Date.now();
   const lessonId = typeof body.lesson_id === "string" ? body.lesson_id : "";
+  // v5.0 student-declared turn mode. Absent (any client older than the selector) or
+  // unrecognized → null → today's behavior, unchanged.
+  const declaredMode = studentTurnMode(body.mode);
   if (!lessonId) return typedError("lesson_id is required.", 400);
-
-  // MVP chat modes (docs/MVP_SCOPE.md §8): an optional side-mode posture for THIS
-  // session. Absent chat_mode = the lesson flow, byte-identical to before — every mode
-  // branch below is gated on this value. A mode turn requires an EXISTING session (it
-  // converses about a lesson already in flight; it never creates one), and never
-  // grades, advances, or completes the lesson flow.
-  const chatMode: ChatMode | null =
-    typeof body.chat_mode === "string" && CHAT_MODE_OPTIONS.has(body.chat_mode)
-      ? (body.chat_mode as ChatMode)
-      : null;
-  if (body.chat_mode !== undefined && !chatMode) {
-    return typedError('chat_mode must be "open", "discuss", or "quiz".', 400, {
-      lesson_id: lessonId,
-    });
-  }
-  if (chatMode && !(typeof body.session_id === "string" && body.session_id)) {
-    return typedError("chat_mode requires an existing session_id.", 400, {
-      lesson_id: lessonId,
-    });
-  }
 
   let config: SupabaseConfig;
   let user: DbRow;
@@ -3827,8 +3520,6 @@ async function handleTypedRequest(
         return json(
           makeEnvelope({
             status: "ok",
-            // A held mode turn still echoes the mode (the mentor didn't run either way).
-            ...(chatMode ? { chat_mode: chatMode } : {}),
             reply:
               "Your teacher stepped in and paused the session for a moment. Hang tight — you'll be able to keep going as soon as they're done.",
             session_id: sessionId,
@@ -3861,10 +3552,7 @@ async function handleTypedRequest(
     body.control && typeof body.control === "object"
       ? (body.control as DbRow)
       : null;
-  // Mode turns IGNORE navigation/continue/artifact controls outright (they respond
-  // conversationally instead): with controlType blanked, every control branch below
-  // stays closed and the turn falls through to the shared conversational path.
-  const controlType = chatMode ? "" : control ? String(control.type || "") : "";
+  const controlType = control ? String(control.type || "") : "";
 
   // Durable per-step completion history, lazily backfilled from cursor position for
   // sessions that predate the steps_done column (every step before the cursor was, by
@@ -4116,9 +3804,7 @@ async function handleTypedRequest(
   // or advance — its authoritative completion lives in steps_done, and the lazy
   // step_state backfill can't accidentally mark it "done again" and stomp the frame.
   const realRequirements = requirementsFor(context.activity, context.quiz);
-  // Chat modes neutralize the gates exactly like a revisit: a mode turn is pure
-  // conversation and must never re-grade, pass, or advance the step.
-  const requirements: StepRequirements = inRevisit || chatMode
+  const requirements: StepRequirements = inRevisit
     ? { code: false, quiz: false, understanding: false, acknowledge: false, quizChoices: [] }
     : realRequirements;
   const { state: stepStateBefore, seedFailed: stepSeedFailed } =
@@ -4135,7 +3821,7 @@ async function handleTypedRequest(
   // A revisit never grades: the step is already complete (steps_done is authoritative),
   // so re-running its code or re-answering must not write attempts, fails, or mastery.
   const orchestratorAssessment =
-    !presentedBefore || staleQuizAnswer || inRevisit || chatMode
+    !presentedBefore || staleQuizAnswer || inRevisit
       ? null
       : assessAnswer(answer, context.lesson, context.activity, context.quiz);
 
@@ -4270,9 +3956,10 @@ async function handleTypedRequest(
             stage: currentStage,
             response_mode: answer.mode,
             content,
-            // Mode turns record which posture the student was in (the mentor row gets
-            // it for free — the envelope, stored whole, carries chat_mode).
-            payload: answer && chatMode ? { ...answer, chat_mode: chatMode } : answer,
+            // v6: persist the student's declared TurnMode so a RELOADED transcript can still
+            // show which mode each stretch of conversation happened in. Omitted when null so
+            // legacy turns stay byte-identical and the client can tell "unknown" from a value.
+            payload: declaredMode ? { ...answer, turn_mode: declaredMode } : answer,
           })
         : Promise.resolve(null);
 
@@ -4283,7 +3970,6 @@ async function handleTypedRequest(
     // Only true text answers carry the student's words; a "file" answer's content is a
     // placeholder, so grading it would judge garbage — leave those to the mentor path.
     const isTextExplanation =
-      !chatMode &&
       answer?.mode === "text" &&
       activityMode === "text" &&
       requirements.understanding &&
@@ -4307,7 +3993,6 @@ async function handleTypedRequest(
         !runHasErrors(answer.run_result),
     );
     const codeNeedsJudge =
-      !chatMode &&
       codeRanClean &&
       orchestratorAssessment?.passed === false &&
       requirements.code &&
@@ -4321,11 +4006,7 @@ async function handleTypedRequest(
     // Flow v3 router: classify free-text turns in parallel with the graders. Control
     // turns and code/MCQ answers route deterministically without a model call.
     const routerEligible =
-      !chatMode &&
-      !controlType &&
-      answer?.mode === "text" &&
-      Boolean(content) &&
-      presentedBefore;
+      !controlType && answer?.mode === "text" && Boolean(content) && presentedBefore;
     // Upcoming steps in position order (≤3), shared by the router (titles for context)
     // and the understanding grader (objectives for pre-emption detection).
     const upcomingSteps = (context.activities || [])
@@ -4339,29 +4020,6 @@ async function handleTypedRequest(
         title: String(a.title || ""),
         prompt: String(a.prompt || ""),
       }));
-    // Quiz mode grades a student's TEXT answer with the same understanding grader —
-    // but only once the mentor has actually asked a quiz-mode question (the opening
-    // "quiz me" message is a request, not an answer, and must not grade as a miss).
-    const quizModeAsked =
-      chatMode === "quiz" &&
-      context.recentTurns.some((turn) => {
-        if (turn.role !== "mentor") return false;
-        const payload =
-          turn.payload && typeof turn.payload === "object"
-            ? (turn.payload as DbRow)
-            : null;
-        return payload?.chat_mode === "quiz";
-      });
-    const quizModeGrades =
-      quizModeAsked && answer?.mode === "text" && Boolean(content);
-    // Grade against the lesson's objective (the milestone), never the current step's
-    // task — quiz-mode questions are drawn from the lesson's skills, not the cursor.
-    const quizModeObjective: DbRow =
-      context.milestone ?? {
-        objective: `Recall and apply the key ideas of this lesson: ${
-          String(context.lesson?.title || lessonId)
-        }`,
-      };
     const [gradedUnderstanding, gradedCode, routerResult] = await Promise.all([
       isTextExplanation
         ? checkUnderstanding(
@@ -4375,18 +4033,7 @@ async function handleTypedRequest(
             context.recentTurns,
             upcomingSteps,
           )
-        : quizModeGrades
-          ? checkUnderstanding(
-              config,
-              userId,
-              sessionId,
-              lessonId,
-              null,
-              quizModeObjective,
-              content,
-              context.recentTurns,
-            )
-          : Promise.resolve(null),
+        : Promise.resolve(null),
       codeNeedsJudge
         ? checkCodeObjective(
             config,
@@ -4417,7 +4064,7 @@ async function handleTypedRequest(
     // Routed kind resolution: explicit control wins; code/MCQ are attempts by
     // construction; router verdict next; heuristic fallback keeps legacy behavior for
     // text turns when the router errored. null = fully legacy (e.g. file answers).
-    const routedKind: RoutedKind | null =
+    const routedKindRaw: RoutedKind | null =
       controlType === "continue"
         ? "continue_signal"
         : controlType === "artifact_ready"
@@ -4430,6 +4077,13 @@ async function handleTypedRequest(
             : routerEligible
               ? (routerResult?.kind ?? heuristicKind(content).kind)
               : null;
+    // v5.0: the student's declared mode caps what this turn may discharge. Explicit
+    // CONTROL turns are exempt on purpose — Continue and the navigation controls are
+    // deliberate button presses, not conversation, so a student in Discuss can still
+    // press Continue on a content step. Everything else routes through the ceiling.
+    const routedKind: RoutedKind | null = controlType
+      ? routedKindRaw
+      : applyModeCeiling(declaredMode, routedKindRaw);
     // Tuning telemetry: a router-question turn whose grader still said "demonstrated" is
     // the disagreement to watch before leaning harder on routing. It rides the envelope
     // (persisted whole in learning_turns.payload), so it's queryable with zero schema.
@@ -4484,7 +4138,6 @@ async function handleTypedRequest(
     // suppressing a fail is always safe; suppressing a pass is not (a pass sets
     // understanding via the grader on the model-output path regardless of this).
     const openEndedMiss: Assessment | null =
-      !chatMode &&
       stepMode === "assessment" &&
       stepModeType === "open_ended" &&
       gradedUnderstanding !== null &&
@@ -4508,11 +4161,8 @@ async function handleTypedRequest(
     // A judge-based pass COMPLETES the activity (unblocks the loop) but is capped below the
     // "secure" mastery tier (< 0.85): the server never re-executed the code and run_result is
     // client-supplied, so an open-ended judgement earns solid-but-not-verified credit only.
-    // Mode turns never produce a flow-level grade: quiz mode's verdict lives in its
-    // own assessment below and is written as revision evidence, not step grading.
-    const effectiveOrchestratorAssessment: Assessment | null = chatMode
-      ? null
-      : gradedCode?.demonstrated
+    const effectiveOrchestratorAssessment: Assessment | null =
+      gradedCode?.demonstrated
         ? {
             score: 0.8,
             passed: true,
@@ -4520,27 +4170,6 @@ async function handleTypedRequest(
             source: "orchestrator",
           }
         : (orchestratorAssessment ?? openEndedMiss);
-
-    // Quiz-mode verdict -> a revision-flavored assessment (mirrors the spaced-review
-    // handler's mapping): drives the envelope's assessment and the evidence write,
-    // never the step/flow machinery.
-    const quizModeAssessment: Assessment | null =
-      chatMode === "quiz" && quizModeGrades && gradedUnderstanding
-        ? {
-            score: gradedUnderstanding.demonstrated
-              ? gradedUnderstanding.level === "solid"
-                ? 0.8
-                : 0.65
-              : 0.45,
-            passed: gradedUnderstanding.demonstrated === true,
-            feedback:
-              gradedUnderstanding.note ||
-              (gradedUnderstanding.demonstrated
-                ? "Recalled it."
-                : "Still fuzzy — worth another look."),
-            source: "orchestrator",
-          }
-        : null;
 
     // Inquiry events (v4 + §9 LLM tagging): written AFTER the mentor turn so the mentor's own
     // classification (parsed.inquiry) can drive the confusion/curiosity split — see below, near the
@@ -4573,19 +4202,9 @@ async function handleTypedRequest(
       nextAction: "reply",
       choices: [],
     };
-    // Chat modes are the same shape of override, but keep the session's stage label
-    // untouched on the wire: a mode turn neither advances nor demotes the lesson.
-    const chatModeFlow: FlowDecision = {
-      stage: currentStage,
-      responseMode: "text",
-      nextAction: "reply",
-      choices: [],
-    };
     const draftFlow = inRevisit
       ? revisitFlow
-      : chatMode
-        ? chatModeFlow
-        : deriveTurn(draftState, requirements, presentedBefore, activityMode);
+      : deriveTurn(draftState, requirements, presentedBefore, activityMode);
     // P8 loader hygiene: UNBOUND mentor-built rows (metadata.generated + no step
     // binding) never ride the ordinary attach rungs — they are presented ONCE via the
     // artifact_ready control, and again only when the student explicitly asks. A row a
@@ -4660,7 +4279,6 @@ async function handleTypedRequest(
       inRevisit,
       navAction,
       preemptedNote,
-      chatMode,
     });
     // P4: on the turn that DETECTED pre-emption, let the mentor nod at it without
     // teaching ahead — the credit is delivered when the pre-empted step arrives.
@@ -4684,7 +4302,6 @@ async function handleTypedRequest(
     // leak), never during a revisit, at most once per step — artifact-live enforces the
     // hard caps regardless of what this soft layer decides.
     const artifactOfferEligible =
-      !chatMode &&
       context.lesson?.allow_live_artifacts === true &&
       !artifactReadyResource &&
       stepMode !== "assessment" &&
@@ -4716,7 +4333,7 @@ async function handleTypedRequest(
     // Not during a revisit: a just-advanced-then-revisit corner can reach here with
     // presentedBefore=false, and re-counting material already shown skews analytics
     // (the cards themselves still re-attach — that part is good UX).
-    if (stepMode === "media" && !presentedBefore && !inRevisit && !chatMode && attachedResources.length) {
+    if (stepMode === "media" && !presentedBefore && !inRevisit && attachedResources.length) {
       for (const resource of attachedResources) {
         scheduleBackground(
           insertRow(config, "resource_interactions", {
@@ -4840,11 +4457,6 @@ async function handleTypedRequest(
               pattern: row.pattern,
               hint: row.hint,
             })),
-            // Memory v1: cross-session memory (profile + recent session summaries),
-            // hard-capped in memoryForPrompt; null (a stable literal) when absent.
-            // Session-stable like mastery/misconceptions, so it sits BEFORE the
-            // per-turn recent_questions in the stable -> volatile key order.
-            memory: memoryForPrompt(context.memory, context.recentSummaries),
             recent_questions: recentQuestions.slice(0, 4),
           },
           checkpoints: context.pendingCheckpoints.slice(0, 3),
@@ -5051,12 +4663,7 @@ async function handleTypedRequest(
             source: "orchestrator",
           }
         : null;
-    // Quiz mode surfaces its verdict as the envelope's assessment (right/wrong feedback
-    // for the client) without ever entering the step/flow machinery below.
-    const assessment =
-      chatMode === "quiz"
-        ? quizModeAssessment
-        : (effectiveOrchestratorAssessment ?? understandingAssessment);
+    const assessment = effectiveOrchestratorAssessment ?? understandingAssessment;
     // The dedicated grader is authoritative for text completion (it hard-gates the loop);
     // the mentor's self-reported understanding is only the fallback when no grader ran.
     const understanding =
@@ -5073,9 +4680,7 @@ async function handleTypedRequest(
     );
     const finalFlow = inRevisit
       ? revisitFlow
-      : chatMode
-        ? chatModeFlow
-        : deriveTurn(finalState, requirements, presentedBefore, activityMode);
+      : deriveTurn(finalState, requirements, presentedBefore, activityMode);
     // First attach of an eligible quiz: remember it so later prompts can say the options
     // are already on screen (the mentor points at them instead of re-reading them).
     if (finalFlow.nextAction === "choose" && !finalState.quiz_presented_at) {
@@ -5095,10 +4700,7 @@ async function handleTypedRequest(
     // a no-op and the runtime behaves exactly as before.
     const finishedCurrentActivity =
       // Never advance from inside a revisit — the Resume control is the only exit.
-      // Never advance from a chat-mode turn either (chatModeFlow echoes the session's
-      // stage, which reads "complete" on an already-complete session).
       !inRevisit &&
-      !chatMode &&
       (finalFlow.stage === "complete" || finalFlow.nextAction === "complete");
     let advanceToActivityId: string | null = null;
     if (finishedCurrentActivity && context.activity) {
@@ -5134,9 +4736,22 @@ async function handleTypedRequest(
               context.quiz,
             ),
     });
-    // MVP chat modes: echo the active mode on the envelope (and thereby into the stored
-    // mentor-turn payload, so dedup replays and the teacher transcript carry it too).
-    if (chatMode) envelope.chat_mode = chatMode;
+    // v6: drive the chatbox's inline pills. A pill appears only when there is something behind
+    // it, so each flag is read off state this turn already computed:
+    //   quiz     — the step's own requirement, so it tracks a bound quiz appearing or passing
+    //   homework — a PENDING assignment checkpoint for this lesson (assessments are not homework)
+    //   resources — whatever the mentor actually attached to this turn
+    // The client keeps a fallback for quiz and resources, but homework has no client-side proxy:
+    // without this it can never appear, and guessing would point a student at work that may not
+    // exist.
+    envelope.available = {
+      quiz: requirements.quiz,
+      homework: context.pendingCheckpoints.some(
+        (checkpoint) => String((checkpoint as DbRow).kind || "") === "assignment",
+      ),
+      resources: attachedResources.length > 0,
+    };
+
     // Flow v3: the Continue pill renders whenever a content step is presented but not yet
     // acknowledged — the deterministic escape hatch that replaces "any message advances".
     // Suppressed during a revisit (the Resume chip is the exit there).
@@ -5241,9 +4856,6 @@ async function handleTypedRequest(
       // A revisit turn can never finish the activities (its flow is forced conversational
       // above; this guard keeps the invariant even if that derivation changes).
       !inRevisit &&
-      // A chat-mode turn can never finish them either (chatModeFlow echoes the
-      // session's stage, which is already "complete" on a complete session).
-      !chatMode &&
       (finalFlow.stage === "complete" || finalFlow.nextAction === "complete");
     const activitiesComplete =
       activitiesDoneThisTurn || session.activities_complete === true;
@@ -5275,10 +4887,8 @@ async function handleTypedRequest(
       unifiedComplete &&
       // Never celebrate completion mid-revisit (e.g. a required checkpoint cleared in
       // another panel while the student was revisiting) — the resume/next normal turn
-      // picks it up. A revisit turn must never read as a completion. Chat-mode turns
-      // never trigger completion logic at all — the next lesson turn picks it up.
+      // picks it up. A revisit turn must never read as a completion.
       !inRevisit &&
-      !chatMode &&
       session.status !== "complete"
     ) {
       // Re-completion: the student finished the required checkpoints since last time.
@@ -5303,11 +4913,9 @@ async function handleTypedRequest(
     // step (never from raw attempts: side questions to the mentor are not struggling).
     const nextStatus = advancing
       ? "active"
-      : inRevisit || chatMode
+      : inRevisit
         ? // A revisit turn never changes completion/attention status — it neither earns
           // a completion nor demotes an already-complete session back to active.
-          // Chat-mode turns are status-inert for the same reason (and the session row
-          // is never patched on a mode turn anyway).
           String(session.status || "active")
         : unifiedComplete
           ? "complete"
@@ -5343,13 +4951,15 @@ async function handleTypedRequest(
       stage: envelope.stage,
       response_mode: envelope.response_mode,
       content: envelope.reply,
-      payload: envelope,
+      // Stamped with the same TurnMode as the student turn it answers, so a reply groups into
+      // its own mode section on replay rather than starting a new unlabelled one.
+      payload: declaredMode ? { ...envelope, turn_mode: declaredMode } : envelope,
     });
 
     // Rolling independence signal (only updated on real graded-eligible attempts —
     // never on empty control turns or revisit conversation).
     let nextIndependence: number | undefined;
-    if (answer && content && presentedBefore && !staleQuizAnswer && !inRevisit && !chatMode) {
+    if (answer && content && presentedBefore && !staleQuizAnswer && !inRevisit) {
       const turnInd = independenceFor(
         assessment,
         attemptedBeforeHelp,
@@ -5388,9 +4998,7 @@ async function handleTypedRequest(
     let inquirySource = "";
     // Skipped during a revisit: questions about already-mastered material are review
     // conversation, not confusion/curiosity evidence against the revisited step.
-    // Also skipped on chat-mode turns: open/discuss are grading- and evidence-free by
-    // contract, and quiz mode's questions would read as false "confusion" signals.
-    if (answer?.mode === "text" && content && presentedBefore && !inRevisit && !chatMode) {
+    if (answer?.mode === "text" && content && presentedBefore && !inRevisit) {
       if (mentorInquiry === "confusion" || intent === "confused" || helpRequest) {
         inquiryEventType = "confusion";
         inquirySource = mentorInquiry === "confusion" ? "mentor" : "heuristic";
@@ -5437,9 +5045,7 @@ async function handleTypedRequest(
     // revisit turn writes nothing (the step's real record was made when it was
     // completed), and an EMPTY control turn (Continue/resume — no student content)
     // writes nothing: an attempt row with a blank answer records noise, not work.
-    // Chat-mode turns skip the whole flow-record family (attempts/evidence/quiz rows/
-    // recommendations); quiz mode adds its OWN revision evidence just below.
-    if (answer && content && presentedBefore && !staleQuizAnswer && !inRevisit && !chatMode) {
+    if (answer && content && presentedBefore && !staleQuizAnswer && !inRevisit) {
       recordWrites.push(
         (async () => {
           const attempt = await insertRow(config, "lesson_attempts", {
@@ -5523,39 +5129,7 @@ async function handleTypedRequest(
         );
       }
     }
-
-    // Quiz mode's graded recall earns real spaced-practice credit: a learning_evidence
-    // row (mode='revision', mode_type='recall') + mastery refresh through the shared
-    // writer — exactly the review handler's mapping — while step_state, the session
-    // cursor, and completion stay untouched.
-    if (chatMode === "quiz" && quizModeAssessment && answer && skillKeys.length) {
-      recordWrites.push(
-        writeEvidenceAndMastery(
-          config,
-          userId,
-          lessonId,
-          sessionId,
-          null,
-          answer,
-          quizModeAssessment,
-          skillKeys,
-          context.milestone,
-          quizModeAssessment.passed ? 0.8 : 0.5,
-          directive.key,
-          0,
-          true,
-          "revision",
-          "recall",
-        ),
-      );
-    }
     await Promise.all(recordWrites);
-
-    // Chat-mode turns NEVER touch the session row: no step_state, cursor, stage,
-    // status, steps_done, nav, preempted, score, or counter mutations — the lesson
-    // resumes exactly where it left off. (The learning_turns transcript above is the
-    // only durable trace of the conversation itself.)
-    if (!chatMode) {
     await patchRows(
       config,
       `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`,
@@ -5649,21 +5223,6 @@ async function handleTypedRequest(
         },
       );
 
-    // Memory v1: THIS turn just transitioned the session to complete (status persisted
-    // above) — schedule the background summary/profile writer. Best-effort by
-    // construction (writeSessionMemory self-catches) and never on a re-completion:
-    // duplicate session_id inserts are ignored, but there is no reason to re-spend a
-    // model call for a session whose summary already exists.
-    if (
-      nextStatus === "complete" &&
-      String(session.status || "") !== "complete"
-    ) {
-      scheduleBackground(
-        writeSessionMemory(config, userId, sessionId, lessonId),
-      );
-    }
-    }
-
     if (currentStage !== envelope.stage) {
       scheduleBackground(
         recordRuntimeEvent(config, {
@@ -5676,7 +5235,7 @@ async function handleTypedRequest(
         }),
       );
     }
-    if (!advancing && !chatMode && (envelope.next_action === "complete" || nextStatus === "complete")) {
+    if (!advancing && (envelope.next_action === "complete" || nextStatus === "complete")) {
       scheduleBackground(
         recordRuntimeEvent(config, {
           userId,

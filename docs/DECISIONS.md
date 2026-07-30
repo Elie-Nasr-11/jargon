@@ -592,3 +592,56 @@ Reason:
 
 - The column already exists with teacher-writable RLS and rides the runtime's existing select —
   one binding surface, no migration, no second source of truth to drift.
+
+## 2026-07-27 — v5.0: student-selected conversation modes; progression moves to a requirement ledger
+
+Supersedes three v4.0 positions, deliberately (PLATFORM.md is canonical and says change the doc
+first — that rewrite lands with P2; this entry records the decision).
+
+1. **Modes become student-selected, not only teacher-authored.** v4.0 §2 fixed "each step is
+   exactly one mode," teacher-authored. v5.0 lets the student pick the conversational mode from the
+   chatbox at any time (practice, discuss, checkpoints, quiz, assignment, open, plus a default
+   lesson spine).
+2. **"Deterministic gates own progression" survives in substance; its one-mode-per-step corollary
+   does not.** Naive student-driven modes would let a student discuss past an assessment. The fix
+   is to split the two ideas that v4.0 conflated: MODE is the current conversational contract
+   (student-chosen, free, drives directive + UI skin); PROGRESSION is a separate requirement
+   ledger, and a requirement is discharged ONLY by a turn in the matching mode whose deterministic
+   gate passes. `discuss`/`open` therefore discharge nothing, by construction rather than by
+   prohibition. The LLM still never grades its own completion.
+3. **§9's "visual redesign — deferred" is lifted.** The shell becomes a Home (LMS) / Learn (chat)
+   split with a ChatGPT-shaped sidebar.
+
+Consequence for the eight-mode vocabulary: it is rebuilt, not extended. `revision` folds into
+Routines rather than being a chat mode; `explanation` + `media` become the default Lesson spine.
+The DB check constraint gains the new values BEFORE anything stops writing the old ones, and
+`mode = null` keeps meaning legacy exactly as it does today — no live curriculum changes behavior
+on the migration.
+
+Also decided: a linear stepper is a lie once mode is student-chosen, so the lesson header becomes
+"N of M requirements met" with the outstanding ones tappable (tapping switches to the mode that can
+discharge it). Phasing is shell → runtime → theming, each behind a flag, because a real student is
+live on the platform.
+
+## 2026-07-27 (amended) — v5.0 P2 as built: two mode axes, no requirement-ledger rebuild
+
+Amends the entry above. That entry described building a new "requirement ledger" to make
+student-driven modes safe. Research before implementing showed **the ledger already exists** and the
+rebuild was unnecessary:
+
+- `StepState` (chat/index.ts) is already a monotonic per-step ledger; `stepRequirements()` already
+  derives what a step needs from its authored mode; `stepDone()` already decides completion.
+- Flow v3 already enforces "conversation never closes a gate": the router classifies each turn and
+  `applyTurn` discards grader verdicts for conversation kinds.
+
+So P2 shipped the smaller, safer change: the student's declared mode is an authoritative input to
+the EXISTING routing/masking layer — declaring what the LLM previously inferred — rather than a
+parallel progression system.
+
+The correction that mattered most: the earlier entry conflated two different axes. The authored
+`lesson_activities.mode` describes a STEP; the new selector describes a MESSAGE. They coexist, so
+"rebuild the vocabulary" applies only to the student-facing selector. The eight authored step types
+are untouched in P2, no migration was needed, and no live curriculum changed behavior.
+
+Unchanged from the original entry: the Home/Learn shell (shipped in P1), and that §9's "visual
+redesign — deferred" is lifted.
