@@ -4,12 +4,16 @@ import {
   fetchLearningTurns,
   fetchStudentCatalog,
   getSession,
+  invokeJargonRun,
   invokeTypedChat,
 } from "@/lib/api";
+import { runJavaScript, runPython } from "@/lib/code-runner";
 import { store } from "@/lib/jargon-store";
 import type { Lesson, LessonChatResource, TypedChatAnswer, TypedChatEnvelope } from "@/lib/types";
+import type { ComposerLanguage } from "@/components/Composer";
 import {
   envelopeMessage,
+  formatRunOutput,
   mentorToPreferences,
   sortTimedMessages,
   turnToMessage,
@@ -265,6 +269,67 @@ export function useConversation() {
     }
   }, []);
 
+  // Running code IS the turn in this curriculum: the server's code gate only passes on a real
+  // execution result, so there is no useful "submit without running". One action runs the code,
+  // shows the output, and submits it — which also makes a stale run_result impossible.
+  //
+  // Two runners, two result shapes, deliberately not flattened: Jargon executes server-side and
+  // its full response (status, truncated, errors) is what the gate inspects, so it is passed
+  // through as run_result untouched. JavaScript and Python run sandboxed in the browser and only
+  // produce {ok, output}.
+  const sendCode = useCallback(
+    async (code: string, language: ComposerLanguage, mode: TurnMode) => {
+      const trimmed = code.trim();
+      if (!trimmed || sendingRef.current) return;
+
+      let outputText = "";
+      let ok = false;
+      let runResult: Record<string, unknown>;
+
+      try {
+        if (language === "jargon") {
+          const session = await getSession();
+          const token = session?.access_token;
+          if (!token) throw new Error("You must be signed in.");
+          const response = await invokeJargonRun({
+            accessToken: token,
+            code: trimmed,
+            answers: [],
+          });
+          outputText = formatRunOutput(response);
+          ok = response.status === "ok";
+          runResult = response as unknown as Record<string, unknown>;
+        } else {
+          const result =
+            language === "python" ? await runPython(trimmed) : await runJavaScript(trimmed);
+          outputText = result.output || "(no output)";
+          ok = result.ok;
+          runResult = { ok: result.ok, output: result.output };
+        }
+      } catch (err) {
+        // A runner failure is shown as output, not as a chat error: the student's code is fine to
+        // discuss even when the runtime could not be reached.
+        outputText = friendlyError(err, "Could not run your code.");
+        ok = false;
+        runResult = { ok: false, output: outputText };
+      }
+
+      // The output bubble lands before the turn so the student sees their result immediately,
+      // rather than after the tutor has finished thinking about it.
+      setMessages((current) => [
+        ...current,
+        { id: uid(), role: "output", ok, output: outputText, lang: language },
+      ]);
+
+      await sendAnswer(
+        { mode: "code", code: trimmed, run_result: runResult, client_msg_id: uid() },
+        mode,
+        trimmed,
+      );
+    },
+    [sendAnswer],
+  );
+
   const sendText = useCallback(
     (text: string, mode: TurnMode) =>
       sendAnswer({ mode: "text", text, client_msg_id: uid() }, mode, text),
@@ -299,6 +364,7 @@ export function useConversation() {
     booting,
     error,
     sendText,
+    sendCode,
     sendChoice,
     openLesson,
     retry,

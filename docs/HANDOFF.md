@@ -6920,3 +6920,44 @@ should not be acted on until someone has run /learn signed in.
 (5) NOTHING on this surface has been verified against real data.
 Suggested next task: the signed-in run, then code running (it is the one unported feature the Jargon
 curriculum cannot work without).
+
+## Claude -> Codex / Human - 2026-07-30 13:00
+
+Status: Done (code running — the student can now write and run code on /learn)
+Summary: Ported the piece the Jargon curriculum cannot work without. The chatbox gains a CODE
+SURFACE: a toggle swaps the message field for a Monaco editor plus a language picker (Jargon /
+JavaScript / Python), and the primary action becomes Run.
+This is where the reserved word finally earns its keep. Text-vs-code is an INPUT SURFACE, a
+different axis from TurnMode — a student can write code in Practice or in Discuss; the surface says
+HOW they are typing, the mode says WHAT the turn is for. The old surface called both "mode", and
+that collision is what made the previous architecture hard to reason about. `type InputSurface` is
+local to Chatbox and never leaks.
+RUN IS THE TURN, deliberately one action rather than Run-then-Send. The server's code gate only
+passes on a real execution result, so "submit without running" has no meaning here — and a single
+action makes a stale run_result impossible.
+Two runners, two result shapes, deliberately NOT flattened: Jargon executes server-side via
+invokeJargonRun and its whole response (status, truncated, errors) is what the gate inspects, so it
+is passed through as run_result untouched; JavaScript and Python run sandboxed in the browser and
+only produce {ok, output}. Flattening Jargon into {ok, output} would discard what the server grades
+on. A runner failure renders as OUTPUT rather than a chat error — the student's code is still worth
+discussing when the runtime could not be reached.
+Also fixed a latent trap in tests/test_student_surface.py: an appended `if __name__ == "__main__"`
+block had ended up ABOVE two later test classes, so running that file directly silently skipped 9
+tests (unittest discover imports the module and still found them, which is why it went unnoticed).
+Moved to the end; direct runs now execute all 24.
+Files changed: frontend/src/student/{Chatbox.tsx,ChatWindow.tsx,StudentApp.tsx,useConversation.ts},
+tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 301 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged
+(+4 new). Live: headless Chromium — the code surface renders with editor, language picker and Run.
+Remaining concerns: (1) THE MONACO EDITOR SHOWS "Loading…" IN THIS SANDBOX. @monaco-editor/react
+fetches the Monaco runtime from its CDN (there is no loader.config anywhere in the repo), and this
+environment has no outbound network. CodeArea is already shipped in QuizPanel and routes/chat.tsx, so
+it is a working component — this is an environment artifact, NOT a bug. But it does mean the editor
+itself has not been seen working on this surface, and neither has a single code execution.
+(2) Still unported: attachments, live voice (WebRTC), artifacts, resource cards. The Chatbox renders
+no attach or audio button until they are wired.
+(3) Routines remains the only placeholder destination, correctly — it has no backend.
+(4) Nothing on this surface has run against real data.
+Suggested next task: the signed-in run. Code running is exactly the path that cannot be trusted
+until a real execution has happened once.

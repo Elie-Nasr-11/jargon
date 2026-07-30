@@ -227,6 +227,7 @@ export function StudentApp({
             onOpenResources={() => onSelectDestination("resources")}
             sending={conversation.sending || conversation.booting}
             onSend={(text) => conversation.sendText(text, turnMode)}
+            onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
           >
             {conversation.booting ? (
               <p className="text-body text-muted-foreground">Opening your conversation…</p>

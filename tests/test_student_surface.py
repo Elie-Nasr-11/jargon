@@ -108,8 +108,6 @@ class StudentSurfaceWire(unittest.TestCase):
             self.assertNotIn(banned, TRANSCRIPT)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 class ModeSections(unittest.TestCase):
     """The border and label describe a stretch of conversation, not the window."""
@@ -176,3 +174,42 @@ class LessonOffersAreServerDriven(unittest.TestCase):
     def test_the_field_stays_optional_for_replay(self):
         # Envelopes stored before v6 must replay unchanged.
         self.assertIn("available?: { quiz: boolean; homework: boolean; resources: boolean }", CHAT_FN)
+
+
+class CodeSurface(unittest.TestCase):
+    """Running code IS the turn: the server's code gate only passes on a real result."""
+
+    def test_input_surface_is_a_separate_axis_from_turn_mode(self):
+        box = (FRONT / "student" / "Chatbox.tsx").read_text()
+        # A student can write code in Practice or in Discuss; the surface says HOW they type,
+        # the mode says what the turn is for. Conflating the two is the old surface's mistake.
+        self.assertIn('type InputSurface = "text" | "code"', box)
+        self.assertIn("ModeSelector", box)
+
+    def test_run_submits_the_turn_rather_than_only_executing(self):
+        # One action, so a stale run_result cannot be submitted.
+        fn = HOOK[HOOK.index("const sendCode = useCallback(") :]
+        fn = fn[: fn.index("[sendAnswer],")]
+        self.assertIn("sendAnswer(", fn)
+        self.assertIn('mode: "code"', fn)
+        self.assertIn("run_result: runResult", fn)
+
+    def test_jargon_result_is_passed_through_untouched(self):
+        # The gate inspects status/truncated/errors, so flattening Jargon's response into
+        # {ok, output} would discard what the server grades on.
+        fn = HOOK[HOOK.index("const sendCode = useCallback(") :]
+        fn = fn[: fn.index("[sendAnswer],")]
+        self.assertIn("invokeJargonRun(", fn)
+        self.assertIn("runResult = response", fn)
+        # Browser runners only ever produce {ok, output}.
+        self.assertIn("runJavaScript", fn)
+        self.assertIn("runPython", fn)
+
+    def test_a_runner_failure_is_output_not_a_chat_error(self):
+        fn = HOOK[HOOK.index("const sendCode = useCallback(") :]
+        fn = fn[: fn.index("[sendAnswer],")]
+        self.assertIn('role: "output"', fn)
+
+
+if __name__ == "__main__":
+    unittest.main()
