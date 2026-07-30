@@ -1,8 +1,66 @@
-import { choiceLabel, choiceValue, type Msg } from "@/features/student/chat/chatMessages";
+import type { ReactNode } from "react";
+import { MessageSquare, RotateCcw } from "lucide-react";
+import { tokenizeJargon } from "@/lib/jargon-syntax";
+import type { TypedChatAnswer } from "@/lib/types";
+import {
+  choiceLabel,
+  choiceValue,
+  jargonTokenClass,
+  languageLabel,
+  parseFencedBlocks,
+  type ChatCodeBlock,
+  type Msg,
+} from "@/features/student/chat/chatMessages";
 
-// Renders the conversation. Deliberately plain in this slice — no markdown pipeline, no code
-// blocks, no resource cards. Those exist on the old surface and come across in later slices;
-// shipping a half-wired version of each would repeat the pattern this rebuild is correcting.
+// Renders the conversation.
+//
+// Fenced code blocks are parsed and highlighted — the mentor teaches with code, so a reply
+// containing ``` must not render as flat text. parseFencedBlocks / jargonTokenClass /
+// tokenizeJargon are the same helpers the previous surface used; there is no general Markdown
+// pipeline in this codebase and this slice does not add one.
+
+function CodeBlock({ code }: { code: ChatCodeBlock }) {
+  return (
+    <figure className="my-2 overflow-hidden rounded-control border border-border">
+      <figcaption className="border-b border-border bg-depth-sub px-2.5 py-1 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+        {languageLabel(code.language)}
+      </figcaption>
+      {/* Wide code scrolls inside its own box; the transcript column must never scroll sideways. */}
+      <pre className="overflow-x-auto bg-code-background px-2.5 py-2 text-[12.5px] leading-relaxed text-code-foreground">
+        <code>
+          {code.language === "jargon"
+            ? tokenizeJargon(code.source).map((token, i) => (
+                <span key={`${token.kind}-${i}`} className={jargonTokenClass[token.kind]}>
+                  {token.text}
+                </span>
+              ))
+            : code.source}
+        </code>
+      </pre>
+    </figure>
+  );
+}
+
+// Text with its fenced blocks lifted out. Plain segments keep whitespace; code gets the block.
+function MessageBody({ text }: { text: string }) {
+  const segments = parseFencedBlocks(text);
+  if (segments.length === 1 && segments[0].kind === "text") {
+    return <span className="whitespace-pre-wrap">{segments[0].text}</span>;
+  }
+  return (
+    <>
+      {segments.map((segment, i) =>
+        segment.kind === "code" ? (
+          <CodeBlock key={i} code={segment.code} />
+        ) : segment.text.trim() ? (
+          <span key={i} className="whitespace-pre-wrap">
+            {segment.text.replace(/^\n+|\n+$/g, "")}
+          </span>
+        ) : null,
+      )}
+    </>
+  );
+}
 
 function Bubble({
   align,
@@ -11,7 +69,7 @@ function Bubble({
 }: {
   align: "start" | "end";
   tone: "user" | "mentor" | "teacher" | "error" | "output";
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const toneClass =
     tone === "user"
@@ -25,9 +83,7 @@ function Bubble({
             : "bg-depth-sub text-foreground";
   return (
     <div className={`flex ${align === "end" ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[min(46rem,85%)] whitespace-pre-wrap rounded-card px-3.5 py-2.5 text-body ${toneClass}`}
-      >
+      <div className={`max-w-[min(46rem,85%)] rounded-card px-3.5 py-2.5 text-body ${toneClass}`}>
         {children}
       </div>
     </div>
@@ -39,10 +95,23 @@ export type TranscriptProps = {
   // Choices are live only on the LATEST mentor message — an older question's buttons must not
   // stay clickable once the conversation has moved on.
   onChoose?: (choiceId: string, label: string) => void;
+  onRetry?: (answer: TypedChatAnswer) => void;
   disabled?: boolean;
 };
 
-export function Transcript({ messages, onChoose, disabled }: TranscriptProps) {
+export function Transcript({ messages, onChoose, onRetry, disabled }: TranscriptProps) {
+  if (!messages.length) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-12 text-center">
+        <MessageSquare className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.5} />
+        <p className="text-body text-muted-foreground">
+          Your tutor will open the lesson here. Say hello, or ask about anything you&rsquo;re stuck
+          on.
+        </p>
+      </div>
+    );
+  }
+
   const lastBotId = [...messages].reverse().find((m) => m.role === "bot" && !m.isError)?.id;
 
   return (
@@ -58,7 +127,7 @@ export function Transcript({ messages, onChoose, disabled }: TranscriptProps) {
         if (message.role === "user") {
           return (
             <Bubble key={message.id} align="end" tone="user">
-              {message.text}
+              <MessageBody text={message.text} />
             </Bubble>
           );
         }
@@ -68,14 +137,14 @@ export function Transcript({ messages, onChoose, disabled }: TranscriptProps) {
               <span className="mb-1 block text-overline uppercase tracking-[0.08em] opacity-70">
                 Your teacher
               </span>
-              {message.text}
+              <MessageBody text={message.text} />
             </Bubble>
           );
         }
         if (message.role === "output") {
           return (
             <Bubble key={message.id} align="start" tone="output">
-              {message.output}
+              <span className="whitespace-pre-wrap">{message.output}</span>
             </Bubble>
           );
         }
@@ -84,7 +153,19 @@ export function Transcript({ messages, onChoose, disabled }: TranscriptProps) {
         return (
           <div key={message.id} className="flex flex-col gap-2">
             <Bubble align="start" tone={message.isError ? "error" : "mentor"}>
-              {message.text}
+              <MessageBody text={message.text} />
+              {/* An error bubble carries the answer that failed, so Retry re-sends it verbatim
+                  rather than asking the student to retype. */}
+              {message.isError && message.retryAnswer && onRetry ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onRetry(message.retryAnswer!)}
+                  className="mt-2 flex items-center gap-1.5 rounded-control border border-danger/40 px-2 py-1 text-meta text-danger transition-colors duration-(--dur-fast) hover:bg-danger/10 disabled:opacity-40"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.7} /> Try again
+                </button>
+              ) : null}
             </Bubble>
             {live ? (
               <div className="flex flex-wrap gap-2 pl-1">

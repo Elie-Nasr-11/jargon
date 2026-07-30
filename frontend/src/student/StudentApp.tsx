@@ -143,6 +143,7 @@ export function StudentApp({
               <Transcript
                 messages={conversation.messages}
                 disabled={conversation.sending}
+                onRetry={(answer) => void conversation.retry(answer, turnMode)}
                 onChoose={(choiceId, label) => {
                   // Answering a quiz is a Quiz-mode act. The server fails closed on a choice sent
                   // in a conversation mode (correct), but that would read as a dead button — so

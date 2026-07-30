@@ -178,7 +178,10 @@ export function useConversation() {
     [loadLesson],
   );
 
-  const sendAnswer = useCallback(async (answer: TypedChatAnswer, mode: TurnMode, echo: string) => {
+  // `echo` is the student's own message to show immediately. It is OPTIONAL because a retry
+  // re-sends an answer whose user bubble is already in the transcript — echoing again would
+  // duplicate it.
+  const sendAnswer = useCallback(async (answer: TypedChatAnswer, mode: TurnMode, echo?: string) => {
     const activeLesson = lessonRef.current;
     if (!activeLesson || sendingRef.current) return;
 
@@ -188,9 +191,13 @@ export function useConversation() {
 
     const thinkingId = uid();
     setMessages((current) => [
-      ...current,
-      { id: uid(), role: "user", text: echo, createdAt: new Date().toISOString() },
-      { id: thinkingId, role: "thinking" },
+      // Drop any trailing error bubble: the turn it reported is being attempted again, and
+      // leaving it would show a failure above its own successful retry.
+      ...current.filter((m) => !(m.role === "bot" && m.isError)),
+      ...(echo === undefined
+        ? []
+        : [{ id: uid(), role: "user" as const, text: echo, createdAt: new Date().toISOString() }]),
+      { id: thinkingId, role: "thinking" as const },
     ]);
 
     try {
@@ -243,6 +250,13 @@ export function useConversation() {
     [sendAnswer],
   );
 
+  // Re-send a failed turn. The Msg union already carries retryAnswer for exactly this, so the
+  // original answer goes back verbatim rather than being reconstructed from the rendered text.
+  const retry = useCallback(
+    (answer: TypedChatAnswer, mode: TurnMode) => sendAnswer(answer, mode),
+    [sendAnswer],
+  );
+
   return {
     messages,
     lessons,
@@ -254,5 +268,6 @@ export function useConversation() {
     sendText,
     sendChoice,
     openLesson,
+    retry,
   };
 }

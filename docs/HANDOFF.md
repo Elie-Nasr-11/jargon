@@ -6698,3 +6698,37 @@ dashboard variable — the "use a powerful model" half of the original request c
 repo. See OPEN_QUESTIONS 2026-07-30.
 Suggested next task: upload a text PDF and a scanned PDF to a lesson and watch the chain; then decide
 the chunk-cards-vs-document question in OPEN_QUESTIONS.
+
+## Claude -> Codex / Human - 2026-07-30 08:15
+
+Status: Done (v6 /learn — slice 4: finish the transcript)
+Summary: Closed the three gaps that made /learn's chat window incomplete rather than adding new
+surface on top of it.
+(1) FENCED CODE BLOCKS. The mentor teaches with code, so a reply containing ``` was rendering as
+flat text. Now parsed and highlighted, reusing parseFencedBlocks / jargonTokenClass /
+tokenizeJargon — the same helpers the previous surface used. Wide code scrolls inside its own box
+so the transcript column never scrolls sideways. Note: there is NO general Markdown pipeline in
+this codebase and this slice deliberately does not add one; fenced blocks are what the old surface
+handled too.
+(2) EMPTY STATE. An empty transcript was a large void; it now says what will happen.
+(3) RETRY. The Msg union has carried retryAnswer since the extraction, with nothing rendering a
+button. Error bubbles now offer "Try again" and re-send the original answer verbatim rather than
+asking the student to retype. sendAnswer's `echo` became optional for this — a retry's user bubble
+is already in the transcript, so echoing again would duplicate it — and sending now strips any
+trailing error bubble, which otherwise would sit above its own successful retry.
+Files changed: frontend/src/student/{Transcript.tsx,useConversation.ts,StudentApp.tsx},
+docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact baseline); vite build green;
+python unittest 284 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged. Live: headless Chromium on /learn — shell renders, friendly error copy, ZERO page errors,
+no regression from slice 3.
+Remaining concerns: (1) The three things added here CANNOT be exercised in this sandbox. Supabase is
+unreachable, so boot always lands on the network-error branch: the transcript never populates, which
+means code-block rendering, the empty state, and the Retry button have all been type-checked and
+built but never SEEN. They need the signed-in run.
+(2) Still unported from /chat: attachments, live voice, code running, artifacts, resource cards. The
+Chatbox renders attachment and audio buttons that remain inert.
+(3) Home and all five sidebar destinations are still honest "not built yet" panels.
+Suggested next task: Home / the LMS view — it is half the primary nav and the largest remaining
+placeholder. The old surface's PulsePanel, ClassesGrid, and AgendaCalendar already exist; decide
+whether the new Home reuses them or is rebuilt in src/student/ before starting.
