@@ -6679,3 +6679,17 @@ time via /admin Seeding; the login disclosure deliberately shows emails only.
 Suggested next task: deploy + human demo pass (student: lesson -> modes -> practice ->
 memory panel; teacher: hotlist -> transcript -> watch live -> assign/grade; admin:
 seed logins), then visual QA screenshots and any polish the pass surfaces.
+
+## Claude -> Codex / Human - 2026-07-30 19:55
+
+Status: Starting
+Task: TRUNK UNIFICATION (owner decision): merge claude/happy-johnson-wseex8 (v6 /learn student
+surface + TurnMode backend) into claude/project-scope-mvp-o7ox0y (strips + memory v1 + demo
+catalog), then collapse everything onto MAIN as the single trunk. Codex's TurnMode design
+supersedes my chat_mode implementation (dropped); v7's deliberate review removal is honored
+(my ReviewDueChip reconnection dropped); /chat + features/student retire in favor of /learn;
+memory v1 grafts onto the v6 chat fn. Then: 0/N fractions in LessonTree, memory panel on Home,
+teacher/admin restyled to the v6 language, deploy repointed to main.
+Files I expect to touch: essentially the frontend student tree, chat fn, tests, workflows, docs.
+Notes: owner said "ignore codex do main" — treating happy-johnson as parked; nothing deleted
+from history (both branches remain).
