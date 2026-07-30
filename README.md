@@ -1,6 +1,15 @@
 # Jargon
 
-Jargon is a learning platform for structured thinking and pseudocode. It combines a deterministic Jargon runtime, a Supabase-backed lesson/session system, and a tutor-style frontend that helps students move from everyday logical speech into Jargon and then toward Python.
+Jargon is a chat-first learning platform: students learn inside one guided mentor
+conversation, with the LMS (classes, curriculum, assignments, assessments, mastery,
+teacher oversight) underneath it. It combines a deterministic Jargon runtime, a
+Supabase-backed lesson/session system, and a tutor-style frontend.
+
+**MVP branch note:** `claude/project-scope-mvp-o7ox0y` carries the stripped MVP —
+student experience first (a 7-mode chat: open / lesson / practice / discuss / quiz /
+assessment / resources, plus mentor memory), a class-centric teacher core with
+studio-lite authoring, and a 3-tab admin. `main` archives the full pre-strip platform.
+See `docs/MVP_SCOPE.md` for the authoritative inventory.
 
 ## Architecture
 
