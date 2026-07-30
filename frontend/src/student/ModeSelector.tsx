@@ -1,24 +1,23 @@
 import { useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Popover } from "@/components/Popover";
-import { TURN_MODES, turnModeSpec, type TurnMode } from "@/student/turnModes";
+import { ALWAYS_MODES, turnModeSpec, type TurnMode } from "@/student/turnModes";
 
-// The mode picker that lives in the chatbox. Shows the current TurnMode and opens a list with
-// a one-line hint per mode — the hints are the whole point, since "Discuss" vs "Open" is not
+// The mode picker that lives in the chatbox. Lists ONLY the four always-available modes, with a
+// one-line hint each — the hints are the whole point, since "Discuss" vs "Open" is not
 // self-evident to a 12-year-old.
 //
-// A mode with nothing to act on renders DISABLED rather than hidden: a control that vanishes
-// reads as a bug, one that's dimmed with a reason explains itself.
+// Quiz and Homework are deliberately NOT in here: they exist only when the lesson has one, and a
+// dropdown whose length changes per lesson is harder to learn than a fixed list plus visible
+// inline pills. Chatbox renders those.
 
 export type ModeSelectorProps = {
   value: TurnMode;
   onChange: (mode: TurnMode) => void;
-  // Modes that can't be entered right now, each with a reason shown in the list.
-  unavailable?: Partial<Record<TurnMode, string>>;
   disabled?: boolean;
 };
 
-export function ModeSelector({ value, onChange, unavailable, disabled }: ModeSelectorProps) {
+export function ModeSelector({ value, onChange, disabled }: ModeSelectorProps) {
   const [open, setOpen] = useState(false);
   const current = turnModeSpec(value);
 
@@ -48,19 +47,17 @@ export function ModeSelector({ value, onChange, unavailable, disabled }: ModeSel
         </button>
       }
     >
-      {TURN_MODES.map((mode) => {
-        const blockedReason = unavailable?.[mode.id];
+      {ALWAYS_MODES.map((mode) => {
         const selected = mode.id === value;
         return (
           <button
             key={mode.id}
             type="button"
-            disabled={Boolean(blockedReason)}
             onClick={() => {
               setOpen(false);
               onChange(mode.id);
             }}
-            className="flex w-full items-start gap-2.5 rounded-control px-2.5 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+            className="flex w-full items-start gap-2.5 rounded-control px-2.5 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
             style={{ ["--mode-accent" as string]: `var(${mode.accentVar})` }}
           >
             <span
@@ -73,9 +70,7 @@ export function ModeSelector({ value, onChange, unavailable, disabled }: ModeSel
                 {mode.label}
                 {selected ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : null}
               </span>
-              <span className="mt-0.5 block text-meta text-muted-foreground">
-                {blockedReason || mode.hint}
-              </span>
+              <span className="mt-0.5 block text-meta text-muted-foreground">{mode.hint}</span>
             </span>
           </button>
         );

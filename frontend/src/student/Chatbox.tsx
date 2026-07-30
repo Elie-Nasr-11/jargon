@@ -1,7 +1,8 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { AudioLines, Mic, Paperclip, Send } from "lucide-react";
 import { ModeSelector } from "@/student/ModeSelector";
-import { turnModeSpec, type TurnMode } from "@/student/turnModes";
+import { OfferPills } from "@/student/OfferPills";
+import { turnModeSpec, type LessonOffers, type TurnMode } from "@/student/turnModes";
 
 // The chatbox: attachments, the TurnMode selector, audio, and speak/send.
 //
@@ -12,7 +13,9 @@ import { turnModeSpec, type TurnMode } from "@/student/turnModes";
 export type ChatboxProps = {
   mode: TurnMode;
   onModeChange: (mode: TurnMode) => void;
-  modeUnavailable?: Partial<Record<TurnMode, string>>;
+  // What this lesson offers. Drives the inline pills; absent offers show no pill at all.
+  offers: LessonOffers;
+  onOpenResources: () => void;
   onSend: (text: string) => void;
   onAttach?: () => void;
   onToggleVoice?: () => void;
@@ -24,7 +27,8 @@ export type ChatboxProps = {
 export function Chatbox({
   mode,
   onModeChange,
-  modeUnavailable,
+  offers,
+  onOpenResources,
   onSend,
   onAttach,
   onToggleVoice,
@@ -84,14 +88,18 @@ export function Chatbox({
           <Paperclip className="h-[16px] w-[16px]" strokeWidth={1.6} />
         </button>
 
-        <ModeSelector
-          value={mode}
-          onChange={onModeChange}
-          unavailable={modeUnavailable}
+        <ModeSelector value={mode} onChange={onModeChange} disabled={disabled} />
+
+        {/* Quiz / Homework / Resources — only the ones this lesson actually has. */}
+        <OfferPills
+          offers={offers}
+          mode={mode}
+          onModeChange={onModeChange}
+          onOpenResources={onOpenResources}
           disabled={disabled}
         />
 
-        <div className="flex-1" />
+        <div className="min-w-2 flex-1" />
 
         <button
           type="button"

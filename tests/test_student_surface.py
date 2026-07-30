@@ -22,6 +22,8 @@ API = (FRONT / "lib" / "api.ts").read_text()
 HOOK = (FRONT / "student" / "useConversation.ts").read_text()
 MODES = (FRONT / "student" / "turnModes.ts").read_text()
 TRANSCRIPT = (FRONT / "student" / "Transcript.tsx").read_text()
+PILLS = (FRONT / "student" / "OfferPills.tsx").read_text()
+CHAT_FN = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
 
 
 class StudentSurfaceWire(unittest.TestCase):
@@ -50,9 +52,38 @@ class StudentSurfaceWire(unittest.TestCase):
         for src in (HOOK, TRANSCRIPT):
             self.assertNotIn("type Msg =", src)
 
-    def test_checkpoints_never_sends_a_turn(self):
-        block = MODES[MODES.index('id: "checkpoints"') :][:260]
-        self.assertIn("sendsTurn: false", block)
+    def test_dropdown_holds_exactly_the_always_available_modes(self):
+        block = MODES[MODES.index("export const ALWAYS_MODES") : MODES.index("export const CONDITIONAL_MODES")]
+        for mode in ("lesson", "practice", "discuss", "open"):
+            self.assertIn(f'id: "{mode}"', block)
+        # Quiz and homework are conditional — a dropdown whose length changes per lesson is
+        # harder to learn than a fixed list plus visible inline pills.
+        self.assertNotIn('id: "quiz"', block)
+        self.assertNotIn('id: "assignment"', block)
+
+    def test_checkpoints_mode_is_gone(self):
+        self.assertNotIn("checkpoints", MODES)
+
+    def test_homework_keeps_the_assignment_wire_id(self):
+        # The server's mode whitelist accepts "assignment"; only the student-facing LABEL says
+        # Homework. Renaming the id would fall through to legacy behaviour server-side.
+        block = MODES[MODES.index("export const CONDITIONAL_MODES") :]
+        self.assertIn('id: "assignment"', block)
+        self.assertIn('label: "Homework"', block)
+        self.assertIn('"assignment"', CHAT_FN)
+
+    def test_resources_is_not_a_turn_mode(self):
+        # Opening materials sends no turn and cannot change the conversation's contract, so it
+        # must not be in the TurnMode union.
+        union = MODES[MODES.index("export type TurnMode =") :]
+        union = union[: union.index(";")]
+        self.assertNotIn("resources", union)
+
+    def test_a_pill_only_appears_when_the_lesson_offers_it(self):
+        # No guessing: homework has no client-side proxy signal, so its pill stays hidden until
+        # the server sends availability rather than pointing a student at work that may not exist.
+        self.assertIn("sent?.homework ?? false", HOOK)
+        self.assertIn("if (!available.length && !offers.resources) return null;", PILLS)
 
     def test_errors_are_humanised_for_any_thrown_shape(self):
         # supabase-js rejects with PLAIN OBJECTS carrying a message, not Error instances. An

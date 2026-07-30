@@ -6732,3 +6732,44 @@ Chatbox renders attachment and audio buttons that remain inert.
 Suggested next task: Home / the LMS view — it is half the primary nav and the largest remaining
 placeholder. The old surface's PulsePanel, ClassesGrid, and AgendaCalendar already exist; decide
 whether the new Home reuses them or is rebuilt in src/student/ before starting.
+
+## Claude -> Codex / Human - 2026-07-30 09:05
+
+Status: Done (UI) / Backend writer NOT done
+Summary: Restructured the chatbox mode controls. The dropdown is now exactly four always-available
+modes — Lesson, Practice, Discuss, Open. Quiz and Homework left the dropdown and became inline
+pills beside it, shown ONLY when the lesson has one; Resources joined them as a third pill.
+`checkpoints` is deleted outright.
+Reasoning worth keeping: a dropdown whose length changes per lesson is harder to learn than a fixed
+list plus visible extras, and a pill's PRESENCE is itself the signal — a student can see "this
+lesson has a quiz" without opening anything. Chose icon+label pills over the hover-expanding
+circles that were floated: hover does not exist on touch, and a control whose meaning is hidden
+until hover costs discoverability for exactly the person least able to afford it.
+Two things that would have been easy to get wrong: (1) Homework keeps the wire id "assignment"
+because that is what the server's mode whitelist accepts — only the LABEL says Homework; renaming
+the id would silently fall through to legacy server behaviour. Pinned by a test. (2) Resources is
+NOT a TurnMode — opening materials sends no turn and cannot change the conversation's contract — so
+it lives in a separate LessonOffers type and calls its own handler.
+Availability comes from a new optional envelope field `available: {quiz, homework, resources}`,
+with a client fallback: quiz from live choices/next_action, resources from attached resources.
+Homework has NO client-side proxy and stays hidden until the server sends it — a pill that guessed
+would point a student at work that may not exist.
+Files changed: frontend/src/student/{turnModes.ts,ModeSelector.tsx,Chatbox.tsx,ChatWindow.tsx,
+StudentApp.tsx,useConversation.ts,OfferPills.tsx (new)}, frontend/src/lib/types.ts,
+tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green;
+python unittest 288 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged (+4 new). Live: headless Chromium — dropdown confirmed as exactly the four modes, zero
+page errors.
+Remaining concerns: (1) THE BACKEND WRITER IS NOT DONE. Nothing populates envelope.available, so
+the Homework pill can never appear and Quiz relies on the client fallback. chat/index.ts already has
+what it needs — stepRequirements(activity).quiz for the quiz flag and the checkpoints it loads at
+:2811 for homework — so this is a small additive change to the envelope builder, deliberately left
+out of a UI commit to keep the diff attributable. THIS IS THE NEXT TASK.
+(2) The pills have never been SEEN. Supabase is unreachable from this sandbox so offers are always
+false; the pill row is type-checked and built but unrendered.
+(3) Removing checkpoints leaves no student route to "what's due" — it was a placeholder pane, but
+that information now has no home until Home is built.
+Suggested next task: populate envelope.available in chat/index.ts (quiz from stepRequirements,
+homework from the lesson's checkpoints, resources from what it already attaches), then look at the
+pills with real data.

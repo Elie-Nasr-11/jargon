@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Chatbox } from "@/student/Chatbox";
-import { turnModeSpec, type TurnMode } from "@/student/turnModes";
+import { turnModeSpec, type LessonOffers, type TurnMode } from "@/student/turnModes";
 
 // The conversation surface. Its whole job is to make the current TurnMode legible: the panel
 // takes the mode's tint, gets its own border so it reads as a distinct container, and carries a
@@ -13,7 +13,8 @@ import { turnModeSpec, type TurnMode } from "@/student/turnModes";
 export type ChatWindowProps = {
   mode: TurnMode;
   onModeChange: (mode: TurnMode) => void;
-  modeUnavailable?: Partial<Record<TurnMode, string>>;
+  offers: LessonOffers;
+  onOpenResources: () => void;
   onSend: (text: string) => void;
   onAttach?: () => void;
   onToggleVoice?: () => void;
@@ -26,7 +27,8 @@ export type ChatWindowProps = {
 export function ChatWindow({
   mode,
   onModeChange,
-  modeUnavailable,
+  offers,
+  onOpenResources,
   onSend,
   onAttach,
   onToggleVoice,
@@ -66,7 +68,8 @@ export function ChatWindow({
           <Chatbox
             mode={mode}
             onModeChange={onModeChange}
-            modeUnavailable={modeUnavailable}
+            offers={offers}
+            onOpenResources={onOpenResources}
             onSend={onSend}
             onAttach={onAttach}
             onToggleVoice={onToggleVoice}

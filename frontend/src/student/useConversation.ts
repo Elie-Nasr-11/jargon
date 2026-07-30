@@ -7,7 +7,7 @@ import {
   invokeTypedChat,
 } from "@/lib/api";
 import { DEFAULT_MENTOR } from "@/lib/jargon-store";
-import type { Lesson, TypedChatAnswer } from "@/lib/types";
+import type { Lesson, TypedChatAnswer, TypedChatEnvelope } from "@/lib/types";
 import {
   envelopeMessage,
   mentorToPreferences,
@@ -16,7 +16,7 @@ import {
   uid,
   type Msg,
 } from "@/features/student/chat/chatMessages";
-import type { TurnMode } from "@/student/turnModes";
+import { NO_OFFERS, type LessonOffers, type TurnMode } from "@/student/turnModes";
 
 // The turn loop for the v6 student surface: resolve a lesson, resume (or create) its session,
 // load the transcript, and send turns carrying the student's declared TurnMode.
@@ -62,7 +62,21 @@ function friendlyError(err: unknown, fallback: string): string {
   return /^(TypeError|ReferenceError|SyntaxError)\b/i.test(raw) ? fallback : raw;
 }
 
+// What the lesson offers, read off a turn envelope. Prefers the server's `available` block; falls
+// back to signals already present in the envelope so quiz and resources work before that field
+// ships. Homework has no client-side proxy — a pill that guessed wrong would send a student to
+// work that does not exist — so it stays false until the server says otherwise.
+function offersFromEnvelope(envelope: TypedChatEnvelope): LessonOffers {
+  const sent = envelope.available;
+  return {
+    quiz: sent?.quiz ?? (Boolean(envelope.choices?.length) || envelope.next_action === "choose"),
+    homework: sent?.homework ?? false,
+    resources: sent?.resources ?? Boolean(envelope.resources?.length),
+  };
+}
+
 export function useConversation() {
+  const [offers, setOffers] = useState<LessonOffers>(NO_OFFERS);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -95,6 +109,7 @@ export function useConversation() {
     lessonRef.current = target;
     setLesson(target);
     setMessages([]);
+    setOffers(NO_OFFERS);
     setError("");
 
     const session = await getSession();
@@ -121,6 +136,7 @@ export function useConversation() {
       });
       if (isStale()) return;
       setSession(envelope.session_id ?? null);
+      setOffers(offersFromEnvelope(envelope));
       setMessages([envelopeMessage(envelope)]);
     }
   }, []);
@@ -214,6 +230,7 @@ export function useConversation() {
         mode,
       });
       if (envelope.session_id) setSession(envelope.session_id);
+      setOffers(offersFromEnvelope(envelope));
       setMessages((current) => [
         ...current.filter((m) => m.id !== thinkingId),
         envelopeMessage(envelope),
@@ -259,6 +276,7 @@ export function useConversation() {
 
   return {
     messages,
+    offers,
     lessons,
     lesson,
     sessionId,

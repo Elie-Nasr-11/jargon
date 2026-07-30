@@ -1297,6 +1297,11 @@ export type TypedChatEnvelope = {
   exercise: Record<string, unknown> | null;
   assessment: Record<string, unknown> | null;
   resources?: LessonChatResource[];
+  // v6: what this lesson currently offers, for the chatbox's inline pills. Optional — when the
+  // server does not send it the client falls back to what it can see in this envelope (live quiz
+  // choices, attached resources). `homework` has NO client-side fallback and stays false until
+  // the server sends it, so that pill simply does not appear yet.
+  available?: { quiz?: boolean; homework?: boolean; resources?: boolean };
   lesson_arc?: LessonArc | null;
   next_action: "reply" | "run_code" | "choose" | "retry" | "rescue" | "continue" | "complete";
   guardrail: {
