@@ -87,11 +87,19 @@ export function AmbientCanvas({ intensity = 0.5 }: Props) {
       renderer.render(scene, camera);
       raf = requestAnimationFrame(tick);
     };
-    if (!reduce) raf = requestAnimationFrame(tick);
+    // prefers-reduced-motion: one static frame at full target intensity — the wash stays, the
+    // animation loop never starts.
+    const renderStatic = () => {
+      uniforms.uIntensity.value = intensityRef.current;
+      renderer.render(scene, camera);
+    };
+    if (reduce) renderStatic();
+    else raf = requestAnimationFrame(tick);
 
     const onResize = () => {
       resize();
       uniforms.uRes.value.set(window.innerWidth, window.innerHeight);
+      if (reduce) renderStatic();
     };
     window.addEventListener("resize", onResize);
     const onVis = () => {

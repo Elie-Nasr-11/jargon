@@ -6561,3 +6561,39 @@ Status: Starting
 Task: Final UI coherence pass on the MVP student experience (restart confirm, lesson-switch toast, AmbientCanvas reduced-motion + intensity, completion handoff, stream card consistency, EmptyState adoption, student copy sweep).
 Files I expect to touch: frontend/src/routes/chat.tsx, frontend/src/features/student/**, frontend/src/components/{AmbientCanvas,ConfirmButton,ModalCard,EmptyState}.tsx (as needed).
 Notes: Polish only — subtraction and consistency; no supabase/, tests/, teacher/admin/curriculum, lib/api.ts, lib/types.ts changes; no commit.
+
+## Claude -> Codex / Human - 2026-07-30 (UI coherence pass - finished)
+
+Status: Done (uncommitted, per task instructions)
+Summary: MVP execution-order step 8 (UI coherence). (1) restartLesson's window.confirm
+(the app's only native dialog) replaced with a controlled ModalCard confirm mounted
+beside FocusLock (ConfirmButton's AlertDialog can't live inside the roadmap Popover —
+its outside-tap dismiss would unmount the portaled dialog). (2) openLessonFromView's
+silent in-flight no-op now shows a neutral sonner toast ("Hold on — your mentor is
+still responding.") covering the non-sidebar race. (3) AmbientCanvas renders ONE
+static frame under prefers-reduced-motion (was: blank canvas) and re-renders it on
+resize; chat.tsx student mounts toned down 0.35 -> 0.22 (login/teacher/admin mounts
+untouched). (4) Completion banner suggests Practice when reviews are due: subtext
+names the due count and a "Practice review · N" button switches to practice mode;
+"Pick your next lesson" -> goView("classes") verified against the panel nav.
+(5) Card-language outliers aligned: user bubble border-border/50 -> /60, run-output
+pre and inline-resource media container and surface-error banner rounded-xl/2xl ->
+rounded-card. (6) Divergent empty states now use shared EmptyState: chat empty-catalog
+(was bare text), practice/assessment/resources surfaces (were hand-rolled cards).
+(7) Copy sweep: "..." -> "…" across chat.tsx + QuizPanel student strings; "the
+Mentor" -> "your mentor" in the voice panel (2 spots).
+Files changed: frontend/src/routes/chat.tsx, frontend/src/components/AmbientCanvas.tsx,
+frontend/src/features/student/QuizPanel.tsx.
+Tests run: cd frontend && npx tsc --noEmit (0 errors); npx eslint on the 3 touched
+files (0 errors; 1 pre-existing AmbientCanvas hook-deps warning, present on baseline);
+npm run build green; python3 -m unittest tests.test_review_sessions -q OK (5 tests);
+tests.test_chat_modes_memory OK (23 tests, pins backend files only); the 8 static
+modules pinning chat.tsx show an IDENTICAL failure set before/after (verified by
+diff — all pre-existing strip breakage).
+Remaining concerns: PulsePanel/ClassCanvas keep StateNote (their own consistent shared
+empty-state idiom for the popup layer — converting only some sections would create
+in-panel divergence); rounded-full vs rounded-pill mix left alone (visually identical
+tokens, wholesale rename would be churn); EmptyState/StateNote keep rounded-2xl (both
+shared empty-state components agree with each other).
+Suggested next task: final verification pass + docs sync + push (execution-order
+step 9); repoint deploy-backend.yml at go-live.

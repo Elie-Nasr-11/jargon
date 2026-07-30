@@ -183,7 +183,7 @@ export function QuizPanel({
   }, [completed, failedToLoad]);
 
   if (booting) {
-    return <div className="py-6 text-[13px] text-muted-foreground">Loading quiz...</div>;
+    return <div className="py-6 text-[13px] text-muted-foreground">Loading quiz…</div>;
   }
   if (!assessment) {
     return (
@@ -333,14 +333,14 @@ function QuizContent({
                     readOnly={completed}
                     onChange={(code) => onSetDraft(item.id, { code })}
                     height={150}
-                    placeholder="Write code for this answer..."
+                    placeholder="Write code for this answer…"
                   />
                 ) : (
                   <textarea
                     value={itemAttempt?.answer_text || draft.text}
                     disabled={completed}
                     onChange={(event) => onSetDraft(item.id, { text: event.target.value })}
-                    placeholder="Write your answer..."
+                    placeholder="Write your answer…"
                     className="min-h-[120px] w-full rounded-2xl border border-border bg-background/55 px-3 py-2 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-70"
                   />
                 )}
@@ -382,7 +382,7 @@ function QuizContent({
             className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-[13px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             <Send className="h-4 w-4" strokeWidth={1.7} />
-            {submitting ? "Submitting..." : "Submit quiz"}
+            {submitting ? "Submitting…" : "Submit quiz"}
           </button>
         ) : null}
       </div>

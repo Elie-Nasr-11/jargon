@@ -5,7 +5,9 @@ import {
   AlertCircle,
   ArrowRight,
   AudioLines,
+  BookOpen,
   Check,
+  CheckCircle2,
   ChevronDown,
   ClipboardList,
   Code2,
@@ -23,6 +25,7 @@ import {
   Undo2,
   Volume2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
@@ -31,6 +34,8 @@ import { CodeArea } from "@/components/CodeArea";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ArtifactFrame } from "@/components/ArtifactFrame";
 import { DeckRenderer } from "@/components/DeckRenderer";
+import { EmptyState } from "@/components/EmptyState";
+import { ModalCard } from "@/components/ModalCard";
 import { parseArtifactConfig } from "@/lib/artifact-schema";
 import { QuizPanel } from "@/features/student/QuizPanel";
 import { ReviewDueChip, useGuidedReview } from "@/features/student/ReviewDueChip";
@@ -494,6 +499,9 @@ function ChatPage() {
   // open panel after a lockdown exit so its data reflects the fresh submission.
   const [openQuizId, setOpenQuizId] = useState<string | null>(null);
   const [openAssignmentId, setOpenAssignmentId] = useState<string | null>(null);
+  // The restart-lesson confirmation (the roadmap's "Restart lesson" opens it; ModalCard, not
+  // window.confirm — the app never shows a native dialog).
+  const [restartConfirmOpen, setRestartConfirmOpen] = useState(false);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [assignmentDirty, setAssignmentDirty] = useState(false);
   const [workVersion, setWorkVersion] = useState(0);
@@ -1246,11 +1254,14 @@ function ChatPage() {
 
   // Start the lesson over: a turn WITHOUT a session id makes the server open a FRESH session
   // (which becomes the newest, so future visits resume it). The old session's transcript stays
-  // saved server-side; only this screen resets.
+  // saved server-side; only this screen resets. Confirmation happens in the house ModalCard
+  // (see the mount near FocusLock) — never a native window.confirm.
+  const requestRestartLesson = () => {
+    if (!accessToken || !lessonId || sendingRef.current || buildingArtifactRef.current) return;
+    setRestartConfirmOpen(true);
+  };
   const restartLesson = async () => {
     if (!accessToken || !lessonId || sendingRef.current || buildingArtifactRef.current) return;
-    if (!window.confirm("Start this lesson over from step 1? Your previous work stays saved."))
-      return;
     setVoiceMode(false);
     setSessionId(null);
     setLearningSession(null);
@@ -1338,8 +1349,12 @@ function ChatPage() {
     if (
       nextLessonId !== lessonId &&
       (sending || sendingRef.current || runInFlight || buildingArtifactRef.current)
-    )
+    ) {
+      // Sidebar rows disable via switchBlocked; this covers the remaining race (class canvas
+      // rows, a turn resolving mid-click) so the refusal never reads as a dead click.
+      toast("Hold on — your mentor is still responding.");
       return;
+    }
     store.setLessonId(nextLessonId);
     goView(null);
     if (nextLessonId === lessonId) return; // already the open lesson — just come back to it
@@ -1556,7 +1571,7 @@ function ChatPage() {
         className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <AmbientCanvas intensity={0.35} />
+        <AmbientCanvas intensity={0.22} />
         <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-col items-center justify-center gap-3 px-5">
           <div className="text-center text-[14px] text-muted-foreground">
             {surfaceError || "Opening Jargon\u2026"}
@@ -1584,7 +1599,7 @@ function ChatPage() {
       className="relative flex h-dvh overflow-hidden"
       style={{ background: "var(--background)" }}
     >
-      <AmbientCanvas intensity={0.35} />
+      <AmbientCanvas intensity={0.22} />
 
       {/* The v6 shell: ONE left column carries all navigation (ChatGPT-style); the rest of the
           screen is whatever the active surface is — chat, Classes, or Pulse. Under lockdown the
@@ -1702,13 +1717,17 @@ function ChatPage() {
             {lessonId === null ? (
               // Empty catalog and nothing stored: no lesson to boot, so the pane says so
               // instead of loading a dead lesson id.
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1.5 text-center">
-                <div className="text-[15px] font-medium text-foreground">
-                  No lessons available yet
-                </div>
-                <div className="max-w-[420px] text-[13px] leading-relaxed text-muted-foreground">
-                  Ask your teacher to publish your first lesson — it will show up here as soon as it
-                  does.
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center">
+                <div className="w-full max-w-[420px]">
+                  <EmptyState icon={BookOpen}>
+                    <span className="block text-[14px] font-medium text-foreground">
+                      No lessons available yet
+                    </span>
+                    <span className="mt-0.5 block leading-relaxed">
+                      Ask your teacher to publish your first lesson — it will show up here as soon
+                      as it does.
+                    </span>
+                  </EmptyState>
                 </div>
               </div>
             ) : (
@@ -1761,7 +1780,7 @@ function ChatPage() {
                     <ChatStepperStrip
                       arc={lessonArc}
                       activities={activities}
-                      onRestart={restartLesson}
+                      onRestart={requestRestartLesson}
                       onNavigate={sendNavigate}
                       navigateDisabled={sending || runInFlight || sessionHeld}
                     />
@@ -1807,7 +1826,7 @@ function ChatPage() {
                   </div>
                 ) : null}
                 {surfaceError && !booting ? (
-                  <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
+                  <div className="mb-3 flex items-center justify-between gap-3 rounded-card border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
                     <span className="min-w-0 flex-1">{surfaceError}</span>
                     <button
                       type="button"
@@ -1917,10 +1936,12 @@ function ChatPage() {
                               Lesson complete
                             </div>
                             <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-                              Nice work. Pick your next lesson, or keep chatting about this one.
+                              {reviewDue.length
+                                ? `Nice work. ${reviewDue.length === 1 ? "One skill is" : `${reviewDue.length} skills are`} ready for a quick review — or pick your next lesson.`
+                                : "Nice work. Pick your next lesson, or keep chatting about this one."}
                             </div>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="flex shrink-0 flex-wrap items-center gap-2">
                             <button
                               type="button"
                               onClick={() => goView("classes")}
@@ -1928,6 +1949,15 @@ function ChatPage() {
                             >
                               Pick your next lesson
                             </button>
+                            {reviewDue.length ? (
+                              <button
+                                type="button"
+                                onClick={() => switchChatMode("practice")}
+                                className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+                              >
+                                Practice review · {reviewDue.length}
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => setFollowUp(true)}
@@ -2037,6 +2067,40 @@ function ChatPage() {
           </div>
         ) : null}
       </div>
+
+      {/* Restart-lesson confirmation: the app's ModalCard idiom (the only other candidate,
+          ConfirmButton's AlertDialog, can't live inside the roadmap Popover — the popover's
+          outside-tap dismiss would unmount the portaled dialog under the student). */}
+      <ModalCard
+        open={restartConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) setRestartConfirmOpen(false);
+        }}
+        title="Restart lesson"
+      >
+        <p className="text-[13.5px] leading-relaxed text-muted-foreground">
+          Start this lesson over from step 1? Your previous work stays saved.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setRestartConfirmOpen(false)}
+            className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRestartConfirmOpen(false);
+              void restartLesson();
+            }}
+            className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+          >
+            Start over
+          </button>
+        </div>
+      </ModalCard>
 
       {/* Graded work runs in a full FOCUS LOCKDOWN: no outside click, no ESC, no close X — the
           only exits are Submit or the explicit inline Leave confirmation. The lock relaxes to a
@@ -2271,7 +2335,7 @@ function RealtimeVoicePanel({
     submittedCallIdsRef.current.add(callId);
     turnInFlightRef.current = true;
     setLastTranscript(text);
-    setMessage("Sending your spoken answer to Jargon...");
+    setMessage("Sending your spoken answer to Jargon…");
     void onVoiceEvent({
       event_type: "voice_turn_submitted",
       input_modality: "audio_session",
@@ -2378,7 +2442,7 @@ function RealtimeVoicePanel({
       return;
     }
     setStatus("connecting");
-    setMessage("Opening microphone...");
+    setMessage("Opening microphone…");
     void onVoiceEvent({ event_type: "voice_session_started", input_modality: "audio_session" });
 
     try {
@@ -2440,7 +2504,7 @@ function RealtimeVoicePanel({
         }
       });
       channel.addEventListener("open", () => {
-        setMessage("Live voice is warming up...");
+        setMessage("Live voice is warming up…");
       });
       channel.addEventListener("close", () => {
         if (statusRef.current === "live") {
@@ -2462,7 +2526,7 @@ function RealtimeVoicePanel({
       // Stay in "connecting" until the peer connection actually reaches "connected"
       // (or session.created arrives). Arm a timeout so a handshake that never connects
       // surfaces a recoverable error rather than a stuck "connecting" state.
-      setMessage("Connecting to the Mentor...");
+      setMessage("Connecting to your mentor…");
       connectTimerRef.current = setTimeout(() => {
         if (statusRef.current !== "live") {
           stop("Live voice could not connect.");
@@ -2520,7 +2584,8 @@ function RealtimeVoicePanel({
             </span>
           </div>
           <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
-            {message || "Talk with the Mentor out loud — your spoken answers submit automatically."}
+            {message ||
+              "Talk with your mentor out loud — your spoken answers submit automatically."}
           </div>
         </div>
       </div>
@@ -2772,13 +2837,15 @@ function PracticeSurface({
         {!dueLoaded ? (
           <div className="text-[13px] text-muted-foreground">Checking what&apos;s due…</div>
         ) : due.length === 0 ? (
-          <div className="flex flex-col items-center gap-1.5 rounded-card border border-border/60 bg-depth-card px-5 py-8 text-center shadow-card">
-            <div className="text-[14px] font-medium text-foreground">You&apos;re all caught up</div>
-            <div className="max-w-[380px] text-[12.5px] leading-relaxed text-muted-foreground">
+          <EmptyState icon={CheckCircle2}>
+            <span className="block text-[14px] font-medium text-foreground">
+              You&apos;re all caught up
+            </span>
+            <span className="mx-auto mt-0.5 block max-w-[380px] leading-relaxed">
               Nothing is due for review right now. Keep learning — practiced skills come back here
               when it&apos;s time to refresh them.
-            </div>
-          </div>
+            </span>
+          </EmptyState>
         ) : (
           <div className="grid gap-2">
             {due.map((skill) => (
@@ -2903,13 +2970,13 @@ function AssessmentSurface({
         Your formal assessments. Opening one starts a focused, full-screen attempt.
       </div>
       {published.length === 0 ? (
-        <div className="flex flex-col items-center gap-1.5 rounded-card border border-border/60 bg-depth-card px-5 py-8 text-center shadow-card">
-          <div className="text-[14px] font-medium text-foreground">Nothing pending</div>
-          <div className="max-w-[380px] text-[12.5px] leading-relaxed text-muted-foreground">
+        <EmptyState icon={ClipboardList}>
+          <span className="block text-[14px] font-medium text-foreground">Nothing pending</span>
+          <span className="mx-auto mt-0.5 block max-w-[380px] leading-relaxed">
             No assessments are waiting for you right now — they&apos;ll show up here when your
             teacher publishes one.
-          </div>
-        </div>
+          </span>
+        </EmptyState>
       ) : (
         <div className="grid gap-2">
           {published.map((assessment) => {
@@ -2966,12 +3033,12 @@ function ResourcesSurface({
         Everything your teacher attached to this lesson.
       </div>
       {resources.length === 0 ? (
-        <div className="flex flex-col items-center gap-1.5 rounded-card border border-border/60 bg-depth-card px-5 py-8 text-center shadow-card">
-          <div className="text-[14px] font-medium text-foreground">No resources yet</div>
-          <div className="max-w-[380px] text-[12.5px] leading-relaxed text-muted-foreground">
+        <EmptyState icon={Paperclip}>
+          <span className="block text-[14px] font-medium text-foreground">No resources yet</span>
+          <span className="mx-auto mt-0.5 block max-w-[380px] leading-relaxed">
             This lesson has no attached materials — anything your teacher adds will appear here.
-          </div>
-        </div>
+          </span>
+        </EmptyState>
       ) : (
         <div className="grid gap-3">
           {resources.map((resource) => (
@@ -3125,10 +3192,10 @@ function AssignmentFocus({
         <textarea
           value={content}
           onChange={(event) => setContent(event.target.value)}
-          placeholder="Write your answer..."
+          placeholder="Write your answer…"
           className="min-h-[110px] rounded-2xl border border-border bg-background/65 px-3 py-2 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
         />
-        <CodeArea value={code} onChange={setCode} height={140} placeholder="Optional code..." />
+        <CodeArea value={code} onChange={setCode} height={140} placeholder="Optional code…" />
         <input
           type="file"
           multiple
@@ -3172,7 +3239,7 @@ function AssignmentFocus({
             className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
-            {saving ? "Submitting..." : "Submit"}
+            {saving ? "Submitting…" : "Submit"}
           </button>
         </div>
       </div>
@@ -3242,7 +3309,7 @@ function MessageRow({
       <div ref={ref} className="flex justify-end">
         <div className="flex max-w-[85%] flex-col items-end gap-2">
           {text ? (
-            <div className="whitespace-pre-wrap rounded-card border border-border/50 bg-depth-card px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground shadow-card">
+            <div className="whitespace-pre-wrap rounded-card border border-border/60 bg-depth-card px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground shadow-card">
               {text}
             </div>
           ) : null}
@@ -3313,7 +3380,7 @@ function MessageRow({
             {msg.ok ? "Output" : "Error"} \u00B7 {languageLabel(msg.lang)}
           </div>
           <pre
-            className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-border bg-[var(--code-background)] px-4 py-3 text-[12.5px] leading-relaxed text-[var(--code-foreground)]"
+            className="overflow-x-auto whitespace-pre-wrap rounded-card border border-border bg-[var(--code-background)] px-4 py-3 text-[12.5px] leading-relaxed text-[var(--code-foreground)]"
             style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
           >
             {msg.output}
@@ -3641,7 +3708,7 @@ function ResourceCard({
               ) : (
                 <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
               )}
-              {busy ? "Opening..." : "Open"}
+              {busy ? "Opening…" : "Open"}
             </button>
           ) : null}
         </div>
@@ -3684,7 +3751,7 @@ function ResourceCard({
         ) : null}
 
         {openedUrl ? (
-          <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-[var(--code-background)]">
+          <div className="mt-4 overflow-hidden rounded-card border border-border bg-[var(--code-background)]">
             {resource.resource_type === "youtube" || resource.resource_type === "pdf" ? (
               <iframe
                 title={resource.title}
