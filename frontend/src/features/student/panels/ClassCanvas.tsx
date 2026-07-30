@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarClock, ChevronRight, Lock, Megaphone } from "lucide-react";
+import { CalendarClock, ChevronRight } from "lucide-react";
 import { StateNote } from "@/components/StateNote";
 import { Collapsible } from "@/components/Collapsible";
 import { ProgressRing } from "@/components/ProgressRing";
-import { EntityComments } from "@/features/comms/EntityComments";
 import { groupByUnit } from "@/features/student/lessonGroups";
-import { formatDate, formatScore, relativeTime } from "@/lib/format";
+import { formatDate, formatScore } from "@/lib/format";
 import {
   fetchClassScopedLessons,
-  fetchEntityCommentCounts,
   fetchStudentClasses,
   fetchStudentGrades,
   fetchStudentLessonProgress,
@@ -18,7 +16,6 @@ import type {
   AssessmentAttempt,
   Assignment,
   Lesson,
-  Notification,
   StudentAssessmentBundle,
   StudentAssignmentBundle,
   StudentClass,
@@ -29,9 +26,8 @@ import type {
 // Recent & upcoming strip up top (this class's deadlines + latest submissions, so due dates read
 // without scanning); collapsible units whose lessons carry an at-a-glance state (a progress ring +
 // title weight) and their WORK IN PLACE (each assignment/assessment nested under the lesson it
-// belongs to; lesson-less
-// work drops to "Other work"); and a Discussion section split into the student's private teacher
-// threads and class-wide posts. Assignment submission and quiz-taking run in the P5 focus lockdown.
+// belongs to; lesson-less work drops to "Other work"). Assignment submission and quiz-taking run
+// in the P5 focus lockdown.
 
 type UnitState = "complete" | "in_progress" | "not_started";
 
@@ -106,8 +102,6 @@ export function ClassCanvas({
   classId,
   assignments,
   assessments,
-  notifications,
-  onMarkRead,
   onOpenLesson,
   switchBlocked = false,
   onOpenQuiz,
@@ -115,8 +109,6 @@ export function ClassCanvas({
   classId: string;
   assignments: StudentAssignmentBundle;
   assessments: StudentAssessmentBundle;
-  notifications: Notification[];
-  onMarkRead: (id: string) => void;
   onOpenLesson: (lessonId: string) => void;
   // Lesson switching is refused while a turn is in flight — disable the rows (like the sidebar's)
   // so the refusal never reads as a dead click.
@@ -244,54 +236,6 @@ export function ClassCanvas({
     [classAssessments, lessonIdSet],
   );
 
-  const classPosts = useMemo(
-    () => notifications.filter((n) => n.class_id === classId && n.kind !== "direct_message"),
-    [notifications, classId],
-  );
-  // Private teacher threads (kind private_comment, written by the entity_comments layer) vs the
-  // class-wide feed. Private is the student's own, so it leads.
-  const privatePosts = useMemo(
-    () => classPosts.filter((n) => n.kind === "private_comment"),
-    [classPosts],
-  );
-  const publicPosts = useMemo(
-    () => classPosts.filter((n) => n.kind !== "private_comment"),
-    [classPosts],
-  );
-
-  // Batched comment counts for the chips (per-viewer honest — RLS scopes what each caller sees).
-  const [commentCounts, setCommentCounts] = useState<{
-    lesson: Record<string, number>;
-    assignment: Record<string, number>;
-    assessment: Record<string, number>;
-  }>({ lesson: {}, assignment: {}, assessment: {} });
-  useEffect(() => {
-    if (!lessons) return;
-    let alive = true;
-    void Promise.all([
-      fetchEntityCommentCounts(
-        "lesson",
-        lessons.map((l) => l.id),
-        classId,
-      ).catch(() => ({})),
-      fetchEntityCommentCounts(
-        "assignment",
-        classAssignments.map((a) => a.id),
-        classId,
-      ).catch(() => ({})),
-      fetchEntityCommentCounts(
-        "assessment",
-        classAssessments.map((a) => a.id),
-        classId,
-      ).catch(() => ({})),
-    ]).then(([lesson, assignment, assessment]) => {
-      if (alive) setCommentCounts({ lesson, assignment, assessment });
-    });
-    return () => {
-      alive = false;
-    };
-  }, [lessons, classAssignments, classAssessments, classId]);
-
   const now = Date.now();
 
   // Recent & upcoming, off the unified grades feed. Overdue is pinned ahead of future-due.
@@ -357,14 +301,6 @@ export function ClassCanvas({
             {recipient.feedback}
           </p>
         ) : null}
-        <div className="mt-2 flex flex-wrap justify-end gap-2">
-          <EntityComments
-            entityType="assignment"
-            entityId={a.id}
-            classId={classId}
-            initialCount={commentCounts.assignment[a.id] ?? 0}
-          />
-        </div>
       </div>
     );
   };
@@ -410,14 +346,6 @@ export function ClassCanvas({
         {releasedResult && attempt?.feedback ? (
           <p className="mt-2 text-meta leading-relaxed text-muted-foreground">{attempt.feedback}</p>
         ) : null}
-        <div className="mt-2 flex flex-wrap justify-end gap-2">
-          <EntityComments
-            entityType="assessment"
-            entityId={a.id}
-            classId={classId}
-            initialCount={commentCounts.assessment[a.id] ?? 0}
-          />
-        </div>
       </div>
     );
   };
@@ -429,9 +357,8 @@ export function ClassCanvas({
     const work = workByLesson.get(lesson.id);
     return (
       <div key={lesson.id}>
-        {/* hover treatment + chevron reveal scoped to the NAV BUTTON so an expanded comment thread
-            below doesn't light the row up as if it navigated. State reads from a leading ring
-            (in-progress only) + title weight, matching the sidebar. */}
+        {/* State reads from a leading ring (in-progress only) + title weight, matching the
+            sidebar. */}
         <div className="group flex w-full flex-wrap items-center gap-3 rounded-control px-2 py-2">
           <button
             type="button"
@@ -463,12 +390,6 @@ export function ClassCanvas({
               strokeWidth={1.7}
             />
           </button>
-          <EntityComments
-            entityType="lesson"
-            entityId={lesson.id}
-            classId={classId}
-            initialCount={commentCounts.lesson[lesson.id] ?? 0}
-          />
         </div>
         {work && (work.assignments.length || work.assessments.length) ? (
           <div className="mb-1 ml-3 mt-1 grid gap-1.5 border-l border-border/60 pl-3">
@@ -479,32 +400,6 @@ export function ClassCanvas({
       </div>
     );
   };
-
-  const renderPost = (n: Notification) => (
-    <button
-      key={n.id}
-      type="button"
-      onClick={() => onMarkRead(n.id)}
-      className={`flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent ${
-        n.read_at ? "bg-transparent" : "bg-depth-field"
-      }`}
-    >
-      <span
-        className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-          n.read_at ? "bg-transparent" : "bg-danger"
-        }`}
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-body text-foreground">{n.title}</span>
-        {n.body ? (
-          <span className="block truncate text-meta text-muted-foreground">{n.body}</span>
-        ) : null}
-        <span className="block text-meta text-muted-foreground">
-          {relativeTime(n.created_at, now)}
-        </span>
-      </span>
-    </button>
-  );
 
   if (error) return <StateNote>{error}</StateNote>;
   if (lessons === null) return <StateNote>Loading…</StateNote>;
@@ -642,29 +537,6 @@ export function ClassCanvas({
             {orphanAssignments.map(renderAssignmentCard)}
             {orphanAssessments.map(renderAssessmentCard)}
           </div>
-        </>
-      ) : null}
-
-      {/* discussion — private teacher threads first, then class-wide */}
-      {privatePosts.length || publicPosts.length ? (
-        <>
-          <SectionLabel>Discussion</SectionLabel>
-          {privatePosts.length ? (
-            <div className="mb-3">
-              <div className="mb-1.5 flex items-center gap-1.5 text-meta font-medium text-muted-foreground">
-                <Lock className="h-3.5 w-3.5" strokeWidth={1.7} /> Private to you
-              </div>
-              <div className="grid gap-1">{privatePosts.slice(0, 12).map(renderPost)}</div>
-            </div>
-          ) : null}
-          {publicPosts.length ? (
-            <div>
-              <div className="mb-1.5 flex items-center gap-1.5 text-meta font-medium text-muted-foreground">
-                <Megaphone className="h-3.5 w-3.5" strokeWidth={1.7} /> Class-wide
-              </div>
-              <div className="grid gap-1">{publicPosts.slice(0, 20).map(renderPost)}</div>
-            </div>
-          ) : null}
         </>
       ) : null}
     </div>

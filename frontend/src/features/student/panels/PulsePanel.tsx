@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  ArrowLeft,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -9,36 +8,16 @@ import {
   NotebookPen,
 } from "lucide-react";
 import { StateNote } from "@/components/StateNote";
-import { DmThread } from "@/features/comms/DmThread";
-import { EntityComments } from "@/features/comms/EntityComments";
 import { GradesPanel } from "@/features/student/GradesPanel";
 import { AgendaCalendar } from "@/features/student/panels/AgendaCalendar";
 import { formatScore, relativeTime } from "@/lib/format";
 import { modeLabel } from "@/lib/modes";
-import {
-  COMMS_MINI_CHAT_FLAG,
-  fetchCommsEnabledClassIds,
-  fetchDmChannels,
-  fetchEntityCommentCounts,
-  fetchStudentClasses,
-  fetchStudentProfileStats,
-  getSession,
-  listMyTeachers,
-  openDmChannel,
-} from "@/lib/api";
-import { notifyErr } from "@/lib/feedback";
-import type {
-  DmChannel,
-  MyTeacher,
-  Notification,
-  StudentGradeRow,
-  StudentProfileStats,
-} from "@/lib/types";
+import { fetchStudentProfileStats } from "@/lib/api";
+import type { Notification, StudentGradeRow, StudentProfileStats } from "@/lib/types";
 
 // Pulse — time + signal, in one panel: (a) Up next, this student's work as either a day-grouped
 // agenda (−7d…+21d, overdue pinned) or a month calendar, toggled; (b) Grades, a summary + recent
-// five with the full gradebook behind a disclosure; (c) Activity, ONE merged feed of notifications
-// and DM threads (threads expand inline; "message a teacher" bootstraps a channel); (d)
+// five with the full gradebook behind a disclosure; (c) Activity, the notifications feed; (d)
 // Performance, the student's own numbers (progress / skills / strengths / teacher notes).
 
 function SectionLabel({ children }: { children: ReactNode }) {
@@ -198,43 +177,6 @@ function GradesSection({ grades }: { grades: StudentGradeRow[] }) {
     : null;
   const recent = released.slice(0, 5);
 
-  // Batched comment counts for the recent rows' chips — grade comments are per-class anchored, so
-  // group the ids by class before counting. Chips only render on rows whose class the student is
-  // STILL an active member of (RLS would reject posts anchored to a class they left).
-  const [gradeCounts, setGradeCounts] = useState<Record<string, number>>({});
-  const [activeClassIds, setActiveClassIds] = useState<Set<string> | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void fetchStudentClasses()
-      .then((rows) => alive && setActiveClassIds(new Set(rows.map((c) => c.id))))
-      .catch(() => alive && setActiveClassIds(new Set()));
-    return () => {
-      alive = false;
-    };
-  }, []);
-  useEffect(() => {
-    const byClass = new Map<string, string[]>();
-    for (const g of recent) {
-      if (!g.class_id) continue;
-      const list = byClass.get(g.class_id) ?? [];
-      list.push(g.id);
-      byClass.set(g.class_id, list);
-    }
-    if (!byClass.size) return;
-    let alive = true;
-    void Promise.all(
-      Array.from(byClass, ([classId, ids]) =>
-        fetchEntityCommentCounts("grade", ids, classId).catch(() => ({}) as Record<string, number>),
-      ),
-    ).then((maps) => {
-      if (alive) setGradeCounts(Object.assign({}, ...maps));
-    });
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grades]);
-
   if (!grades.length) {
     return <StateNote>No graded work yet.</StateNote>;
   }
@@ -264,14 +206,6 @@ function GradesSection({ grades }: { grades: StudentGradeRow[] }) {
             <span className="w-11 shrink-0 text-right text-meta font-medium tabular-nums text-foreground">
               {formatScore(g.score)}
             </span>
-            {g.class_id && activeClassIds?.has(g.class_id) ? (
-              <EntityComments
-                entityType="grade"
-                entityId={g.id}
-                classId={g.class_id}
-                initialCount={gradeCounts[g.id] ?? 0}
-              />
-            ) : null}
           </div>
         ))}
       </div>
@@ -297,12 +231,8 @@ function GradesSection({ grades }: { grades: StudentGradeRow[] }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// (c) Activity — one merged feed: notifications + DM threads (inline) + message-a-teacher
+// (c) Activity — the notifications feed
 // ---------------------------------------------------------------------------------------------
-type FeedItem =
-  | { kind: "notification"; at: number; notification: Notification }
-  | { kind: "dm"; at: number; channel: DmChannel };
-
 function ActivityFeed({
   notifications,
   onMarkRead,
@@ -312,161 +242,16 @@ function ActivityFeed({
   onMarkRead: (id: string) => void;
   onMarkAll: () => void;
 }) {
-  const [meId, setMeId] = useState<string | null>(null);
-  const [teachers, setTeachers] = useState<MyTeacher[]>([]);
-  const [channels, setChannels] = useState<DmChannel[]>([]);
-  const [dmEnabled, setDmEnabled] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [expanded, setExpanded] = useState<DmChannel | null>(null);
-  const [opening, setOpening] = useState(false);
-
-  // The MessagesPanel bootstrap, relocated: DM rows only exist for classes where messaging is on.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const session = await getSession();
-        const uid = session?.user?.id;
-        if (!uid || cancelled) return;
-        setMeId(uid);
-        const classes = await fetchStudentClasses();
-        const enabled = await fetchCommsEnabledClassIds(
-          classes.map((c) => c.id),
-          COMMS_MINI_CHAT_FLAG,
-        );
-        if (cancelled || enabled.size === 0) return;
-        setDmEnabled(true);
-        const [t, ch] = await Promise.all([listMyTeachers(), fetchDmChannels()]);
-        if (cancelled) return;
-        setTeachers(t.filter((row) => enabled.has(row.class_id)));
-        setChannels(ch);
-      } catch {
-        // the feed degrades to notifications-only
-      } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const teacherNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of teachers) map.set(t.teacher_id, t.teacher_name);
-    return map;
-  }, [teachers]);
-  const classNameByTeacher = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of teachers) map.set(`${t.teacher_id}:${t.class_id}`, t.class_name);
-    return map;
-  }, [teachers]);
-
-  // Expanding a thread consumes its unread direct_message notifications — the thread IS the
-  // notification's destination, so leaving them unread would keep the badge lit forever.
-  const expandChannel = (channel: DmChannel) => {
-    setExpanded(channel);
-    for (const n of notifications) {
-      if (n.kind === "direct_message" && !n.read_at && n.ref?.channel_id === channel.id) {
-        onMarkRead(n.id);
-      }
-    }
-  };
-
-  // A direct_message notification row expands its thread in place (the v4 cross-surface
-  // deep-link died with the Messages view — the feed IS the messages surface now).
-  const openNotification = (n: Notification) => {
-    onMarkRead(n.id);
-    if (n.kind === "direct_message" && typeof n.ref?.channel_id === "string") {
-      const channel = channels.find((c) => c.id === n.ref?.channel_id);
-      if (channel) expandChannel(channel);
-    }
-  };
-
-  const feed = useMemo(() => {
-    const channelIds = new Set(channels.map((c) => c.id));
-    const items: FeedItem[] = [
-      // A DM notification whose thread is already a feed row would show the same event twice —
-      // the thread row wins (expansion marks the notification read).
-      ...notifications
-        .filter(
-          (n) =>
-            !(
-              n.kind === "direct_message" &&
-              typeof n.ref?.channel_id === "string" &&
-              channelIds.has(n.ref.channel_id)
-            ),
-        )
-        .map((n) => ({
-          kind: "notification" as const,
-          at: Date.parse(n.created_at),
-          notification: n,
-        })),
-      ...channels.map((c) => ({
-        kind: "dm" as const,
-        at: Date.parse(c.last_message_at ?? c.created_at),
-        channel: c,
-      })),
-    ];
-    return items.sort((a, b) => b.at - a.at).slice(0, 30);
-  }, [notifications, channels]);
-
-  const teachersWithoutChannel = useMemo(
+  const feed = useMemo(
     () =>
-      teachers.filter(
-        (t) => !channels.some((c) => c.teacher_id === t.teacher_id && c.class_id === t.class_id),
-      ),
-    [teachers, channels],
+      [...notifications]
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+        .slice(0, 30),
+    [notifications],
   );
-
-  const startThread = async (t: MyTeacher) => {
-    if (!meId || opening) return;
-    setOpening(true);
-    try {
-      const channel = await openDmChannel(meId, t.teacher_id, t.class_id);
-      if (!channel) return;
-      setChannels((prev) => (prev.some((c) => c.id === channel.id) ? prev : [channel, ...prev]));
-      setExpanded(channel);
-    } catch (err) {
-      notifyErr(err, "Couldn't open the conversation.");
-    } finally {
-      setOpening(false);
-    }
-  };
 
   const unread = notifications.filter((n) => !n.read_at).length;
   const now = Date.now();
-
-  if (!loaded && !notifications.length) {
-    return <StateNote>Loading your activity…</StateNote>;
-  }
-
-  if (expanded && meId) {
-    return (
-      <div className="flex h-[min(52dvh,480px)] min-h-0 flex-col">
-        <button
-          type="button"
-          onClick={() => setExpanded(null)}
-          className="mb-2 inline-flex items-center gap-1.5 text-body text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" strokeWidth={1.7} />
-          {teacherNameById.get(expanded.teacher_id) ?? "Teacher"}
-        </button>
-        <div className="min-h-0 flex-1">
-          <DmThread
-            channelId={expanded.id}
-            meId={meId}
-            disabled={expanded.status !== "open"}
-            disabledNote={
-              expanded.status === "blocked"
-                ? "Your teacher has paused this conversation."
-                : "This conversation is closed."
-            }
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -485,84 +270,39 @@ function ActivityFeed({
         <StateNote>Nothing here yet.</StateNote>
       ) : (
         <div className="grid gap-1">
-          {feed.map((item) =>
-            item.kind === "dm" ? (
-              <button
-                key={`dm-${item.channel.id}`}
-                type="button"
-                onClick={() => expandChannel(item.channel)}
-                className="flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent"
-              >
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-info" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-body text-foreground">
-                    {teacherNameById.get(item.channel.teacher_id) ?? "Teacher"}
-                  </span>
-                  <span className="block truncate text-meta text-muted-foreground">
-                    {classNameByTeacher.get(
-                      `${item.channel.teacher_id}:${item.channel.class_id}`,
-                    ) ?? "Conversation"}
-                    {item.channel.last_message_at
-                      ? ` · ${relativeTime(item.channel.last_message_at, now)}`
-                      : ""}
-                  </span>
-                </span>
-              </button>
-            ) : (
-              <button
-                key={`n-${item.notification.id}`}
-                type="button"
-                onClick={() => openNotification(item.notification)}
-                className={`flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent ${
-                  item.notification.read_at ? "bg-transparent" : "bg-depth-field"
+          {feed.map((n) => (
+            <button
+              key={`n-${n.id}`}
+              type="button"
+              onClick={() => onMarkRead(n.id)}
+              className={`flex items-start gap-2.5 rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent ${
+                n.read_at ? "bg-transparent" : "bg-depth-field"
+              }`}
+            >
+              <span
+                className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                  n.read_at ? "bg-transparent" : "bg-danger"
                 }`}
-              >
-                <span
-                  className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                    item.notification.read_at ? "bg-transparent" : "bg-danger"
-                  }`}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-body text-foreground">{item.notification.title}</span>
-                  {item.notification.body ? (
-                    <span className="block truncate text-meta text-muted-foreground">
-                      {item.notification.body}
-                    </span>
-                  ) : null}
-                  <span className="block text-meta text-muted-foreground">
-                    {relativeTime(item.notification.created_at, now)}
-                  </span>
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-body text-foreground">{n.title}</span>
+                {n.body ? (
+                  <span className="block truncate text-meta text-muted-foreground">{n.body}</span>
+                ) : null}
+                <span className="block text-meta text-muted-foreground">
+                  {relativeTime(n.created_at, now)}
                 </span>
-              </button>
-            ),
-          )}
+              </span>
+            </button>
+          ))}
         </div>
       )}
-      {teachersWithoutChannel.length ? (
-        <div className="mt-3">
-          <div className="mb-1.5 text-meta text-muted-foreground">Message a teacher</div>
-          <div className="grid gap-1">
-            {teachersWithoutChannel.map((t) => (
-              <button
-                key={`${t.teacher_id}:${t.class_id}`}
-                type="button"
-                onClick={() => void startThread(t)}
-                disabled={opening}
-                className="flex flex-col rounded-control border border-border/60 px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-accent disabled:opacity-50"
-              >
-                <span className="text-body text-foreground">{t.teacher_name}</span>
-                <span className="text-meta text-muted-foreground">{t.class_name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------------------------
-// (d) Performance — the ProfilePanel's numbers without the identity, plus embedded guided review
+// (d) Performance — the student's own numbers
 // ---------------------------------------------------------------------------------------------
 function StatTile({ value, label }: { value: string | number; label: string }) {
   return (

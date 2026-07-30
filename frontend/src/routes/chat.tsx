@@ -24,7 +24,6 @@ import {
   Volume2,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
-import { MaterialComments } from "@/features/comms/MaterialComments";
 import { Composer, type ComposerHandle, type ComposerLanguage } from "@/components/Composer";
 import { GradientCard } from "@/components/GradientCard";
 import { FocusLock } from "@/components/FocusLock";
@@ -410,7 +409,9 @@ function ChatPage() {
   // Flow v3 backtracking: non-null while revisiting a completed step (the value is the
   // frontier activity id we return to). Drives the "Return to where you were" chip.
   const [revisitFrontier, setRevisitFrontier] = useState<string | null>(null);
-  const [lessonId, setLessonId] = useState<string>("lesson1");
+  // Null when the catalog is empty and nothing is stored — the chat pane shows its empty state
+  // instead of booting a dead lesson id.
+  const [lessonId, setLessonId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   // v9: the current lesson's published teacher resources, surfaced in the chat's top-right launcher.
   const [lessonResources, setLessonResources] = useState<LessonChatResource[]>([]);
@@ -709,7 +710,7 @@ function ChatPage() {
         const selected =
           liveLessons.find((lesson) => lesson.id === store.getLessonId())?.id ||
           liveLessons[0]?.id ||
-          "lesson1";
+          null;
         // Prefer server-persisted prefs when present (cross-device), else localStorage. Converge
         // the store so both layers agree; a failed/absent read silently keeps the local values.
         const savedMentor =
@@ -730,7 +731,13 @@ function ChatPage() {
         setLessonId(selected);
         setMentor(savedMentor);
         setVoice(savedVoice);
-        await loadLesson(selected, session.access_token, savedMentor);
+        if (selected) {
+          await loadLesson(selected, session.access_token, savedMentor);
+        } else {
+          // Empty catalog and nothing stored: no lesson to boot. The chat pane renders its
+          // "no lessons yet" empty state instead.
+          setBooting(false);
+        }
       } catch (error) {
         if (!alive) return;
         setSurfaceError((error as Error).message || "Could not start Jargon.");
@@ -868,7 +875,7 @@ function ChatPage() {
     optimistic: Msg[];
     errorText: string;
   }): Promise<TypedChatEnvelope | null | "busy"> => {
-    if (!accessToken) return null;
+    if (!accessToken || !lessonId) return null;
     if (sessionHeld) {
       // isError keeps this notice from becoming the "latest bot message" — a live quiz's choice
       // buttons must not retire (and fake a recorded answer) for a turn that was never sent.
@@ -1075,7 +1082,14 @@ function ChatPage() {
     kind: "html_sim" | "deck";
     activity_id: string;
   }) => {
-    if (!accessToken || !sessionId || buildingArtifactRef.current || sendingRef.current) return;
+    if (
+      !accessToken ||
+      !lessonId ||
+      !sessionId ||
+      buildingArtifactRef.current ||
+      sendingRef.current
+    )
+      return;
     buildingArtifactRef.current = true;
     // The tapped offer is consumed — clear it off its message (like a picked quiz
     // choice) so the retired pill can't flash back between bubbles.
@@ -1172,7 +1186,7 @@ function ChatPage() {
   // (which becomes the newest, so future visits resume it). The old session's transcript stays
   // saved server-side; only this screen resets.
   const restartLesson = async () => {
-    if (!accessToken || sendingRef.current || buildingArtifactRef.current) return;
+    if (!accessToken || !lessonId || sendingRef.current || buildingArtifactRef.current) return;
     if (!window.confirm("Start this lesson over from step 1? Your previous work stays saved."))
       return;
     setVoiceMode(false);
@@ -1486,7 +1500,7 @@ function ChatPage() {
         onVoiceChange={updateVoice}
         view={view}
         lessons={lessons}
-        currentLessonId={lessonId}
+        currentLessonId={lessonId ?? ""}
         lessonProgress={navData.lessonProgress}
         switchBlocked={sending || runInFlight}
         onOpenLesson={openLessonFromView}
@@ -1533,7 +1547,7 @@ function ChatPage() {
       {/* Lesson resources: a top-right launcher (mirroring the top-left nav launchers) that opens
           the teacher's attachments for this lesson. Chat view only, hidden under lockdown, and only
           when the lesson actually has resources. */}
-      {!view && !locked && lessonResources.length > 0 ? (
+      {!view && !locked && lessonId && lessonResources.length > 0 ? (
         <div className="fixed right-3 top-3 z-[var(--z-header)]">
           <Popover
             open={resourcesOpen}
@@ -1588,179 +1602,197 @@ function ChatPage() {
           inert={view || locked ? true : undefined}
         >
           <main className="relative z-10 mx-auto flex w-full min-h-0 max-w-[760px] flex-1 flex-row px-5 pb-0 pt-14 lg:pt-8">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              {lessonArc ? (
-                <ChatStepperStrip
-                  arc={lessonArc}
-                  activities={activities}
-                  onRestart={restartLesson}
-                  onNavigate={sendNavigate}
-                  navigateDisabled={sending || runInFlight || sessionHeld}
-                />
-              ) : null}
-              {revisitFrontier ? (
-                <div className="mb-3 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={sendResume}
-                    disabled={sending || runInFlight || sessionHeld}
-                    className="elev-hover inline-flex items-center gap-2 rounded-pill border border-info/40 bg-info/12 px-3.5 py-1.5 text-[12px] text-info disabled:opacity-50"
-                  >
-                    <Undo2 className="h-3.5 w-3.5" strokeWidth={2} />
-                    Revisiting an earlier step — return to where you were
-                  </button>
+            {lessonId === null ? (
+              // Empty catalog and nothing stored: no lesson to boot, so the pane says so
+              // instead of loading a dead lesson id.
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-1.5 text-center">
+                <div className="text-[15px] font-medium text-foreground">
+                  No lessons available yet
                 </div>
-              ) : null}
-              {activeLiveViewers.length ? (
-                <div className="mb-3 flex justify-center">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-info/40 bg-info/12 px-3 py-1.5 text-[12px] text-info">
-                    <span className="h-1.5 w-1.5 rounded-full bg-info" />
-                    Teacher viewing
-                    {activeLiveViewers.length > 1 ? ` · ${activeLiveViewers.length}` : ""}
-                  </div>
+                <div className="max-w-[420px] text-[13px] leading-relaxed text-muted-foreground">
+                  Ask your teacher to publish your first lesson — it will show up here as soon as it
+                  does.
                 </div>
-              ) : null}
-              {sessionHeld ? (
-                <div className="mb-3 flex justify-center">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-3.5 py-1.5 text-[12px] text-warning">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
-                    Your teacher paused the session — hang tight
-                  </div>
-                </div>
-              ) : null}
-              {surfaceError && !booting ? (
-                <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
-                  <span className="min-w-0 flex-1">{surfaceError}</span>
-                  <button
-                    type="button"
-                    onClick={() => setSurfaceError("")}
-                    className="shrink-0 text-[12px] underline underline-offset-2"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              ) : null}
-              <div
-                ref={scrollRef}
-                className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5"
-              >
-                {msgs.map((m) => (
-                  <MessageRow
-                    key={m.id}
-                    msg={m}
-                    // Quiz choices are live ONLY on the newest mentor message — historical bubbles
-                    // keep their text but their buttons are gone, so an old quiz can't be re-answered.
-                    choicesActive={m.id === lastBotId}
-                    choicesDisabled={sending || runInFlight || sessionHeld}
-                    onUseCode={useCodeInEditor}
-                    onChooseChoice={sendChoice}
-                    onContinue={sendContinue}
-                    onBuildArtifact={buildArtifact}
-                    onRetry={retryTurn}
-                    onResourceEvent={handleResourceEvent}
-                    voice={voice}
-                    accessToken={accessToken || ""}
-                    lessonId={lessonId}
-                    sessionId={sessionId}
-                    onVoiceEvent={handleVoiceEvent}
+              </div>
+            ) : (
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                {lessonArc ? (
+                  <ChatStepperStrip
+                    arc={lessonArc}
+                    activities={activities}
+                    onRestart={restartLesson}
+                    onNavigate={sendNavigate}
+                    navigateDisabled={sending || runInFlight || sessionHeld}
                   />
-                ))}
-                {showJump ? (
-                  <div className="sticky bottom-1 z-10 flex justify-center">
+                ) : null}
+                {revisitFrontier ? (
+                  <div className="mb-3 flex justify-center">
                     <button
                       type="button"
-                      onClick={() => {
-                        setNewBelow(false);
-                        scrollRef.current?.scrollTo({
-                          top: scrollRef.current.scrollHeight,
-                          behavior: "smooth",
-                        });
-                      }}
-                      className="elev-hover inline-flex items-center gap-1.5 rounded-pill border border-border bg-depth-card/95 px-3.5 py-1.5 text-meta font-medium text-foreground shadow-raised backdrop-blur"
+                      onClick={sendResume}
+                      disabled={sending || runInFlight || sessionHeld}
+                      className="elev-hover inline-flex items-center gap-2 rounded-pill border border-info/40 bg-info/12 px-3.5 py-1.5 text-[12px] text-info disabled:opacity-50"
                     >
-                      <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
-                      {newBelow ? "New messages" : "Jump to latest"}
+                      <Undo2 className="h-3.5 w-3.5" strokeWidth={2} />
+                      Revisiting an earlier step — return to where you were
                     </button>
                   </div>
                 ) : null}
-              </div>
-              <div
-                ref={composerWrapRef}
-                className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-              >
-                <WorkDock
-                  lessonId={lessonId}
-                  assignments={assignments}
-                  assessments={assessments}
-                  onOpenAssignment={(id) => {
-                    setAssignmentDirty(false);
-                    setOpenAssignmentId(id);
-                  }}
-                  onOpenQuiz={openQuiz}
-                />
-                {lessonComplete && !followUp ? (
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
-                    <div className="min-w-0">
-                      <div className="text-[14px] font-medium text-foreground">Lesson complete</div>
-                      <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-                        Nice work. Pick your next lesson, or keep chatting about this one.
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => goView("classes")}
-                        className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
-                      >
-                        Pick your next lesson
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFollowUp(true)}
-                        className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
-                      >
-                        Ask a follow-up
-                      </button>
+                {activeLiveViewers.length ? (
+                  <div className="mb-3 flex justify-center">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-info/40 bg-info/12 px-3 py-1.5 text-[12px] text-info">
+                      <span className="h-1.5 w-1.5 rounded-full bg-info" />
+                      Teacher viewing
+                      {activeLiveViewers.length > 1 ? ` · ${activeLiveViewers.length}` : ""}
                     </div>
                   </div>
                 ) : null}
-                {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
-              imperative handle for "Use this code" — survives entering/leaving voice mode. */}
-                <div className={voiceMode || (lessonComplete && !followUp) ? "hidden" : undefined}>
-                  <Composer
-                    ref={composerRef}
-                    key={lessonId}
-                    initialCode={starterCode}
-                    initialLanguage="jargon"
-                    onSendText={sendUser}
-                    onRunCode={runCode}
-                    onSendCodeResult={sendCodeResult}
-                    onVoiceEvent={handleVoiceEvent}
-                    // Lock inputs while a teacher has the session paused (Phase 3).
-                    sending={sending || sessionHeld}
-                    canStartVoice={voiceSupported}
-                    onStartVoice={() => setVoiceMode(true)}
-                  />
-                </div>
-                {voiceMode ? (
-                  <RealtimeVoicePanel
-                    accessToken={accessToken || ""}
-                    lessonId={lessonId}
-                    sessionId={sessionId}
-                    voice={voice}
-                    autoStart
-                    onClose={() => setVoiceMode(false)}
-                    onVoiceEvent={handleVoiceEvent}
-                    onSubmitVoiceTurn={async (text, confidence) =>
-                      submitTextAnswer(text, {
-                        inputModality: "audio_session",
-                        transcriptConfidence: confidence ?? null,
-                      })
-                    }
-                  />
+                {sessionHeld ? (
+                  <div className="mb-3 flex justify-center">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-3.5 py-1.5 text-[12px] text-warning">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
+                      Your teacher paused the session — hang tight
+                    </div>
+                  </div>
                 ) : null}
+                {surfaceError && !booting ? (
+                  <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-[13px] text-danger">
+                    <span className="min-w-0 flex-1">{surfaceError}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSurfaceError("")}
+                      className="shrink-0 text-[12px] underline underline-offset-2"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ) : null}
+                <div
+                  ref={scrollRef}
+                  className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5"
+                >
+                  {msgs.map((m) => (
+                    <MessageRow
+                      key={m.id}
+                      msg={m}
+                      // Quiz choices are live ONLY on the newest mentor message — historical bubbles
+                      // keep their text but their buttons are gone, so an old quiz can't be re-answered.
+                      choicesActive={m.id === lastBotId}
+                      choicesDisabled={sending || runInFlight || sessionHeld}
+                      onUseCode={useCodeInEditor}
+                      onChooseChoice={sendChoice}
+                      onContinue={sendContinue}
+                      onBuildArtifact={buildArtifact}
+                      onRetry={retryTurn}
+                      onResourceEvent={handleResourceEvent}
+                      voice={voice}
+                      accessToken={accessToken || ""}
+                      lessonId={lessonId}
+                      sessionId={sessionId}
+                      onVoiceEvent={handleVoiceEvent}
+                    />
+                  ))}
+                  {showJump ? (
+                    <div className="sticky bottom-1 z-10 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewBelow(false);
+                          scrollRef.current?.scrollTo({
+                            top: scrollRef.current.scrollHeight,
+                            behavior: "smooth",
+                          });
+                        }}
+                        className="elev-hover inline-flex items-center gap-1.5 rounded-pill border border-border bg-depth-card/95 px-3.5 py-1.5 text-meta font-medium text-foreground shadow-raised backdrop-blur"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                        {newBelow ? "New messages" : "Jump to latest"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <div
+                  ref={composerWrapRef}
+                  className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+                >
+                  <WorkDock
+                    lessonId={lessonId}
+                    assignments={assignments}
+                    assessments={assessments}
+                    onOpenAssignment={(id) => {
+                      setAssignmentDirty(false);
+                      setOpenAssignmentId(id);
+                    }}
+                    onOpenQuiz={openQuiz}
+                  />
+                  {lessonComplete && !followUp ? (
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
+                      <div className="min-w-0">
+                        <div className="text-[14px] font-medium text-foreground">
+                          Lesson complete
+                        </div>
+                        <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+                          Nice work. Pick your next lesson, or keep chatting about this one.
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => goView("classes")}
+                          className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+                        >
+                          Pick your next lesson
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFollowUp(true)}
+                          className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+                        >
+                          Ask a follow-up
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
+              imperative handle for "Use this code" — survives entering/leaving voice mode. */}
+                  <div
+                    className={voiceMode || (lessonComplete && !followUp) ? "hidden" : undefined}
+                  >
+                    <Composer
+                      ref={composerRef}
+                      key={lessonId}
+                      initialCode={starterCode}
+                      initialLanguage="jargon"
+                      onSendText={sendUser}
+                      onRunCode={runCode}
+                      onSendCodeResult={sendCodeResult}
+                      onVoiceEvent={handleVoiceEvent}
+                      // Lock inputs while a teacher has the session paused (Phase 3).
+                      sending={sending || sessionHeld}
+                      canStartVoice={voiceSupported}
+                      onStartVoice={() => setVoiceMode(true)}
+                    />
+                  </div>
+                  {voiceMode ? (
+                    <RealtimeVoicePanel
+                      accessToken={accessToken || ""}
+                      lessonId={lessonId}
+                      sessionId={sessionId}
+                      voice={voice}
+                      autoStart
+                      onClose={() => setVoiceMode(false)}
+                      onVoiceEvent={handleVoiceEvent}
+                      onSubmitVoiceTurn={async (text, confidence) =>
+                        submitTextAnswer(text, {
+                          inputModality: "audio_session",
+                          transcriptConfidence: confidence ?? null,
+                        })
+                      }
+                    />
+                  ) : null}
+                </div>
               </div>
-            </div>
+            )}
           </main>
         </div>
 
@@ -1777,8 +1809,6 @@ function ChatPage() {
                     classId={classParam}
                     assignments={assignments}
                     assessments={assessments}
-                    notifications={navData.notifications}
-                    onMarkRead={navData.markNotificationRead}
                     onOpenLesson={openLessonFromView}
                     switchBlocked={sending || runInFlight}
                     onOpenQuiz={openQuiz}
@@ -3171,8 +3201,6 @@ function ResourceCard({
             ) : null}
           </div>
         ) : null}
-
-        <MaterialComments resourceId={resource.id} />
       </div>
     </GradientCard>
   );

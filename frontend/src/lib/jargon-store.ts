@@ -2,30 +2,6 @@
 // Auth, lessons, sessions, runs, and mentor replies come from Supabase.
 import type { MentorMode } from "./types";
 
-export type Lesson = {
-  id: string;
-  title: string;
-  subtitle: string;
-  group?: string;
-  progress: number; // 0..1
-  // Curriculum hierarchy for the header nav (optional; the demo LESSONS omit them and
-  // fall back to a single "Lessons" group).
-  subjectTitle?: string;
-  courseTitle?: string;
-  unitTitle?: string;
-  unitPosition?: number;
-  position?: number;
-};
-
-export const LESSONS: Lesson[] = [
-  {
-    id: "lesson1",
-    title: "Purpose",
-    subtitle: "Start with what a process is trying to do.",
-    progress: 0,
-  },
-];
-
 export type MentorConfig = {
   tone: "Friendly" | "Direct" | "Socratic";
   verbosity: "Concise" | "Balanced" | "Detailed";
@@ -77,7 +53,8 @@ function write(k: string, v: unknown) {
 }
 
 export const store = {
-  getLessonId: () => read<string>(KEYS.lesson, LESSONS[0].id),
+  // Null when the student has never opened a lesson — callers fall back to the live catalog.
+  getLessonId: () => read<string | null>(KEYS.lesson, null),
   setLessonId: (id: string) => write(KEYS.lesson, id),
   getMentor: () => ({ ...DEFAULT_MENTOR, ...read<Partial<MentorConfig>>(KEYS.mentor, {}) }),
   setMentor: (m: MentorConfig) => write(KEYS.mentor, m),

@@ -870,7 +870,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     }
                   }}
                   rows={1}
-                  placeholder={"Ask anything\u2026 try \u201Cshow me a for loop\u201D"}
+                  placeholder={"Message your mentor\u2026"}
                   className="min-h-[28px] flex-1 resize-none overflow-y-hidden bg-transparent py-1 text-[14.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
                 />
                 <button

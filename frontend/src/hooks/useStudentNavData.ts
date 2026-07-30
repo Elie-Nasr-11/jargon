@@ -13,9 +13,8 @@ import type { Notification, StudentGradeRow } from "@/lib/types";
 // The persistent data layer behind the student sidebar: it fetches + live-subscribes so the
 // Pulse badge and the class summaries stay current while every page is closed. The notifications
 // list + mark-read live here (one source of truth shared by the badge and the Pulse activity
-// feed; a DM insert also writes a notification row, so DMs light the same badge). Grades load
-// once on mount and refresh via refreshGrades() when a page closes — the class cards read
-// nextDue / dueByClass / avgByClass without their own fetches.
+// feed). Grades load once on mount and refresh via refreshGrades() when a page closes — the
+// class cards read dueByClass / avgByClass without their own fetches.
 export function useStudentNavData() {
   const [meId, setMeId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -89,8 +88,9 @@ export function useStudentNavData() {
     void apiMarkAll().catch(() => {});
   }, []);
 
-  // Called when a panel closes (work may have been submitted inside it) so the edge peeks refresh.
-  // Lesson progress can also have advanced (a lesson finished mid-session), so refresh it too.
+  // Called when a panel closes (work may have been submitted inside it) so the grade summaries
+  // refresh. Lesson progress can also have advanced (a lesson finished mid-session), so refresh
+  // it too.
   const refreshGrades = useCallback(() => {
     void fetchStudentGrades()
       .then((rows) => setGrades(rows))
@@ -100,18 +100,12 @@ export function useStudentNavData() {
       .catch(() => {});
   }, []);
 
-  // Grade-derived summaries for the edge peeks: an item is OPEN while the student still owes work
+  // Grade-derived summaries for the class cards: an item is OPEN while the student still owes work
   // on it (assigned/started); submitted-awaiting-grading is no longer "due".
-  const { nextDue, dueByClass, avgByClass } = useMemo(() => {
+  const { dueByClass, avgByClass } = useMemo(() => {
     const open = grades.filter(
       (g) => (g.status === "assigned" || g.status === "started") && g.due_at,
     );
-    const now = Date.now();
-    const upcoming = open
-      .filter((g) => new Date(g.due_at as string).getTime() >= now)
-      .sort(
-        (a, b) => new Date(a.due_at as string).getTime() - new Date(b.due_at as string).getTime(),
-      );
     const byClass: Record<string, number> = {};
     for (const g of open) {
       if (g.class_id) byClass[g.class_id] = (byClass[g.class_id] ?? 0) + 1;
@@ -126,7 +120,7 @@ export function useStudentNavData() {
     }
     const avg: Record<string, number> = {};
     for (const [classId, s] of Object.entries(sums)) avg[classId] = s.total / s.count;
-    return { nextDue: upcoming[0] ?? null, dueByClass: byClass, avgByClass: avg };
+    return { dueByClass: byClass, avgByClass: avg };
   }, [grades]);
 
   return {
@@ -134,7 +128,6 @@ export function useStudentNavData() {
     notificationsUnread,
     grades,
     lessonProgress,
-    nextDue,
     dueByClass,
     avgByClass,
     markNotificationRead,

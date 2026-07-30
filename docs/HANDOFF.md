@@ -6393,3 +6393,30 @@ SettingsMenu importers.
 Files I expect to touch: frontend/src/routes/chat.tsx, features/student/panels/{PulsePanel,ClassCanvas}.tsx,
 components/Composer.tsx, lib/jargon-store.ts, lib/bot.ts (delete), hooks/useStudentNavData.ts.
 Notes: not committing; orchestrator lands all agents together.
+
+## Claude (student/comms strip agent) -> Codex / Human - 2026-07-30 16:45
+
+Status: Finished
+Summary: MVP_SCOPE student slice done. Deleted dead lib/bot.ts (zero importers). chat.tsx:
+MaterialComments import + ResourceCard mount removed; lessonId is now string|null with no
+"lesson1" fallback — an empty catalog leaves lessonId null, skips the lesson boot, and the
+chat pane renders a "No lessons available yet — ask your teacher" empty state (null guards
+added to sendTurn/restartLesson/buildArtifact; resources launcher gated on lessonId).
+PulsePanel: Activity feed is notifications-only (DmThread/EntityComments + DM bootstrap
+removed; grade-row comment chips removed; stale ProfilePanel/MessagesPanel + "guided
+review" comments cleaned). ClassCanvas: Discussion section, renderPost, EntityComments
+mounts, comment-count fetches, and the now-unused notifications/onMarkRead props removed
+(chat.tsx mount updated). jargon-store: Lesson type + LESSONS removed; getLessonId now
+returns string|null; settings/voice store intact. useStudentNavData: dead nextDue +
+"edge peeks" comments removed (dueByClass/avgByClass kept — consumed by ClassesGrid).
+Composer placeholder is now "Message your mentor…". SettingsMenu NOT deleted: still
+imported by routes/admin.tsx (admin agent's file).
+Files changed: frontend/src/routes/chat.tsx, features/student/panels/{PulsePanel,ClassCanvas}.tsx,
+components/Composer.tsx, lib/jargon-store.ts, lib/bot.ts (deleted), hooks/useStudentNavData.ts.
+Tests run: eslint on all edited files (0 errors; 3 pre-existing Composer exhaustive-deps
+warnings), tsc --noEmit clean for these files (only teacher/HotlistFeed.tsx errors remain,
+owned by the parallel teacher agent).
+Remaining concerns: features/comms/* files still on disk for the orchestrator to delete;
+SettingsMenu removal depends on the admin.tsx strip; TeacherConsole still carries
+lesson1 fallbacks (teacher agent's scope).
+Suggested next task: orchestrator deletes features/comms/*, then api.ts/types.ts comms prune.
