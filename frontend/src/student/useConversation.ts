@@ -7,7 +7,7 @@ import {
   invokeTypedChat,
 } from "@/lib/api";
 import { DEFAULT_MENTOR } from "@/lib/jargon-store";
-import type { Lesson, TypedChatAnswer, TypedChatEnvelope } from "@/lib/types";
+import type { Lesson, LessonChatResource, TypedChatAnswer, TypedChatEnvelope } from "@/lib/types";
 import {
   envelopeMessage,
   mentorToPreferences,
@@ -77,6 +77,8 @@ function offersFromEnvelope(envelope: TypedChatEnvelope): LessonOffers {
 
 export function useConversation() {
   const [offers, setOffers] = useState<LessonOffers>(NO_OFFERS);
+  // The materials the mentor has attached this session — what the Resources pill opens.
+  const [resources, setResources] = useState<LessonChatResource[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -110,6 +112,7 @@ export function useConversation() {
     setLesson(target);
     setMessages([]);
     setOffers(NO_OFFERS);
+    setResources([]);
     setError("");
 
     const session = await getSession();
@@ -137,6 +140,7 @@ export function useConversation() {
       if (isStale()) return;
       setSession(envelope.session_id ?? null);
       setOffers(offersFromEnvelope(envelope));
+      if (envelope.resources?.length) setResources(envelope.resources);
       setMessages([envelopeMessage(envelope)]);
     }
   }, []);
@@ -239,6 +243,8 @@ export function useConversation() {
       });
       if (envelope.session_id) setSession(envelope.session_id);
       setOffers(offersFromEnvelope(envelope));
+      // Accumulate: a later turn attaching nothing must not clear what was already shown.
+      if (envelope.resources?.length) setResources(envelope.resources);
       setMessages((current) => [
         ...current.filter((m) => m.id !== thinkingId),
         envelopeMessage(envelope, mode),
@@ -285,6 +291,7 @@ export function useConversation() {
   return {
     messages,
     offers,
+    resources,
     lessons,
     lesson,
     sessionId,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChatWindow } from "@/student/ChatWindow";
 import { StudentSidebar } from "@/student/StudentSidebar";
 import { LessonTree } from "@/student/LessonTree";
+import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import { useConversation } from "@/student/useConversation";
 import { DEFAULT_TURN_MODE, turnModeSpec, type TurnMode } from "@/student/turnModes";
@@ -96,18 +97,48 @@ export function StudentApp({
                 Close
               </button>
             </header>
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-card border border-dashed border-border bg-depth-sub p-6 text-body text-muted-foreground">
-              {destinationSpec.label} is not built yet. The nav entry is real so the shell can be
-              navigated end to end; this panel is where it will live.
-            </div>
+            {destination === "resources" ? (
+              // The Resources PILL in the chatbox links here, so this must not be a placeholder —
+              // a prominent control pointing at "not built yet" is worse than no control.
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {conversation.resources.length ? (
+                  <ul className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+                    {conversation.resources.map((resource) => (
+                      <li
+                        key={resource.id}
+                        className="rounded-card border border-border bg-depth-card p-3"
+                      >
+                        <div className="flex items-baseline gap-2">
+                          <span className="min-w-0 flex-1 truncate text-body text-foreground">
+                            {resource.title}
+                          </span>
+                          <span className="shrink-0 text-meta capitalize text-muted-foreground">
+                            {resource.resource_type}
+                          </span>
+                        </div>
+                        {resource.description ? (
+                          <p className="mt-1 text-meta text-muted-foreground">
+                            {resource.description}
+                          </p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-card border border-dashed border-border bg-depth-sub p-6 text-body text-muted-foreground">
+                    Materials your teacher shares appear here as you reach them in the lesson.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto rounded-card border border-dashed border-border bg-depth-sub p-6 text-body text-muted-foreground">
+                {destinationSpec.label} is not built yet. The nav entry is real so the shell can be
+                navigated end to end; this panel is where it will live.
+              </div>
+            )}
           </section>
         ) : section === "home" ? (
-          <section className="flex min-h-0 flex-1 flex-col px-6 py-6">
-            <h1 className="mb-4 font-serif text-[22px] tracking-tight text-foreground">Home</h1>
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-card border border-dashed border-border bg-depth-sub p-6 text-body text-muted-foreground">
-              The LMS view — what's due, recent work, and your classes at a glance. Not built yet.
-            </div>
-          </section>
+          <StudentHome />
         ) : (
           <ChatWindow
             mode={turnMode}

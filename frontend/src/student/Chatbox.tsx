@@ -78,15 +78,19 @@ export function Chatbox({
       />
 
       <div className="flex items-center gap-1.5 px-2 pb-2">
-        <button
-          type="button"
-          onClick={onAttach}
-          disabled={disabled || !onAttach}
-          aria-label="Attach a file"
-          className="flex h-8 w-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground disabled:opacity-40"
-        >
-          <Paperclip className="h-[16px] w-[16px]" strokeWidth={1.6} />
-        </button>
+        {/* Rendered only when wired. A permanently-disabled button is a promise the app does
+            not keep — absent reads as "not a feature here", greyed reads as "broken". */}
+        {onAttach ? (
+          <button
+            type="button"
+            onClick={onAttach}
+            disabled={disabled}
+            aria-label="Attach a file"
+            className="flex h-8 w-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground disabled:opacity-40"
+          >
+            <Paperclip className="h-[16px] w-[16px]" strokeWidth={1.6} />
+          </button>
+        ) : null}
 
         <ModeSelector value={mode} onChange={onModeChange} disabled={disabled} />
 
@@ -101,20 +105,22 @@ export function Chatbox({
 
         <div className="min-w-2 flex-1" />
 
-        <button
-          type="button"
-          onClick={onToggleVoice}
-          disabled={disabled || !onToggleVoice}
-          aria-label={voiceActive ? "Stop live voice" : "Start live voice"}
-          aria-pressed={voiceActive}
-          className={`flex h-8 w-8 items-center justify-center rounded-control transition-colors duration-(--dur-fast) disabled:opacity-40 ${
-            voiceActive
-              ? "bg-foreground text-background"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          <AudioLines className="h-[16px] w-[16px]" strokeWidth={1.6} />
-        </button>
+        {onToggleVoice ? (
+          <button
+            type="button"
+            onClick={onToggleVoice}
+            disabled={disabled}
+            aria-label={voiceActive ? "Stop live voice" : "Start live voice"}
+            aria-pressed={voiceActive}
+            className={`flex h-8 w-8 items-center justify-center rounded-control transition-colors duration-(--dur-fast) disabled:opacity-40 ${
+              voiceActive
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <AudioLines className="h-[16px] w-[16px]" strokeWidth={1.6} />
+          </button>
+        ) : null}
 
         {/* Speak/Send: the primary action swaps to Send the moment there's text, so an empty
             box invites speaking and a filled one invites sending. */}
@@ -122,10 +128,10 @@ export function Chatbox({
           type="button"
           onClick={canSend ? submit : onToggleVoice}
           disabled={disabled || (!canSend && !onToggleVoice)}
-          aria-label={canSend ? "Send" : "Speak"}
+          aria-label={canSend || !onToggleVoice ? "Send" : "Speak"}
           className="flex h-8 w-8 items-center justify-center rounded-control bg-foreground text-background transition-opacity duration-(--dur-fast) hover:opacity-90 disabled:opacity-30"
         >
-          {canSend ? (
+          {canSend || !onToggleVoice ? (
             <Send className="h-[15px] w-[15px]" strokeWidth={1.7} />
           ) : (
             <Mic className="h-[15px] w-[15px]" strokeWidth={1.7} />

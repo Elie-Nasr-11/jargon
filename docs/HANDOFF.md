@@ -6813,3 +6813,39 @@ never populates.
 remains impossible. That is the outstanding backend task.
 Suggested next task: populate envelope.available in chat/index.ts (quiz from stepRequirements,
 homework from the lesson's checkpoints), then look at pills and sections together with real data.
+
+## Claude -> Codex / Human - 2026-07-30 11:00
+
+Status: Done (Home + UI polish)
+Summary: Built Home and closed two honesty gaps in the chat surface.
+HOME is real. It answers the three questions a student opens an LMS to ask — what is due, what have
+I handed in, how did I do — as three columns (To do / Handed in / Marked). Built FRESH in
+src/student/ rather than importing the old surface's PulsePanel: that component is ~700 lines and
+carries the previous shell's assumptions, and pulling it in would undo the point of rebuilding in a
+clean namespace. The DATA layer is reused untouched — fetchStudentGrades already resolves checkpoint
+recipients into titles, due dates, submissions and scores, so Home needs one call and no new
+endpoint. Undated work sorts last on purpose: it is not urgent, just unscheduled.
+RESOURCES IS NO LONGER A DEAD END. The Resources pill I added last session pointed at a "not built
+yet" placeholder — a prominent control leading nowhere is worse than no control. It now lists the
+lesson's actual materials, accumulated from the envelopes this session (a later turn attaching
+nothing must not clear what was already shown).
+INERT CONTROLS REMOVED. The attachment and audio buttons rendered permanently disabled because no
+handler is wired. They are now rendered only when a handler exists, and Send no longer swaps to a
+Mic icon when there is no voice handler to call. A greyed-forever button reads as broken; absent
+reads as "not a feature here".
+Files changed: frontend/src/student/{StudentHome.tsx (new),StudentApp.tsx,Chatbox.tsx,
+useConversation.ts}, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 293 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged.
+Live: headless Chromium — Home renders its three columns, the chatbox is down to two controls (mode
++ send), zero page errors.
+Remaining concerns: (1) Home shows empty columns here because fetchStudentGrades returns [] without
+a session (it does not throw), so the layout is verified but never seen WITH DATA.
+(2) Home covers only work and grades. Classes, the agenda calendar, and per-mode strengths are the
+next additions; there is no class navigation from Home yet.
+(3) envelope.available STILL has no server writer — the Homework pill remains impossible and Quiz
+runs off a client fallback. This is now blocking two features and is the top backend task.
+(4) Three sidebar destinations remain placeholders: Routines, Customize, Reports. Reports overlaps
+Home's "Marked" column — decide whether it is a deeper view or should be dropped.
+(5) Attachments, voice, code running, artifacts and resource cards are still unported from /chat.
+Suggested next task: the envelope.available writer, then Classes navigation on Home.
