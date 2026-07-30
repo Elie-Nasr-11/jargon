@@ -4,12 +4,11 @@ Repo convention: these tests read the TypeScript source of the chat edge functio
 assert structural contracts, so a regression that would loosen the gates or silently
 drop the router shows up in CI without a Deno toolchain.
 
-Trimmed 2026-07-30 (trunk unification): the client-wiring pins (Continue pill posting
-`control: {type:"continue"}`, the LessonMilestones stepper posting navigate/resume)
-retired with routes/chat.tsx — the v6 /learn surface maps `continue_offer` into its
-transcript model (pinned below) but does not yet SEND control turns; that
-reconnection gap is recorded in docs/OPEN_QUESTIONS.md. All server-side invariants
-are unchanged and stay pinned.
+Trimmed 2026-07-30 (trunk unification), then RE-ANCHORED later the same day (B1): the
+v6 /learn surface sends control turns again — useConversation posts continue /
+navigate / resume controls, the Transcript renders the Continue pill live-only on the
+latest mentor message, and ChatWindow offers the revisit-return chip while the server
+holds a revisit frame open. All server-side invariants are unchanged and stay pinned.
 """
 
 import re
@@ -78,12 +77,36 @@ class FlowV3RouterInvariants(unittest.TestCase):
         self.assertIsNotNone(batch)
 
     def test_client_model_carries_the_continue_offer(self):
-        # The surviving client piece: the shared transcript model (consumed by the v6
-        # surface) maps envelope.continue_offer, so a surface that renders/sends the
-        # affordance gets the data path for free. (Send-side wiring is the open gap
-        # noted in the module docstring.)
+        # The shared transcript model (consumed by the v6 surface) maps
+        # envelope.continue_offer, so the rendering surface gets the data path for free.
         self.assertIn("continueOffer", CHAT_MESSAGES)
         self.assertIn("continue_offer", CHAT_MESSAGES)
+
+    def test_v6_surface_sends_control_turns(self):
+        # Re-anchored (B1): the v6 hook posts the three structured controls the server
+        # parses — continue (content-step acknowledge), navigate (revisit a completed
+        # step), resume (return to the frontier).
+        hook = (REPO / "frontend" / "src" / "student" / "useConversation.ts").read_text()
+        for fragment in (
+            'control: { type: "continue" }',
+            'control: { type: "navigate", target_activity_id: targetActivityId }',
+            'control: { type: "resume" }',
+        ):
+            self.assertIn(fragment, hook)
+        # A failed control turn retries WITH its control — a failed navigate must retry as
+        # navigation, not degrade into a bare text turn.
+        self.assertIn("retryControl: options?.control", hook)
+
+    def test_continue_pill_is_live_only_on_the_latest_message(self):
+        # Like retired quiz choices, an old Continue offer must not stay pressable once the
+        # conversation has moved on.
+        transcript = (REPO / "frontend" / "src" / "student" / "Transcript.tsx").read_text()
+        self.assertIn("message.continueOffer && isLatestBot", transcript)
+
+    def test_revisit_frame_offers_the_return_chip(self):
+        window = (REPO / "frontend" / "src" / "student" / "ChatWindow.tsx").read_text()
+        self.assertIn("return to where you were", window)
+        self.assertIn("channel.sendResume", window)
 
     def test_migration_whitelisted_and_additive(self):
         self.assertIn("20260815000000_flow_v3_session_nav.sql", WORKFLOW)

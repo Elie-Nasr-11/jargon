@@ -6,19 +6,51 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-## Claude -> Codex / Human - 2026-07-30 20:53
+## Claude -> Codex / Human - 2026-07-30 21:20
 
-Status: Starting
-Task: B1 — v6 /learn turn-loop completeness (Continue/quiz retire/step eyebrow/revisit-resume),
-session-hold + live-intervention UX (viewer chip, teacher bubbles, hold lock via realtime),
-voice threading (dictation, read-aloud, live-voice panel port), transcript mode sections
-(§4), micro-interactions (§3). Reference: retired routes/chat.tsx at 6f00e2a^.
-Files I expect to touch: frontend/src/student/{ChatWindow,Chatbox,Transcript,ModeSelector,
-OfferPills,VoicePanel(new)}.tsx, frontend/src/student/{useConversation,turnModes}.ts,
-frontend/src/features/student/chat/chatMessages.ts, tests (re-anchoring trimmed pins), docs.
-Notes: StudentApp.tsx is owned by another agent — new affordances are wired through a
-conversation channel published by useConversation and consumed by my own components, so
-StudentApp's existing prop surface stays untouched.
+Status: Finished (B1 slice)
+Summary: v6 /learn turn-loop completeness + live intervention + voice, per DESIGN_V6 §3-4.
+(1) Lesson flow: Continue pill (live-only on latest mentor turn, posts control continue),
+quiz pills retire with the pick check-marked, step eyebrow (Step N/M · title) on lesson
+sections from the PERSISTED per-turn lesson_arc (real on reload, not the live cursor
+projected backwards), revisit "return to where you were" chip posting resume; sendNavigate
+implemented + exposed but no v6 stepper surface triggers it yet (shell-owned — see
+OPEN_QUESTIONS update). (2) Hold + intervention: one realtime channel per session
+(live_session_viewers/teacher_live_comments/session_holds), "Teacher viewing" chip
+(heartbeat-aged), live tips into the transcript + merged on reload, hold banner + composer
+lock + send-path guard + held-envelope re-lock + voice teardown on hold. (3) Voice:
+dictation in the Chatbox (browser speech into the EDITABLE input; input_modality +
+confidence staged onto the turn via a synchronous one-shot, since the shell's onSend
+forwards only text+attachments), ReadAloudAction on mentor/teacher turns, live voice
+ported whole as student/VoicePanel.tsx (WebRTC; spoken answers go through the normal turn
+loop as audio_session). (4) Sections: off-spine (discuss/open) chrome desaturated via
+color-mix toward muted (modeAccentValue — token-derived, no hex). (5) Micro-interactions:
+mentor 12px rise/280ms/power3.out (new messages only — history and reloads render instant;
+reduced-motion guarded), 400ms mode hue cross-fade on chatbox border + section eyebrows.
+Architecture note: StudentApp is another agent's file, so useConversation publishes a
+module-level conversation channel (useSyncExternalStore singleton, same reasoning as
+jargon-store) that ChatWindow/Transcript consume for hold/presence/arc/actions; explicit
+props can supersede it later. Also repaired merge-damaged Chatbox.tsx (attachment chip
+block was pasted 4x inside buttons).
+Files changed: frontend/src/student/{useConversation.ts,Transcript.tsx,Chatbox.tsx,
+ChatWindow.tsx,turnModes.ts,VoicePanel.tsx(new)}, frontend/src/features/student/chat/
+chatMessages.ts, tests/{test_session_hold,test_live_teacher_intervention,
+test_flow_v3_router,test_student_surface}.py (re-anchored trimmed pins + new B1 pins),
+docs/{OPEN_QUESTIONS.md,HANDOFF.md}.
+Tests run: npx tsc --noEmit (0), npx eslint src/student src/features/student (0),
+npm run build (green), python3 -m unittest tests.test_student_surface tests.test_turn_modes
+tests.test_live_teacher_intervention tests.test_session_hold tests.test_flow_v3_router
+(94 tests OK, up from 76).
+Remaining concerns: (a) no stepper UI for sendNavigate (needs a shell/LessonTree decision);
+(b) artifactOffer mapped but unrendered — belongs to the inline-media/artifact port;
+(c) turn_mode on control turns is stamped "lesson" (they are spine acts; server ceiling
+exempts controls regardless); (d) chosen-pick check-marks are live-session only (the pick
+is not persisted on the mentor turn payload — parity with the old surface); (e) dictation
+lang is hardcoded en-US (same as the old Composer — the speech-provider question in
+OPEN_QUESTIONS owns this).
+Suggested next task: inline media + artifact port into /learn (ResourceCard →
+ArtifactFrame/DeckRenderer + telemetry + artifact-live offer loop), or the stepper surface
+for navigate.
 
 ## Claude -> Codex / Human - 2026-07-12
 

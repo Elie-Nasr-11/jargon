@@ -102,6 +102,16 @@ export function isTurnMode(value: unknown): value is TurnMode {
   return typeof value === "string" && BY_ID.has(value as TurnMode);
 }
 
+// The CSS value a mode wrapper should set as --mode-accent. Progression honesty (DESIGN_V6 §4):
+// Discuss/Open can never close a gate, and the chrome should SHOW that — their accent is mixed
+// toward the neutral muted tone (slightly desaturated, "off the spine") rather than restated in
+// copy. Still token-derived: no hex codes leak into components, and both themes resolve.
+export function modeAccentValue(spec: TurnModeSpec): string {
+  return spec.canProgress
+    ? `var(${spec.accentVar})`
+    : `color-mix(in oklab, var(${spec.accentVar}) 55%, var(--muted-foreground))`;
+}
+
 // What this lesson currently offers. Resources is NOT a TurnMode — opening materials sends no
 // turn and cannot change the conversation's contract — so it rides alongside rather than in the
 // union. Absent/false hides the affordance: a pill only ever appears when there is something

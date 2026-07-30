@@ -76,6 +76,10 @@ export type Msg =
       chosen?: string;
       // See the user variant: the mode this reply's exchange happened in.
       turnMode?: string;
+      // The lesson arc as of this reply. Mentor turn payloads persist the whole envelope, so a
+      // reloaded transcript can label each lesson section with the REAL step it happened on
+      // (Step N/M · title) instead of guessing from the live cursor.
+      lessonArc?: LessonArc | null;
     }
   | { id: string; role: "teacher"; text: string; createdAt?: string }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
@@ -164,6 +168,11 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       choices,
       resources,
       turnMode: typeof payload.turn_mode === "string" ? payload.turn_mode : undefined,
+      // Persisted envelope payloads carry the arc; older turns simply don't have one.
+      lessonArc:
+        payload.lesson_arc && typeof payload.lesson_arc === "object"
+          ? (payload.lesson_arc as LessonArc)
+          : undefined,
       createdAt: turn.created_at,
     };
   }
@@ -199,8 +208,17 @@ export function envelopeMessage(envelope: TypedChatEnvelope, turnMode?: string):
     continueOffer: envelope.continue_offer ?? undefined,
     artifactOffer: envelope.artifact_offer ?? undefined,
     turnMode,
+    lessonArc: envelope.lesson_arc ?? undefined,
     createdAt: new Date().toISOString(),
   };
+}
+
+// The step eyebrow for a lesson section (DESIGN_V6 §4): "Step N/M · title". Null when the arc
+// can't honestly label the section (single-step lessons carry no arc at all).
+export function stepEyebrowLabel(arc: LessonArc | null | undefined): string | null {
+  if (!arc || !arc.total || arc.total <= 1) return null;
+  const title = arc.current?.title?.trim();
+  return title ? `Step ${arc.step}/${arc.total} · ${title}` : `Step ${arc.step}/${arc.total}`;
 }
 
 export function formatRunOutput(result: JargonRunResponse) {

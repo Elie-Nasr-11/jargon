@@ -1,11 +1,10 @@
-"""Trimmed 2026-07-30 (trunk unification): the old /chat route retired in favor of the
-v6 /learn surface, which does NOT (yet) resubscribe to live_session_viewers /
-teacher_live_comments — the student-side realtime wiring ("Teacher viewing" presence,
-live comments streaming into the transcript) has no v6 counterpart today; only the
-transcript model's teacher-comment adapter (liveCommentToMessage, the "teacher" Msg
-role) survives in chatMessages.ts and stays pinned. The migration, API helpers, and
-the teacher dashboard's watch/comment/alert surfaces are all still live and pinned.
-The student-side reconnection gap is recorded in docs/OPEN_QUESTIONS.md.
+"""Trimmed 2026-07-30 (trunk unification), then RE-ANCHORED later the same day (B1):
+the v6 /learn surface reconnected the student-side realtime wiring — useConversation
+subscribes to live_session_viewers + teacher_live_comments per session, live tips
+stream into the transcript through the surviving liveCommentToMessage adapter (and
+merge back in on reload), and ChatWindow shows the "Teacher viewing" presence chip.
+The migration, API helpers, and the teacher dashboard's watch/comment surfaces were
+never trimmed and stay pinned.
 
 Also trimmed (pre-existing on the MVP trunk, surfaced by this run): the intervention-
 alert acknowledge/resolve workflow (updateInterventionAlertStatus + the console's
@@ -29,6 +28,8 @@ CHAT_MESSAGES = (
 # routes/teacher.tsx is now a thin route wrapper; the live-intervention teacher
 # UI lives in the TeacherConsole feature component.
 TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
+HOOK = ROOT / "frontend" / "src" / "student" / "useConversation.ts"
+WINDOW = ROOT / "frontend" / "src" / "student" / "ChatWindow.tsx"
 
 
 class LiveTeacherInterventionStaticTests(unittest.TestCase):
@@ -39,6 +40,8 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
         cls.types = TYPES.read_text(encoding="utf-8")
         cls.chat_messages = CHAT_MESSAGES.read_text(encoding="utf-8")
         cls.teacher = TEACHER_ROUTE.read_text(encoding="utf-8")
+        cls.hook = HOOK.read_text(encoding="utf-8")
+        cls.window = WINDOW.read_text(encoding="utf-8")
 
     def test_realtime_publication_is_enabled_for_live_tables(self):
         for fragment in (
@@ -86,6 +89,37 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.chat_messages)
+
+    def test_student_surface_subscribes_to_live_intervention(self):
+        # Re-anchored (B1): the v6 hook opens one realtime channel per session carrying
+        # teacher presence, student-visible live tips, and the hold — plus initial fetches
+        # for state that predates the subscription (a teacher already watching).
+        for fragment in (
+            'table: "live_session_viewers"',
+            'table: "teacher_live_comments"',
+            "fetchLiveSessionViewers(",
+            "liveCommentToMessage(",
+            "supabase.removeChannel(channel)",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.hook)
+
+    def test_teacher_private_comments_never_render_for_the_student(self):
+        # The RLS already scopes reads, but the realtime payload check is the client's own
+        # guard: only student_visible tips enter the transcript.
+        self.assertIn('comment.visibility !== "student_visible"', self.hook)
+
+    def test_reload_merges_live_comments_into_the_transcript(self):
+        # A tip the teacher sent is part of the record the student saw — a refresh must not
+        # erase it. The hook merges fetched comments with turns in timestamp order.
+        self.assertIn("fetchTeacherLiveComments(existing.id)", self.hook)
+        self.assertIn("comments.map(liveCommentToMessage)", self.hook)
+
+    def test_student_sees_teacher_viewing_presence(self):
+        self.assertIn("Teacher viewing", self.window)
+        # Presence ages out without a realtime event: a viewer row only counts with a fresh
+        # heartbeat, re-evaluated on a clock.
+        self.assertIn("VIEWER_FRESH_MS", self.hook)
 
     def test_teacher_dashboard_can_watch_and_comment(self):
         # (alert acknowledge/resolve controls trimmed — see module docstring)

@@ -306,25 +306,36 @@ Retiring routes/chat.tsx (v6 /learn is now the only student surface) dropped sev
 client-side wirings whose server halves are intact. Each needs an owner decision:
 reconnect into the v6 surface, or declare deliberately dropped and trim the server side.
 
-- **Student live-intervention UX**: /learn does not subscribe to `live_session_viewers` /
-  `teacher_live_comments` — no "Teacher viewing" presence, and teacher live tips never
-  appear in the student transcript. The transcript model still has the `teacher` Msg role
-  + `liveCommentToMessage` adapter, so rendering is free once a subscription exists.
-  (Teacher watch/comment UI and RLS are all still live.)
-- **Student hold lock**: the chat fn still enforces `session_holds` server-side (held
-  envelope), but /learn shows no "teacher paused" state and does not lock the composer —
-  a paused student just sees turns not run.
-- **Continue pill / stepper navigation**: the v6 model maps `continue_offer`, but nothing
-  renders it or posts `control: {type: "continue"|"navigate"|"resume"}` — Flow v3
-  backtracking and the Continue affordance are server-complete, client-absent.
+UPDATE (2026-07-30, B1 slice): most of these are now RECONNECTED — see the per-item
+notes. Pins re-anchored in tests/test_session_hold.py, test_live_teacher_intervention.py,
+test_flow_v3_router.py, test_student_surface.py.
+
+- **Student live-intervention UX** — RECONNECTED (B1). useConversation opens one realtime
+  channel per session (`live_session_viewers` / `teacher_live_comments` / `session_holds`),
+  ChatWindow shows the "Teacher viewing" chip (heartbeat-aged), live tips stream into the
+  transcript via the surviving `liveCommentToMessage` adapter and merge back in on reload.
+- **Student hold lock** — RECONNECTED (B1). Held state (realtime + initial fetch + held
+  envelope re-lock) shows the paused banner, locks the composer, blocks the send path, and
+  unmounts live voice. Server enforcement unchanged.
+- **Continue pill / stepper navigation** — MOSTLY RECONNECTED (B1). The Continue pill
+  renders live-only on the latest mentor turn and posts `control:{type:"continue"}`; the
+  revisit frame shows a "return to where you were" chip posting `resume`; `sendNavigate`
+  (posting `navigate`) is implemented and exposed on the conversation channel, but no v6
+  surface yet offers a CLICKABLE STEPPER to trigger it — the natural home (LessonTree /
+  a stepper strip) belongs to the shell slice. Open: where step-level navigation lives in v6.
 - **Inline artifact/media rendering**: student/ResourceCard.tsx deliberately renders
-  artifacts as inert cards (documented there); ArtifactFrame/DeckRenderer/ReadAloudAction
-  are kept for the announced follow-up phase porting inline media into /learn. The
-  artifact-live build loop (offer pill → generateLiveArtifact → artifact_ready control)
-  is likewise client-absent; `generateLiveArtifact` stays in api.ts.
-- **Voice**: Composer still supports `onVoiceEvent`, but the v6 surface does not thread
-  voice events to resource/deck rendering (read-aloud works only via DeckRenderer in the
-  teacher studio preview).
+  artifacts as inert cards (documented there); ArtifactFrame/DeckRenderer are kept for the
+  announced follow-up phase porting inline media into /learn. The artifact-live build loop
+  (offer pill → generateLiveArtifact → artifact_ready control) is likewise client-absent;
+  `generateLiveArtifact` stays in api.ts. (`artifactOffer` is mapped in the transcript
+  model but not yet rendered — deliberate, it belongs with the media/artifact port.)
+- **Voice** — RECONNECTED (B1). The v6 Chatbox has real dictation (browser speech into the
+  editable input, input_modality="dictated" + confidence staged onto the turn),
+  ReadAloudAction returns on mentor + teacher turns in the transcript, and live voice is
+  ported whole as student/VoicePanel.tsx (WebRTC realtime session; spoken answers submit
+  through the normal turn loop as input_modality="audio_session"). Voice telemetry flows
+  through the conversation channel's recordVoiceInteraction sink. Still open: threading
+  voice into resource/deck rendering, which rides the inline-media port above.
 
 Also noted: `fetchStudentProfileStats` (api.ts) now has zero UI consumers — the old /chat
 profile popup was its only caller. Kept (out of the cleanup's mandated scope, and the

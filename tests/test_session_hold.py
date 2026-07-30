@@ -1,11 +1,12 @@
 """Trimmed 2026-07-30 (trunk unification): the old /chat route's client-side hold lock
-(realtime session_holds subscription + composer lock + "Your teacher paused the
-session" notice) retired with that surface; the v6 /learn surface has not reconnected
-it — recorded in docs/OPEN_QUESTIONS.md. The hold is still ENFORCED server-side (the
-chat fn's fail-open hold gate below returns a held envelope instead of running), so
-the security property survives; what's missing is only the student-facing UX. The
-migration/RLS, chat-fn gate, API helpers, types, and teacher pause/resume UI pins
-are all KEPT."""
+retired with that surface. RE-ANCHORED later the same day (B1): the v6 /learn surface
+reconnected the student-facing hold UX — useConversation subscribes to session_holds
+over realtime (plus an initial fetch, plus re-locking off a held envelope), and
+ChatWindow shows the paused banner while locking the composer. The hold remains
+ENFORCED server-side regardless (the chat fn's fail-open hold gate returns a held
+envelope instead of running); the client pins below are UX, not the security
+boundary. The migration/RLS, chat-fn gate, API helpers, types, and teacher
+pause/resume UI pins are all KEPT."""
 from pathlib import Path
 import unittest
 
@@ -17,6 +18,8 @@ API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 TEACHER = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-backend.yml"
+HOOK = ROOT / "frontend" / "src" / "student" / "useConversation.ts"
+WINDOW = ROOT / "frontend" / "src" / "student" / "ChatWindow.tsx"
 
 
 class SessionHoldStaticTests(unittest.TestCase):
@@ -28,6 +31,8 @@ class SessionHoldStaticTests(unittest.TestCase):
         cls.types = TYPES.read_text(encoding="utf-8")
         cls.teacher = TEACHER.read_text(encoding="utf-8")
         cls.deploy = DEPLOY.read_text(encoding="utf-8")
+        cls.hook = HOOK.read_text(encoding="utf-8")
+        cls.window = WINDOW.read_text(encoding="utf-8")
 
     def test_migration_creates_holds_table_with_rls_and_realtime(self):
         for fragment in (
@@ -80,9 +85,29 @@ class SessionHoldStaticTests(unittest.TestCase):
         self.assertIn("export type SessionHold", self.types)
         self.assertIn("held?: boolean", self.types)
 
-    # removed 2026-07-30: test_student_chat_locks_on_hold — the /chat client lock
-    # retired with the old surface and the v6 /learn surface has not reconnected it
-    # (see module docstring; server-side enforcement is pinned above and unchanged).
+    def test_student_surface_locks_on_hold(self):
+        # Re-anchored (B1): the v6 hold lock. The hook subscribes to session_holds for the
+        # active session, seeds from an initial fetch (a hold placed while the student was
+        # away must lock on load), and re-locks off a held envelope (server-authoritative:
+        # a turn submitted while paused comes back held).
+        for fragment in (
+            'table: "session_holds"',
+            "fetchSessionHold(",
+            "if (envelope.held) setHeldState(true);",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.hook)
+        # The send path refuses to run while held — the composer lock alone is not enough
+        # (voice callbacks and stale closures can race a pause).
+        self.assertIn("if (heldRef.current) {", self.hook)
+        # The window shows the paused banner and locks the composer while held.
+        self.assertIn("Your teacher paused the session — hang tight", self.window)
+        self.assertIn("disabled={sending || held}", self.window)
+
+    def test_hold_kills_live_voice(self):
+        # A pause must not leave the mic hot: the voice panel unmounts (full WebRTC/mic
+        # teardown) when the hold lands.
+        self.assertIn("if (held) setVoiceOpen(false);", self.window)
 
     def test_teacher_console_has_pause_resume(self):
         for fragment in (
