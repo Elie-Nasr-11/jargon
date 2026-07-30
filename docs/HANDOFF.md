@@ -7726,3 +7726,34 @@ ResourcesPanel ever renders outside a live conversation, deck read-aloud silentl
 (readAloud={canReadDeckAloud}) — by design, but worth knowing.
 Suggested next task: the signed-in run, then the student live-intervention/hold
 reconnection listed in OPEN_QUESTIONS.
+
+## Claude -> Codex / Human - 2026-07-31 03:30
+
+Status: Finished
+Summary: TRUNK UNIFICATION + PREMIUM PASS COMPLETE. main is now the single trunk. The night's
+arc: merged the v6 /learn surface + TurnMode backend into the MVP trunk (Codex's design won;
+chat_mode dropped; memory v1 grafted onto the v6 chat fn — test_memory_v1.py); retired /chat
+end-to-end (roleHome -> /learn, 20 files deleted, 12 test modules re-anchored); B1 completed
+the conversation core (Continue/quiz/step eyebrows/revisit, session-hold lock, teacher
+viewing + live tips realtime, dictation + read-aloud + WebRTC live voice, transcript mode
+sections, GSAP micro-interactions); B3 completed the shell (LessonTree done/total fractions,
+Home with resume + "What your mentor remembers" + due/grades strips, locked AssessmentSurface
++ Checkpoints destination, dead-nav sweep w/ Routines removed, FlipNumber badges); Phase C
+re-skinned teacher/studio/admin/login onto the v6 language (depth cards, token scale,
+mode-hue accents, state-hue hotlist edges); B2 ported the full inline-media table
+(pdf/youtube-nocookie/av+telemetry/image/link + sandboxed ArtifactFrame/DeckRenderer, live
+artifact offer/build loop, safe markdown) into the v6 transcript; the premium ambient slice
+extended AmbientCanvas (uHue lerps, uFocus blooms, reduced-motion static, hidden-pause,
+single WebGL context) wired to TurnMode/reply/completion/memory-reveal. Deploy + CI + Render
+all repointed to main.
+Tests run: tsc 0 errors, eslint 0 errors, build green, full python suite OK (4 pre-existing
+Flask skips) — run at every slice boundary and once at the end.
+Remaining concerns: (1) NO signed-in browser run of the unified surface has happened —
+everything is type-checked, built, and test-pinned but unseen; the live pass is the top
+follow-up. (2) The navigate-stepper UI (jump to a completed step) is designed but has no v6
+surface — OPEN_QUESTIONS. (3) Completion-bloom relies on a conservative arc detector; exact
+next_action plumbing noted in HANDOFF (ambient entry). (4) In-chat live quiz doesn't dim the
+ambient (only AssessmentSurface does). (5) claude/happy-johnson-wseex8 and
+claude/project-scope-mvp-o7ox0y are now historical — do not build on them.
+Suggested next task: signed-in live pass of all three roles on the deployed site; then the
+first real classroom dry run.

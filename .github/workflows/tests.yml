@@ -9,7 +9,6 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - claude/project-scope-mvp-o7ox0y
       - main
   pull_request:
 

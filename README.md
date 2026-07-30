@@ -5,11 +5,12 @@ conversation, with the LMS (classes, curriculum, assignments, assessments, maste
 teacher oversight) underneath it. It combines a deterministic Jargon runtime, a
 Supabase-backed lesson/session system, and a tutor-style frontend.
 
-**MVP branch note:** `claude/project-scope-mvp-o7ox0y` carries the stripped MVP —
-student experience first (a 7-mode chat: open / lesson / practice / discuss / quiz /
-assessment / resources, plus mentor memory), a class-centric teacher core with
-studio-lite authoring, and a 3-tab admin. `main` archives the full pre-strip platform.
-See `docs/MVP_SCOPE.md` for the authoritative inventory.
+**Trunk note:** `main` is the single trunk carrying the unified MVP — the v6 `/learn`
+student surface (TurnModes: Lesson / Practice / Discuss / Open in the composer dropdown,
+plus conditional Quiz / Homework / Resources pills; mentor memory; full inline media; a
+three.js ambient layer), a class-centric teacher core with studio-lite authoring, and a
+3-tab admin. See `docs/MVP_SCOPE.md`, `docs/DESIGN_V6.md`, and `docs/DECISIONS.md`
+(2026-07-30 entries) for the authoritative inventory and design language.
 
 ## Architecture
 

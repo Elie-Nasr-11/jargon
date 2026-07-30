@@ -5,7 +5,7 @@ services:
   - type: web
     name: jargon
     runtime: static
-    branch: claude/project-scope-mvp-o7ox0y
+    branch: main
     buildCommand: "cd frontend && npm install --no-audit --no-fund && npm run build"
     staticPublishPath: frontend/dist
     pullRequestPreviewsEnabled: false
@@ -18,7 +18,7 @@ services:
     name: jargon-engine
     runtime: python
     plan: free
-    branch: claude/project-scope-mvp-o7ox0y
+    branch: main
     rootDir: engine
     buildCommand: "pip install -r requirements.txt"
     # Must bind 0.0.0.0:$PORT or Render's health check never passes.
