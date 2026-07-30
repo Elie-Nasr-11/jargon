@@ -39,23 +39,19 @@ import {
   createCurriculumLessonStub,
   createCurriculumSubject,
   createCurriculumUnit,
-  archiveCurriculumTemplate,
   deleteCurriculumNode,
   deleteCurriculumStep,
   fetchCurriculumAuthoringData,
   fetchPrimaryRole,
   generateCurriculumDraft,
   getSession,
-  instantiateCurriculumTemplate,
   invokeCurriculumAdmin,
-  listCurriculumTemplates,
   moveCurriculumLesson,
   renameCurriculumNode,
   reorderCurriculumNodes,
   reorderCurriculumSteps,
   roleHome,
   saveCurriculumLessonMeta,
-  saveCurriculumTemplate,
   updateLessonResource,
   upsertCurriculumStep,
 } from "@/lib/api";
@@ -71,7 +67,6 @@ import type {
   CurriculumQuizItem,
   CurriculumStepDraft,
   CurriculumStepInput,
-  CurriculumTemplate,
   CurriculumStepKind,
   CurriculumSubject,
   CurriculumUnit,
@@ -156,14 +151,11 @@ function CurriculumPage() {
   const [data, setData] = useState<CurriculumAuthoringData | null>(null);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [message, setMessage] = useState("");
-  const [publishing] = useState(false);
   const [busy, setBusy] = useState(false);
   // Outline nodes are collapsed by default; this set holds the EXPANDED ids.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [outlineOpen, setOutlineOpen] = useState(true);
   const [roleOk, setRoleOk] = useState(false);
-  // Org-shared lesson templates (v4.0 Phase 2), loaded lazily when a picker opens.
-  const [templates, setTemplates] = useState<CurriculumTemplate[]>([]);
   const undoable = useUndoable();
   // Deferred-undo ops (delete/publish) hold their optimistic change here so a
   // background refetch (from a create/AI-apply) doesn't resurrect a row that's
@@ -593,58 +585,6 @@ function CurriculumPage() {
       { successMessage: "Activity shared with the class." },
     );
 
-  // --- Org-shared templates (v4.0 Phase 2) --------------------------------
-  const loadTemplates = useCallback(async () => {
-    if (!selectedClass) return;
-    try {
-      const session = await getSession();
-      if (!session) return;
-      const res = await listCurriculumTemplates({
-        accessToken: session.access_token,
-        classId: selectedClass.id,
-        organizationId: selectedClass.organization_id,
-      });
-      setTemplates(res.templates || []);
-    } catch (error) {
-      setMessage((error as Error).message || "Could not load templates.");
-    }
-  }, [selectedClass]);
-
-  const saveAsTemplate = (lessonId: string, title: string, description: string) =>
-    reloading(
-      (accessToken, classId) =>
-        saveCurriculumTemplate({ accessToken, classId, lessonId, title, description }),
-      { successMessage: "Saved as a template for your school." },
-    );
-
-  const instantiateTemplate = (unitId: string, templateId: string) =>
-    reloading(
-      (accessToken, classId) =>
-        instantiateCurriculumTemplate({ accessToken, classId, unitId, templateId }),
-      {
-        successMessage: "Lesson created from template.",
-        select: (result) => {
-          const id = (result as { lesson_id?: string } | null)?.lesson_id;
-          return id ? { type: "lesson", id } : null;
-        },
-      },
-    );
-
-  const archiveTemplate = async (templateId: string) => {
-    try {
-      const session = await getSession();
-      if (!session || !selectedClass) return;
-      await archiveCurriculumTemplate({
-        accessToken: session.access_token,
-        classId: selectedClass.id,
-        templateId,
-      });
-      setTemplates((prev) => prev.filter((template) => template.id !== templateId));
-    } catch (error) {
-      setMessage((error as Error).message || "Could not archive template.");
-    }
-  };
-
   const deleteStep = (lessonId: string, activityId: string) => {
     if (!selectedClass || !data) return;
     const classId = selectedClass.id;
@@ -1028,7 +968,6 @@ function CurriculumPage() {
                   orgUnits={orgUnits}
                   resources={data.resources}
                   busy={busy}
-                  publishing={publishing}
                   onAddSubject={addSubject}
                   onRename={renameNode}
                   onArchive={archiveNode}
@@ -1051,12 +990,6 @@ function CurriculumPage() {
                   onApplyOutline={applyOutline}
                   onGenerateSteps={generateSteps}
                   onApplySteps={applyStepDrafts}
-                  templates={templates}
-                  onLoadTemplates={loadTemplates}
-                  onSaveTemplate={saveAsTemplate}
-                  onInstantiateTemplate={instantiateTemplate}
-                  onArchiveTemplate={archiveTemplate}
-                  currentVersionForCourse={currentVersionForCourse}
                   counts={{
                     coursesForSubject: (id) => coursesForSubject(id).length,
                     unitsForCourse: (id) => unitsForCourse(id).length,
@@ -1454,7 +1387,6 @@ function DetailPane({
   orgUnits,
   resources,
   busy,
-  publishing,
   onAddSubject,
   onRename,
   onArchive,
@@ -1477,12 +1409,6 @@ function DetailPane({
   onApplyOutline,
   onGenerateSteps,
   onApplySteps,
-  templates,
-  onLoadTemplates,
-  onSaveTemplate,
-  onInstantiateTemplate,
-  onArchiveTemplate,
-  currentVersionForCourse,
   counts,
 }: {
   selection: Selection;
@@ -1491,12 +1417,6 @@ function DetailPane({
   orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
   resources: LessonResource[];
   busy: boolean;
-  publishing: boolean;
-  templates: CurriculumTemplate[];
-  onLoadTemplates: () => void;
-  onSaveTemplate: (lessonId: string, title: string, description: string) => void;
-  onInstantiateTemplate: (unitId: string, templateId: string) => void;
-  onArchiveTemplate: (templateId: string) => void;
   onAddSubject: () => void;
   onRename: (type: CurriculumNodeType, id: string, title: string, description?: string) => void;
   onArchive: (type: CurriculumNodeType, id: string) => void;
@@ -1533,7 +1453,6 @@ function DetailPane({
   onApplyOutline: (courseId: string, outline: CurriculumOutlineDraft) => void;
   onGenerateSteps: (lessonId: string, args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
   onApplySteps: (lessonId: string, drafts: CurriculumStepDraft[]) => void;
-  currentVersionForCourse: (courseId: string) => CurriculumCourseVersion | null;
   counts: {
     coursesForSubject: (id: string) => number;
     unitsForCourse: (id: string) => number;
@@ -1589,18 +1508,12 @@ function DetailPane({
   if (selection.type === "course") {
     const course = data.courses.find((item) => item.id === selection.id);
     if (!course) return <MissingNode />;
-    const version = currentVersionForCourse(course.id);
     const childCount = counts.unitsForCourse(course.id);
     return (
       <StructureDetail
         kind="Course"
         node={course}
         status={course.status}
-        info={
-          version
-            ? `Version ${version.version_label}${version.is_current ? " · current" : ""}`
-            : undefined
-        }
         busy={busy}
         addLabel="New unit"
         showArchive
@@ -1635,12 +1548,6 @@ function DetailPane({
         onSave={(title, description) => onRename("unit", unit.id, title, description)}
         onAddChild={() => onAddLesson(unit.id)}
         onDelete={() => onDelete("unit", unit.id)}
-        templates={{
-          list: templates,
-          onLoad: onLoadTemplates,
-          onInstantiate: (templateId) => onInstantiateTemplate(unit.id, templateId),
-          onArchive: onArchiveTemplate,
-        }}
       />
     );
   }
@@ -1654,7 +1561,6 @@ function DetailPane({
       data={data}
       orgUnits={orgUnits}
       busy={busy}
-      publishing={publishing}
       onSaveMeta={(meta, milestone) => onSaveLessonMeta(lesson.id, meta, milestone)}
       onUpsertStep={(step) => onUpsertStep(lesson.id, step)}
       onReorderSteps={(ids) => onReorderSteps(lesson.id, ids)}
@@ -1670,7 +1576,6 @@ function DetailPane({
       resources={resources}
       onGenerateSteps={(args) => onGenerateSteps(lesson.id, args)}
       onApplySteps={(drafts) => onApplySteps(lesson.id, drafts)}
-      onSaveTemplate={(title, description) => onSaveTemplate(lesson.id, title, description)}
     />
   );
 }
@@ -1685,93 +1590,10 @@ function MissingNode() {
   );
 }
 
-// "Start from a template" — instantiate an org-shared lesson template into this unit.
-function TemplatePicker({
-  busy,
-  list,
-  onLoad,
-  onInstantiate,
-  onArchive,
-}: {
-  busy: boolean;
-  list: CurriculumTemplate[];
-  onLoad: () => void;
-  onInstantiate: (templateId: string) => void;
-  onArchive: (templateId: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const flowOf = (template: CurriculumTemplate) =>
-    template.steps.map((step) => (step.mode ? modeMeta(step.mode).label : "step")).join(" → ");
-  return (
-    <div className="rounded-2xl border border-border bg-depth-sub">
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((value) => {
-            if (!value) onLoad();
-            return !value;
-          });
-        }}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left"
-      >
-        <Layers3 className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
-        <span className="flex-1 text-[13px] text-foreground">Start from a template</span>
-        <ChevronRight
-          className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
-          strokeWidth={1.7}
-        />
-      </button>
-      {open ? (
-        <div className="grid gap-2 border-t border-border p-3">
-          {list.length === 0 ? (
-            <div className="px-1 py-2 text-[12px] text-muted-foreground">
-              No templates yet. Open a lesson and choose “Save as template” to reuse its mode flow
-              across your school.
-            </div>
-          ) : (
-            list.map((template) => (
-              <div
-                key={template.id}
-                className="flex items-center gap-2 rounded-xl border border-border bg-depth-field px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12.5px] text-foreground">{template.title}</div>
-                  <div className="truncate text-[11px] text-muted-foreground">
-                    {template.steps.length} step{template.steps.length === 1 ? "" : "s"}
-                    {flowOf(template) ? ` · ${flowOf(template)}` : ""}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onInstantiate(template.id)}
-                  disabled={busy}
-                  className="shrink-0 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground hover:bg-muted disabled:opacity-50"
-                >
-                  Use
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onArchive(template.id)}
-                  disabled={busy}
-                  title="Archive this template"
-                  className="shrink-0 rounded-full border border-border px-2 py-1.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
-                >
-                  <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function StructureDetail({
   kind,
   node,
   status,
-  info,
   busy,
   addLabel,
   showArchive,
@@ -1782,12 +1604,10 @@ function StructureDetail({
   onArchive,
   onDelete,
   ai,
-  templates,
 }: {
   kind: string;
   node: { id: string; title: string; description?: string };
   status?: string;
-  info?: string;
   busy: boolean;
   addLabel: string;
   showArchive: boolean;
@@ -1801,12 +1621,6 @@ function StructureDetail({
     resources: LessonResource[];
     onGenerate: (args: OutlineGenArgs) => Promise<CurriculumOutlineDraft | null>;
     onApply: (outline: CurriculumOutlineDraft) => void;
-  };
-  templates?: {
-    list: CurriculumTemplate[];
-    onLoad: () => void;
-    onInstantiate: (templateId: string) => void;
-    onArchive: (templateId: string) => void;
   };
 }) {
   const [title, setTitle] = useState(node.title);
@@ -1824,7 +1638,6 @@ function StructureDetail({
               {kind}
             </div>
             <h2 className="mt-1 text-[20px] font-medium text-foreground">{node.title}</h2>
-            {info ? <div className="mt-0.5 text-[11.5px] text-muted-foreground">{info}</div> : null}
           </div>
           {status ? (
             <span className="rounded-full border border-border px-3 py-1 text-[11.5px] text-muted-foreground">
@@ -1866,12 +1679,6 @@ function StructureDetail({
               onGenerate={ai.onGenerate}
               onApply={ai.onApply}
             />
-          </div>
-        ) : null}
-
-        {templates ? (
-          <div className="mt-5">
-            <TemplatePicker busy={busy} {...templates} />
           </div>
         ) : null}
 
@@ -2189,7 +1996,6 @@ function LessonDetail({
   orgUnits,
   resources,
   busy,
-  publishing,
   onSaveMeta,
   onUpsertStep,
   onReorderSteps,
@@ -2204,14 +2010,12 @@ function LessonDetail({
   onDelete,
   onGenerateSteps,
   onApplySteps,
-  onSaveTemplate,
 }: {
   lesson: Lesson;
   data: CurriculumAuthoringData;
   orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
   resources: LessonResource[];
   busy: boolean;
-  publishing: boolean;
   onSaveMeta: (meta: CurriculumLessonMetaInput, milestone: CurriculumMilestoneInput) => void;
   onUpsertStep: (step: CurriculumStepInput) => void;
   onReorderSteps: (orderedIds: string[]) => void;
@@ -2226,12 +2030,9 @@ function LessonDetail({
   onDelete: () => void;
   onGenerateSteps: (args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
   onApplySteps: (drafts: CurriculumStepDraft[]) => void;
-  onSaveTemplate: (title: string, description: string) => void;
 }) {
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [savingTemplate, setSavingTemplate] = useState(false);
-  const [templateTitle, setTemplateTitle] = useState("");
 
   const steps = useMemo(
     () =>
@@ -2354,8 +2155,7 @@ function LessonDetail({
               <button
                 type="button"
                 onClick={onPublish}
-                disabled={publishing}
-                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Publish
@@ -2363,52 +2163,11 @@ function LessonDetail({
               <button
                 type="button"
                 onClick={onArchiveLesson}
-                disabled={publishing}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Archive
               </button>
-              {savingTemplate ? (
-                <div className="inline-flex items-center gap-2">
-                  <input
-                    value={templateTitle}
-                    onChange={(event) => setTemplateTitle(event.target.value)}
-                    placeholder={`${lesson.title} template`}
-                    className="rounded-full border border-border bg-depth-field px-3 py-1.5 text-[12px] text-foreground outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSaveTemplate(templateTitle.trim(), "");
-                      setSavingTemplate(false);
-                      setTemplateTitle("");
-                    }}
-                    disabled={busy}
-                    className="rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground hover:bg-muted disabled:opacity-50"
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSavingTemplate(false)}
-                    className="rounded-full px-2 py-1.5 text-[12px] text-muted-foreground hover:text-foreground"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setSavingTemplate(true)}
-                  disabled={busy}
-                  title="Save this lesson's mode flow as a reusable, school-shared template"
-                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-                >
-                  <Layers3 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                  Save as template
-                </button>
-              )}
             </div>
 
             <div className="border-t border-border pt-4">
