@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import { Chatbox } from "@/student/Chatbox";
-import { turnModeSpec, type LessonOffers, type TurnMode } from "@/student/turnModes";
+import type { LessonOffers, TurnMode } from "@/student/turnModes";
 
-// The conversation surface. Its whole job is to make the current TurnMode legible: the panel
-// takes the mode's tint, gets its own border so it reads as a distinct container, and carries a
-// centered eyebrow pill ON the top border — the fieldset-legend treatment, so the mode labels
-// the container rather than floating as one more chip inside the transcript.
+// The conversation surface: a scrolling transcript with the chatbox beneath it.
 //
-// All colour comes from --mode-accent via the .mode-surface / .mode-eyebrow classes in
-// styles.css; nothing here hardcodes a hue, so the theme toggle needs no work.
+// It deliberately has NO border and NO mode label of its own. Mode chrome belongs to the stretch
+// of conversation it describes, not to the window — one lesson can contain several modes, so a
+// single window-level border would be a lie about which part was which. Transcript draws a
+// bordered, labelled section per run of messages; the chatbox tints itself to the mode you are
+// about to send in.
 
 export type ChatWindowProps = {
   mode: TurnMode;
@@ -36,31 +36,14 @@ export function ChatWindow({
   sending,
   children,
 }: ChatWindowProps) {
-  const spec = turnModeSpec(mode);
-
   return (
-    <div
-      className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-6"
-      style={{ ["--mode-accent" as string]: `var(${spec.accentVar})` }}
-    >
-      <section
-        aria-label={`Conversation — ${spec.label} mode`}
-        className="mode-surface relative flex min-h-0 flex-1 flex-col rounded-card border transition-colors duration-(--dur)"
-      >
-        {/* Eyebrow pill, centered on the top border. aria-hidden because the section's
-            aria-label already announces the mode — a screen reader shouldn't hear it twice. */}
-        <span
-          aria-hidden
-          className="mode-eyebrow absolute -top-[11px] left-1/2 -translate-x-1/2 rounded-pill border px-2.5 py-0.5 text-overline font-medium uppercase tracking-[0.09em]"
-        >
-          {spec.label}
-        </span>
-
+    <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-4">
+      <section aria-label="Conversation" className="flex min-h-0 flex-1 flex-col">
         {/* Both the transcript and the composer sit in the same centered, width-capped column.
             Full-bleed text across a 1440px window is unreadable — every LLM chat caps the
             measure for the same reason, and keeping the composer on the same axis is what makes
             the conversation read as one column rather than two stacked panels. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-7">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-2">
           <div className="mx-auto w-full max-w-3xl">{children}</div>
         </div>
 

@@ -212,7 +212,15 @@ export function useConversation() {
       ...current.filter((m) => !(m.role === "bot" && m.isError)),
       ...(echo === undefined
         ? []
-        : [{ id: uid(), role: "user" as const, text: echo, createdAt: new Date().toISOString() }]),
+        : [
+            {
+              id: uid(),
+              role: "user" as const,
+              text: echo,
+              turnMode: mode,
+              createdAt: new Date().toISOString(),
+            },
+          ]),
       { id: thinkingId, role: "thinking" as const },
     ]);
 
@@ -233,7 +241,7 @@ export function useConversation() {
       setOffers(offersFromEnvelope(envelope));
       setMessages((current) => [
         ...current.filter((m) => m.id !== thinkingId),
-        envelopeMessage(envelope),
+        envelopeMessage(envelope, mode),
       ]);
     } catch (err) {
       const message = friendlyError(err, "That didn't send.");

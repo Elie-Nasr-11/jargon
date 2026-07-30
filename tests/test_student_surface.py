@@ -24,6 +24,8 @@ MODES = (FRONT / "student" / "turnModes.ts").read_text()
 TRANSCRIPT = (FRONT / "student" / "Transcript.tsx").read_text()
 PILLS = (FRONT / "student" / "OfferPills.tsx").read_text()
 CHAT_FN = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
+WINDOW = (FRONT / "student" / "ChatWindow.tsx").read_text()
+MODEL = (FRONT / "features" / "student" / "chat" / "chatMessages.ts").read_text()
 
 
 class StudentSurfaceWire(unittest.TestCase):
@@ -108,3 +110,40 @@ class StudentSurfaceWire(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class ModeSections(unittest.TestCase):
+    """The border and label describe a stretch of conversation, not the window."""
+
+    def test_mode_is_persisted_on_both_turn_roles(self):
+        # Without this a RELOADED transcript cannot know which mode any message happened in, so
+        # the sections would vanish on refresh. Both roles are stamped so a reply groups with the
+        # student turn it answers instead of opening a new unlabelled section.
+        self.assertIn("{ ...answer, turn_mode: declaredMode } : answer", CHAT_FN)
+        self.assertIn("{ ...envelope, turn_mode: declaredMode } : envelope", CHAT_FN)
+
+    def test_the_client_reads_the_persisted_mode_back(self):
+        self.assertIn("turn_mode", MODEL)
+        self.assertIn("turnMode", MODEL)
+
+    def test_unknown_mode_gets_no_section_chrome(self):
+        # Relabelling a turn written before modes existed would be inventing history.
+        fn = TRANSCRIPT[TRANSCRIPT.index("function ModeSection(") :]
+        fn = fn[: fn.index("\n}")]
+        self.assertIn("if (!mode || !isTurnMode(mode))", fn)
+
+    def test_only_student_and_mentor_messages_open_a_section(self):
+        # Thinking placeholders and teacher interjections are not the student picking a mode; if
+        # they opened sections, a reply and its "Thinking…" bubble would split across two boxes.
+        fn = TRANSCRIPT[TRANSCRIPT.index("function groupIntoSections(") :]
+        fn = fn[: fn.index("\n}")]
+        self.assertIn('message.role === "user" || message.role === "bot"', fn)
+        self.assertIn("!opensSection || mode === current.mode", fn)
+
+    def test_the_window_no_longer_owns_the_border_or_label(self):
+        # One lesson can contain several modes, so a single window-level border would be a lie
+        # about which part was which.
+        self.assertNotIn("mode-surface", WINDOW)
+        self.assertNotIn("mode-eyebrow", WINDOW)
+        # The sections do own them.
+        self.assertIn("mode-surface", TRANSCRIPT)
+        self.assertIn("mode-eyebrow", TRANSCRIPT)

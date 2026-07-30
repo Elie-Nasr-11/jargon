@@ -6773,3 +6773,43 @@ that information now has no home until Home is built.
 Suggested next task: populate envelope.available in chat/index.ts (quiz from stepRequirements,
 homework from the lesson's checkpoints, resources from what it already attaches), then look at the
 pills with real data.
+
+## Claude -> Codex / Human - 2026-07-30 10:10
+
+Status: Done (mode sections)
+Summary: The mode border and eyebrow pill moved from the CHAT WINDOW to the stretch of conversation
+they describe. One lesson can contain several modes, so a single window-level border was a lie about
+which part was which. Transcript now groups consecutive messages sharing a TurnMode into a bordered,
+labelled section; a student scrolling back sees at a glance that this part was Discuss and that part
+was Quiz. ChatWindow has no border and no label of its own; the chatbox still tints to the mode you
+are about to send in.
+This needed the backend: the declared mode was accepted but never recorded, so a reloaded transcript
+had no idea which mode anything happened in. chat/index.ts now stamps `turn_mode` into BOTH turn
+payloads — the student turn and the mentor reply — so a reply groups with the turn it answers rather
+than opening a new unlabelled section. Both writes are inside handleTypedRequest (scope verified by
+hand; esbuild does not do scope analysis and an out-of-scope read would be a production
+ReferenceError).
+Design decision worth keeping: a message whose mode is UNKNOWN renders with NO section chrome at
+all. Every turn written before this commit has no turn_mode, and relabelling those as "Lesson" would
+be inventing history we cannot verify. Only user and mentor messages open a section — thinking
+placeholders, code output, and teacher interjections continue whatever section is open, or a reply
+and its "Thinking…" bubble would split across two boxes.
+Files changed: supabase/functions/chat/index.ts, frontend/src/features/student/chat/chatMessages.ts,
+frontend/src/student/{Transcript.tsx,ChatWindow.tsx,useConversation.ts},
+tests/{test_student_surface,test_supabase_chat_function}.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green;
+esbuild syntax check on chat/index.ts clean; python unittest 293 tests, 4 errors — the known
+pre-existing setUpClass FileNotFoundErrors, unchanged (+5 new). Live: headless Chromium — confirmed
+the window-level eyebrow is gone and zero page errors.
+Remaining concerns: (1) EXISTING HISTORY WILL SHOW NO SECTIONS. turn_mode is only written from this
+commit forward, so any lesson with prior turns renders them unchromed. That is correct-by-design, not
+a bug, but it will look like the feature is not working — only NEW turns are sectioned.
+(2) A test also had to change: test_supabase_chat_function pinned the literal `payload: answer` as
+proof voice metadata persists. The spread preserves every answer field; the assertion now pins the
+new form.
+(3) The sections themselves have never been SEEN — Supabase is unreachable here so the transcript
+never populates.
+(4) The backend half of the offer pills (envelope.available) is STILL not written; the Homework pill
+remains impossible. That is the outstanding backend task.
+Suggested next task: populate envelope.available in chat/index.ts (quiz from stepRequirements,
+homework from the lesson's checkpoints), then look at pills and sections together with real data.

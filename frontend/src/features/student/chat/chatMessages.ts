@@ -41,6 +41,12 @@ export type Msg =
       transcriptConfidence?: number | null;
       attachments?: ChatAttachment[];
       createdAt?: string;
+      // v6: the TurnMode this message was sent in, so the transcript can group consecutive
+      // messages into labelled mode sections. Kept as a plain string here to avoid coupling the
+      // shared transcript model to the student surface's TurnMode union. Undefined = unknown
+      // (any turn written before modes existed), which renders WITHOUT section chrome rather
+      // than being relabelled as something we cannot actually verify.
+      turnMode?: string;
     }
   | {
       id: string;
@@ -66,6 +72,8 @@ export type Msg =
       // The choice the student picked on this (quiz) message — kept so history shows WHICH
       // option was selected after the live buttons retire.
       chosen?: string;
+      // See the user variant: the mode this reply's exchange happened in.
+      turnMode?: string;
     }
   | { id: string; role: "teacher"; text: string; createdAt?: string }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
@@ -137,6 +145,7 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       attachments: Array.isArray(turn.payload?.attachments)
         ? (turn.payload.attachments as ChatAttachment[])
         : undefined,
+      turnMode: typeof turn.payload?.turn_mode === "string" ? turn.payload.turn_mode : undefined,
       createdAt: turn.created_at,
     };
   }
@@ -152,6 +161,7 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       text: turn.content,
       choices,
       resources,
+      turnMode: typeof payload.turn_mode === "string" ? payload.turn_mode : undefined,
       createdAt: turn.created_at,
     };
   }
@@ -175,7 +185,7 @@ export function sortTimedMessages(messages: Msg[]) {
   });
 }
 
-export function envelopeMessage(envelope: TypedChatEnvelope): Msg {
+export function envelopeMessage(envelope: TypedChatEnvelope, turnMode?: string): Msg {
   return {
     id: uid(),
     role: "bot",
@@ -186,6 +196,7 @@ export function envelopeMessage(envelope: TypedChatEnvelope): Msg {
     // quiz choices) it stays anchored to its turn and only the LATEST offer is live.
     continueOffer: envelope.continue_offer ?? undefined,
     artifactOffer: envelope.artifact_offer ?? undefined,
+    turnMode,
     createdAt: new Date().toISOString(),
   };
 }

@@ -3952,7 +3952,10 @@ async function handleTypedRequest(
             stage: currentStage,
             response_mode: answer.mode,
             content,
-            payload: answer,
+            // v6: persist the student's declared TurnMode so a RELOADED transcript can still
+            // show which mode each stretch of conversation happened in. Omitted when null so
+            // legacy turns stay byte-identical and the client can tell "unknown" from a value.
+            payload: declaredMode ? { ...answer, turn_mode: declaredMode } : answer,
           })
         : Promise.resolve(null);
 
@@ -4928,7 +4931,9 @@ async function handleTypedRequest(
       stage: envelope.stage,
       response_mode: envelope.response_mode,
       content: envelope.reply,
-      payload: envelope,
+      // Stamped with the same TurnMode as the student turn it answers, so a reply groups into
+      // its own mode section on replay rather than starting a new unlabelled one.
+      payload: declaredMode ? { ...envelope, turn_mode: declaredMode } : envelope,
     });
 
     // Rolling independence signal (only updated on real graded-eligible attempts —
