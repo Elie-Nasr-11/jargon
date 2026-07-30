@@ -6362,3 +6362,22 @@ ships only on the next main FF.
 Suggested next task: adversarial review folds (in progress this session), push + deploy verify,
 main FF on user OK, then the live E2E (fail a practice step twice → pill → build → Run →
 teacher Share with class).
+
+## Claude -> Codex / Human - 2026-07-30 12:30
+
+Status: Starting
+Task: MVP strip-down + refinement pass (product-owner approved 2026-07-30). This branch
+(`claude/project-scope-mvp-o7ox0y`) becomes the MVP: it keeps ONLY surviving code; `main`
+remains the full archive. Scope: student experience is the star (new 7-mode chat model:
+open/lesson/practice/discuss/quiz/assessment/resources), memory v1 (session summaries +
+rolling student profile fed to the mentor), teacher collapsed to a class-centric core
+(keeping studio-lite w/ AI drafter, assessments, resource upload), admin reduced to
+Seeding/Live/Cost, comms UI removed, voice restored with best server voices, demo
+content + demo logins. No live users; deploy workflow does not fire on this branch.
+Files I expect to touch: docs/MVP_SCOPE.md (new, the authoritative keep/cut inventory),
+frontend/src/routes/{admin,chat,teacher.curriculum}.tsx, features/teacher/*,
+features/student/*, features/comms/* (removed), lib/{api,types,jargon-store,bot}.ts,
+supabase/functions/chat/index.ts, new memory migration, tests.
+Notes: DB migrations and edge functions are NOT deleted (applied/live, additive-only
+rule); out-of-scope backend (canvas, google-classroom, resource-processing pipeline)
+stays deployed but loses its frontend. See docs/MVP_SCOPE.md for the full inventory.
