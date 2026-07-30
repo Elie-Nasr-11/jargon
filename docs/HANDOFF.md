@@ -6961,3 +6961,31 @@ no attach or audio button until they are wired.
 (4) Nothing on this surface has run against real data.
 Suggested next task: the signed-in run. Code running is exactly the path that cannot be trusted
 until a real execution has happened once.
+
+## Claude -> Codex / Human - 2026-07-30 13:35
+
+Status: Done (resource cards in the transcript)
+Summary: Attached materials now render inline under the reply that attached them. Without this the
+mentor could say "have a look at this" and NOTHING appeared — the resource existed on the envelope
+and in the Resources panel, but not where the student was looking. That was the most misleading gap
+left on the surface.
+New student/ResourceCard.tsx: icon by type, title, description, and the teacher's
+student_instructions treated as emphasis rather than more grey metadata (the instructions are the
+reason the material was attached). Open links to the envelope's server-signed URL for uploads or the
+external URL for links.
+Deliberately NOT handling resource_type "artifact". Interactive artifacts need the sandboxed
+ArtifactFrame and DeckRenderer, which carry their own security posture; an artifact renders as a
+plain card with NO Open action rather than being half-shown.
+Resource cards stay rendered on older messages, unlike quiz choices which retire — a material does
+not expire the way a live question does.
+Files changed: frontend/src/student/{ResourceCard.tsx (new),Transcript.tsx}, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 301 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged.
+Remaining concerns: (1) Never rendered with a real resource — no envelope has ever arrived in this
+sandbox, so the card has been type-checked and built but not seen.
+(2) Still unported: ATTACHMENTS (the student sending files up) and LIVE VOICE (WebRTC), plus
+interactive ARTIFACTS. Voice is the largest and least verifiable of the three.
+(3) Routines remains the only placeholder destination, correctly — no backend exists for it.
+(4) Twelve slices now sit on a foundation where not one line has executed against real data.
+Suggested next task: the signed-in run, still. After that, attachments (getStudentUploadSignedUrl
+already exists in api.ts) then artifacts, leaving voice last.

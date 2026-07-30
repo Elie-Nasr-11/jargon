@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { MessageSquare, RotateCcw } from "lucide-react";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
+import { ResourceCard } from "@/student/ResourceCard";
 import { isTurnMode, turnModeSpec } from "@/student/turnModes";
 import type { TypedChatAnswer } from "@/lib/types";
 import {
@@ -224,6 +225,16 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                     </button>
                   ) : null}
                 </Bubble>
+                {/* Materials the mentor attached to THIS reply, so "have a look at this" points
+                    at something. Unlike quiz choices these stay rendered on older messages — a
+                    resource does not expire the way a live question does. */}
+                {message.resources?.length ? (
+                  <div className="flex flex-col gap-2 pl-1">
+                    {message.resources.map((resource) => (
+                      <ResourceCard key={resource.id} resource={resource} />
+                    ))}
+                  </div>
+                ) : null}
                 {live ? (
                   <div className="flex flex-wrap gap-2 pl-1">
                     {message.choices?.map((choice) => {
