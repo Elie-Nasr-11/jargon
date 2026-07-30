@@ -2,6 +2,29 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-30 (late): Trunk unification — v6 /learn wins, main becomes the single trunk
+
+Owner decisions after discovering the parallel v6 rebuild on claude/happy-johnson-wseex8:
+
+- **The v6 /learn surface is THE student surface.** The old /chat (and my same-day refinement
+  of it) is retired; frontend/src/student/** + routes/learn.tsx carry the product. roleHome
+  sends students to /learn.
+- **Codex's TurnMode design supersedes my chat_mode implementation.** One vocabulary:
+  TurnMode (message) / StepKind (authored step) / InputSurface (text-vs-code). The server
+  ceiling (applyModeCeiling) restricts what a turn may discharge and never relabels it;
+  discuss/open can never close a progression gate. Four always-modes in the dropdown
+  (Lesson/Practice/Discuss/Open) + conditional inline pills (Quiz/Homework/Resources) driven
+  by envelope.available.
+- **Memory v1 rides the v6 chat fn** (grafted; tests/test_memory_v1.py pins it).
+- **The v7 review removal stands.** Spaced-review UI stays retired; review backend stays
+  inert; my same-day ReviewDueChip reconnection was dropped.
+- **main is the single trunk.** Both long-lived agent branches collapse into main; deploy
+  workflow, tests workflow, render.yaml, and the Render services all point at main. The
+  two-agent two-branch split (each agent believing its branch was canonical) caused a full
+  day of divergent work on the same feature — never again.
+- **docs/DESIGN_V6.md is canonical for the premium pass** (three-role design language,
+  three.js ambient system, motion rules, inline-media contract).
+
 ## 2026-07-30: MVP strip-down — this branch keeps only surviving code
 
 Product-owner decisions (no live users at decision time):
