@@ -132,8 +132,13 @@ Revision steps are RETRIEVAL PRACTICE on material the student has already studie
 question at a time on the step's skills, targeting the ones they are weakest at (their per-skill tiers are in
 student.mastery — favor "emerging" over "developing" over "secure"). Let them retrieve the answer from memory
 — do NOT re-teach, summarize, or hand them the answer before they try; affirm accurate recall briefly and
-correct gaps gently. Speak only about the named skills and tiers you are given — never invent or claim
-specifics about the student's past sessions or earlier answers.
+correct gaps gently. Speak only about the named skills and tiers you are given.
+
+STUDENT MEMORY: student.memory (when present) is the ONLY record of the student's past sessions you may
+draw on — a short profile (narrative, strengths, struggles, preferences) and up to three recent session
+summaries. Reference past sessions ONLY as described there; beyond what student.memory states,
+never invent or claim specifics about the student's past sessions or earlier answers. When it is
+absent, say nothing about their past sessions at all.
 
 Quiz steps: while options are on screen the student answers by tapping them — point at the options, do not
 re-read or re-narrate them (introduce the question briefly only when the directive says it is the first
@@ -1943,6 +1948,37 @@ async function upsertMisconception(
       updated_at: now,
     });
   }
+
+  // Memory v1: mirror the pattern into student_mastery.common_error_patterns for the
+  // matching skill row, IF the student already has one (never creates a mastery row —
+  // mastery rows are earned through graded evidence). Deduped, newest kept, capped at
+  // 5. Best-effort: the misconception row above is the source of truth, so a merge
+  // failure never fails the turn.
+  try {
+    const masteryRow = await loadFirst(
+      config,
+      `student_mastery?user_id=eq.${encodeURIComponent(userId)}&skill_key=eq.${encodeURIComponent(skillKey)}&select=common_error_patterns&limit=1`,
+    );
+    if (masteryRow) {
+      const existingPatterns = Array.isArray(masteryRow.common_error_patterns)
+        ? (masteryRow.common_error_patterns as unknown[]).map((entry) =>
+            String(entry),
+          )
+        : [];
+      if (!existingPatterns.includes(pattern)) {
+        await patchRows(
+          config,
+          `student_mastery?user_id=eq.${encodeURIComponent(userId)}&skill_key=eq.${encodeURIComponent(skillKey)}`,
+          {
+            common_error_patterns: [...existingPatterns, pattern].slice(-5),
+            updated_at: now,
+          },
+        );
+      }
+    }
+  } catch {
+    // Best-effort mirror only.
+  }
 }
 
 // --- Flow core (v2) -----------------------------------------------------------
@@ -2923,6 +2959,11 @@ async function loadContext(
   misconceptions: DbRow[];
   pendingCheckpoints: PendingCheckpoint[];
   pendingCheckpointsOk: boolean;
+  // Memory v1: the student's rolling profile row and their last few completed-session
+  // summaries (newest first, current session excluded). Both BEST-EFFORT — a read
+  // failure yields absent memory and never blocks the turn.
+  memory: DbRow | null;
+  recentSummaries: DbRow[];
 }> {
   // Reads run in TWO parallel waves (wave 2 holds only the queries that genuinely
   // depend on a wave-1 result), with the checkpoints chain overlapping both.
@@ -2939,6 +2980,8 @@ async function loadContext(
     resources,
     resourceInteractions,
     profile,
+    memory,
+    recentSummaries,
   ] = await Promise.all([
     loadFirst(
       config,
@@ -2968,6 +3011,15 @@ async function loadContext(
       config,
       `profiles?id=eq.${encodeURIComponent(userId)}&select=name,grade&limit=1`,
     ),
+    // Memory v1 (both best-effort — absent on any failure, never blocks the turn).
+    loadFirst(
+      config,
+      `student_memory?user_id=eq.${encodeURIComponent(userId)}&select=profile,updated_at&limit=1`,
+    ).catch(() => null),
+    loadMany(
+      config,
+      `session_summaries?user_id=eq.${encodeURIComponent(userId)}&session_id=neq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=3&select=lesson_id,summary,created_at`,
+    ).catch(() => [] as DbRow[]),
   ]);
 
   const currentActivityId =
@@ -3048,6 +3100,8 @@ async function loadContext(
     misconceptions,
     pendingCheckpoints: pendingResult ?? [],
     pendingCheckpointsOk: pendingResult !== null,
+    memory,
+    recentSummaries,
   };
 }
 
@@ -3153,6 +3207,71 @@ function buildLessonArc(
         }
       : {}),
   };
+}
+
+// --- Memory v1: prompt-side view --------------------------------------------------
+// Compact, hard-capped view of the student's cross-session memory for the prompt
+// payload: the profile narrative tops out at 600 chars, each recent-session summary is
+// flattened to one <=240-char line, and at most 3 summaries ride. Returns null when
+// there is nothing to say (fresh student, or the best-effort reads failed) so the
+// prompt simply omits the key.
+const MEMORY_NARRATIVE_MAX = 600;
+const MEMORY_SUMMARY_MAX = 240;
+const MEMORY_LIST_MAX = 6;
+
+function memoryForPrompt(
+  memoryRow: DbRow | null,
+  summaryRows: DbRow[],
+): DbRow | null {
+  const profileRaw =
+    memoryRow?.profile &&
+    typeof memoryRow.profile === "object" &&
+    !Array.isArray(memoryRow.profile)
+      ? (memoryRow.profile as DbRow)
+      : null;
+  const narrative = profileRaw
+    ? String(profileRaw.narrative || "").slice(0, MEMORY_NARRATIVE_MAX)
+    : "";
+  const profile =
+    profileRaw &&
+    (narrative ||
+      stringArray(profileRaw.strengths).length ||
+      stringArray(profileRaw.struggles).length ||
+      stringArray(profileRaw.preferences).length)
+      ? {
+          narrative,
+          strengths: stringArray(profileRaw.strengths).slice(0, MEMORY_LIST_MAX),
+          struggles: stringArray(profileRaw.struggles).slice(0, MEMORY_LIST_MAX),
+          preferences: stringArray(profileRaw.preferences).slice(0, MEMORY_LIST_MAX),
+        }
+      : null;
+  const recent = summaryRows
+    .slice(0, 3)
+    .map((row) => {
+      const summary =
+        row.summary && typeof row.summary === "object" && !Array.isArray(row.summary)
+          ? (row.summary as DbRow)
+          : {};
+      const parts = [
+        stringArray(summary.covered).length
+          ? `covered: ${stringArray(summary.covered).join(", ")}`
+          : "",
+        stringArray(summary.wins).length
+          ? `wins: ${stringArray(summary.wins).join(", ")}`
+          : "",
+        stringArray(summary.struggles).length
+          ? `struggles: ${stringArray(summary.struggles).join(", ")}`
+          : "",
+        typeof summary.note === "string" ? summary.note : "",
+      ].filter(Boolean);
+      return {
+        lesson_id: typeof row.lesson_id === "string" ? row.lesson_id : null,
+        summary: parts.join("; ").slice(0, MEMORY_SUMMARY_MAX),
+      };
+    })
+    .filter((entry) => entry.summary);
+  if (!profile && !recent.length) return null;
+  return { profile, recent };
 }
 
 // Artifacts v1 (P6): validated passthrough of ONLY the metadata.artifact subtree.
@@ -3452,6 +3571,151 @@ async function maybeWriteRecommendation(
   // notifications row (service-role-only insert). Rescue flags already reach teachers via the
   // derived hotlist (dashboard.mentorRecommendations), so no chat-side notification writer is added
   // here; the notifications table is fed by the service-role edge fns (assessment-admin) instead.
+}
+
+// --- Memory v1: completion-time summary writer ------------------------------------
+// Scheduled as a BACKGROUND task (scheduleBackground/EdgeRuntime.waitUntil) on the
+// exact turn that transitions a session to complete. ONE cheap-route model call turns
+// the session's last ~20 turns into {summary, profile}; the summary is inserted into
+// session_summaries (duplicate session_id conflicts ignored — a re-completion can
+// never fork history) and the profile is upserted into student_memory (narrative
+// replaced; strengths/struggles/preferences unioned newest-first and capped at 6).
+// Everything runs under the student's OWN JWT (this fn holds no service key), so the
+// writes rely on the owner RLS policies in 20260731100000_memory_v1.sql. Fully
+// best-effort: any failure logs and never affects the student's turn.
+const MEMORY_TURNS_LIMIT = 20;
+const MEMORY_TURN_CHARS = 280;
+const MEMORY_TRANSCRIPT_CHARS = 6000;
+const MEMORY_LIST_ENTRY_CHARS = 80;
+
+async function writeSessionMemory(
+  config: SupabaseConfig,
+  userId: string,
+  sessionId: string,
+  lessonId: string,
+): Promise<void> {
+  try {
+    const turns = await loadMany(
+      config,
+      `learning_turns?session_id=eq.${encodeURIComponent(sessionId)}&order=created_at.desc&limit=${MEMORY_TURNS_LIMIT}&select=role,content`,
+    );
+    if (!turns.length) return;
+    const transcript = turns
+      .slice()
+      .reverse()
+      .map(
+        (turn) =>
+          `${String(turn.role || "student")}: ${String(turn.content || "").slice(0, MEMORY_TURN_CHARS)}`,
+      )
+      .join("\n")
+      .slice(0, MEMORY_TRANSCRIPT_CHARS);
+    const existing = await loadFirst(
+      config,
+      `student_memory?user_id=eq.${encodeURIComponent(userId)}&select=profile&limit=1`,
+    ).catch(() => null);
+    const priorProfile =
+      existing?.profile &&
+      typeof existing.profile === "object" &&
+      !Array.isArray(existing.profile)
+        ? (existing.profile as DbRow)
+        : {};
+
+    const system =
+      "You maintain a lightweight tutoring memory for a children's coding mentor. From the session " +
+      "transcript (and the student's existing profile, when given), produce ONLY this JSON object: " +
+      '{"summary": {"covered": ["short topic phrases"], "wins": ["what went well"], "struggles": ' +
+      '["what was hard"], "note": "one-sentence takeaway for the next session"}, "profile": ' +
+      '{"narrative": "a warm 2-4 sentence picture of this student as a learner, under 600 characters", ' +
+      '"strengths": [], "struggles": [], "preferences": []}}. Keep every list entry a short phrase. ' +
+      "The profile REPLACES the old narrative, so fold forward anything still true from the existing " +
+      "profile. Never include the student's name or personal details beyond how they learn.";
+    const result = await callModel(
+      [
+        { role: "system", content: system },
+        {
+          role: "user",
+          content: JSON.stringify({
+            existing_profile: priorProfile,
+            transcript,
+          }),
+        },
+      ],
+      true,
+      "understanding",
+    );
+    scheduleBackground(
+      recordModelUsage(config, userId, sessionId, lessonId, result, "grading"),
+    );
+    const raw = JSON.parse(extractJsonObject(result.content)) as DbRow;
+    const capList = (value: unknown, max = MEMORY_LIST_MAX) =>
+      stringArray(value)
+        .map((entry) => entry.slice(0, MEMORY_LIST_ENTRY_CHARS))
+        .slice(0, max);
+    const summaryRaw =
+      raw.summary && typeof raw.summary === "object" && !Array.isArray(raw.summary)
+        ? (raw.summary as DbRow)
+        : {};
+    const profileRaw =
+      raw.profile && typeof raw.profile === "object" && !Array.isArray(raw.profile)
+        ? (raw.profile as DbRow)
+        : {};
+    const summary = {
+      covered: capList(summaryRaw.covered),
+      wins: capList(summaryRaw.wins),
+      struggles: capList(summaryRaw.struggles),
+      note: String(summaryRaw.note || "").slice(0, MEMORY_SUMMARY_MAX),
+    };
+
+    // Insert the per-session summary; a duplicate session_id (double-complete, retried
+    // background task) is silently ignored rather than erroring or overwriting.
+    try {
+      await supabaseFetch(config, "session_summaries?on_conflict=session_id", {
+        method: "POST",
+        headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+        body: JSON.stringify({
+          user_id: userId,
+          session_id: sessionId,
+          lesson_id: lessonId || null,
+          summary,
+        }),
+      });
+    } catch (summaryErr) {
+      console.error("memory_summary_insert_failed", errorMessage(summaryErr));
+    }
+
+    // Rolling profile: replace the narrative (fall back to the prior one so a thin
+    // model response can't blank it), union the lists newest-first, cap at 6.
+    const unionCapped = (next: unknown, prior: unknown) =>
+      uniqueStrings([...capList(next), ...capList(prior, MEMORY_LIST_MAX * 2)]).slice(
+        0,
+        MEMORY_LIST_MAX,
+      );
+    const profile = {
+      narrative: String(profileRaw.narrative || priorProfile.narrative || "").slice(
+        0,
+        MEMORY_NARRATIVE_MAX,
+      ),
+      strengths: unionCapped(profileRaw.strengths, priorProfile.strengths),
+      struggles: unionCapped(profileRaw.struggles, priorProfile.struggles),
+      preferences: unionCapped(profileRaw.preferences, priorProfile.preferences),
+    };
+    if (
+      profile.narrative ||
+      profile.strengths.length ||
+      profile.struggles.length ||
+      profile.preferences.length
+    ) {
+      await upsertRows(
+        config,
+        "student_memory",
+        [{ user_id: userId, profile, updated_at: new Date().toISOString() }],
+        "user_id",
+      );
+    }
+  } catch (err) {
+    // Best-effort by contract: memory must never affect the student's turn.
+    console.error("memory_write_failed", errorMessage(err));
+  }
 }
 
 async function handleTypedRequest(
@@ -4457,6 +4721,11 @@ async function handleTypedRequest(
               pattern: row.pattern,
               hint: row.hint,
             })),
+            // Memory v1: cross-session memory (profile + recent session summaries),
+            // hard-capped in memoryForPrompt; null (a stable literal) when absent.
+            // Session-stable like mastery/misconceptions, so it sits BEFORE the
+            // per-turn recent_questions in the stable -> volatile key order.
+            memory: memoryForPrompt(context.memory, context.recentSummaries),
             recent_questions: recentQuestions.slice(0, 4),
           },
           checkpoints: context.pendingCheckpoints.slice(0, 3),
@@ -5222,6 +5491,20 @@ async function handleTypedRequest(
             : {}),
         },
       );
+
+    // Memory v1: THIS turn just transitioned the session to complete (status persisted
+    // above) — schedule the background summary/profile writer. Best-effort by
+    // construction (writeSessionMemory self-catches) and never on a re-completion:
+    // duplicate session_id inserts are ignored, but there is no reason to re-spend a
+    // model call for a session whose summary already exists.
+    if (
+      nextStatus === "complete" &&
+      String(session.status || "") !== "complete"
+    ) {
+      scheduleBackground(
+        writeSessionMemory(config, userId, sessionId, lessonId),
+      );
+    }
 
     if (currentStage !== envelope.stage) {
       scheduleBackground(

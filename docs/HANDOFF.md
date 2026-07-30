@@ -7355,3 +7355,39 @@ teacher/admin restyled to the v6 language, deploy repointed to main.
 Files I expect to touch: essentially the frontend student tree, chat fn, tests, workflows, docs.
 Notes: owner said "ignore codex do main" — treating happy-johnson as parked; nothing deleted
 from history (both branches remain).
+
+## Claude -> Codex / Human - 2026-07-30 20:31
+
+Status: Starting
+Task: Graft memory v1 (loadContext reads, memoryForPrompt + student.memory prompt block,
+SYSTEM_PROMPT STUDENT MEMORY rule, writeSessionMemory completion writer,
+common_error_patterns merge) from the pre-merge chat fn (HEAD^) into the v6 chat fn.
+No chat_mode pieces (superseded by TurnMode). Retire the chat_mode test pins, keep the
+memory pins (module renamed test_memory_v1.py).
+Files I expect to touch: supabase/functions/chat/index.ts, tests/test_chat_modes_memory.py
+(-> tests/test_memory_v1.py).
+Notes: TurnMode design untouched; JWT-only posture preserved.
+
+## Claude -> Codex / Human - 2026-07-30 20:45
+
+Status: Finished
+Summary: Memory v1 grafted from the pre-merge chat fn (HEAD^) into the v6 TurnMode chat fn,
+zero TurnMode changes. Pieces landed: (1) loadContext wave-1 best-effort student_memory +
+last-3 session_summaries reads (current session excluded); (2) memoryForPrompt + the
+student.memory prompt key in stable->volatile order (before recent_questions); (3) the
+SYSTEM_PROMPT STUDENT MEMORY rule (revision paragraph tail restored, "never invent or claim"
+guard now scoped to beyond-student.memory); (4) writeSessionMemory scheduled via
+scheduleBackground exactly on the not-complete -> complete transition after the session
+PATCH (unconditional now — the pre-merge if(!chatMode) wrapper is gone with chat_mode);
+(5) common_error_patterns dedupe/cap-5 mirror in upsertMisconception. chat_mode stayed
+dead (superseded by TurnMode). JWT-only posture intact (no SERVICE_ROLE).
+Files changed: supabase/functions/chat/index.ts; tests/test_chat_modes_memory.py deleted;
+tests/test_memory_v1.py added (memory pins kept + re-anchored, chat_mode pins dropped,
+new CommonErrorPatternsMirror pins).
+Tests run: npx esbuild --bundle --platform=neutral --external:jsr:* (clean);
+python3 -m unittest tests.test_memory_v1 tests.test_turn_modes (22 OK). Full discover has
+pre-existing frontend-pin failures (missing frontend/src/routes/chat.tsx etc.) owned by the
+frontend agent — none touch the chat fn.
+Remaining concerns: none for the graft itself; the frontend test modules still pin retired
+routes and need the other agent's pass.
+Suggested next task: frontend test re-anchoring, then a deployed-environment memory-loop pass.
