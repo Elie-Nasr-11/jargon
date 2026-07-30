@@ -2,6 +2,33 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-07-30: MVP strip-down — this branch keeps only surviving code
+
+Product-owner decisions (no live users at decision time):
+
+- `claude/project-scope-mvp-o7ox0y` is the MVP branch: cut code is REMOVED from it,
+  `main` remains the full archive. Nothing is hidden behind flags.
+- The student experience is the product's center. It gains seven student-facing chat
+  modes — open, lesson, practice, discuss, quiz, assessment, resources — replacing the
+  never-surfaced `MentorMode` stance vocabulary.
+- Memory v1 ships light and high-yield: per-session summaries + a rolling per-student
+  narrative profile, both prompt-fed and student-visible, layered over the existing
+  per-skill mastery/misconception memory. The "never reference past sessions" mentor
+  guardrail relaxes to "only what student.memory provides".
+- Teacher keeps a class-centric core (class cards, hotlist, overview, roster, gradebook,
+  assignment + assessment builders/grading, slim resource upload, student transcript
+  with watch-live/pause/tips) plus studio-lite authoring with the AI drafter. The media
+  extraction pipeline, reports/CSV, analytics/risk duplicates, comms UI, and all
+  integration UIs are cut from this branch.
+- Admin is three tabs: Seeding (demo logins are the MVP entry story), Live, Cost.
+- DB migrations and edge functions are never deleted (applied/live, additive-only);
+  out-of-scope backend stays deployed but dormant (canvas, google-classroom,
+  resource-processing pipeline, comms tables).
+- Voice is in the MVP with the best available server voices (already the defaults in
+  `voice-session`); the deleted frontend toggles return.
+- A small multi-subject demo catalog is seeded alongside Book F.
+- The full inventory lives in `docs/MVP_SCOPE.md` (canonical for this pass).
+
 ## 2026-07-17: Artifacts P8 — live mentor artifacts are student-private, consent-first, and service-role-isolated
 
 Three coupled decisions for live mentor-generated artifacts (product owner chose "student-private
