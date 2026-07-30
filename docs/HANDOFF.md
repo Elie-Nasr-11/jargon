@@ -6885,3 +6885,38 @@ optional, so old clients ignore it.
 (4) Still unported from /chat: attachments, voice, code running, artifacts, resource cards.
 Suggested next task: the signed-in run. Five slices of student surface plus this writer have never
 executed against real data, and the homework `kind` assumption is the first thing it would confirm.
+
+## Claude -> Codex / Human - 2026-07-30 12:10
+
+Status: Done (mobile navigation, Customize, Reports, and a mentor-settings bug)
+Summary: Three placeholders became real surfaces and one genuine bug got fixed.
+MOBILE NAVIGATION existed nowhere. The sidebar was `hidden … lg:block`, so below 1024px the student
+surface had NO navigation at all — no lesson switching, no Home, nothing. The column is now hoisted
+into a variable shared by the docked aside and a Radix Sheet drawer, with a fixed hamburger below lg.
+Every nav action closes the drawer; the docked column is unaffected. Verified at 390px.
+BUG: useConversation sent mentorToPreferences(DEFAULT_MENTOR) — the HARDCODED default — on every
+turn. Customize would have let a student change tone, verbosity and difficulty and had none of it
+reach the tutor. It now reads store.getMentor() per turn, so a change lands on the next message
+without a reload. This was latent from the first slice; it only became visible once Customize existed.
+CUSTOMIZE reuses MentorControls (already built and working) with store-backed state.
+REPORTS reuses GradesPanel, which fetches its own rows — it is the deeper view of Home's "Marked"
+column, with class and unit context rather than the recent few. That resolves the overlap question
+raised earlier: Home summarises, Reports is the full list.
+Files changed: frontend/src/student/{StudentApp.tsx,useConversation.ts}, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 297 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged.
+Live: headless Chromium at 390px (drawer opens and lists nav) and 1180px (Customize renders real tone
+/ verbosity controls); zero page errors.
+Remaining concerns: (1) Routines is the last placeholder destination, and correctly so — it has no
+backend. Spaced repetition works via review_sessions but has no student-facing home yet; digests and
+summaries need a scheduler that does not exist.
+(2) Home has no Classes navigation and no agenda calendar.
+(3) Still unported from /chat: attachments, live voice, code running (the whole Jargon runtime),
+artifacts, resource cards. These are the largest remaining chunk of the student end by far and each
+wants its own slice — the Chatbox deliberately renders no attach/audio button until they are wired.
+(4) /chat still exists. The bar proposed earlier — once /learn handles boot, send, quiz choices and
+Home, /chat redirects and features/student/ is deleted in the same commit — is now MET on paper, but
+should not be acted on until someone has run /learn signed in.
+(5) NOTHING on this surface has been verified against real data.
+Suggested next task: the signed-in run, then code running (it is the one unported feature the Jargon
+curriculum cannot work without).

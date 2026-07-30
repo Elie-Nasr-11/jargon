@@ -6,7 +6,7 @@ import {
   getSession,
   invokeTypedChat,
 } from "@/lib/api";
-import { DEFAULT_MENTOR } from "@/lib/jargon-store";
+import { store } from "@/lib/jargon-store";
 import type { Lesson, LessonChatResource, TypedChatAnswer, TypedChatEnvelope } from "@/lib/types";
 import {
   envelopeMessage,
@@ -135,7 +135,7 @@ export function useConversation() {
       const envelope = await invokeTypedChat({
         accessToken: token,
         lessonId: target.id,
-        mentorPreferences: mentorToPreferences(DEFAULT_MENTOR),
+        mentorPreferences: mentorToPreferences(store.getMentor()),
       });
       if (isStale()) return;
       setSession(envelope.session_id ?? null);
@@ -238,7 +238,7 @@ export function useConversation() {
         lessonId: activeLesson.id,
         sessionId: sessionRef.current,
         answer,
-        mentorPreferences: mentorToPreferences(DEFAULT_MENTOR),
+        mentorPreferences: mentorToPreferences(store.getMentor()),
         mode,
       });
       if (envelope.session_id) setSession(envelope.session_id);
