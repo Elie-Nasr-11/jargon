@@ -103,19 +103,19 @@ export function LinkedCoursesPanel({
   };
 
   return (
-    <div className="mt-5 rounded-3xl border border-border bg-depth-sub p-4">
-      <div className="mb-1 flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+    <div className="mt-5 rounded-card border border-border bg-depth-sub p-4">
+      <div className="mb-1 flex items-center gap-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
         <BookMarked className="h-3.5 w-3.5" strokeWidth={1.8} />
         Linked courses
       </div>
-      <p className="mb-3 text-[12.5px] leading-relaxed text-muted-foreground">
+      <p className="mb-3 text-meta leading-relaxed text-muted-foreground">
         Choose which courses this class's students see in their lesson catalog. Leave everything
         unchecked to show the full published catalog.
       </p>
       {loading ? (
-        <p className="text-[12.5px] text-muted-foreground">Loading…</p>
+        <p className="text-meta text-muted-foreground">Loading…</p>
       ) : availableCourses.length === 0 ? (
-        <p className="text-[12.5px] text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           No published courses are available to link yet.
         </p>
       ) : (
@@ -123,7 +123,7 @@ export function LinkedCoursesPanel({
           {availableCourses.map((course) => (
             <label
               key={course.id}
-              className="flex items-center gap-2.5 rounded-xl border border-border bg-depth-field px-3 py-2 text-[12.5px] text-foreground"
+              className="flex items-center gap-2.5 rounded-control border border-border bg-depth-field px-3 py-2 text-meta text-foreground"
             >
               <input
                 type="checkbox"
@@ -136,19 +136,19 @@ export function LinkedCoursesPanel({
           ))}
         </div>
       )}
-      {error ? <p className="mt-2 text-[12px] text-danger">{error}</p> : null}
-      {status ? <p className="mt-2 text-[12px] text-success">{status}</p> : null}
+      {error ? <p className="mt-2 text-meta text-danger">{error}</p> : null}
+      {status ? <p className="mt-2 text-meta text-success">{status}</p> : null}
       {availableCourses.length ? (
         <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
             onClick={save}
             disabled={saving || !dirty}
-            className="rounded-full border border-border px-3.5 py-1.5 text-[12px] text-foreground hover:bg-muted disabled:opacity-50"
+            className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground hover:bg-muted disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save linked courses"}
           </button>
-          <span className="text-[11.5px] text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             {selected.size ? `${selected.size} linked` : "No scoping (full catalog)"}
           </span>
         </div>

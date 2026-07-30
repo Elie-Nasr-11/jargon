@@ -158,5 +158,5 @@ export function lessonStatusClass(status: LessonProgressStatus) {
   if (status === "Retry") {
     return "border-warning/40 bg-warning/12 text-warning";
   }
-  return "border-border bg-background/45 text-muted-foreground";
+  return "border-border bg-depth-sub text-muted-foreground";
 }

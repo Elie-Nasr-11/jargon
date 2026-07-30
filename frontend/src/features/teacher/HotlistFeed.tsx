@@ -8,7 +8,6 @@ import {
   Radio,
   Sparkles,
 } from "lucide-react";
-import { GradientCard } from "@/components/GradientCard";
 import { EmptyState } from "@/components/EmptyState";
 import type { Lesson, Profile, TeacherClassSummary, TeacherDashboardData } from "@/lib/types";
 
@@ -186,6 +185,27 @@ const TONE_CLASS: Record<"danger" | "warn" | "info", string> = {
   info: "text-muted-foreground",
 };
 
+// State-hue LEFT ACCENT per row (DESIGN_V6 §6): a 3px tinted left edge carries the row's
+// urgency at a glance; the rest of the row stays neutral so the feed reads calmly.
+const TONE_ACCENT: Record<"danger" | "warn" | "info", string> = {
+  danger: "border-l-danger",
+  warn: "border-l-warning",
+  info: "border-l-info/60",
+};
+
+// Count badge whose NUMBER flips in on change (DESIGN_V6 §3: number flips animate; badges
+// never blink). Keying the inner span on the value re-triggers the .num-flip animation;
+// reduced motion neutralizes it globally. Exported for the console's other count badges.
+export function NumberFlip({ value }: { value: number | string }) {
+  return (
+    <span className="inline-block overflow-hidden align-bottom">
+      <span key={String(value)} className="num-flip inline-block tabular-nums">
+        {value}
+      </span>
+    </span>
+  );
+}
+
 export function HotlistFeed({
   items,
   onOpen,
@@ -199,15 +219,15 @@ export function HotlistFeed({
 }) {
   const shown = items.slice(0, limit);
   return (
-    <GradientCard>
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
       <div className="p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+          <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
             Hotlist
           </div>
           {items.length ? (
-            <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground">
-              {items.length}
+            <span className="rounded-pill border border-border bg-depth-sub px-2.5 py-0.5 text-meta text-muted-foreground">
+              <NumberFlip value={items.length} />
             </span>
           ) : null}
         </div>
@@ -225,12 +245,12 @@ export function HotlistFeed({
                   key={item.id}
                   type="button"
                   onClick={() => onOpen(item)}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-depth-field px-3 py-2 text-left transition-colors hover:bg-muted"
+                  className={`flex items-center gap-3 rounded-control border border-border border-l-[3px] bg-depth-field px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-muted ${TONE_ACCENT[meta.tone]}`}
                 >
                   <Icon className={`h-4 w-4 shrink-0 ${TONE_CLASS[meta.tone]}`} strokeWidth={1.7} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12.5px] text-foreground">{item.title}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">
+                    <div className="truncate text-meta text-foreground">{item.title}</div>
+                    <div className="truncate text-overline text-muted-foreground">
                       {meta.label}
                       {item.subtitle ? ` · ${item.subtitle}` : ""}
                     </div>
@@ -241,7 +261,7 @@ export function HotlistFeed({
                       strokeWidth={1.6}
                     />
                   ) : null}
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                  <span className="shrink-0 text-meta text-muted-foreground">
                     {relativeTime(item.ts, nowMs)}
                   </span>
                 </button>
@@ -250,11 +270,11 @@ export function HotlistFeed({
           </div>
         )}
         {items.length > shown.length ? (
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-meta text-muted-foreground">
             +{items.length - shown.length} more — open a class to see the rest.
           </p>
         ) : null}
       </div>
-    </GradientCard>
+    </section>
   );
 }

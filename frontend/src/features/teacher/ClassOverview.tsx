@@ -1,4 +1,5 @@
 import { CalendarClock, ClipboardCheck, FileCheck2, Radio } from "lucide-react";
+import { NumberFlip } from "@/features/teacher/HotlistFeed";
 import type { Assessment, Assignment, Profile, TeacherDashboardData } from "@/lib/types";
 
 // v4.0 Phase 2c — the class Overview's attention strips: which students are live right now
@@ -19,9 +20,11 @@ function relTime(iso: string, now: number): string {
 
 function Tile({ value, label }: { value: number; label: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-background/45 px-3 py-2">
-      <div className="text-[15px] font-medium text-foreground">{value}</div>
-      <div className="mt-0.5 text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
+    <div className="rounded-card border border-border bg-depth-sub px-3 py-2">
+      <div className="text-body-lg font-medium tabular-nums text-foreground">
+        <NumberFlip value={value} />
+      </div>
+      <div className="mt-0.5 text-overline uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </div>
     </div>
@@ -87,8 +90,8 @@ export function ClassOverviewStrips({
   return (
     <div className="mt-5 grid gap-3">
       {live.length ? (
-        <div className="rounded-3xl border border-border bg-depth-sub p-4">
-          <div className="mb-3 flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+        <div className="rounded-card border border-border bg-depth-sub p-4">
+          <div className="mb-3 flex items-center gap-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
             <Radio className="h-3.5 w-3.5 text-success" strokeWidth={1.8} />
             Live now
           </div>
@@ -96,17 +99,17 @@ export function ClassOverviewStrips({
             {live.slice(0, 6).map((s) => (
               <div
                 key={s.id}
-                className="flex items-center gap-2 rounded-xl border border-border bg-depth-field px-3 py-2"
+                className="flex items-center gap-2 rounded-control border border-border bg-depth-field px-3 py-2"
               >
                 <span className="relative flex h-2 w-2 shrink-0">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12.5px] text-foreground">
+                  <div className="truncate text-meta text-foreground">
                     {displayName(profilesById.get(s.user_id), s.user_id)}
                   </div>
-                  <div className="truncate text-[11px] text-muted-foreground">
+                  <div className="truncate text-meta text-muted-foreground">
                     {lessonTitle(s.lesson_id)} · {relTime(s.updated_at, now)}
                   </div>
                 </div>
@@ -114,7 +117,7 @@ export function ClassOverviewStrips({
                   type="button"
                   onClick={() => onWatch(s.user_id, s.id)}
                   aria-label={`Watch ${displayName(profilesById.get(s.user_id), s.user_id)}`}
-                  className="shrink-0 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground hover:bg-muted"
+                  className="shrink-0 rounded-full border border-border px-3 py-1.5 text-meta text-foreground hover:bg-muted"
                 >
                   Watch
                 </button>
@@ -124,8 +127,8 @@ export function ClassOverviewStrips({
         </div>
       ) : null}
 
-      <div className="rounded-3xl border border-border bg-depth-sub p-4">
-        <div className="mb-3 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+      <div className="rounded-card border border-border bg-depth-sub p-4">
+        <div className="mb-3 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
           Work
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">

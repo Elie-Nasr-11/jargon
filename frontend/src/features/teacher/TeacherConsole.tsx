@@ -20,8 +20,12 @@ import {
   Send,
   UsersRound,
 } from "lucide-react";
-import { GradientCard } from "@/components/GradientCard";
-import { HotlistFeed, deriveHotlist, type HotlistItem } from "@/features/teacher/HotlistFeed";
+import {
+  HotlistFeed,
+  NumberFlip,
+  deriveHotlist,
+  type HotlistItem,
+} from "@/features/teacher/HotlistFeed";
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { StudentReviewSessions } from "@/features/teacher/StudentReviewSessions";
 import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
@@ -813,7 +817,7 @@ export function TeacherConsole() {
           {!selectedClassId ? (
             <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <div className="text-overline uppercase tracking-[0.12em] text-muted-foreground">
+                <div className="text-overline uppercase tracking-[0.1em] text-muted-foreground">
                   Teacher dashboard
                 </div>
                 <h1 className="font-serif mt-2 text-display text-foreground">
@@ -828,7 +832,7 @@ export function TeacherConsole() {
                 <button
                   type="button"
                   onClick={() => void loadDashboard()}
-                  className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+                  className="rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
                 >
                   Refresh
                 </button>
@@ -837,25 +841,25 @@ export function TeacherConsole() {
           ) : null}
 
           {booting ? (
-            <GradientCard>
-              <div className="p-6 text-[14px] text-muted-foreground">Loading teacher access...</div>
-            </GradientCard>
+            <section className="rounded-card border border-border bg-depth-card shadow-card">
+              <div className="p-6 text-body text-muted-foreground">Loading teacher access...</div>
+            </section>
           ) : message ? (
-            <GradientCard>
-              <div className="p-6 text-[14px] text-muted-foreground">{message}</div>
-            </GradientCard>
+            <section className="rounded-card border border-border bg-depth-card shadow-card">
+              <div className="p-6 text-body text-muted-foreground">{message}</div>
+            </section>
           ) : null}
 
           {!booting && dashboard && model && (
             <>
               <div className="flex flex-col gap-4">
                 {!selectedClassId ? (
-                  <GradientCard>
+                  <section className="rounded-card border border-border bg-depth-card shadow-card">
                     <div className="p-4">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
-                          <h2 className="text-[16px] font-medium text-foreground">Classes</h2>
-                          <p className="mt-1 text-[12.5px] text-muted-foreground">
+                          <h2 className="text-title font-medium text-foreground">Classes</h2>
+                          <p className="mt-1 text-meta text-muted-foreground">
                             Live roster counts and latest student activity.
                           </p>
                         </div>
@@ -863,7 +867,7 @@ export function TeacherConsole() {
                       <div className="flex flex-col gap-4">
                         {classesByOrg.map(([org, items]) => (
                           <div key={org}>
-                            <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                            <div className="mb-2 flex items-center gap-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                               <Building2 className="h-3.5 w-3.5" strokeWidth={1.7} />
                               {org}
                               <span className="text-muted-foreground/60">· {items.length}</span>
@@ -897,7 +901,7 @@ export function TeacherConsole() {
                         ))}
                       </div>
                     </div>
-                  </GradientCard>
+                  </section>
                 ) : null}
 
                 <div className="grid gap-4">
@@ -1044,15 +1048,13 @@ function ClassButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-full w-full flex-col rounded-3xl border p-4 text-left transition-colors ${
-        active
-          ? "border-foreground/25 bg-background/80"
-          : "border-border bg-background/45 hover:bg-muted"
+      className={`elev-hover flex h-full w-full flex-col rounded-card border bg-depth-card p-4 text-left shadow-card ${
+        active ? "border-foreground/25" : "border-border"
       }`}
     >
-      <div className="text-[14px] font-medium text-foreground">{item.name}</div>
-      <div className="mt-1 text-[12px] text-muted-foreground">{organizationName(item)}</div>
-      <div className="mt-3 flex flex-wrap gap-3 text-[11.5px] text-muted-foreground">
+      <div className="text-body font-medium text-foreground">{item.name}</div>
+      <div className="mt-1 text-meta text-muted-foreground">{organizationName(item)}</div>
+      <div className="mt-3 flex flex-wrap gap-3 text-meta text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <UsersRound className="h-3.5 w-3.5" strokeWidth={1.6} />
           {stats.students} students
@@ -1069,12 +1071,12 @@ function ClassButton({
       {attention ? (
         <div className="mt-auto pt-3">
           {attention.tone === "warning" ? (
-            <span className="inline-flex items-center gap-1.5 rounded-pill border border-warning/40 bg-warning/12 px-2.5 py-1 text-[11px] text-warning">
-              <ClipboardList className="h-3 w-3" strokeWidth={2} /> {attention.pendingGrading} to
-              grade
+            <span className="inline-flex items-center gap-1.5 rounded-pill border border-warning/40 bg-warning/12 px-2.5 py-1 text-meta text-warning">
+              <ClipboardList className="h-3 w-3" strokeWidth={2} />{" "}
+              <NumberFlip value={attention.pendingGrading} /> to grade
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-pill border border-success/40 bg-success/12 px-2.5 py-1 text-[11px] text-success">
+            <span className="inline-flex items-center gap-1.5 rounded-pill border border-success/40 bg-success/12 px-2.5 py-1 text-meta text-success">
               <CheckCircle2 className="h-3 w-3" strokeWidth={2} /> Clear
             </span>
           )}
@@ -1186,21 +1188,21 @@ function ClassDetail({
     }
   }, [section]);
   return (
-    <GradientCard>
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
       <div className="p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               {organizationName(item)} · {item.status}
             </div>
-            <h2 className="mt-1 text-[22px] font-medium text-foreground">{item.name}</h2>
-            <p className="mt-1 text-[13px] text-muted-foreground">
+            <h2 className="mt-1 font-serif text-display text-foreground">{item.name}</h2>
+            <p className="mt-1 text-body text-muted-foreground">
               {stats.students} students, {stats.teachers} teacher, {stats.sessions} learning
               sessions.
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 lg:items-end">
-            <div className="grid grid-cols-3 gap-2 text-center text-[12px]">
+            <div className="grid grid-cols-3 gap-2 text-center text-meta">
               <MiniMetric label="Attempts" value={String(stats.attempts)} />
               <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
               <MiniMetric label="Evidence" value={String(stats.evidence)} />
@@ -1213,7 +1215,7 @@ function ClassDetail({
             live together with their consumers in Structure, so in-progress drafts only reset
             on an explicit cross-section move. */}
         {section === "overview" ? (
-          <div className="mt-4">
+          <div className="panel-fade mt-4">
             <h3 className="sr-only">Overview</h3>
             <ClassOverviewStrips
               classId={item.id}
@@ -1238,7 +1240,7 @@ function ClassDetail({
 
         {/* Grading queues lead — they're what the bell and hotlist deep-link to. */}
         {section === "students" ? (
-          <div className="mt-4">
+          <div className="panel-fade mt-4">
             <h3 className="sr-only">Students &amp; performance</h3>
             <div className="grid gap-4">
               <AssignmentGrading
@@ -1298,27 +1300,27 @@ function ClassDetail({
                       type="button"
                       key={studentId}
                       onClick={() => onSelectStudent(studentId)}
-                      className={`rounded-3xl border p-4 text-left transition-colors ${
+                      className={`rounded-card border p-4 text-left transition-colors ${
                         selectedStudentId === studentId
-                          ? "border-foreground/25 bg-background/80"
-                          : "border-border bg-background/45 hover:bg-muted"
+                          ? "border-foreground/25 bg-depth-card"
+                          : "border-border bg-depth-sub hover:bg-muted"
                       }`}
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <div className="text-[14px] font-medium text-foreground">
+                          <div className="text-body font-medium text-foreground">
                             {displayName(profile, studentId)}
                           </div>
-                          <div className="mt-1 text-[12px] text-muted-foreground">
+                          <div className="mt-1 text-meta text-muted-foreground">
                             {profile?.grade || "Grade not set"} - {masteryCount} mastery skills
                           </div>
-                          <div className="mt-2 text-[12px] text-muted-foreground">
+                          <div className="mt-2 text-meta text-muted-foreground">
                             {completedLessons.length
                               ? `Completed: ${completedLessons.join(", ")}`
                               : "No completed lessons yet"}
                           </div>
                         </div>
-                        <div className="text-left text-[12px] text-muted-foreground sm:text-right">
+                        <div className="text-left text-meta text-muted-foreground sm:text-right">
                           <div>{latest ? statusLabel(latest) : "No session yet"}</div>
                           <div className="mt-1">
                             {latest
@@ -1331,7 +1333,7 @@ function ClassDetail({
                   );
                 })
               ) : (
-                <div className="rounded-3xl border border-border bg-background/45 p-5 text-[13px] text-muted-foreground">
+                <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
                   No active students are assigned to this class yet.
                 </div>
               )}
@@ -1340,7 +1342,7 @@ function ClassDetail({
         ) : null}
 
         {section === "structure" ? (
-          <div className="mt-4">
+          <div className="panel-fade mt-4">
             <h3 className="sr-only">Structure &amp; curriculum</h3>
             <ClassStructurePanel
               classId={item.id}
@@ -1358,10 +1360,10 @@ function ClassDetail({
                 structure tree → course scoping → three compact builder rows. Collapsible keeps
                 children mounted (height-0 + inert), so builder drafts and chunk-QA state
                 survive folding. */}
-            <div className="mt-4 rounded-3xl border border-border bg-depth-card p-4">
+            <div className="mt-4 rounded-card border border-border bg-depth-card p-4">
               <div className="mb-2">
-                <h3 className="text-[15px] font-medium text-foreground">Build for this class</h3>
-                <p className="text-[12.5px] text-muted-foreground">
+                <h3 className="text-title font-medium text-foreground">Build for this class</h3>
+                <p className="text-meta text-muted-foreground">
                   Resources, assignments, and quizzes you author for these lessons. Submitted work
                   is graded under Students &amp; performance.
                 </p>
@@ -1370,13 +1372,13 @@ function ClassDetail({
                 <Collapsible
                   open={!!openBuilders.resources}
                   onToggle={() => toggleBuilder("resources")}
-                  title={<span className="text-[13px] font-medium text-foreground">Resources</span>}
+                  title={<span className="text-body font-medium text-foreground">Resources</span>}
                   meta={
-                    <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                    <span className="shrink-0 text-meta text-muted-foreground">
                       {resources.length}
                     </span>
                   }
-                  headerClassName="rounded-xl px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
                   bodyClassName="pb-2"
                 >
                   <ResourceManager
@@ -1391,15 +1393,13 @@ function ClassDetail({
                 <Collapsible
                   open={!!openBuilders.assignments}
                   onToggle={() => toggleBuilder("assignments")}
-                  title={
-                    <span className="text-[13px] font-medium text-foreground">Assignments</span>
-                  }
+                  title={<span className="text-body font-medium text-foreground">Assignments</span>}
                   meta={
-                    <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                    <span className="shrink-0 text-meta text-muted-foreground">
                       {assignments.length}
                     </span>
                   }
-                  headerClassName="rounded-xl px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
                   bodyClassName="pb-2"
                 >
                   <AssignmentManager
@@ -1419,13 +1419,13 @@ function ClassDetail({
                 <Collapsible
                   open={!!openBuilders.assessments}
                   onToggle={() => toggleBuilder("assessments")}
-                  title={<span className="text-[13px] font-medium text-foreground">Quizzes</span>}
+                  title={<span className="text-body font-medium text-foreground">Quizzes</span>}
                   meta={
-                    <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                    <span className="shrink-0 text-meta text-muted-foreground">
                       {assessments.length}
                     </span>
                   }
-                  headerClassName="rounded-xl px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
                   bodyClassName="pb-2"
                 >
                   <AssessmentManager
@@ -1447,7 +1447,7 @@ function ClassDetail({
           </div>
         ) : null}
       </div>
-    </GradientCard>
+    </section>
   );
 }
 
@@ -1625,7 +1625,7 @@ function ResourceManager({
       {/* Hosted inside the Structure section's "Resources" bench — the Collapsible header
           carries the title + count, so this keeps only the description and the action. */}
       <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <p className="text-[12.5px] text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           Attach teacher-approved files and links. Drafts stay hidden from students.
         </p>
         <button
@@ -1634,7 +1634,7 @@ function ResourceManager({
             cancelEdit();
             setFormOpen(true);
           }}
-          className="shrink-0 rounded-full bg-foreground px-3 py-1.5 text-[12px] font-medium text-background transition-colors hover:opacity-90"
+          className="shrink-0 rounded-full bg-foreground px-3 py-1.5 text-meta font-medium text-background transition-colors hover:opacity-90"
         >
           New resource
         </button>
@@ -1654,13 +1654,13 @@ function ResourceManager({
             </DialogHeader>
 
             <div className="grid gap-3">
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Lesson
                 <select
                   value={draft.lessonId}
                   onChange={(event) => setField("lessonId", event.target.value)}
                   disabled={Boolean(draft.resourceId)}
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
                 >
                   {lessons.map((lesson) => (
                     <option key={lesson.id} value={lesson.id}>
@@ -1670,18 +1670,18 @@ function ResourceManager({
                 </select>
               </label>
 
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Title
                 <input
                   value={draft.title}
                   onChange={(event) => setField("title", event.target.value)}
                   placeholder="Purpose explainer PDF"
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </label>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Source
                   <select
                     value={draft.sourceType}
@@ -1695,14 +1695,14 @@ function ResourceManager({
                       }));
                     }}
                     disabled={Boolean(draft.resourceId)}
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
                   >
                     <option value="upload">Upload</option>
                     <option value="external_url">External URL</option>
                   </select>
                 </label>
 
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Type
                   <select
                     value={draft.resourceType}
@@ -1710,7 +1710,7 @@ function ResourceManager({
                       setField("resourceType", event.target.value as LessonResourceType)
                     }
                     disabled={draft.sourceType === "upload" || Boolean(draft.resourceId)}
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
                   >
                     <option value="pdf">PDF</option>
                     <option value="video">Video</option>
@@ -1724,68 +1724,68 @@ function ResourceManager({
               </div>
 
               {draft.sourceType === "upload" && !draft.resourceId ? (
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   File
                   <input
                     type="file"
                     accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,image/*,audio/*,video/*"
                     onChange={(event) => setField("file", event.target.files?.[0] || null)}
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-meta file:text-foreground"
                   />
                 </label>
               ) : null}
 
               {draft.sourceType === "external_url" ? (
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   External URL
                   <input
                     value={draft.externalUrl || ""}
                     onChange={(event) => setField("externalUrl", event.target.value)}
                     placeholder="https://youtube.com/watch?v=..."
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
                   />
                 </label>
               ) : null}
 
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Student instructions
                 <textarea
                   value={draft.studentInstructions}
                   onChange={(event) => setField("studentInstructions", event.target.value)}
                   placeholder="Open this before the checkpoint and look for the input/process/output idea."
-                  className="min-h-[72px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                  className="min-h-[72px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </label>
 
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Description
                 <textarea
                   value={draft.description}
                   onChange={(event) => setField("description", event.target.value)}
                   placeholder="Short student-facing summary."
-                  className="min-h-[66px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                  className="min-h-[66px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </label>
 
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Teacher notes
                 <textarea
                   value={draft.teacherNotes}
                   onChange={(event) => setField("teacherNotes", event.target.value)}
                   placeholder="Private classroom context for teachers."
-                  className="min-h-[66px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                  className="min-h-[66px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </label>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Status
                   <select
                     value={draft.status}
                     onChange={(event) =>
                       setField("status", event.target.value as LessonResourceStatus)
                     }
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                   >
                     <option value="draft">Draft</option>
                     <option value="published">Published</option>
@@ -1793,14 +1793,14 @@ function ResourceManager({
                   </select>
                 </label>
 
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Visibility
                   <select
                     value={draft.visibility}
                     onChange={(event) =>
                       setField("visibility", event.target.value as LessonResourceVisibility)
                     }
-                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                   >
                     <option value="class_private">Class private</option>
                     <option value="org_private">Organization private</option>
@@ -1813,12 +1813,12 @@ function ResourceManager({
                 type="button"
                 onClick={() => void submit()}
                 disabled={saving}
-                className="mt-1 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-1 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? "Saving..." : draft.resourceId ? "Save resource" : "Create resource"}
               </button>
               {resourceMessage ? (
-                <div className="text-[12px] leading-relaxed text-muted-foreground">
+                <div className="text-meta leading-relaxed text-muted-foreground">
                   {resourceMessage}
                 </div>
               ) : null}
@@ -1828,7 +1828,7 @@ function ResourceManager({
 
         <div className="grid content-start gap-2">
           {resourceMessage && !formOpen ? (
-            <div className="rounded-2xl border border-border bg-depth-sub px-3 py-2 text-[12px] leading-relaxed text-muted-foreground">
+            <div className="rounded-card border border-border bg-depth-sub px-3 py-2 text-meta leading-relaxed text-muted-foreground">
               {resourceMessage}
             </div>
           ) : null}
@@ -1837,23 +1837,23 @@ function ResourceManager({
               return (
                 <div
                   key={resource.id}
-                  className="rounded-2xl border border-border bg-depth-sub p-4"
+                  className="rounded-card border border-border bg-depth-sub p-4"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13px] font-medium text-foreground">
+                        <span className="text-body font-medium text-foreground">
                           {resource.title}
                         </span>
                         <ResourceStatusChip status={resource.status} />
                       </div>
-                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                      <div className="mt-1 text-meta text-muted-foreground">
                         {resource.resource_type} ·{" "}
                         {resource.source_type === "upload" ? "private file" : "external link"} ·{" "}
                         {lessonTitle(lessons, resource.lesson_id)}
                       </div>
                       {resource.student_instructions ? (
-                        <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
+                        <p className="mt-2 line-clamp-2 text-meta leading-relaxed text-muted-foreground">
                           {resource.student_instructions}
                         </p>
                       ) : null}
@@ -1862,14 +1862,14 @@ function ResourceManager({
                       <button
                         type="button"
                         onClick={() => editResource(resource)}
-                        className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                        className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => void openResource(resource)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
                       >
                         <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.6} />
                         {openingId === resource.id ? "Opening..." : "Open"}
@@ -1900,7 +1900,7 @@ function ResourceManager({
               );
             })
           ) : (
-            <div className="rounded-2xl border border-border bg-depth-sub p-5 text-[13px] text-muted-foreground">
+            <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
               No lesson resources yet. Add a draft, then publish it when students should see it.
             </div>
           )}
@@ -2096,20 +2096,20 @@ function AssessmentManager({
     <div className="pt-1">
       {/* Hosted inside the Structure section's "Quizzes" bench — title + count live on the
           Collapsible header; grading moved to Students + performance. */}
-      <p className="mb-3 text-[12.5px] text-muted-foreground">
+      <p className="mb-3 text-meta text-muted-foreground">
         Build and publish multi-question quizzes for a lesson. MCQ items auto-grade on submission.
       </p>
 
       <div className="grid gap-4">
-        <div className="rounded-2xl border border-border bg-depth-sub p-4">
-          <div className="text-[13px] font-medium text-foreground">Create quiz</div>
+        <div className="rounded-card border border-border bg-depth-sub p-4">
+          <div className="text-body font-medium text-foreground">Create quiz</div>
           <div className="mt-3 grid gap-3">
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Lesson
               <select
                 value={draft.lessonId}
                 onChange={(event) => setField("lessonId", event.target.value)}
-                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
               >
                 {lessons.map((lesson) => (
                   <option key={lesson.id} value={lesson.id}>
@@ -2118,35 +2118,35 @@ function AssessmentManager({
                 ))}
               </select>
             </label>
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Title
               <input
                 value={draft.title}
                 onChange={(event) => setField("title", event.target.value)}
                 placeholder="Clear reasons checkpoint"
-                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
               />
             </label>
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Instructions
               <textarea
                 value={draft.instructions}
                 onChange={(event) => setField("instructions", event.target.value)}
                 placeholder="Answer each question carefully. Written answers will be reviewed by your teacher."
-                className="min-h-[76px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="min-h-[76px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
               />
             </label>
             <div className="grid gap-3 sm:grid-cols-3">
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Due
                 <input
                   type="datetime-local"
                   value={draft.dueAt}
                   onChange={(event) => setField("dueAt", event.target.value)}
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                 />
               </label>
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Status
                 <select
                   value={draft.status}
@@ -2156,13 +2156,13 @@ function AssessmentManager({
                       event.target.value as Extract<AssessmentStatus, "draft" | "published">,
                     )
                   }
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                 >
                   <option value="published">Published</option>
                   <option value="draft">Draft</option>
                 </select>
               </label>
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Attempts
                 <input
                   type="number"
@@ -2170,29 +2170,29 @@ function AssessmentManager({
                   max={10}
                   value={draft.attemptLimit}
                   onChange={(event) => setField("attemptLimit", Number(event.target.value) || 1)}
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                 />
               </label>
             </div>
 
-            <label className="flex items-start gap-2.5 rounded-2xl border border-border bg-background/40 p-3">
+            <label className="flex items-start gap-2.5 rounded-card border border-border bg-depth-field p-3">
               <input
                 type="checkbox"
                 checked={draft.required}
                 onChange={(event) => setField("required", event.target.checked)}
                 className="mt-0.5 h-4 w-4 shrink-0 accent-foreground"
               />
-              <span className="text-[12.5px] text-foreground">
+              <span className="text-meta text-foreground">
                 Required for lesson completion
-                <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                <span className="mt-0.5 block text-meta text-muted-foreground">
                   Students can't finish the lesson until they complete this quiz.
                 </span>
               </span>
             </label>
 
-            <div className="rounded-2xl border border-border bg-background/40 p-3">
+            <div className="rounded-card border border-border bg-depth-field p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Recipients
                 </div>
                 <button
@@ -2203,7 +2203,7 @@ function AssessmentManager({
                       draft.recipientIds.length === studentIds.length ? [] : studentIds,
                     )
                   }
-                  className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-meta text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {draft.recipientIds.length === studentIds.length ? "Clear" : "All students"}
                 </button>
@@ -2214,7 +2214,7 @@ function AssessmentManager({
                   return (
                     <label
                       key={studentId}
-                      className="flex items-center gap-2 text-[12.5px] text-foreground"
+                      className="flex items-center gap-2 text-meta text-foreground"
                     >
                       <input
                         type="checkbox"
@@ -2231,19 +2231,19 @@ function AssessmentManager({
 
             <div className="grid gap-3">
               <div className="flex items-center justify-between">
-                <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Questions
                 </div>
                 <button
                   type="button"
                   onClick={() => setField("items", [...draft.items, defaultAssessmentQuestion()])}
-                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted"
+                  className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
                 >
                   Add question
                 </button>
               </div>
               {draft.items.map((question, index) => (
-                <div key={index} className="rounded-2xl border border-border bg-background/45 p-3">
+                <div key={index} className="rounded-card border border-border bg-depth-sub p-3">
                   <div className="mb-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px]">
                     <select
                       value={question.quizItemId || ""}
@@ -2253,7 +2253,7 @@ function AssessmentManager({
                           prompt: event.target.value ? "" : question.prompt,
                         })
                       }
-                      className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                      className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
                     >
                       <option value="">New question</option>
                       {lessonQuizItems.map((quiz) => (
@@ -2270,7 +2270,7 @@ function AssessmentManager({
                       onChange={(event) =>
                         updateQuestion(index, { points: Number(event.target.value) || 1 })
                       }
-                      className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                      className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
                     />
                   </div>
                   {!question.quizItemId ? (
@@ -2283,7 +2283,7 @@ function AssessmentManager({
                               .value as AssessmentFormQuestion["questionType"],
                           })
                         }
-                        className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none"
+                        className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
                       >
                         <option value="multiple_choice">Multiple choice</option>
                         <option value="text">Text response</option>
@@ -2293,7 +2293,7 @@ function AssessmentManager({
                         value={question.prompt || ""}
                         onChange={(event) => updateQuestion(index, { prompt: event.target.value })}
                         placeholder="Question prompt"
-                        className="min-h-[72px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+                        className="min-h-[72px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
                       />
                       {question.questionType === "multiple_choice" ? (
                         <div className="grid gap-2">
@@ -2302,7 +2302,7 @@ function AssessmentManager({
                               key={choice.id}
                               className="grid gap-2 sm:grid-cols-[72px_minmax(0,1fr)]"
                             >
-                              <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                              <label className="flex items-center gap-2 text-meta text-muted-foreground">
                                 <input
                                   type="radio"
                                   checked={question.correctChoiceIds?.[0] === choice.id}
@@ -2319,7 +2319,7 @@ function AssessmentManager({
                                   updateChoice(index, choice.id, event.target.value)
                                 }
                                 placeholder={`Choice ${choice.id.toUpperCase()}`}
-                                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
                               />
                             </div>
                           ))}
@@ -2336,11 +2336,11 @@ function AssessmentManager({
                           })
                         }
                         placeholder="Skill keys, comma separated"
-                        className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                        className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
                       />
                     </div>
                   ) : (
-                    <div className="text-[12px] text-muted-foreground">
+                    <div className="text-meta text-muted-foreground">
                       Uses existing lesson question. Points and recipients are controlled here.
                     </div>
                   )}
@@ -2355,7 +2355,7 @@ function AssessmentManager({
                             : draft.items,
                         )
                       }
-                      className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                      className="text-meta text-muted-foreground transition-colors hover:text-foreground"
                     >
                       Remove
                     </button>
@@ -2368,13 +2368,13 @@ function AssessmentManager({
               type="button"
               onClick={() => void submit()}
               disabled={saving}
-              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
               {saving ? "Saving..." : draft.status === "published" ? "Assign quiz" : "Save draft"}
             </button>
             {assessmentMessage ? (
-              <div className="text-[12px] leading-relaxed text-muted-foreground">
+              <div className="text-meta leading-relaxed text-muted-foreground">
                 {assessmentMessage}
               </div>
             ) : null}
@@ -2393,26 +2393,26 @@ function AssessmentManager({
               return (
                 <div
                   key={assessment.id}
-                  className="rounded-2xl border border-border bg-depth-sub p-4"
+                  className="rounded-card border border-border bg-depth-sub p-4"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13px] font-medium text-foreground">
+                        <span className="text-body font-medium text-foreground">
                           {assessment.title}
                         </span>
                         <AssessmentStatusChip status={assessment.status} />
                       </div>
-                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                      <div className="mt-1 text-meta text-muted-foreground">
                         {lessonTitle(lessons, assessment.lesson_id)} · {items.length} questions ·{" "}
                         {recipients.length} recipients
                       </div>
                       {assessment.due_at ? (
-                        <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        <div className="mt-1 text-meta text-muted-foreground">
                           Due {formatDateTime(assessment.due_at)}
                         </div>
                       ) : null}
-                      <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                      <p className="mt-2 whitespace-pre-wrap text-meta leading-relaxed text-muted-foreground">
                         {assessment.instructions || "No instructions."}
                       </p>
                     </div>
@@ -2421,7 +2421,7 @@ function AssessmentManager({
                         type="button"
                         onClick={() => onSetAssessmentStatus(assessment.id, "published")}
                         disabled={assessment.status === "published"}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-success/35 px-3 py-1.5 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                       >
                         <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                         Publish
@@ -2453,14 +2453,14 @@ function AssessmentManager({
                       return (
                         <div
                           key={recipient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-field px-3 py-2"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-border bg-depth-field px-3 py-2"
                         >
-                          <div className="text-[12.5px] text-foreground">
+                          <div className="text-meta text-foreground">
                             {displayName(profile, recipient.user_id)}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <AssessmentRecipientChip status={recipient.status} />
-                            <span className="text-[11.5px] text-muted-foreground">
+                            <span className="text-meta text-muted-foreground">
                               {recipient.final_score === null
                                 ? "ungraded"
                                 : formatScore(recipient.final_score)}
@@ -2474,7 +2474,7 @@ function AssessmentManager({
               );
             })
           ) : (
-            <div className="rounded-2xl border border-border bg-depth-sub p-5 text-[13px] text-muted-foreground">
+            <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
               No lesson quizzes yet. Create one when you need a larger checkpoint.
             </div>
           )}
@@ -2602,15 +2602,15 @@ function AssignmentManager({
     <div className="pt-1">
       {/* Hosted inside the Structure section's "Assignments" bench — title + count live on the
           Collapsible header; grading moved to Students + performance. */}
-      <p className="mb-3 text-[12.5px] text-muted-foreground">
+      <p className="mb-3 text-meta text-muted-foreground">
         Create class work for a lesson, choose recipients, and assign or save as draft.
       </p>
 
       <div className="grid gap-4">
-        <div className="rounded-2xl border border-border bg-depth-sub p-4">
-          <div className="text-[13px] font-medium text-foreground">Create assignment</div>
+        <div className="rounded-card border border-border bg-depth-sub p-4">
+          <div className="text-body font-medium text-foreground">Create assignment</div>
           <div className="mt-3 grid gap-3">
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Lesson
               <select
                 value={draft.lessonId}
@@ -2621,7 +2621,7 @@ function AssignmentManager({
                     resourceIds: [],
                   }))
                 }
-                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
               >
                 {lessons.map((lesson) => (
                   <option key={lesson.id} value={lesson.id}>
@@ -2631,38 +2631,38 @@ function AssignmentManager({
               </select>
             </label>
 
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Title
               <input
                 value={draft.title}
                 onChange={(event) => setField("title", event.target.value)}
                 placeholder="Purpose reflection"
-                className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
               />
             </label>
 
-            <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Instructions
               <textarea
                 value={draft.instructions}
                 onChange={(event) => setField("instructions", event.target.value)}
                 placeholder="Use the resource and explain what the tool is for in your own words."
-                className="min-h-[86px] rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="min-h-[86px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
               />
             </label>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Due date
                 <input
                   type="datetime-local"
                   value={draft.dueAt}
                   onChange={(event) => setField("dueAt", event.target.value)}
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                 />
               </label>
 
-              <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Status
                 <select
                   value={draft.status}
@@ -2672,7 +2672,7 @@ function AssignmentManager({
                       event.target.value as Extract<AssignmentStatus, "draft" | "assigned">,
                     )
                   }
-                  className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                 >
                   <option value="assigned">Assigned</option>
                   <option value="draft">Draft</option>
@@ -2680,24 +2680,24 @@ function AssignmentManager({
               </label>
             </div>
 
-            <label className="flex items-start gap-2.5 rounded-2xl border border-border bg-background/40 p-3">
+            <label className="flex items-start gap-2.5 rounded-card border border-border bg-depth-field p-3">
               <input
                 type="checkbox"
                 checked={draft.required}
                 onChange={(event) => setField("required", event.target.checked)}
                 className="mt-0.5 h-4 w-4 shrink-0 accent-foreground"
               />
-              <span className="text-[12.5px] text-foreground">
+              <span className="text-meta text-foreground">
                 Required for lesson completion
-                <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                <span className="mt-0.5 block text-meta text-muted-foreground">
                   Students can't finish the lesson until they complete this assignment.
                 </span>
               </span>
             </label>
 
-            <div className="rounded-2xl border border-border bg-background/40 p-3">
+            <div className="rounded-card border border-border bg-depth-field p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Recipients
                 </div>
                 <button
@@ -2708,7 +2708,7 @@ function AssignmentManager({
                       draft.recipientIds.length === studentIds.length ? [] : studentIds,
                     )
                   }
-                  className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-meta text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {draft.recipientIds.length === studentIds.length ? "Clear" : "All students"}
                 </button>
@@ -2719,7 +2719,7 @@ function AssignmentManager({
                   return (
                     <label
                       key={studentId}
-                      className="flex items-center gap-2 text-[12.5px] text-foreground"
+                      className="flex items-center gap-2 text-meta text-foreground"
                     >
                       <input
                         type="checkbox"
@@ -2734,8 +2734,8 @@ function AssignmentManager({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border bg-background/40 p-3">
-              <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            <div className="rounded-card border border-border bg-depth-field p-3">
+              <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Optional resources
               </div>
               {resourcesForLesson.length ? (
@@ -2743,7 +2743,7 @@ function AssignmentManager({
                   {resourcesForLesson.map((resource) => (
                     <label
                       key={resource.id}
-                      className="flex items-center gap-2 text-[12.5px] text-foreground"
+                      className="flex items-center gap-2 text-meta text-foreground"
                     >
                       <input
                         type="checkbox"
@@ -2758,7 +2758,7 @@ function AssignmentManager({
                   ))}
                 </div>
               ) : (
-                <div className="text-[12.5px] text-muted-foreground">
+                <div className="text-meta text-muted-foreground">
                   No resources are attached to this lesson yet.
                 </div>
               )}
@@ -2768,13 +2768,13 @@ function AssignmentManager({
               type="button"
               onClick={() => void submit()}
               disabled={saving}
-              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
               {saving ? "Saving..." : draft.status === "assigned" ? "Assign work" : "Save draft"}
             </button>
             {assignmentMessage ? (
-              <div className="text-[12px] leading-relaxed text-muted-foreground">
+              <div className="text-meta leading-relaxed text-muted-foreground">
                 {assignmentMessage}
               </div>
             ) : null}
@@ -2796,26 +2796,26 @@ function AssignmentManager({
               return (
                 <div
                   key={assignment.id}
-                  className="rounded-2xl border border-border bg-depth-sub p-4"
+                  className="rounded-card border border-border bg-depth-sub p-4"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13px] font-medium text-foreground">
+                        <span className="text-body font-medium text-foreground">
                           {assignment.title}
                         </span>
                         <AssignmentStatusChip status={assignment.status} />
                       </div>
-                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                      <div className="mt-1 text-meta text-muted-foreground">
                         {lessonTitle(lessons, assignment.lesson_id)} · {assignmentRecipients.length}{" "}
                         recipients · {assignmentSubmissions.length} submissions
                       </div>
                       {assignment.due_at ? (
-                        <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        <div className="mt-1 text-meta text-muted-foreground">
                           Due {formatDateTime(assignment.due_at)}
                         </div>
                       ) : null}
-                      <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                      <p className="mt-2 whitespace-pre-wrap text-meta leading-relaxed text-muted-foreground">
                         {assignment.instructions || "No instructions."}
                       </p>
                       {linkedResources.length ? (
@@ -2823,7 +2823,7 @@ function AssignmentManager({
                           {linkedResources.map((resource) => (
                             <span
                               key={resource.id}
-                              className="inline-flex items-center gap-1 rounded-full border border-border bg-background/45 px-2.5 py-1 text-[11.5px] text-muted-foreground"
+                              className="inline-flex items-center gap-1 rounded-full border border-border bg-depth-sub px-2.5 py-1 text-meta text-muted-foreground"
                             >
                               <Paperclip className="h-3 w-3" strokeWidth={1.7} />
                               {resource.title}
@@ -2837,7 +2837,7 @@ function AssignmentManager({
                         type="button"
                         onClick={() => onSetAssignmentStatus(assignment.id, "assigned")}
                         disabled={assignment.status === "assigned"}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-success/35 px-3 py-1.5 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                       >
                         <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                         Assign
@@ -2869,14 +2869,14 @@ function AssignmentManager({
                       return (
                         <div
                           key={recipient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-field px-3 py-2"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-border bg-depth-field px-3 py-2"
                         >
-                          <div className="text-[12.5px] text-foreground">
+                          <div className="text-meta text-foreground">
                             {displayName(profile, recipient.user_id)}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <AssignmentRecipientChip status={recipient.status} />
-                            <span className="text-[11.5px] text-muted-foreground">
+                            <span className="text-meta text-muted-foreground">
                               {recipient.score === null ? "ungraded" : formatScore(recipient.score)}
                             </span>
                           </div>
@@ -2888,7 +2888,7 @@ function AssignmentManager({
               );
             })
           ) : (
-            <div className="rounded-2xl border border-border bg-depth-sub p-5 text-[13px] text-muted-foreground">
+            <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
               No assignments yet. Create one for a lesson when students need to submit work.
             </div>
           )}
@@ -2929,20 +2929,20 @@ function GradebookTable({
   }, {});
 
   return (
-    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
+    <div className="mt-6 rounded-card border border-border bg-depth-card p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h3 className="text-[15px] font-medium text-foreground">Gradebook</h3>
-          <p className="text-[12.5px] text-muted-foreground">
+          <h3 className="text-title font-medium text-foreground">Gradebook</h3>
+          <p className="text-meta text-muted-foreground">
             Scan completion, scores, attempts, quizzes, evidence, and attention signals.
           </p>
         </div>
-        <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+        <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
           Lesson filter
           <select
             value={selectedLessonId}
             onChange={(event) => onSelectLesson(event.target.value)}
-            className="min-w-[220px] rounded-full border border-border bg-background/70 px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+            className="min-w-[220px] rounded-full border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
           >
             <option value="all">All lessons</option>
             {Object.entries(lessonGroups).map(([moduleName, moduleLessons]) => (
@@ -2982,7 +2982,7 @@ function GradebookTable({
                   key={row.studentId}
                   type="button"
                   onClick={() => onSelectStudent(row.studentId)}
-                  className={`w-full rounded-2xl border border-border bg-depth-sub p-3 text-left transition-colors hover:bg-muted ${
+                  className={`w-full rounded-card border border-border bg-depth-sub p-3 text-left transition-colors hover:bg-muted ${
                     selectedStudentId === row.studentId
                       ? "outline outline-1 outline-foreground/20"
                       : ""
@@ -2990,36 +2990,34 @@ function GradebookTable({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-[13px] font-medium text-foreground">
+                      <div className="text-body font-medium text-foreground">
                         {displayName(profile, row.studentId)}
                       </div>
-                      <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                      <div className="mt-0.5 text-meta text-muted-foreground">
                         {profile?.grade || "Grade not set"}
                       </div>
                     </div>
                     <span
-                      className={`shrink-0 rounded-full border px-2.5 py-1 text-[11.5px] ${row.statusClass}`}
+                      className={`shrink-0 rounded-full border px-2.5 py-1 text-meta ${row.statusClass}`}
                     >
                       {row.statusLabel}
                     </span>
                   </div>
                   {row.needsAttention ? (
-                    <span className="mt-2 inline-block rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-[11.5px] text-warning">
+                    <span className="mt-2 inline-block rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-meta text-warning">
                       Needs attention
                     </span>
                   ) : null}
                   {row.lessonDetail ? (
-                    <div className="mt-1 text-[11.5px] text-muted-foreground">
-                      {row.lessonDetail}
-                    </div>
+                    <div className="mt-1 text-meta text-muted-foreground">{row.lessonDetail}</div>
                   ) : null}
                   <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
                     {cardStats.map((stat) => (
                       <div key={stat.label}>
-                        <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                        <div className="text-overline uppercase tracking-[0.1em] text-muted-foreground">
                           {stat.label}
                         </div>
-                        <div className="mt-0.5 text-[12.5px] text-foreground">{stat.value}</div>
+                        <div className="mt-0.5 text-meta text-foreground">{stat.value}</div>
                       </div>
                     ))}
                   </div>
@@ -3029,29 +3027,35 @@ function GradebookTable({
           </div>
           <div className="hidden max-h-[58vh] overflow-auto pb-1 md:block">
             <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
-              <thead className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <thead className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 <tr>
-                  <th className="sticky left-0 top-0 z-[3] bg-background px-3 py-1 font-medium">
+                  <th className="sticky left-0 top-0 z-[3] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
                     Student
                   </th>
-                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                  <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
                     Lesson status
                   </th>
-                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Score</th>
-                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                  <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
+                    Score
+                  </th>
+                  <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
                     Attempts
                   </th>
-                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Quiz</th>
-                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                  <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
+                    Quiz
+                  </th>
+                  <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
                     Evidence
                   </th>
-                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                  <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
                     Mastery
                   </th>
-                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">
+                  <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
                     Last activity
                   </th>
-                  <th className="sticky top-0 z-[2] bg-background px-3 py-1 font-medium">Action</th>
+                  <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -3061,53 +3065,53 @@ function GradebookTable({
                     <tr
                       key={row.studentId}
                       onClick={() => onSelectStudent(row.studentId)}
-                      className={`group cursor-pointer rounded-2xl border border-border bg-depth-sub transition-colors hover:bg-muted ${
+                      className={`group cursor-pointer rounded-card border border-border bg-depth-sub transition-colors hover:bg-muted ${
                         selectedStudentId === row.studentId
                           ? "outline outline-1 outline-foreground/20"
                           : ""
                       }`}
                     >
                       <td className="sticky left-0 z-[1] rounded-l-2xl border-y border-l border-border bg-depth-sub px-3 py-3 transition-colors group-hover:bg-muted">
-                        <div className="text-[13px] font-medium text-foreground">
+                        <div className="text-body font-medium text-foreground">
                           {displayName(profile, row.studentId)}
                         </div>
-                        <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        <div className="mt-1 text-meta text-muted-foreground">
                           {profile?.grade || "Grade not set"}
                         </div>
                       </td>
                       <td className="border-y border-border px-3 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <span
-                            className={`rounded-full border px-2.5 py-1 text-[11.5px] ${row.statusClass}`}
+                            className={`rounded-full border px-2.5 py-1 text-meta ${row.statusClass}`}
                           >
                             {row.statusLabel}
                           </span>
                           {row.needsAttention ? (
-                            <span className="rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-[11.5px] text-warning">
+                            <span className="rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-meta text-warning">
                               Needs attention
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        <div className="mt-1 text-meta text-muted-foreground">
                           {row.lessonDetail}
                         </div>
                       </td>
-                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-foreground">
+                      <td className="border-y border-border px-3 py-3 text-meta text-foreground">
                         {row.scoreLabel}
                       </td>
-                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
                         {row.attempts}
                       </td>
-                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
                         {row.quizAttempts}
                       </td>
-                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
                         {row.evidence}
                       </td>
-                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
                         {row.mastery}
                       </td>
-                      <td className="border-y border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
                         {row.latestSession
                           ? formatDateTime(row.latestSession.updated_at)
                           : "No activity"}
@@ -3116,7 +3120,7 @@ function GradebookTable({
                         <button
                           type="button"
                           onClick={() => onSelectStudent(row.studentId)}
-                          className="rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted"
+                          className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
                         >
                           Inspect
                         </button>
@@ -3233,22 +3237,22 @@ function StudentDetail({
     Boolean(selectedSession) && selectedSession?.status !== "complete";
 
   return (
-    <GradientCard>
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
       <div className="p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Student detail
             </div>
-            <h2 className="mt-1 text-[24px] font-medium text-foreground">
+            <h2 className="mt-1 font-serif text-display text-foreground">
               {displayName(profile, studentId)}
             </h2>
-            <p className="mt-1 text-[13px] text-muted-foreground">
+            <p className="mt-1 text-body text-muted-foreground">
               {profile?.grade || "Grade not set"} - latest status:{" "}
               {sessions[0] ? statusLabel(sessions[0]) : "no session yet"}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-center text-[12px] sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 text-center text-meta sm:grid-cols-4">
             <MiniMetric label="Sessions" value={String(stats.sessions)} />
             <MiniMetric label="Attempts" value={String(stats.attempts)} />
             <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
@@ -3257,22 +3261,22 @@ function StudentDetail({
         </div>
 
         {selectedSession ? (
-          <div className="mt-4 rounded-3xl border border-border bg-depth-sub p-4">
+          <div className="mt-4 rounded-card border border-border bg-depth-sub p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Selected session
                 </div>
-                <div className="mt-1 text-[15px] font-medium text-foreground">
+                <div className="mt-1 text-body-lg font-medium text-foreground">
                   {lessonName(lessonsById, selectedSession.lesson_id)}
                 </div>
-                <div className="mt-1 text-[12.5px] text-muted-foreground">
+                <div className="mt-1 text-meta text-muted-foreground">
                   {statusLabel(selectedSession)} - updated{" "}
                   {formatDateTime(selectedSession.updated_at)}
                 </div>
               </div>
               <span
-                className={`w-fit rounded-full border px-3 py-1.5 text-[12px] ${lessonStatusClass(
+                className={`w-fit rounded-full border px-3 py-1.5 text-meta ${lessonStatusClass(
                   sessionProgressStatus(selectedSession),
                 )}`}
               >
@@ -3282,7 +3286,7 @@ function StudentDetail({
                 type="button"
                 onClick={watchingSelectedSession ? onStopWatching : onStartWatching}
                 disabled={!canWatchSelectedSession}
-                className="inline-flex w-fit items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {watchingSelectedSession ? (
                   <EyeOff className="h-3.5 w-3.5" strokeWidth={1.7} />
@@ -3296,7 +3300,7 @@ function StudentDetail({
                   type="button"
                   onClick={sessionHeld ? onResumeSession : onHoldSession}
                   disabled={holdBusy}
-                  className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                  className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
                     sessionHeld
                       ? "border-warning/45 bg-warning/12 text-warning hover:bg-warning/20"
                       : "border-border text-foreground hover:bg-muted"
@@ -3312,7 +3316,7 @@ function StudentDetail({
               ) : null}
             </div>
             {watchingSelectedSession ? (
-              <div className="mt-3 rounded-2xl border border-info/35 bg-info/10 px-3 py-2 text-[12px] text-info">
+              <div className="mt-3 rounded-card border border-info/35 bg-info/10 px-3 py-2 text-meta text-info">
                 You are watching live. The student will see a teacher-viewing indicator while your
                 heartbeat is active.
                 {sessionHeld
@@ -3362,18 +3366,18 @@ function StudentDetail({
                 ) : null}
 
                 {selectedSession && canWatchSelectedSession ? (
-                  <div className="mb-3 rounded-2xl border border-border bg-background/45 p-3">
+                  <div className="mb-3 rounded-card border border-border bg-depth-sub p-3">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <div className="text-[12px] font-medium text-foreground">
+                        <div className="text-meta font-medium text-foreground">
                           Live teacher tip
                         </div>
-                        <div className="text-[11.5px] text-muted-foreground">
+                        <div className="text-meta text-muted-foreground">
                           Visible in the student chat as a Teacher message.
                         </div>
                       </div>
                       {watchingSelectedSession ? (
-                        <span className="rounded-full border border-info/35 bg-info/10 px-2.5 py-1 text-[11px] text-info">
+                        <span className="rounded-full border border-info/35 bg-info/10 px-2.5 py-1 text-meta text-info">
                           Watching
                         </span>
                       ) : null}
@@ -3388,7 +3392,7 @@ function StudentDetail({
                             ? "Send a short tip to this student..."
                             : "Start watching live before sending a tip."
                         }
-                        className="min-w-0 flex-1 rounded-full border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-55"
+                        className="min-w-0 flex-1 rounded-full border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-55"
                       />
                       <button
                         type="button"
@@ -3396,7 +3400,7 @@ function StudentDetail({
                         disabled={
                           !watchingSelectedSession || !liveCommentDraft.trim() || sendingLiveComment
                         }
-                        className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-3 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                        className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-3 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
                         {sendingLiveComment ? "Sending..." : "Send"}
@@ -3405,51 +3409,67 @@ function StudentDetail({
                   </div>
                 ) : null}
 
+                {/* The read-only transcript renders as v6-style bubbles so what the teacher
+                    reads visually matches what the student saw (src/student/Transcript.tsx):
+                    student turns right-aligned in ink, mentor turns left on depth-sub, teacher
+                    tips as the info-bordered "teacher" tone. All metadata (stage, modality,
+                    timestamp) is preserved as an overline row inside each bubble. */}
                 {transcriptItems.length ? (
-                  <div className="max-h-[440px] space-y-3 overflow-auto pr-1">
+                  <div className="flex max-h-[440px] flex-col gap-3 overflow-auto pr-1">
                     {transcriptItems.map((item) => {
                       if (item.kind === "live_comment") {
                         return (
-                          <div
-                            key={item.id}
-                            className="rounded-3xl border border-info/35 bg-info/10 p-4"
-                          >
-                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-[12px] uppercase tracking-[0.1em] text-info">
+                          <div key={item.id} className="flex justify-start">
+                            <div className="max-w-[min(46rem,85%)] rounded-card border border-info/40 bg-depth-sub px-3.5 py-2.5 text-body text-foreground">
+                              <span className="mb-1 flex flex-wrap items-center justify-between gap-2 text-overline uppercase tracking-[0.08em] text-info">
                                 Teacher live
+                                <span className="normal-case tracking-normal text-muted-foreground">
+                                  {formatDateTime(item.comment.created_at)}
+                                </span>
                               </span>
-                              <span className="text-[11.5px] text-muted-foreground">
-                                {formatDateTime(item.comment.created_at)}
-                              </span>
+                              <span className="whitespace-pre-wrap">{item.comment.content}</span>
                             </div>
-                            <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-                              {item.comment.content}
-                            </p>
                           </div>
                         );
                       }
                       const modality = inputModalityFromPayload(item.turn.payload);
+                      const isStudent = item.turn.role === "student";
+                      const toneClass = isStudent
+                        ? "bg-foreground text-background"
+                        : item.turn.role === "mentor"
+                          ? "bg-depth-sub text-foreground"
+                          : "border border-border bg-depth-sub text-muted-foreground";
                       return (
                         <div
                           key={item.id}
-                          className="rounded-3xl border border-border bg-background/45 p-4"
+                          className={`flex ${isStudent ? "justify-end" : "justify-start"}`}
                         >
-                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                            <span className="flex flex-wrap items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                              {item.turn.role} - {item.turn.stage}
+                          <div
+                            className={`max-w-[min(46rem,85%)] rounded-card px-3.5 py-2.5 text-body ${toneClass}`}
+                          >
+                            <span
+                              className={`mb-1 flex flex-wrap items-center gap-2 text-overline uppercase tracking-[0.08em] ${
+                                isStudent ? "text-background/70" : "text-muted-foreground"
+                              }`}
+                            >
+                              {item.turn.role} · {item.turn.stage}
                               {modality === "dictated" || modality === "audio_session" ? (
-                                <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] tracking-[0.08em] text-muted-foreground">
+                                <span
+                                  className={`rounded-pill border px-2 py-0.5 ${
+                                    isStudent ? "border-background/30" : "border-border"
+                                  }`}
+                                >
                                   {modality === "audio_session" ? "Voice" : "Dictated"}
                                 </span>
                               ) : null}
+                              <span className="normal-case tracking-normal">
+                                {formatDateTime(item.turn.created_at)}
+                              </span>
                             </span>
-                            <span className="text-[11.5px] text-muted-foreground">
-                              {formatDateTime(item.turn.created_at)}
+                            <span className="whitespace-pre-wrap">
+                              {item.turn.content || "[Empty turn]"}
                             </span>
                           </div>
-                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-                            {item.turn.content || "[Empty turn]"}
-                          </p>
                         </div>
                       );
                     })}
@@ -3477,7 +3497,7 @@ function StudentDetail({
                     value={noteDraft}
                     onChange={(event) => onNoteChange(event.target.value)}
                     placeholder="Add a private observation or student-visible note..."
-                    className="min-h-[96px] w-full rounded-2xl border border-border bg-background/60 px-3 py-3 text-[13px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/30"
+                    className="min-h-[96px] w-full rounded-card border border-border bg-depth-field px-3 py-3 text-body leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/30"
                   />
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <select
@@ -3485,7 +3505,7 @@ function StudentDetail({
                       onChange={(event) =>
                         onNoteVisibilityChange(event.target.value as TeacherNote["visibility"])
                       }
-                      className="rounded-full border border-border bg-background/60 px-3 py-2 text-[12px] text-foreground outline-none"
+                      className="rounded-full border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
                     >
                       <option value="teacher_private">Teacher private</option>
                       <option value="student_visible">Student visible</option>
@@ -3494,7 +3514,7 @@ function StudentDetail({
                       type="button"
                       onClick={onSaveNote}
                       disabled={!noteDraft.trim() || savingNote}
-                      className="rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                      className="rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       {savingNote ? "Saving..." : "Save note"}
                     </button>
@@ -3504,9 +3524,9 @@ function StudentDetail({
                       notes.map((note) => (
                         <div
                           key={note.id}
-                          className="rounded-2xl border border-border bg-background/45 p-3"
+                          className="rounded-card border border-border bg-depth-sub p-3"
                         >
-                          <div className="mb-1 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
+                          <div className="mb-1 flex items-center justify-between gap-2 text-meta text-muted-foreground">
                             <span>
                               {note.visibility === "student_visible"
                                 ? "Student visible"
@@ -3514,13 +3534,13 @@ function StudentDetail({
                             </span>
                             <span>{formatDateTime(note.created_at)}</span>
                           </div>
-                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
+                          <p className="whitespace-pre-wrap text-body leading-relaxed text-foreground">
                             {note.note}
                           </p>
                         </div>
                       ))
                     ) : (
-                      <div className="text-[12.5px] text-muted-foreground">No notes yet.</div>
+                      <div className="text-meta text-muted-foreground">No notes yet.</div>
                     )}
                   </div>
                 </Panel>
@@ -3534,15 +3554,15 @@ function StudentDetail({
                       {mastery.map((item) => (
                         <div
                           key={`${item.user_id}-${item.skill_key}`}
-                          className="rounded-2xl border border-border bg-background/45 p-3"
+                          className="rounded-card border border-border bg-depth-sub p-3"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[13px] font-medium text-foreground">
+                            <span className="text-body font-medium text-foreground">
                               {item.skill_key}
                             </span>
-                            <span className="text-[12px] text-muted-foreground">{item.level}</span>
+                            <span className="text-meta text-muted-foreground">{item.level}</span>
                           </div>
-                          <div className="mt-1 text-[12px] text-muted-foreground">
+                          <div className="mt-1 text-meta text-muted-foreground">
                             {item.evidence_count} evidence - score {formatScore(item.score)}
                           </div>
                         </div>
@@ -3560,7 +3580,7 @@ function StudentDetail({
           </WorkspacePanel>
         </Tabs>
       </div>
-    </GradientCard>
+    </section>
   );
 }
 
@@ -3580,8 +3600,8 @@ function StudentAnalyticsPanel({
     .sort((a, b) => Number(a.score || 0) - Number(b.score || 0))[0];
 
   return (
-    <div className="mt-5 rounded-3xl border border-border bg-depth-card p-4">
-      <div className="mb-3 flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+    <div className="mt-5 rounded-card border border-border bg-depth-card p-4">
+      <div className="mb-3 flex items-center gap-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
         <BarChart3 className="h-4 w-4" strokeWidth={1.6} />
         Student analytics
       </div>
@@ -3591,27 +3611,27 @@ function StudentAnalyticsPanel({
         <MiniMetric label="Resources" value={String(analytics.resourceOpened)} />
       </div>
       <div className="mt-3 grid gap-3">
-        <div className="rounded-2xl border border-border bg-background/45 p-3">
-          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+        <div className="rounded-card border border-border bg-depth-sub p-3">
+          <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
             Strongest skill
           </div>
-          <div className="mt-1 text-[13px] text-foreground">
+          <div className="mt-1 text-body text-foreground">
             {strongest ? strongest.skill_key : "No mastery yet"}
           </div>
-          <div className="mt-1 text-[12px] text-muted-foreground">
+          <div className="mt-1 text-meta text-muted-foreground">
             {strongest
               ? `${formatPercent(strongest.score)} · ${strongest.evidence_count} evidence`
               : "Complete assessed work to populate this."}
           </div>
         </div>
-        <div className="rounded-2xl border border-border bg-background/45 p-3">
-          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+        <div className="rounded-card border border-border bg-depth-sub p-3">
+          <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
             Weakest skill
           </div>
-          <div className="mt-1 text-[13px] text-foreground">
+          <div className="mt-1 text-body text-foreground">
             {weakest ? weakest.skill_key : "No mastery yet"}
           </div>
-          <div className="mt-1 text-[12px] text-muted-foreground">
+          <div className="mt-1 text-meta text-muted-foreground">
             {weakest
               ? `${formatPercent(weakest.score)} · ${weakest.evidence_count} evidence`
               : "No weak signal recorded."}
@@ -3637,7 +3657,7 @@ function SessionChipGroup({
 }) {
   return (
     <div>
-      <div className="mb-1.5 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+      <div className="mb-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </div>
       {sessions.length ? (
@@ -3647,7 +3667,7 @@ function SessionChipGroup({
               type="button"
               key={session.id}
               onClick={() => onSelectSession(session.id)}
-              className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
+              className={`rounded-full border px-3 py-1.5 text-meta transition-colors ${
                 selectedSessionId === session.id
                   ? "border-foreground/25 bg-background text-foreground"
                   : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -3658,7 +3678,7 @@ function SessionChipGroup({
           ))}
         </div>
       ) : (
-        <div className="text-[12px] text-muted-foreground">
+        <div className="text-meta text-muted-foreground">
           {label === "Completed" ? "No completed lessons yet" : "No active lessons"}
         </div>
       )}
@@ -3668,9 +3688,9 @@ function SessionChipGroup({
 
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-background/45 px-3 py-2">
-      <div className="text-[15px] font-medium text-foreground">{value}</div>
-      <div className="mt-0.5 text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
+    <div className="rounded-card border border-border bg-depth-sub px-3 py-2">
+      <div className="text-body-lg font-medium text-foreground">{value}</div>
+      <div className="mt-0.5 text-overline uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </div>
     </div>
@@ -3682,10 +3702,10 @@ function ResourceStatusChip({ status }: { status: LessonResourceStatus }) {
     status === "published"
       ? "border-success/40 bg-success/12 text-success"
       : status === "archived"
-        ? "border-border bg-background/45 text-muted-foreground"
+        ? "border-border bg-depth-sub text-muted-foreground"
         : "border-warning/40 bg-warning/12 text-warning";
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+    <span className={`rounded-full border px-2.5 py-1 text-meta capitalize ${classes}`}>
       {status}
     </span>
   );
@@ -3693,9 +3713,9 @@ function ResourceStatusChip({ status }: { status: LessonResourceStatus }) {
 
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
-    <div className="rounded-3xl border border-border bg-depth-sub p-4">
-      <div className="mb-3 flex items-center gap-2 text-[14px] font-medium text-foreground">
-        <span className="text-muted-foreground">{icon}</span>
+    <div className="rounded-card border border-border bg-depth-sub p-4">
+      <div className="mb-3 flex items-center gap-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        {icon}
         {title}
       </div>
       {children}
@@ -3705,9 +3725,9 @@ function Panel({ title, icon, children }: { title: string; icon: ReactNode; chil
 
 function EmptyInline({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-background/45 p-4">
-      <div className="text-[13px] font-medium text-foreground">{title}</div>
-      <div className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{body}</div>
+    <div className="rounded-card border border-border bg-depth-sub p-4">
+      <div className="text-body font-medium text-foreground">{title}</div>
+      <div className="mt-1 text-meta leading-relaxed text-muted-foreground">{body}</div>
     </div>
   );
 }
@@ -3901,7 +3921,7 @@ function gradebookRowForStudent(
     statusClass:
       completedCount > 0
         ? "border-success/40 bg-success/12 text-success"
-        : "border-border bg-background/45 text-muted-foreground",
+        : "border-border bg-depth-sub text-muted-foreground",
     lessonDetail: `${detailBase}${requiredNote}`,
     scoreLabel: averageCompleteScore === null ? "n/a" : `${formatScore(averageCompleteScore)} avg`,
     attempts: attempts.length,

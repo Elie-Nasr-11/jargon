@@ -155,6 +155,9 @@
   --mode-quiz: oklch(0.62 0.14 25);
   --mode-assignment: oklch(0.64 0.12 60);
   --mode-open: oklch(0.6 0.02 250);
+  /* Authoring-only accent (curriculum studio Media steps): teal, between the lesson blue and
+     practice green, so the studio's 8-mode picker gets a distinct hue per StepCard mode. */
+  --mode-media: oklch(0.64 0.09 200);
 
   /* focus ring */
   --ring: rgba(10, 10, 10, 0.34);
@@ -607,4 +610,62 @@ select {
   color: color-mix(in oklab, var(--foreground) 62%, var(--mode-accent, transparent));
   background-color: color-mix(in oklab, var(--background) 88%, var(--mode-accent, transparent));
   border-color: color-mix(in oklab, var(--border) 40%, var(--mode-accent, transparent));
+}
+
+/* --- v6 teacher/admin console skin ----------------------------------------- */
+
+/* Panel/section entrance (DESIGN_V6 §3: 220ms translate+fade). Runs on mount AND each time a
+   forceMount tab panel returns from display:none, so tab switches fade in too. Neutralized by
+   the global prefers-reduced-motion block above. */
+.panel-fade {
+  animation: panel-fade 0.22s ease-out both;
+}
+@keyframes panel-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Count badges (hotlist, work tiles): the NUMBER flips in when the value changes — the badge
+   itself never blinks. Re-triggered by keying the inner span on the value. */
+.num-flip {
+  animation: num-flip 0.28s ease-out both;
+}
+@keyframes num-flip {
+  from {
+    opacity: 0;
+    transform: translateY(0.55em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* /admin page wash: the same neutral shell as /teacher, mixed a step toward the info blue —
+   the "cooler admin tint" from DESIGN_V6 §2/§6 — without touching the shared AmbientCanvas. */
+.admin-wash {
+  background-color: color-mix(in oklab, var(--background) 96.5%, var(--info));
+}
+
+/* Curriculum studio: per-mode accents on the StepCard picker + step rows. A wrapper sets
+   --mode-accent (same contract as .mode-surface above); the chip derives its fill/border/ink
+   from it so one definition serves both themes and all eight modes. */
+.mode-chip {
+  background-color: color-mix(in oklab, var(--background) 92%, var(--mode-accent, transparent));
+  border-color: color-mix(in oklab, var(--border) 40%, var(--mode-accent, transparent));
+  transition: background-color var(--dur-fast) ease;
+}
+.mode-chip:hover {
+  background-color: color-mix(in oklab, var(--background) 84%, var(--mode-accent, transparent));
+}
+
+/* The step row's left edge carries its mode hue (mirrors the hotlist's state-hue accents). */
+.mode-edge {
+  border-left: 3px solid color-mix(in oklab, var(--mode-accent, var(--border)) 55%, transparent);
 }

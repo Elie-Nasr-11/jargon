@@ -7,7 +7,7 @@ export type Crumb = { label: string; onClick?: () => void };
 
 export function Breadcrumb({ segments }: { segments: Crumb[] }) {
   return (
-    <nav className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
+    <nav className="flex flex-wrap items-center gap-1.5 text-meta text-muted-foreground">
       {segments.map((segment, index) => {
         const isLast = index === segments.length - 1;
         return (

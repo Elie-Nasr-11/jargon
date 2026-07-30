@@ -44,12 +44,12 @@ export function AssignmentStatusChip({ status }: { status: AssignmentStatus }) {
     status === "assigned"
       ? "border-success/40 bg-success/12 text-success"
       : status === "archived"
-        ? "border-border bg-background/45 text-muted-foreground"
+        ? "border-border bg-depth-sub text-muted-foreground"
         : status === "recommended"
           ? "border-info/40 bg-info/12 text-info"
           : "border-warning/40 bg-warning/12 text-warning";
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+    <span className={`rounded-full border px-2.5 py-1 text-meta capitalize ${classes}`}>
       {status.replace("_", " ")}
     </span>
   );
@@ -63,9 +63,9 @@ export function AssignmentRecipientChip({ status }: { status: AssignmentRecipien
         ? "border-info/40 bg-info/12 text-info"
         : status === "returned"
           ? "border-warning/40 bg-warning/12 text-warning"
-          : "border-border bg-background/45 text-muted-foreground";
+          : "border-border bg-depth-sub text-muted-foreground";
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+    <span className={`rounded-full border px-2.5 py-1 text-meta capitalize ${classes}`}>
       {status}
     </span>
   );
@@ -76,10 +76,10 @@ export function AssessmentStatusChip({ status }: { status: AssessmentStatus }) {
     status === "published"
       ? "border-success/40 bg-success/12 text-success"
       : status === "archived"
-        ? "border-border bg-background/45 text-muted-foreground"
+        ? "border-border bg-depth-sub text-muted-foreground"
         : "border-warning/40 bg-warning/12 text-warning";
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+    <span className={`rounded-full border px-2.5 py-1 text-meta capitalize ${classes}`}>
       {status}
     </span>
   );
@@ -95,9 +95,9 @@ export function AssessmentRecipientChip({ status }: { status: AssessmentRecipien
           ? "border-info/40 bg-info/12 text-info"
           : status === "returned"
             ? "border-warning/40 bg-warning/12 text-warning"
-            : "border-border bg-background/45 text-muted-foreground";
+            : "border-border bg-depth-sub text-muted-foreground";
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
+    <span className={`rounded-full border px-2.5 py-1 text-meta capitalize ${classes}`}>
       {status.replace("_", " ")}
     </span>
   );

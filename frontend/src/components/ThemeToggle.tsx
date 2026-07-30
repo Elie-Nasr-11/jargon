@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Sun, Moon } from "lucide-react";
 import gsap from "gsap";
+import { prefersReducedMotion } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
 
 export function ThemeToggle({
@@ -16,7 +17,7 @@ export function ThemeToggle({
   useEffect(() => setMounted(true), []);
 
   const onClick = () => {
-    if (iconRef.current) {
+    if (iconRef.current && !prefersReducedMotion()) {
       gsap.fromTo(
         iconRef.current,
         { rotate: -90, scale: 0.6, opacity: 0.4 },

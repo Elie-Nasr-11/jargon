@@ -114,7 +114,7 @@ export function AssessmentGrading({
   // Quiet day: collapse the whole queue to one slim line instead of a full card of nothing.
   if (!reviewable.length) {
     return (
-      <div className="rounded-3xl border border-border bg-depth-card px-4 py-3 text-[12.5px] text-muted-foreground">
+      <div className="rounded-card border border-border bg-depth-card px-4 py-3 text-meta text-muted-foreground">
         <span className="font-medium text-foreground">Quiz attempts</span> — nothing to review;
         student attempts will appear here.
       </div>
@@ -122,20 +122,20 @@ export function AssessmentGrading({
   }
 
   return (
-    <div className="rounded-3xl border border-border bg-depth-card p-4">
+    <div className="rounded-card border border-border bg-depth-card p-4">
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h3 className="text-[15px] font-medium text-foreground">Quiz attempts</h3>
-          <p className="text-[12.5px] text-muted-foreground">
+          <h3 className="text-title font-medium text-foreground">Quiz attempts</h3>
+          <p className="text-meta text-muted-foreground">
             Review written answers and return quiz results.
           </p>
         </div>
-        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
+        <div className="text-meta uppercase tracking-[0.1em] text-muted-foreground">
           {reviewable.length} with attempts
         </div>
       </div>
       {message ? (
-        <div role="status" className="mb-3 text-[12px] leading-relaxed text-muted-foreground">
+        <div role="status" className="mb-3 text-meta leading-relaxed text-muted-foreground">
           {message}
         </div>
       ) : null}
@@ -150,15 +150,13 @@ export function AssessmentGrading({
             (attempt) => attempt.assessment_id === assessment.id,
           );
           return (
-            <div key={assessment.id} className="rounded-2xl border border-border bg-depth-sub p-4">
+            <div key={assessment.id} className="rounded-card border border-border bg-depth-sub p-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13px] font-medium text-foreground">
-                    {assessment.title}
-                  </span>
+                  <span className="text-body font-medium text-foreground">{assessment.title}</span>
                   <AssessmentStatusChip status={assessment.status} />
                 </div>
-                <div className="mt-1 text-[11.5px] text-muted-foreground">
+                <div className="mt-1 text-meta text-muted-foreground">
                   {lessonTitle(lessons, assessment.lesson_id)} · {items.length} question
                   {items.length === 1 ? "" : "s"} · {attempts.length} attempt
                   {attempts.length === 1 ? "" : "s"}
@@ -172,14 +170,14 @@ export function AssessmentGrading({
                   return (
                     <div
                       key={recipient.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-depth-field px-3 py-2"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-border bg-depth-field px-3 py-2"
                     >
-                      <div className="text-[12.5px] text-foreground">
+                      <div className="text-meta text-foreground">
                         {displayName(profile, recipient.user_id)}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <AssessmentRecipientChip status={recipient.status} />
-                        <span className="text-[11.5px] text-muted-foreground">
+                        <span className="text-meta text-muted-foreground">
                           {recipient.final_score === null
                             ? "ungraded"
                             : formatScore(recipient.final_score)}
@@ -202,18 +200,18 @@ export function AssessmentGrading({
                   return (
                     <div
                       key={attempt.id}
-                      className="rounded-2xl border border-border bg-background/45 p-3"
+                      className="rounded-card border border-border bg-depth-sub p-3"
                     >
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <div className="text-[12.5px] font-medium text-foreground">
+                          <div className="text-meta font-medium text-foreground">
                             {displayName(profile, attempt.user_id)}
                           </div>
-                          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                          <div className="mt-0.5 text-meta text-muted-foreground">
                             {attempt.status} · {formatDateTime(attempt.created_at)}
                           </div>
                         </div>
-                        <span className="text-[11.5px] text-muted-foreground">
+                        <span className="text-meta text-muted-foreground">
                           {attempt.final_score === null
                             ? "pending"
                             : formatScore(attempt.final_score)}
@@ -239,25 +237,25 @@ export function AssessmentGrading({
                           return (
                             <div
                               key={itemAttempt.id}
-                              className="rounded-2xl border border-border bg-background/45 p-3"
+                              className="rounded-card border border-border bg-depth-sub p-3"
                             >
-                              <div className="text-[12.5px] font-medium text-foreground">
+                              <div className="text-meta font-medium text-foreground">
                                 {quiz?.prompt || "Question"}
                               </div>
-                              <div className="mt-1 text-[11.5px] text-muted-foreground">
+                              <div className="mt-1 text-meta text-muted-foreground">
                                 {itemAttempt.review_state.replace("_", " ")} · score{" "}
                                 {itemAttempt.score === null
                                   ? "pending"
                                   : `${itemAttempt.score}/${itemAttempt.max_score}`}
                               </div>
                               {itemAttempt.answer_text ? (
-                                <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+                                <p className="mt-2 whitespace-pre-wrap text-meta leading-relaxed text-muted-foreground">
                                   {itemAttempt.answer_text}
                                 </p>
                               ) : null}
                               {itemAttempt.answer_code ? (
                                 <pre
-                                  className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap rounded-2xl border border-border bg-[var(--code-background)] p-3 text-[12px] leading-relaxed text-[var(--code-foreground)]"
+                                  className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap rounded-card border border-border bg-[var(--code-background)] p-3 text-meta leading-relaxed text-[var(--code-foreground)]"
                                   style={{
                                     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                                   }}
@@ -279,7 +277,7 @@ export function AssessmentGrading({
                                     }
                                     placeholder="Score"
                                     aria-label="Score (0–100)"
-                                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
                                   />
                                   <input
                                     value={draft.feedback}
@@ -290,19 +288,19 @@ export function AssessmentGrading({
                                     }
                                     placeholder="Feedback"
                                     aria-label="Feedback for the student"
-                                    className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => void reviewItem(itemAttempt)}
                                     disabled={draft.saving}
-                                    className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                                    className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-45"
                                   >
                                     Review
                                   </button>
                                 </div>
                               ) : itemAttempt.feedback ? (
-                                <p className="mt-2 text-[12.5px] text-muted-foreground">
+                                <p className="mt-2 text-meta text-muted-foreground">
                                   {itemAttempt.feedback}
                                 </p>
                               ) : null}
@@ -315,7 +313,7 @@ export function AssessmentGrading({
                           type="button"
                           onClick={() => void returnAttempt(attempt)}
                           disabled={pending || attempt.status === "returned"}
-                          className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
+                          className="rounded-full border border-success/35 px-3 py-1.5 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                         >
                           Return result
                         </button>

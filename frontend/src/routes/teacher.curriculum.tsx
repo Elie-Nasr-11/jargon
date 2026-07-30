@@ -21,7 +21,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { GradientCard } from "@/components/GradientCard";
 import { PageShell } from "@/components/PageShell";
 import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -858,7 +857,7 @@ function CurriculumPage() {
 
           <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="text-overline uppercase tracking-[0.12em] text-muted-foreground">
+              <div className="text-overline uppercase tracking-[0.1em] text-muted-foreground">
                 Curriculum studio
               </div>
               <h1 className="font-serif mt-2 text-display text-foreground">
@@ -867,12 +866,12 @@ function CurriculumPage() {
             </div>
             <div className="flex flex-wrap items-end gap-2">
               {data?.classes.length ? (
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Class scope
                   <select
                     value={selectedClassId}
                     onChange={(event) => setSelectedClassId(event.target.value)}
-                    className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                   >
                     {data.classes.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -886,7 +885,7 @@ function CurriculumPage() {
                 <button
                   type="button"
                   onClick={() => setOutlineOpen((value) => !value)}
-                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
                 >
                   {outlineOpen ? (
                     <PanelLeftClose className="h-4 w-4" strokeWidth={1.7} />
@@ -899,7 +898,7 @@ function CurriculumPage() {
               <button
                 type="button"
                 onClick={() => void loadData()}
-                className="rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+                className="rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
               >
                 Refresh
               </button>
@@ -907,30 +906,30 @@ function CurriculumPage() {
           </section>
 
           {message ? (
-            <GradientCard>
-              <div className="flex items-center justify-between gap-3 p-4 text-[13px] text-muted-foreground">
+            <section className="rounded-card border border-border bg-depth-card shadow-card">
+              <div className="flex items-center justify-between gap-3 p-4 text-body text-muted-foreground">
                 <span>{message}</span>
                 <button
                   type="button"
                   onClick={() => setMessage("")}
-                  className="text-[12px] text-muted-foreground/70 hover:text-foreground"
+                  className="text-meta text-muted-foreground/70 hover:text-foreground"
                 >
                   Dismiss
                 </button>
               </div>
-            </GradientCard>
+            </section>
           ) : null}
 
           {booting ? (
-            <GradientCard>
-              <div className="p-6 text-[14px] text-muted-foreground">Loading curriculum...</div>
-            </GradientCard>
+            <section className="rounded-card border border-border bg-depth-card shadow-card">
+              <div className="p-6 text-body text-muted-foreground">Loading curriculum...</div>
+            </section>
           ) : !data?.classes.length ? (
-            <GradientCard>
-              <div className="p-6 text-[14px] text-muted-foreground">
+            <section className="rounded-card border border-border bg-depth-card shadow-card">
+              <div className="p-6 text-body text-muted-foreground">
                 Teacher curriculum access requires an assigned class.
               </div>
-            </GradientCard>
+            </section>
           ) : data && selectedClass ? (
             <div
               className={`grid gap-4 ${outlineOpen ? "lg:grid-cols-[330px_minmax(0,1fr)]" : ""}`}
@@ -1047,10 +1046,10 @@ function Outline({
     selection?.type === type && selection.id === id;
 
   return (
-    <GradientCard innerClassName="!bg-depth-card">
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
       <div className="p-3">
         <div className="mb-2 flex items-center justify-between gap-2 px-1">
-          <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+          <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
             Outline
           </span>
           <div className="flex items-center gap-1">
@@ -1058,7 +1057,7 @@ function Outline({
               type="button"
               onClick={onAddSubject}
               disabled={busy}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
               Subject
@@ -1076,7 +1075,7 @@ function Outline({
         </div>
 
         {subjects.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border px-3 py-6 text-center text-[12.5px] text-muted-foreground">
+          <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
             No subjects yet. Create one to start building.
           </div>
         ) : (
@@ -1207,7 +1206,7 @@ function Outline({
           </div>
         )}
       </div>
-    </GradientCard>
+    </section>
   );
 }
 
@@ -1269,14 +1268,12 @@ function OutlineRow({
         onClick={onSelect}
         className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
       >
-        <span
-          className={`min-w-0 flex-1 truncate text-[12.5px] ${depth === 0 ? "font-medium" : ""}`}
-        >
+        <span className={`min-w-0 flex-1 truncate text-meta ${depth === 0 ? "font-medium" : ""}`}>
           {label}
         </span>
         {meta ? (
           <span
-            className={`shrink-0 text-[10px] uppercase tracking-[0.08em] ${
+            className={`shrink-0 text-overline uppercase tracking-[0.08em] ${
               selected ? "text-background/70" : "text-muted-foreground"
             }`}
           >
@@ -1296,7 +1293,7 @@ function OutlineRow({
           className={`shrink-0 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100 ${
             selected
               ? "text-background/80 hover:bg-background/20"
-              : "text-muted-foreground hover:bg-background/60"
+              : "text-muted-foreground hover:bg-depth-field"
           }`}
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -1309,7 +1306,7 @@ function OutlineRow({
 function EmptyHint({ depth, label }: { depth: number; label: string }) {
   return (
     <div
-      className="py-1 text-[11px] italic text-muted-foreground/70"
+      className="py-1 text-meta italic text-muted-foreground/70"
       style={{ paddingLeft: `${depth * 14 + 22}px` }}
     >
       {label}
@@ -1461,11 +1458,11 @@ function DetailPane({
 }) {
   if (!selection) {
     return (
-      <GradientCard innerClassName="!bg-depth-card">
+      <section className="rounded-card border border-border bg-depth-card shadow-card">
         <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
           <Layers3 className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
-          <div className="text-[14px] text-foreground">Select a node to edit it.</div>
-          <p className="max-w-md text-[12.5px] leading-relaxed text-muted-foreground">
+          <div className="text-body text-foreground">Select a node to edit it.</div>
+          <p className="max-w-md text-meta leading-relaxed text-muted-foreground">
             Pick a subject, course, unit, or lesson from the outline — or create a subject to start
             a new path. Drag items in the outline to reorder them.
           </p>
@@ -1473,13 +1470,13 @@ function DetailPane({
             type="button"
             onClick={onAddSubject}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
             New subject
           </button>
         </div>
-      </GradientCard>
+      </section>
     );
   }
 
@@ -1582,11 +1579,11 @@ function DetailPane({
 
 function MissingNode() {
   return (
-    <GradientCard innerClassName="!bg-depth-card">
-      <div className="p-6 text-[13px] text-muted-foreground">
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
+      <div className="p-6 text-body text-muted-foreground">
         That item is no longer available. Pick another from the outline.
       </div>
-    </GradientCard>
+    </section>
   );
 }
 
@@ -1630,17 +1627,17 @@ function StructureDetail({
   const dirty = title.trim() !== node.title || (description ?? "") !== (node.description ?? "");
 
   return (
-    <GradientCard innerClassName="!bg-depth-card">
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
       <div className="p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               {kind}
             </div>
-            <h2 className="mt-1 text-[20px] font-medium text-foreground">{node.title}</h2>
+            <h2 className="mt-1 font-serif text-display text-foreground">{node.title}</h2>
           </div>
           {status ? (
-            <span className="rounded-full border border-border px-3 py-1 text-[11.5px] text-muted-foreground">
+            <span className="rounded-full border border-border px-3 py-1 text-meta text-muted-foreground">
               {status}
             </span>
           ) : null}
@@ -1654,7 +1651,7 @@ function StructureDetail({
               type="button"
               onClick={() => onSave(title.trim(), description.trim())}
               disabled={busy || !title.trim() || !dirty}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Pencil className="h-3.5 w-3.5" strokeWidth={1.7} />
               {busy ? "Saving..." : "Save changes"}
@@ -1663,7 +1660,7 @@ function StructureDetail({
               type="button"
               onClick={onAddChild}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
               {addLabel}
@@ -1683,7 +1680,7 @@ function StructureDetail({
         ) : null}
 
         <div className="mt-6 border-t border-border pt-4">
-          <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+          <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
             Lifecycle
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1692,7 +1689,7 @@ function StructureDetail({
                 type="button"
                 onClick={onArchive}
                 disabled={busy}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
               >
                 <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Archive
@@ -1704,7 +1701,7 @@ function StructureDetail({
                   type="button"
                   onClick={onDelete}
                   disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-2 text-[12.5px] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-2 text-meta text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
                   Confirm delete
@@ -1712,7 +1709,7 @@ function StructureDetail({
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(false)}
-                  className="text-[12px] text-muted-foreground hover:text-foreground"
+                  className="text-meta text-muted-foreground hover:text-foreground"
                 >
                   Cancel
                 </button>
@@ -1723,19 +1720,19 @@ function StructureDetail({
                 onClick={() => setConfirmDelete(true)}
                 disabled={busy || !canDelete}
                 title={canDelete ? undefined : deleteHint}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Delete
               </button>
             )}
             {!canDelete ? (
-              <span className="text-[11.5px] text-muted-foreground">{deleteHint}</span>
+              <span className="text-meta text-muted-foreground">{deleteHint}</span>
             ) : null}
           </div>
         </div>
       </div>
-    </GradientCard>
+    </section>
   );
 }
 
@@ -1901,6 +1898,27 @@ function modeMeta(mode: LearningMode) {
   return MODE_META.find((item) => item.mode === mode) || MODE_META[3];
 }
 
+// Per-mode accent hue for the 8-mode StepCard picker and step rows — the --mode-* custom
+// props from styles.css (the same family the student TurnMode skin reads; see
+// src/student/turnModes.ts for that mapping). Authoring modes map onto the nearest student
+// hue: explanation→lesson, assessment→quiz, revision→checkpoints, inquiry→open; media gets
+// its own authoring-only --mode-media token.
+const MODE_ACCENT: Record<LearningMode, string> = {
+  explanation: "--mode-lesson",
+  media: "--mode-media",
+  reflection: "--mode-discuss",
+  practice: "--mode-practice",
+  assignment: "--mode-assignment",
+  inquiry: "--mode-open",
+  assessment: "--mode-quiz",
+  revision: "--mode-checkpoints",
+};
+
+function modeAccentStyle(mode: LearningMode | "legacy" | null | undefined) {
+  if (!mode || mode === "legacy") return undefined;
+  return { ["--mode-accent" as string]: `var(${MODE_ACCENT[mode]})` };
+}
+
 // mode_type pinning mirrors the backend: practice code|applied, assessment mcq|open_ended.
 function pinnedShapeFor(mode: LearningMode, modeType: string) {
   const meta = modeMeta(mode);
@@ -2058,14 +2076,14 @@ function LessonDetail({
   );
 
   return (
-    <GradientCard innerClassName="!bg-depth-card">
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
       <div className="p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Lesson
             </div>
-            <h2 className="mt-1 truncate text-[20px] font-medium text-foreground">
+            <h2 className="mt-1 truncate font-serif text-display text-foreground">
               {lesson.title}
             </h2>
           </div>
@@ -2085,19 +2103,19 @@ function LessonDetail({
           <div className="grid gap-5">
             <LessonMetaForm lesson={lesson} milestone={milestone} busy={busy} onSave={onSaveMeta} />
 
-            <section className="rounded-3xl border border-border bg-depth-sub p-4">
+            <section className="rounded-card border border-border bg-depth-sub p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-[15px] font-medium text-foreground">
+                <div className="flex items-center gap-2 text-title font-medium text-foreground">
                   <Layers3 className="h-4 w-4" strokeWidth={1.7} />
                   Steps
                 </div>
-                <span className="text-[11.5px] text-muted-foreground">
+                <span className="text-meta text-muted-foreground">
                   {steps.length} step{steps.length === 1 ? "" : "s"}
                 </span>
               </div>
 
               {steps.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border px-3 py-6 text-center text-[12.5px] text-muted-foreground">
+                <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
                   No steps yet. Add the first one below.
                 </div>
               ) : (
@@ -2133,7 +2151,8 @@ function LessonDetail({
                     type="button"
                     onClick={() => onUpsertStep(defaultStepForMode(meta.mode))}
                     disabled={busy}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    style={modeAccentStyle(meta.mode)}
+                    className="mode-chip inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-meta text-foreground disabled:opacity-50"
                   >
                     {stepKindConfig(meta.kind).icon}
                     {meta.label}
@@ -2155,7 +2174,7 @@ function LessonDetail({
               <button
                 type="button"
                 onClick={onPublish}
-                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10"
+                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-meta text-success transition-colors hover:bg-success/10"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Publish
@@ -2163,7 +2182,7 @@ function LessonDetail({
               <button
                 type="button"
                 onClick={onArchiveLesson}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Archive
@@ -2171,11 +2190,11 @@ function LessonDetail({
             </div>
 
             <div className="border-t border-border pt-4">
-              <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Organize
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Move to unit
                   <select
                     value={lesson.unit_id || ""}
@@ -2185,7 +2204,7 @@ function LessonDetail({
                       }
                     }}
                     disabled={busy}
-                    className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
                   >
                     {orgUnits.map(({ unit, courseTitle }) => (
                       <option key={unit.id} value={unit.id}>
@@ -2200,7 +2219,7 @@ function LessonDetail({
                       type="button"
                       onClick={onDelete}
                       disabled={busy}
-                      className="inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-2 text-[12.5px] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-2 text-meta text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                     >
                       <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
                       Confirm delete
@@ -2208,7 +2227,7 @@ function LessonDetail({
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(false)}
-                      className="text-[12px] text-muted-foreground hover:text-foreground"
+                      className="text-meta text-muted-foreground hover:text-foreground"
                     >
                       Cancel
                     </button>
@@ -2218,21 +2237,21 @@ function LessonDetail({
                     type="button"
                     onClick={() => setConfirmDelete(true)}
                     disabled={busy}
-                    className="inline-flex items-center gap-2 self-end rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    className="inline-flex items-center gap-2 self-end rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
                     Delete
                   </button>
                 )}
               </div>
-              <p className="mt-2 text-[11.5px] text-muted-foreground">
+              <p className="mt-2 text-meta text-muted-foreground">
                 Lessons with learner activity can be archived but not deleted.
               </p>
             </div>
           </div>
         )}
       </div>
-    </GradientCard>
+    </section>
   );
 }
 
@@ -2309,8 +2328,8 @@ function LessonMetaForm({
   };
 
   return (
-    <section className="rounded-3xl border border-border bg-depth-sub p-4">
-      <div className="mb-3 flex items-center gap-2 text-[15px] font-medium text-foreground">
+    <section className="rounded-card border border-border bg-depth-sub p-4">
+      <div className="mb-3 flex items-center gap-2 text-title font-medium text-foreground">
         <NotebookPen className="h-4 w-4" strokeWidth={1.7} />
         Lesson basics
       </div>
@@ -2329,7 +2348,7 @@ function LessonMetaForm({
         <TextArea label="Lesson objective" value={objective} onChange={setObjective} />
         <TextInput label="Skill keys (comma separated)" value={skillKeys} onChange={setSkillKeys} />
         <div className="grid gap-2">
-          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+          <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
             Allowed answer modes
           </div>
           <div className="flex flex-wrap gap-2">
@@ -2338,7 +2357,7 @@ function LessonMetaForm({
                 type="button"
                 key={mode}
                 onClick={() => toggleMode(mode)}
-                className={`rounded-full border px-3 py-1.5 text-[11.5px] transition-colors ${
+                className={`rounded-full border px-3 py-1.5 text-meta transition-colors ${
                   allowedModes.includes(mode)
                     ? "border-foreground/25 bg-foreground text-background"
                     : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -2349,10 +2368,10 @@ function LessonMetaForm({
             ))}
           </div>
         </div>
-        <div className="grid gap-3 rounded-2xl border border-border bg-depth-field p-3">
+        <div className="grid gap-3 rounded-card border border-border bg-depth-field p-3">
           <div>
-            <div className="text-[13px] font-medium text-foreground">Tutor behavior</div>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
+            <div className="text-body font-medium text-foreground">Tutor behavior</div>
+            <p className="mt-0.5 text-meta text-muted-foreground">
               Govern how much help the mentor may give and whether it must see an attempt first. The
               student's chosen mode can ask for help only up to the ceiling.
             </p>
@@ -2392,7 +2411,7 @@ function LessonMetaForm({
           <button
             type="button"
             onClick={() => setRequireAttemptFirst((current) => !current)}
-            className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
+            className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors ${
               requireAttemptFirst
                 ? "border-foreground/25 bg-foreground text-background"
                 : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -2405,7 +2424,7 @@ function LessonMetaForm({
             <button
               type="button"
               onClick={() => setAllowLiveArtifacts((current) => !current)}
-              className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
+              className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors ${
                 allowLiveArtifacts
                   ? "border-foreground/25 bg-foreground text-background"
                   : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -2414,7 +2433,7 @@ function LessonMetaForm({
               {allowLiveArtifacts ? <Check className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
               Live mentor-built activities
             </button>
-            <p className="text-[12px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               Lets the mentor offer to build a one-off interactive activity for a struggling student
               — private to that student until you share it.
             </p>
@@ -2425,7 +2444,7 @@ function LessonMetaForm({
             type="button"
             onClick={save}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
             {busy ? "Saving..." : "Save lesson basics"}
@@ -2587,13 +2606,16 @@ function StepCard({
 
   return (
     <div
-      className={`rounded-2xl border border-border bg-depth-field ${dragging ? "opacity-40" : ""}`}
+      // The step's LearningMode hue rides the card's left edge + kind chip (mode-edge /
+      // mode-chip read --mode-accent); legacy steps stay neutral.
+      style={modeAccentStyle(stepMode)}
+      className={`mode-edge rounded-card border border-border bg-depth-field ${dragging ? "opacity-40" : ""}`}
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <span className="cursor-grab text-muted-foreground/60">
           <GripVertical className="h-4 w-4" strokeWidth={1.6} />
         </span>
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-[11px] text-muted-foreground">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-meta text-muted-foreground">
           {index + 1}
         </span>
         <span className="text-muted-foreground">{config.icon}</span>
@@ -2602,10 +2624,10 @@ function StepCard({
           onClick={() => setOpen((value) => !value)}
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
+          <span className="min-w-0 flex-1 truncate text-body text-foreground">
             {activity.title}
           </span>
-          <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="mode-chip shrink-0 rounded-pill border px-2 py-0.5 text-overline uppercase tracking-[0.08em] text-muted-foreground">
             {config.label}
           </span>
           <ChevronRight
@@ -2685,7 +2707,7 @@ function StepCard({
 
           {showChoices ? (
             <div className="grid gap-2">
-              <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Choices
               </div>
               {choices.map((choice, i) => (
@@ -2693,17 +2715,17 @@ function StepCard({
                   <input
                     value={choice.id}
                     onChange={(event) => updateChoice(i, { id: event.target.value })}
-                    className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] text-foreground outline-none"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
                   />
                   <input
                     value={choice.text}
                     onChange={(event) => updateChoice(i, { text: event.target.value })}
-                    className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] text-foreground outline-none"
+                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setCorrectId(choice.id)}
-                    className={`rounded-full border px-3 py-1.5 text-[11.5px] ${
+                    className={`rounded-full border px-3 py-1.5 text-meta ${
                       correctId === choice.id
                         ? "border-success/35 text-success"
                         : "border-border text-muted-foreground"
@@ -2721,7 +2743,7 @@ function StepCard({
                     { id: String.fromCharCode(97 + current.length), text: "" },
                   ])
                 }
-                className="justify-self-start text-[12px] text-muted-foreground hover:text-foreground"
+                className="justify-self-start text-meta text-muted-foreground hover:text-foreground"
               >
                 + Add choice
               </button>
@@ -2733,32 +2755,32 @@ function StepCard({
               actually show their material. Binding saves immediately, outside Save step. */}
           <div className="grid gap-2">
             <div className="flex items-baseline justify-between gap-2">
-              <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Attached materials
               </div>
-              <span className="text-[11px] text-muted-foreground/70">
+              <span className="text-meta text-muted-foreground/70">
                 Saves immediately · the mentor presents up to 3
               </span>
             </div>
             {attached.map((resource) => (
               <div
                 key={resource.id}
-                className="flex items-center gap-2 rounded-2xl border border-border bg-depth-sub px-3 py-2"
+                className="flex items-center gap-2 rounded-card border border-border bg-depth-sub px-3 py-2"
               >
                 <Paperclip
                   className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                   strokeWidth={1.7}
                 />
-                <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                <span className="min-w-0 flex-1 truncate text-meta text-foreground">
                   {resource.title}
                 </span>
-                <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
                   {resource.resource_type}
                 </span>
                 {resource.status !== "published" ? (
                   <span
                     title="Drafts never reach students — the mentor only presents published materials."
-                    className="shrink-0 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-warning"
+                    className="shrink-0 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-overline uppercase tracking-[0.06em] text-warning"
                   >
                     draft
                   </span>
@@ -2775,7 +2797,7 @@ function StepCard({
               </div>
             ))}
             {attached.length === 0 && stepMode === "media" ? (
-              <div className="rounded-2xl border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground">
+              <div className="rounded-card border border-dashed border-border px-3 py-2 text-meta text-muted-foreground">
                 {resources.length === 0
                   ? "No lesson materials yet — add them in the class console's Resources tab, then attach them here."
                   : "Media steps present their attached materials when the step opens — attach one below."}
@@ -2790,7 +2812,7 @@ function StepCard({
                   event.target.value = "";
                 }}
                 title={bindable ? undefined : "Save the new step first, then attach materials."}
-                className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] text-muted-foreground outline-none disabled:opacity-50"
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-muted-foreground outline-none disabled:opacity-50"
               >
                 <option value="">Attach a material…</option>
                 {attachable.map((resource) => (
@@ -2809,22 +2831,22 @@ function StepCard({
               it becomes an ordinary attachable material. */}
           {mentorBuilt.length ? (
             <div className="grid gap-1.5">
-              <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Mentor-built activities
               </div>
               {mentorBuilt.map((resource) => (
                 <div
                   key={resource.id}
-                  className="flex items-center gap-2 rounded-2xl border border-border bg-depth-field px-3 py-2"
+                  className="flex items-center gap-2 rounded-card border border-border bg-depth-field px-3 py-2"
                 >
                   <Sparkles
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     strokeWidth={1.7}
                   />
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                  <span className="min-w-0 flex-1 truncate text-meta text-foreground">
                     {resource.title}
                   </span>
-                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
+                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-overline uppercase tracking-[0.06em] text-muted-foreground">
                     {resource.visibility === "student_private" ? "student-private" : "shared"}
                   </span>
                   {resource.visibility === "student_private" ? (
@@ -2833,7 +2855,7 @@ function StepCard({
                       onClick={() => onShare(resource.id)}
                       disabled={busy}
                       title="Make this activity visible to the whole class"
-                      className="shrink-0 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                      className="shrink-0 rounded-full border border-border px-2.5 py-1 text-meta text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
                     >
                       Share with class
                     </button>
@@ -2857,7 +2879,7 @@ function StepCard({
               type="button"
               onClick={save}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
               {busy ? "Saving..." : "Save step"}
@@ -2867,7 +2889,7 @@ function StepCard({
               onClick={onDelete}
               disabled={busy || !canDelete}
               title={canDelete ? undefined : "A lesson needs at least one step."}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
               Delete step
@@ -2892,18 +2914,18 @@ function LessonPreview({
 }) {
   return (
     <div className="grid gap-4">
-      <div className="mb-1 flex items-center gap-2 text-[15px] font-medium text-foreground">
+      <div className="mb-1 flex items-center gap-2 text-title font-medium text-foreground">
         <Eye className="h-4 w-4" strokeWidth={1.7} />
         Student walkthrough
       </div>
       <div>
-        <h2 className="font-serif text-[26px] leading-tight text-foreground">{lesson.title}</h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+        <h2 className="font-serif text-display leading-tight text-foreground">{lesson.title}</h2>
+        <p className="mt-2 text-body leading-relaxed text-muted-foreground">
           {milestone?.objective || "Add a lesson objective to preview the target."}
         </p>
       </div>
       {steps.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-depth-sub p-4 text-[12.5px] text-muted-foreground">
+        <div className="rounded-card border border-border bg-depth-sub p-4 text-meta text-muted-foreground">
           No steps yet.
         </div>
       ) : (
@@ -2912,15 +2934,19 @@ function LessonPreview({
           const config = stepKindConfig(kind);
           const quiz = quizFor(activity.id);
           return (
-            <div key={activity.id} className="rounded-2xl border border-border bg-depth-sub p-4">
-              <div className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-border text-[10px]">
+            <div
+              key={activity.id}
+              style={modeAccentStyle(activity.mode)}
+              className="mode-edge rounded-card border border-border bg-depth-sub p-4"
+            >
+              <div className="mb-2 flex items-center gap-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-border text-overline">
                   {index + 1}
                 </span>
                 {config.label}
               </div>
-              <div className="text-[15px] font-medium text-foreground">{activity.title}</div>
-              <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
+              <div className="text-body-lg font-medium text-foreground">{activity.title}</div>
+              <p className="mt-1 whitespace-pre-wrap text-meta leading-relaxed text-muted-foreground">
                 {activity.prompt}
               </p>
               {kind === "checkpoint" && quiz?.choices?.length ? (
@@ -2928,7 +2954,7 @@ function LessonPreview({
                   {quiz.choices.map((choice) => (
                     <div
                       key={choice.id}
-                      className={`rounded-xl border px-3 py-2 text-[12.5px] ${
+                      className={`rounded-control border px-3 py-2 text-meta ${
                         quiz.correct_choice_ids?.includes(choice.id)
                           ? "border-success/35 text-success"
                           : "border-border text-muted-foreground"
@@ -2940,7 +2966,7 @@ function LessonPreview({
                 </div>
               ) : null}
               {kind === "practice" && activity.response_mode === "code" && activity.starter_code ? (
-                <pre className="mt-3 overflow-auto rounded-xl border border-border bg-depth-field p-3 text-[12px] text-foreground">
+                <pre className="mt-3 overflow-auto rounded-control border border-border bg-depth-field p-3 text-meta text-foreground">
                   {activity.starter_code}
                 </pre>
               ) : null}
@@ -2965,7 +2991,7 @@ function ViewToggle({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-3 py-1 text-[12px] transition-colors ${
+      className={`rounded-full px-3 py-1 text-meta transition-colors ${
         active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
       }`}
     >
@@ -3090,15 +3116,15 @@ function AiReferenceInput({
       .join(" · ") || "optional";
 
   return (
-    <div className="rounded-2xl border border-border bg-depth-sub p-3">
+    <div className="rounded-card border border-border bg-depth-sub p-3">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center gap-2 text-[12px] font-medium text-foreground"
+        className="flex w-full items-center gap-2 text-meta font-medium text-foreground"
       >
         <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
         Reference material
-        <span className="text-[11px] font-normal text-muted-foreground">{summary}</span>
+        <span className="text-meta font-normal text-muted-foreground">{summary}</span>
         <ChevronRight
           className={`ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
           strokeWidth={1.7}
@@ -3108,7 +3134,7 @@ function AiReferenceInput({
         <div className="mt-3 grid gap-3">
           <TextArea label="Paste source text" value={paste} onChange={setPaste} />
           <div className="grid gap-1">
-            <span className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Upload files (.txt, .md, .pdf)
             </span>
             <input
@@ -3120,17 +3146,17 @@ function AiReferenceInput({
                 void handleFiles(event.target.files);
                 event.target.value = "";
               }}
-              className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12px] text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-[12px] file:text-foreground"
+              className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-meta file:text-foreground"
             />
             {extracting ? (
-              <span className="text-[11px] text-muted-foreground">Reading files…</span>
+              <span className="text-meta text-muted-foreground">Reading files…</span>
             ) : null}
             {docs.length ? (
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {docs.map((doc, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground"
+                    className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-meta text-muted-foreground"
                   >
                     <span className="max-w-[160px] truncate">{doc.name}</span>
                     <button
@@ -3148,14 +3174,14 @@ function AiReferenceInput({
           </div>
           {usableResources.length ? (
             <div className="grid gap-1">
-              <span className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Use existing resources
               </span>
               <div className="grid max-h-40 gap-1 overflow-auto">
                 {usableResources.map((resource) => (
                   <label
                     key={resource.id}
-                    className="flex items-center gap-2 text-[12px] text-foreground"
+                    className="flex items-center gap-2 text-meta text-foreground"
                   >
                     <input
                       type="checkbox"
@@ -3199,14 +3225,14 @@ function RefineBox({
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder={placeholder}
-        className="rounded-xl border border-border bg-depth-field px-3 py-2 text-[12px] text-foreground outline-none placeholder:text-muted-foreground"
+        className="rounded-control border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
       />
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => onSubmit(text.trim())}
           disabled={loading || !text.trim()}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
           {loading ? "Refining…" : "Refine"}
@@ -3214,7 +3240,7 @@ function RefineBox({
         <button
           type="button"
           onClick={onCancel}
-          className="text-[12px] text-muted-foreground hover:text-foreground"
+          className="text-meta text-muted-foreground hover:text-foreground"
         >
           Cancel
         </button>
@@ -3275,12 +3301,12 @@ function AiOutlinePanel({
   };
 
   return (
-    <section className="rounded-3xl border border-border bg-depth-sub p-4">
-      <div className="mb-2 flex items-center gap-2 text-[15px] font-medium text-foreground">
+    <section className="rounded-card border border-border bg-depth-sub p-4">
+      <div className="mb-2 flex items-center gap-2 text-title font-medium text-foreground">
         <Sparkles className="h-4 w-4" strokeWidth={1.7} />
         Draft an outline with AI
       </div>
-      <p className="mb-3 text-[12px] text-muted-foreground">
+      <p className="mb-3 text-meta text-muted-foreground">
         Describe the course. The AI sees the rest of this subject and any reference material you
         attach. Refine individual units before anything is created.
       </p>
@@ -3293,7 +3319,7 @@ function AiOutlinePanel({
           type="button"
           onClick={() => void generate()}
           disabled={loading || busy || !prompt.trim()}
-          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
           {loading ? "Working…" : draft ? "Regenerate" : "Generate"}
@@ -3301,22 +3327,22 @@ function AiOutlinePanel({
       </div>
 
       {draft ? (
-        <div className="mt-3 grid gap-2 rounded-2xl border border-border bg-depth-field p-3">
+        <div className="mt-3 grid gap-2 rounded-card border border-border bg-depth-field p-3">
           {draft.units.length === 0 ? (
-            <div className="text-[12.5px] text-muted-foreground">
+            <div className="text-meta text-muted-foreground">
               The model did not return any units. Try a more specific brief.
             </div>
           ) : (
             draft.units.map((unit, i) => {
               const status = statuses[i] || "same";
               return (
-                <div key={i} className={`rounded-xl border p-2.5 ${statusRing(status)}`}>
+                <div key={i} className={`rounded-control border p-2.5 ${statusRing(status)}`}>
                   <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-foreground">
+                    <span className="min-w-0 flex-1 truncate text-meta font-medium text-foreground">
                       {unit.title}
                     </span>
                     {statusLabel(status) ? (
-                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-overline uppercase tracking-[0.08em] text-muted-foreground">
                         {statusLabel(status)}
                       </span>
                     ) : null}
@@ -3325,12 +3351,12 @@ function AiOutlinePanel({
                       onClick={() => setRefineFor(refineFor === i ? null : i)}
                       title="Refine this unit"
                       aria-label="Refine this unit"
-                      className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+                      className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-depth-field hover:text-foreground"
                     >
                       <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.7} />
                     </button>
                   </div>
-                  <ul className="mt-1 ml-4 list-disc text-[12px] text-muted-foreground">
+                  <ul className="mt-1 ml-4 list-disc text-meta text-muted-foreground">
                     {unit.lessons.map((lesson, j) => (
                       <li key={j}>{lesson.title}</li>
                     ))}
@@ -3358,7 +3384,7 @@ function AiOutlinePanel({
                   setPrompt("");
                 }}
                 disabled={busy}
-                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Apply outline
@@ -3369,7 +3395,7 @@ function AiOutlinePanel({
                   setDraft(null);
                   setStatuses([]);
                 }}
-                className="text-[12px] text-muted-foreground hover:text-foreground"
+                className="text-meta text-muted-foreground hover:text-foreground"
               >
                 Discard
               </button>
@@ -3434,11 +3460,11 @@ function AiStepsPanel({
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-2 text-[15px] font-medium text-foreground">
+      <div className="mb-2 flex items-center gap-2 text-title font-medium text-foreground">
         <Sparkles className="h-4 w-4" strokeWidth={1.7} />
         Draft steps with AI
       </div>
-      <p className="mb-3 text-[12px] text-muted-foreground">
+      <p className="mb-3 text-meta text-muted-foreground">
         Describe the lesson. The AI sees the lesson context and any reference material you attach.
         Refine individual steps, then add them.
       </p>
@@ -3451,7 +3477,7 @@ function AiStepsPanel({
           type="button"
           onClick={() => void generate()}
           disabled={loading || busy || !prompt.trim()}
-          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
           {loading ? "Working…" : drafts ? "Regenerate" : "Generate"}
@@ -3459,25 +3485,25 @@ function AiStepsPanel({
       </div>
 
       {drafts ? (
-        <div className="mt-3 grid gap-2 rounded-2xl border border-border bg-depth-field p-3">
+        <div className="mt-3 grid gap-2 rounded-card border border-border bg-depth-field p-3">
           {drafts.length === 0 ? (
-            <div className="text-[12.5px] text-muted-foreground">
+            <div className="text-meta text-muted-foreground">
               The model did not return any steps. Try a more specific brief.
             </div>
           ) : (
             drafts.map((step, i) => {
               const status = statuses[i] || "same";
               return (
-                <div key={i} className={`rounded-xl border p-2.5 ${statusRing(status)}`}>
+                <div key={i} className={`rounded-control border p-2.5 ${statusRing(status)}`}>
                   <div className="flex items-center gap-2">
-                    <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                    <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
                       {step.kind}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-foreground">
+                    <span className="min-w-0 flex-1 truncate text-meta font-medium text-foreground">
                       {step.title}
                     </span>
                     {statusLabel(status) ? (
-                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-overline uppercase tracking-[0.08em] text-muted-foreground">
                         {statusLabel(status)}
                       </span>
                     ) : null}
@@ -3486,16 +3512,16 @@ function AiStepsPanel({
                       onClick={() => setRefineFor(refineFor === i ? null : i)}
                       title="Refine this step"
                       aria-label="Refine this step"
-                      className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+                      className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-depth-field hover:text-foreground"
                     >
                       <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.7} />
                     </button>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-[12px] text-muted-foreground">
+                  <p className="mt-1 whitespace-pre-wrap text-meta text-muted-foreground">
                     {step.prompt}
                   </p>
                   {step.kind === "checkpoint" && step.choices.length ? (
-                    <ul className="mt-1 ml-4 list-disc text-[11.5px] text-muted-foreground">
+                    <ul className="mt-1 ml-4 list-disc text-meta text-muted-foreground">
                       {step.choices.map((choice) => (
                         <li
                           key={choice.id}
@@ -3529,7 +3555,7 @@ function AiStepsPanel({
                   setPrompt("");
                 }}
                 disabled={busy}
-                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Add these steps
@@ -3540,7 +3566,7 @@ function AiStepsPanel({
                   setDrafts(null);
                   setStatuses([]);
                 }}
-                className="text-[12px] text-muted-foreground hover:text-foreground"
+                className="text-meta text-muted-foreground hover:text-foreground"
               >
                 Discard
               </button>
@@ -3640,14 +3666,14 @@ function ArtifactGeneratePanel({
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-depth-sub">
+    <div className="rounded-card border border-border bg-depth-sub">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
       >
         <Sparkles className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
-        <span className="flex-1 text-[13px] text-foreground">Generate an activity</span>
+        <span className="flex-1 text-body text-foreground">Generate an activity</span>
         <ChevronRight
           className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
           strokeWidth={1.7}
@@ -3656,7 +3682,7 @@ function ArtifactGeneratePanel({
       {open ? (
         <div className="grid gap-3 border-t border-border p-3">
           {!bindable ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground">
+            <div className="rounded-control border border-dashed border-border px-3 py-2 text-meta text-muted-foreground">
               Save this step first, then generate an activity for it.
             </div>
           ) : null}
@@ -3689,14 +3715,14 @@ function ArtifactGeneratePanel({
             type="button"
             onClick={() => void generate()}
             disabled={busy || loading || !bindable || !brief.trim()}
-            className="inline-flex items-center gap-2 self-start rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            className="inline-flex items-center gap-2 self-start rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
             {loading ? "Generating…" : hasDraft ? "Regenerate" : "Generate"}
           </button>
 
           {lintViolations.length ? (
-            <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] text-warning">
+            <div className="rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-meta text-warning">
               This activity tripped a safety check ({lintViolations.join(", ")}). Regenerate before
               approving.
             </div>
@@ -3734,7 +3760,7 @@ function ArtifactGeneratePanel({
                   type="button"
                   onClick={approve}
                   disabled={busy || loading || lintViolations.length > 0}
-                  className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-[12.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-50"
                 >
                   <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                   Approve &amp; add to step
@@ -3742,7 +3768,7 @@ function ArtifactGeneratePanel({
                 <button
                   type="button"
                   onClick={reset}
-                  className="text-[12px] text-muted-foreground hover:text-foreground"
+                  className="text-meta text-muted-foreground hover:text-foreground"
                 >
                   Discard
                 </button>
@@ -4182,12 +4208,12 @@ function TextInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+    <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
       {label}
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+        className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
       />
     </label>
   );
@@ -4203,12 +4229,12 @@ function TextArea({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+    <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
       {label}
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-[82px] rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+        className="min-h-[82px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
       />
     </label>
   );
@@ -4228,12 +4254,12 @@ function SelectInput({
   optionLabels?: Record<string, string>;
 }) {
   return (
-    <label className="grid gap-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+    <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
       {label}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-2xl border border-border bg-depth-field px-3 py-2 text-[12.5px] normal-case tracking-normal text-foreground outline-none"
+        className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
       >
         {options.map((option) => (
           <option key={option} value={option}>

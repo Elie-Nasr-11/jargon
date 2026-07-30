@@ -53,8 +53,8 @@ export function OverflowMenu({
                 onSelect={() => action.onClick()}
                 className={
                   action.tone === "danger"
-                    ? "text-[12.5px] text-destructive focus:text-destructive"
-                    : "text-[12.5px]"
+                    ? "text-meta text-destructive focus:text-destructive"
+                    : "text-meta"
                 }
               >
                 {Icon ? <Icon className="h-3.5 w-3.5" strokeWidth={1.6} /> : null}

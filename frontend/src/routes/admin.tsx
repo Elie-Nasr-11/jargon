@@ -12,7 +12,6 @@ import {
   UserPlus,
 } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
-import { GradientCard } from "@/components/GradientCard";
 import { EmptyState } from "@/components/EmptyState";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
@@ -555,13 +554,13 @@ export function AdminPage() {
       <main className="relative z-10 mx-auto flex w-full max-w-[1240px] flex-1 flex-col gap-5 px-5 py-8">
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               {adminLevelLabel}
             </div>
-            <h1 className="font-serif mt-2 text-[38px] leading-tight tracking-tight text-foreground">
+            <h1 className="font-serif mt-2 text-display text-foreground">
               Manage pilot classrooms.
             </h1>
-            <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 max-w-2xl text-body leading-relaxed text-muted-foreground">
               {isPlatformLevel
                 ? "Seed pilot classes, watch live sessions, and track AI/runtime cost across the pilot."
                 : "Seed rosters and watch live sessions inside your organization."}{" "}
@@ -573,7 +572,7 @@ export function AdminPage() {
               type="button"
               onClick={() => void refreshScope()}
               disabled={scopeLoading}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-4 w-4 ${scopeLoading ? "animate-spin" : ""}`}
@@ -585,12 +584,12 @@ export function AdminPage() {
         </section>
 
         {!selectedOrgId ? (
-          <GradientCard>
+          <section className="rounded-card border border-border bg-depth-card shadow-card">
             <div className="p-5">
-              <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 {isPlatformLevel ? "Organizations" : "Your organizations"}
               </div>
-              <p className="mt-1 text-[12.5px] text-muted-foreground">
+              <p className="mt-1 text-meta text-muted-foreground">
                 {isPlatformLevel
                   ? "Pick an organization to manage its seeding, live sessions, and cost."
                   : "Pick an organization to manage its seeding and live sessions."}
@@ -613,25 +612,25 @@ export function AdminPage() {
                           }),
                         })
                       }
-                      className="rounded-2xl border border-border bg-depth-sub p-3.5 text-left transition-colors hover:bg-muted"
+                      className="rounded-card border border-border bg-depth-sub p-3.5 text-left transition-colors hover:bg-muted"
                     >
-                      <div className="text-[14px] font-medium text-foreground">
+                      <div className="text-body font-medium text-foreground">
                         {organization.name}
                       </div>
-                      <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                      <div className="mt-0.5 text-meta text-muted-foreground">
                         {organization.status || "active"} · {orgClassCount} classes
                       </div>
                     </button>
                   );
                 })}
                 {(scope?.organizations || []).length === 0 ? (
-                  <div className="text-[13px] text-muted-foreground">
+                  <div className="text-body text-muted-foreground">
                     No organizations in scope yet.
                   </div>
                 ) : null}
               </div>
             </div>
-          </GradientCard>
+          </section>
         ) : (
           <>
             <Breadcrumb
@@ -654,19 +653,19 @@ export function AdminPage() {
               </WorkspaceTabList>
 
               <WorkspacePanel value="live">
-                <GradientCard>
+                <section className="rounded-card border border-border bg-depth-card shadow-card">
                   <div className="p-4 sm:p-6">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div>
-                        <h2 className="text-[17px] font-medium text-foreground">
+                        <h2 className="text-title font-medium text-foreground">
                           Live sessions
                           {activeSessions?.length ? (
-                            <span className="ml-2 text-[13px] font-normal text-muted-foreground">
+                            <span className="ml-2 text-body font-normal text-muted-foreground">
                               {activeSessions.length}
                             </span>
                           ) : null}
                         </h2>
-                        <p className="mt-1 text-[13px] text-muted-foreground">
+                        <p className="mt-1 text-body text-muted-foreground">
                           Students active in the last 30 minutes across your{" "}
                           {isPlatformLevel ? "platform" : "organization"}.
                         </p>
@@ -675,13 +674,13 @@ export function AdminPage() {
                         type="button"
                         onClick={() => void refreshActiveSessions()}
                         disabled={activeSessionsLoading}
-                        className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                       >
                         {activeSessionsLoading ? "Refreshing…" : "Refresh"}
                       </button>
                     </div>
                     {activeSessionsError ? (
-                      <p className="text-[13px] text-danger">
+                      <p className="text-body text-danger">
                         {activeSessionsError}{" "}
                         <button
                           type="button"
@@ -692,7 +691,7 @@ export function AdminPage() {
                         </button>
                       </p>
                     ) : activeSessions === null ? (
-                      <p className="text-[13px] text-muted-foreground">Loading live sessions…</p>
+                      <p className="text-body text-muted-foreground">Loading live sessions…</p>
                     ) : activeSessions.length === 0 ? (
                       <EmptyState icon={Activity}>
                         No students are in a live session right now.
@@ -705,7 +704,7 @@ export function AdminPage() {
                           return (
                             <div
                               key={s.session_id}
-                              className="flex items-center gap-3 rounded-2xl border border-border bg-depth-field px-3 py-2.5"
+                              className="flex items-center gap-3 rounded-card border border-border bg-depth-field px-3 py-2.5"
                             >
                               <span className="relative flex h-2 w-2 shrink-0">
                                 <span
@@ -716,21 +715,21 @@ export function AdminPage() {
                                 />
                               </span>
                               <div className="min-w-0 flex-1">
-                                <div className="truncate text-[13.5px] text-foreground">
+                                <div className="truncate text-body text-foreground">
                                   {s.student_name}
                                 </div>
-                                <div className="truncate text-[12px] text-muted-foreground">
+                                <div className="truncate text-meta text-muted-foreground">
                                   {s.lesson_title}
                                   {s.class_name ? ` · ${s.class_name}` : ""}
                                   {s.stage ? ` · ${s.stage}` : ""}
                                 </div>
                               </div>
                               {struggling ? (
-                                <span className="shrink-0 rounded-full border border-warning/40 px-2 py-0.5 text-[10.5px] text-warning">
+                                <span className="shrink-0 rounded-full border border-warning/40 px-2 py-0.5 text-overline text-warning">
                                   Needs attention
                                 </span>
                               ) : null}
-                              <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                              <span className="shrink-0 text-meta text-muted-foreground">
                                 {liveAgo(s.updated_at)}
                               </span>
                             </div>
@@ -739,22 +738,22 @@ export function AdminPage() {
                       </div>
                     )}
                   </div>
-                </GradientCard>
+                </section>
               </WorkspacePanel>
 
               <WorkspacePanel value="cost">
-                <GradientCard>
+                <section className="rounded-card border border-border bg-depth-card shadow-card">
                   <div className="space-y-5 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                           <Activity className="h-3.5 w-3.5" strokeWidth={1.7} />
                           AI/runtime operations
                         </div>
-                        <h2 className="text-[18px] font-medium text-foreground">
+                        <h2 className="text-title font-medium text-foreground">
                           Usage, reliability, and model load
                         </h2>
-                        <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                        <p className="mt-1 max-w-2xl text-meta leading-relaxed text-muted-foreground">
                           {costVisible
                             ? "Platform admins see estimated model cost, tokens, latency, and failure signals across the pilot."
                             : "Org admins see scoped usage and reliability. Dollar-cost totals stay platform-admin only."}
@@ -764,7 +763,7 @@ export function AdminPage() {
                         type="button"
                         onClick={() => void refreshCostDashboard()}
                         disabled={costLoading}
-                        className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                       >
                         <RefreshCw
                           className={`h-4 w-4 ${costLoading ? "animate-spin" : ""}`}
@@ -775,7 +774,7 @@ export function AdminPage() {
                     </div>
 
                     {costMessage ? (
-                      <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                      <div className="rounded-card border border-border bg-depth-sub px-3 py-2 text-meta text-muted-foreground">
                         {costMessage}
                       </div>
                     ) : null}
@@ -807,18 +806,16 @@ export function AdminPage() {
                       />
                     </div>
 
-                    <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
+                    <div className="rounded-card border border-border/80 bg-depth-sub p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <h3 className="text-[14px] font-medium text-foreground">
-                            Runtime health
-                          </h3>
-                          <p className="mt-1 text-[12px] text-muted-foreground">
+                          <h3 className="text-body font-medium text-foreground">Runtime health</h3>
+                          <p className="mt-1 text-meta text-muted-foreground">
                             Engine wakeups, retry recoveries, controlled code errors, and pilot
                             safety limits from recent runtime events.
                           </p>
                         </div>
-                        <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                        <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                           Last event{" "}
                           {formatDate(costDashboard?.runtime_health?.last_runtime_event_at)}
                         </div>
@@ -873,15 +870,15 @@ export function AdminPage() {
                     />
 
                     <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
-                        <h3 className="text-[14px] font-medium text-foreground">
+                      <div className="rounded-card border border-border/80 bg-depth-sub p-4">
+                        <h3 className="text-body font-medium text-foreground">
                           Recent model events
                         </h3>
                         <div className="mt-3 space-y-2">
                           {(costDashboard?.recent_model_events || []).slice(0, 6).map((event) => (
                             <div
                               key={event.id}
-                              className="border-b border-border/55 pb-2 text-[12px]"
+                              className="border-b border-border/55 pb-2 text-meta"
                             >
                               <div className="text-foreground">
                                 {event.model} · {event.task_type.replaceAll("_", " ")}
@@ -896,20 +893,20 @@ export function AdminPage() {
                             </div>
                           ))}
                           {!costDashboard?.recent_model_events.length ? (
-                            <div className="text-[12px] text-muted-foreground">
+                            <div className="text-meta text-muted-foreground">
                               No model events recorded yet.
                             </div>
                           ) : null}
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
-                        <h3 className="text-[14px] font-medium text-foreground">Runtime errors</h3>
+                      <div className="rounded-card border border-border/80 bg-depth-sub p-4">
+                        <h3 className="text-body font-medium text-foreground">Runtime errors</h3>
                         <div className="mt-3 space-y-2">
                           {(costDashboard?.recent_runtime_errors || []).slice(0, 6).map((event) => (
                             <div
                               key={event.id}
-                              className="border-b border-border/55 pb-2 text-[12px]"
+                              className="border-b border-border/55 pb-2 text-meta"
                             >
                               <div className="text-foreground">
                                 {event.event_type} · {event.lesson_id || "no lesson"}
@@ -920,7 +917,7 @@ export function AdminPage() {
                             </div>
                           ))}
                           {!costDashboard?.recent_runtime_errors.length ? (
-                            <div className="text-[12px] text-muted-foreground">
+                            <div className="text-meta text-muted-foreground">
                               No runtime errors in the current scope.
                             </div>
                           ) : null}
@@ -928,7 +925,7 @@ export function AdminPage() {
                       </div>
                     </div>
                   </div>
-                </GradientCard>
+                </section>
               </WorkspacePanel>
 
               {isPlatformLevel ? (
@@ -936,13 +933,16 @@ export function AdminPage() {
                   <div className="space-y-5">
                     {isPlatformAdmin ? (
                       <div>
-                        <GradientCard>
+                        <section className="rounded-card border border-border bg-depth-card shadow-card">
                           <div className="space-y-4 p-5">
                             <div>
-                              <h2 className="text-[16px] font-medium text-foreground">
+                              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                                Demo entry
+                              </div>
+                              <h2 className="mt-1 text-title font-medium text-foreground">
                                 Create demo logins
                               </h2>
-                              <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                              <p className="mt-1 max-w-2xl text-meta leading-relaxed text-muted-foreground">
                                 One click creates (or resets) three test accounts in a "Demo Org" so
                                 you can sign in as each role — student, teacher, and org admin. Your
                                 own account is the platform admin. All three share the password
@@ -950,7 +950,7 @@ export function AdminPage() {
                               </p>
                             </div>
                             {demoMessage ? (
-                              <div className="rounded-2xl border border-border bg-background/45 px-3 py-2 text-[12.5px] text-muted-foreground">
+                              <div className="rounded-card border border-border bg-depth-sub px-3 py-2 text-meta text-muted-foreground">
                                 {demoMessage}
                               </div>
                             ) : null}
@@ -972,14 +972,14 @@ export function AdminPage() {
                                 disabled={
                                   demoBusy || demoPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH
                                 }
-                                className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-meta font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
                               >
                                 <UserPlus className="h-4 w-4" strokeWidth={1.6} />
                                 {demoBusy ? "Creating…" : "Create demo logins"}
                               </button>
                             </div>
                             {demoResult ? (
-                              <div className="rounded-2xl border border-success/30 bg-success/10 p-3 text-[12.5px]">
+                              <div className="rounded-card border border-success/30 bg-success/10 p-3 text-meta">
                                 <div className="font-medium text-success">
                                   Logins ready — password{" "}
                                   <span className="font-mono">{demoResult.password}</span>
@@ -999,15 +999,15 @@ export function AdminPage() {
                               </div>
                             ) : null}
                           </div>
-                        </GradientCard>
+                        </section>
                       </div>
                     ) : null}
                     <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
-                      <GradientCard>
+                      <section className="rounded-card border border-border bg-depth-card shadow-card">
                         <div className="space-y-5 p-5">
                           <div>
-                            <h2 className="text-[16px] font-medium text-foreground">Class setup</h2>
-                            <p className="mt-1 text-[12.5px] text-muted-foreground">
+                            <h2 className="text-title font-medium text-foreground">Class setup</h2>
+                            <p className="mt-1 text-meta text-muted-foreground">
                               Use stable names for the real classroom pilot.
                             </p>
                           </div>
@@ -1055,7 +1055,7 @@ export function AdminPage() {
                               className={`jargon-input ${hasShortDefaultPassword ? "border-danger/60" : ""}`}
                             />
                             <p
-                              className={`mt-1.5 text-[12px] ${
+                              className={`mt-1.5 text-meta ${
                                 hasShortDefaultPassword ? "text-danger" : "text-muted-foreground"
                               }`}
                             >
@@ -1064,21 +1064,19 @@ export function AdminPage() {
                                 : "Required unless every row has a password override."}
                             </p>
                           </Field>
-                          <div className="rounded-2xl border border-border bg-muted/30 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
+                          <div className="rounded-card border border-border bg-muted/30 p-3 text-meta leading-relaxed text-muted-foreground">
                             Bootstrap note: the first platform admin is still created manually in
                             Supabase by inserting the signed-in admin user id into{" "}
                             <code>public.platform_admins</code>.
                           </div>
                         </div>
-                      </GradientCard>
+                      </section>
 
-                      <GradientCard>
+                      <section className="rounded-card border border-border bg-depth-card shadow-card">
                         <div className="space-y-4 p-5">
                           <div>
-                            <h2 className="text-[16px] font-medium text-foreground">
-                              Roster paste
-                            </h2>
-                            <p className="mt-1 text-[12.5px] text-muted-foreground">
+                            <h2 className="text-title font-medium text-foreground">Roster paste</h2>
+                            <p className="mt-1 text-meta text-muted-foreground">
                               Paste CSV or tab-separated rows. Header fields can be email, name,
                               role, grade, password.
                             </p>
@@ -1089,34 +1087,34 @@ export function AdminPage() {
                             placeholder={
                               "email,name,role,grade,password\nteacher@example.com,Teacher Name,teacher,,temporary123\nstudent@example.com,Student Name,student,Grade 4,temporary123"
                             }
-                            className="min-h-[170px] w-full resize-y rounded-2xl border border-border bg-background/70 p-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
+                            className="min-h-[170px] w-full resize-y rounded-card border border-border bg-depth-field p-3 text-body leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
                           />
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
                               onClick={applyPaste}
-                              className="rounded-full bg-foreground px-4 py-2 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px]"
+                              className="rounded-full bg-foreground px-4 py-2 text-body font-medium text-background transition-transform hover:-translate-y-[1px]"
                             >
                               Load pasted roster
                             </button>
                             <button
                               type="button"
                               onClick={() => setRows((current) => [...current, blankRow()])}
-                              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
+                              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
                             >
                               <Plus className="h-4 w-4" strokeWidth={1.6} /> Add row
                             </button>
                           </div>
                         </div>
-                      </GradientCard>
+                      </section>
                     </div>
 
-                    <GradientCard>
+                    <section className="rounded-card border border-border bg-depth-card shadow-card">
                       <div className="p-5">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <h2 className="text-[16px] font-medium text-foreground">Roster rows</h2>
-                            <p className="mt-1 text-[12.5px] text-muted-foreground">
+                            <h2 className="text-title font-medium text-foreground">Roster rows</h2>
+                            <p className="mt-1 text-meta text-muted-foreground">
                               {validRows.length} ready{" "}
                               {validRows.length === 1 ? "account" : "accounts"}.
                             </p>
@@ -1126,14 +1124,14 @@ export function AdminPage() {
                             onClick={seedRoster}
                             disabled={!canSeed}
                             title={formErrors[0] || "Seed classroom"}
-                            className="rounded-full bg-foreground px-5 py-2.5 text-[13px] font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
+                            className="rounded-full bg-foreground px-5 py-2.5 text-body font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
                           >
                             {submitting ? "Seeding..." : "Seed classroom"}
                           </button>
                         </div>
                         <div className="overflow-x-auto">
-                          <table className="min-w-[820px] w-full border-collapse text-left text-[13px]">
-                            <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <table className="min-w-[820px] w-full border-collapse text-left text-body">
+                            <thead className="border-b border-border text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                               <tr>
                                 <th className="py-2 pr-3 font-medium">Role</th>
                                 <th className="py-2 pr-3 font-medium">Email</th>
@@ -1172,7 +1170,7 @@ export function AdminPage() {
                                         }`}
                                       />
                                       {emailErrors[row.rowId] ? (
-                                        <div className="text-[11px] text-danger">
+                                        <div className="text-meta text-danger">
                                           {emailErrors[row.rowId]}
                                         </div>
                                       ) : null}
@@ -1190,7 +1188,7 @@ export function AdminPage() {
                                         }`}
                                       />
                                       {nameErrors[row.rowId] ? (
-                                        <div className="text-[11px] text-danger">
+                                        <div className="text-meta text-danger">
                                           {nameErrors[row.rowId]}
                                         </div>
                                       ) : null}
@@ -1218,7 +1216,7 @@ export function AdminPage() {
                                         }`}
                                       />
                                       {passwordErrors[row.rowId] ? (
-                                        <div className="text-[11px] text-danger">
+                                        <div className="text-meta text-danger">
                                           {passwordErrors[row.rowId]}
                                         </div>
                                       ) : null}
@@ -1240,13 +1238,13 @@ export function AdminPage() {
                           </table>
                         </div>
                       </div>
-                    </GradientCard>
+                    </section>
 
                     {(message || results.length > 0) && (
-                      <GradientCard>
+                      <section className="rounded-card border border-border bg-depth-card shadow-card">
                         <div className="space-y-4 p-5">
                           {message && (
-                            <div className="flex items-start gap-2 text-[13px] text-muted-foreground">
+                            <div className="flex items-start gap-2 text-body text-muted-foreground">
                               {results.some((result) => result.status === "failed") ? (
                                 <AlertCircle
                                   className="mt-0.5 h-4 w-4 shrink-0 text-danger"
@@ -1270,8 +1268,8 @@ export function AdminPage() {
                           )}
                           {results.length > 0 && (
                             <div className="overflow-x-auto">
-                              <table className="min-w-[680px] w-full border-collapse text-left text-[13px]">
-                                <thead className="border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                              <table className="min-w-[680px] w-full border-collapse text-left text-body">
+                                <thead className="border-b border-border text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                                   <tr>
                                     <th className="py-2 pr-3 font-medium">Status</th>
                                     <th className="py-2 pr-3 font-medium">Role</th>
@@ -1304,7 +1302,7 @@ export function AdminPage() {
                             </div>
                           )}
                         </div>
-                      </GradientCard>
+                      </section>
                     )}
                   </div>
                 </WorkspacePanel>
@@ -1327,11 +1325,10 @@ function AdminShell({
   children?: React.ReactNode;
 }) {
   return (
-    <div
-      className="relative flex min-h-screen flex-col overflow-hidden"
-      style={{ background: "var(--background)" }}
-    >
-      <AmbientCanvas intensity={0.24} />
+    // admin-wash = the neutral page mixed a step toward the info blue: the cooler admin
+    // tint (DESIGN_V6 §2/§6). Ambient held at the 0.22 working-surface intensity (§2).
+    <div className="admin-wash relative flex min-h-screen flex-col overflow-hidden">
+      <AmbientCanvas intensity={0.22} />
       <header
         className="relative z-20 shrink-0 backdrop-blur-md"
         style={{ background: "color-mix(in oklab, var(--background) 72%, transparent)" }}
@@ -1353,7 +1350,7 @@ function AdminShell({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-medium uppercase tracking-[0.09em] text-muted-foreground">
+      <span className="text-overline font-medium uppercase tracking-[0.09em] text-muted-foreground">
         {label}
       </span>
       <div className="mt-1.5">{children}</div>
@@ -1371,12 +1368,14 @@ function MetricStat({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border/75 bg-depth-sub p-4">
+    <div className="rounded-card border border-border/75 bg-depth-sub p-4">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
-        <span className="text-[10.5px] uppercase tracking-[0.1em]">{label}</span>
+        <span className="text-overline uppercase tracking-[0.1em]">{label}</span>
       </div>
-      <div className="mt-2 text-[22px] font-semibold leading-none text-foreground">{value}</div>
+      <div className="mt-2 text-[22px] font-semibold tabular-nums leading-none text-foreground">
+        {value}
+      </div>
     </div>
   );
 }
@@ -1395,13 +1394,13 @@ function CostMetricTable({
   wide?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-border/80 bg-depth-sub p-4">
-      <h3 className="text-[14px] font-medium text-foreground">{title}</h3>
+    <div className="rounded-card border border-border/80 bg-depth-sub p-4">
+      <h3 className="text-body font-medium text-foreground">{title}</h3>
       <div className="mt-3 overflow-x-auto">
         <table
-          className={`${wide ? "min-w-[860px]" : "min-w-[620px]"} w-full border-collapse text-left text-[12px]`}
+          className={`${wide ? "min-w-[860px]" : "min-w-[620px]"} w-full border-collapse text-left text-meta`}
         >
-          <thead className="border-b border-border text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+          <thead className="border-b border-border text-overline uppercase tracking-[0.1em] text-muted-foreground">
             <tr>
               <th className="py-2 pr-3 font-medium">Scope</th>
               <th className="py-2 pr-3 font-medium">Model</th>
@@ -1416,7 +1415,7 @@ function CostMetricTable({
               <tr key={row.key} className="border-b border-border/55">
                 <td className="py-2 pr-3">
                   <div className="font-medium text-foreground">{row.label}</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  <div className="mt-0.5 text-meta text-muted-foreground">
                     {row.completion_count} completions · {row.session_count} sessions
                   </div>
                 </td>

@@ -36,7 +36,7 @@ export function ModalCard({
       >
         <GradientCard className="shadow-pop">
           <div className={`flex flex-col ${size === "large" ? "h-[86dvh]" : "max-h-[82vh]"}`}>
-            <DialogTitle className="px-5 pb-2 pr-10 pt-4 text-[12px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            <DialogTitle className="px-5 pb-2 pr-10 pt-4 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               {title}
             </DialogTitle>
             <div className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-5">{children}</div>

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
-import { GradientCard } from "./GradientCard";
 import {
   fetchNotifications,
   getSession,
@@ -168,7 +167,7 @@ export function NotificationsMenu() {
       >
         <Bell className="h-[18px] w-[18px]" strokeWidth={1.5} />
         {unread ? (
-          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-medium leading-none text-white">
+          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-overline font-medium leading-none text-white">
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}
@@ -179,24 +178,24 @@ export function NotificationsMenu() {
           className="absolute right-0 top-[calc(100%+10px)] z-[var(--z-menu)]"
           style={{ width: "min(340px, calc(100vw - 16px))" }}
         >
-          <GradientCard>
+          <div className="rounded-card border border-border bg-depth-card shadow-raised">
             <div className="max-h-[calc(100dvh-84px)] overflow-y-auto overscroll-contain p-3">
               <div className="mb-2 flex items-center justify-between px-1">
-                <div className="text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Notifications
                 </div>
                 {unread ? (
                   <button
                     type="button"
                     onClick={markAll}
-                    className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                    className="text-meta text-muted-foreground transition-colors hover:text-foreground"
                   >
                     Mark all read
                   </button>
                 ) : null}
               </div>
               {items.length === 0 ? (
-                <p className="px-1 py-6 text-center text-[12.5px] text-muted-foreground">
+                <p className="px-1 py-6 text-center text-meta text-muted-foreground">
                   No notifications yet.
                 </p>
               ) : (
@@ -206,7 +205,7 @@ export function NotificationsMenu() {
                       key={n.id}
                       type="button"
                       onClick={() => openItem(n)}
-                      className={`flex items-start gap-2.5 rounded-xl border border-border px-3 py-2 text-left transition-colors hover:bg-muted ${
+                      className={`flex items-start gap-2.5 rounded-control border border-border px-3 py-2 text-left transition-colors hover:bg-muted ${
                         n.read_at ? "bg-transparent" : "bg-depth-field"
                       }`}
                     >
@@ -216,10 +215,8 @@ export function NotificationsMenu() {
                         }`}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12.5px] text-foreground">
-                          {n.title}
-                        </span>
-                        <span className="block text-[11px] text-muted-foreground">
+                        <span className="block truncate text-meta text-foreground">{n.title}</span>
+                        <span className="block text-meta text-muted-foreground">
                           {relativeTime(n.created_at, now)}
                         </span>
                       </span>
@@ -228,7 +225,7 @@ export function NotificationsMenu() {
                 </div>
               )}
             </div>
-          </GradientCard>
+          </div>
         </div>
       ) : null}
     </div>

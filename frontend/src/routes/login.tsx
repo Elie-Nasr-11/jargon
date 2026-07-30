@@ -5,6 +5,7 @@ import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { prefersReducedMotion } from "@/lib/motion";
 import { fetchPrimaryRole, getSession, roleHome, signIn } from "@/lib/api";
 
 export const Route = createFileRoute("/login")({
@@ -49,6 +50,9 @@ function LoginPage() {
   }, [navigate]);
 
   useEffect(() => {
+    // GSAP ignores the CSS reduced-motion block — skip the entrance choreography entirely
+    // and land on the settled layout.
+    if (prefersReducedMotion()) return;
     const ctx = gsap.context(() => {
       gsap.from("[data-anim='word']", {
         y: 18,
@@ -92,15 +96,19 @@ function LoginPage() {
       const role = session
         ? await fetchPrimaryRole(session.access_token, session.user.id)
         : "student";
-      gsap.to(wrapRef.current, {
-        opacity: 0,
-        y: -8,
-        duration: 0.35,
-        ease: "power2.in",
-        onComplete: () => {
-          navigate({ to: roleHome(role) });
-        },
-      });
+      if (prefersReducedMotion()) {
+        navigate({ to: roleHome(role) });
+      } else {
+        gsap.to(wrapRef.current, {
+          opacity: 0,
+          y: -8,
+          duration: 0.35,
+          ease: "power2.in",
+          onComplete: () => {
+            navigate({ to: roleHome(role) });
+          },
+        });
+      }
     } catch (error) {
       setMessage((error as Error).message || "Could not sign in.");
       setSubmitting(false);
@@ -114,7 +122,9 @@ function LoginPage() {
       className="relative min-h-screen overflow-hidden"
       style={{ background: "var(--background)" }}
     >
-      <AmbientCanvas intensity={0.85} />
+      {/* The brand moment: full ambient presence, capped at the entry-surface ceiling
+          (DESIGN_V6 §2: up to 0.5 on entry surfaces). */}
+      <AmbientCanvas intensity={0.5} />
       <ThemeToggle floating />
       <div
         ref={wrapRef}
@@ -143,7 +153,7 @@ function LoginPage() {
         </p>
 
         <div data-anim="card" className="mt-12 w-full max-w-[400px]">
-          <GradientCard>
+          <GradientCard className="shadow-raised">
             <form onSubmit={onSubmit} className="space-y-5 p-7">
               <div>
                 <label className="text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -224,7 +234,7 @@ function LoginPage() {
                           setEmail(demo.email);
                           setMessage("");
                         }}
-                        className="flex items-baseline justify-between gap-3 rounded-xl border border-border/60 px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                        className="flex items-baseline justify-between gap-3 rounded-control border border-border/60 px-3 py-2 text-left transition-colors hover:bg-muted/50"
                       >
                         <span className="min-w-0">
                           <span className="block text-[12.5px] font-medium text-foreground">

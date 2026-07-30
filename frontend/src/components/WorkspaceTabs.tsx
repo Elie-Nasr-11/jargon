@@ -80,7 +80,7 @@ export function WorkspaceTab({ value, children }: { value: string; children: Rea
   return (
     <TabsTrigger
       value={value}
-      className="inline-flex items-center gap-1.5 rounded-pill whitespace-nowrap px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-none"
+      className="inline-flex items-center gap-1.5 rounded-pill whitespace-nowrap px-3.5 py-1.5 text-body font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-none"
     >
       {Icon ? <Icon className="h-3.5 w-3.5" strokeWidth={1.7} /> : null}
       {children}
@@ -101,7 +101,10 @@ export function WorkspacePanel({
     <TabsContent
       value={value}
       forceMount
-      className={cn("mt-4 data-[state=inactive]:hidden", className)}
+      // panel-fade (220ms translate+fade, DESIGN_V6 §3) re-runs each time the panel returns
+      // from display:none, so switching tabs fades the incoming panel in. Reduced motion
+      // neutralizes it via the global media block.
+      className={cn("panel-fade mt-4 data-[state=inactive]:hidden", className)}
     >
       {children}
     </TabsContent>

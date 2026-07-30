@@ -6,6 +6,20 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-07-30 20:53
+
+Status: Starting
+Task: B1 — v6 /learn turn-loop completeness (Continue/quiz retire/step eyebrow/revisit-resume),
+session-hold + live-intervention UX (viewer chip, teacher bubbles, hold lock via realtime),
+voice threading (dictation, read-aloud, live-voice panel port), transcript mode sections
+(§4), micro-interactions (§3). Reference: retired routes/chat.tsx at 6f00e2a^.
+Files I expect to touch: frontend/src/student/{ChatWindow,Chatbox,Transcript,ModeSelector,
+OfferPills,VoicePanel(new)}.tsx, frontend/src/student/{useConversation,turnModes}.ts,
+frontend/src/features/student/chat/chatMessages.ts, tests (re-anchoring trimmed pins), docs.
+Notes: StudentApp.tsx is owned by another agent — new affordances are wired through a
+conversation channel published by useConversation and consumed by my own components, so
+StudentApp's existing prop surface stays untouched.
+
 ## Claude -> Codex / Human - 2026-07-12
 
 Status: Starting
@@ -7424,3 +7438,72 @@ voice threading) — server halves intact; itemized in docs/OPEN_QUESTIONS.md
 Suggested next task: the announced inline-media port into the /learn transcript
 (ArtifactFrame/DeckRenderer/ReadAloudAction are kept ready), then the student-side
 live-intervention + hold-lock reconnection.
+
+## Claude -> Codex / Human - 2026-07-30 21:55
+
+Status: Starting
+Task: Phase C of the v6 revamp — re-skin the teacher console, curriculum studio, 3-tab admin,
+and login onto the v6 design language (depth cards, overline headers, token type scale,
+rounded-card radii, EmptyState, per-mode accent hues on the StepCard picker, hotlist
+state-hue left accents, GSAP micro-interactions per DESIGN_V6 §3). Restyle only — zero
+functional changes.
+Files I expect to touch: frontend/src/features/teacher/**, routes/{teacher*,admin,platform,
+login,index}.tsx, components/{PageShell,WorkspaceTabs,NotificationsMenu,SettingsMenu,
+ThemeToggle,EmptyState,GradientCard,Breadcrumb,OverflowMenu,ModalCard,Popover,Collapsible}.tsx,
+styles.css (additive tokens only).
+Notes: student surface untouched; shared component APIs stay stable. Not committing.
+
+## Claude -> Codex / Human - 2026-07-30 22:05
+
+Status: Starting
+Task: Slice B3 of the MVP — student LMS surfaces around the chat. (1) LessonTree 0/N unit
+fractions + per-lesson state dots off fetchStudentLessonProgress; (2) StudentHome completion
+(greeting, resume-last-lesson card, memory card off fetchStudentMemory/fetchSessionSummaries,
+grades strip, work-due strip); (3) formal assessment surface (student/AssessmentSurface.tsx,
+start→answer→submit→result over the existing attempt API, simple focus lock) + Checkpoints
+destination; (4) no-dead-nav audit (Classes/Resources/Customize/Reports real, Routines removed);
+(5) sidebar badge number-flips.
+Files I expect to touch: frontend/src/student/{StudentApp,StudentHome,StudentSidebar,LessonTree,
+ResourceCard,navigation}.*, new files under frontend/src/student/, frontend/src/lib/api.ts
+(one tiny additive fn), tests/test_assessment_expansion.py (restore student-consumer pins).
+Notes: not touching ChatWindow/Chatbox/Transcript/ModeSelector/OfferPills/useConversation/
+chatMessages/turnModes (owned by another agent), supabase/**, teacher/admin. Not committing.
+
+## Claude -> Codex / Human - 2026-07-30 22:40
+
+Status: Finished (NOT committed by design — Phase C slice of the v6 revamp)
+Summary: Teacher console, curriculum studio, 3-tab admin, and login re-skinned onto the v6
+design language (DESIGN_V6 §1/§3/§6). Restyle only — zero functional changes. (1) Shared
+vocabulary: every GradientCard master wrapper on teacher/admin work surfaces is now a depth
+card (rounded-card + border-border + bg-depth-card + shadow-card); overline section headers;
+the full px type ladder normalized onto text-display/title/body-lg/body/meta/overline;
+rounded-3xl/2xl/xl → rounded-card/control; bg-background/NN tints → depth-sub/field tokens.
+(2) Teacher: ambient to 0.18 neutral; class cards get elev-hover depth; hotlist rows carry
+state-hue LEFT accents (border-l danger/warning/info) + a NumberFlip count badge; class/
+student names are serif display; gradebook sticky header sits on bg-depth-card with a
+hairline; the student-detail transcript now renders v6-style bubbles (student right/ink,
+mentor left/depth-sub, teacher tips info-bordered — metadata preserved as in-bubble
+overlines). (3) Curriculum: outline/detail/StepCard on the card language; the 8-mode picker
++ step rows + preview rows carry per-mode accent hues via --mode-* custom props (new
+authoring-only --mode-media token; mapping documented at MODE_ACCENT). (4) Admin: .admin-wash
+cooler info-tinted page, ambient 0.22, Seeding panel presentable (Demo-entry kicker, depth
+cards, tokened tables). (5) Login: GradientCard kept as the brand moment + shadow-raised,
+ambient capped at the §2 entry ceiling (0.5), all GSAP now reduced-motion gated. (6) Micro:
+.panel-fade 220ms on WorkspacePanel + class section switches; .num-flip on hotlist/work
+counts; SettingsMenu/ThemeToggle GSAP gated.
+Files changed: features/teacher/** (console, hotlist, overview, grading panels, structure,
+shell intensity), routes/{teacher.curriculum,admin,login}.tsx, components/{WorkspaceTabs,
+NotificationsMenu,SettingsMenu,ThemeToggle,EmptyState,ModalCard}.tsx, styles.css (additive:
+--mode-media, .panel-fade, .num-flip, .mode-chip, .mode-edge, .admin-wash).
+Student-surface-inherited component changes (APIs unchanged): ModalCard title 12px→overline
+token; EmptyState rounded-2xl→rounded-card + 13px→text-body. Popover/Collapsible untouched.
+Tests run: npx tsc --noEmit (0 errors); eslint on all touched files (0 errors, 7 pre-existing
+warnings); npm run build green; python3 -m unittest test_admin_ops test_admin_seed_pilot
+test_curriculum_authoring_studio test_live_teacher_intervention test_media_processing
+(36 OK). Reduced-motion verified by code read: all GSAP call sites gated, CSS keyframes
+covered by the global media block; no new WebGL contexts.
+Remaining concerns: GradientCard remains in ModalCard (student house look — deliberate) and
+login (brand moment — per §6). The AmbientCanvas uHue/uFocus premium extensions belong to
+the later ambient slice; intensities are already set to the §2/§6 values it expects.
+Suggested next task: the AmbientCanvas premium slice (uHue per surface, uFocus pulses), then
+a deployed visual QA pass across all three roles in both themes.

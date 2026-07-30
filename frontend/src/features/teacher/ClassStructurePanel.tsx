@@ -116,17 +116,17 @@ export function ClassStructurePanel({
 
   return (
     <div className="mt-5">
-      <div className="rounded-3xl border border-border bg-depth-card p-4">
+      <div className="rounded-card border border-border bg-depth-card p-4">
         <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h3 className="text-[15px] font-medium text-foreground">Class structure</h3>
-            <p className="text-[12.5px] text-muted-foreground">
+            <h3 className="text-title font-medium text-foreground">Class structure</h3>
+            <p className="text-meta text-muted-foreground">
               The courses, units, and lessons this class works through — with publish state and
               class progress.
             </p>
           </div>
           {scoped ? (
-            <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
+            <div className="text-meta uppercase tracking-[0.1em] text-muted-foreground">
               {scoped.length} lesson{scoped.length === 1 ? "" : "s"}
               {loadError
                 ? " · couldn't load course links — showing all"
@@ -138,7 +138,7 @@ export function ClassStructurePanel({
         </div>
 
         {!scoped ? (
-          <p className="text-[12.5px] text-muted-foreground">Loading structure…</p>
+          <p className="text-meta text-muted-foreground">Loading structure…</p>
         ) : !courses.length ? (
           <EmptyState>
             No lessons in this class's linked courses yet. Link a course below or author lessons in
@@ -147,19 +147,19 @@ export function ClassStructurePanel({
         ) : (
           <div className="grid gap-2">
             {courses.map((course) => (
-              <div key={course.id} className="rounded-2xl border border-border bg-depth-sub p-3">
+              <div key={course.id} className="rounded-card border border-border bg-depth-sub p-3">
                 <Collapsible
                   open={openOverrides[course.id] ?? defaultOpen}
                   onToggle={() => toggleCourse(course.id)}
                   title={
-                    <span className="text-[13px] font-medium text-foreground">{course.title}</span>
+                    <span className="text-body font-medium text-foreground">{course.title}</span>
                   }
                   meta={
-                    <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                    <span className="shrink-0 text-meta text-muted-foreground">
                       {course.count} lesson{course.count === 1 ? "" : "s"}
                     </span>
                   }
-                  headerClassName="rounded-xl px-1.5 py-1.5 transition-colors hover:bg-muted/60"
+                  headerClassName="rounded-control px-1.5 py-1.5 transition-colors hover:bg-muted/60"
                   bodyClassName="mt-1 grid gap-2 pl-2"
                 >
                   {course.units.map((unit) => (
@@ -168,7 +168,7 @@ export function ClassStructurePanel({
                           fallback header would just restate the bucket. */}
                       {course.units.length > 1 ||
                       (course.id !== "__none__" && unit.unitTitle !== course.title) ? (
-                        <div className="mb-1 mt-1 px-1.5 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                        <div className="mb-1 mt-1 px-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                           {unit.unitTitle}
                         </div>
                       ) : null}
@@ -178,18 +178,18 @@ export function ClassStructurePanel({
                           return (
                             <div
                               key={lesson.id}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background/45 px-3 py-2"
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-border bg-depth-sub px-3 py-2"
                             >
                               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                <span className="min-w-0 truncate text-[12.5px] text-foreground">
+                                <span className="min-w-0 truncate text-meta text-foreground">
                                   {lesson.title}
                                 </span>
                                 {lesson.publication_status &&
                                 lesson.publication_status !== "published" ? (
                                   <span
-                                    className={`rounded-full border px-2 py-0.5 text-[10.5px] capitalize ${
+                                    className={`rounded-full border px-2 py-0.5 text-overline capitalize ${
                                       lesson.publication_status === "archived"
-                                        ? "border-border bg-background/45 text-muted-foreground"
+                                        ? "border-border bg-depth-sub text-muted-foreground"
                                         : "border-warning/40 bg-warning/12 text-warning"
                                     }`}
                                   >
@@ -198,7 +198,7 @@ export function ClassStructurePanel({
                                 ) : null}
                               </div>
                               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                                <span className="text-[11.5px] text-muted-foreground">
+                                <span className="text-meta text-muted-foreground">
                                   {studentIds.length
                                     ? `${complete}/${studentIds.length} complete`
                                     : "No students"}
@@ -206,7 +206,7 @@ export function ClassStructurePanel({
                                 <button
                                   type="button"
                                   onClick={() => onOpenGradebook(lesson.id)}
-                                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                  className="rounded-full border border-border px-2.5 py-1 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                 >
                                   Gradebook
                                 </button>
@@ -218,7 +218,7 @@ export function ClassStructurePanel({
                                       search: { lesson: lesson.id },
                                     })
                                   }
-                                  className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                  className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                 >
                                   <Pencil className="h-3 w-3" strokeWidth={1.7} />
                                   Edit

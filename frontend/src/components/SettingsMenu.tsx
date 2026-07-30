@@ -3,9 +3,9 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import gsap from "gsap";
 import { ExternalLink, LogOut, Moon, Settings, Sparkles, Sun, User } from "lucide-react";
-import { GradientCard } from "./GradientCard";
 import { ModalCard } from "./ModalCard";
 import { MentorControls } from "@/features/student/MentorControls";
+import { prefersReducedMotion } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
 import { useIsTouch } from "@/hooks/useIsTouch";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
@@ -72,8 +72,17 @@ export function SettingsMenu({
   }, [visible]);
 
   // Open/close animation — a bottom sheet on touch (can't open off-screen), a dropdown on desktop.
+  // Reduced motion: skip the tweens and snap open/closed (GSAP ignores the CSS media block).
   useEffect(() => {
     if (!mounted) return;
+    if (prefersReducedMotion()) {
+      const backdrop = backdropRef.current;
+      if (backdrop) backdrop.style.opacity = visible ? "1" : "0";
+      const sheet = sheetRef.current;
+      if (sheet) sheet.style.transform = visible ? "translateY(0%)" : "translateY(100%)";
+      if (!visible) setMounted(false);
+      return;
+    }
     if (isTouch) {
       const sheet = sheetRef.current;
       const backdrop = backdropRef.current;
@@ -124,17 +133,17 @@ export function SettingsMenu({
   }, [isTouch, visible]);
 
   const rowClass =
-    "flex w-full items-center justify-between gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2";
+    "flex w-full items-center justify-between gap-2.5 rounded-md px-2 py-3 text-left text-body text-foreground transition-colors hover:bg-muted sm:py-2";
 
   const content = (
     <>
       <div className="flex items-center gap-3 px-1 pb-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-[12px] text-muted-foreground">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-meta text-muted-foreground">
           {email.slice(0, 1).toUpperCase()}
         </div>
         <div className="min-w-0">
-          <div className="text-[12.5px] font-medium text-foreground">Signed in</div>
-          <div className="truncate text-[12px] text-muted-foreground">{email}</div>
+          <div className="text-meta font-medium text-foreground">Signed in</div>
+          <div className="truncate text-meta text-muted-foreground">{email}</div>
         </div>
       </div>
       <div className="my-2 h-px bg-border" />
@@ -164,7 +173,7 @@ export function SettingsMenu({
           )}
           Appearance
         </span>
-        <span className="text-[11.5px] uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="text-meta uppercase tracking-[0.08em] text-muted-foreground">
           {resolved === "dark" ? "Dark" : "Light"}
         </span>
       </button>
@@ -187,7 +196,7 @@ export function SettingsMenu({
           await signOut();
           navigate({ to: "/login" });
         }}
-        className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-[13px] text-foreground transition-colors hover:bg-muted sm:py-2"
+        className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-body text-foreground transition-colors hover:bg-muted sm:py-2"
       >
         <LogOut className="h-[15px] w-[15px]" strokeWidth={1.5} /> Log out
       </button>
@@ -212,11 +221,11 @@ export function SettingsMenu({
           className="absolute right-0 top-[calc(100%+10px)] z-[var(--z-menu)]"
           style={{ width: "min(320px, calc(100vw - 16px))" }}
         >
-          <GradientCard>
+          <div className="rounded-card border border-border bg-depth-card shadow-raised">
             <div className="max-h-[calc(100dvh-84px)] overflow-y-auto overscroll-contain p-4">
               {content}
             </div>
-          </GradientCard>
+          </div>
         </div>
       )}
 
@@ -241,14 +250,14 @@ export function SettingsMenu({
               style={{ transform: "translateY(100%)" }}
             >
               <div className="mx-auto w-full max-w-[640px] px-2 pb-[max(env(safe-area-inset-bottom),12px)]">
-                <GradientCard>
+                <div className="rounded-card border border-border bg-depth-card shadow-pop">
                   <div className="flex flex-col" style={{ maxHeight: "82vh" }}>
                     <div className="flex justify-center pt-2.5">
                       <span className="h-1 w-10 rounded-full bg-muted-foreground/40" />
                     </div>
                     <div className="min-h-0 overflow-y-auto overscroll-contain p-4">{content}</div>
                   </div>
-                </GradientCard>
+                </div>
               </div>
             </div>
           </>,
