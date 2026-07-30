@@ -3,19 +3,18 @@ import {
   BarChart3,
   BookOpen,
   ChevronsUpDown,
+  ClipboardCheck,
   GraduationCap,
   House,
-  LifeBuoy,
-  Mail,
+  LogOut,
   MessageCircle,
   Plus,
-  Repeat,
   Settings,
   Sliders,
-  Sparkles,
   User,
 } from "lucide-react";
 import { Popover } from "@/components/Popover";
+import { FlipNumber } from "@/student/FlipNumber";
 import {
   DESTINATIONS,
   MENU_ITEMS,
@@ -34,7 +33,7 @@ const DESTINATION_ICONS: Record<
 > = {
   classes: GraduationCap,
   resources: BookOpen,
-  routines: Repeat,
+  checkpoints: ClipboardCheck,
   customize: Sliders,
   reports: BarChart3,
 };
@@ -44,11 +43,8 @@ const MENU_ICONS: Record<
   ComponentType<{ className?: string; strokeWidth?: number }>
 > = {
   profile: User,
-  notifications: Sparkles,
-  "whats-new": Sparkles,
-  help: LifeBuoy,
-  contact: Mail,
   settings: Settings,
+  "sign-out": LogOut,
 };
 
 function NavRow({
@@ -78,8 +74,8 @@ function NavRow({
       <Icon className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {badge ? (
-        <span className="shrink-0 rounded-pill bg-foreground px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums leading-none text-background">
-          {badge > 99 ? "99+" : badge}
+        <span className="shrink-0 overflow-hidden rounded-pill bg-foreground px-1.5 py-0.5 text-[10.5px] font-semibold leading-none text-background">
+          <FlipNumber value={badge} />
         </span>
       ) : null}
     </button>
@@ -90,7 +86,9 @@ export type StudentSidebarProps = {
   email: string;
   section: StudentSection;
   destination?: StudentDestination;
-  notificationsUnread: number;
+  // Formal work waiting on the student (assigned/in-progress checkpoints) — badges the
+  // Checkpoints row so due work is visible without opening it.
+  workDue?: number;
   onSelectSection: (section: StudentSection) => void;
   onSelectDestination: (destination: StudentDestination) => void;
   onNewConversation: () => void;
@@ -104,7 +102,7 @@ export function StudentSidebar({
   email,
   section,
   destination,
-  notificationsUnread,
+  workDue = 0,
   onSelectSection,
   onSelectDestination,
   onNewConversation,
@@ -162,6 +160,7 @@ export function StudentSidebar({
             icon={DESTINATION_ICONS[d.id]}
             label={d.label}
             active={destination === d.id}
+            badge={d.id === "checkpoints" ? workDue : undefined}
             onClick={() => onSelectDestination(d.id)}
           />
         ))}
@@ -210,11 +209,6 @@ export function StudentSidebar({
                   <Icon className="h-[15px] w-[15px]" strokeWidth={1.5} />
                   {item.label}
                 </span>
-                {item.id === "notifications" && notificationsUnread ? (
-                  <span className="rounded-pill bg-foreground px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums leading-none text-background">
-                    {notificationsUnread > 99 ? "99+" : notificationsUnread}
-                  </span>
-                ) : null}
               </button>
             );
           })}

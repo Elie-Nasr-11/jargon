@@ -11,15 +11,13 @@
 
 export type StudentSection = "home" | "learn";
 
-export type StudentDestination = "classes" | "resources" | "routines" | "customize" | "reports";
+export type StudentDestination = "classes" | "resources" | "checkpoints" | "customize" | "reports";
 
-export type StudentMenuItem =
-  | "profile"
-  | "notifications"
-  | "whats-new"
-  | "help"
-  | "contact"
-  | "settings";
+// Trimmed 2026-07-30 to what actually renders (MVP bar: no dead nav): notifications,
+// what's-new, help, and contact had no student-facing surface behind them. Profile opens
+// Reports (the old profile popup's stats live there), settings opens Customize, and
+// sign-out signs out. The removed items return with their surfaces.
+export type StudentMenuItem = "profile" | "settings" | "sign-out";
 
 export type DestinationSpec = {
   id: StudentDestination;
@@ -29,11 +27,15 @@ export type DestinationSpec = {
 };
 
 // Order is deliberate: Classes first because it's the spine of coursework, then the two
-// content surfaces, then the two "about how I work" surfaces.
+// work surfaces, then the two "about how I work" surfaces.
+//
+// Routines was removed 2026-07-30 (MVP bar: no dead nav) — nothing backs it yet; it returns
+// as a destination the day a routine scheduler exists. Checkpoints replaced it: the formal
+// teacher-assigned assessment surface (assessment_attempts flow), which is real.
 export const DESTINATIONS: readonly DestinationSpec[] = [
   { id: "classes", label: "Classes", hint: "Your units and lessons" },
   { id: "resources", label: "Resources", hint: "Everything your teachers have shared" },
-  { id: "routines", label: "Routines", hint: "Recurring updates, summaries, and review" },
+  { id: "checkpoints", label: "Checkpoints", hint: "Quizzes and tests your teacher assigned" },
   { id: "customize", label: "Customize", hint: "How your mentor talks and teaches" },
   { id: "reports", label: "Reports", hint: "Your grades and progress" },
 ] as const;
@@ -47,11 +49,8 @@ export type MenuItemSpec = {
 
 export const MENU_ITEMS: readonly MenuItemSpec[] = [
   { id: "profile", label: "Profile" },
-  { id: "notifications", label: "Notifications" },
-  { id: "whats-new", label: "What's new" },
-  { id: "help", label: "Help" },
-  { id: "contact", label: "Contact" },
   { id: "settings", label: "Settings" },
+  { id: "sign-out", label: "Sign out" },
 ] as const;
 
 const DESTINATION_IDS = new Set<string>(DESTINATIONS.map((d) => d.id));

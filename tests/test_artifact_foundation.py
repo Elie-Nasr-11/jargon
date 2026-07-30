@@ -151,7 +151,11 @@ class ArtifactClientWireInvariants(unittest.TestCase):
         # plain card with no Open action (no signed/external URL is ever synthesized for
         # it), never a non-sandboxed embed. The sandboxed ArtifactFrame/DeckRenderer are
         # the only components allowed to run artifact content.
-        self.assertIn('resource.resource_type === "artifact" ? null', RESOURCE_CARD)
+        # Re-anchored 2026-07-30 (B3 lazy-signing refactor): the artifact guard is now the
+        # isArtifact flag gating BOTH url paths — the direct href and the lazy signer.
+        self.assertIn('const isArtifact = resource.resource_type === "artifact"', RESOURCE_CARD)
+        self.assertIn("isArtifact ? null", RESOURCE_CARD)
+        self.assertIn("!isArtifact && !directHref", RESOURCE_CARD)
         # A comment may NAME ArtifactFrame (it documents the deliberate non-handling);
         # the card must never import or mount it, nor open any embed surface itself.
         self.assertNotIn("components/ArtifactFrame", RESOURCE_CARD)

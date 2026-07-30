@@ -899,6 +899,21 @@ export async function fetchLatestLearningSession(lessonId: string) {
   return ((data || [])[0] as LearningSession | undefined) || null;
 }
 
+// v6 Home: the student's most recent learning session across ALL lessons — the resume card's
+// source of truth. Own-rows RLS scopes the read; the explicit user filter is belt-and-braces.
+export async function fetchMostRecentLearningSession(): Promise<LearningSession | null> {
+  const session = await getSession();
+  if (!session?.user?.id) return null;
+  const { data, error } = await supabase
+    .from("learning_sessions")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return ((data || [])[0] as LearningSession | undefined) || null;
+}
+
 export async function fetchLearningTurns(sessionId: string) {
   const { data, error } = await supabase
     .from("learning_turns")

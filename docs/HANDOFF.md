@@ -7507,3 +7507,54 @@ login (brand moment — per §6). The AmbientCanvas uHue/uFocus premium extensio
 the later ambient slice; intensities are already set to the §2/§6 values it expects.
 Suggested next task: the AmbientCanvas premium slice (uHue per surface, uFocus pulses), then
 a deployed visual QA pass across all three roles in both themes.
+
+## Claude -> Codex / Human - 2026-07-30 22:55
+
+Status: Finished (slice B3; NOT committed by design)
+Summary: The student LMS surfaces around the chat are real end to end.
+(1) LessonTree: per-unit done/total fractions (owner decision, DESIGN_V6 §4) + per-lesson
+state dots (done/in-progress/unstarted) off fetchStudentLessonProgress, refreshed by the
+shell after every completed send; current-unit auto-open kept.
+(2) StudentHome rebuilt: time-of-day greeting (profile name), resume-last-lesson card
+(fetchMostRecentLearningSession -> one tap into /learn chat), "What your mentor remembers"
+memory card (narrative + strengths/working-on chips + last-3 session recaps; spec'd empty
+state; gsap rise+fade first-reveal, reduced-motion snaps — the ambient uFocus pulse stays
+with the AmbientCanvas slice), work-due strip (checkpoints -> AssessmentSurface), recent
+grades strip.
+(3) Formal assessments: new student/AssessmentSurface.tsx — start→answer→submit→result over
+the existing attempt API (startAssessment/submitAssessment; MC/text/code answers), plain
+modal overlay with the FocusLock posture (no Escape/backdrop dismiss, two-step Leave
+confirm, 0.985 scale-in). Checkpoints destination (new CheckpointsPanel + shared
+checkpoints.ts derivation) replaces Routines; sidebar badge shows work due.
+(4) No dead nav: Classes -> real class list + lazy per-class scoped lessons (ClassesPanel);
+Resources -> the lesson's published materials merged with session attachments
+(ResourcesPanel; ResourceCard grew lazy signed-URL open + shown/opened telemetry);
+Customize -> MentorControls now write-through to student_settings via upsertStudentSettings
+(hydrates from it on mount); Reports -> ReportsPanel (proficiency off
+fetchStudentProfileStats + GradesPanel). ROUTINES REMOVED — nothing backs it (confirmed:
+no backend, prior handoffs agree); returns with a scheduler. Account menu trimmed to real
+items: Profile -> Reports, Settings -> Customize, new Sign out (signOut -> /login);
+notifications/what's-new/help/contact had no surface and are gone.
+(5) Sidebar badges animate as number flips (new FlipNumber, gsap, reduced-motion guard).
+Files changed: frontend/src/student/{StudentApp,StudentHome,StudentSidebar,LessonTree,
+ResourceCard}.tsx, navigation.ts, routes/learn.tsx; NEW frontend/src/student/
+{AssessmentSurface,CheckpointsPanel,ClassesPanel,ResourcesPanel,ReportsPanel,FlipNumber}.tsx
++ checkpoints.ts; lib/api.ts (+fetchMostRecentLearningSession only); tests/
+test_assessment_expansion.py (student attempt-API pins RESTORED per the trim note: consumer
++ focus-lock + checkpoints-destination classes), test_artifact_foundation.py (ResourceCard
+artifact-guard pin re-anchored to the isArtifact flag — invariant unchanged),
+test_student_surface.py (ModeSection pin extraction re-anchored after the other agent's
+Transcript restructure; guard unchanged).
+Tests run: cd frontend && npx tsc --noEmit (0); npx eslint over the student tree + owned
+files (0 errors, 0 warnings on mine); npm run build green; python3 -m unittest
+tests.test_student_surface tests.test_assessment_expansion tests.test_review_due (43 OK);
+full discover 353 OK / 4 pre-existing Flask skips.
+Remaining concerns: (1) submitted answers aren't draft-saved server-side — leaving mid-
+attempt loses typed answers (the Leave confirm says so honestly); a draft-save action on
+assessment-admin would close it. (2) result_release_policy after_review/manual are not
+enforced server-side for fully auto-graded submissions (server returns the score
+immediately); surface mirrors server truth. (3) The old surface's assignment-submission UI
+is still gone — due assignments only surface via the chat Homework pill; Home's due strip
+covers assessments only.
+Suggested next task: assignment submission surface (or fold into chat Homework mode), then
+the ambient uFocus hook for the memory-card reveal once AmbientCanvas mounts in /learn.

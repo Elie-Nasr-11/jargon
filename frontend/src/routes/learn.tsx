@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getSession } from "@/lib/api";
+import { getSession, signOut } from "@/lib/api";
 import { StudentApp } from "@/student/StudentApp";
 import {
   isDestination,
@@ -58,13 +58,23 @@ function LearnRoute() {
       email={email}
       section={activeSection}
       destination={to}
-      notificationsUnread={0}
       onSelectSection={(nextSection) => go({ section: nextSection })}
       onSelectDestination={(destination) => go({ section: activeSection, to: destination })}
       onCloseDestination={() => go({ section: activeSection })}
       onNewConversation={() => go({ section: "learn" })}
-      onSelectMenuItem={() => {
-        /* menu destinations arrive with their surfaces */
+      onSelectMenuItem={(item) => {
+        // Every menu item does something real (MVP bar: no dead nav). Profile's stats live
+        // in Reports; Settings is Customize; sign-out clears the session then leaves.
+        if (item === "profile") go({ section: activeSection, to: "reports" });
+        else if (item === "settings") go({ section: activeSection, to: "customize" });
+        else if (item === "sign-out") {
+          void signOut()
+            .catch(() => {
+              // A failed server-side sign-out still leaves for /login; the auth listener
+              // clears local state either way.
+            })
+            .finally(() => void navigate({ to: "/login" }));
+        }
       }}
     />
   );

@@ -125,8 +125,12 @@ class ModeSections(unittest.TestCase):
 
     def test_unknown_mode_gets_no_section_chrome(self):
         # Relabelling a turn written before modes existed would be inventing history.
+        # (Anchored to the next top-level function rather than the first "\n}" — the
+        # multi-line props destructure closes with one before the body even starts.)
         fn = TRANSCRIPT[TRANSCRIPT.index("function ModeSection(") :]
-        fn = fn[: fn.index("\n}")]
+        tail = fn.find("\nfunction ")
+        if tail != -1:
+            fn = fn[:tail]
         self.assertIn("if (!mode || !isTurnMode(mode))", fn)
 
     def test_only_student_and_mentor_messages_open_a_section(self):
@@ -145,6 +149,74 @@ class ModeSections(unittest.TestCase):
         # The sections do own them.
         self.assertIn("mode-surface", TRANSCRIPT)
         self.assertIn("mode-eyebrow", TRANSCRIPT)
+
+class LessonFlowAffordances(unittest.TestCase):
+    """B1: the turn-loop affordances the envelope drives."""
+
+    def test_quiz_choices_retire_with_the_pick_checkmarked(self):
+        # The pick is stamped on the quiz message BEFORE the turn is sent, so when the live
+        # buttons retire the history keeps showing WHICH option was chosen.
+        self.assertIn("{ ...m, chosen: choiceId }", HOOK)
+        # Retired rendering: chosen pill check-marked, the rest dimmed; and a message with a
+        # stamped pick is no longer live even while it is still the latest.
+        self.assertIn("message.choices?.length && message.chosen", TRANSCRIPT)
+        self.assertIn("!message.chosen", TRANSCRIPT)
+
+    def test_lesson_sections_carry_the_step_eyebrow(self):
+        # Mentor turn payloads persist the whole envelope, so a reloaded transcript labels
+        # each lesson section with the REAL step it happened on — never the live cursor
+        # projected backwards onto history.
+        self.assertIn("stepEyebrowLabel", MODEL)
+        self.assertIn("payload.lesson_arc", MODEL)
+        self.assertIn('mode === "lesson" && stepEyebrowLabel(arc)', TRANSCRIPT)
+
+    def test_off_spine_modes_read_as_off_the_spine(self):
+        # Progression honesty (DESIGN_V6 §4): Discuss/Open can't close gates, and their
+        # section chrome SHOWS it — accent mixed toward neutral, still token-derived (no hex).
+        fn = MODES[MODES.index("export function modeAccentValue(") :]
+        fn = fn[: fn.index("\n}")]
+        self.assertIn("spec.canProgress", fn)
+        self.assertIn("color-mix", fn)
+        self.assertNotIn("#", fn)
+
+    def test_mentor_rise_respects_reduced_motion(self):
+        # DESIGN_V6 §3: 280ms power3.out rise for mentor replies — and a reduced-motion user
+        # gets the final state with no tween at all.
+        self.assertIn("prefersReducedMotion()", TRANSCRIPT)
+        self.assertIn('ease: "power3.out"', TRANSCRIPT)
+
+    def test_history_never_animates(self):
+        # Only newly-arrived replies rise: a reloaded transcript (or a lesson switch) counts
+        # as history and renders instantly.
+        self.assertIn("seenRef", TRANSCRIPT)
+
+
+class VoiceThreading(unittest.TestCase):
+    """B1: dictation, read-aloud, and live voice all land in the normal turn loop."""
+
+    def _box(self) -> str:
+        return (FRONT / "student" / "Chatbox.tsx").read_text()
+
+    def test_dictation_stages_modality_for_the_turn(self):
+        # The shell's onSend prop forwards only text+attachments, so the Chatbox stages the
+        # modality synchronously and the hook consumes it while building the SAME turn.
+        self.assertIn('stageInputMeta({ inputModality: "dictated"', self._box())
+        self.assertIn("takeStagedInputMeta()", HOOK)
+        self.assertIn('input_modality: meta?.inputModality ?? "typed"', HOOK)
+
+    def test_dictated_transcript_is_editable_before_send(self):
+        # Dictation streams INTO the textarea (interim results) — the student reads and fixes
+        # the words before sending. Auto-submitting a misheard transcript would be a trap.
+        box = self._box()
+        self.assertIn("interimResults = true", box)
+        self.assertIn("setText(nextText)", box)
+
+    def test_read_aloud_returns_on_mentor_turns(self):
+        self.assertIn("ReadAloudAction", TRANSCRIPT)
+
+    def test_voice_turns_carry_audio_session_modality(self):
+        self.assertIn('input_modality: "audio_session"', HOOK)
+
 
 class LessonOffersAreServerDriven(unittest.TestCase):
     """envelope.available is what makes the inline pills real rather than decorative."""
