@@ -6648,3 +6648,53 @@ document, which is a UX improvement but not a missing capability.
 Corrected next task: auto-extract on upload (dispatch by resource type after createLessonResource
 in TeacherConsole.tsx, non-blocking, surfacing status in the materials list) plus the model config.
 Everything else asked for is already built.
+
+## Claude -> Codex / Human - 2026-07-30 07:19
+
+Status: Starting
+Task: Auto-extract resource content on upload. The review UI, all four extraction handlers, and the
+approve/reject flow already exist in TeacherConsole.tsx; what is missing is that nothing fires on
+upload, so a teacher must notice and click "Extract PDF text" (or, for a scanned PDF, click through
+three buttons in the right order) or the content never reaches the mentor.
+Files I expect to touch: frontend/src/features/teacher/TeacherConsole.tsx, tests/, docs/.
+Notes: The scanned-PDF fallback (text extract → page previews → OCR) is the real value; today the
+teacher has to diagnose and drive that sequence by hand. extractChunks signals "scanned" by throwing
+a string-matched Error — the orchestrator must branch on a RETURN VALUE instead, or a copy edit
+silently breaks auto-OCR. Non-blocking: never hold the upload form on a model call. Do NOT touch
+chat/index.ts — status=eq.approved and the 18-chunk cap are the contract this feeds.
+
+## Claude -> Codex / Human - 2026-07-30 07:40
+
+Status: Done (auto-extract on upload)
+Summary: Uploading a lesson resource now scans it automatically. Previously a teacher had to notice
+and click "Extract PDF text" — or, for a scanned PDF, click three buttons in the right order — and
+forgetting was silent: the resource looked fine and the mentor never saw its contents.
+A new `autoExtract(resource)` in ResourceManager dispatches by type: PDF → browser text extraction,
+and only if the file has no selectable text, page previews → OCR; audio/video → transcription;
+links → no-op. Each step reuses the same handler the manual buttons call, so there is one code path
+and the buttons remain a working override.
+Two details worth keeping: (1) `extractChunks` now RETURNS "extracted" | "no_text" | "failed"
+instead of signalling the scanned case by throwing a string-matched Error — the OCR fallback branches
+on that value, so rewording a message can no longer silently disable automatic OCR. (2)
+`ocrPdfResource` takes an optional `freshAssets`, because reading `assetsByResource` in the same tick
+the previews were saved yields an empty page list before React re-renders. That happened to work (the
+server treats an empty list as "every asset") but only by accident; the assets are now passed
+explicitly.
+Wiring note: `saveResource` lives in TeacherConsole but the extraction handlers live in
+ResourceManager — different components. `onSaveResource` now returns the created resource so the
+child can scan it. Editing existing metadata returns nothing, so a re-save never re-scans.
+Files changed: frontend/src/features/teacher/TeacherConsole.tsx,
+tests/test_resource_autoextract.py (new, 7 tests), docs/{OPEN_QUESTIONS,HANDOFF}.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (exact baseline); vite build green;
+python unittest 284 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors,
+unchanged from the 277/4 baseline (+7 new).
+Remaining concerns: (1) NOT run against a real upload. Static checks only; the OCR chain in
+particular (browser render → upload assets → server OCR) has never executed end to end in this
+session. (2) The chain is three sequential steps, two in the browser — a teacher navigating away
+mid-chain leaves page assets with no OCR'd chunks; recoverable via the manual buttons, but the
+status message will not say so. (3) Status messages churn between steps because each reused handler
+sets and clears its own; acceptable, but it reads as flicker. (4) `OPENAI_OCR_MODEL` is a Supabase
+dashboard variable — the "use a powerful model" half of the original request cannot be done from the
+repo. See OPEN_QUESTIONS 2026-07-30.
+Suggested next task: upload a text PDF and a scanned PDF to a lesson and watch the chain; then decide
+the chunk-cards-vs-document question in OPEN_QUESTIONS.

@@ -567,6 +567,9 @@ export function TeacherConsole() {
       setDashboard((current) =>
         current ? { ...current, resources: [created, ...current.resources] } : current,
       );
+      // Returned so ResourceManager (which owns the extraction handlers) can scan the upload
+      // immediately. Extraction lives in that component, not this one.
+      return created;
     } catch (error) {
       setMessage((error as Error).message || "Could not save lesson resource.");
       throw error;
@@ -1331,7 +1334,7 @@ function ClassDetail({
   savingResource: boolean;
   savingAssignment: boolean;
   savingAssessment: boolean;
-  onSaveResource: (input: ResourceFormValues) => Promise<void>;
+  onSaveResource: (input: ResourceFormValues) => Promise<LessonResource | void>;
   onSaveAssignment: (input: AssignmentFormValues) => Promise<void>;
   onSaveAssessment: (input: AssessmentFormValues) => Promise<void>;
   onSetAssignmentStatus: (assignmentId: string, status: AssignmentStatus) => void;
@@ -1812,7 +1815,7 @@ function ResourceManager({
   lessons: Lesson[];
   resources: LessonResource[];
   saving: boolean;
-  onSaveResource: (input: ResourceFormValues) => Promise<void>;
+  onSaveResource: (input: ResourceFormValues) => Promise<LessonResource | void>;
   onUpdateResource: (resource: LessonResource) => void;
 }) {
   const [draft, setDraft] = useState<ResourceFormValues>(() =>
@@ -1884,7 +1887,7 @@ function ResourceManager({
         }
       }
 
-      await onSaveResource({
+      const created = await onSaveResource({
         ...draft,
         title,
         description: draft.description.trim(),
@@ -1893,6 +1896,11 @@ function ResourceManager({
         externalUrl,
       });
       setResourceMessage(draft.resourceId ? "Resource metadata saved." : "Resource created.");
+      // Scan a NEW upload straight away. Not awaited: the browser PDF pass is slow on large
+      // files and must not hold the form open, and a scanning failure must never read as a
+      // failed upload — the file itself saved fine. Editing metadata returns nothing, so a
+      // re-save never re-scans.
+      if (created) void autoExtract(created);
       setDraft(defaultResourceForm(classSummary, lessons));
       setFormOpen(false);
     } catch (error) {
@@ -1961,7 +1969,13 @@ function ResourceManager({
     }
   };
 
-  const extractChunks = async (resource: LessonResource) => {
+  // Returns a RESULT rather than signalling "this is a scanned PDF" by throwing a
+  // string-matched Error. autoExtract branches on the return value to decide whether to fall
+  // through to the OCR path; keying that off an error message would mean a reworded string
+  // silently disables automatic OCR. The manual button ignores the value and behaves as before.
+  const extractChunks = async (
+    resource: LessonResource,
+  ): Promise<"extracted" | "no_text" | "failed"> => {
     try {
       setProcessingId(resource.id);
       setResourceMessage("Opening PDF and extracting text in this browser...");
@@ -1969,7 +1983,8 @@ function ResourceManager({
       if (!url) throw new Error("This resource does not have an openable PDF URL.");
       const chunks = await extractPdfTextChunksFromUrl(url);
       if (!chunks.length) {
-        throw new Error("No selectable text was found in this PDF.");
+        setResourceMessage("No selectable text was found in this PDF.");
+        return "no_text";
       }
       const saved = await saveExtractedPdfChunks(resource.id, chunks, {
         extracted_in: "browser",
@@ -1987,8 +2002,10 @@ function ResourceManager({
       setResourceMessage(
         `Extracted ${saved.length} draft chunk${saved.length === 1 ? "" : "s"}. Review and approve before Mentor can use them.`,
       );
+      return "extracted";
     } catch (error) {
       setResourceMessage((error as Error).message || "Could not extract PDF text.");
+      return "failed";
     } finally {
       setProcessingId("");
     }
@@ -2014,18 +2031,26 @@ function ResourceManager({
       setResourceMessage(
         `Generated previews for ${pageCount} page${pageCount === 1 ? "" : "s"}. Scanned pages can now be OCR processed.`,
       );
+      // Returned so autoExtract can tell a successful render from a reported failure and only
+      // then continue to OCR. The manual button ignores it.
+      return saved;
     } catch (error) {
       setResourceMessage((error as Error).message || "Could not generate page previews.");
+      return null;
     } finally {
       setProcessingId("");
     }
   };
 
-  const ocrPdfResource = async (resource: LessonResource) => {
+  // `freshAssets` lets autoExtract hand over the assets it just created. Without it the chain
+  // would read assetsByResource in the same tick the previews were saved, before React has
+  // re-rendered, and pass an empty page list. That happens to work (the server treats an empty
+  // list as "every asset") but only by accident — passing them explicitly makes it intentional.
+  const ocrPdfResource = async (resource: LessonResource, freshAssets?: ResourcePageAsset[]) => {
     try {
       setProcessingId(resource.id);
       setResourceMessage("Running OCR on scanned PDF page images...");
-      const assets = assetsByResource[resource.id] || [];
+      const assets = freshAssets ?? assetsByResource[resource.id] ?? [];
       const pageNumbers = Array.from(
         new Set(
           assets
@@ -2074,6 +2099,39 @@ function ResourceManager({
       setResourceMessage((error as Error).message || "Could not transcribe media.");
     } finally {
       setProcessingId("");
+    }
+  };
+
+  // Fired automatically after an upload so a teacher never has to know that extraction is a
+  // separate step. Forgetting it is silent — the resource looks fine and the mentor simply never
+  // sees its contents — which is the failure this exists to prevent.
+  //
+  // The scanned-PDF chain is the point: text extraction, and only if the PDF has no selectable
+  // text, page previews then OCR. Driven by extractChunks' return value, never by its message.
+  // Each step reuses the same handler the manual buttons call, so there is one code path and the
+  // buttons stay a working manual override if any step fails.
+  const autoExtract = async (resource: LessonResource) => {
+    if (resource.source_type !== "upload") return; // links have nothing to scan
+
+    try {
+      if (resource.resource_type === "pdf") {
+        const result = await extractChunks(resource);
+        if (result !== "no_text") return; // extracted, or failed and already reported
+        // Scanned PDF: render page images, then OCR them.
+        setResourceMessage("No selectable text — preparing this scanned PDF for OCR...");
+        const assets = await generatePagePreviews(resource);
+        if (!assets?.length) return; // generatePagePreviews reported the reason
+        await ocrPdfResource(resource, assets);
+        return;
+      }
+      if (resource.resource_type === "audio" || resource.resource_type === "video") {
+        await transcribeResource(resource);
+      }
+    } catch (error) {
+      // Never surface as a failed UPLOAD — the file saved fine. The manual buttons remain.
+      setResourceMessage(
+        `${(error as Error).message || "Automatic scanning failed."} You can run it by hand from this resource's menu.`,
+      );
     }
   };
 
