@@ -1,3 +1,7 @@
+"""Trimmed 2026-07-30: the Google Classroom admin UI and its api.ts wrappers were
+removed in the MVP strip (see docs/MVP_SCOPE.md §9 — the edge function and its
+migration stay deployed BACKEND-ONLY). The migration RLS, read-only-scope, and
+no-secrets-in-frontend security pins all survive below."""
 from pathlib import Path
 import unittest
 
@@ -5,10 +9,6 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase" / "migrations" / "0014_google_classroom_integration.sql"
 FUNCTION = ROOT / "supabase" / "functions" / "google-classroom" / "index.ts"
-API = ROOT / "frontend" / "src" / "lib" / "api.ts"
-SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
-TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-ADMIN_ROUTE = ROOT / "frontend" / "src" / "routes" / "admin.tsx"
 DOC = ROOT / "docs" / "GOOGLE_CLASSROOM_INTEGRATION.md"
 
 
@@ -17,10 +17,6 @@ class GoogleClassroomIntegrationStaticTests(unittest.TestCase):
     def setUpClass(cls):
         cls.migration = MIGRATION.read_text(encoding="utf-8")
         cls.function = FUNCTION.read_text(encoding="utf-8")
-        cls.api = API.read_text(encoding="utf-8")
-        cls.supabase = SUPABASE.read_text(encoding="utf-8")
-        cls.types = TYPES.read_text(encoding="utf-8")
-        cls.admin = ADMIN_ROUTE.read_text(encoding="utf-8")
         cls.doc = DOC.read_text(encoding="utf-8")
         cls.frontend_source = "\n".join(
             path.read_text(encoding="utf-8")
@@ -78,45 +74,17 @@ class GoogleClassroomIntegrationStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertNotIn(fragment, scopes_block)
 
-    def test_frontend_calls_edge_function_without_exposing_google_secrets(self):
+    def test_frontend_has_no_google_classroom_surface_or_secrets(self):
+        # The integration is backend-only on the MVP branch: no client wrappers,
+        # no OAuth kick-off, and (still) no Google secrets anywhere in the frontend.
         for fragment in (
-            '"google-classroom"',
             'functionUrl("google-classroom")',
             "startGoogleClassroomOAuth",
-            "completeGoogleClassroomOAuth",
-            "fetchGoogleClassroomCourses",
-            "previewGoogleClassroomRoster",
-            "importGoogleClassroomCourse",
-            "disconnectGoogleClassroom",
-            "GoogleClassroomIntegrationState",
-        ):
-            with self.subTest(fragment=fragment):
-                self.assertTrue(
-                    fragment in self.api
-                    or fragment in self.supabase
-                    or fragment in self.types
-                    or fragment in self.admin
-                )
-
-        for secret_name in (
             "GOOGLE_CLASSROOM_CLIENT_SECRET",
             "GOOGLE_TOKEN_ENCRYPTION_KEY",
         ):
-            with self.subTest(secret_name=secret_name):
-                self.assertNotIn(secret_name, self.frontend_source)
-
-    def test_admin_ui_supports_connect_preview_import(self):
-        for fragment in (
-            "Google Classroom",
-            "Connect Google",
-            "Load courses",
-            "Preview roster",
-            "Import into Jargon",
-            "needs seed",
-            "Recent Classroom syncs",
-        ):
             with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.admin)
+                self.assertNotIn(fragment, self.frontend_source)
 
     def test_docs_pin_v1_boundaries(self):
         for fragment in (

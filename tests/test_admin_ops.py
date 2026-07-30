@@ -1,3 +1,8 @@
+"""Trimmed 2026-07-30: the 7-tab admin operations dashboard (Readiness, School
+data, Integrations, Operations, CSV import/export, retention/consent) was cut to
+three MVP tabs — Seeding, Live, Cost & runtime — in the MVP strip (see
+docs/MVP_SCOPE.md §1). The admin-ops edge function keeps every action (dormant
+subset), so all server-side scoping/audit/no-plaintext-password pins survive."""
 from pathlib import Path
 import unittest
 
@@ -94,18 +99,18 @@ class AdminOpsStaticTests(unittest.TestCase):
         self.assertNotIn("admin_account_seed_entries", reset_section)
 
     def test_frontend_exposes_admin_ops_without_service_role(self):
+        # MVP wrapper surface: scope + cost dashboard + live sessions only
+        # (pilot-readiness and snapshot-export wrappers were cut with their tabs).
         self.assertIn('"admin-ops"', self.supabase)
         self.assertIn('functionUrl("admin-ops")', self.api)
         self.assertIn("invokeAdminOps", self.api)
         self.assertIn("fetchAdminScope", self.api)
-        self.assertIn("fetchPilotReadiness", self.api)
         self.assertIn("fetchCostModelDashboard", self.api)
-        self.assertIn("exportClassSnapshot", self.api)
+        self.assertIn("fetchActiveSessions", self.api)
         self.assertIn("AdminActorAccess", self.types)
         self.assertIn("AdminScope", self.types)
-        self.assertIn("PilotReadiness", self.types)
         self.assertIn("CostModelDashboard", self.types)
-        self.assertIn("ClassSnapshotExport", self.types)
+        self.assertIn("ActiveSession", self.types)
 
     def test_snapshot_export_does_not_include_passwords(self):
         export_section = self.function[
@@ -118,32 +123,31 @@ class AdminOpsStaticTests(unittest.TestCase):
         self.assertIn("Completed lessons", export_section)
         self.assertIn("Open alerts", export_section)
 
-    def test_admin_route_contains_operations_dashboard(self):
+    def test_admin_route_keeps_three_mvp_tabs(self):
+        # The MVP admin is exactly Seeding + Live + (platform-admin only) Cost & runtime,
+        # with stale ?tab= deep links falling back to a tab every admin level can see.
         for fragment in (
-            "Operations dashboard",
-            "Pilot Readiness",
+            '<WorkspaceTab value="seeding">Seeding</WorkspaceTab>',
+            '<WorkspaceTab value="live">Live</WorkspaceTab>',
+            '<WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>',
+            'const visibleTabs = isPlatformLevel ? ["seeding", "live", "cost"] : ["seeding", "live"];',
+            # Seeding tab: roster seeding via the admin-seed edge fn; passwords never persist.
+            "invokeAdminSeed",
+            "Seed classroom",
+            "Passwords are sent only to Supabase Auth and are not stored in Jargon tables.",
+            # Live tab: the active-sessions fleet view.
+            "fetchActiveSessions",
+            "Live sessions",
+            "No students are in a live session right now.",
+            # Cost & runtime tab: usage/reliability with dollar cost gated to platform admins.
+            "fetchCostModelDashboard",
             "AI/runtime operations",
             "Usage, reliability, and model load",
             "Estimated cost",
             "Model breakdown",
             "Task type breakdown",
             "Class operating load",
-            "Classroom launch command center",
-            "Roster/account health",
-            "Export CSV",
-            "Copy login instructions",
-            "Org admin",
-            "Platform admin",
-            "Create class",
-            "Class settings",
-            "Add existing user",
-            "Password reset",
-            "Recent audit events",
-            "Organization role updated.",
-            # removed: scoped org-admin onboarding (task #28) dropped the platform-admin-only
-            # restriction on roster seeding, so the "stays platform-admin only" copy no longer exists.
-            "update_membership_status",
-            "reset_user_password",
+            "Dollar-cost totals stay platform-admin only.",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.route)

@@ -6597,3 +6597,85 @@ tokens, wholesale rename would be churn); EmptyState/StateNote keep rounded-2xl 
 shared empty-state components agree with each other).
 Suggested next task: final verification pass + docs sync + push (execution-order
 step 9); repoint deploy-backend.yml at go-live.
+
+## Claude -> Codex / Human - 2026-07-30 17:35
+
+Status: Starting
+Task: Refresh the Python static-fingerprint test suite after the MVP strip-down
+(execution-order step 9, test half). Per test: delete pins of CUT features, re-pin
+KEPT-but-drifted invariants against the current source, restructure setUpClass file
+reads that hit deleted paths. All security pins survive in some form.
+Files I expect to touch: tests/test_media_processing.py, tests/test_admin_ops.py,
+tests/test_admin_seed_pilot.py, tests/test_google_classroom_integration.py,
+tests/test_live_teacher_intervention.py, tests/test_platform_completion_sprint.py,
+tests/test_review_due.py, tests/test_assessment_expansion.py,
+tests/test_curriculum_authoring_studio.py, docs/HANDOFF.md.
+Notes: No frontend/supabase edits — the code is the spec; tests adapt to it.
+
+## Claude -> Codex / Human - 2026-07-30 17:50
+
+Status: Finished
+Summary: Refreshed the Python static-fingerprint suite after the MVP strip-down.
+Per MVP_SCOPE.md, deleted tests pinning CUT features (media pipeline UI, Google
+Classroom admin UI, intervention_alerts UI, 7-tab admin dashboard, dedicated
+/quiz route, HeaderMenus, ProfilePanel, LessonProgress), re-pinned KEPT-but-moved
+invariants against the current source (3-tab admin, in-chat QuizPanel assessment
+surface, AssessmentGrading review/return, TeacherSidebar studio link, groupByUnit
+lesson grouping, ReviewDueChip/useGuidedReview practice wiring), and restructured
+three setUpClass blocks that read deleted files. Every security pin survives:
+backend RLS/no-anon migrations, no-service-role and no-OPENAI/Google-secret
+frontend sweeps, read-only Google scopes, no-plaintext-password seeding, plus the
+untouched sandbox/chat-fn/lesson_id guards. No frontend/supabase code changed.
+Files changed: tests/test_media_processing.py, tests/test_admin_ops.py,
+tests/test_admin_seed_pilot.py, tests/test_google_classroom_integration.py,
+tests/test_live_teacher_intervention.py, tests/test_platform_completion_sprint.py,
+tests/test_review_due.py, tests/test_assessment_expansion.py,
+tests/test_curriculum_authoring_studio.py, docs/HANDOFF.md.
+Tests run: python3 -m unittest discover -s tests -q — twice, both: 307 tests,
+0 failures, 0 errors, 4 skipped (pre-existing test_engine_app Flask skips).
+Remaining concerns: none found — no failure revealed strip breakage of a KEPT
+feature; types.ts still carries dormant admin-ops action unions/types
+(PilotReadiness, ClassSnapshotExport, csv/report actions) which tests no longer
+pin but which are harmless server-mirroring types.
+Suggested next task: docs sync + README update + push (execution-order step 9
+remainder); repoint deploy-backend.yml at go-live.
+
+## Claude -> Codex / Human - 2026-07-30 21:40
+
+Status: Finished
+Summary: MVP strip-down + refinement pass complete on `claude/project-scope-mvp-o7ox0y`
+(main remains the full archive). Net -7,885 lines vs main while ADDING the new student
+capabilities. Shipped: (1) STRIPS — admin 7 tabs -> 3 (Seeding/Live/Cost), TeacherConsole
+5542 -> 3972 lines (reports, analytics/risk duplicate, Records/Messages tabs, dead
+intervention_alerts UI, media-extraction pipeline all cut; class cards/hotlist/gradebook/
+grading/builders/transcript/watch-live kept), curriculum studio-lite (templates + version
+UI cut, AI drafter + artifact generation kept), comms UI + root static app + bot.ts +
+lesson1 fallbacks removed, api.ts/types.ts pruned (-1,731). (2) STUDENT 7-MODE CHAT —
+open/lesson/practice/discuss/quiz/assessment/resources; lesson flow byte-identical with
+no mode selected; open/discuss/quiz are chat-fn directive postures (chat_mode envelope
+field) that never mutate lesson progress; practice reconnects the orphaned SM-2-lite
+review loop (new ReviewDueChip + useGuidedReview; test_review_sessions green again);
+assessment/resources are in-chat surfaces. (3) MEMORY v1 — session_summaries +
+student_memory tables (owner RLS, teacher read), background summary/profile writer on
+session completion, student.memory prompt block replacing the never-reference-past-
+sessions rule, common_error_patterns now populated; student-visible "What your mentor
+remembers" panel. (4) DEMO — 3-subject/4-lesson/16-step seeded catalog (interpreter-
+verified starter code) registered AFTER the Book F sweep; login demo-access disclosure.
+(5) COHERENCE — house confirm modal, toast on blocked lesson switch, reduced-motion-safe
+calmer AmbientCanvas, completion banner suggests due practice, card/empty-state/copy
+unification. (6) TESTS — suite refreshed to the MVP reality: 307 tests, 0 failures,
+0 errors, 4 pre-existing Flask skips; every security pin preserved (sandbox literals,
+no-service-role chat posture, RLS fragments, lesson_id NOT-NULL guard).
+Files changed: see docs/MVP_SCOPE.md (authoritative inventory) + git log (18 commits).
+Tests run: python unittest discover (307 OK x2), frontend tsc 0 errors, eslint 0 errors
+(17 pre-existing warnings), production build green.
+Remaining concerns: (1) deploy-backend.yml still triggers on the OLD branch by design —
+repoint to this branch (or merge to main) at go-live; memory_v1 + mvp_demo_catalog
+migrations then apply on first deploy. (2) Live E2E (real Supabase + demo logins +
+voice + artifact build) needs a deployed environment — repo-side gates are green but a
+human pass of the 7 modes and memory loop is due. (3) The demo password is set at seed
+time via /admin Seeding; the login disclosure deliberately shows emails only.
+(4) fetchTeacherDashboard remains a monolith (fine at MVP scale; slim later).
+Suggested next task: deploy + human demo pass (student: lesson -> modes -> practice ->
+memory panel; teacher: hotlist -> transcript -> watch live -> assign/grade; admin:
+seed logins), then visual QA screenshots and any polish the pass surfaces.

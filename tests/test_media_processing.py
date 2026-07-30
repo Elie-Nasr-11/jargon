@@ -1,3 +1,9 @@
+"""Trimmed 2026-07-30: the teacher-facing media-extraction pipeline UI (extract /
+OCR / transcribe / chunk QA in the ResourceManager, plus its api.ts wrappers) was
+removed in the MVP strip (see docs/MVP_SCOPE.md §4). The resource-processing edge
+function and its migrations stay deployed BACKEND-ONLY, so all backend security
+pins remain; the client-side pdf.js extraction stays for the studio's AI reference
+input."""
 from pathlib import Path
 import unittest
 
@@ -8,11 +14,8 @@ TRANSCRIPTION_MIGRATION = ROOT / "supabase" / "migrations" / "0015_media_transcr
 OCR_MIGRATION = ROOT / "supabase" / "migrations" / "0016_pdf_page_assets_ocr.sql"
 FUNCTION = ROOT / "supabase" / "functions" / "resource-processing" / "index.ts"
 CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
-API = ROOT / "frontend" / "src" / "lib" / "api.ts"
-SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
-TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-# The teacher resource-manager UI moved from the thin route file into this feature module.
-TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
+# Studio-lite keeps the client-side pdf.js extraction for the AI reference input.
+STUDIO_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx"
 PDF_EXTRACT = ROOT / "frontend" / "src" / "lib" / "pdf-extract.ts"
 PACKAGE = ROOT / "frontend" / "package.json"
 
@@ -25,10 +28,7 @@ class MediaProcessingStaticTests(unittest.TestCase):
         cls.ocr_migration = OCR_MIGRATION.read_text(encoding="utf-8")
         cls.function = FUNCTION.read_text(encoding="utf-8")
         cls.chat = CHAT_FUNCTION.read_text(encoding="utf-8")
-        cls.api = API.read_text(encoding="utf-8")
-        cls.supabase = SUPABASE.read_text(encoding="utf-8")
-        cls.types = TYPES.read_text(encoding="utf-8")
-        cls.teacher = TEACHER_ROUTE.read_text(encoding="utf-8")
+        cls.studio = STUDIO_ROUTE.read_text(encoding="utf-8")
         cls.pdf_extract = PDF_EXTRACT.read_text(encoding="utf-8")
         cls.package = PACKAGE.read_text(encoding="utf-8")
 
@@ -147,53 +147,14 @@ class MediaProcessingStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.function)
 
-    def test_frontend_uses_pdfjs_and_resource_processing_edge_function(self):
-        for fragment in (
-            '"resource-processing"',
-            'functionUrl("resource-processing")',
-            "ResourceTextChunk",
-            "fetchResourceTextChunks",
-            "saveExtractedPdfChunks",
-            "transcribeMediaResource",
-            "uploadPdfPageAssets",
-            "ocrPdfPages",
-            "approveResourceChunks",
-            "rejectResourceChunks",
-            "deleteResourceChunks",
-            "pdfjs-dist",
-        ):
-            with self.subTest(fragment=fragment):
-                self.assertTrue(
-                    fragment in self.supabase
-                    or fragment in self.api
-                    or fragment in self.types
-                    or fragment in self.package
-                )
-
+    def test_studio_keeps_client_side_pdf_extraction_for_ai_reference(self):
+        # The pipeline UI is gone, but the studio's AiReferenceInput still extracts
+        # PDF text fully client-side with pdf.js (no server round-trip, no secrets).
+        self.assertIn('"pdfjs-dist"', self.package)
         self.assertIn("getDocument", self.pdf_extract)
         self.assertIn("pdf.worker.min.mjs?url", self.pdf_extract)
-        self.assertIn("extractPdfTextChunksFromUrl", self.pdf_extract)
-        self.assertIn("renderPdfPageAssetsFromUrl", self.pdf_extract)
-
-    def test_teacher_resource_manager_supports_extract_review_approve(self):
-        for fragment in (
-            "Extract PDF text",
-            "Generate page previews",
-            "OCR scanned pages",
-            "Transcribe audio",
-            "Transcribe video",
-            "Review text",
-            "Extracted text / transcript review",
-            "Approve drafts",
-            "Draft and rejected chunks are teacher-only",
-            "Mentor can use approved",
-            "ResourceChunkStatusChip",
-            "extractPdfTextChunksFromUrl",
-            "renderPdfPageAssetsFromUrl",
-            "chunkLocationLabel",
-        ):
-            with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.teacher)
+        self.assertIn("export async function extractPdfTextChunksFromUrl", self.pdf_extract)
+        self.assertIn("extractPdfTextChunksFromUrl", self.studio)
 
     def test_chat_loads_only_approved_chunks_for_mentor_context(self):
         for fragment in (

@@ -1,3 +1,8 @@
+"""Trimmed 2026-07-30: components/HeaderMenus.tsx was removed in the MVP strip;
+the student lesson catalog is now grouped by curriculum unit via the shared
+features/student/lessonGroups.ts helper (AppSidebar + ClassCanvas), and the
+teacher entry point to the studio moved into the TeacherSidebar shell
+(see docs/MVP_SCOPE.md §1/§2). The studio itself (studio-lite) is KEPT."""
 from pathlib import Path
 import unittest
 
@@ -10,10 +15,11 @@ SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
 CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx"
 ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
-HEADER_MENUS = ROOT / "frontend" / "src" / "components" / "HeaderMenus.tsx"
-# routes/teacher.tsx is now a thin route wrapper; the console (which links to the
-# curriculum authoring studio) lives in the TeacherConsole feature component.
-TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
+LESSON_GROUPS = ROOT / "frontend" / "src" / "features" / "student" / "lessonGroups.ts"
+APP_SIDEBAR = ROOT / "frontend" / "src" / "features" / "student" / "shell" / "AppSidebar.tsx"
+CLASS_CANVAS = ROOT / "frontend" / "src" / "features" / "student" / "panels" / "ClassCanvas.tsx"
+# The teacher shell sidebar owns the navigation into the authoring studio now.
+TEACHER_SIDEBAR = ROOT / "frontend" / "src" / "features" / "teacher" / "shell" / "TeacherSidebar.tsx"
 
 
 class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
@@ -26,8 +32,10 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         cls.chat = CHAT_FUNCTION.read_text(encoding="utf-8")
         cls.route = ROUTE.read_text(encoding="utf-8")
         cls.route_tree = ROUTE_TREE.read_text(encoding="utf-8")
-        cls.header_menus = HEADER_MENUS.read_text(encoding="utf-8")
-        cls.teacher_route = TEACHER_ROUTE.read_text(encoding="utf-8")
+        cls.lesson_groups = LESSON_GROUPS.read_text(encoding="utf-8")
+        cls.app_sidebar = APP_SIDEBAR.read_text(encoding="utf-8")
+        cls.class_canvas = CLASS_CANVAS.read_text(encoding="utf-8")
+        cls.teacher_sidebar = TEACHER_SIDEBAR.read_text(encoding="utf-8")
 
     def test_curriculum_admin_function_is_privileged_and_scoped(self):
         for fragment in (
@@ -81,9 +89,9 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
             '{ label: "Teacher", onClick: () => navigate({ to: "/teacher" }) }', self.route
         )
         self.assertIn("/teacher/curriculum", self.route_tree)
-        # The teacher console navigates to the studio via router `navigate({ to: ... })`
-        # rather than a JSX `to="..."` link attribute.
-        self.assertIn('to: "/teacher/curriculum"', self.teacher_route)
+        # The teacher shell sidebar navigates to the studio via router
+        # `navigate({ to: ... })` rather than a JSX `to="..."` link attribute.
+        self.assertIn('navigate({ to: "/teacher/curriculum" })', self.teacher_sidebar)
 
     def test_authoring_types_cover_blueprint_contract(self):
         for fragment in (
@@ -105,13 +113,13 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         self.assertIn("status=eq.draft", self.function)
         self.assertIn('status: "published"', self.function)
 
-    def test_student_lesson_menu_groups_curriculum_labels(self):
-        # groupLessons was renamed to buildLessonTree (Subject > Unit > Lesson grouping).
-        self.assertIn("buildLessonTree", self.header_menus)
-        self.assertIn("data-lesson-id", self.header_menus)
-        chat_route = (ROOT / "frontend" / "src" / "routes" / "chat.tsx").read_text(encoding="utf-8")
-        self.assertIn("lesson.curriculum_group", chat_route)
-        self.assertIn("lesson.subject_title", chat_route)
+    def test_student_surfaces_group_lessons_by_curriculum_unit(self):
+        # HeaderMenus/buildLessonTree gave way to the shared groupByUnit helper:
+        # every student lesson catalog groups by unit with a course-title fallback.
+        self.assertIn("export function groupByUnit", self.lesson_groups)
+        self.assertIn('lesson.unit_title || lesson.course_title || "Lessons"', self.lesson_groups)
+        self.assertIn("groupByUnit", self.app_sidebar)
+        self.assertIn("groupByUnit", self.class_canvas)
 
     # removed: test_default_authoring_blueprint_is_multisubject_logic_lesson — the
     # hardcoded "Logic Foundations / Clear Thinking / Claims, Reasons, Evidence" default

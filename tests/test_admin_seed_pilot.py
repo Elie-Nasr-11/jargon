@@ -1,3 +1,6 @@
+"""Trimmed 2026-07-30: the teacher LessonProgress grid was removed in the MVP
+strip (the gradebook is the progress view now — see docs/MVP_SCOPE.md §4); its
+fingerprint was dropped from the teacher-dashboard test below."""
 from pathlib import Path
 import unittest
 
@@ -119,7 +122,6 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
                 self.assertIn(table, self.api)
         for phrase in (
             "ClassDetail",
-            "LessonProgress",
             "StudentDetail",
             "Transcript",
             "Teacher notes",

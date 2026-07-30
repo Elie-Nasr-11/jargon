@@ -1,3 +1,6 @@
+"""Trimmed 2026-07-30: the Google Classroom frontend wrappers (diagnose included)
+were removed in the MVP strip (see docs/MVP_SCOPE.md §9 — the edge function stays
+deployed BACKEND-ONLY, and its diagnostics + write-gate pins remain below)."""
 import pathlib
 import re
 import unittest
@@ -9,7 +12,6 @@ ADMIN_OPS = ROOT / "supabase/functions/admin-ops/index.ts"
 GOOGLE_CLASSROOM = ROOT / "supabase/functions/google-classroom/index.ts"
 VOICE_SESSION = ROOT / "supabase/functions/voice-session/index.ts"
 RESOURCE_PROCESSING = ROOT / "supabase/functions/resource-processing/index.ts"
-FRONTEND_API = ROOT / "frontend/src/lib/api.ts"
 FRONTEND_TYPES = ROOT / "frontend/src/lib/types.ts"
 
 
@@ -21,7 +23,6 @@ class PlatformCompletionSprintTests(unittest.TestCase):
         cls.google = GOOGLE_CLASSROOM.read_text()
         cls.voice = VOICE_SESSION.read_text()
         cls.resource_processing = RESOURCE_PROCESSING.read_text()
-        cls.frontend_api = FRONTEND_API.read_text()
         cls.frontend_types = FRONTEND_TYPES.read_text()
 
     def test_platform_completion_tables_have_rls_and_no_anon_access(self):
@@ -61,8 +62,6 @@ class PlatformCompletionSprintTests(unittest.TestCase):
         self.assertIn('action === "diagnose"', self.google)
         self.assertIn("missingGoogleSecrets", self.google)
         self.assertIn("write sync is not enabled yet", self.google)
-        self.assertIn('| "diagnose"', self.frontend_api)
-        self.assertIn("diagnoseGoogleClassroom", self.frontend_api)
 
     def test_voice_diagnostics_are_env_configurable_without_raw_audio_storage(self):
         for env_name in [

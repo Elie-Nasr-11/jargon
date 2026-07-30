@@ -1,3 +1,7 @@
+"""Trimmed 2026-07-30: the dedicated /quiz/$assessmentId route was removed in the
+MVP strip — formal assessments (KEPT, docs/MVP_SCOPE.md §8 "assessment") now run
+through the QuizPanel surface mounted inside the student chat's assessment mode.
+Teacher review/return UI split into AssessmentGrading.tsx."""
 from pathlib import Path
 import unittest
 
@@ -9,11 +13,12 @@ API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 CHAT_ROUTE = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
-QUIZ_ROUTE = ROOT / "frontend" / "src" / "routes" / "quiz.$assessmentId.tsx"
+QUIZ_PANEL = ROOT / "frontend" / "src" / "features" / "student" / "QuizPanel.tsx"
 # The teacher console UI moved out of the thin routes/teacher.tsx into the
-# feature module; the assessment surfaces live in TeacherConsole.tsx now.
+# feature module; the assessment surfaces live in TeacherConsole.tsx now,
+# with the attempt review/return half in AssessmentGrading.tsx.
 TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
-ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
+GRADING = ROOT / "frontend" / "src" / "features" / "teacher" / "AssessmentGrading.tsx"
 
 
 class AssessmentExpansionStaticTests(unittest.TestCase):
@@ -25,9 +30,9 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
         cls.supabase = SUPABASE.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
         cls.chat_route = CHAT_ROUTE.read_text(encoding="utf-8")
-        cls.quiz_route = QUIZ_ROUTE.read_text(encoding="utf-8")
+        cls.quiz_panel = QUIZ_PANEL.read_text(encoding="utf-8")
         cls.teacher_route = TEACHER_ROUTE.read_text(encoding="utf-8")
-        cls.route_tree = ROUTE_TREE.read_text(encoding="utf-8")
+        cls.grading = GRADING.read_text(encoding="utf-8")
 
     def test_migration_adds_assessment_tables_with_rls_and_grants(self):
         for fragment in (
@@ -105,7 +110,7 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.function)
 
-    def test_frontend_exposes_dedicated_quiz_route_and_assessment_api(self):
+    def test_frontend_exposes_assessment_api_and_in_chat_quiz_surface(self):
         for fragment in (
             '"assessment-admin"',
             'functionUrl("assessment-admin")',
@@ -119,27 +124,32 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertTrue(fragment in self.supabase or fragment in self.api)
 
-        self.assertIn('createFileRoute("/quiz/$assessmentId")', self.quiz_route)
-        self.assertIn("/quiz/$assessmentId", self.route_tree)
-        self.assertIn("AssessmentDock", self.chat_route)
-        self.assertIn("Lesson quiz", self.quiz_route)
+        # The assessment entry lives inside the student chat (MVP §8 "assessment"
+        # mode) and the attempt runs through QuizPanel — no dedicated route.
+        self.assertIn('chatMode === "assessment"', self.chat_route)
+        self.assertIn("AssessmentSurface", self.chat_route)
+        self.assertIn("<QuizPanel", self.chat_route)
+        for fragment in ("fetchStudentAssessments", "startAssessment", "submitAssessment"):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.quiz_panel)
 
     def test_teacher_ui_can_create_assign_review_and_return_assessments(self):
         for fragment in (
-            "Lesson quizzes",
             "Create quiz",
             "Assign quiz",
             "AssessmentManager",
             "AssessmentStatusChip",
             "AssessmentRecipientChip",
             "onReviewAssessmentItem",
-            "Return result",
             "Text response",
             "Code response",
             "Multiple choice",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.teacher_route)
+        # The attempt review/return half lives in AssessmentGrading.tsx.
+        self.assertIn("onReviewAssessmentItem", self.grading)
+        self.assertIn("Return result", self.grading)
 
     def test_assessment_types_cover_student_and_teacher_contracts(self):
         for fragment in (

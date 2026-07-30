@@ -1,3 +1,7 @@
+"""Trimmed 2026-07-30: ProfilePanel was removed in the MVP strip; the review-due
+surface is now the chat header ReviewDueChip + the Practice mode pane in chat.tsx
+(see docs/MVP_SCOPE.md §8 "practice"). The SM-2-lite queue and the isolated chat-fn
+review path are KEPT and stay pinned below against their current shape."""
 from pathlib import Path
 import unittest
 
@@ -7,7 +11,6 @@ API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 REVIEW = ROOT / "frontend" / "src" / "lib" / "review.ts"
 CHIP = ROOT / "frontend" / "src" / "features" / "student" / "ReviewDueChip.tsx"
-PROFILE = ROOT / "frontend" / "src" / "features" / "student" / "ProfilePanel.tsx"
 CHAT = ROOT / "frontend" / "src" / "routes" / "chat.tsx"
 CHAT_FN = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 
@@ -19,7 +22,6 @@ class ReviewDueStaticTests(unittest.TestCase):
         cls.types = TYPES.read_text(encoding="utf-8")
         cls.review = REVIEW.read_text(encoding="utf-8")
         cls.chip = CHIP.read_text(encoding="utf-8")
-        cls.profile = PROFILE.read_text(encoding="utf-8")
         cls.chat = CHAT.read_text(encoding="utf-8")
         cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
 
@@ -45,25 +47,29 @@ class ReviewDueStaticTests(unittest.TestCase):
         self.assertIn("reviewDue: ReviewDueSkill[]", self.types)
 
     def test_chip_renders_only_when_due(self):
-        # The chip is self-contained and hides itself when nothing is due (stays up mid-review).
+        # The chip hides itself when nothing is due; the chat surface owns the due
+        # queue (fetchReviewDue) and passes the count down.
         self.assertIn("export function ReviewDueChip", self.chip)
-        self.assertIn("fetchReviewDue", self.chip)
-        self.assertIn("if (due.length === 0 && !reviewSkill) return null;", self.chip)
-        # And it is mounted in the student chat header.
+        self.assertIn("if (count <= 0) return null;", self.chip)
+        # And it is mounted in the student chat header, fed from the SM-2-lite queue.
         self.assertIn("<ReviewDueChip", self.chat)
+        self.assertIn("fetchReviewDue", self.chat)
 
     def test_guided_review_loop_close(self):
-        # P4b: a one-tap guided review that runs retrieval + refreshes the spacing clock.
+        # MVP §8 practice: the guided review runs retrieval + refreshes the spacing
+        # clock, and completes the backing review_sessions row when wrapped up.
         self.assertIn("export async function invokeReview", self.api)
         self.assertIn("review: true", self.api)
         self.assertIn("skill_key: input.skillKey", self.api)
-        for fragment in ("startReview", "sendReview", "invokeReview"):
+        for fragment in ("useGuidedReview", "invokeReview", "completeReviewSession"):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.chip)
 
-    def test_profile_panel_has_review_section(self):
-        self.assertIn("Due for review", self.profile)
-        self.assertIn("stats?.reviewDue.length", self.profile)
+    def test_practice_surface_shows_review_due(self):
+        # The completion banner offers Practice when reviews are due, and the chat
+        # surface tracks the due queue in state.
+        self.assertIn("Practice review ·", self.chat)
+        self.assertIn("const [reviewDue, setReviewDue]", self.chat)
 
     def test_chat_fn_review_handler_is_isolated_and_closes_loop(self):
         # Fires ONLY on review:true (normal turn loop untouched), and refreshes the spacing clock.
