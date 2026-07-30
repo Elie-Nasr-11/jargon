@@ -13,11 +13,13 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CHAT = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
-# Trunk unification 2026-07-30: routes/chat.tsx (and its P5c block-markdown renderer)
-# retired. The v6 transcript deliberately has NO general markdown pass — replies render
-# as pre-wrap text with fence-only code handling — so the injection surface P5c guarded
-# is gone by construction; the pins below assert the v6 renderer stays that way.
+# v6 slice B2 (2026-07-30): the P5c safe markdown subset retired with routes/chat.tsx is
+# PORTED into the v6 transcript (mentor bubbles only), and student/ResourceCard.tsx is
+# the universal §5 media renderer. The pins below hold the same invariants against the
+# new mounts: React-node-only rendering, https-only links, the BLOCK_MD_RE gate, signed
+# URLs, the nocookie rewrite, and progress telemetry.
 TRANSCRIPT = (REPO / "frontend" / "src" / "student" / "Transcript.tsx").read_text()
+RESOURCE_CARD = (REPO / "frontend" / "src" / "student" / "ResourceCard.tsx").read_text()
 CURRICULUM = (REPO / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text()
 API = (REPO / "frontend" / "src" / "lib" / "api.ts").read_text()
 FORMAT_TS = (REPO / "frontend" / "src" / "lib" / "format.ts").read_text()
@@ -110,22 +112,30 @@ class TeacherAttachInvariants(unittest.TestCase):
 
 
 class SafeMarkdownInvariants(unittest.TestCase):
-    """P5c, post-unification: reply rendering stays React-node-only and dependency-free.
-
-    The old /chat block-markdown renderer (BLOCK_MD_RE, the https-only link regex)
-    retired with that surface; the v6 transcript renders replies as pre-wrap text with
-    fence-only code handling and produces no links from mentor text at all, which is a
-    strictly smaller surface. These pins keep it that way.
-    """
+    """P5c, re-anchored to the v6 transcript (slice B2): the hand-rolled markdown subset
+    is back for mentor prose, with the same safety construction as the old surface —
+    React nodes only (text nodes ARE the sanitizer), a lexical https-only link scheme,
+    and the cheap BLOCK_MD_RE gate so plain replies keep the pre-wrap path."""
 
     def test_no_dangerous_html(self):
         # The JSX attribute form — a comment may name it, but nothing may USE it.
         self.assertNotIn("dangerouslySetInnerHTML=", TRANSCRIPT)
+        self.assertNotIn("dangerouslySetInnerHTML=", RESOURCE_CARD)
 
-    def test_replies_render_as_plain_prewrap_text(self):
-        # No markdown/HTML pass: mentor text reaches the DOM as text nodes only.
+    def test_block_pass_is_gated_and_scoped_to_mentor_prose(self):
+        # The block renderer runs ONLY when block syntax is present…
+        self.assertIn("const BLOCK_MD_RE =", TRANSCRIPT)
+        self.assertIn("BLOCK_MD_RE.test(raw)", TRANSCRIPT)
+        # …and only mentor bubbles opt in — student/teacher text stays literal pre-wrap.
+        self.assertIn("markdown={!message.isError}", TRANSCRIPT)
+        self.assertIn("{markdown ? renderInline(raw) : raw}", TRANSCRIPT)
         self.assertIn("whitespace-pre-wrap", TRANSCRIPT)
-        self.assertIn("no general Markdown", TRANSCRIPT)
+
+    def test_links_are_https_only_and_noopener(self):
+        # The scheme is enforced LEXICALLY in both the tokenizer and the matcher — no
+        # javascript:/data: vector exists because nothing else parses as a link.
+        self.assertEqual(TRANSCRIPT.count("https:\\/\\/[^\\s)]+"), 2)
+        self.assertIn('rel="noopener noreferrer"', TRANSCRIPT)
 
     def test_no_markdown_dependency(self):
         deps = {
@@ -144,6 +154,61 @@ class SafeMarkdownInvariants(unittest.TestCase):
     def test_style_prompt_extension_landed(self):
         self.assertIn("dash list", CHAT)
         self.assertIn("Never use headings or links in replies.", CHAT)
+
+
+class InlineMediaTable(unittest.TestCase):
+    """Slice B2: the DESIGN_V6 §5 media table renders through ONE card — the same
+    component in the transcript and the Resources panel — with the old surface's
+    security/telemetry invariants pinned here."""
+
+    def test_youtube_gets_the_nocookie_rewrite(self):
+        self.assertIn("youtube-nocookie.com/embed/", RESOURCE_CARD)
+        # The rewrite runs on the youtube branch of URL resolution — never the raw URL
+        # first — and an unrecognizable URL falls back out of the iframe path.
+        self.assertIn('youtubeEmbedUrl(resource.external_url || "")', RESOURCE_CARD)
+
+    def test_uploads_are_signed_lazily_and_only_on_open(self):
+        # Signing happens inside open/run handlers, never on mount: listing a lesson's
+        # materials must not mint URLs nobody opens, and persisted signed URLs (long
+        # expired by replay) are only a last-resort fallback.
+        self.assertIn("getLessonResourceSignedUrl({", RESOURCE_CARD)
+        self.assertIn('source_type: "upload"', RESOURCE_CARD)
+
+    def test_inline_players_are_scoped_per_kind(self):
+        # The generic iframe mounts ONLY for pdf/youtube; video/audio/image use native
+        # elements. Artifacts are excluded from BOTH generic paths (pinned in the
+        # foundation suite) — their HTML never reaches these players.
+        self.assertIn(
+            'resource.resource_type === "pdf" || resource.resource_type === "youtube"',
+            RESOURCE_CARD,
+        )
+        self.assertIn('const INLINE_KINDS = new Set(["pdf", "youtube", "video", "audio", "image"])', RESOURCE_CARD)
+        self.assertIn("<video", RESOURCE_CARD)
+        self.assertIn("<audio", RESOURCE_CARD)
+        self.assertIn("<img", RESOURCE_CARD)
+
+    def test_everything_else_opens_noopener(self):
+        self.assertIn('window.open(url, "_blank", "noopener,noreferrer")', RESOURCE_CARD)
+
+    def test_telemetry_covers_the_table(self):
+        # `shown` fires once on mount; media fires played/paused/completed WITH progress
+        # (seconds + percent) — this feeds the mentor's "don't claim they watched it"
+        # honesty rule, so losing an event class would let the mentor lie politely.
+        self.assertIn('event_type: "shown"', RESOURCE_CARD)
+        self.assertIn('track("opened")', RESOURCE_CARD)
+        self.assertIn('track("played", mediaProgress(event.currentTarget))', RESOURCE_CARD)
+        self.assertIn('track("paused", mediaProgress(event.currentTarget))', RESOURCE_CARD)
+        self.assertIn('track("completed", mediaProgress(event.currentTarget))', RESOURCE_CARD)
+        self.assertIn("progress_seconds", RESOURCE_CARD)
+        self.assertIn("progress_percent", RESOURCE_CARD)
+        # Artifact telemetry: the frame's played/paused passthrough + deck completion.
+        self.assertIn("onTelemetry={(event) => track(event)}", RESOURCE_CARD)
+        self.assertIn('track("completed", { progress_percent: 100 })', RESOURCE_CARD)
+
+    def test_transcript_and_panel_share_the_card(self):
+        panel = (REPO / "frontend" / "src" / "student" / "ResourcesPanel.tsx").read_text()
+        self.assertIn('from "@/student/ResourceCard"', panel)
+        self.assertIn('from "@/student/ResourceCard"', TRANSCRIPT)
 
 
 if __name__ == "__main__":

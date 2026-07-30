@@ -229,12 +229,6 @@ class ChatLiveArtifactWire(unittest.TestCase):
         types = (front / "lib" / "types.ts").read_text()
         api = (front / "lib" / "api.ts").read_text()
         supa = (front / "lib" / "supabase.ts").read_text()
-        # Trunk unification 2026-07-30: routes/chat.tsx retired, and with it the client
-        # build loop (offer pill -> generateLiveArtifact -> artifact_ready control post,
-        # busy retry, mid-build lesson-switch guard). The v6 /learn surface has not
-        # reconnected it — recorded in docs/OPEN_QUESTIONS.md. What survives client-side
-        # is pinned below: the shared transcript model still maps the offer off the
-        # envelope, and the API/type/studio contracts are unchanged.
         chat_messages = (
             front / "features" / "student" / "chat" / "chatMessages.ts"
         ).read_text()
@@ -255,6 +249,34 @@ class ChatLiveArtifactWire(unittest.TestCase):
         self.assertIn("Share with class", studio)
         self.assertIn('visibility: "class_private"', studio)
         self.assertIn("student_id: null", studio)
+
+    def test_v6_client_build_loop(self):
+        # Re-anchored 2026-07-30 (slice B2): the client build loop retired with
+        # routes/chat.tsx is RECONNECTED on the v6 surface — the offer pill lives in the
+        # transcript, the 30-90s build runs in useConversation OUTSIDE the turn loop.
+        front = REPO / "frontend" / "src"
+        hook = (front / "student" / "useConversation.ts").read_text()
+        transcript = (front / "student" / "Transcript.tsx").read_text()
+        # The tap calls the dedicated artifact-live client (never invokeTypedChat).
+        self.assertIn("await generateLiveArtifact({", hook)
+        # Consent stays consent: the offer is consumed off its message at tap so the
+        # retired pill can't flash back between bubbles.
+        self.assertIn("artifactOffer: undefined", hook)
+        # On success the mentor presents the card through an artifact_ready control turn
+        # (the ONLY path that attaches a mentor-built row).
+        self.assertIn('control: { type: "artifact_ready", resource_id: built.resource_id }', hook)
+        # Busy-retry: a build resolving mid-turn waits the in-flight turn out and
+        # re-posts, so a successful build is never silently dropped.
+        self.assertIn('outcome === "busy"', hook)
+        self.assertIn("await inFlightTurnRef.current?.catch(() => {})", hook)
+        # Lesson-switch guard: a build that resolves after the lesson changed is dropped,
+        # never smeared into the new session.
+        self.assertIn("lessonRef.current?.id !== builtForLesson", hook)
+        # The pill: rides the offering message, live only while it is the latest mentor
+        # message (like the Continue pill), and carries the canonical label fallback.
+        self.assertIn("message.artifactOffer && isLatestBot && !message.isError", transcript)
+        self.assertIn("channel.buildArtifact(message.artifactOffer!)", transcript)
+        self.assertIn('"Build me a quick activity"', transcript)
 
     def test_admin_passes_toggle_through(self):
         admin = (

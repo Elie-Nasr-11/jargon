@@ -7,6 +7,7 @@ import {
   fetchSessionHold,
   fetchStudentCatalog,
   fetchTeacherLiveComments,
+  generateLiveArtifact,
   getSession,
   invokeJargonRun,
   invokeTypedChat,
@@ -94,7 +95,11 @@ export type ConversationChannel = {
     confidence?: number | null,
   ) => Promise<TypedChatEnvelope | null | "busy">;
   voiceEvent: (event: VoiceInteractionEvent) => void;
+  // P8: the student accepted the mentor's "build me a quick activity" offer (see buildArtifact).
+  buildArtifact: (offer: ArtifactOffer) => void;
 };
+
+export type ArtifactOffer = { label: string; kind: "html_sim" | "deck"; activity_id: string };
 
 const EMPTY_CHANNEL: ConversationChannel = {
   held: false,
@@ -111,6 +116,7 @@ const EMPTY_CHANNEL: ConversationChannel = {
   retryControlTurn: () => {},
   sendVoiceTurn: async () => null,
   voiceEvent: () => {},
+  buildArtifact: () => {},
 };
 
 let channelSnapshot: ConversationChannel = EMPTY_CHANNEL;
@@ -232,6 +238,11 @@ export function useConversation() {
   const heldRef = useRef(false);
   // Monotonic token identifying the most recent lesson switch (see openLesson).
   const switchTokenRef = useRef(0);
+  // The promise of the turn currently in flight, so a caller told "busy" can wait the turn
+  // out and retry instead of dropping its send (the artifact build's ready post needs this).
+  const inFlightTurnRef = useRef<Promise<TypedChatEnvelope | null> | null>(null);
+  // True while a live artifact build is running (30-90s, outside the turn loop).
+  const buildingArtifactRef = useRef(false);
 
   const setSession = (id: string | null) => {
     sessionRef.current = id;
@@ -569,49 +580,54 @@ export function useConversation() {
         { id: thinkingId, role: "thinking" as const },
       ]);
 
-      try {
-        const session = await getSession();
-        const token = session?.access_token;
-        if (!token) throw new Error("You must be signed in.");
+      const work = (async (): Promise<TypedChatEnvelope | null> => {
+        try {
+          const session = await getSession();
+          const token = session?.access_token;
+          if (!token) throw new Error("You must be signed in.");
 
-        const envelope = await invokeTypedChat({
-          accessToken: token,
-          lessonId: activeLesson.id,
-          sessionId: sessionRef.current,
-          answer,
-          control: options?.control,
-          mentorPreferences: mentorToPreferences(store.getMentor()),
-          mode,
-        });
-        applyEnvelope(envelope);
-        setMessages((current) => [
-          ...current.filter((m) => m.id !== thinkingId),
-          envelopeMessage(envelope, mode),
-        ]);
-        return envelope;
-      } catch (err) {
-        const message = friendlyError(err, "That didn't send.");
-        // The error bubble carries the failed answer (and control) so Retry can re-send it
-        // faithfully — a failed navigate/resume must retry as navigation, not degrade into a
-        // bare text turn — and is flagged isError so it never becomes the "latest mentor
-        // message" (which would strip live quiz choices off the real question with no way back).
-        setMessages((current) => [
-          ...current.filter((m) => m.id !== thinkingId),
-          {
-            id: uid(),
-            role: "bot",
-            text: message,
-            isError: true,
-            retryAnswer: answer,
-            retryControl: options?.control,
-          },
-        ]);
-        setError(message);
-        return null;
-      } finally {
-        sendingRef.current = false;
-        setSending(false);
-      }
+          const envelope = await invokeTypedChat({
+            accessToken: token,
+            lessonId: activeLesson.id,
+            sessionId: sessionRef.current,
+            answer,
+            control: options?.control,
+            mentorPreferences: mentorToPreferences(store.getMentor()),
+            mode,
+          });
+          applyEnvelope(envelope);
+          setMessages((current) => [
+            ...current.filter((m) => m.id !== thinkingId),
+            envelopeMessage(envelope, mode),
+          ]);
+          return envelope;
+        } catch (err) {
+          const message = friendlyError(err, "That didn't send.");
+          // The error bubble carries the failed answer (and control) so Retry can re-send it
+          // faithfully — a failed navigate/resume must retry as navigation, not degrade into a
+          // bare text turn — and is flagged isError so it never becomes the "latest mentor
+          // message" (which would strip live quiz choices off the real question with no way back).
+          setMessages((current) => [
+            ...current.filter((m) => m.id !== thinkingId),
+            {
+              id: uid(),
+              role: "bot",
+              text: message,
+              isError: true,
+              retryAnswer: answer,
+              retryControl: options?.control,
+            },
+          ]);
+          setError(message);
+          return null;
+        } finally {
+          sendingRef.current = false;
+          setSending(false);
+        }
+      })();
+      // Registered so a "busy" caller (the artifact build's ready post) can await the turn out.
+      inFlightTurnRef.current = work;
+      return work;
     },
     [applyEnvelope],
   );
@@ -780,6 +796,115 @@ export function useConversation() {
     [sendAnswer],
   );
 
+  // P8: the student accepted the mentor's build offer (the "Build me a quick activity" pill).
+  // Generation is a LONG call by design (~30-90s: the model writes a whole interactive
+  // document), so it runs OUTSIDE the turn loop behind a dedicated status bubble — which, as a
+  // plain bot message, also becomes the latest bot message and naturally retires the offer pill
+  // while building. On success an artifact_ready control turn makes the mentor present the card
+  // (and persists it in the turn payload for replay); on failure the bubble turns into an error
+  // (server-side caps bound the spend, and an explicit ask re-opens the offer).
+  const buildArtifact = useCallback(
+    async (offer: ArtifactOffer) => {
+      const activeLesson = lessonRef.current;
+      const activeSession = sessionRef.current;
+      if (
+        !activeLesson ||
+        !activeSession ||
+        buildingArtifactRef.current ||
+        sendingRef.current ||
+        heldRef.current
+      ) {
+        return;
+      }
+      buildingArtifactRef.current = true;
+      // The tapped offer is consumed — clear it off its message (like a picked quiz choice) so
+      // the retired pill can't flash back between bubbles.
+      setMessages((current) =>
+        current.map((m) =>
+          m.role === "bot" && m.artifactOffer?.activity_id === offer.activity_id
+            ? { ...m, artifactOffer: undefined }
+            : m,
+        ),
+      );
+      const builtForLesson = activeLesson.id;
+      const statusId = uid();
+      setMessages((current) => [
+        ...current,
+        {
+          id: uid(),
+          role: "user",
+          text: "Yes — build me an activity",
+          turnMode: "lesson",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: statusId,
+          role: "bot",
+          text: "Building your activity — this can take a minute or two. You can keep chatting while I work.",
+          turnMode: "lesson",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      try {
+        const session = await getSession();
+        const token = session?.access_token;
+        if (!token) throw new Error("You must be signed in.");
+        const built = await generateLiveArtifact({
+          accessToken: token,
+          lessonId: builtForLesson,
+          sessionId: activeSession,
+          activityId: offer.activity_id,
+          kind: offer.kind,
+        });
+        // Belt-and-braces on top of the switch guards: a build that resolves after the lesson
+        // changed is dropped, never smeared into the new session (state closures go stale over
+        // a 30-90s call — hence the ref reads).
+        if (lessonRef.current?.id !== builtForLesson) return;
+        setMessages((current) => current.filter((m) => m.id !== statusId));
+        const sendReady = () =>
+          sendAnswer({ mode: "text", text: "", client_msg_id: uid() }, "lesson", undefined, {
+            control: { type: "artifact_ready", resource_id: built.resource_id },
+          });
+        // The status bubble invites chatting during the build, so a normal turn may be in
+        // flight when generation resolves — sendAnswer then returns "busy" WITHOUT sending.
+        // Wait the turn out and retry (the code-run review pattern) so a successful build is
+        // never silently dropped.
+        let outcome = await sendReady();
+        for (let attempt = 0; attempt < 3 && outcome === "busy"; attempt++) {
+          await inFlightTurnRef.current?.catch(() => {});
+          outcome = await sendReady();
+        }
+        if (outcome === "busy") {
+          // Practically unreachable (each retry waits the in-flight turn out first). The honest
+          // recovery: an explicit ask re-opens the offer, and the server's duplicate-reuse
+          // window returns this same build instantly.
+          setMessages((current) => [
+            ...current,
+            {
+              id: uid(),
+              role: "bot",
+              isError: true,
+              text: 'Your activity is ready but the chat was busy — type "build me the activity" to get it.',
+            },
+          ]);
+        }
+      } catch (err) {
+        if (lessonRef.current?.id !== builtForLesson) return;
+        const message = friendlyError(err, "The mentor couldn't build that this time.");
+        setMessages((current) =>
+          current.map((m) =>
+            m.id === statusId
+              ? { id: statusId, role: "bot" as const, isError: true, text: message }
+              : m,
+          ),
+        );
+      } finally {
+        buildingArtifactRef.current = false;
+      }
+    },
+    [sendAnswer],
+  );
+
   // A spoken answer from the live-voice panel. The transcript is the record; raw audio is never
   // stored (see OPEN_QUESTIONS voice policy).
   const sendVoiceTurn = useCallback(
@@ -839,6 +964,7 @@ export function useConversation() {
       retryControlTurn,
       sendVoiceTurn,
       voiceEvent,
+      buildArtifact,
     });
   }, [
     held,
@@ -855,6 +981,7 @@ export function useConversation() {
     retryControlTurn,
     sendVoiceTurn,
     voiceEvent,
+    buildArtifact,
   ]);
 
   // A stale snapshot must not outlive the conversation that published it.

@@ -1,6 +1,6 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import gsap from "gsap";
-import { ArrowRight, Check, MessageSquare, Paperclip, RotateCcw } from "lucide-react";
+import { ArrowRight, Check, MessageSquare, Paperclip, RotateCcw, Sparkles } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
 import { store } from "@/lib/jargon-store";
@@ -37,8 +37,15 @@ import {
 //
 // Fenced code blocks are parsed and highlighted — the mentor teaches with code, so a reply
 // containing ``` must not render as flat text. parseFencedBlocks / jargonTokenClass /
-// tokenizeJargon are the same helpers the previous surface used; there is no general Markdown
-// pipeline in this codebase and this slice does not add one.
+// tokenizeJargon are the same helpers the previous surface used.
+//
+// MENTOR prose additionally gets the safe hand-rolled markdown subset ported from the old
+// surface (P5c): inline `code`/**bold**/*italic*/https-only links, and — gated by a cheap
+// block-syntax test (BLOCK_MD_RE) — ##/### headings, -/1. lists, and paragraphs. Everything
+// renders as React nodes (text nodes ARE the sanitizer — no dangerouslySetInnerHTML anywhere,
+// no markdown dependency); anything unmatched passes through as literal text, so a malformed
+// reply can never drop content or inject markup. Student and teacher bubbles stay plain
+// pre-wrap text.
 
 function CodeBlock({ code }: { code: ChatCodeBlock }) {
   return (
@@ -62,11 +69,164 @@ function CodeBlock({ code }: { code: ChatCodeBlock }) {
   );
 }
 
-// Text with its fenced blocks lifted out. Plain segments keep whitespace; code gets the block.
-function MessageBody({ text }: { text: string }) {
+// ---- The safe markdown subset (ported from the old surface's P5c renderer) ----------------
+//
+// Minimal inline markdown for mentor prose: `code`, **bold**, *italic*, and https-only
+// [text](url) links. Alternation order matters: code first (its content is verbatim), then
+// bold before italic. The italic opener guard [^\s*] keeps "3 * 4 and 2 * 5" plain; the
+// literal https:// in the link branch enforces the scheme lexically (no javascript:/data:
+// vector exists).
+const INLINE_MD_RE =
+  /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^\s*][^*\n]*\*|\[[^\]\n]+\]\(https:\/\/[^\s)]+\))/g;
+
+function renderInline(text: string): ReactNode[] {
+  return text.split(INLINE_MD_RE).map((part, i) => {
+    const code = part.match(/^`([^`\n]+)`$/);
+    if (code) {
+      return (
+        <code
+          key={i}
+          className="rounded-md bg-code-background px-1.5 py-0.5 font-mono text-[0.9em] text-code-foreground"
+        >
+          {code[1]}
+        </code>
+      );
+    }
+    const bold = part.match(/^\*\*([^*\n]+)\*\*$/);
+    if (bold) {
+      return (
+        <b key={i} className="font-semibold">
+          {bold[1]}
+        </b>
+      );
+    }
+    const italic = part.match(/^\*([^\s*][^*\n]*)\*$/);
+    if (italic) {
+      return <i key={i}>{italic[1]}</i>;
+    }
+    const link = part.match(/^\[([^\]\n]+)\]\((https:\/\/[^\s)]+)\)$/);
+    if (link) {
+      return (
+        <a
+          key={i}
+          href={link[2]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 decoration-foreground/40 transition-colors hover:decoration-foreground"
+        >
+          {link[1]}
+        </a>
+      );
+    }
+    return <Fragment key={i}>{part}</Fragment>;
+  });
+}
+
+// Structured replies only: a cheap block-syntax test gates the block renderer so plain replies
+// (the overwhelming majority) keep rendering through the untouched pre-wrap path bit-identically.
+const BLOCK_MD_RE = /^\s{0,3}(#{2,3}\s+\S|-\s+\S|\d{1,3}\.\s+\S)/m;
+
+// Line-based block pass: ##/### headings, consecutive -/1. lists, blank-line-separated
+// paragraphs. Unsupported syntax (# h1, > quotes, tables) stays literal paragraph text.
+function renderBlocks(text: string): ReactNode[] {
+  const lines = text.split("\n");
+  const nodes: ReactNode[] = [];
+  let paragraph: string[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+
+  const flushParagraph = () => {
+    const joined = paragraph.join("\n");
+    paragraph = [];
+    if (!joined.trim()) return;
+    nodes.push(
+      <p key={nodes.length} className="whitespace-pre-wrap">
+        {renderInline(joined)}
+      </p>,
+    );
+  };
+  const flushList = () => {
+    if (!list) return;
+    const { ordered, items } = list;
+    list = null;
+    const rows = items.map((item, i) => <li key={i}>{renderInline(item)}</li>);
+    nodes.push(
+      ordered ? (
+        <ol key={nodes.length} className="list-decimal space-y-1 pl-5">
+          {rows}
+        </ol>
+      ) : (
+        <ul key={nodes.length} className="list-disc space-y-1 pl-5">
+          {rows}
+        </ul>
+      ),
+    );
+  };
+
+  for (const line of lines) {
+    const h3 = line.match(/^\s{0,3}###\s+(.+)$/);
+    const h2 = h3 ? null : line.match(/^\s{0,3}##\s+(.+)$/);
+    if (h3 || h2) {
+      flushParagraph();
+      flushList();
+      nodes.push(
+        h3 ? (
+          <div key={nodes.length} className="pt-1 text-[15px] font-semibold">
+            {renderInline(h3[1])}
+          </div>
+        ) : (
+          <div key={nodes.length} className="pt-1 font-serif text-title">
+            {renderInline(h2![1])}
+          </div>
+        ),
+      );
+      continue;
+    }
+    const ol = line.match(/^\s{0,3}\d{1,3}\.\s+(.+)$/);
+    const ul = ol ? null : line.match(/^\s{0,3}-\s+(.+)$/);
+    if (ol || ul) {
+      flushParagraph();
+      const ordered = Boolean(ol);
+      if (!list || list.ordered !== ordered) {
+        flushList();
+        list = { ordered, items: [] };
+      }
+      list.items.push((ol ?? ul)![1]);
+      continue;
+    }
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    flushList();
+    paragraph.push(line);
+  }
+  flushParagraph();
+  flushList();
+  return nodes;
+}
+
+// Text with its fenced blocks lifted out. Code gets the highlighted block; prose segments keep
+// whitespace. `markdown` (mentor bubbles only) turns on the safe subset above — student and
+// teacher text stays literal.
+function MessageBody({ text, markdown }: { text: string; markdown?: boolean }) {
   const segments = parseFencedBlocks(text);
+  const renderText = (raw: string, key?: number) => {
+    if (markdown && BLOCK_MD_RE.test(raw)) {
+      return (
+        <div key={key} className="space-y-2">
+          {renderBlocks(raw)}
+        </div>
+      );
+    }
+    return (
+      <span key={key} className="whitespace-pre-wrap">
+        {markdown ? renderInline(raw) : raw}
+      </span>
+    );
+  };
   if (segments.length === 1 && segments[0].kind === "text") {
-    return <span className="whitespace-pre-wrap">{segments[0].text}</span>;
+    return renderText(segments[0].text);
   }
   return (
     <>
@@ -74,9 +234,7 @@ function MessageBody({ text }: { text: string }) {
         segment.kind === "code" ? (
           <CodeBlock key={i} code={segment.code} />
         ) : segment.text.trim() ? (
-          <span key={i} className="whitespace-pre-wrap">
-            {segment.text.replace(/^\n+|\n+$/g, "")}
-          </span>
+          renderText(segment.text.replace(/^\n+|\n+$/g, ""), i)
         ) : null,
       )}
     </>
@@ -316,7 +474,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
               <MentorRise key={message.id} animate={isNew}>
                 <div className="flex flex-col gap-2">
                   <Bubble align="start" tone={message.isError ? "error" : "mentor"}>
-                    <MessageBody text={message.text} />
+                    <MessageBody text={message.text} markdown={!message.isError} />
                     {/* An error bubble carries the answer that failed, so Retry re-sends it
                         verbatim rather than asking the student to retype. A failed CONTROL turn
                         retries through the channel so its control rides along — a failed
@@ -354,7 +512,12 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                   {message.resources?.length ? (
                     <div className="flex flex-col gap-2 pl-1">
                       {message.resources.map((resource) => (
-                        <ResourceCard key={resource.id} resource={resource} />
+                        <ResourceCard
+                          key={resource.id}
+                          resource={resource}
+                          lessonId={channel.lessonId}
+                          sessionId={channel.sessionId}
+                        />
                       ))}
                     </div>
                   ) : null}
@@ -412,6 +575,22 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                       >
                         {message.continueOffer.label || "Continue"}
                         <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+                      </button>
+                    </div>
+                  ) : null}
+                  {/* P8: the consent-first live-artifact offer rides the message that made it,
+                      live only while that message is the latest (like the Continue pill). The
+                      tap starts a 30-90s build OUTSIDE the turn loop — see buildArtifact. */}
+                  {message.artifactOffer && isLatestBot && !message.isError ? (
+                    <div className="flex pl-1">
+                      <button
+                        type="button"
+                        disabled={inert}
+                        onClick={() => channel.buildArtifact(message.artifactOffer!)}
+                        className="inline-flex items-center gap-1.5 rounded-pill border border-foreground/30 bg-foreground/5 px-4 py-1.5 text-body font-medium text-foreground transition-colors duration-(--dur-fast) hover:bg-foreground/10 disabled:opacity-40"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+                        {message.artifactOffer.label || "Build me a quick activity"}
                       </button>
                     </div>
                   ) : null}

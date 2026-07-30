@@ -28,11 +28,12 @@ LINT = (FRONTEND / "lib" / "artifact-lint.ts").read_text()
 SCHEMA = (FRONTEND / "lib" / "artifact-schema.ts").read_text()
 TYPES = (FRONTEND / "lib" / "types.ts").read_text()
 API = (FRONTEND / "lib" / "api.ts").read_text()
-# Trunk unification 2026-07-30: routes/chat.tsx retired. The v6 /learn surface's
-# inline resource card deliberately does NOT embed artifacts (see the comment in
-# student/ResourceCard.tsx) — ArtifactFrame/DeckRenderer keep their sandbox posture
-# and their teacher-studio mount; the v6 inline mount + voice threading is an open
-# reconnection gap recorded in docs/OPEN_QUESTIONS.md.
+# v6 slice B2 (2026-07-30): student/ResourceCard.tsx is the UNIVERSAL renderer for the
+# DESIGN_V6 §5 media table — it mounts ArtifactFrame (html_sim) and DeckRenderer (deck)
+# inline in the transcript AND in the Resources panel, alongside the pdf/youtube/video/
+# audio/image inline players. The sandbox posture lives in ArtifactFrame and is pinned
+# below; the card-level pins assert the artifact document only ever reaches the frame as
+# TEXT and never becomes a navigable or embeddable URL in the card itself.
 RESOURCE_CARD = (FRONTEND / "student" / "ResourceCard.tsx").read_text()
 TEACHER = (
     FRONTEND / "features" / "teacher" / "TeacherConsole.tsx"
@@ -146,21 +147,29 @@ class ArtifactClientWireInvariants(unittest.TestCase):
         self.assertNotIn("student_instructions,metadata,", API)
         self.assertIn("parseArtifactConfig", API)
 
-    def test_resource_card_never_half_renders_an_artifact(self):
-        # The v6 inline card handles artifacts by NOT handling them: an artifact gets a
-        # plain card with no Open action (no signed/external URL is ever synthesized for
-        # it), never a non-sandboxed embed. The sandboxed ArtifactFrame/DeckRenderer are
-        # the only components allowed to run artifact content.
-        # Re-anchored 2026-07-30 (B3 lazy-signing refactor): the artifact guard is now the
-        # isArtifact flag gating BOTH url paths — the direct href and the lazy signer.
+    def test_resource_card_mounts_artifacts_only_through_the_sandboxed_renderers(self):
+        # Re-anchored 2026-07-30 (slice B2): the card now DOES render artifacts inline —
+        # but ONLY through the components that carry the security posture. html_sim goes
+        # through ArtifactFrame (poster→Run gate, allow-scripts sandbox pinned above);
+        # deck goes through DeckRenderer (native, no HTML at all).
+        self.assertIn('from "@/components/ArtifactFrame"', RESOURCE_CARD)
+        self.assertIn('from "@/components/DeckRenderer"', RESOURCE_CARD)
+        self.assertIn('artifact?.kind === "html_sim"', RESOURCE_CARD)
+        self.assertIn('artifact?.kind === "deck" && artifact.deck', RESOURCE_CARD)
+        # The parse is the validated schema parser, never raw metadata trust.
+        self.assertIn("parseArtifactConfig(resource.artifact)", RESOURCE_CARD)
+
+    def test_resource_card_artifact_html_travels_as_text_never_as_a_url(self):
+        # An artifact NEVER gets an Open action or an inline player URL: the isArtifact
+        # flag excludes it from both generic paths, so a signed URL for artifact HTML is
+        # only ever consumed inside fetchHtml — fetched as TEXT into the frame's srcdoc.
         self.assertIn('const isArtifact = resource.resource_type === "artifact"', RESOURCE_CARD)
-        self.assertIn("isArtifact ? null", RESOURCE_CARD)
-        self.assertIn("!isArtifact && !directHref", RESOURCE_CARD)
-        # A comment may NAME ArtifactFrame (it documents the deliberate non-handling);
-        # the card must never import or mount it, nor open any embed surface itself.
-        self.assertNotIn("components/ArtifactFrame", RESOURCE_CARD)
-        self.assertNotIn("<ArtifactFrame", RESOURCE_CARD)
-        self.assertNotIn("iframe", RESOURCE_CARD)
+        self.assertIn("const rendersInline = !isArtifact &&", RESOURCE_CARD)
+        self.assertIn("const canOpen =\n    !isArtifact &&", RESOURCE_CARD)
+        self.assertIn("response.text()", RESOURCE_CARD)
+        # The card itself composes no document: no srcdoc, no injected HTML. (The only
+        # iframes it may mount are the pdf/youtube players, pinned in the media suite.)
+        self.assertNotIn("srcDoc", RESOURCE_CARD)
         self.assertNotIn("dangerouslySetInnerHTML", RESOURCE_CARD)
 
     def test_deck_renderer_is_native(self):

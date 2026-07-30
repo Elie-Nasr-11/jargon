@@ -7671,3 +7671,58 @@ solo loading frame, so the single-context rule still holds).
 Suggested next task: thread envelope.next_action into the channel so the completion bloom
 fires deterministically, and sync the ChatWindow mode-chrome cross-fade (§3) to the ambient
 hue lerp.
+
+## Claude -> Codex / Human - 2026-07-30 23:20
+
+Status: Finished (slice B2; NOT committed by design)
+Summary: The v6 transcript renders the full DESIGN_V6 §5 media table, and the live
+artifact offer flow is reconnected.
+(1) ResourceCard is now the UNIVERSAL renderer — the same component in the transcript
+and the ResourcesPanel (extended, not forked): pdf/youtube open into inline iframes
+(pdf via a lazily-signed URL, youtube via the youtube-nocookie.com/embed rewrite);
+video/audio are native elements with played/paused/completed telemetry carrying
+progress_seconds/progress_percent; image renders inline; link/document/other stay
+open-in-tab noopener cards. Uploads sign LAZILY on open and always FRESH — a signed_url
+persisted in a turn payload has expired by replay, so it is only a signing-failure
+fallback; that is what makes reloaded turns render identically to live ones.
+(2) Artifacts render inline: html_sim through ArtifactFrame (poster→Run gate,
+sandbox="allow-scripts" only, srcdoc-from-TEXT-fetch — the card gives artifacts NO Open
+action and excludes them from both generic URL paths), deck through DeckRenderer
+(per-slide read-aloud on via the conversation channel, completed telemetry at 100%).
+ArtifactFrame/DeckRenderer/ReadAloudAction internals untouched.
+(3) The P8 offer flow is back: envelope artifact_offer renders the "Build me a quick
+activity" pill on its message (live only while latest, like Continue); the tap runs
+buildArtifact in useConversation OUTSIDE the turn loop — offer consumed at tap, user
+echo + "Building your activity…" status bubble (which retires the pill naturally),
+generateLiveArtifact (30-90s), lesson-switch guard via ref reads, then the
+artifact_ready control turn with the busy-retry loop (sendAnswer now registers its
+in-flight promise so the ready post can wait a mid-build turn out; 3 retries, honest
+"type build me the activity" bubble on the practically-unreachable exhaust).
+(4) The P5c safe markdown subset is ported into the transcript for MENTOR prose only:
+inline `code`/**bold**/*italic*/https-only links + BLOCK_MD_RE-gated ##/### headings
+and -/1. lists, all React nodes (no dangerouslySetInnerHTML, no markdown dependency);
+student/teacher text stays literal pre-wrap. ReadAloudAction already spoke
+stripMarkdown(text) — unchanged, and now matches what is rendered.
+Files changed: frontend/src/student/{ResourceCard,Transcript}.tsx, useConversation.ts;
+tests/{test_artifact_foundation,test_artifact_live,test_flow_v3_p5_media_binding}.py
+(trimmed pins re-anchored as REAL pins: card mounts artifacts only through the
+sandboxed renderers + HTML-as-text, the reconnected v6 build loop, the markdown/media
+invariants; sandbox literal pins untouched and passing). ChatWindow/OfferPills/
+chatMessages needed no changes (wiring already existed; the offer pill is
+transcript-anchored per the old flow's live-turn semantics).
+Tests run: python3 -m unittest tests.test_artifact_foundation tests.test_artifact_live
+tests.test_flow_v3_p5_media_binding tests.test_student_surface (99 OK); full discover
+362 OK / 4 pre-existing Flask skips. Frontend: tsc 0 errors; eslint 0 errors 0 warnings
+on all owned files; production build green. Reduced-motion by code read: no new
+animation code (MentorRise + ArtifactFrame guards pre-existing); no WebGL.
+Remaining concerns: (1) Nothing here has run against real data — Supabase and any
+browser are unreachable in this sandbox, so no envelope, card, embed, or build has ever
+been SEEN; the signed-in run remains the top task (first checks: a pdf open, a youtube
+embed, one artifact build end-to-end). (2) The offer pill hides while `held` via the
+shared inert flag, but a hold ARRIVING mid-build only surfaces when the artifact_ready
+post bounces off the held gate (retryable error bubble) — acceptable, noting it.
+(3) The deck read-aloud context comes off the conversation channel singleton; if the
+ResourcesPanel ever renders outside a live conversation, deck read-aloud silently hides
+(readAloud={canReadDeckAloud}) — by design, but worth knowing.
+Suggested next task: the signed-in run, then the student live-intervention/hold
+reconnection listed in OPEN_QUESTIONS.
