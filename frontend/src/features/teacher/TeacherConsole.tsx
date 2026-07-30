@@ -3,9 +3,7 @@ import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
-  AlertTriangle,
   BarChart3,
-  BookOpen,
   Building2,
   Check,
   CheckCircle2,
@@ -15,22 +13,17 @@ import {
   Pause,
   Play,
   ExternalLink,
-  FileText,
-  FileSearch,
   GraduationCap,
   MessageSquare,
   NotebookText,
   Paperclip,
   Send,
-  Trash2,
-  TrendingUp,
   UsersRound,
 } from "lucide-react";
 import { GradientCard } from "@/components/GradientCard";
 import { HotlistFeed, deriveHotlist, type HotlistItem } from "@/features/teacher/HotlistFeed";
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { StudentReviewSessions } from "@/features/teacher/StudentReviewSessions";
-import { TeacherStudentMessages } from "@/features/teacher/TeacherStudentMessages";
 import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
 import { AssessmentGrading } from "@/features/teacher/AssessmentGrading";
 import { ClassStructurePanel } from "@/features/teacher/ClassStructurePanel";
@@ -52,7 +45,6 @@ import {
   lessonName,
   lessonTitle,
 } from "@/features/teacher/classShared";
-import { INQUIRY_TYPE_LABELS, modeLabel } from "@/lib/modes";
 import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/components/WorkspaceTabs";
 import { Collapsible } from "@/components/Collapsible";
 import { PageShell } from "@/components/PageShell";
@@ -66,48 +58,32 @@ import {
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { OverflowMenu } from "@/components/OverflowMenu";
-import { notifyErr, notifyOk, notifyUndo } from "@/lib/feedback";
-import { useUndoable } from "@/hooks/useUndoable";
+import { notifyUndo } from "@/lib/feedback";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createAssignment,
   createAssessment,
   createLessonResource,
   createTeacherNote,
-  approveResourceChunks,
-  deleteResourceChunks,
   fetchTeacherDashboard,
-  fetchResourceTextChunks,
-  getResourcePageAssetSignedUrl,
   gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
   getSession,
   fetchPrimaryRole,
   roleHome,
   heartbeatLiveSessionViewer,
-  ocrPdfPages,
   sendTeacherLiveComment,
   startLiveSessionViewer,
   stopLiveSessionViewer,
   fetchSessionHold,
   holdSession,
   releaseSessionHold,
-  rejectResourceChunks,
-  saveExtractedPdfChunks,
-  saveResourceChunkEdits,
-  transcribeMediaResource,
   updateAssignmentStatus,
   updateAssessmentStatus,
   reviewAssessmentItem,
   returnAssessment,
-  fetchStudentProgressReports,
-  teacherGenerateProgressReport,
-  teacherExportClassSnapshot,
-  updateInterventionAlertStatus,
   updateLessonResource,
-  uploadPdfPageAssets,
 } from "@/lib/api";
-import { extractPdfTextChunksFromUrl, renderPdfPageAssetsFromUrl } from "@/lib/pdf-extract";
 import type {
   Assignment,
   AssignmentRecipient,
@@ -124,7 +100,6 @@ import type {
   AssessmentStatus,
   ChatInputModality,
   CurriculumQuizItem,
-  InterventionAlert,
   LearningSession,
   Lesson,
   LessonResource,
@@ -135,14 +110,8 @@ import type {
   LessonResourceVisibility,
   LiveSessionViewer,
   Profile,
-  ResourcePageAsset,
-  ResourceTextChunk,
-  ResourceTextChunkStatus,
-  StudentMastery,
-  StudentProgressReportRow,
   TeacherClassSummary,
   TeacherDashboardData,
-  TeacherLiveComment,
   TeacherNote,
 } from "@/lib/types";
 
@@ -172,40 +141,11 @@ export function TeacherConsole() {
   const [sessionHeld, setSessionHeld] = useState(false);
   const [holdBusy, setHoldBusy] = useState(false);
   const [sendingLiveComment, setSendingLiveComment] = useState(false);
-  const [updatingAlertId, setUpdatingAlertId] = useState<string | null>(null);
-  const [generatingReport, setGeneratingReport] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [pastReports, setPastReports] = useState<StudentProgressReportRow[]>([]);
-  const [exportingSnapshot, setExportingSnapshot] = useState(false);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
 
   const teacherId = auth?.id ?? "";
   const email = auth?.email ?? "";
   const selectedClassId = params.classId ?? null;
   const selectedStudentId = params.studentId ?? null;
-
-  useEffect(() => {
-    setReportError(null);
-    if (!selectedStudentId) {
-      setPastReports([]);
-      return;
-    }
-    let alive = true;
-    fetchStudentProgressReports(selectedStudentId)
-      .then((rows) => {
-        if (alive) setPastReports(rows);
-      })
-      .catch(() => {
-        if (alive) setPastReports([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [selectedStudentId]);
-
-  useEffect(() => {
-    setSnapshotError(null);
-  }, [selectedClassId]);
 
   useEffect(() => {
     let alive = true;
@@ -290,12 +230,7 @@ export function TeacherConsole() {
     const profilesById = new Map(dashboard.profiles.map((profile) => [profile.id, profile]));
     const lessonsById = new Map(dashboard.lessons.map((lesson) => [lesson.id, lesson]));
     const classesById = new Map(dashboard.classes.map((item) => [item.id, item]));
-    const studentIds = unique(
-      dashboard.memberships
-        .filter((membership) => membership.role === "student" && membership.status === "active")
-        .map((membership) => membership.user_id),
-    );
-    return { profilesById, lessonsById, classesById, studentIds };
+    return { profilesById, lessonsById, classesById };
   }, [dashboard]);
 
   // Org -> classes, so the picker mirrors the real hierarchy (shared with the shell sidebar).
@@ -461,63 +396,6 @@ export function TeacherConsole() {
       setMessage((error as Error).message || "Could not save teacher note.");
     } finally {
       setSavingNote(false);
-    }
-  };
-
-  const generateReport = async () => {
-    if (!selectedClassId || !selectedStudentId || generatingReport) return;
-    setGeneratingReport(true);
-    setReportError(null);
-    try {
-      const { export: file } = await teacherGenerateProgressReport({
-        classId: selectedClassId,
-        userId: selectedStudentId,
-      });
-      const blob = new Blob([file.body], { type: file.content_type });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = file.filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      // Defer the revoke so an in-flight download is not cancelled in browsers that capture the
-      // blob asynchronously after click().
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
-      notifyOk("Progress report downloaded.");
-      // Refresh the past-reports list so the one just generated appears.
-      fetchStudentProgressReports(selectedStudentId)
-        .then(setPastReports)
-        .catch(() => {});
-    } catch (error) {
-      setReportError((error as Error).message || "Could not generate the report.");
-      notifyErr(error, "Could not generate the report.");
-    } finally {
-      setGeneratingReport(false);
-    }
-  };
-
-  const exportClassSnapshot = async () => {
-    if (!selectedClassId || exportingSnapshot) return;
-    setExportingSnapshot(true);
-    setSnapshotError(null);
-    try {
-      const file = await teacherExportClassSnapshot({ classId: selectedClassId });
-      const blob = new Blob([file.body], { type: file.content_type });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = file.filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-      notifyOk("Class CSV exported.");
-    } catch (error) {
-      setSnapshotError((error as Error).message || "Could not export the class snapshot.");
-      notifyErr(error, "Could not export the class snapshot.");
-    } finally {
-      setExportingSnapshot(false);
     }
   };
 
@@ -887,27 +765,6 @@ export function TeacherConsole() {
     }
   };
 
-  const updateAlertStatus = async (alertId: string, status: InterventionAlert["status"]) => {
-    setUpdatingAlertId(alertId);
-    try {
-      const updated = await updateInterventionAlertStatus(alertId, status);
-      setDashboard((current) =>
-        current
-          ? {
-              ...current,
-              interventionAlerts: current.interventionAlerts.map((alert) =>
-                alert.id === updated.id ? updated : alert,
-              ),
-            }
-          : current,
-      );
-    } catch (error) {
-      setMessage((error as Error).message || "Could not update intervention alert.");
-    } finally {
-      setUpdatingAlertId(null);
-    }
-  };
-
   if (!authChecked) {
     return <RouteLoader label="Loading…" />;
   }
@@ -991,21 +848,6 @@ export function TeacherConsole() {
 
           {!booting && dashboard && model && (
             <>
-              {/* Fleet-wide metrics belong to the landing; class/student pages open on their own headers. */}
-              {!selectedClassId ? (
-                <div className="grid gap-3 md:grid-cols-4">
-                  <MetricCard label="Classes" value={String(dashboard.classes.length)} />
-                  <MetricCard label="Students" value={String(model.studentIds.length)} />
-                  <MetricCard
-                    label="Completed"
-                    value={String(
-                      dashboard.sessions.filter((session) => session.status === "complete").length,
-                    )}
-                  />
-                  <MetricCard label="Evidence" value={String(dashboard.evidence.length)} />
-                </div>
-              ) : null}
-
               <div className="flex flex-col gap-4">
                 {!selectedClassId ? (
                   <GradientCard>
@@ -1063,9 +905,6 @@ export function TeacherConsole() {
                     <ClassDetail
                       item={selectedClass}
                       stats={classStats}
-                      onExportSnapshot={exportClassSnapshot}
-                      exportingSnapshot={exportingSnapshot}
-                      snapshotError={snapshotError}
                       dashboard={dashboard}
                       profilesById={model.profilesById}
                       lessons={dashboard.lessons}
@@ -1120,10 +959,6 @@ export function TeacherConsole() {
                       onReviewSubmission={reviewSubmission}
                       onReviewAssessmentItem={reviewAssessment}
                       onReturnAssessment={returnAssessmentResult}
-                      updatingAlertId={updatingAlertId}
-                      onUpdateAlertStatus={(alertId, status) =>
-                        void updateAlertStatus(alertId, status)
-                      }
                       onUpdateResource={(resource) =>
                         setDashboard((current) =>
                           current
@@ -1144,12 +979,6 @@ export function TeacherConsole() {
                   {selectedStudentId && studentStats ? (
                     <StudentDetail
                       studentId={selectedStudentId}
-                      classId={selectedClassId}
-                      classLabel={selectedClass?.name ?? ""}
-                      onGenerateReport={generateReport}
-                      generatingReport={generatingReport}
-                      reportError={reportError}
-                      pastReports={pastReports}
                       profile={selectedStudent}
                       stats={studentStats}
                       dashboard={dashboard}
@@ -1239,12 +1068,7 @@ function ClassButton({
       </div>
       {attention ? (
         <div className="mt-auto pt-3">
-          {attention.tone === "danger" ? (
-            <span className="inline-flex items-center gap-1.5 rounded-pill border border-danger/40 bg-danger/12 px-2.5 py-1 text-[11px] text-danger">
-              <AlertTriangle className="h-3 w-3" strokeWidth={2} /> {attention.alerts} alert
-              {attention.alerts === 1 ? "" : "s"}
-            </span>
-          ) : attention.tone === "warning" ? (
+          {attention.tone === "warning" ? (
             <span className="inline-flex items-center gap-1.5 rounded-pill border border-warning/40 bg-warning/12 px-2.5 py-1 text-[11px] text-warning">
               <ClipboardList className="h-3 w-3" strokeWidth={2} /> {attention.pendingGrading} to
               grade
@@ -1263,9 +1087,6 @@ function ClassButton({
 function ClassDetail({
   item,
   stats,
-  onExportSnapshot,
-  exportingSnapshot,
-  snapshotError,
   dashboard,
   profilesById,
   lessons,
@@ -1297,17 +1118,12 @@ function ClassDetail({
   onReviewSubmission,
   onReviewAssessmentItem,
   onReturnAssessment,
-  updatingAlertId,
-  onUpdateAlertStatus,
   onUpdateResource,
   section,
   onSectionChange,
 }: {
   item: TeacherClassSummary;
   stats: ClassSummary;
-  onExportSnapshot: () => void;
-  exportingSnapshot: boolean;
-  snapshotError: string | null;
   dashboard: TeacherDashboardData;
   profilesById: Map<string, Profile>;
   lessons: Lesson[];
@@ -1349,8 +1165,6 @@ function ClassDetail({
     feedback: string;
   }) => Promise<void>;
   onReturnAssessment: (input: { attemptId: string; feedback: string }) => Promise<void>;
-  updatingAlertId: string | null;
-  onUpdateAlertStatus: (alertId: string, status: InterventionAlert["status"]) => void;
   onUpdateResource: (resource: LessonResource) => void;
   section: ClassSection;
   onSectionChange: (value: ClassSection) => void;
@@ -1371,24 +1185,6 @@ function ClassDetail({
       gradebookRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [section]);
-  const studentSet = useMemo(() => new Set(studentIds), [studentIds]);
-  const openAlerts = dashboard.interventionAlerts.filter(
-    (alert) =>
-      alert.class_id === item.id && (alert.status === "open" || alert.status === "acknowledged"),
-  );
-  const activeAssignments = assignments.filter((assignment) => assignment.status === "assigned");
-  const recentCompletions = dashboard.sessions.filter(
-    (session) =>
-      studentSet.has(session.user_id) &&
-      session.status === "complete" &&
-      Date.now() - new Date(session.updated_at).getTime() < 1000 * 60 * 60 * 24 * 14,
-  ).length;
-  const runtimeErrors = dashboard.runtimeEvents.filter(
-    (event) =>
-      event.status === "error" &&
-      (event.class_id === item.id || (event.user_id && studentSet.has(event.user_id))),
-  ).length;
-
   return (
     <GradientCard>
       <div className="p-4 sm:p-5">
@@ -1404,20 +1200,6 @@ function ClassDetail({
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 lg:items-end">
-            <div className="flex flex-col items-end gap-1">
-              <button
-                type="button"
-                onClick={onExportSnapshot}
-                disabled={exportingSnapshot}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <FileText className="h-3.5 w-3.5" strokeWidth={1.7} />
-                {exportingSnapshot ? "Exporting…" : "Export CSV"}
-              </button>
-              {snapshotError ? (
-                <span className="text-[11.5px] text-danger">{snapshotError}</span>
-              ) : null}
-            </div>
             <div className="grid grid-cols-3 gap-2 text-center text-[12px]">
               <MiniMetric label="Attempts" value={String(stats.attempts)} />
               <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
@@ -1450,32 +1232,6 @@ function ClassDetail({
                   search: { tab: "overview", session: sessionId },
                 })
               }
-            />
-            <div className="mt-5 rounded-3xl border border-border bg-depth-sub p-4">
-              <div className="mb-3 text-[12px] uppercase tracking-[0.1em] text-muted-foreground">
-                Pilot readiness
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                <MiniMetric label="Roster" value={`${stats.students} students`} />
-                <MiniMetric label="Open work" value={String(activeAssignments.length)} />
-                <MiniMetric label="Recent complete" value={String(recentCompletions)} />
-                <MiniMetric label="Open alerts" value={String(openAlerts.length)} />
-                <MiniMetric label="Runtime errors" value={String(runtimeErrors)} />
-              </div>
-              <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
-                {openAlerts.length || runtimeErrors
-                  ? "This class has support signals to review before launch."
-                  : "No open intervention or runtime-error signals for this class."}
-              </p>
-            </div>
-
-            <ClassAnalyticsPanel
-              dashboard={dashboard}
-              studentIds={studentIds}
-              lessonsById={lessonsById}
-              onSelectStudent={onSelectStudent}
-              updatingAlertId={updatingAlertId}
-              onUpdateAlertStatus={onUpdateAlertStatus}
             />
           </div>
         ) : null}
@@ -1580,13 +1336,6 @@ function ClassDetail({
                 </div>
               )}
             </div>
-
-            <LessonProgress
-              lessons={lessons}
-              studentIds={studentIds}
-              dashboard={dashboard}
-              profilesById={profilesById}
-            />
           </div>
         ) : null}
 
@@ -1727,7 +1476,7 @@ function defaultResourceForm(
   return {
     organizationId: classSummary.organization_id,
     classId: classSummary.id,
-    lessonId: lessons[0]?.id || "lesson1",
+    lessonId: lessons[0]?.id || "",
     title: "",
     description: "",
     studentInstructions: "",
@@ -1740,64 +1489,6 @@ function defaultResourceForm(
     externalUrl: "",
     file: null,
   };
-}
-
-function formatSeconds(value: number | null | undefined) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "";
-  const total = Math.max(0, Math.floor(value));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-function chunkLocationLabel(chunk: ResourceTextChunk) {
-  if (chunk.source_kind === "audio" || chunk.source_kind === "video") {
-    const start = formatSeconds(chunk.start_seconds);
-    const end = formatSeconds(chunk.end_seconds);
-    if (start && end) return `${chunk.source_kind === "video" ? "Video" : "Audio"} ${start}-${end}`;
-    if (start) return `${chunk.source_kind === "video" ? "Video" : "Audio"} ${start}`;
-    return `${chunk.source_kind === "video" ? "Video" : "Audio"} transcript`;
-  }
-  const generatedFrom =
-    chunk.metadata && typeof chunk.metadata.generated_from === "string"
-      ? chunk.metadata.generated_from
-      : "";
-  return generatedFrom === "openai_vision_ocr"
-    ? `Page ${chunk.page_number} OCR`
-    : `Page ${chunk.page_number}`;
-}
-
-function ResourcePageThumbnail({ asset }: { asset: ResourcePageAsset }) {
-  const [url, setUrl] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    void getResourcePageAssetSignedUrl(asset)
-      .then((signedUrl) => {
-        if (!cancelled) setUrl(signedUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setUrl("");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [asset]);
-
-  return (
-    <div
-      className="h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border bg-muted/35"
-      title={`Page ${asset.page_number} preview`}
-    >
-      {url ? (
-        <img src={url} alt={`Page ${asset.page_number}`} className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
-          p{asset.page_number}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function ResourceManager({
@@ -1820,14 +1511,7 @@ function ResourceManager({
   );
   const [resourceMessage, setResourceMessage] = useState("");
   const [openingId, setOpeningId] = useState("");
-  const [processingId, setProcessingId] = useState("");
-  const [reviewingId, setReviewingId] = useState("");
-  const [chunkBusyId, setChunkBusyId] = useState("");
-  const [chunksByResource, setChunksByResource] = useState<Record<string, ResourceTextChunk[]>>({});
-  const [assetsByResource, setAssetsByResource] = useState<Record<string, ResourcePageAsset[]>>({});
-  const [chunkDrafts, setChunkDrafts] = useState<Record<string, string>>({});
   const [formOpen, setFormOpen] = useState(false);
-  const undoable = useUndoable();
 
   useEffect(() => {
     setDraft(defaultResourceForm(classSummary, lessons));
@@ -1843,7 +1527,7 @@ function ResourceManager({
       resourceId: resource.id,
       organizationId: resource.organization_id || classSummary.organization_id,
       classId: resource.class_id || classSummary.id,
-      lessonId: resource.lesson_id || lessons[0]?.id || "lesson1",
+      lessonId: resource.lesson_id || lessons[0]?.id || "",
       title: resource.title,
       description: resource.description || "",
       studentInstructions: resource.student_instructions || "",
@@ -1934,249 +1618,6 @@ function ResourceManager({
     } finally {
       setOpeningId("");
     }
-  };
-
-  const loadChunks = async (resource: LessonResource, openPanel = true) => {
-    try {
-      setChunkBusyId(resource.id);
-      const data = await fetchResourceTextChunks(resource.id);
-      setChunksByResource((current) => ({
-        ...current,
-        [resource.id]: data.chunks,
-      }));
-      setAssetsByResource((current) => ({
-        ...current,
-        [resource.id]: data.assets,
-      }));
-      setChunkDrafts((current) => ({
-        ...current,
-        ...Object.fromEntries(data.chunks.map((chunk) => [chunk.id, chunk.chunk_text])),
-      }));
-      if (openPanel) setReviewingId(resource.id);
-      if (!data.chunks.length) setResourceMessage("No extracted text chunks yet.");
-    } catch (error) {
-      setResourceMessage((error as Error).message || "Could not load extracted text.");
-    } finally {
-      setChunkBusyId("");
-    }
-  };
-
-  const extractChunks = async (resource: LessonResource) => {
-    try {
-      setProcessingId(resource.id);
-      setResourceMessage("Opening PDF and extracting text in this browser...");
-      const url = await getLessonResourceSignedUrl(resource);
-      if (!url) throw new Error("This resource does not have an openable PDF URL.");
-      const chunks = await extractPdfTextChunksFromUrl(url);
-      if (!chunks.length) {
-        throw new Error("No selectable text was found in this PDF.");
-      }
-      const saved = await saveExtractedPdfChunks(resource.id, chunks, {
-        extracted_in: "browser",
-        extracted_at: new Date().toISOString(),
-      });
-      setChunksByResource((current) => ({
-        ...current,
-        [resource.id]: saved,
-      }));
-      setChunkDrafts((current) => ({
-        ...current,
-        ...Object.fromEntries(saved.map((chunk) => [chunk.id, chunk.chunk_text])),
-      }));
-      setReviewingId(resource.id);
-      setResourceMessage(
-        `Extracted ${saved.length} draft chunk${saved.length === 1 ? "" : "s"}. Review and approve before Mentor can use them.`,
-      );
-    } catch (error) {
-      setResourceMessage((error as Error).message || "Could not extract PDF text.");
-    } finally {
-      setProcessingId("");
-    }
-  };
-
-  const generatePagePreviews = async (resource: LessonResource) => {
-    try {
-      setProcessingId(resource.id);
-      setResourceMessage("Rendering PDF page previews in this browser...");
-      const url = await getLessonResourceSignedUrl(resource);
-      if (!url) throw new Error("This resource does not have an openable PDF URL.");
-      const pageAssets = await renderPdfPageAssetsFromUrl(url);
-      if (!pageAssets.length) {
-        throw new Error("No PDF pages were rendered.");
-      }
-      const saved = await uploadPdfPageAssets(resource, pageAssets);
-      setAssetsByResource((current) => ({
-        ...current,
-        [resource.id]: saved,
-      }));
-      setReviewingId(resource.id);
-      const pageCount = new Set(saved.map((asset) => asset.page_number)).size;
-      setResourceMessage(
-        `Generated previews for ${pageCount} page${pageCount === 1 ? "" : "s"}. Scanned pages can now be OCR processed.`,
-      );
-    } catch (error) {
-      setResourceMessage((error as Error).message || "Could not generate page previews.");
-    } finally {
-      setProcessingId("");
-    }
-  };
-
-  const ocrPdfResource = async (resource: LessonResource) => {
-    try {
-      setProcessingId(resource.id);
-      setResourceMessage("Running OCR on scanned PDF page images...");
-      const assets = assetsByResource[resource.id] || [];
-      const pageNumbers = Array.from(
-        new Set(
-          assets
-            .filter((asset) => asset.asset_type === "ocr_image")
-            .map((asset) => asset.page_number),
-        ),
-      ).sort((a, b) => a - b);
-      const saved = await ocrPdfPages(resource.id, pageNumbers);
-      setChunksByResource((current) => ({
-        ...current,
-        [resource.id]: [...(current[resource.id] || []), ...saved],
-      }));
-      setChunkDrafts((current) => ({
-        ...current,
-        ...Object.fromEntries(saved.map((chunk) => [chunk.id, chunk.chunk_text])),
-      }));
-      setReviewingId(resource.id);
-      setResourceMessage(
-        `Created ${saved.length} draft OCR chunk${saved.length === 1 ? "" : "s"}. Review and approve before Mentor can use them.`,
-      );
-    } catch (error) {
-      setResourceMessage((error as Error).message || "Could not OCR PDF pages.");
-    } finally {
-      setProcessingId("");
-    }
-  };
-
-  const transcribeResource = async (resource: LessonResource) => {
-    try {
-      setProcessingId(resource.id);
-      setResourceMessage("Transcribing uploaded media. This can take a little while...");
-      const saved = await transcribeMediaResource(resource.id);
-      setChunksByResource((current) => ({
-        ...current,
-        [resource.id]: saved,
-      }));
-      setChunkDrafts((current) => ({
-        ...current,
-        ...Object.fromEntries(saved.map((chunk) => [chunk.id, chunk.chunk_text])),
-      }));
-      setReviewingId(resource.id);
-      setResourceMessage(
-        `Created ${saved.length} draft transcript chunk${saved.length === 1 ? "" : "s"}. Review and approve before Mentor can use them.`,
-      );
-    } catch (error) {
-      setResourceMessage((error as Error).message || "Could not transcribe media.");
-    } finally {
-      setProcessingId("");
-    }
-  };
-
-  const saveChunk = async (resource: LessonResource, chunk: ResourceTextChunk) => {
-    try {
-      setChunkBusyId(chunk.id);
-      const saved = await saveResourceChunkEdits(resource.id, [
-        {
-          id: chunk.id,
-          page_number: chunk.page_number,
-          chunk_index: chunk.chunk_index,
-          chunk_text: chunkDrafts[chunk.id] ?? chunk.chunk_text,
-        },
-      ]);
-      setChunksByResource((current) => ({
-        ...current,
-        [resource.id]: (current[resource.id] || []).map((existing) =>
-          existing.id === chunk.id ? saved[0] || existing : existing,
-        ),
-      }));
-      setResourceMessage("Chunk saved.");
-    } catch (error) {
-      setResourceMessage((error as Error).message || "Could not save chunk.");
-    } finally {
-      setChunkBusyId("");
-    }
-  };
-
-  const patchChunkStatus = (resourceId: string, chunkId: string, status: ResourceTextChunkStatus) =>
-    setChunksByResource((current) => ({
-      ...current,
-      [resourceId]: (current[resourceId] || []).map((existing) =>
-        existing.id === chunkId ? { ...existing, status } : existing,
-      ),
-    }));
-
-  const setChunkStatus = (
-    resource: LessonResource,
-    chunk: ResourceTextChunk,
-    status: Extract<ResourceTextChunkStatus, "approved" | "rejected">,
-  ) => {
-    const prev = chunk.status;
-    undoable({
-      key: `chunk-status:${chunk.id}`,
-      message: status === "approved" ? "Chunk approved." : "Chunk rejected.",
-      optimistic: () => patchChunkStatus(resource.id, chunk.id, status),
-      revert: () => patchChunkStatus(resource.id, chunk.id, prev),
-      commit: () => {
-        void (async () => {
-          try {
-            const updated =
-              status === "approved"
-                ? await approveResourceChunks(resource.id, [chunk.id])
-                : await rejectResourceChunks(resource.id, [chunk.id]);
-            if (updated[0]) {
-              setChunksByResource((current) => ({
-                ...current,
-                [resource.id]: (current[resource.id] || []).map((existing) =>
-                  existing.id === chunk.id ? updated[0] : existing,
-                ),
-              }));
-            }
-          } catch (error) {
-            setResourceMessage((error as Error).message || "Could not update chunk status.");
-            patchChunkStatus(resource.id, chunk.id, prev); // resync on failure
-          }
-        })();
-      },
-    });
-  };
-
-  const removeChunk = (resource: LessonResource, chunk: ResourceTextChunk) => {
-    const list = chunksByResource[resource.id] || [];
-    const index = list.findIndex((existing) => existing.id === chunk.id);
-    const reinsert = () =>
-      setChunksByResource((current) => {
-        const arr = [...(current[resource.id] || [])];
-        if (arr.some((existing) => existing.id === chunk.id)) return current;
-        arr.splice(index < 0 ? arr.length : index, 0, chunk);
-        return { ...current, [resource.id]: arr };
-      });
-    undoable({
-      key: `chunk-delete:${chunk.id}`,
-      message: "Chunk deleted.",
-      optimistic: () =>
-        setChunksByResource((current) => ({
-          ...current,
-          [resource.id]: (current[resource.id] || []).filter(
-            (existing) => existing.id !== chunk.id,
-          ),
-        })),
-      revert: reinsert,
-      commit: () => {
-        void (async () => {
-          try {
-            await deleteResourceChunks(resource.id, [chunk.id]);
-          } catch (error) {
-            setResourceMessage((error as Error).message || "Could not delete chunk.");
-            reinsert(); // resync on failure
-          }
-        })();
-      },
-    });
   };
 
   return (
@@ -2393,23 +1834,6 @@ function ResourceManager({
           ) : null}
           {resources.length ? (
             resources.map((resource) => {
-              const chunks = chunksByResource[resource.id] || [];
-              const assets = assetsByResource[resource.id] || [];
-              const draftCount = chunks.filter((chunk) => chunk.status === "draft").length;
-              const approvedCount = chunks.filter((chunk) => chunk.status === "approved").length;
-              const rejectedCount = chunks.filter((chunk) => chunk.status === "rejected").length;
-              const canExtractPdf =
-                resource.resource_type === "pdf" && resource.source_type === "upload";
-              const pdfPageCount = new Set(assets.map((asset) => asset.page_number)).size;
-              const thumbnailAssets = assets.filter((asset) => asset.asset_type === "thumbnail");
-              const ocrAssetCount = assets.filter(
-                (asset) => asset.asset_type === "ocr_image",
-              ).length;
-              const canTranscribeMedia =
-                (resource.resource_type === "audio" || resource.resource_type === "video") &&
-                resource.source_type === "upload";
-              const reviewOpen = reviewingId === resource.id;
-
               return (
                 <div
                   key={resource.id}
@@ -2428,44 +1852,6 @@ function ResourceManager({
                         {resource.source_type === "upload" ? "private file" : "external link"} ·{" "}
                         {lessonTitle(lessons, resource.lesson_id)}
                       </div>
-                      {chunks.length ? (
-                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                          <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
-                            {chunks.length} chunk{chunks.length === 1 ? "" : "s"}
-                          </span>
-                          <span className="rounded-full border border-success/30 bg-success/10 px-2 py-1 text-success">
-                            {approvedCount} approved
-                          </span>
-                          <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-warning">
-                            {draftCount} draft
-                          </span>
-                          <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
-                            {rejectedCount} rejected
-                          </span>
-                        </div>
-                      ) : null}
-                      {assets.length ? (
-                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                          <span className="rounded-full border border-border bg-background/45 px-2 py-1 text-muted-foreground">
-                            {pdfPageCount} rendered page{pdfPageCount === 1 ? "" : "s"}
-                          </span>
-                          <span className="rounded-full border border-info/30 bg-info/10 px-2 py-1 text-info">
-                            {ocrAssetCount} OCR image{ocrAssetCount === 1 ? "" : "s"}
-                          </span>
-                        </div>
-                      ) : null}
-                      {thumbnailAssets.length ? (
-                        <div className="mt-2 flex max-w-full gap-2 overflow-x-auto pb-1">
-                          {thumbnailAssets.slice(0, 6).map((asset) => (
-                            <ResourcePageThumbnail key={asset.id} asset={asset} />
-                          ))}
-                          {thumbnailAssets.length > 6 ? (
-                            <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/35 text-[10px] text-muted-foreground">
-                              +{thumbnailAssets.length - 6}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
                       {resource.student_instructions ? (
                         <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
                           {resource.student_instructions}
@@ -2506,169 +1892,10 @@ function ResourceManager({
                             onClick: () => void setStatus(resource, "archived"),
                             disabled: resource.status === "archived",
                           },
-                          canExtractPdf && {
-                            label:
-                              processingId === resource.id
-                                ? "Rendering..."
-                                : "Generate page previews",
-                            icon: FileText,
-                            onClick: () => void generatePagePreviews(resource),
-                            disabled: processingId === resource.id,
-                            separatorBefore: true,
-                          },
-                          canExtractPdf && {
-                            label:
-                              processingId === resource.id ? "Extracting..." : "Extract PDF text",
-                            icon: FileSearch,
-                            onClick: () => void extractChunks(resource),
-                            disabled: processingId === resource.id,
-                          },
-                          canExtractPdf && {
-                            label:
-                              processingId === resource.id ? "Running OCR..." : "OCR scanned pages",
-                            icon: FileSearch,
-                            onClick: () => void ocrPdfResource(resource),
-                            disabled: processingId === resource.id,
-                          },
-                          canTranscribeMedia && {
-                            label:
-                              processingId === resource.id
-                                ? "Transcribing..."
-                                : resource.resource_type === "video"
-                                  ? "Transcribe video"
-                                  : "Transcribe audio",
-                            icon: FileSearch,
-                            onClick: () => void transcribeResource(resource),
-                            disabled: processingId === resource.id,
-                            separatorBefore: true,
-                          },
-                          {
-                            label: reviewOpen
-                              ? "Hide review"
-                              : chunkBusyId === resource.id
-                                ? "Loading..."
-                                : "Review text",
-                            icon: FileSearch,
-                            onClick: () => {
-                              if (reviewOpen) setReviewingId("");
-                              else void loadChunks(resource, true);
-                            },
-                            separatorBefore: true,
-                          },
                         ]}
                       />
                     </div>
                   </div>
-
-                  {reviewOpen ? (
-                    <div className="mt-4 rounded-2xl border border-border bg-background/45 p-3">
-                      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                        <div>
-                          <div className="text-[12.5px] font-medium text-foreground">
-                            Extracted text / transcript review
-                          </div>
-                          <div className="text-[11.5px] text-muted-foreground">
-                            Draft and rejected chunks are teacher-only. Mentor can use approved
-                            chunks.
-                          </div>
-                        </div>
-                        {chunks.length ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void approveResourceChunks(
-                                resource.id,
-                                chunks
-                                  .filter((chunk) => chunk.status === "draft")
-                                  .map((chunk) => chunk.id),
-                              ).then((updated) => {
-                                setChunksByResource((current) => ({
-                                  ...current,
-                                  [resource.id]: (current[resource.id] || []).map(
-                                    (existing) =>
-                                      updated.find((chunk) => chunk.id === existing.id) || existing,
-                                  ),
-                                }));
-                                setResourceMessage("Draft chunks approved.");
-                              })
-                            }
-                            disabled={!draftCount}
-                            className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
-                          >
-                            Approve drafts
-                          </button>
-                        ) : null}
-                      </div>
-                      {chunks.length ? (
-                        <div className="grid max-h-[520px] gap-3 overflow-auto pr-1">
-                          {chunks.map((chunk) => (
-                            <div
-                              key={chunk.id}
-                              className="rounded-2xl border border-border bg-background/55 p-3"
-                            >
-                              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
-                                  <span>{chunkLocationLabel(chunk)}</span>
-                                  <span>Chunk {chunk.chunk_index + 1}</span>
-                                  <ResourceChunkStatusChip status={chunk.status} />
-                                </div>
-                                <button
-                                  type="button"
-                                  title="Delete chunk"
-                                  onClick={() => void removeChunk(resource, chunk)}
-                                  disabled={chunkBusyId === chunk.id}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.6} />
-                                </button>
-                              </div>
-                              <textarea
-                                value={chunkDrafts[chunk.id] ?? chunk.chunk_text}
-                                onChange={(event) =>
-                                  setChunkDrafts((current) => ({
-                                    ...current,
-                                    [chunk.id]: event.target.value,
-                                  }))
-                                }
-                                className="min-h-[120px] w-full rounded-2xl border border-border bg-background/80 px-3 py-2 text-[12.5px] leading-relaxed text-foreground outline-none"
-                              />
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => void saveChunk(resource, chunk)}
-                                  disabled={chunkBusyId === chunk.id}
-                                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-45"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void setChunkStatus(resource, chunk, "approved")}
-                                  disabled={chunk.status === "approved" || chunkBusyId === chunk.id}
-                                  className="rounded-full border border-success/35 px-3 py-1.5 text-[11.5px] text-success transition-colors hover:bg-success/10 disabled:opacity-45"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void setChunkStatus(resource, chunk, "rejected")}
-                                  disabled={chunk.status === "rejected" || chunkBusyId === chunk.id}
-                                  className="rounded-full border border-border px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="rounded-2xl border border-border bg-background/55 p-4 text-[12.5px] text-muted-foreground">
-                          No chunks yet. Extract selectable PDF text, OCR scanned PDF pages, or
-                          transcribe uploaded audio/video to begin review.
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
                 </div>
               );
             })
@@ -2748,7 +1975,7 @@ function defaultAssessmentForm(
   return {
     organizationId: classSummary.organization_id,
     classId: classSummary.id,
-    lessonId: lessons[0]?.id || "lesson1",
+    lessonId: lessons[0]?.id || "",
     title: "",
     instructions: "",
     dueAt: "",
@@ -3265,7 +2492,7 @@ function defaultAssignmentForm(
   return {
     organizationId: classSummary.organization_id,
     classId: classSummary.id,
-    lessonId: lessons[0]?.id || "lesson1",
+    lessonId: lessons[0]?.id || "",
     title: "",
     instructions: "",
     dueAt: "",
@@ -3671,177 +2898,6 @@ function AssignmentManager({
   );
 }
 
-function ClassAnalyticsPanel({
-  dashboard,
-  studentIds,
-  lessonsById,
-  onSelectStudent,
-  updatingAlertId,
-  onUpdateAlertStatus,
-}: {
-  dashboard: TeacherDashboardData;
-  studentIds: string[];
-  lessonsById: Map<string, Lesson>;
-  onSelectStudent: (studentId: string) => void;
-  updatingAlertId: string | null;
-  onUpdateAlertStatus: (alertId: string, status: InterventionAlert["status"]) => void;
-}) {
-  const analytics = classAnalyticsFor(dashboard, studentIds);
-  const signals = riskSignalsForClass(dashboard, studentIds, lessonsById);
-  const masteryRows = masteryRowsForClass(dashboard, studentIds);
-  const profilesById = new Map(dashboard.profiles.map((profile) => [profile.id, profile]));
-
-  return (
-    <div className="mt-6 grid gap-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <AnalyticsMetric
-          label="Completion rate"
-          value={formatPercent(analytics.completionRate)}
-          detail={`${analytics.completedSessions}/${analytics.startedSessions} started sessions complete`}
-        />
-        <AnalyticsMetric
-          label="Average quiz score"
-          value={formatPercent(analytics.averageQuizScore)}
-          detail={`${analytics.quizAttempts} quiz attempt${analytics.quizAttempts === 1 ? "" : "s"}`}
-        />
-        <AnalyticsMetric
-          label="Assignment submissions"
-          value={formatPercent(analytics.assignmentSubmissionRate)}
-          detail={`${analytics.submittedAssignments}/${analytics.assignedAssignments} assigned work items submitted`}
-        />
-        <AnalyticsMetric
-          label="Resource engagement"
-          value={formatPercent(analytics.resourceEngagementRate)}
-          detail={`${analytics.resourceOpened} opened / ${analytics.resourceShown} shown`}
-        />
-      </div>
-
-      <div className="grid gap-4">
-        <Panel title="Mastery heatmap" icon={<TrendingUp className="h-4 w-4" strokeWidth={1.6} />}>
-          {masteryRows.length ? (
-            <div className="grid gap-2">
-              {masteryRows.map((row) => (
-                <div
-                  key={row.skill}
-                  className="rounded-2xl border border-border bg-background/45 p-3"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[13px] font-medium text-foreground">{row.skill}</div>
-                    <div className="text-[12px] text-muted-foreground">
-                      {row.students} student{row.students === 1 ? "" : "s"} - {row.evidence}{" "}
-                      evidence
-                    </div>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`h-full rounded-full ${masteryBarClass(row.averageScore)}`}
-                      style={{ width: `${Math.max(4, Math.round(row.averageScore * 100))}%` }}
-                    />
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11.5px] text-muted-foreground">
-                    <span>Avg {formatPercent(row.averageScore)}</span>
-                    <span>{row.secure} secure</span>
-                    <span>{row.developing} developing</span>
-                    <span>{row.emerging} emerging</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyInline
-              title="No mastery yet"
-              body="Mastery signals appear after assessed student work."
-            />
-          )}
-        </Panel>
-
-        <Panel
-          title="Needs Attention"
-          icon={<AlertTriangle className="h-4 w-4" strokeWidth={1.6} />}
-        >
-          {signals.length ? (
-            <div className="space-y-2">
-              {signals.slice(0, 8).map((signal) => {
-                const profile = profilesById.get(signal.studentId) || null;
-                return (
-                  <div
-                    key={`${signal.studentId}-${signal.kind}-${signal.sourceId}`}
-                    className="rounded-2xl border border-border bg-background/45 p-3"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onSelectStudent(signal.studentId)}
-                      className="w-full text-left"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-medium text-foreground">
-                          {displayName(profile, signal.studentId)}
-                        </span>
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10.5px] ${severityClass(
-                            signal.severity,
-                          )}`}
-                        >
-                          {signal.severity}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-[12.5px] text-foreground">{signal.title}</div>
-                      <div className="mt-1 text-[11.5px] text-muted-foreground">
-                        {signal.detail}
-                      </div>
-                    </button>
-                    {signal.kind === "intervention" ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {(["acknowledged", "resolved", "dismissed"] as const).map((status) => (
-                          <button
-                            key={status}
-                            type="button"
-                            onClick={() => onUpdateAlertStatus(signal.sourceId, status)}
-                            disabled={updatingAlertId === signal.sourceId}
-                            className="rounded-full border border-border px-2.5 py-1 text-[11px] capitalize text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-45"
-                          >
-                            {status}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <EmptyInline
-              title="No deterministic alerts"
-              body="Risk signals appear only from real attempts, quiz misses, mastery, assignments, or teacher alerts."
-            />
-          )}
-        </Panel>
-      </div>
-    </div>
-  );
-}
-
-function AnalyticsMetric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-3xl border border-border bg-depth-card p-4">
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-        <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.6} />
-        {label}
-      </div>
-      <div className="mt-2 font-serif text-[28px] leading-none text-foreground">{value}</div>
-      <div className="mt-2 text-[12px] text-muted-foreground">{detail}</div>
-    </div>
-  );
-}
-
 function GradebookTable({
   lessons,
   lessonsById,
@@ -4081,88 +3137,8 @@ function GradebookTable({
   );
 }
 
-function LessonProgress({
-  lessons,
-  studentIds,
-  dashboard,
-  profilesById,
-}: {
-  lessons: Lesson[];
-  studentIds: string[];
-  dashboard: TeacherDashboardData;
-  profilesById: Map<string, Profile>;
-}) {
-  return (
-    <div className="mt-6 rounded-3xl border border-border bg-depth-card p-4">
-      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h3 className="text-[15px] font-medium text-foreground">Lesson Progress</h3>
-          <p className="text-[12.5px] text-muted-foreground">
-            Completed lessons stay visible even when a student starts a newer lesson.
-          </p>
-        </div>
-        <div className="text-[11.5px] uppercase tracking-[0.1em] text-muted-foreground">
-          {lessons.length} lessons
-        </div>
-      </div>
-
-      {studentIds.length ? (
-        <div className="pb-1">
-          <div className="grid gap-2">
-            {studentIds.map((studentId) => {
-              const profile = profilesById.get(studentId) || null;
-              return (
-                <div
-                  key={studentId}
-                  className="grid grid-cols-1 gap-3 rounded-2xl border border-border bg-depth-sub p-3 sm:grid-cols-[180px_minmax(0,1fr)]"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-medium text-foreground">
-                      {displayName(profile, studentId)}
-                    </div>
-                    <div className="mt-1 text-[11.5px] text-muted-foreground">
-                      {profile?.grade || "Grade not set"}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {lessons.map((lesson) => {
-                      const unified = unifiedLessonStatus(dashboard, studentId, lesson.id);
-                      const { total, outstanding } = unified.checkpoints;
-                      const checkpointNote =
-                        total > 0 ? ` (${total - outstanding}/${total} required)` : "";
-                      return (
-                        <span
-                          key={`${studentId}-${lesson.id}`}
-                          className={`rounded-full border px-2.5 py-1 text-[11.5px] ${unifiedStatusClass(
-                            unified.status,
-                          )}`}
-                          title={`${lesson.title}: ${unified.status}${checkpointNote}`}
-                        >
-                          {lesson.title} · {unified.status}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <EmptyState icon={UsersRound}>No students are assigned to this class yet.</EmptyState>
-      )}
-    </div>
-  );
-}
-
 function StudentDetail({
   studentId,
-  classId,
-  classLabel,
-  onGenerateReport,
-  generatingReport,
-  reportError,
-  pastReports,
   profile,
   stats,
   dashboard,
@@ -4192,12 +3168,6 @@ function StudentDetail({
   onTabChange,
 }: {
   studentId: string;
-  classId: string | null;
-  classLabel: string;
-  onGenerateReport: () => void;
-  generatingReport: boolean;
-  reportError: string | null;
-  pastReports: StudentProgressReportRow[];
   profile: Profile | null;
   stats: StudentSummary;
   dashboard: TeacherDashboardData;
@@ -4227,49 +3197,13 @@ function StudentDetail({
   onTabChange?: (value: string) => void;
 }) {
   const [localTab, setLocalTab] = useState("overview");
-  const studentTab = tab ?? localTab;
+  // Old deep links may still carry tab=records|messages — those tabs are gone; land on Overview.
+  const requestedTab = tab ?? localTab;
+  const studentTab = requestedTab === "transcript" ? "transcript" : "overview";
   const setStudentTab = (value: string) => (onTabChange ? onTabChange(value) : setLocalTab(value));
   const turns = selectedSession
     ? dashboard.turns.filter((turn) => turn.session_id === selectedSession.id)
     : [];
-  const attempts = dashboard.attempts.filter(
-    (item) =>
-      item.user_id === studentId && (!selectedSession || item.session_id === selectedSession.id),
-  );
-  const quizAttempts = dashboard.quizAttempts.filter(
-    (item) =>
-      item.user_id === studentId && (!selectedSession || item.session_id === selectedSession.id),
-  );
-  const evidence = dashboard.evidence.filter(
-    (item) =>
-      item.user_id === studentId && (!selectedSession || item.session_id === selectedSession.id),
-  );
-  // v4.0 deferred: per-mode evidence breakdown (count + avg score) + the inquiry confusion/curiosity
-  // split — pays off the mode dimension stamped since P1. Empty until mode-tagged evidence accrues.
-  const evidenceByMode = (() => {
-    const acc = new Map<string, { count: number; total: number; scored: number }>();
-    const inquiry = { confusion: 0, curiosity: 0 };
-    for (const item of evidence) {
-      if (!item.mode) continue;
-      const cur = acc.get(item.mode) ?? { count: 0, total: 0, scored: 0 };
-      cur.count += 1;
-      if (item.score != null) {
-        cur.total += item.score;
-        cur.scored += 1;
-      }
-      acc.set(item.mode, cur);
-      if (item.mode === "inquiry") {
-        if (item.mode_type === "confusion") inquiry.confusion += 1;
-        else if (item.mode_type === "curiosity") inquiry.curiosity += 1;
-      }
-    }
-    const rows = Array.from(acc, ([mode, v]) => ({
-      mode,
-      count: v.count,
-      avg: v.scored ? v.total / v.scored : null,
-    })).sort((a, b) => b.count - a.count);
-    return { rows, inquiry };
-  })();
   const mastery = dashboard.mastery.filter((item) => item.user_id === studentId);
   const notes = dashboard.notes.filter((item) => item.student_id === studentId);
   const liveComments = selectedSession
@@ -4298,52 +3232,9 @@ function StudentDetail({
   const canWatchSelectedSession =
     Boolean(selectedSession) && selectedSession?.status !== "complete";
 
-  const downloadReport = (report: StudentProgressReportRow) => {
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `progress-report-${report.created_at.slice(0, 10)}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-  };
-
   return (
     <GradientCard>
       <div className="p-4 sm:p-5">
-        {/* The shell's back pill owns "back to class" — this row keeps only the report actions. */}
-        <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
-          <div className="flex flex-col items-end gap-1">
-            <button
-              type="button"
-              onClick={onGenerateReport}
-              disabled={generatingReport}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <FileText className="h-3.5 w-3.5" strokeWidth={1.7} />
-              {generatingReport ? "Generating…" : "Generate report"}
-            </button>
-            {reportError ? <span className="text-[11.5px] text-danger">{reportError}</span> : null}
-            {pastReports.length ? (
-              <div className="mt-1 flex flex-col items-end gap-0.5">
-                {pastReports.slice(0, 5).map((report) => (
-                  <button
-                    key={report.id}
-                    type="button"
-                    onClick={() => downloadReport(report)}
-                    title={`Download "${report.title}"`}
-                    className="max-w-[240px] truncate text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    {formatDateTime(report.created_at)} · {report.title}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -4436,24 +3327,13 @@ function StudentDetail({
           <WorkspaceTabList>
             <WorkspaceTab value="overview">Overview</WorkspaceTab>
             <WorkspaceTab value="transcript">Transcript &amp; notes</WorkspaceTab>
-            <WorkspaceTab value="records">Records</WorkspaceTab>
-            <WorkspaceTab value="messages">Messages</WorkspaceTab>
           </WorkspaceTabList>
 
           <WorkspacePanel value="overview">
-            <StudentAnalyticsPanel
-              dashboard={dashboard}
-              studentId={studentId}
-              lessonsById={lessonsById}
-            />
-          </WorkspacePanel>
-
-          <WorkspacePanel value="messages">
-            <TeacherStudentMessages
-              studentId={studentId}
-              classId={classId}
-              classLabel={classLabel}
-            />
+            <StudentAnalyticsPanel dashboard={dashboard} studentId={studentId} />
+            <div className="mt-4">
+              <StudentReviewSessions studentId={studentId} />
+            </div>
           </WorkspacePanel>
 
           <WorkspacePanel value="transcript">
@@ -4678,103 +3558,6 @@ function StudentDetail({
               </div>
             </div>
           </WorkspacePanel>
-
-          <WorkspacePanel value="records">
-            <div className="mt-4 grid gap-4">
-              <Panel
-                title="Lesson attempts"
-                icon={<ClipboardList className="h-4 w-4" strokeWidth={1.6} />}
-              >
-                {attempts.length ? (
-                  <RecordList
-                    items={attempts.slice(0, 8).map((item) => ({
-                      id: item.id,
-                      title: `${lessonName(lessonsById, item.lesson_id)} - ${item.answer_mode}`,
-                      meta: `${modalityLabel(item.input_modality)}${formatPass(item.passed)} - score ${formatScore(
-                        item.score,
-                      )}`,
-                      body:
-                        item.feedback ||
-                        item.answer_text ||
-                        item.answer_code ||
-                        "No feedback text.",
-                    }))}
-                  />
-                ) : (
-                  <EmptyInline
-                    title="No attempts"
-                    body="Code/text attempts appear after lesson activity."
-                  />
-                )}
-              </Panel>
-
-              <Panel title="Quiz checks" icon={<BookOpen className="h-4 w-4" strokeWidth={1.6} />}>
-                {quizAttempts.length ? (
-                  <RecordList
-                    items={quizAttempts.slice(0, 8).map((item) => ({
-                      id: item.id,
-                      title: `${lessonName(lessonsById, item.lesson_id)} - ${item.choice_id || item.answer_mode}`,
-                      meta: `${formatPass(item.passed)} - score ${formatScore(item.score)}`,
-                      body: item.feedback || item.answer_text || "Objective quiz attempt.",
-                    }))}
-                  />
-                ) : (
-                  <EmptyInline
-                    title="No quiz attempts"
-                    body="Quiz records appear after a checkpoint."
-                  />
-                )}
-              </Panel>
-
-              <Panel title="Evidence" icon={<FileText className="h-4 w-4" strokeWidth={1.6} />}>
-                {evidenceByMode.rows.length ? (
-                  <div className="mb-3 rounded-2xl border border-border bg-background/40 p-3">
-                    <div className="mb-2 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                      By mode
-                    </div>
-                    <div className="grid gap-1.5">
-                      {evidenceByMode.rows.map((row) => (
-                        <div key={row.mode} className="flex items-center gap-2 text-[12.5px]">
-                          <span className="min-w-0 flex-1 truncate text-foreground">
-                            {modeLabel(row.mode)}
-                            {row.mode === "inquiry" &&
-                            (evidenceByMode.inquiry.confusion ||
-                              evidenceByMode.inquiry.curiosity) ? (
-                              <span className="text-muted-foreground">
-                                {" "}
-                                · {evidenceByMode.inquiry.confusion} {INQUIRY_TYPE_LABELS.confusion}
-                                , {evidenceByMode.inquiry.curiosity} {INQUIRY_TYPE_LABELS.curiosity}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="shrink-0 text-muted-foreground">{row.count}×</span>
-                          <span className="w-10 shrink-0 text-right tabular-nums text-foreground">
-                            {row.avg == null ? "—" : formatScore(row.avg)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {evidence.length ? (
-                  <RecordList
-                    items={evidence.slice(0, 8).map((item) => ({
-                      id: item.id,
-                      title: `${item.source_type} - ${item.skill_keys.join(", ") || "skill evidence"}`,
-                      meta: `${lessonName(lessonsById, item.lesson_id)} - score ${formatScore(item.score)}`,
-                      body: item.notes || "Evidence captured from lesson work.",
-                    }))}
-                  />
-                ) : (
-                  <EmptyInline
-                    title="No evidence"
-                    body="Evidence appears after rubric-backed work."
-                  />
-                )}
-              </Panel>
-              <StudentReviewSessions studentId={studentId} />
-            </div>
-          </WorkspacePanel>
         </Tabs>
       </div>
     </GradientCard>
@@ -4784,14 +3567,11 @@ function StudentDetail({
 function StudentAnalyticsPanel({
   dashboard,
   studentId,
-  lessonsById,
 }: {
   dashboard: TeacherDashboardData;
   studentId: string;
-  lessonsById: Map<string, Lesson>;
 }) {
   const analytics = studentAnalyticsFor(dashboard, studentId);
-  const signals = riskSignalsForClass(dashboard, [studentId], lessonsById);
   const strongest = dashboard.mastery
     .filter((item) => item.user_id === studentId)
     .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))[0];
@@ -4805,11 +3585,10 @@ function StudentAnalyticsPanel({
         <BarChart3 className="h-4 w-4" strokeWidth={1.6} />
         Student analytics
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-3">
         <MiniMetric label="Completion" value={formatPercent(analytics.completionRate)} />
         <MiniMetric label="Quiz avg" value={formatPercent(analytics.averageQuizScore)} />
         <MiniMetric label="Resources" value={String(analytics.resourceOpened)} />
-        <MiniMetric label="Alerts" value={String(signals.length)} />
       </div>
       <div className="mt-3 grid gap-3">
         <div className="rounded-2xl border border-border bg-background/45 p-3">
@@ -4838,30 +3617,8 @@ function StudentAnalyticsPanel({
               : "No weak signal recorded."}
           </div>
         </div>
-        <div className="rounded-2xl border border-border bg-background/45 p-3">
-          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-            Latest signal
-          </div>
-          <div className="mt-1 text-[13px] text-foreground">
-            {signals[0]?.title || "No attention signal"}
-          </div>
-          <div className="mt-1 text-[12px] text-muted-foreground">
-            {signals[0]?.detail || "Signals are derived from records, not AI guesses."}
-          </div>
-        </div>
       </div>
     </div>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <GradientCard>
-      <div className="p-5">
-        <div className="text-[12px] uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
-        <div className="mt-2 font-serif text-[34px] leading-none text-foreground">{value}</div>
-      </div>
-    </GradientCard>
   );
 }
 
@@ -4934,20 +3691,6 @@ function ResourceStatusChip({ status }: { status: LessonResourceStatus }) {
   );
 }
 
-function ResourceChunkStatusChip({ status }: { status: ResourceTextChunkStatus }) {
-  const classes =
-    status === "approved"
-      ? "border-success/40 bg-success/12 text-success"
-      : status === "rejected"
-        ? "border-border bg-background/45 text-muted-foreground"
-        : "border-warning/40 bg-warning/12 text-warning";
-  return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] capitalize ${classes}`}>
-      {status}
-    </span>
-  );
-}
-
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
     <div className="rounded-3xl border border-border bg-depth-sub p-4">
@@ -4960,42 +3703,11 @@ function Panel({ title, icon, children }: { title: string; icon: ReactNode; chil
   );
 }
 
-function EmptyPanel({ title, body }: { title: string; body: string }) {
-  return (
-    <GradientCard>
-      <div className="p-6">
-        <h2 className="text-[16px] font-medium text-foreground">{title}</h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">{body}</p>
-      </div>
-    </GradientCard>
-  );
-}
-
 function EmptyInline({ title, body }: { title: string; body: string }) {
   return (
     <div className="rounded-2xl border border-border bg-background/45 p-4">
       <div className="text-[13px] font-medium text-foreground">{title}</div>
       <div className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{body}</div>
-    </div>
-  );
-}
-
-function RecordList({
-  items,
-}: {
-  items: Array<{ id: string; title: string; meta: string; body: string }>;
-}) {
-  return (
-    <div className="space-y-2">
-      {items.map((item) => (
-        <div key={item.id} className="rounded-2xl border border-border bg-background/45 p-3">
-          <div className="text-[13px] font-medium text-foreground">{item.title}</div>
-          <div className="mt-1 text-[11.5px] text-muted-foreground">{item.meta}</div>
-          <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
-            {item.body}
-          </p>
-        </div>
-      ))}
     </div>
   );
 }
@@ -5032,94 +3744,11 @@ type GradebookRow = {
   needsAttention: boolean;
 };
 
-type ClassAnalytics = {
-  startedSessions: number;
-  completedSessions: number;
-  completionRate: number | null;
-  quizAttempts: number;
-  averageQuizScore: number | null;
-  assignedAssignments: number;
-  submittedAssignments: number;
-  assignmentSubmissionRate: number | null;
-  resourceShown: number;
-  resourceOpened: number;
-  resourceEngagementRate: number | null;
-};
-
 type StudentAnalytics = {
   completionRate: number | null;
   averageQuizScore: number | null;
   resourceOpened: number;
 };
-
-type MasteryHeatmapRow = {
-  skill: string;
-  averageScore: number;
-  students: number;
-  evidence: number;
-  secure: number;
-  developing: number;
-  emerging: number;
-};
-
-type RiskSignal = {
-  studentId: string;
-  kind:
-    | "intervention"
-    | "quiz_miss"
-    | "failed_attempt"
-    | "retry"
-    | "low_mastery"
-    | "assignment"
-    | "no_activity";
-  title: string;
-  detail: string;
-  severity: "low" | "medium" | "high";
-  sourceId: string;
-};
-
-function classAnalyticsFor(dashboard: TeacherDashboardData, studentIds: string[]): ClassAnalytics {
-  const students = new Set(studentIds);
-  const sessions = dashboard.sessions.filter((session) => students.has(session.user_id));
-  const completedSessions = sessions.filter((session) => session.status === "complete");
-  const quizAttempts = dashboard.quizAttempts.filter((attempt) => students.has(attempt.user_id));
-  const scoredQuizAttempts = quizAttempts.filter((attempt) => typeof attempt.score === "number");
-  const recipients = dashboard.assignmentRecipients.filter((recipient) =>
-    students.has(recipient.user_id),
-  );
-  const submittedAssignments = recipients.filter((recipient) => {
-    const hasSubmission = dashboard.assignmentSubmissions.some(
-      (submission) =>
-        submission.assignment_id === recipient.assignment_id &&
-        submission.user_id === recipient.user_id,
-    );
-    return hasSubmission || recipient.status === "submitted" || recipient.status === "complete";
-  });
-  const resourceInteractions = dashboard.resourceInteractions.filter((interaction) =>
-    students.has(interaction.user_id),
-  );
-  const shown = resourceInteractions.filter((interaction) => interaction.event_type === "shown");
-  const opened = resourceInteractions.filter((interaction) =>
-    ["opened", "played", "completed", "downloaded"].includes(interaction.event_type),
-  );
-
-  return {
-    startedSessions: sessions.length,
-    completedSessions: completedSessions.length,
-    completionRate: ratio(completedSessions.length, sessions.length),
-    quizAttempts: quizAttempts.length,
-    averageQuizScore: scoredQuizAttempts.length
-      ? scoredQuizAttempts.reduce((sum, attempt) => sum + Number(attempt.score || 0), 0) /
-        scoredQuizAttempts.length
-      : null,
-    assignedAssignments: recipients.length,
-    submittedAssignments: submittedAssignments.length,
-    assignmentSubmissionRate: ratio(submittedAssignments.length, recipients.length),
-    resourceShown: shown.length,
-    resourceOpened: opened.length,
-    resourceEngagementRate: ratio(opened.length, shown.length),
-  };
-}
 
 function studentAnalyticsFor(dashboard: TeacherDashboardData, studentId: string): StudentAnalytics {
   const sessions = dashboard.sessions.filter((session) => session.user_id === studentId);
@@ -5142,191 +3771,22 @@ function studentAnalyticsFor(dashboard: TeacherDashboardData, studentId: string)
   };
 }
 
-function masteryRowsForClass(
-  dashboard: TeacherDashboardData,
-  studentIds: string[],
-): MasteryHeatmapRow[] {
-  const students = new Set(studentIds);
-  const bySkill = new Map<string, StudentMastery[]>();
-  dashboard.mastery
-    .filter((item) => students.has(item.user_id))
-    .forEach((item) => {
-      const rows = bySkill.get(item.skill_key) || [];
-      rows.push(item);
-      bySkill.set(item.skill_key, rows);
-    });
-
-  return Array.from(bySkill.entries())
-    .map(([skill, rows]) => {
-      const averageScore = rows.reduce((sum, row) => sum + Number(row.score || 0), 0) / rows.length;
-      return {
-        skill,
-        averageScore,
-        students: rows.length,
-        evidence: rows.reduce((sum, row) => sum + Number(row.evidence_count || 0), 0),
-        secure: rows.filter((row) => Number(row.score || 0) >= 0.85).length,
-        developing: rows.filter((row) => {
-          const score = Number(row.score || 0);
-          return score >= 0.55 && score < 0.85;
-        }).length,
-        emerging: rows.filter((row) => Number(row.score || 0) < 0.55).length,
-      };
-    })
-    .sort((a, b) => a.averageScore - b.averageScore || b.evidence - a.evidence)
-    .slice(0, 8);
-}
-
-function riskSignalsForClass(
-  dashboard: TeacherDashboardData,
-  studentIds: string[],
-  lessonsById: Map<string, Lesson>,
-): RiskSignal[] {
-  const signals: RiskSignal[] = [];
-  const seen = new Set<string>();
-  const add = (signal: RiskSignal) => {
-    const key = `${signal.studentId}-${signal.kind}-${signal.sourceId}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    signals.push(signal);
-  };
-
-  for (const studentId of studentIds) {
-    const sessions = dashboard.sessions.filter((session) => session.user_id === studentId);
-    if (!sessions.length) {
-      add({
-        studentId,
-        kind: "no_activity",
-        title: "No lesson activity yet",
-        detail: "Student has not started a tracked lesson.",
-        severity: "low",
-        sourceId: "no-session",
-      });
-    }
-
-    dashboard.interventionAlerts
-      .filter(
-        (alert) =>
-          alert.student_id === studentId &&
-          (alert.status === "open" || alert.status === "acknowledged"),
-      )
-      .forEach((alert) => add(interventionSignal(alert)));
-
-    sessions
-      .filter((session) => session.status === "needs_retry" || session.status === "needs_rescue")
-      .forEach((session) =>
-        add({
-          studentId,
-          kind: "retry",
-          title: session.status === "needs_rescue" ? "Rescue path active" : "Retry path active",
-          detail: `${lessonName(lessonsById, session.lesson_id)} is ${session.stage}.`,
-          severity: session.status === "needs_rescue" ? "high" : "medium",
-          sourceId: session.id,
-        }),
-      );
-
-    dashboard.quizAttempts
-      .filter((attempt) => attempt.user_id === studentId && attempt.passed === false)
-      .slice(0, 2)
-      .forEach((attempt) =>
-        add({
-          studentId,
-          kind: "quiz_miss",
-          title: "Quiz checkpoint missed",
-          detail: `${lessonName(lessonsById, attempt.lesson_id)} · score ${formatScore(
-            attempt.score,
-          )}`,
-          severity: "medium",
-          sourceId: attempt.id,
-        }),
-      );
-
-    dashboard.attempts
-      .filter((attempt) => attempt.user_id === studentId && attempt.passed === false)
-      .slice(0, 2)
-      .forEach((attempt) =>
-        add({
-          studentId,
-          kind: "failed_attempt",
-          title: "Lesson attempt did not pass",
-          detail: `${lessonName(lessonsById, attempt.lesson_id)} · ${attempt.answer_mode}`,
-          severity: attempt.answer_mode === "code" ? "medium" : "low",
-          sourceId: attempt.id,
-        }),
-      );
-
-    dashboard.mastery
-      .filter((item) => item.user_id === studentId && Number(item.score || 0) < 0.55)
-      .slice(0, 2)
-      .forEach((item) =>
-        add({
-          studentId,
-          kind: "low_mastery",
-          title: "Low skill mastery",
-          detail: `${item.skill_key} · ${formatPercent(Number(item.score || 0))}`,
-          severity: "medium",
-          sourceId: item.skill_key,
-        }),
-      );
-
-    dashboard.assignmentRecipients
-      .filter((recipient) => {
-        if (recipient.user_id !== studentId) return false;
-        if (recipient.status === "submitted" || recipient.status === "complete") return false;
-        return dashboard.assignments.some((assignment) => {
-          return assignment.id === recipient.assignment_id && assignment.status === "assigned";
-        });
-      })
-      .slice(0, 2)
-      .forEach((recipient) => {
-        const assignment = dashboard.assignments.find(
-          (item) => item.id === recipient.assignment_id,
-        );
-        add({
-          studentId,
-          kind: "assignment",
-          title: "Assigned work not submitted",
-          detail: assignment?.title || "Assignment is still open.",
-          severity: "low",
-          sourceId: recipient.id,
-        });
-      });
-  }
-
-  return signals.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
-}
-
-function interventionSignal(alert: InterventionAlert): RiskSignal {
-  return {
-    studentId: alert.student_id,
-    kind: "intervention",
-    title: alert.title || "Teacher intervention alert",
-    detail: alert.message || `${alert.alert_type} · ${alert.status}`,
-    severity: alert.severity || "medium",
-    sourceId: alert.id,
-  };
-}
-
 type ClassAttention = {
-  alerts: number;
   pendingGrading: number;
-  tone: "danger" | "warning" | "ok";
+  tone: "warning" | "ok";
 };
 
-// Per-class "what needs me" signal for the card health badge: open intervention
-// alerts (worst), then submissions waiting to be graded, else clear.
+// Per-class "what needs me" signal for the card health badge: submissions waiting
+// to be graded, else clear.
 function classAttention(dashboard: TeacherDashboardData, classId: string): ClassAttention {
-  const alerts = dashboard.interventionAlerts.filter(
-    (alert) =>
-      alert.class_id === classId && (alert.status === "open" || alert.status === "acknowledged"),
-  ).length;
   const classAssignmentIds = new Set(
     dashboard.assignments.filter((a) => a.class_id === classId).map((a) => a.id),
   );
   const pendingGrading = dashboard.assignmentSubmissions.filter(
     (s) => s.status === "submitted" && classAssignmentIds.has(s.assignment_id),
   ).length;
-  const tone = alerts > 0 ? "danger" : pendingGrading > 0 ? "warning" : "ok";
-  return { alerts, pendingGrading, tone };
+  const tone = pendingGrading > 0 ? "warning" : "ok";
+  return { pendingGrading, tone };
 }
 
 function summarizeClass(dashboard: TeacherDashboardData, classId: string): ClassSummary {
@@ -5484,24 +3944,6 @@ function completedLessonNamesFor(
   );
 }
 
-function severityClass(severity: "low" | "medium" | "high") {
-  if (severity === "high") return "border-danger/35 bg-danger/10 text-danger";
-  if (severity === "medium") return "border-warning/40 bg-warning/12 text-warning";
-  return "border-info/40 bg-info/12 text-info";
-}
-
-function severityRank(severity: "low" | "medium" | "high") {
-  if (severity === "high") return 3;
-  if (severity === "medium") return 2;
-  return 1;
-}
-
-function masteryBarClass(score: number) {
-  if (score >= 0.85) return "bg-success";
-  if (score >= 0.55) return "bg-warning";
-  return "bg-danger";
-}
-
 function inputModalityFromPayload(
   payload: Record<string, unknown> | null | undefined,
 ): ChatInputModality | null {
@@ -5509,12 +3951,6 @@ function inputModalityFromPayload(
   return modality === "typed" || modality === "dictated" || modality === "audio_session"
     ? modality
     : null;
-}
-
-function modalityLabel(modality: ChatInputModality | null | undefined) {
-  if (modality === "dictated") return "Dictated - ";
-  if (modality === "audio_session") return "Voice - ";
-  return "";
 }
 
 function statusLabel(session: LearningSession) {
@@ -5529,12 +3965,6 @@ function formatPercent(value: number | null | undefined) {
 function ratio(numerator: number, denominator: number) {
   if (!denominator) return null;
   return numerator / denominator;
-}
-
-function formatPass(value: boolean | null | undefined) {
-  if (value === true) return "passed";
-  if (value === false) return "not passed";
-  return "ungraded";
 }
 
 function unique(values: string[]) {

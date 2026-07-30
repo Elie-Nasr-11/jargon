@@ -6420,3 +6420,25 @@ Remaining concerns: features/comms/* files still on disk for the orchestrator to
 SettingsMenu removal depends on the admin.tsx strip; TeacherConsole still carries
 lesson1 fallbacks (teacher agent's scope).
 Suggested next task: orchestrator deletes features/comms/*, then api.ts/types.ts comms prune.
+
+## Claude -> Codex / Human - 2026-07-30 (teacher console strip)
+
+Status: Finished
+Summary: MVP strip of TeacherConsole per docs/MVP_SCOPE.md §4. Cut fleet metric row,
+class Export CSV, pilot-readiness block, ClassAnalyticsPanel (+riskSignalsForClass,
+masteryRowsForClass, mastery heatmap, Needs Attention), LessonProgress grid, student
+Records + Messages tabs, progress-report generation/past-reports, and ALL
+intervention_alerts UI. ResourceManager slimmed to list + create/edit form + status
+menu (media pipeline — extraction/page assets/OCR/transcription/chunk QA — removed).
+StudentReviewSessions moved under the student Overview tab. HotlistFeed lost the dead
+`alert_open` kind. Stale ?tab=records|messages deep links normalize to Overview.
+Files changed: frontend/src/features/teacher/TeacherConsole.tsx (5542 → 3972 lines),
+frontend/src/features/teacher/HotlistFeed.tsx; deleted
+frontend/src/features/teacher/TeacherStudentMessages.tsx.
+Tests run: npx eslint src/features/teacher (0 errors), npx tsc --noEmit (no
+features/teacher errors; full run clean at time of check).
+Remaining concerns: lib/api.ts and lib/types.ts still export the now-orphaned report /
+snapshot / chunk-pipeline / intervention-alert wrappers — owned by the api/types prune
+task. components/NotificationsMenu.tsx still deep-links direct_message → tab=messages
+(degrades to Overview); goes away with the comms strip.
+Suggested next task: api.ts/types.ts prune (execution-order step 3).

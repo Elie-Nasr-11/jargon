@@ -13,11 +13,10 @@ import { EmptyState } from "@/components/EmptyState";
 import type { Lesson, Profile, TeacherClassSummary, TeacherDashboardData } from "@/lib/types";
 
 // v4.0 Phase 2 — the teacher hotlist. A single attention feed derived on load from the
-// existing dashboard blob (docs/PLATFORM.md §5). The seven `kind` values are the exact
+// existing dashboard blob (docs/PLATFORM.md §5). The six `kind` values are the exact
 // vocabulary a future `notifications` table will use, so the upgrade is a data-source swap.
 export type HotlistKind =
   | "session_risk"
-  | "alert_open"
   | "mentor_recommendation"
   | "submission_to_grade"
   | "assessment_to_review"
@@ -39,7 +38,6 @@ const KIND_META: Record<
   { label: string; icon: typeof Radio; rank: number; tone: "danger" | "warn" | "info" }
 > = {
   session_risk: { label: "Needs attention", icon: AlertTriangle, rank: 0, tone: "danger" },
-  alert_open: { label: "Alert", icon: AlertTriangle, rank: 0, tone: "danger" },
   mentor_recommendation: { label: "Mentor flag", icon: Sparkles, rank: 1, tone: "warn" },
   submission_to_grade: { label: "To grade", icon: FileCheck2, rank: 2, tone: "info" },
   assessment_to_review: { label: "To review", icon: ClipboardCheck, rank: 2, tone: "info" },
@@ -115,19 +113,6 @@ export function deriveHotlist(
         studentId: s.user_id,
       });
     }
-  }
-
-  for (const alert of dashboard.interventionAlerts) {
-    if (alert.status !== "open" && alert.status !== "acknowledged") continue;
-    items.push({
-      id: `alert:${alert.id}`,
-      kind: "alert_open",
-      title: `${name(alert.student_id)}: ${alert.title || alert.alert_type.replace(/_/g, " ")}`,
-      subtitle: className(alert.class_id),
-      ts: ms(alert.created_at),
-      classId: alert.class_id,
-      studentId: alert.student_id,
-    });
   }
 
   for (const rec of dashboard.mentorRecommendations) {
@@ -228,7 +213,7 @@ export function HotlistFeed({
         </div>
         {shown.length === 0 ? (
           <EmptyState icon={CheckCircle2}>
-            You're all caught up — no submissions to grade, alerts, or work due soon.
+            You're all caught up — no submissions to grade, students at risk, or work due soon.
           </EmptyState>
         ) : (
           <div className="grid gap-1.5">
