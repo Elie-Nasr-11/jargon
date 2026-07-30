@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - claude/happy-johnson-wseex8
+      - claude/project-scope-mvp-o7ox0y
       - main
   pull_request:
 

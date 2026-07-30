@@ -17,7 +17,7 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - claude/happy-johnson-wseex8
+      - claude/project-scope-mvp-o7ox0y
     paths:
       - "supabase/functions/curriculum-admin/**"
       - "supabase/functions/chat/**"
