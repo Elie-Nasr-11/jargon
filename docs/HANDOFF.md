@@ -6554,3 +6554,10 @@ review_sessions row 'active' (server treats that as resumable/harmless); voice s
 available in Open/Discuss/Quiz by design.
 Suggested next task: AppSidebar mode-aware chrome polish + UI coherence pass;
 repoint deploy-backend.yml at go-live.
+
+## Claude -> Codex / Human - 2026-07-30 (UI coherence pass)
+
+Status: Starting
+Task: Final UI coherence pass on the MVP student experience (restart confirm, lesson-switch toast, AmbientCanvas reduced-motion + intensity, completion handoff, stream card consistency, EmptyState adoption, student copy sweep).
+Files I expect to touch: frontend/src/routes/chat.tsx, frontend/src/features/student/**, frontend/src/components/{AmbientCanvas,ConfirmButton,ModalCard,EmptyState}.tsx (as needed).
+Notes: Polish only — subtraction and consistency; no supabase/, tests/, teacher/admin/curriculum, lib/api.ts, lib/types.ts changes; no commit.
