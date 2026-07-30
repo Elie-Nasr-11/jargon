@@ -226,7 +226,7 @@ export function StudentApp({
             // Resources is not a conversation mode — it opens the materials destination.
             onOpenResources={() => onSelectDestination("resources")}
             sending={conversation.sending || conversation.booting}
-            onSend={(text) => conversation.sendText(text, turnMode)}
+            onSend={(text, attachments) => conversation.sendText(text, turnMode, attachments)}
             onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
           >
             {conversation.booting ? (

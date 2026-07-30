@@ -9,7 +9,13 @@ import {
 } from "@/lib/api";
 import { runJavaScript, runPython } from "@/lib/code-runner";
 import { store } from "@/lib/jargon-store";
-import type { Lesson, LessonChatResource, TypedChatAnswer, TypedChatEnvelope } from "@/lib/types";
+import type {
+  ChatAttachment,
+  Lesson,
+  LessonChatResource,
+  TypedChatAnswer,
+  TypedChatEnvelope,
+} from "@/lib/types";
 import type { ComposerLanguage } from "@/components/Composer";
 import {
   envelopeMessage,
@@ -331,8 +337,18 @@ export function useConversation() {
   );
 
   const sendText = useCallback(
-    (text: string, mode: TurnMode) =>
-      sendAnswer({ mode: "text", text, client_msg_id: uid() }, mode, text),
+    (text: string, mode: TurnMode, attachments?: ChatAttachment[]) =>
+      sendAnswer(
+        {
+          mode: "text",
+          text,
+          // Omitted rather than sent empty: the edge function branches on presence.
+          attachments: attachments?.length ? attachments : undefined,
+          client_msg_id: uid(),
+        },
+        mode,
+        text,
+      ),
     [sendAnswer],
   );
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { MessageSquare, RotateCcw } from "lucide-react";
+import { MessageSquare, Paperclip, RotateCcw } from "lucide-react";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
 import { ResourceCard } from "@/student/ResourceCard";
 import { isTurnMode, turnModeSpec } from "@/student/turnModes";
@@ -186,6 +186,21 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
               return (
                 <Bubble key={message.id} align="end" tone="user">
                   <MessageBody text={message.text} />
+                  {/* What the student attached, so the transcript still shows it on reload —
+                      the filename is the only part they will recognise later. */}
+                  {message.attachments?.length ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {message.attachments.map((attachment) => (
+                        <span
+                          key={attachment.upload_id}
+                          className="flex items-center gap-1 rounded-pill bg-background/20 px-2 py-0.5 text-meta"
+                        >
+                          <Paperclip className="h-3 w-3" strokeWidth={1.8} />
+                          <span className="max-w-[12rem] truncate">{attachment.filename}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </Bubble>
               );
             }

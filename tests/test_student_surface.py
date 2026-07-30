@@ -211,5 +211,36 @@ class CodeSurface(unittest.TestCase):
         self.assertIn('role: "output"', fn)
 
 
+class Attachments(unittest.TestCase):
+    def _box(self) -> str:
+        return (FRONT / "student" / "Chatbox.tsx").read_text()
+
+    def test_picker_uses_the_shared_accept_list(self):
+        # CHAT_UPLOAD_ACCEPT deliberately excludes PDF: the edge function only inlines text and
+        # images, so accepting one would attach a file the tutor silently cannot read. Hardcoding
+        # an accept string here would quietly reintroduce that.
+        box = self._box()
+        self.assertIn("CHAT_UPLOAD_ACCEPT", box)
+        self.assertNotIn('accept="', box)
+
+    def test_send_waits_for_uploads_in_flight(self):
+        # Sending mid-upload would hand the tutor a reference to a file that is not there yet.
+        box = self._box()
+        self.assertIn("&& !uploading", box)
+
+    def test_an_attachment_alone_is_a_valid_message(self):
+        # "Here, look at this" needs no accompanying text.
+        box = self._box()
+        self.assertIn("text.trim().length > 0 || attachments.length > 0", box)
+
+    def test_the_file_count_cap_is_the_shared_constant(self):
+        box = self._box()
+        self.assertIn("MAX_CHAT_UPLOAD_FILES", box)
+
+    def test_attachments_are_omitted_when_empty(self):
+        # The edge function branches on presence, so an empty array is not the same as absent.
+        self.assertIn("attachments?.length ? attachments : undefined", HOOK)
+
+
 if __name__ == "__main__":
     unittest.main()

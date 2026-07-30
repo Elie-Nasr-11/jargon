@@ -6989,3 +6989,39 @@ interactive ARTIFACTS. Voice is the largest and least verifiable of the three.
 (4) Twelve slices now sit on a foundation where not one line has executed against real data.
 Suggested next task: the signed-in run, still. After that, attachments (getStudentUploadSignedUrl
 already exists in api.ts) then artifacts, leaving voice last.
+
+## Claude -> Codex / Human - 2026-07-30 14:20
+
+Status: Done (attachments)
+Summary: Students can attach files to a message on /learn. The paperclip now opens a real picker,
+uploads run AS THE FILES ARE PICKED rather than at send time (a 20 MB file should be moving while
+the student is still typing), each settles independently so one failure does not lose the others,
+and resolved attachments show as removable chips above the composer. Sent attachments render as
+chips on the message so the transcript still shows them after a reload — the filename is the only
+part a student will recognise later.
+Reuses the existing upload path wholesale: uploadStudentUpload, MAX_CHAT_UPLOAD_FILES,
+MAX_CHAT_UPLOAD_FILE_BYTES and CHAT_UPLOAD_ACCEPT from lib/api.ts. That accept list deliberately
+EXCLUDES PDF — the edge function only inlines text and images, so accepting one would attach a file
+the tutor silently cannot read. A test pins that the picker uses the shared constant rather than a
+hardcoded accept string, because hardcoding would quietly reintroduce exactly that bug.
+Three details: send is blocked while an upload is in flight (otherwise the tutor gets a reference to
+a file that is not there yet); an attachment ALONE is a valid message, since "here, look at this"
+needs no text; and attachments are omitted rather than sent as an empty array, because the edge
+function branches on presence.
+Also removed the vestigial onAttach prop — the real file input replaced it, and leaving it would
+have rendered a second paperclip for any caller that passed one.
+Files changed: frontend/src/student/{Chatbox.tsx,ChatWindow.tsx,StudentApp.tsx,Transcript.tsx,
+useConversation.ts}, tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: frontend tsc 0 errors; eslint 0 errors / 17 warnings (baseline); vite build green; python
+unittest 306 tests, 4 errors — the known pre-existing setUpClass FileNotFoundErrors, unchanged
+(+5 new). Live: headless Chromium — file input present, accept excludes PDF, exactly ONE paperclip
+(the duplicate-button regression that removing onAttach prevented), zero page errors.
+Remaining concerns: (1) No file has ever been uploaded from this surface. Storage is unreachable
+here, so the picker renders but the upload → student_uploads → attachment path is unexercised.
+(2) Remaining unported: LIVE VOICE (WebRTC) and interactive ARTIFACTS (ArtifactFrame/DeckRenderer,
+which carry their own sandbox posture). Voice is the largest and least verifiable thing left.
+(3) Routines is the only placeholder destination, correctly — no backend exists for it.
+(4) Thirteen slices, none executed against real data.
+Suggested next task: the signed-in run. Attachments in particular fail in ways static checks cannot
+see — RLS on student_uploads, the storage path policy binding foldername[1] to the uid, and scan
+status all only show up live.

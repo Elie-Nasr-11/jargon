@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Chatbox } from "@/student/Chatbox";
 import type { ComposerLanguage } from "@/components/Composer";
+import type { ChatAttachment } from "@/lib/types";
 import type { LessonOffers, TurnMode } from "@/student/turnModes";
 
 // The conversation surface: a scrolling transcript with the chatbox beneath it.
@@ -16,9 +17,8 @@ export type ChatWindowProps = {
   onModeChange: (mode: TurnMode) => void;
   offers: LessonOffers;
   onOpenResources: () => void;
-  onSend: (text: string) => void;
+  onSend: (text: string, attachments?: ChatAttachment[]) => void;
   onSendCode?: (code: string, language: ComposerLanguage) => void;
-  onAttach?: () => void;
   onToggleVoice?: () => void;
   voiceActive?: boolean;
   sending?: boolean;
@@ -33,7 +33,6 @@ export function ChatWindow({
   onOpenResources,
   onSend,
   onSendCode,
-  onAttach,
   onToggleVoice,
   voiceActive,
   sending,
@@ -58,7 +57,6 @@ export function ChatWindow({
             onOpenResources={onOpenResources}
             onSend={onSend}
             onSendCode={onSendCode}
-            onAttach={onAttach}
             onToggleVoice={onToggleVoice}
             voiceActive={voiceActive}
             disabled={sending}
