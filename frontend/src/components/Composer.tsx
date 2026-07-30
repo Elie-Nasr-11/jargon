@@ -190,6 +190,8 @@ type ComposerProps = {
   initialCode?: string;
   initialLanguage?: Lang;
   sending: boolean;
+  // Mode-aware chatbar (MVP §8): the chat surface swaps the prompt per chat mode.
+  placeholder?: string;
   // When the textbox is empty, the send button becomes a voice-mode toggle.
   canStartVoice?: boolean;
   onStartVoice?: () => void;
@@ -204,6 +206,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     initialCode,
     initialLanguage = "jargon",
     sending,
+    placeholder,
     canStartVoice,
     onStartVoice,
   },
@@ -870,7 +873,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     }
                   }}
                   rows={1}
-                  placeholder={"Message your mentor\u2026"}
+                  placeholder={placeholder || "Message your mentor\u2026"}
                   className="min-h-[28px] flex-1 resize-none overflow-y-hidden bg-transparent py-1 text-[14.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
                 />
                 <button

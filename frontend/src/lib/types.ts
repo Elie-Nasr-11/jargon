@@ -694,6 +694,38 @@ export type ReviewSession = {
   updated_at: string;
 };
 
+// Memory v1 (docs/MVP_SCOPE.md §9): the rolling per-student mentor memory profile. Written by the
+// chat fn's background completing-turn task; owner RLS scopes reads to the signed-in student.
+export type StudentMemoryProfile = {
+  narrative?: string;
+  strengths?: string[];
+  struggles?: string[];
+  preferences?: string[];
+};
+
+export type StudentMemory = {
+  user_id: string;
+  profile: StudentMemoryProfile;
+  updated_at: string;
+};
+
+// Memory v1: one immutable per-session recap (append-only history, newest first).
+export type SessionSummaryContent = {
+  covered?: string;
+  wins?: string;
+  struggles?: string;
+  note?: string;
+};
+
+export type SessionSummary = {
+  id: string;
+  user_id: string;
+  session_id: string;
+  lesson_id: string | null;
+  summary: SessionSummaryContent;
+  created_at: string;
+};
+
 export type StudentProfileStats = {
   profile: Profile | null;
   email: string | null;
@@ -1122,6 +1154,9 @@ export type TypedChatEnvelope = {
   held?: boolean;
   // P5: the review path returns the backing review_sessions row id (for continuation + completion).
   review_session_id?: string;
+  // MVP chat modes (docs/MVP_SCOPE.md §8): echoed on side-mode turns (open/discuss/quiz).
+  // Absent on lesson-flow turns.
+  chat_mode?: "open" | "discuss" | "quiz";
   // Flow v3 (all optional — old stored envelopes replay fine): the Continue pill offer for
   // unacknowledged content steps, and the turn router's verdict (telemetry/hinting).
   continue_offer?: { label: string } | null;

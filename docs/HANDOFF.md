@@ -6501,3 +6501,56 @@ first message as recall) but worth a UX pass. Frontend wiring (mode switcher, qu
 feedback chip) is the separate later task.
 Suggested next task: frontend chat-mode switcher + memory-aware UI; repoint
 deploy-backend.yml branch at go-live.
+
+## Claude -> Codex / Human - 2026-07-30 17:40
+
+Status: Starting
+Task: MVP student-experience integration — 7-mode chat switcher (lesson/open/discuss/
+quiz/practice/assessment/resources), practice-mode review reconnection +
+ReviewDueChip, memory panel in Pulse Performance, login demo-access affordance.
+Files I expect to touch: frontend/src/routes/chat.tsx, frontend/src/routes/login.tsx,
+frontend/src/features/student/ReviewDueChip.tsx (new),
+frontend/src/features/student/panels/PulsePanel.tsx, frontend/src/lib/api.ts,
+frontend/src/lib/types.ts, frontend/src/lib/modes.ts,
+frontend/src/components/Composer.tsx.
+Notes: Backend contract already live (chat fn chat_mode + memory v1 + review path).
+No supabase/ or tests/ edits; lesson-flow envelope must stay byte-identical when no
+mode is selected.
+
+## Claude -> Codex / Human - 2026-07-30 18:20
+
+Status: Done
+Summary: MVP student-experience integration. (1) Seven-mode switcher in the chat
+surface (Lesson default; Open/Discuss/Quiz ride sendTurn as chat_mode — omitted
+entirely otherwise, request byte-identical to the pre-mode contract; Practice/
+Assessment/Resources swap the pane to dedicated surfaces). Stepper goes quiescent
+(dim + inert) outside Lesson with a mode-indicator chip; mode replies carry a tag,
+quiz-mode replies a graded Correct/Not-quite verdict chip; lesson choices/Continue
+anchor now skips mode-tagged replies so side chatter can't retire them. (2) Practice
+reconnects the orphaned review loop: ReviewDueChip.tsx (recreated) owns the header
+chip + useGuidedReview hook (invokeReview start -> answers continued on
+reviewSessionId -> completeReviewSession on Finish); the due list comes from
+fetchReviewDue and refetches after completion. (3) Memory panel: new
+fetchStudentMemory()/fetchSessionSummaries(limit) owner-RLS selects + types;
+PulsePanel Performance gains "What your mentor remembers" (narrative, strengths/
+struggles/likes chips, recent session recaps, friendly empty state). (4) Login gains
+a "Demo access" disclosure listing the three deterministic seed_demo_logins emails
+(demo-student/teacher/admin@example.com) with one-click email fill — no password
+embedded. Composer gains an optional mode-aware placeholder.
+Files changed: frontend/src/routes/chat.tsx, frontend/src/routes/login.tsx,
+frontend/src/features/student/ReviewDueChip.tsx (new),
+frontend/src/features/student/panels/PulsePanel.tsx, frontend/src/lib/api.ts,
+frontend/src/lib/types.ts, frontend/src/lib/modes.ts,
+frontend/src/components/Composer.tsx.
+Tests run: cd frontend && npx tsc --noEmit (0 errors); npx eslint on all touched
+files (0 errors; 3 pre-existing Composer hook-deps warnings unchanged); npm run
+build green; python3 -m unittest tests.test_review_sessions -q OK (5 tests); the 9
+static test modules pinning touched frontend files show an IDENTICAL failure set
+before/after (all pre-existing strip breakage; verified by diff).
+Remaining concerns: mode turns' Continue-offer loss on reload (mentor mode turns
+replayed from history lose their chat_mode tag, so lastBotId may pick a mode reply
+after refresh — cosmetic); practice abandons (Back to skills) leave the
+review_sessions row 'active' (server treats that as resumable/harmless); voice stays
+available in Open/Discuss/Quiz by design.
+Suggested next task: AppSidebar mode-aware chrome polish + UI coherence pass;
+repoint deploy-backend.yml at go-live.

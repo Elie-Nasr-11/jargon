@@ -33,6 +33,7 @@ import { ArtifactFrame } from "@/components/ArtifactFrame";
 import { DeckRenderer } from "@/components/DeckRenderer";
 import { parseArtifactConfig } from "@/lib/artifact-schema";
 import { QuizPanel } from "@/features/student/QuizPanel";
+import { ReviewDueChip, useGuidedReview } from "@/features/student/ReviewDueChip";
 import { AppSidebar } from "@/features/student/shell/AppSidebar";
 import { PageShell } from "@/components/PageShell";
 import { isStudentView, type StudentView } from "@/features/student/shell/studentViews";
@@ -58,6 +59,7 @@ import {
   fetchStudentAssignments,
   fetchStudentAssessments,
   fetchLatestLearningSession,
+  fetchReviewDue,
   onAuthStateChange,
   fetchLessonActivities,
   fetchLessonResources,
@@ -84,6 +86,14 @@ import {
   MAX_SUBMISSION_FILE_BYTES,
 } from "@/lib/api";
 import { formatScore, stripMarkdown } from "@/lib/format";
+import {
+  STUDENT_CHAT_MODES,
+  serverChatMode,
+  studentChatModeLabel,
+  type ServerChatMode,
+  type StudentChatMode,
+} from "@/lib/modes";
+import { humanizeSkillKey, practicedAgo } from "@/lib/review";
 import { runJavaScript, runPython, type RunResult } from "@/lib/code-runner";
 import { tokenizeJargon, type JargonTokenKind } from "@/lib/jargon-syntax";
 import { supabase } from "@/lib/supabase";
@@ -101,6 +111,7 @@ import type {
   LiveSessionViewer,
   SessionHold,
   MentorPreferences,
+  ReviewDueSkill,
   StudentAssignmentBundle,
   StudentAssessmentBundle,
   TeacherLiveComment,
@@ -166,6 +177,12 @@ type Msg =
       // The choice the student picked on this (quiz) message — kept so history shows WHICH
       // option was selected after the live buttons retire.
       chosen?: string;
+      // MVP §8: this reply came from a side-mode turn (open/discuss/quiz). Mode replies render
+      // a small mode tag, and the lesson's live choices/Continue anchor SKIPS them — side
+      // chatter must never strip the active lesson question's buttons.
+      chatMode?: ServerChatMode;
+      // Quiz mode's graded verdict for the answer this reply responds to.
+      verdict?: "passed" | "missed";
     }
   | { id: string; role: "teacher"; text: string; createdAt?: string }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
@@ -276,6 +293,13 @@ function sortTimedMessages(messages: Msg[]) {
 }
 
 function envelopeMessage(envelope: TypedChatEnvelope): Msg {
+  // Quiz mode returns a graded verdict per answer (assessment.passed); surface it as a chip.
+  const passed =
+    envelope.chat_mode === "quiz" &&
+    envelope.assessment &&
+    typeof envelope.assessment.passed === "boolean"
+      ? envelope.assessment.passed
+      : null;
   return {
     id: uid(),
     role: "bot",
@@ -286,6 +310,8 @@ function envelopeMessage(envelope: TypedChatEnvelope): Msg {
     // quiz choices) it stays anchored to its turn and only the LATEST offer is live.
     continueOffer: envelope.continue_offer ?? undefined,
     artifactOffer: envelope.artifact_offer ?? undefined,
+    chatMode: envelope.chat_mode,
+    verdict: passed === null ? undefined : passed ? "passed" : "missed",
     createdAt: new Date().toISOString(),
   };
 }
@@ -416,6 +442,18 @@ function ChatPage() {
   // v9: the current lesson's published teacher resources, surfaced in the chat's top-right launcher.
   const [lessonResources, setLessonResources] = useState<LessonChatResource[]>([]);
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  // MVP §8: the student-facing chat mode. Ephemeral UI state — never persisted; switching
+  // lessons resets to Lesson. open/discuss/quiz ride sendTurn envelopes as chat_mode (Lesson
+  // omits the key entirely); practice/assessment/resources swap the pane to a dedicated surface.
+  const [chatMode, setChatMode] = useState<StudentChatMode>("lesson");
+  // Ref twin for sendTurn, which can fire from stale closures (voice, choice buttons).
+  const chatModeRef = useRef<StudentChatMode>("lesson");
+  chatModeRef.current = chatMode;
+  // The SM-2-lite due queue (header chip + Practice surface). Bumping reviewVersion refetches —
+  // a graded review turn refreshes last_practiced_at server-side, so completion changes the queue.
+  const [reviewDue, setReviewDue] = useState<ReviewDueSkill[]>([]);
+  const [reviewDueLoaded, setReviewDueLoaded] = useState(false);
+  const [reviewVersion, setReviewVersion] = useState(0);
   const [mentor, setMentor] = useState<MentorConfig>(DEFAULT_MENTOR);
   const [voice, setVoice] = useState<VoiceSettings>(DEFAULT_VOICE);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -530,11 +568,13 @@ function ChatPage() {
     currentLesson?.sample_code ||
     `// Write Jargon here\nPRINT "hello from jargon"`;
   // Newest REAL mentor message — the only bubble whose quiz choices are live. Error bubbles
-  // are skipped so a failed send can't strip the active question's buttons.
+  // are skipped so a failed send can't strip the active question's buttons, and (MVP §8)
+  // side-mode replies are skipped too so open/discuss/quiz chatter can't retire the lesson's
+  // active question or Continue pill while the student detours.
   const lastBotId = useMemo(() => {
     for (let i = msgs.length - 1; i >= 0; i--) {
       const m = msgs[i];
-      if (m.role === "bot" && !m.isError) return m.id;
+      if (m.role === "bot" && !m.isError && !m.chatMode) return m.id;
     }
     return null;
   }, [msgs]);
@@ -550,7 +590,9 @@ function ChatPage() {
   );
 
   // Auto-stick when the composer grows, but only if already near the bottom. Bound on [booting]
-  // so it attaches AFTER the boot screen unmounts (the refs are null while booting).
+  // so it attaches AFTER the boot screen unmounts (the refs are null while booting), and on
+  // [chatMode] because the mode surfaces (practice/assessment/resources) unmount the transcript
+  // + composer — returning to a conversational mode mounts NEW elements to observe.
   useEffect(() => {
     const el = composerWrapRef.current;
     if (booting || !el || typeof ResizeObserver === "undefined") return;
@@ -566,9 +608,10 @@ function ChatPage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [booting]);
+  }, [booting, chatMode]);
 
   // Track whether the student is near the bottom; scrolled-away shows the jump button.
+  // Re-bound on chatMode for the same remount reason as above.
   useEffect(() => {
     const sc = scrollRef.current;
     if (booting || !sc) return;
@@ -582,7 +625,7 @@ function ChatPage() {
     onScroll();
     sc.addEventListener("scroll", onScroll, { passive: true });
     return () => sc.removeEventListener("scroll", onScroll);
-  }, [booting]);
+  }, [booting, chatMode]);
 
   useEffect(() => {
     const sc = scrollRef.current;
@@ -850,6 +893,20 @@ function ChatPage() {
     void upsertStudentSettings({ voice_settings: next }).catch(() => {});
   };
 
+  // Stable prefs object for the Practice surface's review calls (sendTurn builds its own).
+  const mentorPrefs = useMemo(() => mentorToPreferences(mentor), [mentor]);
+
+  // MVP §8: switch the chat mode. Guarded exactly like lesson switching — never under an
+  // in-flight turn/run/build (a resolving envelope must not land under a different posture).
+  // open/discuss/quiz additionally require an existing session (the server 400s without one).
+  const switchChatMode = (next: StudentChatMode) => {
+    if (next === chatMode) return;
+    if (sending || sendingRef.current || runInFlight || buildingArtifactRef.current) return;
+    if (serverChatMode(next) && !sessionId) return;
+    setChatMode(next);
+  };
+  const modeSwitchBlocked = sending || runInFlight;
+
   const addMsg = (m: Msg) => setMsgs((prev) => [...prev, m]);
 
   const replaceThinking = (thinkingId: string, message: Msg) => {
@@ -890,6 +947,10 @@ function ChatPage() {
     if (sendingRef.current) return "busy";
     sendingRef.current = true;
     setSending(true);
+    // MVP §8: open/discuss/quiz turns carry chat_mode (read via the ref — voice/choice
+    // callbacks fire from stale closures); Lesson and the client-side surfaces OMIT the key,
+    // keeping the lesson-flow request byte-identical to the pre-mode contract.
+    const turnChatMode = serverChatMode(chatModeRef.current);
     for (const m of input.optimistic) addMsg(m);
     const thinkingId = uid();
     setMsgs((p) => [...p, { id: thinkingId, role: "thinking" }]);
@@ -902,6 +963,7 @@ function ChatPage() {
           answer: { ...input.answer, client_msg_id: newClientMsgId() },
           control: input.control,
           mentorPreferences: mentorToPreferences(mentor),
+          chatMode: turnChatMode,
         });
         setSessionId(envelope.session_id);
         // Merge the orchestrator's session snapshot (F7): status, step cursor, and the
@@ -1251,10 +1313,21 @@ function ChatPage() {
   // RealtimeVoicePanel mounted but unreachable would keep the live session (and its audio)
   // running with no reachable controls. Unmounting it triggers its full WebRTC/mic cleanup.
   // Completion counts too — the banner replaces the composer, and the mic must not keep
-  // auto-submitting turns to a finished lesson.
+  // auto-submitting turns to a finished lesson. (In a side chat mode the banner yields to the
+  // composer, so completion only kills voice in Lesson mode.) The non-conversational mode
+  // surfaces (practice/assessment/resources) have no composer at all — voice closes with it.
+  const conversationalMode =
+    chatMode === "lesson" || chatMode === "open" || chatMode === "discuss" || chatMode === "quiz";
   useEffect(() => {
-    if (view || locked || sessionHeld || (lessonComplete && !followUp)) setVoiceMode(false);
-  }, [view, locked, sessionHeld, lessonComplete, followUp]);
+    if (
+      view ||
+      locked ||
+      sessionHeld ||
+      (lessonComplete && !followUp && chatMode === "lesson") ||
+      !conversationalMode
+    )
+      setVoiceMode(false);
+  }, [view, locked, sessionHeld, lessonComplete, followUp, chatMode, conversationalMode]);
 
   // Opening a lesson from the Classes view LOADS it in place (chat.tsx owns loadLesson), then
   // returns to the chat view — the old modal-era same-route navigate never actually reloaded.
@@ -1438,6 +1511,30 @@ function ChatPage() {
     };
   }, [lessonId]);
 
+  // MVP §8: chat mode is ephemeral — switching lessons always lands back in the guided lesson.
+  useEffect(() => {
+    setChatMode("lesson");
+  }, [lessonId]);
+
+  // The spaced-review due queue for the chip + Practice surface. Best-effort (a failed read
+  // just hides the chip); refetched when a guided review completes (reviewVersion).
+  useEffect(() => {
+    if (booting) return;
+    let alive = true;
+    void fetchReviewDue()
+      .then((due) => {
+        if (!alive) return;
+        setReviewDue(due);
+        setReviewDueLoaded(true);
+      })
+      .catch(() => {
+        if (alive) setReviewDueLoaded(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [booting, reviewVersion]);
+
   const handleVoiceEvent = useCallback(
     async (event: VoiceInteractionEvent) => {
       try {
@@ -1616,16 +1713,70 @@ function ChatPage() {
               </div>
             ) : (
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                {lessonArc ? (
-                  <ChatStepperStrip
-                    arc={lessonArc}
-                    activities={activities}
-                    onRestart={restartLesson}
-                    onNavigate={sendNavigate}
-                    navigateDisabled={sending || runInFlight || sessionHeld}
+                {/* MVP §8: the seven-mode switcher — compact segmented pills (the MentorGroup
+                    idiom), scrollable on narrow screens, with the review-due chip beside it. */}
+                <div className="mb-2 flex items-center gap-2">
+                  <div
+                    role="tablist"
+                    aria-label="Chat mode"
+                    className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-pill border border-border p-[3px]"
+                  >
+                    {STUDENT_CHAT_MODES.map((m) => {
+                      const active = chatMode === m.key;
+                      const needsSession = serverChatMode(m.key) !== null && !sessionId;
+                      return (
+                        <button
+                          key={m.key}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          title={m.hint}
+                          disabled={!active && (modeSwitchBlocked || needsSession)}
+                          onClick={() => switchChatMode(m.key)}
+                          className={`shrink-0 rounded-pill px-3 py-1 text-[12px] font-medium transition-colors duration-(--dur-fast) disabled:opacity-40 ${
+                            active
+                              ? "bg-foreground text-background"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <ReviewDueChip
+                    count={reviewDue.length}
+                    active={chatMode === "practice"}
+                    disabled={modeSwitchBlocked}
+                    onOpenPractice={() => switchChatMode("practice")}
                   />
+                </div>
+                {/* The lesson spine stays visible in every mode, but goes quiescent (dimmed +
+                    inert) outside Lesson — the lesson is parked exactly where it was. */}
+                {lessonArc ? (
+                  <div
+                    className={chatMode !== "lesson" ? "pointer-events-none opacity-40" : undefined}
+                    inert={chatMode !== "lesson" ? true : undefined}
+                  >
+                    <ChatStepperStrip
+                      arc={lessonArc}
+                      activities={activities}
+                      onRestart={restartLesson}
+                      onNavigate={sendNavigate}
+                      navigateDisabled={sending || runInFlight || sessionHeld}
+                    />
+                  </div>
                 ) : null}
-                {revisitFrontier ? (
+                {chatMode !== "lesson" ? (
+                  <div className="mb-3 flex justify-center">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-info/40 bg-info/12 px-3.5 py-1.5 text-[12px] text-info">
+                      <span className="h-1.5 w-1.5 rounded-full bg-info" />
+                      {studentChatModeLabel(chatMode)} mode ·{" "}
+                      {STUDENT_CHAT_MODES.find((m) => m.key === chatMode)?.hint}
+                    </div>
+                  </div>
+                ) : null}
+                {chatMode === "lesson" && revisitFrontier ? (
                   <div className="mb-3 flex justify-center">
                     <button
                       type="button"
@@ -1667,130 +1818,180 @@ function ChatPage() {
                     </button>
                   </div>
                 ) : null}
-                <div
-                  ref={scrollRef}
-                  className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5"
-                >
-                  {msgs.map((m) => (
-                    <MessageRow
-                      key={m.id}
-                      msg={m}
-                      // Quiz choices are live ONLY on the newest mentor message — historical bubbles
-                      // keep their text but their buttons are gone, so an old quiz can't be re-answered.
-                      choicesActive={m.id === lastBotId}
-                      choicesDisabled={sending || runInFlight || sessionHeld}
-                      onUseCode={useCodeInEditor}
-                      onChooseChoice={sendChoice}
-                      onContinue={sendContinue}
-                      onBuildArtifact={buildArtifact}
-                      onRetry={retryTurn}
-                      onResourceEvent={handleResourceEvent}
-                      voice={voice}
-                      accessToken={accessToken || ""}
-                      lessonId={lessonId}
-                      sessionId={sessionId}
-                      onVoiceEvent={handleVoiceEvent}
-                    />
-                  ))}
-                  {showJump ? (
-                    <div className="sticky bottom-1 z-10 flex justify-center">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewBelow(false);
-                          scrollRef.current?.scrollTo({
-                            top: scrollRef.current.scrollHeight,
-                            behavior: "smooth",
-                          });
-                        }}
-                        className="elev-hover inline-flex items-center gap-1.5 rounded-pill border border-border bg-depth-card/95 px-3.5 py-1.5 text-meta font-medium text-foreground shadow-raised backdrop-blur"
-                      >
-                        <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
-                        {newBelow ? "New messages" : "Jump to latest"}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                <div
-                  ref={composerWrapRef}
-                  className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-                >
-                  <WorkDock
+                {chatMode === "practice" ? (
+                  // MVP §8 practice: the reconnected guided-review loop, in the chat area.
+                  <PracticeSurface
+                    accessToken={accessToken || ""}
+                    mentorPreferences={mentorPrefs}
+                    due={reviewDue}
+                    dueLoaded={reviewDueLoaded}
+                    onReviewCompleted={() => setReviewVersion((v) => v + 1)}
+                    onUseCode={useCodeInEditor}
+                    onResourceEvent={handleResourceEvent}
+                    voice={voice}
                     lessonId={lessonId}
-                    assignments={assignments}
-                    assessments={assessments}
-                    onOpenAssignment={(id) => {
-                      setAssignmentDirty(false);
-                      setOpenAssignmentId(id);
-                    }}
-                    onOpenQuiz={openQuiz}
+                    sessionId={sessionId}
+                    onVoiceEvent={handleVoiceEvent}
                   />
-                  {lessonComplete && !followUp ? (
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
-                      <div className="min-w-0">
-                        <div className="text-[14px] font-medium text-foreground">
-                          Lesson complete
+                ) : chatMode === "assessment" ? (
+                  // MVP §8 assessment: pending formal assessments (the WorkDock data) as a list.
+                  <AssessmentSurface assessments={assessments} onOpenQuiz={openQuiz} />
+                ) : chatMode === "resources" ? (
+                  // MVP §8 resources: the paperclip launcher content, pinned open as a surface.
+                  <ResourcesSurface
+                    resources={lessonResources}
+                    onResourceEvent={handleResourceEvent}
+                    voice={voice}
+                    accessToken={accessToken || ""}
+                    lessonId={lessonId}
+                    sessionId={sessionId}
+                    onVoiceEvent={handleVoiceEvent}
+                  />
+                ) : (
+                  <>
+                    <div
+                      ref={scrollRef}
+                      className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5"
+                    >
+                      {msgs.map((m) => (
+                        <MessageRow
+                          key={m.id}
+                          msg={m}
+                          // Quiz choices are live ONLY on the newest mentor message — historical bubbles
+                          // keep their text but their buttons are gone, so an old quiz can't be re-answered.
+                          // (And only in Lesson mode: side modes park the lesson's interactive pills.)
+                          choicesActive={m.id === lastBotId && chatMode === "lesson"}
+                          choicesDisabled={sending || runInFlight || sessionHeld}
+                          onUseCode={useCodeInEditor}
+                          onChooseChoice={sendChoice}
+                          onContinue={sendContinue}
+                          onBuildArtifact={buildArtifact}
+                          onRetry={retryTurn}
+                          onResourceEvent={handleResourceEvent}
+                          voice={voice}
+                          accessToken={accessToken || ""}
+                          lessonId={lessonId}
+                          sessionId={sessionId}
+                          onVoiceEvent={handleVoiceEvent}
+                        />
+                      ))}
+                      {showJump ? (
+                        <div className="sticky bottom-1 z-10 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewBelow(false);
+                              scrollRef.current?.scrollTo({
+                                top: scrollRef.current.scrollHeight,
+                                behavior: "smooth",
+                              });
+                            }}
+                            className="elev-hover inline-flex items-center gap-1.5 rounded-pill border border-border bg-depth-card/95 px-3.5 py-1.5 text-meta font-medium text-foreground shadow-raised backdrop-blur"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                            {newBelow ? "New messages" : "Jump to latest"}
+                          </button>
                         </div>
-                        <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-                          Nice work. Pick your next lesson, or keep chatting about this one.
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => goView("classes")}
-                          className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
-                        >
-                          Pick your next lesson
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFollowUp(true)}
-                          className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
-                        >
-                          Ask a follow-up
-                        </button>
-                      </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                  {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
+                    <div
+                      ref={composerWrapRef}
+                      className="relative z-30 shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+                    >
+                      {chatMode === "lesson" ? (
+                        <WorkDock
+                          lessonId={lessonId}
+                          assignments={assignments}
+                          assessments={assessments}
+                          onOpenAssignment={(id) => {
+                            setAssignmentDirty(false);
+                            setOpenAssignmentId(id);
+                          }}
+                          onOpenQuiz={openQuiz}
+                        />
+                      ) : null}
+                      {chatMode === "lesson" && lessonComplete && !followUp ? (
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border/60 bg-depth-card px-5 py-4 shadow-raised">
+                          <div className="min-w-0">
+                            <div className="text-[14px] font-medium text-foreground">
+                              Lesson complete
+                            </div>
+                            <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+                              Nice work. Pick your next lesson, or keep chatting about this one.
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => goView("classes")}
+                              className="rounded-full bg-foreground px-4 py-2 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+                            >
+                              Pick your next lesson
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFollowUp(true)}
+                              className="rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted"
+                            >
+                              Ask a follow-up
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {/* Keep the Composer MOUNTED (hidden) during voice so its state — code edits,
               imperative handle for "Use this code" — survives entering/leaving voice mode. */}
-                  <div
-                    className={voiceMode || (lessonComplete && !followUp) ? "hidden" : undefined}
-                  >
-                    <Composer
-                      ref={composerRef}
-                      key={lessonId}
-                      initialCode={starterCode}
-                      initialLanguage="jargon"
-                      onSendText={sendUser}
-                      onRunCode={runCode}
-                      onSendCodeResult={sendCodeResult}
-                      onVoiceEvent={handleVoiceEvent}
-                      // Lock inputs while a teacher has the session paused (Phase 3).
-                      sending={sending || sessionHeld}
-                      canStartVoice={voiceSupported}
-                      onStartVoice={() => setVoiceMode(true)}
-                    />
-                  </div>
-                  {voiceMode ? (
-                    <RealtimeVoicePanel
-                      accessToken={accessToken || ""}
-                      lessonId={lessonId}
-                      sessionId={sessionId}
-                      voice={voice}
-                      autoStart
-                      onClose={() => setVoiceMode(false)}
-                      onVoiceEvent={handleVoiceEvent}
-                      onSubmitVoiceTurn={async (text, confidence) =>
-                        submitTextAnswer(text, {
-                          inputModality: "audio_session",
-                          transcriptConfidence: confidence ?? null,
-                        })
-                      }
-                    />
-                  ) : null}
-                </div>
+                      <div
+                        className={
+                          voiceMode || (chatMode === "lesson" && lessonComplete && !followUp)
+                            ? "hidden"
+                            : undefined
+                        }
+                      >
+                        <Composer
+                          ref={composerRef}
+                          key={lessonId}
+                          initialCode={starterCode}
+                          initialLanguage="jargon"
+                          onSendText={sendUser}
+                          onRunCode={runCode}
+                          onSendCodeResult={sendCodeResult}
+                          onVoiceEvent={handleVoiceEvent}
+                          // Lock inputs while a teacher has the session paused (Phase 3).
+                          sending={sending || sessionHeld}
+                          // Mode-aware chatbar: the prompt names the posture the student is in.
+                          placeholder={
+                            chatMode === "open"
+                              ? "Ask your mentor anything…"
+                              : chatMode === "discuss"
+                                ? "Share your thinking on today's topic…"
+                                : chatMode === "quiz"
+                                  ? "Answer — or ask for the next question…"
+                                  : undefined
+                          }
+                          canStartVoice={voiceSupported}
+                          onStartVoice={() => setVoiceMode(true)}
+                        />
+                      </div>
+                      {voiceMode ? (
+                        <RealtimeVoicePanel
+                          accessToken={accessToken || ""}
+                          lessonId={lessonId}
+                          sessionId={sessionId}
+                          voice={voice}
+                          autoStart
+                          onClose={() => setVoiceMode(false)}
+                          onVoiceEvent={handleVoiceEvent}
+                          onSubmitVoiceTurn={async (text, confidence) =>
+                            submitTextAnswer(text, {
+                              inputModality: "audio_session",
+                              transcriptConfidence: confidence ?? null,
+                            })
+                          }
+                        />
+                      ) : null}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </main>
@@ -2487,6 +2688,310 @@ function WorkLauncherRow({
   );
 }
 
+// MVP §8 practice: the reconnected spaced-review loop, rendered in the chat area. The due list
+// (SM-2-lite queue) offers a "Start review" per skill; a started review streams mentor/student
+// turns in the transcript style (MessageRow) via useGuidedReview — invokeReview to start, an
+// answer loop continued on reviewSessionId, and completeReviewSession on Finish.
+function PracticeSurface({
+  accessToken,
+  mentorPreferences,
+  due,
+  dueLoaded,
+  onReviewCompleted,
+  onUseCode,
+  onResourceEvent,
+  voice,
+  lessonId,
+  sessionId,
+  onVoiceEvent,
+}: {
+  accessToken: string;
+  mentorPreferences: MentorPreferences;
+  due: ReviewDueSkill[];
+  dueLoaded: boolean;
+  onReviewCompleted: () => void;
+  onUseCode: (code: ChatCodeBlock) => void;
+  onResourceEvent: (
+    resource: LessonChatResource,
+    eventType: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded",
+    progress?: { progress_seconds?: number; progress_percent?: number },
+  ) => Promise<void>;
+  voice: VoiceSettings;
+  lessonId: string;
+  sessionId: string | null;
+  onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
+}) {
+  const review = useGuidedReview({ accessToken: accessToken || null, mentorPreferences });
+  const [draft, setDraft] = useState("");
+  const [finishing, setFinishing] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Stick to the newest review turn (the surface has its own scroll area).
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [review.turns, review.busy]);
+
+  const submitAnswer = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text || review.busy) return;
+    setDraft("");
+    await review.answer(text);
+  };
+
+  const finishReview = async () => {
+    if (finishing || review.busy) return;
+    setFinishing(true);
+    try {
+      await review.finish();
+      onReviewCompleted();
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  // MessageRow props that can never fire in a review (no choices/offers/retry payloads).
+  const inertRow = {
+    onChooseChoice: () => {},
+    onRetry: () => {},
+    onResourceEvent,
+    onUseCode,
+    voice,
+    accessToken,
+    lessonId,
+    sessionId,
+    onVoiceEvent,
+  };
+
+  if (!review.skillKey) {
+    return (
+      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto pb-6">
+        <div className="mb-3 text-[13px] leading-relaxed text-muted-foreground">
+          Spaced practice keeps skills fresh — these are due for a quick review.
+        </div>
+        {!dueLoaded ? (
+          <div className="text-[13px] text-muted-foreground">Checking what&apos;s due…</div>
+        ) : due.length === 0 ? (
+          <div className="flex flex-col items-center gap-1.5 rounded-card border border-border/60 bg-depth-card px-5 py-8 text-center shadow-card">
+            <div className="text-[14px] font-medium text-foreground">You&apos;re all caught up</div>
+            <div className="max-w-[380px] text-[12.5px] leading-relaxed text-muted-foreground">
+              Nothing is due for review right now. Keep learning — practiced skills come back here
+              when it&apos;s time to refresh them.
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            {due.map((skill) => (
+              <div
+                key={skill.skill_key}
+                className="flex items-center gap-3 rounded-card border border-border/60 bg-depth-card px-3.5 py-2.5 shadow-card"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px] font-medium text-foreground">
+                    {humanizeSkillKey(skill.skill_key)}
+                  </div>
+                  <div className="mt-0.5 text-[11.5px] text-muted-foreground">
+                    {skill.level.charAt(0).toUpperCase() + skill.level.slice(1)} ·{" "}
+                    {practicedAgo(skill.last_practiced_at)}
+                    {skill.days_overdue > 0 ? ` · ${skill.days_overdue}d overdue` : " · due today"}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void review.start(skill.skill_key)}
+                  disabled={review.busy}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-4 py-2 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  <Play className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  Start review
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-[13.5px] font-medium text-foreground">
+            Reviewing: {humanizeSkillKey(review.skillKey)}
+          </div>
+          <div className="text-[11.5px] text-muted-foreground">
+            Answer from memory — that&apos;s the workout.
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => review.reset()}
+            disabled={review.busy || finishing}
+            className="rounded-full border border-border px-3.5 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            Back to skills
+          </button>
+          <button
+            type="button"
+            onClick={() => void finishReview()}
+            disabled={review.busy || finishing}
+            className="rounded-full bg-foreground px-4 py-1.5 text-[12px] font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {finishing ? "Finishing…" : "Finish review"}
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="no-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto pb-5">
+        {review.turns.map((turn) => (
+          <MessageRow
+            key={turn.id}
+            msg={
+              turn.role === "student"
+                ? { id: turn.id, role: "user", text: turn.text }
+                : { id: turn.id, role: "bot", text: turn.text, isError: turn.isError }
+            }
+            {...inertRow}
+          />
+        ))}
+        {review.busy ? (
+          <MessageRow msg={{ id: "review-thinking", role: "thinking" }} {...inertRow} />
+        ) : null}
+      </div>
+      <form
+        onSubmit={submitAnswer}
+        className="shrink-0 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+      >
+        <div className="flex items-center gap-2 rounded-3xl border border-border bg-background/70 px-4 py-2.5">
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Type what you remember…"
+            disabled={review.busy}
+            className="min-w-0 flex-1 bg-transparent py-1 text-[14.5px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={review.busy || !draft.trim()}
+            aria-label="Send answer"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            <Send className="h-3.5 w-3.5" strokeWidth={1.8} />
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// MVP §8 assessment: the pending formal assessments (the WorkDock's bundle, unfiltered by
+// lesson) as launchers into the existing QuizPanel lockdown flow.
+function AssessmentSurface({
+  assessments,
+  onOpenQuiz,
+}: {
+  assessments: StudentAssessmentBundle;
+  onOpenQuiz: (assessmentId: string, viewingResult: boolean) => void;
+}) {
+  const published = assessments.assessments
+    .filter((assessment) => assessment.status === "published")
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  return (
+    <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto pb-6">
+      <div className="mb-3 text-[13px] leading-relaxed text-muted-foreground">
+        Your formal assessments. Opening one starts a focused, full-screen attempt.
+      </div>
+      {published.length === 0 ? (
+        <div className="flex flex-col items-center gap-1.5 rounded-card border border-border/60 bg-depth-card px-5 py-8 text-center shadow-card">
+          <div className="text-[14px] font-medium text-foreground">Nothing pending</div>
+          <div className="max-w-[380px] text-[12.5px] leading-relaxed text-muted-foreground">
+            No assessments are waiting for you right now — they&apos;ll show up here when your
+            teacher publishes one.
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          {published.map((assessment) => {
+            const recipient = assessments.recipients.find(
+              (item) => item.assessment_id === assessment.id,
+            );
+            const latestAttempt =
+              assessments.attempts.filter((att) => att.assessment_id === assessment.id)[0] || null;
+            const finished = Boolean(latestAttempt && latestAttempt.status !== "in_progress");
+            return (
+              <WorkLauncherRow
+                key={assessment.id}
+                kind="Quiz"
+                title={assessment.title}
+                status={recipient?.status || "assigned"}
+                dueAt={assessment.due_at}
+                score={latestAttempt?.final_score ?? null}
+                actionLabel={finished ? "View result" : "Open"}
+                onOpen={() => onOpenQuiz(assessment.id, finished)}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// MVP §8 resources: the paperclip launcher's content pinned open as a full surface.
+function ResourcesSurface({
+  resources,
+  onResourceEvent,
+  voice,
+  accessToken,
+  lessonId,
+  sessionId,
+  onVoiceEvent,
+}: {
+  resources: LessonChatResource[];
+  onResourceEvent: (
+    resource: LessonChatResource,
+    eventType: "shown" | "opened" | "played" | "paused" | "completed" | "downloaded",
+    progress?: { progress_seconds?: number; progress_percent?: number },
+  ) => Promise<void>;
+  voice: VoiceSettings;
+  accessToken: string;
+  lessonId: string;
+  sessionId: string | null;
+  onVoiceEvent: (event: VoiceInteractionEvent) => void | Promise<void>;
+}) {
+  return (
+    <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto pb-6">
+      <div className="mb-3 text-[13px] leading-relaxed text-muted-foreground">
+        Everything your teacher attached to this lesson.
+      </div>
+      {resources.length === 0 ? (
+        <div className="flex flex-col items-center gap-1.5 rounded-card border border-border/60 bg-depth-card px-5 py-8 text-center shadow-card">
+          <div className="text-[14px] font-medium text-foreground">No resources yet</div>
+          <div className="max-w-[380px] text-[12.5px] leading-relaxed text-muted-foreground">
+            This lesson has no attached materials — anything your teacher adds will appear here.
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {resources.map((resource) => (
+            <ResourceCard
+              key={resource.id}
+              resource={resource}
+              onResourceEvent={onResourceEvent}
+              voice={voice}
+              accessToken={accessToken}
+              lessonId={lessonId}
+              sessionId={sessionId}
+              onVoiceEvent={onVoiceEvent}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The assignment submission surface inside the FocusLock: instructions, the latest submission's
 // state, and the draft form (moved here from the retired inline AssignmentDock). A successful
 // submit exits the lockdown via onSubmitted.
@@ -2882,7 +3387,33 @@ function MessageRow({
   return (
     <div ref={ref} className="flex">
       <div className="w-full max-w-[92%] space-y-3">
+        {msg.chatMode ? (
+          // MVP §8: side-mode replies carry a small tag so the transcript always shows which
+          // posture a mentor message came from.
+          <div className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+            {msg.chatMode === "open"
+              ? "Open chat"
+              : msg.chatMode === "discuss"
+                ? "Discussion"
+                : "Quiz"}
+          </div>
+        ) : null}
         <MessageContent text={msg.text} onUseCode={onUseCode} />
+        {msg.verdict ? (
+          // Quiz mode's graded verdict for the answer this reply responds to.
+          <div>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium ${
+                msg.verdict === "passed"
+                  ? "border-success/40 bg-success/12 text-success"
+                  : "border-warning/40 bg-warning/12 text-warning"
+              }`}
+            >
+              {msg.verdict === "passed" ? <Check className="h-3 w-3" strokeWidth={2.2} /> : null}
+              {msg.verdict === "passed" ? "Correct" : "Not quite"}
+            </span>
+          </div>
+        ) : null}
         {msg.choices?.length && choicesActive ? (
           <div className="flex flex-wrap gap-2">
             {msg.choices.map((choice, index) => (

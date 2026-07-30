@@ -12,8 +12,14 @@ import { GradesPanel } from "@/features/student/GradesPanel";
 import { AgendaCalendar } from "@/features/student/panels/AgendaCalendar";
 import { formatScore, relativeTime } from "@/lib/format";
 import { modeLabel } from "@/lib/modes";
-import { fetchStudentProfileStats } from "@/lib/api";
-import type { Notification, StudentGradeRow, StudentProfileStats } from "@/lib/types";
+import { fetchSessionSummaries, fetchStudentMemory, fetchStudentProfileStats } from "@/lib/api";
+import type {
+  Notification,
+  SessionSummary,
+  StudentGradeRow,
+  StudentMemory,
+  StudentProfileStats,
+} from "@/lib/types";
 
 // Pulse — time + signal, in one panel: (a) Up next, this student's work as either a day-grouped
 // agenda (−7d…+21d, overdue pinned) or a month calendar, toggled; (b) Grades, a summary + recent
@@ -319,6 +325,134 @@ function titleCase(value: string): string {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
+// Memory v1 (docs/MVP_SCOPE.md §6): the student-visible view of what the mentor carries between
+// sessions — the rolling narrative profile plus the most recent per-session recaps. Both reads
+// are owner-RLS-scoped plain selects; a failure or empty result degrades to the friendly
+// getting-to-know-you note rather than an error.
+function chipList(values: string[] | undefined, max = 6): string[] {
+  return (values ?? []).filter((v) => typeof v === "string" && v.trim()).slice(0, max);
+}
+
+function MemoryChips({ label, values, tone }: { label: string; values: string[]; tone: string }) {
+  if (!values.length) return null;
+  return (
+    <div>
+      <div className="mb-1 text-meta font-medium text-muted-foreground">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {values.map((value) => (
+          <span
+            key={value}
+            className={`inline-flex max-w-full items-center rounded-pill border px-2.5 py-1 text-meta ${tone}`}
+          >
+            <span className="truncate">{value}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MentorMemorySection() {
+  const [memory, setMemory] = useState<StudentMemory | null>(null);
+  const [summaries, setSummaries] = useState<SessionSummary[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([
+      fetchStudentMemory().catch(() => null),
+      fetchSessionSummaries(5).catch(() => [] as SessionSummary[]),
+    ]).then(([nextMemory, nextSummaries]) => {
+      if (!alive) return;
+      setMemory(nextMemory);
+      setSummaries(nextSummaries);
+      setLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!loaded) return <StateNote>Loading your mentor&apos;s memory…</StateNote>;
+
+  const narrative =
+    typeof memory?.profile?.narrative === "string" ? memory.profile.narrative.trim() : "";
+  const strengths = chipList(memory?.profile?.strengths);
+  const struggles = chipList(memory?.profile?.struggles);
+  const preferences = chipList(memory?.profile?.preferences);
+  const empty = !narrative && !strengths.length && !struggles.length && !summaries.length;
+
+  if (empty) {
+    return (
+      <StateNote>
+        Your mentor is still getting to know you — finish a lesson to start building memory.
+      </StateNote>
+    );
+  }
+
+  return (
+    <div className="grid gap-3">
+      {narrative ? (
+        <div className="rounded-card border border-border bg-depth-sub p-3">
+          <p className="text-body leading-relaxed text-foreground">{narrative}</p>
+          {memory?.updated_at ? (
+            <div className="mt-1.5 text-meta text-muted-foreground">
+              Updated {relativeTime(memory.updated_at)}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <MemoryChips
+        label="Strengths"
+        values={strengths}
+        tone="border-success/40 bg-success/10 text-success"
+      />
+      <MemoryChips
+        label="Working on"
+        values={struggles}
+        tone="border-warning/40 bg-warning/10 text-warning"
+      />
+      <MemoryChips
+        label="Likes"
+        values={preferences}
+        tone="border-border bg-depth-field text-foreground"
+      />
+      {summaries.length ? (
+        <div>
+          <div className="mb-1 text-meta font-medium text-muted-foreground">Recent sessions</div>
+          <div className="grid gap-1.5">
+            {summaries.map((row) => {
+              const covered =
+                typeof row.summary?.covered === "string" ? row.summary.covered.trim() : "";
+              const wins = typeof row.summary?.wins === "string" ? row.summary.wins.trim() : "";
+              const stuck =
+                typeof row.summary?.struggles === "string" ? row.summary.struggles.trim() : "";
+              const note = typeof row.summary?.note === "string" ? row.summary.note.trim() : "";
+              return (
+                <div
+                  key={row.id}
+                  className="rounded-control border border-border/60 bg-depth-field px-3 py-2.5"
+                >
+                  <div className="text-body text-foreground">
+                    {covered || note || "A learning session"}
+                  </div>
+                  {wins ? <div className="mt-0.5 text-meta text-success">Wins: {wins}</div> : null}
+                  {stuck ? (
+                    <div className="mt-0.5 text-meta text-warning">Tricky: {stuck}</div>
+                  ) : null}
+                  <div className="mt-0.5 text-meta text-muted-foreground">
+                    {relativeTime(row.created_at)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function PerformanceSection() {
   const [stats, setStats] = useState<StudentProfileStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -362,6 +496,11 @@ function PerformanceSection() {
         <StatTile value={stats.progress.lessonsCompleted} label="Lessons completed" />
         <StatTile value={stats.progress.lessonsStarted} label="Lessons started" />
       </div>
+
+      <div className="mb-2 mt-6 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        What your mentor remembers
+      </div>
+      <MentorMemorySection />
 
       <div className="mb-2 mt-6 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
         Proficiency

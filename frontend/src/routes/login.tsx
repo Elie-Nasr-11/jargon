@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { Eye, EyeOff } from "lucide-react";
+import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -14,6 +14,14 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
+// The seeded demo accounts (admin-seed `seed_demo_logins` — deterministic emails, one shared
+// password handed out by whoever ran the seed; NEVER embedded here).
+const DEMO_LOGINS: Array<{ role: string; email: string; blurb: string }> = [
+  { role: "Student", email: "demo-student@example.com", blurb: "The chat + lesson experience" },
+  { role: "Teacher", email: "demo-teacher@example.com", blurb: "Console, authoring, grading" },
+  { role: "Admin", email: "demo-admin@example.com", blurb: "Seeding, live view, costs" },
+];
+
 function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -21,6 +29,7 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -189,6 +198,53 @@ function LoginPage() {
                   {message}
                 </p>
               )}
+
+              {/* Demo access: the seeded demo logins (entry story). Emails are deterministic —
+                  a tap fills the email field; the password comes from whoever shared the demo. */}
+              <div className="border-t border-border/60 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setDemoOpen((v) => !v)}
+                  aria-expanded={demoOpen}
+                  className="flex w-full items-center justify-between text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Demo access
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform ${demoOpen ? "rotate-180" : ""}`}
+                    strokeWidth={2}
+                  />
+                </button>
+                {demoOpen ? (
+                  <div className="mt-3 grid gap-1.5">
+                    {DEMO_LOGINS.map((demo) => (
+                      <button
+                        key={demo.email}
+                        type="button"
+                        onClick={() => {
+                          setEmail(demo.email);
+                          setMessage("");
+                        }}
+                        className="flex items-baseline justify-between gap-3 rounded-xl border border-border/60 px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-[12.5px] font-medium text-foreground">
+                            {demo.role}
+                          </span>
+                          <span className="block truncate text-[11.5px] text-muted-foreground">
+                            {demo.email}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {demo.blurb}
+                        </span>
+                      </button>
+                    ))}
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                      Tap a role to fill the email — use the demo password you were given.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </form>
           </GradientCard>
         </div>

@@ -71,6 +71,8 @@ import type {
   StudentGradeRow,
   StudentUpload,
   StudentMastery,
+  StudentMemory,
+  SessionSummary,
   StudentProfileStats,
   ReviewDueSkill,
   ReviewSession,
@@ -622,6 +624,35 @@ export async function fetchStudentEvidence(): Promise<LearningEvidence[]> {
     .limit(500);
   if (error) throw error;
   return (data || []) as LearningEvidence[];
+}
+
+// Memory v1 (docs/MVP_SCOPE.md §9): the signed-in student's rolling mentor-memory profile.
+// Owner RLS (student_memory_owner_select) scopes the read; null = no memory built yet.
+export async function fetchStudentMemory(): Promise<StudentMemory | null> {
+  const session = await getSession();
+  if (!session?.user?.id) return null;
+  const { data, error } = await supabase
+    .from("student_memory")
+    .select("user_id,profile,updated_at")
+    .eq("user_id", session.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as StudentMemory | null) ?? null;
+}
+
+// Memory v1: the student's most recent per-session recaps, newest first. Owner RLS
+// (session_summaries_owner_select) scopes the read.
+export async function fetchSessionSummaries(limit = 5): Promise<SessionSummary[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const { data, error } = await supabase
+    .from("session_summaries")
+    .select("id,user_id,session_id,lesson_id,summary,created_at")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []) as SessionSummary[];
 }
 
 export async function fetchStudentTeacherNotes(): Promise<TeacherNote[]> {
@@ -2984,6 +3015,10 @@ export async function invokeTypedChat(input: {
   answer?: TypedChatAnswer;
   control?: TypedChatControl;
   mentorPreferences: MentorPreferences;
+  // MVP chat modes (docs/MVP_SCOPE.md §8): open/discuss/quiz side-mode turns on the SAME session.
+  // Absent/null = the lesson flow — JSON.stringify drops the undefined so the request body stays
+  // byte-identical to the pre-mode contract (the key is omitted entirely, never sent as null).
+  chatMode?: "open" | "discuss" | "quiz" | null;
 }) {
   const response = await fetchWithTimeout(functionUrl("chat"), {
     method: "POST",
@@ -2994,6 +3029,7 @@ export async function invokeTypedChat(input: {
       answer: input.answer,
       control: input.control,
       mentor_preferences: input.mentorPreferences,
+      chat_mode: input.chatMode || undefined,
     }),
   });
   const data = (await response.json()) as TypedChatEnvelope;
