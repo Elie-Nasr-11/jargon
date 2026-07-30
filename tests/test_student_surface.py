@@ -147,3 +147,32 @@ class ModeSections(unittest.TestCase):
         # The sections do own them.
         self.assertIn("mode-surface", TRANSCRIPT)
         self.assertIn("mode-eyebrow", TRANSCRIPT)
+
+class LessonOffersAreServerDriven(unittest.TestCase):
+    """envelope.available is what makes the inline pills real rather than decorative."""
+
+    def test_the_server_populates_every_offer(self):
+        block = CHAT_FN[CHAT_FN.index("envelope.available = {") :]
+        block = block[: block.index("};")]
+        self.assertIn("quiz: requirements.quiz", block)
+        self.assertIn("homework:", block)
+        self.assertIn("resources: attachedResources.length > 0", block)
+
+    def test_homework_counts_assignments_not_assessments(self):
+        # An assessment is not homework; counting it would show the Homework pill for a quiz.
+        block = CHAT_FN[CHAT_FN.index("envelope.available = {") :]
+        block = block[: block.index("};")]
+        self.assertIn("pendingCheckpoints", block)
+        self.assertIn('=== "assignment"', block)
+
+    def test_offers_are_computed_without_new_queries(self):
+        # Each flag reads state the turn already has. A fresh fetch here would add latency to
+        # every single turn for three booleans.
+        block = CHAT_FN[CHAT_FN.index("envelope.available = {") :]
+        block = block[: block.index("};")]
+        for banned in ("await ", "loadMany(", "supabaseFetch("):
+            self.assertNotIn(banned, block)
+
+    def test_the_field_stays_optional_for_replay(self):
+        # Envelopes stored before v6 must replay unchanged.
+        self.assertIn("available?: { quiz: boolean; homework: boolean; resources: boolean }", CHAT_FN)

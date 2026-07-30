@@ -6849,3 +6849,39 @@ runs off a client fallback. This is now blocking two features and is the top bac
 Home's "Marked" column — decide whether it is a deeper view or should be dropped.
 (5) Attachments, voice, code running, artifacts and resource cards are still unported from /chat.
 Suggested next task: the envelope.available writer, then Classes navigation on Home.
+
+## Claude -> Codex / Human - 2026-07-30 11:35
+
+Status: Done (envelope.available — the offer pills are now server-driven)
+Summary: Closed the backend gap that had been deferred three times. chat/index.ts now populates
+`envelope.available = { quiz, homework, resources }`, so the chatbox's inline pills reflect what the
+lesson actually offers instead of a client-side guess. The Homework pill was previously IMPOSSIBLE —
+it had no client-side proxy signal and stayed hidden by design rather than guessing; it can now
+appear.
+Each flag reads state the turn already computed, with no new queries — three booleans must not add
+latency to every turn:
+  quiz      → requirements.quiz, so it tracks a bound quiz appearing or being passed
+  homework  → a PENDING assignment checkpoint for this lesson, from context.pendingCheckpoints.
+              Deliberately kind === "assignment" only: an assessment is not homework, and counting
+              it would show the Homework pill for a quiz.
+  resources → whatever the mentor actually attached to this turn
+Set post-hoc next to envelope.continue_offer, following the existing pattern rather than threading
+three more fields through makeEnvelope's defaults. The field is OPTIONAL so envelopes stored before
+v6 replay unchanged, and the client's existing fallback for quiz/resources still applies when it is
+absent.
+Files changed: supabase/functions/chat/index.ts, tests/test_student_surface.py, docs/HANDOFF.md.
+Tests run: esbuild syntax check on chat/index.ts clean; python unittest 297 tests, 4 errors — the
+known pre-existing setUpClass FileNotFoundErrors, unchanged (+4 new); frontend tsc 0 errors, eslint
+0 errors / 17 warnings (baseline), vite build green.
+Remaining concerns: (1) NOT verified against real data — Supabase is unreachable from this sandbox,
+so no pill has ever been seen. The homework flag in particular depends on the `kind` values in the
+unified checkpoints table being exactly "assignment"/"assessment"; that is what loadPendingCheckpoints
+selects and what the runtime comment at :2845 describes, but it has not been observed live. If the
+Homework pill never appears with real data, check that first.
+(2) This deploys automatically on push (deploy-backend triggers on supabase/functions/chat/**), so
+the change is live on the backend before any client has been verified against it. It is additive and
+optional, so old clients ignore it.
+(3) Reports still overlaps Home's "Marked" column — undecided.
+(4) Still unported from /chat: attachments, voice, code running, artifacts, resource cards.
+Suggested next task: the signed-in run. Five slices of student surface plus this writer have never
+executed against real data, and the homework `kind` assumption is the first thing it would confirm.

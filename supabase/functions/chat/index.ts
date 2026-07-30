@@ -233,6 +233,10 @@ type Envelope = {
   // the Continue pill offer for unacknowledged content steps, the router's verdict for
   // this turn, and the router-vs-grader disagreement flag (tuning telemetry).
   continue_offer?: { label: string } | null;
+  // v6: what this lesson currently offers, for the student chatbox's inline pills. Computed from
+  // what the turn already knows — no extra queries. Optional so stored envelopes from before v6
+  // replay unchanged; the client hides a pill it has no signal for rather than guessing.
+  available?: { quiz: boolean; homework: boolean; resources: boolean };
   turn_kind?: string;
   router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for THIS student (never
@@ -4732,6 +4736,22 @@ async function handleTypedRequest(
               context.quiz,
             ),
     });
+    // v6: drive the chatbox's inline pills. A pill appears only when there is something behind
+    // it, so each flag is read off state this turn already computed:
+    //   quiz     — the step's own requirement, so it tracks a bound quiz appearing or passing
+    //   homework — a PENDING assignment checkpoint for this lesson (assessments are not homework)
+    //   resources — whatever the mentor actually attached to this turn
+    // The client keeps a fallback for quiz and resources, but homework has no client-side proxy:
+    // without this it can never appear, and guessing would point a student at work that may not
+    // exist.
+    envelope.available = {
+      quiz: requirements.quiz,
+      homework: context.pendingCheckpoints.some(
+        (checkpoint) => String((checkpoint as DbRow).kind || "") === "assignment",
+      ),
+      resources: attachedResources.length > 0,
+    };
+
     // Flow v3: the Continue pill renders whenever a content step is presented but not yet
     // acknowledged — the deterministic escape hatch that replaces "any message advances".
     // Suppressed during a revisit (the Resume chip is the exit there).
