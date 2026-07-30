@@ -39,7 +39,7 @@ Legend: **KEEP** (as-is or light touch) · **REWORK** (survives, changes shape) 
 
 | File | Decision | Notes |
 |---|---|---|
-| `shell/AppSidebar.tsx` | REWORK | Keeps Tutor chat / Classes / Overview + lessons list; gains mode-aware chrome; restores voice toggles in account popover (task 9). |
+| `shell/AppSidebar.tsx` | REWORK | Keeps Tutor chat / Classes / Overview + lessons list; gains mode-aware chrome. (Voice needs no restoration — always-on by design with best server voices.) |
 | `shell/studentViews.ts` | KEEP | |
 | `panels/PulsePanel.tsx` | REWORK | Activity feed becomes notifications-only (DM feed removed); stale `ProfilePanel`/`MessagesPanel` comments cleaned; gains "What your mentor remembers" (memory v1) and review-due surface. |
 | `panels/ClassesGrid.tsx` | KEEP | |

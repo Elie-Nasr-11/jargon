@@ -24,8 +24,10 @@ Product-owner decisions (no live users at decision time):
 - DB migrations and edge functions are never deleted (applied/live, additive-only);
   out-of-scope backend stays deployed but dormant (canvas, google-classroom,
   resource-processing pipeline, comms tables).
-- Voice is in the MVP with the best available server voices (already the defaults in
-  `voice-session`); the deleted frontend toggles return.
+- Voice is in the MVP with the best available server voices — verified already true
+  as-built: dictation/read-aloud/live-voice are always-on by design, `voice-session`
+  defaults to the newest models (`gpt-realtime-2`, `gpt-4o-mini-tts`, marin default
+  voice), and read-aloud prefers server TTS with browser fallback. No change needed.
 - A small multi-subject demo catalog is seeded alongside Book F.
 - The full inventory lives in `docs/MVP_SCOPE.md` (canonical for this pass).
 
