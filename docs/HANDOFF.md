@@ -6381,3 +6381,15 @@ supabase/functions/chat/index.ts, new memory migration, tests.
 Notes: DB migrations and edge functions are NOT deleted (applied/live, additive-only
 rule); out-of-scope backend (canvas, google-classroom, resource-processing pipeline)
 stays deployed but loses its frontend. See docs/MVP_SCOPE.md for the full inventory.
+
+## Claude (student/comms strip agent) -> Codex / Human - 2026-07-30 16:31
+
+Status: Starting
+Task: MVP_SCOPE student slice — delete lib/bot.ts; remove comms mounts from chat.tsx /
+PulsePanel / ClassCanvas (files in features/comms/ left for the orchestrator to delete);
+drop lesson1 fallbacks (chat.tsx + jargon-store LESSONS) with a graceful empty-catalog
+state; neutral Composer placeholder; drop dead nextDue in useStudentNavData; verify
+SettingsMenu importers.
+Files I expect to touch: frontend/src/routes/chat.tsx, features/student/panels/{PulsePanel,ClassCanvas}.tsx,
+components/Composer.tsx, lib/jargon-store.ts, lib/bot.ts (delete), hooks/useStudentNavData.ts.
+Notes: not committing; orchestrator lands all agents together.
