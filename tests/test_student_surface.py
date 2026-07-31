@@ -146,9 +146,23 @@ class ModeSections(unittest.TestCase):
         # about which part was which.
         self.assertNotIn("mode-surface", WINDOW)
         self.assertNotIn("mode-eyebrow", WINDOW)
-        # The sections do own them.
-        self.assertIn("mode-surface", TRANSCRIPT)
+        # The sections do own the chrome: a full-width rule + pill per section (the tinted
+        # fit-width .mode-surface boxes retired with the 2026-07-31 flat restyle).
+        self.assertIn("mode-divider", TRANSCRIPT)
         self.assertIn("mode-eyebrow", TRANSCRIPT)
+
+    def test_the_rule_spans_the_window_but_messages_keep_the_reading_column(self):
+        # The rule is full-bleed; the messages under it stay centered and width-capped —
+        # the window no longer wraps children in its own column (Transcript owns layout).
+        self.assertIn("max-w-3xl", TRANSCRIPT)
+        fn = WINDOW[WINDOW.index("overflow-y-auto") :]
+        self.assertNotIn("max-w-3xl", fn[: fn.index("</div>")])
+
+    def test_the_rule_animates_once_on_first_visibility(self):
+        # Both entrances (fresh mode selection at the bottom, scroll-back through history) run
+        # through one mechanism; reduced motion renders the final state immediately.
+        self.assertIn("IntersectionObserver", TRANSCRIPT)
+        self.assertIn("prefersReducedMotion()", TRANSCRIPT)
 
 class LessonFlowAffordances(unittest.TestCase):
     """B1: the turn-loop affordances the envelope drives."""
