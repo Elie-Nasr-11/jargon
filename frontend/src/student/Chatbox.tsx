@@ -7,12 +7,7 @@ import type { ComposerLanguage } from "@/components/Composer";
 import { ModeSelector } from "@/student/ModeSelector";
 import { OfferPills } from "@/student/OfferPills";
 import { stageInputMeta } from "@/student/useConversation";
-import {
-  modeAccentValue,
-  turnModeSpec,
-  type LessonOffers,
-  type TurnMode,
-} from "@/student/turnModes";
+import type { LessonOffers, TurnMode } from "@/student/turnModes";
 
 // The chatbox: attachments, the TurnMode selector, dictation, live voice, and speak/send — plus
 // a code surface.
@@ -144,7 +139,6 @@ export function Chatbox({
   const dictationBaseRef = useRef("");
   const fileRef = useRef<HTMLInputElement>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
-  const spec = turnModeSpec(mode);
   const dictationAvailable = speechRecognitionConstructor() !== null;
   // An attachment alone is a legitimate message ("here, look at this"), so text is not required —
   // but an upload still in flight is, or the tutor would receive a reference to nothing.
@@ -309,9 +303,11 @@ export function Chatbox({
 
   return (
     <div
-      // DESIGN_V6 §3: the tinted border cross-fades hue over 400ms on a mode change.
-      className="mode-surface rounded-card border shadow-card transition-[background-color,border-color] duration-[400ms]"
-      style={{ ["--mode-accent" as string]: modeAccentValue(spec) }}
+      // Design system: the composer is a PLAIN soft surface — the mode announces itself via
+      // the solid tag inside (ModeSelector), not by tinting the box. Hairline + inset
+      // top-highlight + quiet shadow; focus sharpens the hairline (composer-elev).
+      className="mode-surface composer-elev rounded-[24px] border"
+      style={{ boxShadow: "var(--inset-highlight), var(--elev-raised)" }}
     >
       {attachments.length || uploading || uploadError || dictationError ? (
         <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2.5">
@@ -364,7 +360,9 @@ export function Chatbox({
             ? "Listening — speak, then tidy up the words before you send…"
             : surface === "code"
               ? "Add a note with your code (optional)…"
-              : (placeholder ?? `${spec.label} — ${spec.hint.toLowerCase()}`)
+              : // The mode announces itself via the solid tag; the field just invites the reply
+                // (the tag's hint lives in the dropdown where it's explained properly).
+                (placeholder ?? "Reply to your mentor…")
         }
         rows={surface === "code" ? 1 : 2}
         className="w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-body text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
@@ -496,19 +494,21 @@ export function Chatbox({
               setCode("");
             }}
             aria-label="Run and send your code"
-            className="flex h-8 items-center gap-1.5 rounded-control bg-foreground px-2.5 text-meta font-medium text-background transition-opacity duration-(--dur-fast) hover:opacity-90 disabled:opacity-30"
+            className="flex h-8 items-center gap-1.5 rounded-pill bg-primary px-3 text-meta font-bold text-background transition-transform duration-(--dur-fast) hover:scale-[1.03] disabled:opacity-30"
           >
             <Play className="h-[13px] w-[13px]" strokeWidth={2} /> Run
           </button>
         ) : (
+          // Send is a CIRCLE and the only light-filled control in dark (inverts per theme —
+          // bg-foreground/text-background does exactly that). Hover scales, press is instant.
           <button
             type="button"
             onClick={submit}
             disabled={!canSend}
             aria-label="Send"
-            className="flex h-8 w-8 items-center justify-center rounded-control bg-foreground text-background transition-opacity duration-(--dur-fast) hover:opacity-90 disabled:opacity-30"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-background transition-transform duration-(--dur-fast) hover:scale-105 disabled:opacity-30"
           >
-            <Send className="h-[15px] w-[15px]" strokeWidth={1.7} />
+            <Send className="h-[14px] w-[14px]" strokeWidth={1.8} />
           </button>
         )}
       </div>

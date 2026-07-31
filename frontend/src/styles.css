@@ -5,10 +5,14 @@
 @custom-variant dark (&:is(.dark, .dark *));
 
 @theme inline {
+  /* Design system (docs/design-system): Manrope everywhere; Geist Mono for code,
+     counters, and timestamps. The old serif voice is retired — .font-serif below
+     remaps legacy heading markup onto bold tight-tracked Manrope. */
   --font-sans:
-    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif;
-  --font-serif: "Instrument Serif", "Times New Roman", serif;
+    "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-serif: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
@@ -54,10 +58,11 @@
   --color-depth-sub: var(--depth-sub);
   --color-depth-field: var(--depth-field);
 
-  /* radius scale (opt-in: rounded-control / rounded-card / rounded-pill). Tightened for the
-     high-contrast flat look — smaller radii read as cleaner lines. */
-  --radius-control: 10px;
-  --radius-card: 14px;
+  /* radius scale (design system: "999 pills · 22 cards · 12 rows"). In-app cards sit at the
+     tree-card size (18); rows and fields at 12; anything interactive that isn't a row is a
+     pill or a circle. */
+  --radius-control: 12px;
+  --radius-card: 18px;
   --radius-pill: 999px;
 
   /* elevation (shadow-card / shadow-raised / shadow-pop). Indirected through --elev-* on
@@ -67,122 +72,131 @@
   --shadow-raised: var(--elev-raised);
   --shadow-pop: var(--elev-pop);
 
-  /* type scale (text-display / text-title / text-body / text-body-lg / text-meta /
-     text-overline). Conventions: display pairs with font-serif (view titles); overline
-     pairs with uppercase tracking-[0.1em] font-medium text-muted-foreground. */
+  /* type scale (design system: body 13–14px at 500 with line-height 1.7; micro-labels 10px
+     600 with .16em tracking; nothing in the working UI shouts). display is reserved for
+     entry/hero moments. */
   --text-display: 26px;
-  --text-display--line-height: 1.15;
-  --text-title: 17px;
-  --text-title--line-height: 1.3;
-  --text-body: 14px;
-  --text-body--line-height: 1.55;
-  --text-body-lg: 15px;
-  --text-body-lg--line-height: 1.65;
-  --text-meta: 12px;
-  --text-meta--line-height: 1.4;
-  --text-overline: 11px;
+  --text-display--line-height: 1.25;
+  --text-title: 16px;
+  --text-title--line-height: 1.4;
+  --text-body: 13.5px;
+  --text-body--line-height: 1.7;
+  --text-body-lg: 14px;
+  --text-body-lg--line-height: 1.7;
+  --text-meta: 11.5px;
+  --text-meta--line-height: 1.5;
+  --text-overline: 10px;
   --text-overline--line-height: 1.3;
 }
 
 :root {
-  /* foundation — warm ivory + near-black ink (the Claude-adjacent palette): solid surfaces,
-     visible hairlines, full-contrast text. No translucent chrome, no shadow depth — hierarchy
-     comes from borders, spacing, and type. */
-  --background: #faf9f5;
-  --surface: #f0eee6;
-  --surface-hover: #e8e5da;
-  --foreground: #141413;
-  --emphasis: #141413;
-  --muted: #eceade;
-  --muted-foreground: rgba(20, 20, 19, 0.58);
-  --border: rgba(20, 20, 19, 0.14);
+  /* DESIGN SYSTEM (docs/design-system, boards 5a/5b/5c): the daylight ladder.
+     Pure white page; cards separate by hairline + soft shadow; nested surfaces step DOWN
+     to #F5F5F7; hover is one surface step (#ECECF0). Ink is graphite, never black —
+     headings #2F2F33, body #55555B, secondary #7C7C83, faint #A6A6AD. Saturated color
+     lives ONLY in the tag/dot scale; red means destructive, never a mode. */
+  --background: #ffffff;
+  --surface: #ffffff;
+  --surface-hover: #ececf0;
+  --foreground: #2f2f33;
+  --emphasis: #1e1e21;
+  --muted: #ececf0;
+  --muted-foreground: #7c7c83;
+  --border: rgba(0, 0, 0, 0.08);
 
-  /* opacity ladder */
-  --ink-92: rgba(20, 20, 19, 0.92);
-  --ink-62: rgba(20, 20, 19, 0.62);
-  --ink-45: rgba(20, 20, 19, 0.45);
-  --ink-30: rgba(20, 20, 19, 0.3);
-  --ink-16: rgba(20, 20, 19, 0.16);
+  /* ink ladder (Ink 90 / 70 / 54 / 37 from the board) */
+  --ink-92: #2f2f33;
+  --ink-62: #55555b;
+  --ink-45: #7c7c83;
+  --ink-30: #a6a6ad;
+  --ink-16: rgba(0, 0, 0, 0.12);
 
-  /* rainbow — the only accent */
-  --grad-1: #f6d36b; /* yellow */
-  --grad-2: #f9a86b; /* orange */
-  --grad-3: #f585bb; /* pink */
-  --grad-4: #8fa4ef; /* periwinkle / purple */
-  --grad-5: #72b8f5; /* blue */
+  /* Aurora — the ONE glow, rationed to the live thing (board: #7B3FF2 → #E05D38 → #F585BB).
+     grad-1..5 keep their names for legacy gradient surfaces but now speak aurora. */
+  --aurora-1: #7b3ff2;
+  --aurora-2: #e05d38;
+  --aurora-3: #f585bb;
+  --grad-1: #7b3ff2;
+  --grad-2: #a94ba8;
+  --grad-3: #e05d38;
+  --grad-4: #f0708a;
+  --grad-5: #f585bb;
 
-  /* single-hue accent for "current" markers — the warm terracotta of the brand family */
-  --accent-text: #c15f3c;
+  /* "live / current" marker — the lesson blue (the cursor-tag hue) */
+  --accent-text: #4f6bfd;
 
-  /* code palettes */
-  --code-background: #f0eee6;
-  --code-foreground: #1f1e1d;
-  --code-muted: #777571;
-  --code-selection: #5266d829;
-  --loading-dot-color: #000000;
-  --jargon-syntax-command: #5266d8;
-  --jargon-syntax-condition: #c4498b;
-  --jargon-syntax-comment: #777984;
-  --jargon-syntax-string: #25845a;
-  --jargon-syntax-number: #b86b00;
-  --jargon-syntax-bracket: #777984;
+  /* code palette (board 5c: white block, hairline, Geist Mono; command #3D55E8) */
+  --code-background: #ffffff;
+  --code-foreground: #4a4a50;
+  --code-muted: #a6a6ad;
+  --code-selection: #4f6bfd29;
+  --loading-dot-color: #1e1e21;
+  --jargon-syntax-command: #3d55e8;
+  --jargon-syntax-condition: #d6549b;
+  --jargon-syntax-comment: #a6a6ad;
+  --jargon-syntax-string: #1c8a4e;
+  --jargon-syntax-number: #c47a10;
+  --jargon-syntax-bracket: #a6a6ad;
 
-  /* semantic status */
-  --success: #1f8a5b;
-  --warning: #b07400;
-  --danger: #d64545;
-  --info: #2f6fd6;
+  /* semantic status (red = destructive only) */
+  --success: #2fbf71;
+  --warning: #c47a10;
+  --danger: #d9453f;
+  --info: #4f6bfd;
 
   /* translucent surface tiers (auto-adapt via var(--background)) */
   --surface-1: color-mix(in oklab, var(--background) 40%, transparent);
   --surface-2: color-mix(in oklab, var(--background) 62%, transparent);
   --surface-3: color-mix(in oklab, var(--background) 82%, transparent);
 
-  /* nested-card depth ramp (opaque). Each level adds less ink over the page
-     background, so deeper nesting reads closer to the page — which auto-inverts
-     per theme (dark page near-black → deeper is darker; light page near-white →
-     deeper is lighter). Master card is the most distinct; field the least. */
-  --depth-card: color-mix(in oklab, var(--background) 91%, var(--foreground));
-  --depth-sub: color-mix(in oklab, var(--background) 95.5%, var(--foreground));
-  --depth-field: color-mix(in oklab, var(--background) 98.5%, var(--foreground));
+  /* the surface ladder, explicit (page → card → nested → hover): card matches the page and
+     separates by hairline + shadow on the daylight ladder; nested steps down; hover steps
+     one surface. */
+  --depth-card: #ffffff;
+  --depth-sub: #f5f5f7;
+  --depth-field: #f5f5f7;
 
-  /* v6 student surface — per-TurnMode accents (see src/student/turnModes.ts).
-     ONE hue per mode; the surface/border tints derive from it by color-mix against
-     --background, the same trick as the depth ramp above, so a single definition works in
-     both themes and no component ever hardcodes a hex. A wrapper sets --mode-accent and the
-     .mode-surface / .mode-eyebrow classes below read it. */
-  --mode-lesson: oklch(0.62 0.1 250);
-  --mode-practice: oklch(0.63 0.13 150);
-  --mode-discuss: oklch(0.65 0.11 300);
-  --mode-checkpoints: oklch(0.66 0.1 90);
-  --mode-quiz: oklch(0.62 0.14 25);
-  --mode-assignment: oklch(0.64 0.12 60);
-  --mode-open: oklch(0.6 0.02 250);
-  /* Authoring-only accent (curriculum studio Media steps): teal, between the lesson blue and
-     practice green, so the studio's 8-mode picker gets a distinct hue per StepCard mode. */
-  --mode-media: oklch(0.64 0.09 200);
+  /* TurnMode tags — the tag system: one solid hue per mode, dark ink ON the tag so the same
+     six hues hold on both ladders (board 5a: Lesson blue, Practice green, Discuss yellow,
+     Open orange, Quiz pink, Homework lavender). --mode-*-ink is the on-tag text color. */
+  --mode-lesson: #4f6bfd;
+  --mode-lesson-ink: #ffffff;
+  --mode-practice: #2fbf71;
+  --mode-practice-ink: #0e2a1c;
+  --mode-discuss: #ffd83d;
+  --mode-discuss-ink: #3a2e05;
+  --mode-open: #ff8c3a;
+  --mode-open-ink: #3a1c05;
+  --mode-quiz: #f585bb;
+  --mode-quiz-ink: #3a1025;
+  --mode-assignment: #b9a4fa;
+  --mode-assignment-ink: #241a3d;
+  --mode-checkpoints: #ffd83d;
+  /* Authoring-only accent (curriculum studio Media steps). */
+  --mode-media: #2fbfa7;
 
-  /* Ambient hue tokens (DESIGN_V6 §2/§6) — the uHue targets the AmbientCanvas mounts tint
-     toward: a calm near-gray for the teacher console, a cooler blue for admin. Mid-lightness
-     oklch reads on both themes, so one definition serves light and dark; defined here so no
-     mount line ever hardcodes a color. /learn derives its hue from the --mode-* accents above
-     instead; /login passes none (the untinted rainbow IS the brand hue). */
+  /* Ambient hue tokens — legacy mounts (teacher/admin/login) keep working; hues nudged
+     toward the system's blue. */
   --ambient-neutral: oklch(0.62 0.02 250);
   --ambient-admin: oklch(0.6 0.07 235);
 
   /* focus ring */
-  --ring: rgba(20, 20, 19, 0.4);
+  --ring: rgba(30, 30, 33, 0.45);
 
-  /* elevation ramp — RETIRED (flat, high-contrast direction: no shadowing anywhere).
-     The tokens stay defined because shadow-card/raised/pop utilities are still in markup;
-     they all resolve to a no-op shadow, and separation comes from borders + scrims. */
-  --elev-card: 0 0 #0000;
-  --elev-raised: 0 0 #0000;
-  --elev-pop: 0 0 #0000;
+  /* elevation — the system's soft, deep-but-quiet shadows: cards get the 10/24 wash,
+     floating surfaces the 14/30, overlays deeper. Light ladder shadows are faint. */
+  --elev-card: 0 10px 24px rgba(0, 0, 0, 0.07);
+  --elev-raised: 0 14px 30px rgba(0, 0, 0, 0.08);
+  --elev-pop: 0 24px 50px rgba(0, 0, 0, 0.14);
+  /* the inset top-highlight worn by soft controls and cards on the dark ladder; a plain
+     white inset on light */
+  --inset-highlight: inset 0 1px 0 #ffffff;
+  /* page texture dot color */
+  --dot-grid: rgba(0, 0, 0, 0.045);
 
-  /* motion durations. In Tailwind v4 markup use the var shorthand directly:
-     duration-(--dur-fast) / duration-(--dur) / duration-(--dur-slow). */
-  --dur-fast: 0.16s;
+  /* motion durations (design system: hover = 180ms functional reveal; press = instant).
+     In Tailwind v4 markup use the var shorthand directly: duration-(--dur-fast). */
+  --dur-fast: 0.18s;
   --dur: 0.24s;
   --dur-slow: 0.45s;
 
@@ -202,87 +216,83 @@
    user's explicit Light selection on a dark-OS machine. */
 
 .dark {
-  /* warm charcoal, mirroring the light theme's warmth — never blue-black */
-  --background: #262624;
-  --surface: #1f1e1d;
-  --surface-hover: #33322f;
-  --foreground: #f5f4ef;
-  --emphasis: #f5f4ef;
-  --muted: #33322f;
-  --muted-foreground: rgba(245, 244, 239, 0.58);
-  --border: rgba(245, 244, 239, 0.16);
-  --ink-92: rgba(245, 244, 239, 0.92);
-  --ink-62: rgba(245, 244, 239, 0.62);
-  --ink-45: rgba(245, 244, 239, 0.45);
-  --ink-30: rgba(245, 244, 239, 0.3);
-  --ink-16: rgba(245, 244, 239, 0.16);
-  --code-background: #1f1e1d;
-  --code-foreground: #e8e6e1;
-  --code-muted: #8f8d88;
-  --code-selection: #ffffff20;
-  --loading-dot-color: #ffffff;
-  --jargon-syntax-command: #8fa4ef;
+  /* The soft-dark neutral charcoal ladder (board 5a): page #26262A → card #303035 →
+     nested #37373D → hover #47474D. Ink is gray, never white — headings #E6E6E6. Hairline
+     LIGHT borders; cards wear the inset top-highlight + a deep quiet shadow. */
+  --background: #26262a;
+  --surface: #303035;
+  --surface-hover: #47474d;
+  --foreground: #e6e6e6;
+  --emphasis: #f2f2f5;
+  --muted: #47474d;
+  --muted-foreground: #8a8a8a;
+  --border: rgba(255, 255, 255, 0.08);
+  --ink-92: #e6e6e6;
+  --ink-62: #b3b3b3;
+  --ink-45: #8a8a8a;
+  --ink-30: #7c7c82;
+  --ink-16: rgba(255, 255, 255, 0.12);
+  --code-background: #323237;
+  --code-foreground: #c9c9c9;
+  --code-muted: #7c7c82;
+  --code-selection: #7d8ffd33;
+  --loading-dot-color: #f2f2f5;
+  --jargon-syntax-command: #7d8ffd;
   --jargon-syntax-condition: #f585bb;
-  --jargon-syntax-comment: #8f8d88;
-  --jargon-syntax-string: #8ad0a8;
-  --jargon-syntax-number: #f0a868;
-  --jargon-syntax-bracket: #8f8d88;
+  --jargon-syntax-comment: #7c7c82;
+  --jargon-syntax-string: #7de8ae;
+  --jargon-syntax-number: #ffb43a;
+  --jargon-syntax-bracket: #7c7c82;
 
-  /* semantic status (dark) */
-  --success: #5ec98f;
-  --warning: #e3a949;
-  --danger: #f0716f;
-  --info: #6ea8f0;
+  /* semantic status (dark) — the tag hues hold on both ladders */
+  --success: #2fbf71;
+  --warning: #ffb43a;
+  --danger: #f0837e;
+  --info: #7d8ffd;
 
-  /* accent for "current" markers (brighter terracotta reads on dark) */
-  --accent-text: #d97757;
+  /* "live / current" marker (lighter blue reads on charcoal) */
+  --accent-text: #7d8ffd;
 
   /* focus ring (dark) */
-  --ring: rgba(245, 244, 239, 0.45);
+  --ring: rgba(242, 242, 245, 0.45);
 
-  /* elevation stays retired in dark too — separation is borders + scrims. */
-  --elev-card: 0 0 #0000;
-  --elev-raised: 0 0 #0000;
-  --elev-pop: 0 0 #0000;
+  /* surface ladder */
+  --depth-card: #303035;
+  --depth-sub: #37373d;
+  --depth-field: #37373d;
+
+  /* elevation (dark): deep quiet washes + the inset top-highlight */
+  --elev-card: 0 10px 24px rgba(0, 0, 0, 0.35);
+  --elev-raised: 0 14px 30px rgba(0, 0, 0, 0.4);
+  --elev-pop: 0 24px 50px rgba(0, 0, 0, 0.5);
+  --inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --dot-grid: rgba(255, 255, 255, 0.045);
 }
 
-@font-face {
-  font-family: "Instrument Serif";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("https://fonts.gstatic.com/s/instrumentserif/v4/jizDREVItHgc8qDIbSTKq4XKVqOLkqJ55b9Pu14.woff2")
-    format("woff2");
-}
-
-/* Inter — first in --font-sans but previously never loaded (silently fell back to system
-   fonts). v20 ships as a variable font: one latin woff2 covers every weight, so a single
-   face with the full weight range serves 400/500/600. The body's font-feature-settings
-   ("cv11","ss01") only take effect with the real Inter. */
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2")
-    format("woff2");
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
+/* Manrope + Geist Mono load from the Google Fonts stylesheet linked in index.html. */
 
 html,
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  font-weight: 500; /* the system's resting weight — body is 500, never 400-thin */
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: "cv11", "ss01";
 }
 
+/* The page wears the faint dot grid from the boards — texture, not decoration.
+   --dot-grid is themed in :root/.dark alongside the ladders. */
+body {
+  background-image: radial-gradient(var(--dot-grid) 1px, transparent 1.4px);
+  background-size: 110px 110px;
+}
+
+/* Legacy heading voice: the serif is retired — heading markup that still says font-serif
+   renders as bold, tight-tracked Manrope (the board's hero/heading treatment). */
 .font-serif {
-  font-family: var(--font-serif);
-  letter-spacing: -0.01em;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 
 /* Rainbow gradient — yellow → orange → pink → purple → blue */
@@ -455,23 +465,69 @@ body {
   animation-delay: 0.24s;
 }
 
-/* Interactive-card hover, flat edition: no lift, no shadow — the border sharpens and the
-   surface shifts one step. (The global reduced-motion block below neutralizes transitions.) */
+/* Interactive-surface hover, the system rule: hover = ONE surface step, 180ms; press is
+   instant. (The global reduced-motion block below neutralizes transitions.) */
 .elev-hover {
-  transition:
-    border-color var(--dur-fast) ease,
-    background-color var(--dur-fast) ease;
+  transition: background-color var(--dur-fast) ease;
 }
 .elev-hover:hover {
+  background-color: var(--surface-hover);
+}
+
+/* The composer's focus state sharpens the hairline, not a shadow step. */
+.composer-elev {
+  transition: border-color var(--dur-fast) ease;
+}
+.composer-elev:focus-within {
   border-color: var(--ink-30);
 }
 
-/* The composer's focus state is a sharpened border, not a shadow step. */
-.composer-elev {
-  transition: border-color var(--dur) ease;
+/* --- Design-system control + card grammar ---------------------------------------------- */
+
+/* A soft control/card face: surface + hairline + the inset top-highlight. */
+.ds-soft {
+  background-color: var(--depth-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--inset-highlight), var(--elev-card);
 }
-.composer-elev:focus-within {
-  border-color: var(--ink-45);
+
+/* The solid TurnMode/state tag: one hue, dark ink on the tag, pill geometry. A wrapper sets
+   --tag-bg/--tag-ink (usually from the --mode-* pairs). */
+.ds-tag {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--tag-bg, var(--muted));
+  color: var(--tag-ink, var(--foreground));
+  font-weight: 700;
+}
+
+/* The cursor-tip the CURRENT mode tag wears (board 5a: a tiny rotated square at the corner). */
+.ds-tag-tip {
+  position: relative;
+}
+.ds-tag-tip::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  background: var(--tag-bg, currentColor);
+  transform: rotate(45deg);
+  border-radius: 1px;
+}
+
+/* Aurora — rationed to ONE live thing per view. Mount behind the live element. */
+.aurora-glow {
+  position: absolute;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side at 70% 30%, rgba(224, 93, 56, 0.4), transparent 70%),
+    radial-gradient(closest-side at 30% 70%, rgba(123, 63, 242, 0.38), transparent 70%),
+    radial-gradient(closest-side at 85% 85%, rgba(245, 133, 187, 0.3), transparent 70%);
+  filter: blur(24px);
 }
 
 .hairline {
@@ -593,20 +649,25 @@ select {
   }
 }
 
-/* --- v6 student surface: TurnMode skin -------------------------------------
-   A mode wrapper sets --mode-accent; everything below derives from it. Keeping the
+/* --- TurnMode chrome (design system) ---------------------------------------
+   A mode wrapper sets --mode-accent (and --mode-ink for on-tag text). Keeping the
    derivation in CSS (not JS) means the theme toggle needs no re-render to stay correct. */
+
+/* The composer surface is PLAIN in this system — the mode is announced by its solid tag,
+   not by tinting the whole box. Class kept for its mounts; now just the soft face. */
 .mode-surface {
-  background-color: color-mix(in oklab, var(--background) 95%, var(--mode-accent, transparent));
-  border-color: color-mix(in oklab, var(--border) 45%, var(--mode-accent, transparent));
+  background-color: var(--depth-card);
+  border-color: var(--border);
 }
 
-/* The eyebrow pill sits ON the mode rule, centered — the mode reads as a label on that
-   stretch of conversation rather than as another chip inside it. */
+/* The divider label ON the mode rule: mono micro-label in the section's hue, mixed toward
+   ink so even yellow/orange stay readable on both ladders (the board's "LESSON · STEP 2/5"
+   treatment). No box — the label sits directly on the rule. */
 .mode-eyebrow {
-  color: color-mix(in oklab, var(--foreground) 62%, var(--mode-accent, transparent));
-  background-color: color-mix(in oklab, var(--background) 88%, var(--mode-accent, transparent));
-  border-color: color-mix(in oklab, var(--border) 40%, var(--mode-accent, transparent));
+  font-family: var(--font-mono);
+  color: color-mix(in oklab, var(--mode-accent, var(--muted-foreground)) 60%, var(--foreground));
+  background-color: var(--background);
+  border-color: transparent;
 }
 
 /* --- Transcript mode rule: a full-width hairline + pill announcing a mode section ---------

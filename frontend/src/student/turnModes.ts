@@ -102,14 +102,19 @@ export function isTurnMode(value: unknown): value is TurnMode {
   return typeof value === "string" && BY_ID.has(value as TurnMode);
 }
 
-// The CSS value a mode wrapper should set as --mode-accent. Progression honesty (DESIGN_V6 §4):
-// Discuss/Open can never close a gate, and the chrome should SHOW that — their accent is mixed
-// toward the neutral muted tone (slightly desaturated, "off the spine") rather than restated in
-// copy. Still token-derived: no hex codes leak into components, and both themes resolve.
+// The CSS value a mode wrapper should set as --mode-accent. Design system (docs/design-system,
+// board 5a): every mode owns a full hue — Lesson blue, Practice green, Discuss yellow, Open
+// orange, Quiz pink, Homework lavender. The old off-spine desaturation is retired; progression
+// honesty lives in the server ceiling and the canProgress affordances, not in washed-out chips.
+// Still token-derived: no hex codes leak into components, and both themes resolve.
 export function modeAccentValue(spec: TurnModeSpec): string {
-  return spec.canProgress
-    ? `var(${spec.accentVar})`
-    : `color-mix(in oklab, var(${spec.accentVar}) 55%, var(--muted-foreground))`;
+  return `var(${spec.accentVar})`;
+}
+
+// The on-tag text color for a SOLID mode tag (dark ink on the light hues, white on blue) —
+// paired tokens defined next to each --mode-* in styles.css.
+export function modeInkValue(spec: TurnModeSpec): string {
+  return `var(${spec.accentVar}-ink, var(--background))`;
 }
 
 // What this lesson currently offers. Resources is NOT a TurnMode — opening materials sends no

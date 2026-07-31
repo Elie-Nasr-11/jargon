@@ -21,6 +21,9 @@ const MODE_ICONS: Record<string, typeof ListChecks> = {
   assignment: ClipboardList,
 };
 
+// Design system: an ACTIVE offer is the solid tag (bg hue + on-tag ink); an available-but-idle
+// offer is the "Quiz ready" treatment — a soft pill whose TEXT carries the hue, mixed toward
+// ink so yellow/orange stay readable on both ladders.
 function Pill({
   icon: Icon,
   label,
@@ -42,12 +45,19 @@ function Pill({
       disabled={disabled}
       onClick={onClick}
       aria-pressed={active}
-      className={`flex shrink-0 items-center gap-1.5 rounded-pill border px-2.5 py-1 text-meta transition-colors duration-(--dur-fast) disabled:opacity-40 ${
-        active
-          ? "mode-eyebrow border-transparent font-medium"
-          : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+      className={`flex shrink-0 items-center gap-1.5 rounded-pill px-2.5 py-1 text-meta font-semibold transition-colors duration-(--dur-fast) disabled:opacity-40 ${
+        active ? "ds-tag" : "border border-border hover:bg-muted"
       }`}
-      style={{ ["--mode-accent" as string]: `var(${accentVar})` }}
+      style={
+        active
+          ? {
+              ["--tag-bg" as string]: `var(${accentVar})`,
+              ["--tag-ink" as string]: `var(${accentVar}-ink, var(--background))`,
+            }
+          : {
+              color: `color-mix(in oklab, var(${accentVar}) 60%, var(--foreground))`,
+            }
+      }
     >
       <Icon className="h-[13px] w-[13px]" strokeWidth={1.7} />
       {label}

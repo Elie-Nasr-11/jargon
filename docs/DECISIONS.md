@@ -668,3 +668,33 @@ are untouched in P2, no migration was needed, and no live curriculum changed beh
 
 Unchanged from the original entry: the Home/Learn shell (shipped in P1), and that §9's "visual
 redesign — deferred" is lifted.
+
+## 2026-07-31 — The design system lands (docs/design-system)
+
+The Claude Design handoff bundle (`docs/design-system/`, boards 5a/5b/5c + chats/chat1.md) is
+now the design source of truth, superseding DESIGN_V6's visual language and the interim
+Claude-adjacent ivory pass. Its rules, as implemented:
+
+- **Ladders**: dark page #26262A → card #303035 → nested #37373D → hover #47474D with hairline
+  LIGHT borders; light page pure #FFFFFF, cards separate by hairline + soft shadow, nested
+  #F5F5F7, hover #ECECF0. Hover = one surface step, 180ms; press = instant.
+- **Ink, never white/black**: dark headings #E6E6E6; light headings graphite #2F2F33. The
+  Ink 90/70/54/37 scale is tokenized as --ink-92/62/45/30.
+- **Type**: Manrope everywhere (body 13–14px/500, lh 1.7; micro-labels 10px/600 tracked
+  .16em); Geist Mono for code, counters, timestamps. Serif retired — .font-serif remaps to
+  bold tight-tracked Manrope so legacy heading markup keeps rendering.
+- **Controls**: everything a pill or a circle (999 pills, 18 cards, 12 rows). Primary set
+  (Continue, send, Run) inverts per theme — light-filled on dark, near-black on light. Soft
+  controls wear the inset top-highlight. Red is destructive only, never a mode.
+- **TurnMode tags**: solid one-hue pills with dark on-tag ink — Lesson #4F6BFD, Practice
+  #2FBF71, Discuss #FFD83D, Open #FF8C3A, Quiz #F585BB, Homework #B9A4FA. The current mode
+  wears the cursor-tip. The off-spine desaturation rule is RETIRED (modeAccentValue no longer
+  mixes toward neutral); progression honesty lives in canProgress affordances + the server
+  ceiling.
+- **Transcript**: mentor prose sits directly on the page (no bubble); student replies get the
+  soft pill (14/14/4/14); the divider is a hairline with a mono micro-label in the section's
+  hue, mixed toward ink so yellow/orange hold on both ladders.
+- **Aurora, rationed**: the #7B3FF2→#E05D38→#F585BB glow appears once per view, on the live
+  thing (the current lesson row). The three.js AmbientCanvas is retired from teacher/admin
+  shells (login keeps its entry moment); --grad-* now speak the aurora family.
+- **Texture**: the faint 110px dot grid on the page surface, both themes.

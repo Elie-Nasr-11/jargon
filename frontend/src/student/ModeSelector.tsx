@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Popover } from "@/components/Popover";
-import { ALWAYS_MODES, turnModeSpec, type TurnMode } from "@/student/turnModes";
+import {
+  ALWAYS_MODES,
+  modeAccentValue,
+  modeInkValue,
+  turnModeSpec,
+  type TurnMode,
+} from "@/student/turnModes";
 
 // The mode picker that lives in the chatbox. Lists ONLY the four always-available modes, with a
 // one-line hint each — the hints are the whole point, since "Discuss" vs "Open" is not
@@ -28,22 +34,22 @@ export function ModeSelector({ value, onChange, disabled }: ModeSelectorProps) {
       placement="top-start"
       panelClassName="w-[280px] rounded-card border border-border bg-depth-card p-1.5 shadow-raised"
       trigger={
+        // The current mode IS the solid tag (design system board 5a): one hue, dark ink on the
+        // tag, pill geometry, wearing the cursor-tip.
         <button
           type="button"
           disabled={disabled}
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-label={`Conversation mode: ${current.label}`}
-          className="flex items-center gap-1.5 rounded-pill border border-border px-2.5 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted disabled:opacity-40"
-          style={{ ["--mode-accent" as string]: `var(${current.accentVar})` }}
+          className="ds-tag ds-tag-tip gap-1 px-3 py-1.5 text-[11px] transition-transform duration-(--dur-fast) hover:-translate-y-px disabled:opacity-40"
+          style={{
+            ["--tag-bg" as string]: modeAccentValue(current),
+            ["--tag-ink" as string]: modeInkValue(current),
+          }}
         >
-          <span
-            aria-hidden
-            className="h-2 w-2 rounded-full"
-            style={{ backgroundColor: "var(--mode-accent)" }}
-          />
           {current.label}
-          <ChevronDown className="h-3 w-3 text-muted-foreground" strokeWidth={1.8} />
+          <ChevronDown className="h-3 w-3 opacity-80" strokeWidth={2} />
         </button>
       }
     >

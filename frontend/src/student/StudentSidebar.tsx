@@ -130,23 +130,39 @@ export function StudentSidebar({
             );
           })}
 
-          {/* Appearance: flips in place, so the menu stays open — the student sees the theme
-              change under the cursor and can flip back without re-opening anything. */}
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            className="flex w-full items-center justify-between gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-          >
-            <span className="flex items-center gap-2.5">
+          {/* Appearance: the design system's segmented pill (Dark | Light). Flips in place so
+              the menu stays open — the student sees the theme change under the cursor. */}
+          <div className="flex items-center justify-between gap-2.5 rounded-control px-2.5 py-2">
+            <span className="flex items-center gap-2.5 text-body text-foreground">
               {isDark ? (
-                <Sun className="h-[15px] w-[15px]" strokeWidth={1.5} />
-              ) : (
                 <Moon className="h-[15px] w-[15px]" strokeWidth={1.5} />
+              ) : (
+                <Sun className="h-[15px] w-[15px]" strokeWidth={1.5} />
               )}
-              {isDark ? "Light mode" : "Dark mode"}
+              Theme
             </span>
-          </button>
+            <span className="flex rounded-pill border border-border bg-depth-sub p-[3px]">
+              {(["dark", "light"] as const).map((mode) => {
+                const active = (mode === "dark") === isDark;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => !active && toggle()}
+                    aria-pressed={active}
+                    className={`rounded-pill px-2.5 py-1 text-overline font-semibold capitalize transition-colors duration-(--dur-fast) ${
+                      active
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    style={active ? { boxShadow: "var(--inset-highlight)" } : undefined}
+                  >
+                    {mode}
+                  </button>
+                );
+              })}
+            </span>
+          </div>
 
           <div className="my-1 h-px bg-border" />
 

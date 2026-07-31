@@ -7845,3 +7845,33 @@ ChatWindow when switching between layouts (voice panel open-state resets; transc
 shell-owned and survives). (3) Class Resources tab caps at 50 rows.
 Suggested next task: live pass — expand the demo PDF to half and full, collapse the dock,
 open a class card's four tabs.
+
+## Claude -> Codex / Human - 2026-07-31 20:10
+
+Status: Finished
+Summary: DESIGN SYSTEM IMPLEMENTED from the Claude Design handoff bundle (merged as
+docs/design-system via branch design/jargon-design-system, ff onto trunk). Full token rewrite
+in styles.css (ladders, ink scale, Manrope/Geist Mono, pill/circle radii, soft shadows +
+inset top-highlights, six solid mode hues with paired on-tag inks, aurora tokens + .aurora-glow,
+dot-grid page texture, both syntax palettes) — see the DECISIONS entry for the rule set.
+Components: ModeSelector trigger is the solid cursor-tipped mode tag; OfferPills active=solid
+tag / idle=hue-tinted text; composer is a plain soft rounded-24 surface with a circle send
+that inverts per theme; transcript mentor prose is bubble-less, student replies wear the
+14/14/4/14 soft pill, code blocks are Geist Mono 11.5/1.8 with mono captions, Continue is the
+primary inverted pill; LessonTree rows use ring+dot state glyphs (blue live / green done),
+struck-through completed titles, and the aurora glow on the live lesson; account menu theme
+control is the segmented Dark|Light pill; AmbientCanvas unmounted from teacher/admin
+(login keeps its entry moment). index.html loads Manrope + Geist Mono from Google Fonts.
+Files changed: frontend/index.html, frontend/src/styles.css, student/{turnModes,ModeSelector,
+OfferPills,Chatbox,Transcript,LessonTree,StudentSidebar}.tsx, features/teacher/shell/
+TeacherShell.tsx, routes/admin.tsx, tests/test_student_surface.py (off-spine pin re-anchored
+to the token-derivation invariant + modeInkValue).
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK.
+Remaining concerns: (1) The boards' full /learn screen and the token/component spec doc were
+never built in Claude Design ("Try next" items) — surfaces beyond the boards follow the token
+layer but haven't had a per-component pass (Home cards, teacher console, assessment surface
+inherit ladders/type/radii only). (2) Google Fonts is a runtime dependency now; self-host the
+two woff2 files if the CSP ever tightens. (3) The old oklch mode tokens are gone — any
+uncommitted branch styling against them will drift.
+Suggested next task: signed-in pass as demo-student in BOTH themes; then extend the tag/pill
+grammar to the teacher hotlist per board 5b.

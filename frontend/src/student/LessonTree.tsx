@@ -30,39 +30,34 @@ export type LessonTreeProps = {
 };
 
 function ProgressGlyph({ value, current }: { value: number; current: boolean }) {
-  // Three states, one legible 14px glyph: unstarted = hollow ring, in progress = ring with its
-  // right half filled, done = filled disc with a check. The old 7px dots read as specks; at
-  // this size the state is knowable without squinting. Color stays in the neutral ramp except
-  // "current", which borrows the shared accent var so both themes work without a hex here.
-  const ink = current ? "var(--accent-text)" : "currentColor";
-  if (value >= 1) {
+  // The design system's ring-and-dot (board 5b, lesson tree): a 15px ring whose HUE carries the
+  // state — blue ring+dot on the live lesson, green ring+dot when done, ink ring+dot while in
+  // progress, a faint hollow ring when unstarted. Hue does the work; no shape puzzle.
+  const hue = current
+    ? "var(--accent-text)"
+    : value >= 1
+      ? "var(--success)"
+      : value > 0
+        ? "var(--ink-45)"
+        : null;
+  if (!hue) {
     return (
-      <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5 shrink-0">
-        <circle cx="8" cy="8" r="6.75" fill={ink} />
-        <path
-          d="M5.1 8.3l2.1 2.1 3.8-4.4"
-          fill="none"
-          stroke="var(--background)"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-  if (value > 0) {
-    return (
-      <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5 shrink-0">
-        <circle cx="8" cy="8" r="6" fill="none" stroke={ink} strokeWidth="1.5" />
-        {/* Right half filled: started, not finished. */}
-        <path d="M8 2.75a5.25 5.25 0 0 1 0 10.5Z" fill={ink} />
-      </svg>
+      <span
+        aria-hidden
+        className="relative h-[15px] w-[15px] shrink-0 rounded-full"
+        style={{ border: "1.5px solid var(--ink-16)" }}
+      />
     );
   }
   return (
-    <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5 shrink-0 opacity-50">
-      <circle cx="8" cy="8" r="6" fill="none" stroke={ink} strokeWidth="1.5" />
-    </svg>
+    <span
+      aria-hidden
+      className="relative h-[15px] w-[15px] shrink-0 rounded-full"
+      style={{
+        border: `1.5px solid ${hue}`,
+        background: `radial-gradient(circle, ${hue} 40%, transparent 45%)`,
+      }}
+    />
   );
 }
 
@@ -100,14 +95,22 @@ export function LessonTree({
         disabled={disabled && !current}
         onClick={() => onOpenLesson(lesson.id)}
         aria-current={current ? "true" : undefined}
-        className={`flex w-full items-center gap-2 rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) disabled:opacity-40 ${
+        className={`relative flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body transition-colors duration-(--dur-fast) disabled:opacity-40 ${
           current
-            ? "bg-muted font-medium text-foreground"
+            ? "bg-muted font-semibold text-foreground"
             : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
         }`}
       >
+        {/* Aurora is rationed to the ONE live thing per view — here, the live lesson. */}
+        {current ? <span className="aurora-glow -inset-2 opacity-60" aria-hidden /> : null}
         <ProgressGlyph value={value} current={current} />
-        <span className="min-w-0 flex-1 truncate">{lesson.title}</span>
+        <span
+          className={`relative min-w-0 flex-1 truncate ${
+            value >= 1 && !current ? "line-through decoration-[var(--ink-16)]" : ""
+          }`}
+        >
+          {lesson.title}
+        </span>
         {value >= 1 ? <span className="sr-only">(completed)</span> : null}
       </button>
     );
@@ -133,7 +136,7 @@ export function LessonTree({
             title={<span className="truncate font-medium">{group.unitTitle}</span>}
             meta={
               <span
-                className="shrink-0 pl-1 text-meta tabular-nums text-muted-foreground"
+                className="shrink-0 pl-1 font-mono text-overline tracking-[0.14em] text-muted-foreground"
                 aria-label={`${done} of ${total} lessons complete`}
               >
                 {done}/{total}

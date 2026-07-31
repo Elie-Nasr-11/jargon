@@ -184,14 +184,17 @@ class LessonFlowAffordances(unittest.TestCase):
         self.assertIn("payload.lesson_arc", MODEL)
         self.assertIn('mode === "lesson" && stepEyebrowLabel(arc)', TRANSCRIPT)
 
-    def test_off_spine_modes_read_as_off_the_spine(self):
-        # Progression honesty (DESIGN_V6 §4): Discuss/Open can't close gates, and their
-        # section chrome SHOWS it — accent mixed toward neutral, still token-derived (no hex).
+    def test_mode_accents_stay_token_derived(self):
+        # Design system (docs/design-system, 2026-07-31): every mode owns a full hue — the old
+        # off-spine desaturation is retired. What must NOT regress: the accent stays
+        # token-derived (a CSS var, no hex leaking into components), progression honesty lives
+        # in canProgress affordances + the server ceiling, and the on-tag ink pairs with it.
         fn = MODES[MODES.index("export function modeAccentValue(") :]
         fn = fn[: fn.index("\n}")]
-        self.assertIn("spec.canProgress", fn)
-        self.assertIn("color-mix", fn)
+        self.assertIn("var(${spec.accentVar})", fn)
         self.assertNotIn("#", fn)
+        self.assertIn("export function modeInkValue(", MODES)
+        self.assertIn("canProgress", MODES)
 
     def test_mentor_rise_respects_reduced_motion(self):
         # DESIGN_V6 §3: 280ms power3.out rise for mentor replies — and a reduced-motion user

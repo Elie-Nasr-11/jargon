@@ -49,12 +49,15 @@ import {
 
 function CodeBlock({ code }: { code: ChatCodeBlock }) {
   return (
-    <figure className="my-2 overflow-hidden rounded-control border border-border">
-      <figcaption className="border-b border-border bg-depth-sub px-2.5 py-1 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+    <figure
+      className="my-2 overflow-hidden rounded-[14px] border border-border"
+      style={{ boxShadow: "var(--inset-highlight)" }}
+    >
+      <figcaption className="border-b border-border bg-depth-sub px-3 py-1 font-mono text-overline uppercase tracking-[0.16em] text-muted-foreground">
         {languageLabel(code.language)}
       </figcaption>
       {/* Wide code scrolls inside its own box; the transcript column must never scroll sideways. */}
-      <pre className="overflow-x-auto bg-code-background px-2.5 py-2 text-[12.5px] leading-relaxed text-code-foreground">
+      <pre className="overflow-x-auto bg-code-background px-4 py-2.5 font-mono text-[11.5px] leading-[1.8] text-code-foreground">
         <code>
           {code.language === "jargon"
             ? tokenizeJargon(code.source).map((token, i) => (
@@ -241,6 +244,9 @@ function MessageBody({ text, markdown }: { text: string; markdown?: boolean }) {
   );
 }
 
+// Design system (board 5b): MENTOR text sits directly on the page — no bubble; the student's
+// reply gets the soft pill (nested surface, hairline, 14/14/4/14 corners); teacher, error, and
+// code output keep quiet bordered blocks. Send-side chrome inverts per theme elsewhere.
 function Bubble({
   align,
   tone,
@@ -250,19 +256,27 @@ function Bubble({
   tone: "user" | "mentor" | "teacher" | "error" | "output";
   children: ReactNode;
 }) {
+  if (tone === "mentor") {
+    return (
+      <div className="flex justify-start">
+        <div className="max-w-[min(46rem,92%)] text-body text-foreground">{children}</div>
+      </div>
+    );
+  }
   const toneClass =
     tone === "user"
-      ? "bg-foreground text-background"
+      ? "rounded-[14px] rounded-br-[4px] border border-border bg-depth-sub text-foreground"
       : tone === "error"
-        ? "border border-danger/40 bg-depth-sub text-danger"
+        ? "rounded-card border border-danger/40 bg-depth-sub text-danger"
         : tone === "teacher"
-          ? "border border-info/40 bg-depth-sub text-foreground"
-          : tone === "output"
-            ? "border border-border bg-code-background font-mono text-code-foreground"
-            : "bg-depth-sub text-foreground";
+          ? "rounded-card border border-info/40 bg-depth-sub text-foreground"
+          : "rounded-card border border-border bg-code-background font-mono text-code-foreground";
   return (
     <div className={`flex ${align === "end" ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[min(46rem,85%)] rounded-card px-3.5 py-2.5 text-body ${toneClass}`}>
+      <div
+        className={`max-w-[min(46rem,85%)] px-3.5 py-2.5 text-body ${toneClass}`}
+        style={{ boxShadow: "var(--inset-highlight)" }}
+      >
         {children}
       </div>
     </div>
@@ -342,7 +356,9 @@ function ModeRule({ label }: { label: string }) {
       className={`mode-divider flex items-center gap-3 px-4 ${inView ? "in-view" : ""}`}
     >
       <span className="mode-rule mode-rule-l" />
-      <span className="mode-eyebrow mode-pill max-w-[70%] shrink-0 truncate rounded-pill border px-3 py-1 text-overline font-medium uppercase tracking-[0.09em]">
+      {/* The board's divider label: mono micro-label in the section's hue, sitting directly
+          on the rule — no pill box. */}
+      <span className="mode-eyebrow mode-pill max-w-[70%] shrink-0 truncate px-1 text-overline font-semibold uppercase tracking-[0.16em]">
         {label}
       </span>
       <span className="mode-rule mode-rule-r" />
@@ -457,7 +473,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                       {message.attachments.map((attachment) => (
                         <span
                           key={attachment.upload_id}
-                          className="flex items-center gap-1 rounded-pill bg-background/20 px-2 py-0.5 text-meta"
+                          className="flex items-center gap-1 rounded-pill border border-border bg-background px-2 py-0.5 text-meta"
                         >
                           <Paperclip className="h-3 w-3" strokeWidth={1.8} />
                           <span className="max-w-[12rem] truncate">{attachment.filename}</span>
@@ -608,11 +624,12 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                       must not stay pressable. */}
                   {message.continueOffer && isLatestBot && !message.isError ? (
                     <div className="flex pl-1">
+                      {/* The primary pill (board: "Continue lesson") — inverts per theme. */}
                       <button
                         type="button"
                         disabled={inert}
                         onClick={channel.sendContinue}
-                        className="inline-flex items-center gap-1.5 rounded-pill border border-foreground/30 bg-foreground/5 px-4 py-1.5 text-body font-medium text-foreground transition-colors duration-(--dur-fast) hover:bg-foreground/10 disabled:opacity-40"
+                        className="inline-flex items-center gap-1.5 rounded-pill bg-primary px-4 py-1.5 text-body font-bold text-background shadow-card transition-transform duration-(--dur-fast) hover:scale-[1.02] disabled:opacity-40"
                       >
                         {message.continueOffer.label || "Continue"}
                         <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
@@ -628,7 +645,8 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                         type="button"
                         disabled={inert}
                         onClick={() => channel.buildArtifact(message.artifactOffer!)}
-                        className="inline-flex items-center gap-1.5 rounded-pill border border-foreground/30 bg-foreground/5 px-4 py-1.5 text-body font-medium text-foreground transition-colors duration-(--dur-fast) hover:bg-foreground/10 disabled:opacity-40"
+                        className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-depth-card px-4 py-1.5 text-body font-semibold text-foreground transition-colors duration-(--dur-fast) hover:bg-muted disabled:opacity-40"
+                        style={{ boxShadow: "var(--inset-highlight)" }}
                       >
                         <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
                         {message.artifactOffer.label || "Build me a quick activity"}

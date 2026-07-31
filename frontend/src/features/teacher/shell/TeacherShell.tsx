@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Menu, PanelLeft } from "lucide-react";
-import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { NotificationsMenu } from "@/components/NotificationsMenu";
 import { TeacherSidebar } from "./TeacherSidebar";
 import type { ClassSection } from "./teacherNav";
@@ -68,7 +67,6 @@ export function TeacherShell({
     >
       {/* DESIGN_V6 §6: the teacher console sits on a calm neutral ambient at 0.18, tinted
           toward the neutral ambient token (§2's "neutral teacher tint"). */}
-      <AmbientCanvas intensity={0.18} hue="--ambient-neutral" />
 
       <TeacherSidebar
         email={email}
