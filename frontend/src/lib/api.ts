@@ -2402,18 +2402,8 @@ type LessonResourceListRow = {
   artifact: unknown;
 };
 
-export async function fetchLessonResources(lessonId: string): Promise<LessonChatResource[]> {
-  if (!lessonId) return [];
-  const { data, error } = await supabase
-    .from("lesson_resources")
-    .select(
-      "id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,artifact:metadata->artifact",
-    )
-    .eq("lesson_id", lessonId)
-    .eq("status", "published")
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return ((data ?? []) as unknown as LessonResourceListRow[]).map((r) => ({
+function toChatResource(r: LessonResourceListRow): LessonChatResource {
+  return {
     id: r.id,
     title: r.title,
     description: r.description ?? undefined,
@@ -2427,7 +2417,37 @@ export async function fetchLessonResources(lessonId: string): Promise<LessonChat
     student_instructions: r.student_instructions ?? undefined,
     artifact:
       r.resource_type === "artifact" ? (parseArtifactConfig(r.artifact) ?? undefined) : undefined,
-  }));
+  };
+}
+
+const LESSON_RESOURCE_LIST_SELECT =
+  "id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,artifact:metadata->artifact";
+
+export async function fetchLessonResources(lessonId: string): Promise<LessonChatResource[]> {
+  if (!lessonId) return [];
+  const { data, error } = await supabase
+    .from("lesson_resources")
+    .select(LESSON_RESOURCE_LIST_SELECT)
+    .eq("lesson_id", lessonId)
+    .eq("status", "published")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as unknown as LessonResourceListRow[]).map(toChatResource);
+}
+
+// The class detail's Resources section: everything published to this class, across its
+// lessons. Same select + RLS gate (can_view_lesson_resource) as the per-lesson read.
+export async function fetchClassResources(classId: string): Promise<LessonChatResource[]> {
+  if (!classId) return [];
+  const { data, error } = await supabase
+    .from("lesson_resources")
+    .select(LESSON_RESOURCE_LIST_SELECT)
+    .eq("class_id", classId)
+    .eq("status", "published")
+    .order("created_at", { ascending: true })
+    .limit(50);
+  if (error) throw error;
+  return ((data ?? []) as unknown as LessonResourceListRow[]).map(toChatResource);
 }
 
 export async function recordVoiceInteraction(event: VoiceInteractionEvent) {

@@ -20,6 +20,10 @@ CHAT = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
 # URLs, the nocookie rewrite, and progress telemetry.
 TRANSCRIPT = (REPO / "frontend" / "src" / "student" / "Transcript.tsx").read_text()
 RESOURCE_CARD = (REPO / "frontend" / "src" / "student" / "ResourceCard.tsx").read_text()
+# 2026-07-31: URL resolution + the nocookie rewrite moved to resourceMedia.ts, shared by the
+# card and the MediaStage so the invariants cannot drift between the two mounts.
+RESOURCE_MEDIA = (REPO / "frontend" / "src" / "student" / "resourceMedia.ts").read_text()
+MEDIA_STAGE = (REPO / "frontend" / "src" / "student" / "MediaStage.tsx").read_text()
 CURRICULUM = (REPO / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text()
 API = (REPO / "frontend" / "src" / "lib" / "api.ts").read_text()
 FORMAT_TS = (REPO / "frontend" / "src" / "lib" / "format.ts").read_text()
@@ -162,17 +166,22 @@ class InlineMediaTable(unittest.TestCase):
     security/telemetry invariants pinned here."""
 
     def test_youtube_gets_the_nocookie_rewrite(self):
-        self.assertIn("youtube-nocookie.com/embed/", RESOURCE_CARD)
+        self.assertIn("youtube-nocookie.com/embed/", RESOURCE_MEDIA)
         # The rewrite runs on the youtube branch of URL resolution — never the raw URL
-        # first — and an unrecognizable URL falls back out of the iframe path.
-        self.assertIn('youtubeEmbedUrl(resource.external_url || "")', RESOURCE_CARD)
+        # first — and an unrecognizable URL falls back out of the iframe path. Both mounts
+        # (the inline card and the media stage) resolve through this one function.
+        self.assertIn('youtubeEmbedUrl(resource.external_url || "")', RESOURCE_MEDIA)
+        self.assertIn("resolveResourceUrl", RESOURCE_CARD)
+        self.assertIn("resolveResourceUrl", MEDIA_STAGE)
 
     def test_uploads_are_signed_lazily_and_only_on_open(self):
         # Signing happens inside open/run handlers, never on mount: listing a lesson's
         # materials must not mint URLs nobody opens, and persisted signed URLs (long
         # expired by replay) are only a last-resort fallback.
+        self.assertIn("getLessonResourceSignedUrl({", RESOURCE_MEDIA)
+        self.assertIn('source_type: "upload"', RESOURCE_MEDIA)
+        # The artifact run path still signs inline in the card (TEXT fetch, never a link).
         self.assertIn("getLessonResourceSignedUrl({", RESOURCE_CARD)
-        self.assertIn('source_type: "upload"', RESOURCE_CARD)
 
     def test_inline_players_are_scoped_per_kind(self):
         # The generic iframe mounts ONLY for pdf/youtube; video/audio/image use native

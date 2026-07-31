@@ -29,35 +29,41 @@ export type LessonTreeProps = {
   disabled?: boolean;
 };
 
-function StateDot({ value, current }: { value: number; current: boolean }) {
-  // Three states, one shape: done = filled, in progress = half-filled ring, unstarted =
-  // hollow ring. Color stays in the neutral ramp except "current", which borrows the shared
-  // accent marker var so light/dark both work without a hex here.
-  const base = "h-[7px] w-[7px] shrink-0 rounded-full border";
+function ProgressGlyph({ value, current }: { value: number; current: boolean }) {
+  // Three states, one legible 14px glyph: unstarted = hollow ring, in progress = ring with its
+  // right half filled, done = filled disc with a check. The old 7px dots read as specks; at
+  // this size the state is knowable without squinting. Color stays in the neutral ramp except
+  // "current", which borrows the shared accent var so both themes work without a hex here.
+  const ink = current ? "var(--accent-text)" : "currentColor";
   if (value >= 1) {
     return (
-      <span
-        aria-hidden
-        className={`${base} border-transparent ${current ? "bg-(--accent-text)" : "bg-foreground/70"}`}
-      />
+      <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5 shrink-0">
+        <circle cx="8" cy="8" r="6.75" fill={ink} />
+        <path
+          d="M5.1 8.3l2.1 2.1 3.8-4.4"
+          fill="none"
+          stroke="var(--background)"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     );
   }
   if (value > 0) {
     return (
-      <span
-        aria-hidden
-        className={`${base} ${current ? "border-(--accent-text)" : "border-foreground/50"}`}
-        style={{
-          background: `linear-gradient(to top, ${
-            current
-              ? "var(--accent-text)"
-              : "color-mix(in oklab, var(--foreground) 55%, transparent)"
-          } 50%, transparent 50%)`,
-        }}
-      />
+      <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5 shrink-0">
+        <circle cx="8" cy="8" r="6" fill="none" stroke={ink} strokeWidth="1.5" />
+        {/* Right half filled: started, not finished. */}
+        <path d="M8 2.75a5.25 5.25 0 0 1 0 10.5Z" fill={ink} />
+      </svg>
     );
   }
-  return <span aria-hidden className={`${base} border-border`} />;
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5 shrink-0 opacity-50">
+      <circle cx="8" cy="8" r="6" fill="none" stroke={ink} strokeWidth="1.5" />
+    </svg>
+  );
 }
 
 function unitFraction(lessons: Lesson[], progress: Record<string, number>) {
@@ -100,52 +106,45 @@ export function LessonTree({
             : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
         }`}
       >
-        <StateDot value={value} current={current} />
+        <ProgressGlyph value={value} current={current} />
         <span className="min-w-0 flex-1 truncate">{lesson.title}</span>
         {value >= 1 ? <span className="sr-only">(completed)</span> : null}
       </button>
     );
   };
 
-  const single = groups.length === 1 ? unitFraction(groups[0].lessons, progress) : null;
-
+  // No "Lessons" heading — the unit titles ARE the tree's labels. Every unit renders as a
+  // collapsible (a lone unit just starts open), so the fraction always has a header to ride.
   return (
     <>
-      <div className="mb-1 flex items-baseline px-2.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-        <span className="min-w-0 flex-1 truncate">Lessons</span>
-        {single ? (
-          <span className="shrink-0 pl-1 tabular-nums">
-            {single.done}/{single.total}
-          </span>
-        ) : null}
-      </div>
-      {groups.length > 1
-        ? groups.map((group) => {
-            const { done, total } = unitFraction(group.lessons, progress);
-            return (
-              <Collapsible
-                key={group.unitId}
-                open={openUnits[group.unitId] ?? false}
-                onToggle={() =>
-                  setOpenUnits((s) => ({ ...s, [group.unitId]: !(s[group.unitId] ?? false) }))
-                }
-                headerClassName="mt-0.5 rounded-control px-2 py-1.5 text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted/60"
-                title={<span className="truncate font-medium">{group.unitTitle}</span>}
-                meta={
-                  <span
-                    className="shrink-0 pl-1 text-meta tabular-nums text-muted-foreground"
-                    aria-label={`${done} of ${total} lessons complete`}
-                  >
-                    {done}/{total}
-                  </span>
-                }
-                bodyClassName="pb-1 pl-1.5"
+      {groups.map((group) => {
+        const { done, total } = unitFraction(group.lessons, progress);
+        return (
+          <Collapsible
+            key={group.unitId}
+            open={openUnits[group.unitId] ?? groups.length === 1}
+            onToggle={() =>
+              setOpenUnits((s) => ({
+                ...s,
+                [group.unitId]: !(s[group.unitId] ?? groups.length === 1),
+              }))
+            }
+            headerClassName="mt-0.5 rounded-control px-2 py-1.5 text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted/60"
+            title={<span className="truncate font-medium">{group.unitTitle}</span>}
+            meta={
+              <span
+                className="shrink-0 pl-1 text-meta tabular-nums text-muted-foreground"
+                aria-label={`${done} of ${total} lessons complete`}
               >
-                {group.lessons.map(row)}
-              </Collapsible>
-            );
-          })
-        : (groups[0]?.lessons ?? []).map(row)}
+                {done}/{total}
+              </span>
+            }
+            bodyClassName="pb-1 pl-1.5"
+          >
+            {group.lessons.map(row)}
+          </Collapsible>
+        );
+      })}
     </>
   );
 }

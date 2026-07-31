@@ -370,7 +370,9 @@ export function Chatbox({
         className="w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-body text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
       />
 
-      <div className="flex items-center gap-1.5 px-2 pb-2">
+      {/* flex-wrap: in the docked chat widget (media full screen) this row is ~400px wide and
+          must wrap rather than overflow. */}
+      <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2">
         {/* Rendered only when wired. A permanently-disabled button is a promise the app does
             not keep — absent reads as "not a feature here", greyed reads as "broken". */}
         <input

@@ -49,13 +49,10 @@ export function StudentSidebar({
   const isDark = resolved === "dark";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-14 shrink-0 items-center px-4">
-        <span className="font-serif text-[18px] tracking-tight text-foreground">Jargon</span>
-      </div>
-
+    <div className="flex h-full min-h-0 flex-col pt-3">
       {/* Primary: the two things the product is. A segmented control rather than two nav rows,
-          so the choice reads as a mode switch and not as another destination. */}
+          so the choice reads as a mode switch and not as another destination. (No wordmark —
+          the product doesn't need to introduce itself on every screen.) */}
       <div
         role="tablist"
         aria-label="Section"

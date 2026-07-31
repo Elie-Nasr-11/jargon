@@ -366,7 +366,12 @@ export function StudentHome({
         {/* ---- 3. Classes (moved here from the sidebar) -------------------------------- */}
         <SectionLabel>Classes</SectionLabel>
         <div className="pb-6">
-          <ClassesPanel currentLessonId={currentLessonId} onOpenLesson={onOpenLesson} />
+          <ClassesPanel
+            currentLessonId={currentLessonId}
+            onOpenLesson={onOpenLesson}
+            assessments={assessments}
+            onOpenAssessment={onOpenAssessment}
+          />
         </div>
       </div>
     </section>

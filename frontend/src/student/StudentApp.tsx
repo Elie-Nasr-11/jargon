@@ -18,6 +18,12 @@ import {
 import type { StudentAssessmentBundle } from "@/lib/types";
 import { AssessmentSurface } from "@/student/AssessmentSurface";
 import { ChatWindow } from "@/student/ChatWindow";
+import {
+  ChatDock,
+  MediaStageScope,
+  MediaStageViewer,
+  useMediaStageController,
+} from "@/student/MediaStage";
 import { CheckpointsPanel } from "@/student/CheckpointsPanel";
 import { ClassesPanel } from "@/student/ClassesPanel";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
@@ -176,6 +182,20 @@ export function StudentApp({
 
   const destinationSpec = destination ? DESTINATIONS.find((d) => d.id === destination) : undefined;
 
+  // The media stage: shell-owned because it drives the Learn layout (half = media over chat,
+  // full = media with the chat docked). Any ResourceCard below raises it via context.
+  const mediaStage = useMediaStageController();
+  const stageOpen = mediaStage.stage !== null;
+  // The stage renders in the Learn layout; raising it from Home or a destination panel jumps
+  // there so the expansion is visible instead of happening behind the current surface.
+  useEffect(() => {
+    if (!stageOpen) return;
+    if (destination) onCloseDestination();
+    if (section !== "learn") onSelectSection("learn");
+    // Intentionally keyed on stageOpen alone: this is an "on raise" jump, not an invariant.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageOpen]);
+
   // Every nav action closes the drawer; the docked column is unaffected.
   const closeDrawer = () => setDrawerOpen(false);
   const openLesson = (lessonId: string) => {
@@ -205,142 +225,163 @@ export function StudentApp({
     </StudentSidebar>
   );
 
-  return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/* Flat, solid shell: the page IS the background — no ambient layer, no shadows; the
-          sidebar reads as a column of the same surface separated by a clean hairline. */}
-      <aside
-        aria-label="Sidebar"
-        className="hidden h-full w-[260px] shrink-0 border-r border-border bg-depth-sub lg:block"
-      >
-        {sidebar}
-      </aside>
-
-      {/* Below lg the same column lives in a drawer (Radix Sheet: focus trap, ESC, scrim). */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent side="left" className="w-[280px] border-border bg-depth-sub p-0 lg:hidden">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          {sidebar}
-        </SheetContent>
-      </Sheet>
-
-      <button
-        type="button"
-        onClick={() => setDrawerOpen(true)}
-        aria-label="Open navigation"
-        aria-expanded={drawerOpen}
-        className="fixed left-3 top-3 z-[var(--z-header)] flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground lg:hidden"
-      >
-        <Menu className="h-[18px] w-[18px]" strokeWidth={1.6} />
-      </button>
-
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {destinationSpec ? (
-          <section className="flex min-h-0 flex-1 flex-col px-6 py-6">
-            <header className="mb-4 flex items-baseline gap-3">
-              <h1 className="font-serif text-[22px] tracking-tight text-foreground">
-                {destinationSpec.label}
-              </h1>
-              <p className="text-meta text-muted-foreground">{destinationSpec.hint}</p>
-              <div className="flex-1" />
-              <button
-                type="button"
-                onClick={onCloseDestination}
-                className="rounded-control px-2 py-1 text-meta text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
-              >
-                Close
-              </button>
-            </header>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {destination === "classes" ? (
-                <ClassesPanel
-                  currentLessonId={conversation.lesson?.id ?? null}
-                  onOpenLesson={openLesson}
-                />
-              ) : destination === "resources" ? (
-                // The Resources PILL in the chatbox links here too — the current lesson's
-                // published materials plus anything the mentor attached this session.
-                <ResourcesPanel
-                  lessonId={conversation.lesson?.id ?? null}
-                  sessionId={conversation.sessionId}
-                  sessionResources={conversation.resources}
-                />
-              ) : destination === "checkpoints" ? (
-                <CheckpointsPanel
-                  bundle={assessments}
-                  onOpenAssessment={(id) => setOpenAssessmentId(id)}
-                />
-              ) : destination === "customize" ? (
-                // MentorControls already exists and works; Customize is its home on this
-                // surface. Saved to the local store (useConversation reads it per turn) and
-                // written through to student_settings for cross-device carry.
-                <div className="mx-auto w-full max-w-2xl">
-                  <MentorControls
-                    mentor={mentor}
-                    onChange={saveMentor}
-                    voice={voice}
-                    onVoiceChange={saveVoice}
-                  />
-                </div>
-              ) : (
-                // reports — grades + proficiency.
-                <ReportsPanel />
-              )}
-            </div>
-          </section>
-        ) : section === "home" ? (
-          <StudentHome
-            lessons={conversation.lessons}
-            currentLessonId={conversation.lesson?.id ?? null}
-            onOpenLesson={openLesson}
-            assessments={assessments}
-            onOpenAssessment={(id) => setOpenAssessmentId(id)}
-          />
-        ) : (
-          <ChatWindow
-            mode={turnMode}
-            onModeChange={setTurnMode}
-            offers={conversation.offers}
-            // Resources is not a conversation mode — it opens the materials destination.
-            onOpenResources={() => onSelectDestination("resources")}
-            sending={conversation.sending || conversation.booting}
-            onSend={(text, attachments) => conversation.sendText(text, turnMode, attachments)}
-            onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
-          >
-            {conversation.booting ? (
-              <p className="mx-auto w-full max-w-3xl px-4 text-body text-muted-foreground">
-                Opening your conversation…
-              </p>
-            ) : conversation.error && !conversation.messages.length ? (
-              <p className="mx-auto w-full max-w-3xl px-4 text-body text-danger">
-                {conversation.error}
-              </p>
-            ) : (
-              <Transcript
-                messages={conversation.messages}
-                disabled={conversation.sending}
-                onRetry={(answer) => void conversation.retry(answer, turnMode)}
-                onChoose={(choiceId, label) => {
-                  // Answering a quiz is a Quiz-mode act. The server fails closed on a choice sent
-                  // in a conversation mode (correct), but that would read as a dead button — so
-                  // picking an option moves the student into Quiz rather than being refused.
-                  setTurnMode("quiz");
-                  void conversation.sendChoice(choiceId, label, "quiz");
-                }}
-              />
-            )}
-          </ChatWindow>
-        )}
-      </main>
-
-      {openAssessmentId ? (
-        <AssessmentSurface
-          assessmentId={openAssessmentId}
-          bundle={assessments}
-          onClose={() => setOpenAssessmentId(null)}
-          onFinished={refreshAssessments}
+  // The conversation surface, one instance reused by every Learn layout (plain, bottom-half
+  // under the stage, or docked while media is full screen).
+  const chatSurface = (
+    <ChatWindow
+      mode={turnMode}
+      onModeChange={setTurnMode}
+      offers={conversation.offers}
+      // Resources is not a conversation mode — it opens the materials destination.
+      onOpenResources={() => onSelectDestination("resources")}
+      sending={conversation.sending || conversation.booting}
+      onSend={(text, attachments) => conversation.sendText(text, turnMode, attachments)}
+      onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
+    >
+      {conversation.booting ? (
+        <p className="mx-auto w-full max-w-3xl px-4 text-body text-muted-foreground">
+          Opening your conversation…
+        </p>
+      ) : conversation.error && !conversation.messages.length ? (
+        <p className="mx-auto w-full max-w-3xl px-4 text-body text-danger">{conversation.error}</p>
+      ) : (
+        <Transcript
+          messages={conversation.messages}
+          disabled={conversation.sending}
+          onRetry={(answer) => void conversation.retry(answer, turnMode)}
+          onChoose={(choiceId, label) => {
+            // Answering a quiz is a Quiz-mode act. The server fails closed on a choice sent
+            // in a conversation mode (correct), but that would read as a dead button — so
+            // picking an option moves the student into Quiz rather than being refused.
+            setTurnMode("quiz");
+            void conversation.sendChoice(choiceId, label, "quiz");
+          }}
         />
-      ) : null}
-    </div>
+      )}
+    </ChatWindow>
+  );
+
+  return (
+    <MediaStageScope value={mediaStage}>
+      <div className="flex h-screen w-full overflow-hidden bg-background">
+        {/* Flat, solid shell: the page IS the background — no ambient layer, no shadows; the
+          sidebar reads as a column of the same surface separated by a clean hairline. */}
+        <aside
+          aria-label="Sidebar"
+          className="hidden h-full w-[260px] shrink-0 border-r border-border bg-depth-sub lg:block"
+        >
+          {sidebar}
+        </aside>
+
+        {/* Below lg the same column lives in a drawer (Radix Sheet: focus trap, ESC, scrim). */}
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <SheetContent side="left" className="w-[280px] border-border bg-depth-sub p-0 lg:hidden">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            {sidebar}
+          </SheetContent>
+        </Sheet>
+
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Open navigation"
+          aria-expanded={drawerOpen}
+          className="fixed left-3 top-3 z-[var(--z-header)] flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground lg:hidden"
+        >
+          <Menu className="h-[18px] w-[18px]" strokeWidth={1.6} />
+        </button>
+
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {destinationSpec ? (
+            <section className="flex min-h-0 flex-1 flex-col px-6 py-6">
+              <header className="mb-4 flex items-baseline gap-3">
+                <h1 className="font-serif text-[22px] tracking-tight text-foreground">
+                  {destinationSpec.label}
+                </h1>
+                <p className="text-meta text-muted-foreground">{destinationSpec.hint}</p>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={onCloseDestination}
+                  className="rounded-control px-2 py-1 text-meta text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
+                >
+                  Close
+                </button>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {destination === "classes" ? (
+                  <ClassesPanel
+                    currentLessonId={conversation.lesson?.id ?? null}
+                    onOpenLesson={openLesson}
+                    assessments={assessments}
+                    onOpenAssessment={(id) => setOpenAssessmentId(id)}
+                  />
+                ) : destination === "resources" ? (
+                  // The Resources PILL in the chatbox links here too — the current lesson's
+                  // published materials plus anything the mentor attached this session.
+                  <ResourcesPanel
+                    lessonId={conversation.lesson?.id ?? null}
+                    sessionId={conversation.sessionId}
+                    sessionResources={conversation.resources}
+                  />
+                ) : destination === "checkpoints" ? (
+                  <CheckpointsPanel
+                    bundle={assessments}
+                    onOpenAssessment={(id) => setOpenAssessmentId(id)}
+                  />
+                ) : destination === "customize" ? (
+                  // MentorControls already exists and works; Customize is its home on this
+                  // surface. Saved to the local store (useConversation reads it per turn) and
+                  // written through to student_settings for cross-device carry.
+                  <div className="mx-auto w-full max-w-2xl">
+                    <MentorControls
+                      mentor={mentor}
+                      onChange={saveMentor}
+                      voice={voice}
+                      onVoiceChange={saveVoice}
+                    />
+                  </div>
+                ) : (
+                  // reports — grades + proficiency.
+                  <ReportsPanel />
+                )}
+              </div>
+            </section>
+          ) : section === "home" ? (
+            <StudentHome
+              lessons={conversation.lessons}
+              currentLessonId={conversation.lesson?.id ?? null}
+              onOpenLesson={openLesson}
+              assessments={assessments}
+              onOpenAssessment={(id) => setOpenAssessmentId(id)}
+            />
+          ) : (
+            // Learn: the conversation, optionally sharing the area with the media stage.
+            //   no stage   → the conversation owns the whole area.
+            //   half stage → media on top, conversation keeps the bottom half.
+            //   full stage → media owns the area; the conversation docks bottom-right.
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              {mediaStage.stage ? (
+                <MediaStageViewer
+                  stage={mediaStage.stage}
+                  onMode={mediaStage.setMode}
+                  onClose={mediaStage.close}
+                />
+              ) : null}
+              {mediaStage.stage?.mode === "full" ? <ChatDock>{chatSurface}</ChatDock> : chatSurface}
+            </div>
+          )}
+        </main>
+
+        {openAssessmentId ? (
+          <AssessmentSurface
+            assessmentId={openAssessmentId}
+            bundle={assessments}
+            onClose={() => setOpenAssessmentId(null)}
+            onFinished={refreshAssessments}
+          />
+        ) : null}
+      </div>
+    </MediaStageScope>
   );
 }

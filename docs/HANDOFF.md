@@ -7809,3 +7809,39 @@ the sim path. (3) Teacher/admin surfaces still mount AmbientCanvas; if the flat 
 should extend there, unmount + rely on the admin-wash tint.
 Suggested next task: signed-in pass as demo-student on the deployed site; check the theme
 toggle, the mode-rule animation, and each of the seven media cards.
+
+## Claude -> Codex / Human - 2026-07-31 18:40
+
+Status: Finished
+Summary: Refinement round 2 (user feedback). (1) SIDEBAR: wordmark and the "Lessons" overline
+removed — the unit titles are the tree's labels (every unit renders as a collapsible, a lone
+unit starts open); progress dots replaced with legible 14px glyphs (hollow ring / right-half
+filled / filled disc with check; current borrows --accent-text). (2) CLASS DETAIL: ClassesPanel
+cards now expand into a small class canvas — info strip (org, lesson/due/graded counts) + a
+Lessons / Assignments / Grades / Resources tab strip. Assignments come from the shell's
+assessment bundle resolved per class via assessment.class_id (openable into the
+AssessmentSurface); grades filter fetchStudentGrades by class_id; resources use the new
+fetchClassResources(classId) (same select + RLS gate as the per-lesson read) rendered through
+ResourceCard, so class materials get the full media table. (3) MEDIA STAGE (new
+student/MediaStage.tsx): any pdf/youtube/video/audio/image/artifact can expand to HALF screen
+(media top, conversation keeps the bottom half) or FULL screen (media fills main; conversation
+docks bottom-right as a 420px widget collapsible to a round icon). The stage lives inside
+<main> so the sidebar is never covered; raising it from Home or a destination jumps to Learn.
+Shell owns the stage state (useMediaStageController + MediaStageScope context); ResourceCard
+grew Half/Full buttons (isStageable). URL resolution + nocookie rewrite + media telemetry
+moved to student/resourceMedia.ts, shared by card and stage so the invariants (lazy signing,
+nocookie-only embeds, played/paused/completed progress) cannot drift; artifacts still render
+only through ArtifactFrame/DeckRenderer. ESC closes the stage. Chatbox action row wraps for
+the narrow dock.
+Files changed: frontend/src/lib/api.ts (fetchClassResources + shared row mapper),
+student/{StudentSidebar,LessonTree,ClassesPanel,ResourceCard,StudentApp,StudentHome,Chatbox}.tsx,
+student/{MediaStage.tsx,resourceMedia.ts} (new), tests/test_flow_v3_p5_media_binding.py
+(pins re-anchored to resourceMedia + MediaStage).
+Tests run: tsc 0 errors, eslint 0 errors (react-refresh warnings only), build green,
+python suite 364 OK.
+Remaining concerns: (1) The media-binding pins now assert both mounts resolve through
+resolveResourceUrl — keep new mounts on that helper. (2) The chat dock unmounts/remounts the
+ChatWindow when switching between layouts (voice panel open-state resets; transcript state is
+shell-owned and survives). (3) Class Resources tab caps at 50 rows.
+Suggested next task: live pass — expand the demo PDF to half and full, collapse the dock,
+open a class card's four tabs.

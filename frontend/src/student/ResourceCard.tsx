@@ -6,7 +6,9 @@ import {
   Image as ImageIcon,
   Link2,
   Loader2,
+  Maximize2,
   Music,
+  PanelBottom,
   Play,
   type LucideIcon,
 } from "lucide-react";
@@ -15,6 +17,13 @@ import { parseArtifactConfig } from "@/lib/artifact-schema";
 import { ArtifactFrame } from "@/components/ArtifactFrame";
 import { DeckRenderer } from "@/components/DeckRenderer";
 import { store } from "@/lib/jargon-store";
+import { isStageable, useMediaStage } from "@/student/MediaStage";
+import {
+  mediaProgress,
+  resolveResourceUrl,
+  type ResourceEventType,
+  type ResourceProgress,
+} from "@/student/resourceMedia";
 import { useConversationChannel } from "@/student/useConversation";
 import type { LessonChatResource } from "@/lib/types";
 
@@ -57,37 +66,8 @@ const ICONS: Partial<Record<string, LucideIcon>> = {
 // The kinds that render inside the card when opened; everything else opens a tab.
 const INLINE_KINDS = new Set(["pdf", "youtube", "video", "audio", "image"]);
 
-// The nocookie rewrite: any recognizable YouTube URL becomes a youtube-nocookie.com embed.
-// An unrecognizable URL yields "" and the card falls back to the plain open-in-tab path
-// rather than framing an arbitrary page.
-function youtubeEmbedUrl(rawUrl: string): string {
-  try {
-    const url = new URL(rawUrl);
-    const host = url.hostname.replace(/^www\./, "");
-    const id =
-      host === "youtu.be"
-        ? url.pathname.slice(1)
-        : host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com"
-          ? url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop()
-          : "";
-    return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : "";
-  } catch {
-    return "";
-  }
-}
-
-type ResourceEventType = "shown" | "opened" | "played" | "paused" | "completed";
-type ResourceProgress = { progress_seconds?: number; progress_percent?: number };
-
-function mediaProgress(element: HTMLMediaElement): ResourceProgress {
-  return {
-    progress_seconds: Math.round(element.currentTime || 0),
-    progress_percent:
-      element.duration && Number.isFinite(element.duration)
-        ? Math.min(100, Math.round((element.currentTime / element.duration) * 100))
-        : undefined,
-  };
-}
+// URL resolution, the nocookie rewrite, and telemetry helpers live in resourceMedia.ts,
+// shared with the MediaStage so the invariants cannot drift between the two surfaces.
 
 export function ResourceCard({
   resource,
@@ -145,38 +125,11 @@ export function ResourceCard({
   const isArtifact = resource.resource_type === "artifact";
   const rendersInline = !isArtifact && INLINE_KINDS.has(resource.resource_type);
 
-  // Resolve the URL the student is opening. Uploads sign lazily and FRESH — a signed_url
-  // persisted in a turn payload has expired by replay, so it is only a fallback when signing
-  // itself fails. YouTube rewrites to the nocookie embed host.
-  const resolveUrl = async (): Promise<string> => {
-    if (resource.resource_type === "youtube") {
-      return youtubeEmbedUrl(resource.external_url || "") || resource.external_url || "";
-    }
-    if (
-      resource.source_type === "external_url" ||
-      (!resource.storage_path && resource.external_url)
-    ) {
-      return resource.external_url || "";
-    }
-    if (resource.storage_path) {
-      try {
-        return await getLessonResourceSignedUrl({
-          source_type: "upload",
-          storage_bucket: resource.storage_bucket ?? null,
-          storage_path: resource.storage_path,
-        });
-      } catch {
-        return resource.signed_url || "";
-      }
-    }
-    return resource.signed_url || "";
-  };
-
   const open = async () => {
     if (opening) return;
     setOpening(true);
     try {
-      const url = await resolveUrl();
+      const url = await resolveResourceUrl(resource);
       if (!url) return;
       track("opened");
       if (rendersInline) {
@@ -197,6 +150,11 @@ export function ResourceCard({
     !isArtifact && Boolean(resource.storage_path || resource.external_url || resource.signed_url);
 
   const canReadDeckAloud = Boolean(channel.accessToken && channel.lessonId);
+
+  // The media stage (half/full screen) — offered only where a provider is mounted and the
+  // kind can actually stage.
+  const mediaStage = useMediaStage();
+  const canStage = mediaStage !== null && isStageable(resource);
 
   return (
     <article className="rounded-card border border-border bg-depth-card p-3">
@@ -221,21 +179,47 @@ export function ResourceCard({
           {resource.student_instructions ? (
             <p className="mt-1.5 text-meta text-foreground">{resource.student_instructions}</p>
           ) : null}
-          {canOpen && !inlineUrl ? (
-            <button
-              type="button"
-              onClick={() => void open()}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-            >
-              {opening ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.7} />
-              ) : rendersInline ? (
-                <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
-              ) : (
-                <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
-              )}
-              Open
-            </button>
+          {canOpen || canStage ? (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {canOpen && !inlineUrl ? (
+                <button
+                  type="button"
+                  onClick={() => void open()}
+                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                >
+                  {opening ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.7} />
+                  ) : rendersInline ? (
+                    <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  ) : (
+                    <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  )}
+                  Open
+                </button>
+              ) : null}
+              {canStage ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => mediaStage!.open(resource, "half")}
+                    aria-label={`Open ${resource.title} at half screen`}
+                    className="inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                  >
+                    <PanelBottom className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    Half screen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => mediaStage!.open(resource, "full")}
+                    aria-label={`Open ${resource.title} at full screen`}
+                    className="inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    Full screen
+                  </button>
+                </>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
