@@ -29,7 +29,7 @@ export type LessonTreeProps = {
   disabled?: boolean;
 };
 
-function ProgressGlyph({ value, current }: { value: number; current: boolean }) {
+export function ProgressGlyph({ value, current }: { value: number; current: boolean }) {
   // The design system's ring-and-dot (board 5b, lesson tree): a 15px ring whose HUE carries the
   // state — blue ring+dot on the live lesson, green ring+dot when done, ink ring+dot while in
   // progress, a faint hollow ring when unstarted. Hue does the work; no shape puzzle.

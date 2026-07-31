@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Loader2, Maximize2, MessageCircle, Minus, PanelBottom, X } from "lucide-react";
+import { Loader2, Maximize2, MessageCircle, Minimize2, Minus, X } from "lucide-react";
 import { recordResourceInteraction } from "@/lib/api";
 import { parseArtifactConfig } from "@/lib/artifact-schema";
 import { getLessonResourceSignedUrl } from "@/lib/api";
@@ -154,31 +154,20 @@ export function MediaStageViewer({
         <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
           {resource.resource_type === "artifact" ? "activity" : resource.resource_type}
         </span>
+        {/* ONE progressive control: at half it expands to full; at full it shrinks back.
+            Together with the card's inline expand button this makes the ladder
+            inline → half → full a single repeated tap. */}
         <button
           type="button"
-          onClick={() => onMode("half")}
-          aria-label="Half screen"
-          aria-pressed={mode === "half"}
-          className={`flex h-7 w-7 items-center justify-center rounded-control transition-colors duration-(--dur-fast) ${
-            mode === "half"
-              ? "bg-foreground text-background"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
+          onClick={() => onMode(mode === "half" ? "full" : "half")}
+          aria-label={mode === "half" ? "Expand to full screen" : "Shrink to half screen"}
+          className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
         >
-          <PanelBottom className="h-[14px] w-[14px]" strokeWidth={1.7} />
-        </button>
-        <button
-          type="button"
-          onClick={() => onMode("full")}
-          aria-label="Full screen"
-          aria-pressed={mode === "full"}
-          className={`flex h-7 w-7 items-center justify-center rounded-control transition-colors duration-(--dur-fast) ${
-            mode === "full"
-              ? "bg-foreground text-background"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          <Maximize2 className="h-[14px] w-[14px]" strokeWidth={1.7} />
+          {mode === "half" ? (
+            <Maximize2 className="h-[14px] w-[14px]" strokeWidth={1.7} />
+          ) : (
+            <Minimize2 className="h-[14px] w-[14px]" strokeWidth={1.7} />
+          )}
         </button>
         <button
           type="button"

@@ -30,6 +30,7 @@ import { ResourcesPanel } from "@/student/ResourcesPanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
 import { StudentSidebar } from "@/student/StudentSidebar";
 import { LessonTree } from "@/student/LessonTree";
+import { LessonWelcome } from "@/student/LessonWelcome";
 import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import { useConversation } from "@/student/useConversation";
@@ -244,6 +245,18 @@ export function StudentApp({
         </p>
       ) : conversation.error && !conversation.messages.length ? (
         <p className="mx-auto w-full max-w-3xl px-4 text-body text-danger">{conversation.error}</p>
+      ) : !conversation.messages.length && conversation.lesson ? (
+        // A never-opened lesson: blank, no mentor pretext — materials + three ways in.
+        // The tapped suggestion becomes the first turn (and sets its TurnMode).
+        <LessonWelcome
+          lesson={conversation.lesson}
+          activities={conversation.activities}
+          disabled={conversation.sending}
+          onSuggest={(prompt, mode) => {
+            setTurnMode(mode);
+            conversation.sendText(prompt, mode);
+          }}
+        />
       ) : (
         <Transcript
           messages={conversation.messages}
@@ -315,6 +328,7 @@ export function StudentApp({
                     onOpenLesson={openLesson}
                     assessments={assessments}
                     onOpenAssessment={(id) => setOpenAssessmentId(id)}
+                    progress={progress}
                   />
                 ) : destination === "resources" ? (
                   // The Resources PILL in the chatbox links here too — the current lesson's
@@ -354,6 +368,7 @@ export function StudentApp({
               onOpenLesson={openLesson}
               assessments={assessments}
               onOpenAssessment={(id) => setOpenAssessmentId(id)}
+              progress={progress}
             />
           ) : (
             // Learn: the conversation, optionally sharing the area with the media stage.

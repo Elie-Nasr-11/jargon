@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
-import { AudioLines, Code2, Loader2, Mic, Paperclip, Play, Send, Type, X } from "lucide-react";
+import {
+  AudioLines,
+  Code2,
+  Loader2,
+  Mic,
+  Paperclip,
+  Play,
+  Plus,
+  Send,
+  Type,
+  X,
+} from "lucide-react";
 import { CHAT_UPLOAD_ACCEPT, MAX_CHAT_UPLOAD_FILES, uploadStudentUpload } from "@/lib/api";
 import type { ChatAttachment, VoiceInteractionEvent } from "@/lib/types";
 import { CodeArea } from "@/components/CodeArea";
+import { Popover } from "@/components/Popover";
 import type { ComposerLanguage } from "@/components/Composer";
 import { ModeSelector } from "@/student/ModeSelector";
 import { OfferPills } from "@/student/OfferPills";
@@ -143,6 +155,10 @@ export function Chatbox({
   // An attachment alone is a legitimate message ("here, look at this"), so text is not required —
   // but an upload still in flight is, or the tutor would receive a reference to nothing.
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !disabled && !uploading;
+  // The send-slot swap: an empty draft offers speech; any typed text (or attachment) swaps
+  // in the send circle.
+  const draftEmpty = text.trim().length === 0 && attachments.length === 0 && !uploading;
+  const [plusOpen, setPlusOpen] = useState(false);
   const canRun = code.trim().length > 0 && !disabled;
 
   // A hot mic must not outlive the chatbox (or a disable — the hold lock disables the composer,
@@ -306,11 +322,12 @@ export function Chatbox({
       // Design system: the composer is a PLAIN soft surface — the mode announces itself via
       // the solid tag inside (ModeSelector), not by tinting the box. Hairline + inset
       // top-highlight + quiet shadow; focus sharpens the hairline (composer-elev).
-      className="mode-surface composer-elev rounded-[24px] border"
+      // rounded-[20px] + raised insets: the curve must never crowd the text or the controls.
+      className="mode-surface composer-elev rounded-[20px] border"
       style={{ boxShadow: "var(--inset-highlight), var(--elev-raised)" }}
     >
       {attachments.length || uploading || uploadError || dictationError ? (
-        <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 px-4 pt-2.5">
           {attachments.map((attachment) => (
             <span
               key={attachment.upload_id}
@@ -365,14 +382,12 @@ export function Chatbox({
                 (placeholder ?? "Reply to your mentor…")
         }
         rows={surface === "code" ? 1 : 2}
-        className="w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-body text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+        className="w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-body text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
       />
 
       {/* flex-wrap: in the docked chat widget (media full screen) this row is ~400px wide and
           must wrap rather than overflow. */}
-      <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2">
-        {/* Rendered only when wired. A permanently-disabled button is a promise the app does
-            not keep — absent reads as "not a feature here", greyed reads as "broken". */}
+      <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5">
         <input
           ref={fileRef}
           type="file"
@@ -381,38 +396,57 @@ export function Chatbox({
           onChange={(e) => void pickFiles(e)}
           className="hidden"
         />
-        {/* PDFs are absent from CHAT_UPLOAD_ACCEPT on purpose: the edge function only inlines
-            text and images, so accepting one would attach a file the tutor silently cannot read. */}
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={disabled}
-          aria-label="Attach a file"
-          className="flex h-8 w-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground disabled:opacity-40"
+        {/* The PLUS: one circle that opens the compose menu — attach files, switch surface.
+            (PDFs are absent from CHAT_UPLOAD_ACCEPT on purpose: the edge function only
+            inlines text and images.) */}
+        <Popover
+          open={plusOpen}
+          onClose={() => setPlusOpen(false)}
+          placement="top-start"
+          panelClassName="w-[190px] rounded-card border border-border bg-background p-1.5"
+          trigger={
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => setPlusOpen((v) => !v)}
+              aria-expanded={plusOpen}
+              aria-label="Add to your message"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground disabled:opacity-40"
+              style={{ boxShadow: "var(--inset-highlight)" }}
+            >
+              <Plus className="h-[16px] w-[16px]" strokeWidth={1.8} />
+            </button>
+          }
         >
-          <Paperclip className="h-[16px] w-[16px]" strokeWidth={1.6} />
-        </button>
-
-        {onSendCode ? (
           <button
             type="button"
-            disabled={disabled}
-            onClick={() => setSurface((s) => (s === "text" ? "code" : "text"))}
-            aria-pressed={surface === "code"}
-            aria-label={surface === "code" ? "Switch to writing text" : "Switch to writing code"}
-            className={`flex h-8 w-8 items-center justify-center rounded-control transition-colors duration-(--dur-fast) disabled:opacity-40 ${
-              surface === "code"
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
+            onClick={() => {
+              setPlusOpen(false);
+              fileRef.current?.click();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
           >
-            {surface === "code" ? (
-              <Type className="h-[16px] w-[16px]" strokeWidth={1.6} />
-            ) : (
-              <Code2 className="h-[16px] w-[16px]" strokeWidth={1.6} />
-            )}
+            <Paperclip className="h-[15px] w-[15px]" strokeWidth={1.5} />
+            Attach files
           </button>
-        ) : null}
+          {onSendCode ? (
+            <button
+              type="button"
+              onClick={() => {
+                setPlusOpen(false);
+                setSurface((s) => (s === "text" ? "code" : "text"));
+              }}
+              className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+            >
+              {surface === "code" ? (
+                <Type className="h-[15px] w-[15px]" strokeWidth={1.5} />
+              ) : (
+                <Code2 className="h-[15px] w-[15px]" strokeWidth={1.5} />
+              )}
+              {surface === "code" ? "Write text" : "Write code"}
+            </button>
+          ) : null}
+        </Popover>
 
         <ModeSelector value={mode} onChange={onModeChange} disabled={disabled} />
 
@@ -445,17 +479,17 @@ export function Chatbox({
 
         <div className="min-w-2 flex-1" />
 
-        {/* Dictation: browser speech-to-text into the editable input. Only rendered where the
-            browser actually has a recognizer, and only on the text surface — dictating code is
-            not a thing this composer pretends to do. */}
-        {surface === "text" && dictationAvailable ? (
+        {/* Dictation: speech-to-text into the editable input. Visible only while the draft is
+            EMPTY (or the mic is hot — a hidden hot mic would be unstoppable); it steps aside
+            the moment the student types. Text surface only. */}
+        {surface === "text" && dictationAvailable && (draftEmpty || dictating) ? (
           <button
             type="button"
             onClick={toggleDictation}
             disabled={disabled}
             aria-label={dictating ? "Stop dictation" : "Dictate your message"}
             aria-pressed={dictating}
-            className={`relative flex h-8 w-8 items-center justify-center rounded-control transition-colors duration-(--dur-fast) disabled:opacity-40 ${
+            className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-(--dur-fast) disabled:opacity-40 ${
               dictating
                 ? "bg-danger/15 text-danger"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -465,23 +499,6 @@ export function Chatbox({
               <span className="absolute inset-1 animate-ping rounded-full bg-danger/20" />
             ) : null}
             <Mic className="h-[16px] w-[16px]" strokeWidth={1.6} />
-          </button>
-        ) : null}
-
-        {onToggleVoice ? (
-          <button
-            type="button"
-            onClick={onToggleVoice}
-            disabled={disabled}
-            aria-label={voiceActive ? "Stop live voice" : "Start live voice"}
-            aria-pressed={voiceActive}
-            className={`flex h-8 w-8 items-center justify-center rounded-control transition-colors duration-(--dur-fast) disabled:opacity-40 ${
-              voiceActive
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            <AudioLines className="h-[16px] w-[16px]" strokeWidth={1.6} />
           </button>
         ) : null}
 
@@ -498,9 +515,24 @@ export function Chatbox({
           >
             <Play className="h-[13px] w-[13px]" strokeWidth={2} /> Run
           </button>
+        ) : draftEmpty && onToggleVoice ? (
+          // THE SLOT, empty draft: speech is the primary act — the live-voice button holds
+          // the send position (the ChatGPT pattern) and disappears the moment text lands.
+          <button
+            type="button"
+            onClick={onToggleVoice}
+            disabled={disabled}
+            aria-label={voiceActive ? "Stop live voice" : "Start live voice"}
+            aria-pressed={voiceActive}
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-transform duration-(--dur-fast) hover:scale-105 disabled:opacity-40 ${
+              voiceActive ? "bg-danger text-white" : "bg-primary text-background"
+            }`}
+          >
+            <AudioLines className="h-[15px] w-[15px]" strokeWidth={1.7} />
+          </button>
         ) : (
-          // Send is a CIRCLE and the only light-filled control in dark (inverts per theme —
-          // bg-foreground/text-background does exactly that). Hover scales, press is instant.
+          // THE SLOT, draft in progress: send takes over — a circle, the only light-filled
+          // control in dark (bg-primary/text-background inverts per theme).
           <button
             type="button"
             onClick={submit}

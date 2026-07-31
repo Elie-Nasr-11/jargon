@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
-import { ArrowRight, Check, MessageSquare, Paperclip, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Paperclip, RotateCcw, Sparkles } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
 import { store } from "@/lib/jargon-store";
@@ -428,17 +428,9 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
     for (const message of messages) seenRef.current.add(message.id);
   }, [messages]);
 
-  if (!messages.length) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-12 text-center">
-        <MessageSquare className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.5} />
-        <p className="text-body text-muted-foreground">
-          Your tutor will open the lesson here. Say hello, or ask about anything you&rsquo;re stuck
-          on.
-        </p>
-      </div>
-    );
-  }
+  // The empty case belongs to LessonWelcome now (the blank lesson-open surface) — the
+  // transcript renders nothing rather than competing with it.
+  if (!messages.length) return null;
 
   const lastBotId = [...messages].reverse().find((m) => m.role === "bot" && !m.isError)?.id;
   const sections = groupIntoSections(messages);
@@ -494,7 +486,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
             }
             if (message.role === "teacher") {
               return (
-                <div key={message.id} className="flex flex-col gap-1">
+                <div key={message.id} className="hvp flex flex-col gap-1">
                   <Bubble align="start" tone="teacher">
                     <span className="mb-1 block text-overline uppercase tracking-[0.08em] opacity-70">
                       Your teacher
@@ -502,7 +494,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                     <MessageBody text={message.text} />
                   </Bubble>
                   {canReadAloud ? (
-                    <div className="pl-1">
+                    <div className="hvr pl-1">
                       <ReadAloudAction
                         text={message.text}
                         voice={voice}
@@ -529,7 +521,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
             const isNew = seen !== null && !seen.has(message.id);
             return (
               <MentorRise key={message.id} animate={isNew}>
-                <div className="flex flex-col gap-2">
+                <div className="hvp flex flex-col gap-2">
                   <Bubble align="start" tone={message.isError ? "error" : "mentor"}>
                     <MessageBody text={message.text} markdown={!message.isError} />
                     {/* An error bubble carries the answer that failed, so Retry re-sends it
@@ -552,7 +544,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                     ) : null}
                   </Bubble>
                   {!message.isError && canReadAloud ? (
-                    <div className="pl-1">
+                    <div className="hvr pl-1">
                       <ReadAloudAction
                         text={message.text}
                         voice={voice}

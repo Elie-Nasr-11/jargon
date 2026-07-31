@@ -8,7 +8,6 @@ import {
   Loader2,
   Maximize2,
   Music,
-  PanelBottom,
   Play,
   type LucideIcon,
 } from "lucide-react";
@@ -157,7 +156,7 @@ export function ResourceCard({
   const canStage = mediaStage !== null && isStageable(resource);
 
   return (
-    <article className="rounded-card border border-border bg-depth-card p-3">
+    <article className="hvp rounded-card border border-border bg-depth-card p-3.5">
       <div className="flex items-start gap-2.5">
         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-depth-sub text-muted-foreground">
           <Icon className="h-[15px] w-[15px]" strokeWidth={1.6} />
@@ -179,46 +178,25 @@ export function ResourceCard({
           {resource.student_instructions ? (
             <p className="mt-1.5 text-meta text-foreground">{resource.student_instructions}</p>
           ) : null}
-          {canOpen || canStage ? (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {canOpen && !inlineUrl ? (
-                <button
-                  type="button"
-                  onClick={() => void open()}
-                  className="inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-                >
-                  {opening ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.7} />
-                  ) : rendersInline ? (
-                    <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
-                  ) : (
-                    <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
-                  )}
-                  Open
-                </button>
-              ) : null}
-              {canStage ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => mediaStage!.open(resource, "half")}
-                    aria-label={`Open ${resource.title} at half screen`}
-                    className="inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-                  >
-                    <PanelBottom className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    Half screen
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => mediaStage!.open(resource, "full")}
-                    aria-label={`Open ${resource.title} at full screen`}
-                    className="inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-                  >
-                    <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    Full screen
-                  </button>
-                </>
-              ) : null}
+          {/* One action: Open. Expansion is progressive — it appears ON the opened media
+              (see the overlay below), not as a second row of choices here. The action row
+              itself tucks away until the card is hovered/focused (.hvp on the article). */}
+          {canOpen && !inlineUrl ? (
+            <div className="hvr mt-2 flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void open()}
+                className="inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+              >
+                {opening ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.7} />
+                ) : rendersInline ? (
+                  <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
+                ) : (
+                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
+                )}
+                Open
+              </button>
             </div>
           ) : null}
         </div>
@@ -226,7 +204,19 @@ export function ResourceCard({
 
       {/* ---- Inline players (opened lazily; the tap IS the signing moment) ---- */}
       {inlineUrl ? (
-        <div className="mt-3 overflow-hidden rounded-control border border-border bg-code-background">
+        <div className="relative mt-3 overflow-hidden rounded-control border border-border bg-code-background">
+          {/* Progressive expand: one button on the opened media — first tap raises the
+              half-screen stage; the stage's own toggle goes the rest of the way. */}
+          {canStage ? (
+            <button
+              type="button"
+              onClick={() => mediaStage!.open(resource, "half")}
+              aria-label={`Expand ${resource.title}`}
+              className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
+            >
+              <Maximize2 className="h-[13px] w-[13px]" strokeWidth={1.8} />
+            </button>
+          ) : null}
           {resource.resource_type === "pdf" || resource.resource_type === "youtube" ? (
             <iframe
               title={resource.title}
@@ -265,7 +255,17 @@ export function ResourceCard({
 
       {/* ---- Artifacts (their own security posture; never the generic paths above) ---- */}
       {artifact?.kind === "html_sim" ? (
-        <div className="mt-3">
+        <div className="relative mt-3">
+          {canStage ? (
+            <button
+              type="button"
+              onClick={() => mediaStage!.open(resource, "half")}
+              aria-label={`Expand ${resource.title}`}
+              className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
+            >
+              <Maximize2 className="h-[13px] w-[13px]" strokeWidth={1.8} />
+            </button>
+          ) : null}
           <ArtifactFrame
             title={resource.title}
             artifact={artifact}
@@ -287,7 +287,17 @@ export function ResourceCard({
           />
         </div>
       ) : artifact?.kind === "deck" && artifact.deck ? (
-        <div className="mt-3">
+        <div className="relative mt-3">
+          {canStage ? (
+            <button
+              type="button"
+              onClick={() => mediaStage!.open(resource, "half")}
+              aria-label={`Expand ${resource.title}`}
+              className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
+            >
+              <Maximize2 className="h-[13px] w-[13px]" strokeWidth={1.8} />
+            </button>
+          ) : null}
           <DeckRenderer
             deck={artifact.deck}
             title={resource.title}

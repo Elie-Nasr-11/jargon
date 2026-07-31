@@ -7875,3 +7875,44 @@ two woff2 files if the CSP ever tightens. (3) The old oklch mode tokens are gone
 uncommitted branch styling against them will drift.
 Suggested next task: signed-in pass as demo-student in BOTH themes; then extend the tag/pill
 grammar to the teacher hotlist per board 5b.
+
+## Claude -> Codex / Human - 2026-07-31 21:40
+
+Status: Finished
+Summary: Refinement round 3 (user feedback on the design-system build). (1) Mode tag: cursor-tip
+diamond and hover lift removed (ds-tag-tip CSS deleted). (2) MEDIA is now ONE progressive
+expand: Open renders inline; a single overlay expand button on the opened media raises the
+half-screen stage; the stage header carries one expand/shrink toggle (half<->full) + close.
+The card-level Half/Full buttons are gone. (3) LESSON OPEN IS BLANK: loadLesson's new-session
+path no longer fires the auto opening turn — new student/LessonWelcome.tsx shows the lesson
+identity, its published materials (fetchLessonResources), and three suggested prompts derived
+from lesson + activities (start-lesson / big-picture-discuss / quiz-or-practice); the tapped
+suggestion sets the TurnMode and becomes the first turn (invokeTypedChat with no session_id
+creates the session; presentedBefore gating on the server makes a text-carrying first turn
+safe). useConversation now exposes `activities`; Transcript's dead empty-state copy removed.
+(4) CLASSES upgraded to the board-5b card language: monogram avatar header, mono completed
+fraction (lessons now load on-screen, not on-expand), due tag, hover-revealed Open->; lesson
+rows wear ProgressGlyph (exported from LessonTree) + strikethrough + hover-revealed
+Start/Continue/Revisit pills; unit headers are mono micro-labels with per-unit fractions;
+progress map threaded from the shell through Home and the destination. (5) HOVER-REVEAL sweep:
+shared .hvp/.hvr pair in styles.css (board recipe + focus-within); applied to class header/rows,
+assignment/grade meta, Home due dates/kinds/timestamps, transcript read-aloud rows, resource
+card action rows. (6) ROUNDING: composer to rounded-20 with raised insets (textarea px-4,
+strip px-4, action row px-2.5); class cards p-4, resource cards p-3.5. (7) COMPOSER BUTTONS:
+one PLUS circle opens a popover menu (Attach files / Write code|text) replacing the paperclip
++ code toggle; the send slot swaps — empty draft shows the live-voice circle (filled; red
+while active), typing swaps in the send circle; the dictation mic shows only while the draft
+is empty (or the mic is hot) and hides while typing.
+Files changed: student/{ModeSelector,ResourceCard,MediaStage,LessonWelcome(new),Transcript,
+ClassesPanel,StudentHome,StudentApp,Chatbox,LessonTree}.tsx, student/useConversation.ts,
+frontend/src/styles.css.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK (no pins touched).
+Remaining concerns: (1) A fresh lesson now waits for the STUDENT to speak first — the mentor
+never auto-opens; if a pilot shows kids freezing at the blank screen, the suggestion cards are
+the mitigation and an auto-open setting could return per class. (2) The welcome's suggestion
+prompts are client-authored strings; the server sees them as ordinary student turns. (3) On
+touch, hover-reveals stay hidden until tap — every revealed element is secondary meta or has
+a primary-row action, so nothing is unreachable. (4) Teacher hotlist hover-reveal (board 5b)
+still to do.
+Suggested next task: live pass as demo-student — fresh lesson welcome, suggestion tap, media
+inline->half->full ladder, class cards, composer voice/send swap in both themes.

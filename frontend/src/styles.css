@@ -503,20 +503,20 @@ body {
   font-weight: 700;
 }
 
-/* The cursor-tip the CURRENT mode tag wears (board 5a: a tiny rotated square at the corner). */
-.ds-tag-tip {
-  position: relative;
+/* Hover-to-reveal (board 5b: "action reveals on hover, 180ms fade" — the teacher-row
+   pattern). Mark the container .hvp and the tucked-away piece .hvr. focus-within keeps it
+   keyboard-reachable; on touch the row's primary action works without the reveal. */
+.hvp .hvr {
+  opacity: 0;
+  transform: translateX(-3px);
+  transition:
+    opacity var(--dur-fast) ease,
+    transform var(--dur-fast) ease;
 }
-.ds-tag-tip::before {
-  content: "";
-  position: absolute;
-  left: -3px;
-  top: -3px;
-  width: 7px;
-  height: 7px;
-  background: var(--tag-bg, currentColor);
-  transform: rotate(45deg);
-  border-radius: 1px;
+.hvp:hover .hvr,
+.hvp:focus-within .hvr {
+  opacity: 1;
+  transform: none;
 }
 
 /* Aurora — rationed to ONE live thing per view. Mount behind the live element. */

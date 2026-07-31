@@ -21,6 +21,7 @@ import type {
   ChatAttachment,
   ChatInputModality,
   Lesson,
+  LessonActivity,
   LessonArc,
   LessonChatResource,
   LiveSessionViewer,
@@ -208,6 +209,9 @@ export function useConversation() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [lesson, setLesson] = useState<Lesson | null>(null);
+  // The lesson's authored steps, fetched at open (pre-turn). Feeds the blank-lesson welcome
+  // surface (suggested prompts) and the client-derived arc.
+  const [activities, setActivities] = useState<LessonActivity[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [booting, setBooting] = useState(true);
@@ -294,6 +298,7 @@ export function useConversation() {
       lessonRef.current = target;
       setLesson(target);
       setMessages([]);
+      setActivities([]);
       setOffers(NO_OFFERS);
       setResources([]);
       setError("");
@@ -343,19 +348,17 @@ export function useConversation() {
           ]),
         );
       } else {
-        // No session yet: the opening call creates one and returns the mentor's first turn.
-        const envelope = await invokeTypedChat({
-          accessToken: token,
-          lessonId: target.id,
-          mentorPreferences: mentorToPreferences(store.getMentor()),
-        });
-        if (isStale()) return;
-        applyEnvelope(envelope);
-        if (!envelope.lesson_arc) setLessonArc(deriveLessonArc(activities, null));
-        setMessages([envelopeMessage(envelope)]);
+        // No session yet: stay BLANK — no auto-generated opening turn (no pretext). The
+        // welcome surface (LessonWelcome) shows the lesson's materials + suggested prompts;
+        // the student's first act goes through sendText, and invokeTypedChat with no
+        // session_id creates the session then. Server-side the first turn presents the step
+        // (presentedBefore === false skips grading), so nothing is lost by deferring.
+        setLessonArc(deriveLessonArc(activities, null));
+        setMessages([]);
       }
+      setActivities(activities);
     },
-    [applyEnvelope, setHeldState],
+    [setHeldState],
   );
 
   useEffect(() => {
@@ -993,6 +996,7 @@ export function useConversation() {
     resources,
     lessons,
     lesson,
+    activities,
     sessionId,
     sending,
     booting,

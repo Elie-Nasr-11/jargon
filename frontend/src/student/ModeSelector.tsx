@@ -35,14 +35,14 @@ export function ModeSelector({ value, onChange, disabled }: ModeSelectorProps) {
       panelClassName="w-[280px] rounded-card border border-border bg-depth-card p-1.5 shadow-raised"
       trigger={
         // The current mode IS the solid tag (design system board 5a): one hue, dark ink on the
-        // tag, pill geometry, wearing the cursor-tip.
+        // tag, pill geometry. No cursor-tip, no hover motion — press is instant.
         <button
           type="button"
           disabled={disabled}
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-label={`Conversation mode: ${current.label}`}
-          className="ds-tag ds-tag-tip gap-1 px-3 py-1.5 text-[11px] transition-transform duration-(--dur-fast) hover:-translate-y-px disabled:opacity-40"
+          className="ds-tag gap-1 px-3 py-1.5 text-[11px] transition-opacity duration-(--dur-fast) hover:opacity-90 disabled:opacity-40"
           style={{
             ["--tag-bg" as string]: modeAccentValue(current),
             ["--tag-ink" as string]: modeInkValue(current),

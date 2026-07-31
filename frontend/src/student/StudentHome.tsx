@@ -39,6 +39,8 @@ export type StudentHomeProps = {
   // The shell's assessment bundle (null while loading) — feeds the due strip.
   assessments: StudentAssessmentBundle | null;
   onOpenAssessment: (assessmentId: string) => void;
+  // The shell's per-lesson 0..1 progress map — threads into the classes section.
+  progress?: Record<string, number>;
 };
 
 function greetingForHour(hour: number): string {
@@ -146,12 +148,12 @@ function DueRow({ row, onOpen }: { row: CheckpointRowModel; onOpen: () => void }
       <button
         type="button"
         onClick={onOpen}
-        className="group flex w-full items-center gap-2.5 rounded-control px-2 py-1.5 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
+        className="hvp flex w-full items-center gap-2.5 rounded-control px-2 py-1.5 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
       >
         <ClipboardCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.7} />
         <span className="min-w-0 flex-1 truncate text-body text-foreground">{row.title}</span>
         {row.dueAt ? (
-          <span className="shrink-0 text-meta text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100">
+          <span className="hvr shrink-0 text-meta text-muted-foreground">
             Due {formatDate(row.dueAt)}
           </span>
         ) : null}
@@ -169,6 +171,7 @@ export function StudentHome({
   onOpenLesson,
   assessments,
   onOpenAssessment,
+  progress,
 }: StudentHomeProps) {
   const [name, setName] = useState("");
   const [resumeLessonId, setResumeLessonId] = useState<string | null>(null);
@@ -283,11 +286,11 @@ export function StudentHome({
                       recap.summary?.covered || recap.summary?.wins || recap.summary?.note || "";
                     if (!line) return null;
                     return (
-                      <li key={recap.id} className="group flex items-baseline gap-2">
+                      <li key={recap.id} className="hvp flex items-baseline gap-2">
                         <span className="min-w-0 flex-1 truncate text-meta text-foreground">
                           {line}
                         </span>
-                        <span className="shrink-0 text-meta text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100">
+                        <span className="hvr shrink-0 text-meta text-muted-foreground">
                           {relativeTime(recap.created_at)}
                         </span>
                       </li>
@@ -343,12 +346,12 @@ export function StudentHome({
                 {recentGrades.map((row) => (
                   <li
                     key={row.id}
-                    className="group flex items-baseline gap-3 border-b border-border py-2 last:border-0"
+                    className="hvp flex items-baseline gap-3 border-b border-border py-2 last:border-0"
                   >
                     <span className="min-w-0 flex-1 truncate text-body text-foreground">
                       {row.title}
                     </span>
-                    <span className="shrink-0 text-meta capitalize text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100">
+                    <span className="hvr shrink-0 text-meta capitalize text-muted-foreground">
                       {row.kind}
                     </span>
                     <span className="shrink-0 text-meta font-medium tabular-nums text-foreground">
@@ -371,6 +374,7 @@ export function StudentHome({
             onOpenLesson={onOpenLesson}
             assessments={assessments}
             onOpenAssessment={onOpenAssessment}
+            progress={progress}
           />
         </div>
       </div>
