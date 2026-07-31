@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { ArrowRight, Check, MessageSquare, Paperclip, RotateCcw, Sparkles } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
@@ -308,6 +308,48 @@ function groupIntoSections(messages: Msg[]): Section[] {
   return sections;
 }
 
+// The full-width mode rule: a hairline spanning the whole conversation window with the mode
+// pill sitting on it. It animates in once, the first time it is actually seen — a new section
+// appended at the bottom (the student just switched modes) is in view immediately, and an old
+// section scrolled back into view plays the same entrance. IntersectionObserver drives both
+// cases with one mechanism; reduced motion renders the final state straight away.
+function ModeRule({ label }: { label: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (prefersReducedMotion() || typeof IntersectionObserver === "undefined") {
+      setInView(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.01 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div
+      ref={ref}
+      aria-hidden
+      className={`mode-divider flex items-center gap-3 px-4 ${inView ? "in-view" : ""}`}
+    >
+      <span className="mode-rule mode-rule-l" />
+      <span className="mode-eyebrow mode-pill max-w-[70%] shrink-0 truncate rounded-pill border px-3 py-1 text-overline font-medium uppercase tracking-[0.09em]">
+        {label}
+      </span>
+      <span className="mode-rule mode-rule-r" />
+    </div>
+  );
+}
+
 function ModeSection({
   mode,
   arc,
@@ -317,26 +359,25 @@ function ModeSection({
   arc: LessonArc | null;
   children: ReactNode;
 }) {
-  // Unknown mode: no box, no label. Never claim a mode we did not record.
-  if (!mode || !isTurnMode(mode)) return <div className="flex flex-col gap-3">{children}</div>;
+  // Unknown mode: no rule, no label. Never claim a mode we did not record.
+  if (!mode || !isTurnMode(mode))
+    return (
+      <div className="mx-auto mt-3 flex w-full max-w-3xl flex-col gap-3 px-4 first:mt-1">
+        {children}
+      </div>
+    );
   const spec = turnModeSpec(mode);
   // Lesson sections carry the step eyebrow; every other mode labels itself.
   const eyebrow = (mode === "lesson" && stepEyebrowLabel(arc)) || spec.label;
   return (
     <section
       aria-label={`${spec.label} section`}
-      className="mode-surface relative mt-3 flex flex-col gap-3 rounded-card border px-3 pb-3 pt-5 transition-[background-color,border-color] duration-[400ms] first:mt-1"
+      className="mt-5 first:mt-1"
       style={{ ["--mode-accent" as string]: modeAccentValue(spec) }}
     >
-      {/* Centered on the top border — the fieldset-legend treatment, so the label reads as
-          belonging to this stretch of conversation rather than floating inside it. */}
-      <span
-        aria-hidden
-        className="mode-eyebrow absolute -top-[10px] left-1/2 max-w-[85%] -translate-x-1/2 truncate rounded-pill border px-2.5 py-0.5 text-overline font-medium uppercase tracking-[0.09em] transition-[background-color,border-color,color] duration-[400ms]"
-      >
-        {eyebrow}
-      </span>
-      {children}
+      {/* The rule spans the window; the messages stay in the centered reading column. */}
+      <ModeRule label={eyebrow} />
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pt-3">{children}</div>
     </section>
   );
 }

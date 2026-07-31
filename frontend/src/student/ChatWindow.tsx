@@ -102,12 +102,12 @@ export function ChatWindow({
           </div>
         ) : null}
 
-        {/* Both the transcript and the composer sit in the same centered, width-capped column.
-            Full-bleed text across a 1440px window is unreadable — every LLM chat caps the
-            measure for the same reason, and keeping the composer on the same axis is what makes
-            the conversation read as one column rather than two stacked panels. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-2">
-          <div className="mx-auto w-full max-w-3xl">{children}</div>
+        {/* The transcript owns the full window width — its mode rules span edge to edge —
+            while each section keeps its MESSAGES in a centered, width-capped reading column
+            (full-bleed text across a 1440px window is unreadable). The composer sits on that
+            same centered axis so the conversation reads as one column. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4 pt-2">
+          {children}
         </div>
 
         <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3">

@@ -54,9 +54,10 @@
   --color-depth-sub: var(--depth-sub);
   --color-depth-field: var(--depth-field);
 
-  /* radius scale (opt-in: rounded-control / rounded-card / rounded-pill) */
-  --radius-control: 14px;
-  --radius-card: 18px;
+  /* radius scale (opt-in: rounded-control / rounded-card / rounded-pill). Tightened for the
+     high-contrast flat look — smaller radii read as cleaner lines. */
+  --radius-control: 10px;
+  --radius-card: 14px;
   --radius-pill: 999px;
 
   /* elevation (shadow-card / shadow-raised / shadow-pop). Indirected through --elev-* on
@@ -84,22 +85,24 @@
 }
 
 :root {
-  /* foundation */
-  --background: #ffffff;
-  --surface: #f6f6fb;
-  --surface-hover: #f9f9fe;
-  --foreground: rgba(10, 10, 10, 0.92);
-  --emphasis: #0a0a0a;
-  --muted: #f6f6fb;
-  --muted-foreground: rgba(10, 10, 10, 0.45);
-  --border: rgba(10, 10, 10, 0.08);
+  /* foundation — warm ivory + near-black ink (the Claude-adjacent palette): solid surfaces,
+     visible hairlines, full-contrast text. No translucent chrome, no shadow depth — hierarchy
+     comes from borders, spacing, and type. */
+  --background: #faf9f5;
+  --surface: #f0eee6;
+  --surface-hover: #e8e5da;
+  --foreground: #141413;
+  --emphasis: #141413;
+  --muted: #eceade;
+  --muted-foreground: rgba(20, 20, 19, 0.58);
+  --border: rgba(20, 20, 19, 0.14);
 
   /* opacity ladder */
-  --ink-92: rgba(10, 10, 10, 0.92);
-  --ink-62: rgba(10, 10, 10, 0.62);
-  --ink-45: rgba(10, 10, 10, 0.45);
-  --ink-30: rgba(10, 10, 10, 0.3);
-  --ink-16: rgba(10, 10, 10, 0.16);
+  --ink-92: rgba(20, 20, 19, 0.92);
+  --ink-62: rgba(20, 20, 19, 0.62);
+  --ink-45: rgba(20, 20, 19, 0.45);
+  --ink-30: rgba(20, 20, 19, 0.3);
+  --ink-16: rgba(20, 20, 19, 0.16);
 
   /* rainbow — the only accent */
   --grad-1: #f6d36b; /* yellow */
@@ -108,13 +111,13 @@
   --grad-4: #8fa4ef; /* periwinkle / purple */
   --grad-5: #72b8f5; /* blue */
 
-  /* single-hue accent for "current" markers (from the rainbow — magenta reads on light) */
-  --accent-text: #c4498b;
+  /* single-hue accent for "current" markers — the warm terracotta of the brand family */
+  --accent-text: #c15f3c;
 
   /* code palettes */
-  --code-background: #eef0f6;
-  --code-foreground: #1f2026;
-  --code-muted: #777984;
+  --code-background: #f0eee6;
+  --code-foreground: #1f1e1d;
+  --code-muted: #777571;
   --code-selection: #5266d829;
   --loading-dot-color: #000000;
   --jargon-syntax-command: #5266d8;
@@ -168,18 +171,14 @@
   --ambient-admin: oklch(0.6 0.07 235);
 
   /* focus ring */
-  --ring: rgba(10, 10, 10, 0.34);
+  --ring: rgba(20, 20, 19, 0.4);
 
-  /* elevation ramp. Surface layering recipe:
-       L0 page     — AmbientCanvas + --background; never shadowed.
-       L1 raised   — bg-depth-card (or a grad-border face) + shadow-card.
-       L2 floating — popovers, anchored cards, the composer, jump pill: shadow-raised.
-       L3 overlay  — quiz modal, drawer: shadow-pop + scrim.
-     Dark overrides bake a 1px light ring into the shadow (see .dark) because pure dark
-     shadows vanish on a near-black page. */
-  --elev-card: 0 1px 2px rgba(10, 12, 20, 0.05), 0 8px 24px rgba(10, 12, 20, 0.06);
-  --elev-raised: 0 2px 4px rgba(10, 12, 20, 0.06), 0 10px 32px rgba(10, 12, 20, 0.1);
-  --elev-pop: 0 12px 40px rgba(10, 12, 20, 0.16), 0 2px 8px rgba(10, 12, 20, 0.08);
+  /* elevation ramp — RETIRED (flat, high-contrast direction: no shadowing anywhere).
+     The tokens stay defined because shadow-card/raised/pop utilities are still in markup;
+     they all resolve to a no-op shadow, and separation comes from borders + scrims. */
+  --elev-card: 0 0 #0000;
+  --elev-raised: 0 0 #0000;
+  --elev-pop: 0 0 #0000;
 
   /* motion durations. In Tailwind v4 markup use the var shorthand directly:
      duration-(--dur-fast) / duration-(--dur) / duration-(--dur-slow). */
@@ -203,30 +202,31 @@
    user's explicit Light selection on a dark-OS machine. */
 
 .dark {
-  --background: #0b0b0d;
-  --surface: #161619;
-  --surface-hover: #1f1f23;
-  --foreground: rgba(245, 245, 247, 0.92);
-  --emphasis: #f0f0f2;
-  --muted: #161619;
-  --muted-foreground: rgba(245, 245, 247, 0.45);
-  --border: rgba(245, 245, 247, 0.1);
-  --ink-92: rgba(245, 245, 247, 0.92);
-  --ink-62: rgba(245, 245, 247, 0.62);
-  --ink-45: rgba(245, 245, 247, 0.45);
-  --ink-30: rgba(245, 245, 247, 0.3);
-  --ink-16: rgba(245, 245, 247, 0.16);
-  --code-background: #161619;
-  --code-foreground: #e6e6ea;
-  --code-muted: #8a8a90;
+  /* warm charcoal, mirroring the light theme's warmth — never blue-black */
+  --background: #262624;
+  --surface: #1f1e1d;
+  --surface-hover: #33322f;
+  --foreground: #f5f4ef;
+  --emphasis: #f5f4ef;
+  --muted: #33322f;
+  --muted-foreground: rgba(245, 244, 239, 0.58);
+  --border: rgba(245, 244, 239, 0.16);
+  --ink-92: rgba(245, 244, 239, 0.92);
+  --ink-62: rgba(245, 244, 239, 0.62);
+  --ink-45: rgba(245, 244, 239, 0.45);
+  --ink-30: rgba(245, 244, 239, 0.3);
+  --ink-16: rgba(245, 244, 239, 0.16);
+  --code-background: #1f1e1d;
+  --code-foreground: #e8e6e1;
+  --code-muted: #8f8d88;
   --code-selection: #ffffff20;
   --loading-dot-color: #ffffff;
   --jargon-syntax-command: #8fa4ef;
   --jargon-syntax-condition: #f585bb;
-  --jargon-syntax-comment: #8a8a90;
+  --jargon-syntax-comment: #8f8d88;
   --jargon-syntax-string: #8ad0a8;
   --jargon-syntax-number: #f0a868;
-  --jargon-syntax-bracket: #8a8a90;
+  --jargon-syntax-bracket: #8f8d88;
 
   /* semantic status (dark) */
   --success: #5ec98f;
@@ -234,21 +234,16 @@
   --danger: #f0716f;
   --info: #6ea8f0;
 
-  /* accent for "current" markers (brighter pink reads on dark) */
-  --accent-text: #f585bb;
+  /* accent for "current" markers (brighter terracotta reads on dark) */
+  --accent-text: #d97757;
 
   /* focus ring (dark) */
-  --ring: rgba(245, 245, 247, 0.4);
+  --ring: rgba(245, 244, 239, 0.45);
 
-  /* elevation (dark): near-black spreads for grounding + a baked-in 1px light ring for the
-     edge — rgba(10,12,20) shadows are invisible on a #0b0b0d page. */
-  --elev-card:
-    0 0 0 1px rgba(245, 245, 247, 0.055), 0 1px 2px rgba(0, 0, 0, 0.5),
-    0 8px 24px rgba(0, 0, 0, 0.42);
-  --elev-raised:
-    0 0 0 1px rgba(245, 245, 247, 0.07), 0 2px 6px rgba(0, 0, 0, 0.55),
-    0 12px 32px rgba(0, 0, 0, 0.5);
-  --elev-pop: 0 0 0 1px rgba(245, 245, 247, 0.09), 0 16px 48px rgba(0, 0, 0, 0.65);
+  /* elevation stays retired in dark too — separation is borders + scrims. */
+  --elev-card: 0 0 #0000;
+  --elev-raised: 0 0 #0000;
+  --elev-pop: 0 0 #0000;
 }
 
 @font-face {
@@ -460,29 +455,23 @@ body {
   animation-delay: 0.24s;
 }
 
-/* Hover elevation for interactive cards: lift one tier on hover, settle on press.
-   (The global reduced-motion block below neutralizes these transitions.) */
+/* Interactive-card hover, flat edition: no lift, no shadow — the border sharpens and the
+   surface shifts one step. (The global reduced-motion block below neutralizes transitions.) */
 .elev-hover {
   transition:
-    transform var(--dur-fast) ease,
-    box-shadow var(--dur-fast) ease;
+    border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
 }
 .elev-hover:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--elev-raised);
-}
-.elev-hover:active {
-  transform: translateY(0);
-  box-shadow: var(--elev-card);
+  border-color: var(--ink-30);
 }
 
-/* The composer sits highest of the in-flow surfaces; focusing it steps it up one more. */
+/* The composer's focus state is a sharpened border, not a shadow step. */
 .composer-elev {
-  box-shadow: var(--elev-raised);
-  transition: box-shadow var(--dur) ease;
+  transition: border-color var(--dur) ease;
 }
 .composer-elev:focus-within {
-  box-shadow: var(--elev-pop);
+  border-color: var(--ink-45);
 }
 
 .hairline {
@@ -612,12 +601,60 @@ select {
   border-color: color-mix(in oklab, var(--border) 45%, var(--mode-accent, transparent));
 }
 
-/* The eyebrow pill sits ON the top border, centered — so the mode reads as a label on the
-   container rather than as another chip inside the conversation. */
+/* The eyebrow pill sits ON the mode rule, centered — the mode reads as a label on that
+   stretch of conversation rather than as another chip inside it. */
 .mode-eyebrow {
   color: color-mix(in oklab, var(--foreground) 62%, var(--mode-accent, transparent));
   background-color: color-mix(in oklab, var(--background) 88%, var(--mode-accent, transparent));
   border-color: color-mix(in oklab, var(--border) 40%, var(--mode-accent, transparent));
+}
+
+/* --- Transcript mode rule: a full-width hairline + pill announcing a mode section ---------
+   Entrance plays once, when the rule first becomes visible (IntersectionObserver adds
+   .in-view): the two half-rules grow OUTWARD from the pill while the pill rises in — so a
+   fresh mode selection sweeps across the window, and scrolling back through history replays
+   the same beat per section. Reduced motion: the global block collapses the animations to
+   their final frame. */
+.mode-divider .mode-rule {
+  height: 1px;
+  flex: 1;
+  background: color-mix(in oklab, var(--mode-accent, var(--border)) 55%, var(--border));
+}
+.mode-divider .mode-rule-l {
+  transform-origin: right center;
+}
+.mode-divider .mode-rule-r {
+  transform-origin: left center;
+}
+.mode-divider:not(.in-view) .mode-rule {
+  transform: scaleX(0);
+}
+.mode-divider:not(.in-view) .mode-pill {
+  opacity: 0;
+}
+.mode-divider.in-view .mode-rule {
+  animation: mode-rule-in 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.mode-divider.in-view .mode-pill {
+  animation: mode-pill-in 0.35s ease-out 0.1s both;
+}
+@keyframes mode-rule-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes mode-pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* --- v6 teacher/admin console skin ----------------------------------------- */

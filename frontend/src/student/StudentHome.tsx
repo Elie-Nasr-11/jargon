@@ -1,15 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
-import { AMBIENT_FOCUS_EVENT } from "@/components/AmbientCanvas";
-import {
-  ArrowRight,
-  Brain,
-  CalendarClock,
-  ClipboardCheck,
-  GraduationCap,
-  Loader2,
-  Play,
-} from "lucide-react";
+import { ArrowRight, Brain, ClipboardCheck, GraduationCap, Loader2, Play } from "lucide-react";
 import {
   fetchMostRecentLearningSession,
   fetchProfile,
@@ -21,6 +12,7 @@ import {
 import { formatDate, formatScore, relativeTime } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/motion";
 import { checkpointRows, type CheckpointRowModel } from "@/student/checkpoints";
+import { ClassesPanel } from "@/student/ClassesPanel";
 import type {
   Lesson,
   SessionSummary,
@@ -29,22 +21,21 @@ import type {
   StudentMemory,
 } from "@/lib/types";
 
-// Home (DESIGN_V6 §6): greeting, resume-last-lesson card, "What your mentor remembers"
-// (memory v1), the work-due strip, and a recent-grades strip. The LMS half of the surface —
-// everything here either resumes work or reports on it; nothing competes with Learn.
+// Home, in three deliberate tiers (top to bottom = most to least likely next act):
+//   1. RECENT ACTIVITY — resume the last lesson + the last few session recaps, beside
+//      "What your mentor remembers" (memory v1).
+//   2. ASSIGNMENTS, QUIZZES & GRADES — work due and the recent-grades strip.
+//   3. CLASSES — the class list (moved here from the sidebar), expanding to lessons on click.
 //
-// The memory card is the premium moment: it reveals with a slow rise+fade the first time its
-// data lands (reduced motion snaps), and announces that reveal on the ambient focus event so
-// the shell's AmbientCanvas blooms once in sync.
-//
-// Data: every read is an existing api.ts call. Resume = the newest learning session across all
-// lessons resolved against the catalog the shell already holds; memory = student_memory +
-// session_summaries (owner RLS); grades = the unified checkpoint rows.
+// Disclosure follows the same ladder everywhere: primary facts just show; secondary detail
+// (dates, kinds, arrows) reveals on hover; deep content (a class's lesson list, an assessment)
+// takes a click. Data: every read is an existing api.ts call.
 
 export type StudentHomeProps = {
   // The shell's catalog — used to resolve the resume session's lesson without a second fetch.
   lessons: Lesson[];
-  onResumeLesson: (lessonId: string) => void;
+  currentLessonId: string | null;
+  onOpenLesson: (lessonId: string) => void;
   // The shell's assessment bundle (null while loading) — feeds the due strip.
   assessments: StudentAssessmentBundle | null;
   onOpenAssessment: (assessmentId: string) => void;
@@ -55,6 +46,14 @@ function greetingForHour(hour: number): string {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <h2 className="mb-2 text-overline font-medium uppercase tracking-[0.12em] text-muted-foreground">
+      {children}
+    </h2>
+  );
 }
 
 function Chips({ label, values }: { label: string; values: string[] }) {
@@ -68,7 +67,7 @@ function Chips({ label, values }: { label: string; values: string[] }) {
         {values.map((value) => (
           <span
             key={value}
-            className="rounded-pill border border-border bg-depth-sub px-2 py-0.5 text-meta text-foreground"
+            className="rounded-pill border border-border px-2 py-0.5 text-meta text-foreground"
           >
             {value}
           </span>
@@ -80,34 +79,26 @@ function Chips({ label, values }: { label: string; values: string[] }) {
 
 function MemoryCard() {
   const [memory, setMemory] = useState<StudentMemory | null>(null);
-  const [recaps, setRecaps] = useState<SessionSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([
-      fetchStudentMemory().catch(() => null),
-      fetchSessionSummaries(3).catch(() => [] as SessionSummary[]),
-    ]).then(([m, s]) => {
-      if (cancelled) return;
-      setMemory(m);
-      setRecaps(s);
-      setLoaded(true);
-    });
+    void fetchStudentMemory()
+      .catch(() => null)
+      .then((m) => {
+        if (cancelled) return;
+        setMemory(m);
+        setLoaded(true);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // The premium reveal: once, when the data first lands. Reduced motion renders in place.
+  // The reveal: once, when the data first lands. Reduced motion renders in place.
   useEffect(() => {
-    if (!loaded || !cardRef.current) return;
-    // The ambient uFocus pulse on first reveal (DESIGN_V6 §6): announced on window; the shell
-    // that owns the AmbientCanvas listens and bumps its focusSignal. Dispatched regardless of
-    // reduced motion — the canvas itself suppresses blooms under that preference.
-    window.dispatchEvent(new Event(AMBIENT_FOCUS_EVENT));
-    if (prefersReducedMotion()) return;
+    if (!loaded || !cardRef.current || prefersReducedMotion()) return;
     gsap.fromTo(
       cardRef.current,
       { y: 12, opacity: 0 },
@@ -124,10 +115,10 @@ function MemoryCard() {
       className="rounded-card border border-border bg-depth-card p-4"
       aria-label="What your mentor remembers"
     >
-      <h2 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
+      <h3 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
         <Brain className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
         What your mentor remembers
-      </h2>
+      </h3>
       {!loaded ? (
         <p className="flex items-center gap-2 text-meta text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
@@ -143,30 +134,6 @@ function MemoryCard() {
           ) : null}
           <Chips label="Strengths" values={profile?.strengths ?? []} />
           <Chips label="Working on" values={profile?.struggles ?? []} />
-          {recaps.length ? (
-            <div className="mt-3 border-t border-border/60 pt-2.5">
-              <div className="mb-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Recent sessions
-              </div>
-              <ul className="flex flex-col gap-1.5">
-                {recaps.map((recap) => {
-                  const line =
-                    recap.summary?.covered || recap.summary?.wins || recap.summary?.note || "";
-                  if (!line) return null;
-                  return (
-                    <li key={recap.id} className="flex items-baseline gap-2">
-                      <span className="min-w-0 flex-1 truncate text-meta text-foreground">
-                        {line}
-                      </span>
-                      <span className="shrink-0 text-meta text-muted-foreground">
-                        {relativeTime(recap.created_at)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
         </>
       )}
     </section>
@@ -179,12 +146,12 @@ function DueRow({ row, onOpen }: { row: CheckpointRowModel; onOpen: () => void }
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-center gap-2.5 rounded-control px-2 py-1.5 text-left transition-colors duration-(--dur-fast) hover:bg-muted/60"
+        className="group flex w-full items-center gap-2.5 rounded-control px-2 py-1.5 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
       >
         <ClipboardCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.7} />
         <span className="min-w-0 flex-1 truncate text-body text-foreground">{row.title}</span>
         {row.dueAt ? (
-          <span className="shrink-0 text-meta text-muted-foreground">
+          <span className="shrink-0 text-meta text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100">
             Due {formatDate(row.dueAt)}
           </span>
         ) : null}
@@ -198,7 +165,8 @@ function DueRow({ row, onOpen }: { row: CheckpointRowModel; onOpen: () => void }
 
 export function StudentHome({
   lessons,
-  onResumeLesson,
+  currentLessonId,
+  onOpenLesson,
   assessments,
   onOpenAssessment,
 }: StudentHomeProps) {
@@ -206,6 +174,7 @@ export function StudentHome({
   const [resumeLessonId, setResumeLessonId] = useState<string | null>(null);
   const [resumeChecked, setResumeChecked] = useState(false);
   const [grades, setGrades] = useState<StudentGradeRow[] | null>(null);
+  const [recaps, setRecaps] = useState<SessionSummary[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -228,6 +197,9 @@ export function StudentHome({
     void fetchStudentGrades()
       .then((rows) => !cancelled && setGrades(rows))
       .catch(() => !cancelled && setGrades([]));
+    void fetchSessionSummaries(4)
+      .then((rows) => !cancelled && setRecaps(rows))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -257,18 +229,19 @@ export function StudentHome({
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6">
       <div className="mx-auto w-full max-w-4xl">
-        <h1 className="mb-5 font-serif text-[24px] tracking-tight text-foreground">
+        <h1 className="mb-6 font-serif text-[26px] tracking-tight text-foreground">
           {greetingForHour(new Date().getHours())}
           {name ? `, ${name}` : ""}
         </h1>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          {/* Resume: the single most likely next act, so it leads. */}
+        {/* ---- 1. Recent activity ------------------------------------------------------ */}
+        <SectionLabel>Recent activity</SectionLabel>
+        <div className="mb-7 grid gap-3 md:grid-cols-2">
           <section className="rounded-card border border-border bg-depth-card p-4">
-            <h2 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
+            <h3 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
               <Play className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
               Pick up where you left off
-            </h2>
+            </h3>
             {!resumeChecked ? (
               <p className="flex items-center gap-2 text-meta text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
@@ -276,8 +249,8 @@ export function StudentHome({
             ) : resumeLesson ? (
               <button
                 type="button"
-                onClick={() => onResumeLesson(resumeLesson.id)}
-                className="group flex w-full items-center gap-2.5 rounded-control border border-border bg-depth-sub px-3 py-2.5 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
+                onClick={() => onOpenLesson(resumeLesson.id)}
+                className="group flex w-full items-center gap-2.5 rounded-control border border-border px-3 py-2.5 text-left transition-colors duration-(--dur-fast) hover:border-foreground/40 hover:bg-muted"
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-body font-medium text-foreground">
@@ -296,25 +269,48 @@ export function StudentHome({
               </button>
             ) : (
               <p className="text-body text-muted-foreground">
-                Nothing in progress yet — open a lesson from the sidebar to begin.
+                Nothing in progress yet — open a lesson from a class below to begin.
               </p>
             )}
+            {recaps.length ? (
+              <div className="mt-3 border-t border-border pt-2.5">
+                <div className="mb-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  Recent sessions
+                </div>
+                <ul className="flex flex-col gap-1.5">
+                  {recaps.map((recap) => {
+                    const line =
+                      recap.summary?.covered || recap.summary?.wins || recap.summary?.note || "";
+                    if (!line) return null;
+                    return (
+                      <li key={recap.id} className="group flex items-baseline gap-2">
+                        <span className="min-w-0 flex-1 truncate text-meta text-foreground">
+                          {line}
+                        </span>
+                        <span className="shrink-0 text-meta text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100">
+                          {relativeTime(recap.created_at)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
           </section>
 
           <MemoryCard />
+        </div>
 
-          {/* Work due: teacher-assigned checkpoints, one tap into the focused surface. */}
+        {/* ---- 2. Assignments, quizzes & grades ---------------------------------------- */}
+        <SectionLabel>Assignments, quizzes &amp; grades</SectionLabel>
+        <div className="mb-7 grid gap-3 md:grid-cols-2">
           <section className="rounded-card border border-border bg-depth-card p-4">
-            <h2 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
-              <CalendarClock
-                className="h-[15px] w-[15px] text-muted-foreground"
-                strokeWidth={1.6}
-              />
+            <h3 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
               Work due
               {due.length ? (
                 <span className="text-meta tabular-nums text-muted-foreground">{due.length}</span>
               ) : null}
-            </h2>
+            </h3>
             {assessments === null ? (
               <p className="flex items-center gap-2 text-meta text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
@@ -330,15 +326,14 @@ export function StudentHome({
             )}
           </section>
 
-          {/* Recent grades: the slim strip; Reports holds the full gradebook. */}
           <section className="rounded-card border border-border bg-depth-card p-4">
-            <h2 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
+            <h3 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
               <GraduationCap
                 className="h-[15px] w-[15px] text-muted-foreground"
                 strokeWidth={1.6}
               />
               Recent grades
-            </h2>
+            </h3>
             {grades === null ? (
               <p className="flex items-center gap-2 text-meta text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
@@ -348,12 +343,12 @@ export function StudentHome({
                 {recentGrades.map((row) => (
                   <li
                     key={row.id}
-                    className="flex items-baseline gap-3 border-b border-border/60 py-2 last:border-0"
+                    className="group flex items-baseline gap-3 border-b border-border py-2 last:border-0"
                   >
                     <span className="min-w-0 flex-1 truncate text-body text-foreground">
                       {row.title}
                     </span>
-                    <span className="shrink-0 text-meta capitalize text-muted-foreground">
+                    <span className="shrink-0 text-meta capitalize text-muted-foreground opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100">
                       {row.kind}
                     </span>
                     <span className="shrink-0 text-meta font-medium tabular-nums text-foreground">
@@ -366,6 +361,12 @@ export function StudentHome({
               <p className="text-body text-muted-foreground">No graded work yet.</p>
             )}
           </section>
+        </div>
+
+        {/* ---- 3. Classes (moved here from the sidebar) -------------------------------- */}
+        <SectionLabel>Classes</SectionLabel>
+        <div className="pb-6">
+          <ClassesPanel currentLessonId={currentLessonId} onOpenLesson={onOpenLesson} />
         </div>
       </div>
     </section>

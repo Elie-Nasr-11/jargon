@@ -1,99 +1,38 @@
 import { useState, type ComponentType, type ReactNode } from "react";
 import {
-  BarChart3,
-  BookOpen,
   ChevronsUpDown,
-  ClipboardCheck,
-  GraduationCap,
   House,
   LogOut,
   MessageCircle,
-  Plus,
-  Settings,
+  Moon,
   Sliders,
+  Sun,
   User,
 } from "lucide-react";
 import { Popover } from "@/components/Popover";
-import { FlipNumber } from "@/student/FlipNumber";
-import {
-  DESTINATIONS,
-  MENU_ITEMS,
-  type StudentDestination,
-  type StudentMenuItem,
-  type StudentSection,
-} from "@/student/navigation";
+import { useTheme } from "@/lib/theme";
+import { MENU_ITEMS, type StudentMenuItem, type StudentSection } from "@/student/navigation";
 
-// The student sidebar. Purely presentational — it takes state and callbacks, never fetches.
-// Layout follows the ChatGPT/Claude convention: a primary section switch at the top, a New
-// action, then destinations, then the account row pinned to the bottom.
-
-const DESTINATION_ICONS: Record<
-  StudentDestination,
-  ComponentType<{ className?: string; strokeWidth?: number }>
-> = {
-  classes: GraduationCap,
-  resources: BookOpen,
-  checkpoints: ClipboardCheck,
-  customize: Sliders,
-  reports: BarChart3,
-};
+// The student sidebar, deliberately slim: Home/Learn at the top, the lesson tree as the body,
+// the account row at the bottom. Everything else (Resources, Checkpoints, Customize, Reports,
+// Classes) is reached from where it's relevant — the chatbox pill, Home, or the account menu —
+// not from a nav column. Purely presentational: it takes state and callbacks, never fetches.
 
 const MENU_ICONS: Record<
   StudentMenuItem,
   ComponentType<{ className?: string; strokeWidth?: number }>
 > = {
   profile: User,
-  settings: Settings,
+  customize: Sliders,
   "sign-out": LogOut,
 };
-
-function NavRow({
-  icon: Icon,
-  label,
-  active,
-  badge,
-  onClick,
-}: {
-  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
-  label: string;
-  active?: boolean;
-  badge?: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      className={`flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body transition-colors duration-(--dur-fast) ${
-        active
-          ? "bg-muted font-medium text-foreground"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-      }`}
-    >
-      <Icon className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {badge ? (
-        <span className="shrink-0 overflow-hidden rounded-pill bg-foreground px-1.5 py-0.5 text-[10.5px] font-semibold leading-none text-background">
-          <FlipNumber value={badge} />
-        </span>
-      ) : null}
-    </button>
-  );
-}
 
 export type StudentSidebarProps = {
   email: string;
   section: StudentSection;
-  destination?: StudentDestination;
-  // Formal work waiting on the student (assigned/in-progress checkpoints) — badges the
-  // Checkpoints row so due work is visible without opening it.
-  workDue?: number;
   onSelectSection: (section: StudentSection) => void;
-  onSelectDestination: (destination: StudentDestination) => void;
-  onNewConversation: () => void;
   onSelectMenuItem: (item: StudentMenuItem) => void;
-  // Rendered under the destinations — the class/unit/lesson tree, supplied by the shell so
+  // Rendered as the sidebar body — the class/unit/lesson tree, supplied by the shell so
   // this component stays free of data concerns.
   children?: ReactNode;
 };
@@ -101,15 +40,13 @@ export type StudentSidebarProps = {
 export function StudentSidebar({
   email,
   section,
-  destination,
-  workDue = 0,
   onSelectSection,
-  onSelectDestination,
-  onNewConversation,
   onSelectMenuItem,
   children,
 }: StudentSidebarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { resolved, toggle } = useTheme();
+  const isDark = resolved === "dark";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -122,7 +59,7 @@ export function StudentSidebar({
       <div
         role="tablist"
         aria-label="Section"
-        className="mx-2 mb-2 flex shrink-0 gap-1 rounded-control bg-depth-sub p-1"
+        className="mx-2 mb-2 flex shrink-0 gap-1 rounded-control border border-border bg-depth-sub p-1"
       >
         {(
           [
@@ -138,9 +75,9 @@ export function StudentSidebar({
               role="tab"
               aria-selected={active}
               onClick={() => onSelectSection(id)}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2 py-1.5 text-body transition-colors duration-(--dur-fast) ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-3px)] px-2 py-1.5 text-body transition-colors duration-(--dur-fast) ${
                 active
-                  ? "bg-depth-card font-medium text-foreground shadow-card"
+                  ? "bg-background font-medium text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -151,32 +88,17 @@ export function StudentSidebar({
         })}
       </div>
 
-      <nav aria-label="Main" className="shrink-0 px-2">
-        <NavRow icon={Plus} label="New" onClick={onNewConversation} />
-        <div className="my-2 h-px bg-border/60" />
-        {DESTINATIONS.map((d) => (
-          <NavRow
-            key={d.id}
-            icon={DESTINATION_ICONS[d.id]}
-            label={d.label}
-            active={destination === d.id}
-            badge={d.id === "checkpoints" ? workDue : undefined}
-            onClick={() => onSelectDestination(d.id)}
-          />
-        ))}
-      </nav>
-
       {/* The class/unit/lesson tree lives here, supplied by the shell. */}
-      <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
         {children}
       </div>
 
-      <div className="shrink-0 border-t border-border/60 p-2">
+      <div className="shrink-0 border-t border-border p-2">
         <Popover
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           placement="top-start"
-          panelClassName="w-[236px] rounded-card border border-border bg-depth-card p-1.5 shadow-raised"
+          panelClassName="w-[236px] rounded-card border border-border bg-background p-1.5"
           trigger={
             <button
               type="button"
@@ -185,7 +107,7 @@ export function StudentSidebar({
               aria-label={`Account and settings — ${email || "signed in"}`}
               className="flex w-full items-center gap-2.5 rounded-control px-2 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-depth-sub text-meta font-medium text-muted-foreground">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-depth-sub text-meta font-medium text-muted-foreground">
                 {email ? email.slice(0, 1).toUpperCase() : <User className="h-4 w-4" />}
               </span>
               <span className="min-w-0 flex-1 truncate text-body text-foreground">{email}</span>
@@ -193,7 +115,7 @@ export function StudentSidebar({
             </button>
           }
         >
-          {MENU_ITEMS.map((item) => {
+          {MENU_ITEMS.filter((item) => item.id !== "sign-out").map((item) => {
             const Icon = MENU_ICONS[item.id];
             return (
               <button
@@ -203,15 +125,45 @@ export function StudentSidebar({
                   setMenuOpen(false);
                   onSelectMenuItem(item.id);
                 }}
-                className="flex w-full items-center justify-between gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+                className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
               >
-                <span className="flex items-center gap-2.5">
-                  <Icon className="h-[15px] w-[15px]" strokeWidth={1.5} />
-                  {item.label}
-                </span>
+                <Icon className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                {item.label}
               </button>
             );
           })}
+
+          {/* Appearance: flips in place, so the menu stays open — the student sees the theme
+              change under the cursor and can flip back without re-opening anything. */}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            className="flex w-full items-center justify-between gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+          >
+            <span className="flex items-center gap-2.5">
+              {isDark ? (
+                <Sun className="h-[15px] w-[15px]" strokeWidth={1.5} />
+              ) : (
+                <Moon className="h-[15px] w-[15px]" strokeWidth={1.5} />
+              )}
+              {isDark ? "Light mode" : "Dark mode"}
+            </span>
+          </button>
+
+          <div className="my-1 h-px bg-border" />
+
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              onSelectMenuItem("sign-out");
+            }}
+            className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+          >
+            <LogOut className="h-[15px] w-[15px]" strokeWidth={1.5} />
+            Sign out
+          </button>
         </Popover>
       </div>
     </div>

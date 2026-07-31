@@ -61,12 +61,11 @@ function LearnRoute() {
       onSelectSection={(nextSection) => go({ section: nextSection })}
       onSelectDestination={(destination) => go({ section: activeSection, to: destination })}
       onCloseDestination={() => go({ section: activeSection })}
-      onNewConversation={() => go({ section: "learn" })}
       onSelectMenuItem={(item) => {
         // Every menu item does something real (MVP bar: no dead nav). Profile's stats live
-        // in Reports; Settings is Customize; sign-out clears the session then leaves.
+        // in Reports; Customize opens the mentor controls; sign-out clears the session.
         if (item === "profile") go({ section: activeSection, to: "reports" });
-        else if (item === "settings") go({ section: activeSection, to: "customize" });
+        else if (item === "customize") go({ section: activeSection, to: "customize" });
         else if (item === "sign-out") {
           void signOut()
             .catch(() => {

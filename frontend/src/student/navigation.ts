@@ -15,9 +15,11 @@ export type StudentDestination = "classes" | "resources" | "checkpoints" | "cust
 
 // Trimmed 2026-07-30 to what actually renders (MVP bar: no dead nav): notifications,
 // what's-new, help, and contact had no student-facing surface behind them. Profile opens
-// Reports (the old profile popup's stats live there), settings opens Customize, and
-// sign-out signs out. The removed items return with their surfaces.
-export type StudentMenuItem = "profile" | "settings" | "sign-out";
+// Reports (the old profile popup's stats live there), customize opens Customize, and
+// sign-out signs out. The removed items return with their surfaces. The light/dark toggle
+// also lives in this menu but is not a StudentMenuItem — it flips state in place rather
+// than navigating.
+export type StudentMenuItem = "profile" | "customize" | "sign-out";
 
 export type DestinationSpec = {
   id: StudentDestination;
@@ -26,12 +28,11 @@ export type DestinationSpec = {
   hint: string;
 };
 
-// Order is deliberate: Classes first because it's the spine of coursework, then the two
-// work surfaces, then the two "about how I work" surfaces.
-//
-// Routines was removed 2026-07-30 (MVP bar: no dead nav) — nothing backs it yet; it returns
-// as a destination the day a routine scheduler exists. Checkpoints replaced it: the formal
-// teacher-assigned assessment surface (assessment_attempts flow), which is real.
+// Destinations are PANELS, not sidebar rows (slimmed 2026-07-31): the sidebar carries only
+// Home/Learn and the lesson tree. Each destination is reached from where it's relevant —
+// Resources from the chatbox pill, Checkpoints from Home's due list, Customize and Reports
+// from the account menu, Classes inline on Home. The specs stay here because the panel
+// header and the ?to= URL contract still need them.
 export const DESTINATIONS: readonly DestinationSpec[] = [
   { id: "classes", label: "Classes", hint: "Your units and lessons" },
   { id: "resources", label: "Resources", hint: "Everything your teachers have shared" },
@@ -49,7 +50,7 @@ export type MenuItemSpec = {
 
 export const MENU_ITEMS: readonly MenuItemSpec[] = [
   { id: "profile", label: "Profile" },
-  { id: "settings", label: "Settings" },
+  { id: "customize", label: "Customize" },
   { id: "sign-out", label: "Sign out" },
 ] as const;
 

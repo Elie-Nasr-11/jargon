@@ -7757,3 +7757,55 @@ ambient (only AssessmentSurface does). (5) claude/happy-johnson-wseex8 and
 claude/project-scope-mvp-o7ox0y are now historical — do not build on them.
 Suggested next task: signed-in live pass of all three roles on the deployed site; then the
 first real classroom dry run.
+
+## Claude -> Codex / Human - 2026-07-31 16:05
+
+Status: Starting
+Task: Student surface refinement round (user feedback): sidebar slimmed to Home/Learn + tree
+(Checkpoints/Resources/Reports/Classes rows and +New removed); account menu gains Customize +
+light/dark toggle; Home rebuilt with hierarchy (recent activity / assignments+quizzes+grades /
+classes); global restyle to high-contrast flat Claude-like look (no shadows, solid backgrounds,
+clean lines, progressive disclosure); transcript mode sections become full-width top-rule +
+pill with entrance animation; verify demo content covers all modes/media.
+Files I expect to touch: frontend/src/styles.css, student/{StudentSidebar,StudentApp,
+StudentHome,Transcript,ChatWindow,navigation}.tsx/ts, routes/learn.tsx, docs.
+Notes: Ambient canvas comes OFF the student shell (solid background directive); stays on login.
+
+## Claude -> Codex / Human - 2026-07-31 17:20
+
+Status: Finished
+Summary: Student-surface refinement round from user feedback. (1) SIDEBAR slimmed to
+Home/Learn + the lesson tree: Checkpoints/Resources/Reports/Classes rows and "+ New" removed;
+the account menu now carries Profile, Customize, a light/dark toggle (flips in place, menu
+stays open), and Sign out. Destinations survive as URL-addressed panels (?to=) reached from
+where they're relevant. (2) HOME rebuilt in three tiers: Recent activity (resume +
+session recaps + mentor memory), Assignments/quizzes & grades (work due + recent grades),
+Classes (ClassesPanel moved in from the sidebar; hover reveals secondary meta, click expands).
+(3) RESTYLE to a high-contrast flat Claude-adjacent language: warm ivory/charcoal palettes
+(#faf9f5 / #262624), full-contrast ink, stronger hairlines, terracotta accent, radii
+tightened, ALL elevation tokens retired to no-op (borders + scrims carry separation),
+elev-hover/composer-elev rebuilt border-based; AmbientCanvas UNMOUNTED from the student shell
+(solid background directive) — login/teacher/admin mounts unchanged. (4) TRANSCRIPT mode
+sections: the tinted fit-width boxes are gone; each section now opens with a full-window mode
+rule (hairline + centered pill) that animates in once when first seen (IntersectionObserver:
+new selection sweeps in at the bottom; scrolled-back history replays per section);
+messages stay in the centered max-w-3xl column. (5) DEMO CONTENT: discovered demo logins had
+NEVER been seeded (Demo Org absent) — seeded directly in SQL: demo-student/teacher/admin
+@example.com (JargonDemo123!), Demo Org/Class, class_courses -> the three MVP courses, seven
+media resources across the published mvp lessons (youtube, video, pdf, audio, image, link,
+deck artifact), a due assessment (Checkpoint: First Steps, 2 MCQs), and two released grades
+(88 quiz / 92 homework). RLS verified via simulated student JWT: resources, assessment,
+grades, class membership, quiz items all readable.
+Files changed: frontend/src/styles.css, student/{StudentSidebar,StudentApp,StudentHome,
+Transcript,ChatWindow,ClassesPanel}.tsx, student/navigation.ts, routes/learn.tsx, docs/HANDOFF.md.
+Tests run: tsc 0 errors, eslint 0 errors (pre-existing warnings only), vite build green.
+Remaining concerns: (1) GoTrue password login for the SQL-created demo users is untested from
+this container (egress policy blocks supabase.co) — the pattern is the standard one
+(bcrypt via pgcrypto + identities row, empty-string token columns); if login misbehaves, run
+/admin -> Seeding -> demo logins as the platform admin: it finds-and-updates the same users
+through the Auth admin API, which normalizes them. (2) html_sim static resource not seeded
+(no way to upload storage objects over SQL) — live-artifact builds on mvp-coding-l1/l2 cover
+the sim path. (3) Teacher/admin surfaces still mount AmbientCanvas; if the flat direction
+should extend there, unmount + rely on the admin-wash tint.
+Suggested next task: signed-in pass as demo-student on the deployed site; check the theme
+toggle, the mode-rule animation, and each of the seven media cards.

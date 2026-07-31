@@ -144,7 +144,7 @@ export function ClassesPanel({ currentLessonId, onOpenLesson }: ClassesPanelProp
     );
   }
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+    <div className="flex w-full flex-col gap-2">
       {error ? <p className="text-meta text-danger">{error}</p> : null}
       {classes.map((klass) => (
         <ClassCard

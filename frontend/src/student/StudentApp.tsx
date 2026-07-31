@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu } from "lucide-react";
-import { AMBIENT_FOCUS_EVENT, AmbientCanvas } from "@/components/AmbientCanvas";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { MentorControls } from "@/features/student/MentorControls";
 import {
@@ -20,7 +19,6 @@ import type { StudentAssessmentBundle } from "@/lib/types";
 import { AssessmentSurface } from "@/student/AssessmentSurface";
 import { ChatWindow } from "@/student/ChatWindow";
 import { CheckpointsPanel } from "@/student/CheckpointsPanel";
-import { checkpointWorkDue } from "@/student/checkpoints";
 import { ClassesPanel } from "@/student/ClassesPanel";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
@@ -29,12 +27,7 @@ import { LessonTree } from "@/student/LessonTree";
 import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import { useConversation } from "@/student/useConversation";
-import {
-  DEFAULT_TURN_MODE,
-  modeAccentValue,
-  turnModeSpec,
-  type TurnMode,
-} from "@/student/turnModes";
+import { DEFAULT_TURN_MODE, type TurnMode } from "@/student/turnModes";
 import {
   DESTINATIONS,
   type StudentDestination,
@@ -60,7 +53,6 @@ export type StudentAppProps = {
   onSelectSection: (section: StudentSection) => void;
   onSelectDestination: (destination: StudentDestination) => void;
   onCloseDestination: () => void;
-  onNewConversation: () => void;
   onSelectMenuItem: (item: StudentMenuItem) => void;
 };
 
@@ -82,7 +74,6 @@ export function StudentApp({
   onSelectSection,
   onSelectDestination,
   onCloseDestination,
-  onNewConversation,
   onSelectMenuItem,
 }: StudentAppProps) {
   // TurnMode is conversation state, not navigation state — it belongs to the chat, not the URL.
@@ -178,87 +169,12 @@ export function StudentApp({
   useEffect(() => {
     refreshAssessments();
   }, [refreshAssessments]);
-  const workDue = assessments ? checkpointWorkDue(assessments) : 0;
 
   // The open assessment attempt (focused overlay). Deliberately local state, not URL — see the
   // component comment.
   const [openAssessmentId, setOpenAssessmentId] = useState<string | null>(null);
 
   const destinationSpec = destination ? DESTINATIONS.find((d) => d.id === destination) : undefined;
-
-  // ---- Ambient wiring (DESIGN_V6 §2): the student surface's single AmbientCanvas. ----------
-  // focusSignal is a monotonic counter; each bump fires one uFocus bloom in the canvas.
-  const [focusSignal, setFocusSignal] = useState(0);
-  const bumpFocus = useCallback(() => setFocusSignal((n) => n + 1), []);
-
-  // Bloom on mentor reply arrival. A reply lands as [..., thinking] -> [..., bot]: the previous
-  // array holding a "thinking" placeholder is what distinguishes a live reply from transcript
-  // hydration (boot / lesson switch set the whole array at once, no placeholder) — so history
-  // loads never bloom.
-  const prevMessagesRef = useRef(conversation.messages);
-  useEffect(() => {
-    const prev = prevMessagesRef.current;
-    const next = conversation.messages;
-    prevMessagesRef.current = next;
-    const last = next[next.length - 1];
-    if (prev.some((m) => m.role === "thinking") && last && last.role === "bot" && !last.isError) {
-      bumpFocus();
-    }
-  }, [conversation.messages, bumpFocus]);
-
-  // Bloom on TurnMode change (the ambient hue lerps in sync — same state drives both).
-  const prevModeRef = useRef(turnMode);
-  useEffect(() => {
-    if (prevModeRef.current !== turnMode) {
-      prevModeRef.current = turnMode;
-      bumpFocus();
-    }
-  }, [turnMode, bumpFocus]);
-
-  // Bloom on lesson completion, observed off the lesson arc: only an incomplete -> complete
-  // transition WITHIN the same lesson fires (resuming an already-finished lesson hydrates the
-  // arc complete on load and must not bloom). Conservative by design — see the arc note below.
-  const arcSeenRef = useRef<{ lessonId: string | null; incomplete: boolean }>({
-    lessonId: null,
-    incomplete: false,
-  });
-  useEffect(() => {
-    const arc = conversation.lessonArc;
-    const lessonId = conversation.lesson?.id ?? null;
-    // "Complete" = every step reported done. An arc merely sitting ON its last step still has
-    // completed.length === total - 1, so this cannot fire early; if the server never emits a
-    // fully-done arc, this detector simply stays silent rather than guessing.
-    const complete =
-      !!arc &&
-      arc.total > 0 &&
-      (arc.completed.length >= arc.total || (arc.steps_done?.length ?? 0) >= arc.total);
-    const seen = arcSeenRef.current;
-    if (seen.lessonId === lessonId && seen.incomplete && complete) bumpFocus();
-    arcSeenRef.current = { lessonId, incomplete: !!arc && !complete };
-  }, [conversation.lessonArc, conversation.lesson, bumpFocus]);
-
-  // Bloom on the Home memory card's first reveal — StudentHome announces it via the ambient
-  // focus DOM event (the least-invasive channel: no prop threading through the Home tree).
-  useEffect(() => {
-    const onAmbientFocus = () => bumpFocus();
-    window.addEventListener(AMBIENT_FOCUS_EVENT, onAmbientFocus);
-    return () => window.removeEventListener(AMBIENT_FOCUS_EVENT, onAmbientFocus);
-  }, [bumpFocus]);
-
-  // Hue: the active TurnMode's accent while the conversation is on stage; neutral (the brand
-  // rainbow) on Home and destinations. modeAccentValue keeps the progression-honesty
-  // desaturation for Discuss/Open — the ambient tells the same truth as the chat chrome.
-  const ambientHue =
-    !destinationSpec && section === "learn" ? modeAccentValue(turnModeSpec(turnMode)) : null;
-  // Intensity: 0.22 on working surfaces, raised to 0.35 for Home's entry moment (§2 allows up
-  // to 0.5 on entry surfaces; Home stays below the login ceiling). While an assessment attempt
-  // has the screen focus-locked, the ambient dims out of the way (§6: "ambient dims while
-  // locked") — the canvas glides between targets, so none of these are hard cuts.
-  const ambientIntensity = openAssessmentId
-    ? 0.1
-    : !destinationSpec && section === "home"
-      ? 0.35
-      : 0.22;
 
   // Every nav action closes the drawer; the docked column is unaffected.
   const closeDrawer = () => setDrawerOpen(false);
@@ -273,19 +189,9 @@ export function StudentApp({
     <StudentSidebar
       email={email}
       section={section}
-      destination={destination}
-      workDue={workDue}
       onSelectSection={(next) => {
         closeDrawer();
         onSelectSection(next);
-      }}
-      onSelectDestination={(next) => {
-        closeDrawer();
-        onSelectDestination(next);
-      }}
-      onNewConversation={() => {
-        closeDrawer();
-        onNewConversation();
       }}
       onSelectMenuItem={onSelectMenuItem}
     >
@@ -301,22 +207,18 @@ export function StudentApp({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/* The ONE ambient layer for the whole student surface (DESIGN_V6 §2 — no second WebGL
-          context per page). Sidebar and main sit at z-base so the wash stays underneath. */}
-      <AmbientCanvas intensity={ambientIntensity} hue={ambientHue} focusSignal={focusSignal} />
+      {/* Flat, solid shell: the page IS the background — no ambient layer, no shadows; the
+          sidebar reads as a column of the same surface separated by a clean hairline. */}
       <aside
         aria-label="Sidebar"
-        className="relative z-[var(--z-base)] hidden h-full w-[260px] shrink-0 border-r border-border/60 lg:block"
+        className="hidden h-full w-[260px] shrink-0 border-r border-border bg-depth-sub lg:block"
       >
         {sidebar}
       </aside>
 
       {/* Below lg the same column lives in a drawer (Radix Sheet: focus trap, ESC, scrim). */}
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent
-          side="left"
-          className="w-[280px] border-border/60 bg-background p-0 lg:hidden"
-        >
+        <SheetContent side="left" className="w-[280px] border-border bg-depth-sub p-0 lg:hidden">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           {sidebar}
         </SheetContent>
@@ -327,12 +229,12 @@ export function StudentApp({
         onClick={() => setDrawerOpen(true)}
         aria-label="Open navigation"
         aria-expanded={drawerOpen}
-        className="fixed left-3 top-3 z-[var(--z-header)] flex h-9 w-9 items-center justify-center rounded-full bg-depth-card text-muted-foreground shadow-card hover:text-foreground lg:hidden"
+        className="fixed left-3 top-3 z-[var(--z-header)] flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground lg:hidden"
       >
         <Menu className="h-[18px] w-[18px]" strokeWidth={1.6} />
       </button>
 
-      <main className="relative z-[var(--z-base)] flex min-h-0 min-w-0 flex-1 flex-col">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {destinationSpec ? (
           <section className="flex min-h-0 flex-1 flex-col px-6 py-6">
             <header className="mb-4 flex items-baseline gap-3">
@@ -389,7 +291,8 @@ export function StudentApp({
         ) : section === "home" ? (
           <StudentHome
             lessons={conversation.lessons}
-            onResumeLesson={openLesson}
+            currentLessonId={conversation.lesson?.id ?? null}
+            onOpenLesson={openLesson}
             assessments={assessments}
             onOpenAssessment={(id) => setOpenAssessmentId(id)}
           />
@@ -405,9 +308,13 @@ export function StudentApp({
             onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
           >
             {conversation.booting ? (
-              <p className="text-body text-muted-foreground">Opening your conversation…</p>
+              <p className="mx-auto w-full max-w-3xl px-4 text-body text-muted-foreground">
+                Opening your conversation…
+              </p>
             ) : conversation.error && !conversation.messages.length ? (
-              <p className="text-body text-danger">{conversation.error}</p>
+              <p className="mx-auto w-full max-w-3xl px-4 text-body text-danger">
+                {conversation.error}
+              </p>
             ) : (
               <Transcript
                 messages={conversation.messages}
