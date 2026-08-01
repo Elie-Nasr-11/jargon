@@ -8,6 +8,7 @@ import {
   fetchStudentGrades,
   fetchStudentMemory,
   getSession,
+  resetStudentMemory,
 } from "@/lib/api";
 import { formatScore, relativeTime } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/motion";
@@ -70,10 +71,25 @@ function Chips({ label, values }: { label: string; values: string[] }) {
   );
 }
 
-function MemoryCard() {
+function MemoryCard({ onAfterReset }: { onAfterReset?: () => void }) {
   const [memory, setMemory] = useState<StudentMemory | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Reset ladder: idle → confirm (inline, no modal) → busy → back to the empty state.
+  const [resetState, setResetState] = useState<"idle" | "confirm" | "busy">("idle");
   const cardRef = useRef<HTMLElement>(null);
+
+  const runReset = () => {
+    setResetState("busy");
+    void resetStudentMemory()
+      .then(() => {
+        setMemory(null);
+        onAfterReset?.();
+      })
+      .catch(() => {
+        // A failed reset leaves the memory as-is; the card simply returns to idle.
+      })
+      .finally(() => setResetState("idle"));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -105,13 +121,49 @@ function MemoryCard() {
   return (
     <section
       ref={cardRef}
-      className="rounded-card border border-border bg-depth-card p-4 shadow-card"
+      className="hvp rounded-card border border-border bg-depth-card p-4 shadow-card"
       aria-label="What your mentor remembers"
     >
       <h3 className="mb-2 flex items-center gap-2 text-body font-semibold text-foreground">
         <Brain className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
-        What your mentor remembers
+        <span className="min-w-0 flex-1">What your mentor remembers</span>
+        {/* Memory is the student's: one hover-revealed control erases all of it (profile +
+            recaps) under their own JWT. Two-step inline — no modal for a reversible-by-
+            forgetting act. */}
+        {!empty && resetState === "idle" ? (
+          <button
+            type="button"
+            onClick={() => setResetState("confirm")}
+            className="hvr shrink-0 rounded-control px-2 py-0.5 text-meta text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
+          >
+            Reset
+          </button>
+        ) : null}
       </h3>
+      {resetState !== "idle" ? (
+        <div className="mb-2 flex items-center gap-2 rounded-control border border-border bg-depth-sub px-2.5 py-2">
+          <span className="min-w-0 flex-1 text-meta text-foreground">
+            Forget everything your mentor remembers?
+          </span>
+          <button
+            type="button"
+            disabled={resetState === "busy"}
+            onClick={runReset}
+            className="shrink-0 rounded-control px-2 py-1 text-meta font-semibold transition-colors duration-(--dur-fast) hover:bg-muted disabled:opacity-50"
+            style={{ color: "var(--danger)" }}
+          >
+            {resetState === "busy" ? "Forgetting…" : "Reset"}
+          </button>
+          <button
+            type="button"
+            disabled={resetState === "busy"}
+            onClick={() => setResetState("idle")}
+            className="shrink-0 rounded-control px-2 py-1 text-meta text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            Keep
+          </button>
+        </div>
+      ) : null}
       {!loaded ? (
         <p className="flex items-center gap-2 text-meta text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
@@ -288,7 +340,7 @@ export function StudentHome({
             ) : null}
           </section>
 
-          <MemoryCard />
+          <MemoryCard onAfterReset={() => setRecaps([])} />
         </div>
 
         {/* ---- 2. Assignments, quizzes & grades ---------------------------------------- */}

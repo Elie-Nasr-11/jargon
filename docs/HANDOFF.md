@@ -8158,3 +8158,43 @@ Files changed: student/StudentSidebar.tsx.
 Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK (skipped=4).
 Remaining concerns: none.
 Suggested next task: —
+
+## Claude -> Codex / Human - 2026-08-01 (round 9)
+
+Status: Finished
+Summary: MEMORY V2 — relevance, decay, abandonment sweep, student reset. Token budget
+stays FLAT (still ≤3 summaries + capped lists per turn). (1) RELEVANCE: loadContext now
+pools the newest 40 summaries and pickRelevantSummaries ranks them for THIS lesson —
+same lesson +6 > same unit +3 (one best-effort sibling-lessons read) > lesson-title
+keyword hits ≤+3 > recency tiebreak ≤+2; the newest summary ALWAYS rides (continuity).
+Lexical scoring by decision — no embeddings (docs/DECISIONS.md 2026-08-01 has the full
+rationale + revisit conditions). New index session_summaries(user_id, lesson_id).
+(2) DECAY: profile lists carry last-affirmed stamps (profile.affirmed, "kind:text" ->
+ISO). Struggles expire 45d unaffirmed, strengths/preferences 120d; enforced at WRITE
+(rollList prunes + restamps) and READ (memoryForPrompt filters, so a returning
+student's first turn is already clean). Unstamped entries are grandfathered to now.
+(3) SWEEP: on each FRESH open (no session_id), a background task summarizes up to 2
+idle (>30min), non-complete, ≥6-turn, unsummarized sessions via the same writer —
+memory no longer skews toward finishers. Bounded, idempotent, best-effort.
+(4) RESET: the Home memory card grew a hover-revealed Reset -> inline confirm
+("Forget everything your mentor remembers?") -> resetStudentMemory() wholesale-deletes
+student_memory + ALL session_summaries under the student's own JWT; the recap strip
+clears with it. Owner DELETE policies in 20260910000000_memory_v2.sql (applied to the
+live project AND added to the deploy workflow's idempotent list) — the ONE exception
+to v1's append-only summaries stance, documented in the migration + DECISIONS.
+Files changed: supabase/functions/chat/index.ts, supabase/migrations/
+20260910000000_memory_v2.sql (new), .github/workflows/deploy-backend.yml,
+frontend/src/lib/{api,types}.ts, frontend/src/student/StudentHome.tsx,
+tests/test_memory_v2.py (new, 16 pins), docs/{DECISIONS,OPEN_QUESTIONS,HANDOFF}.md.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 380 OK (skipped=4;
+test_memory_v1's append-only pin scopes to the v1 file and stays green). Migration
+applied live via MCP; the chat fn deploys via deploy-backend.yml on this push (its
+trigger paths cover functions/chat + migrations).
+Remaining concerns: (1) Mastery-flip struggle removal is an OPEN_QUESTIONS entry
+(free-text struggles vs skill keys). (2) The sweep summarizes at most 2 sessions per
+open — a long-idle student with many abandoned sessions catches up over several opens
+by design. (3) profile.affirmed rides inside the profile jsonb the teacher can read
+(can_view_student) — it's timestamps only, no new information class.
+Suggested next task: live pass as demo-student — complete a short session, check the
+memory card + Reset round-trip; reopen a lesson from the seeded classes and confirm
+the mentor's memory references stay sane.

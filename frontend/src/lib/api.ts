@@ -635,6 +635,20 @@ export async function fetchStudentMemory(): Promise<StudentMemory | null> {
   return (data as StudentMemory | null) ?? null;
 }
 
+// Memory v2: "reset what your mentor remembers" — erases the rolling profile AND every
+// session summary under the student's own JWT (owner delete policies,
+// 20260910000000_memory_v2.sql). Wholesale by design: per-row edits stay impossible;
+// the next completed session starts building memory fresh.
+export async function resetStudentMemory(): Promise<void> {
+  const session = await getSession();
+  const userId = session?.user?.id;
+  if (!userId) return;
+  const memoryDelete = await supabase.from("student_memory").delete().eq("user_id", userId);
+  if (memoryDelete.error) throw memoryDelete.error;
+  const summariesDelete = await supabase.from("session_summaries").delete().eq("user_id", userId);
+  if (summariesDelete.error) throw summariesDelete.error;
+}
+
 // Memory v1: the student's most recent per-session recaps, newest first. Owner RLS
 // (session_summaries_owner_select) scopes the read.
 export async function fetchSessionSummaries(limit = 5): Promise<SessionSummary[]> {

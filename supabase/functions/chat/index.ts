@@ -3016,9 +3016,12 @@ async function loadContext(
       config,
       `student_memory?user_id=eq.${encodeURIComponent(userId)}&select=profile,updated_at&limit=1`,
     ).catch(() => null),
+    // Memory v2: pull a POOL of summaries (newest first) — the prompt still carries at
+    // most 3, but they are picked by RELEVANCE to this lesson (pickRelevantSummaries),
+    // not recency alone, so an old insight resurfaces when its topic comes back around.
     loadMany(
       config,
-      `session_summaries?user_id=eq.${encodeURIComponent(userId)}&session_id=neq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=3&select=lesson_id,summary,created_at`,
+      `session_summaries?user_id=eq.${encodeURIComponent(userId)}&session_id=neq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=${MEMORY_SUMMARY_POOL}&select=lesson_id,summary,created_at`,
     ).catch(() => [] as DbRow[]),
   ]);
 
@@ -3083,6 +3086,23 @@ async function loadContext(
     ]);
   const quiz = activityQuiz ?? fallbackQuiz;
 
+  // Memory v2: sibling lesson ids for the unit-match tier of summary relevance. Tiny read,
+  // best-effort like every other memory input.
+  const unitLessonIds = new Set<string>();
+  if (typeof lesson?.unit_id === "string" && lesson.unit_id) {
+    const siblings = await loadMany(
+      config,
+      `lessons?unit_id=eq.${encodeURIComponent(lesson.unit_id)}&select=id`,
+    ).catch(() => [] as DbRow[]);
+    for (const row of siblings) unitLessonIds.add(String(row.id));
+  }
+  const relevantSummaries = pickRelevantSummaries(
+    recentSummaries,
+    lessonId,
+    unitLessonIds,
+    String(lesson?.title || ""),
+  );
+
   const pendingResult = await checkpointsPromise;
 
   return {
@@ -3101,7 +3121,7 @@ async function loadContext(
     pendingCheckpoints: pendingResult ?? [],
     pendingCheckpointsOk: pendingResult !== null,
     memory,
-    recentSummaries,
+    recentSummaries: relevantSummaries,
   };
 }
 
@@ -3209,15 +3229,101 @@ function buildLessonArc(
   };
 }
 
-// --- Memory v1: prompt-side view --------------------------------------------------
+// --- Memory: prompt-side view -----------------------------------------------------
 // Compact, hard-capped view of the student's cross-session memory for the prompt
-// payload: the profile narrative tops out at 600 chars, each recent-session summary is
-// flattened to one <=240-char line, and at most 3 summaries ride. Returns null when
-// there is nothing to say (fresh student, or the best-effort reads failed) so the
-// prompt simply omits the key.
+// payload: the profile narrative tops out at 600 chars, each summary is flattened to
+// one <=240-char line, and at most 3 summaries ride. Returns null when there is
+// nothing to say (fresh student, or the best-effort reads failed) so the prompt
+// simply omits the key.
 const MEMORY_NARRATIVE_MAX = 600;
 const MEMORY_SUMMARY_MAX = 240;
 const MEMORY_LIST_MAX = 6;
+
+// --- Memory v2: relevance + decay --------------------------------------------------
+// The token budget stays FLAT (3 summaries, capped lists); v2 changes WHICH memory
+// rides. Summaries are picked by lesson/unit/topic relevance over a pool of the newest
+// MEMORY_SUMMARY_POOL rows (lexical scoring — at this corpus size, exact/unit/keyword
+// match covers what embeddings would, with no per-turn embedding call; see
+// docs/DECISIONS.md). Profile list entries carry a last-affirmed date in
+// profile.affirmed ("kind:text" -> ISO date); struggles expire after
+// MEMORY_STRUGGLE_TTL_DAYS unaffirmed (a mastered struggle must stop following the
+// student around), other traits after MEMORY_TRAIT_TTL_DAYS. Expiry applies at BOTH
+// write (pruned from the stored row) and read (a long-dormant student's first turn
+// must not resurrect stale labels before the next write).
+const MEMORY_SUMMARY_POOL = 40;
+const MEMORY_STRUGGLE_TTL_DAYS = 45;
+const MEMORY_TRAIT_TTL_DAYS = 120;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function affirmedMap(profileRaw: DbRow | null): Record<string, string> {
+  const raw = profileRaw?.affirmed;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as DbRow)) {
+    if (typeof value === "string") out[key] = value;
+  }
+  return out;
+}
+
+// Entries with no recorded affirmation are treated as affirmed "now" (grandfathered) —
+// decay begins the first time an entry rides through a write with the map in place.
+function freshEntries(
+  entries: string[],
+  kind: string,
+  affirmed: Record<string, string>,
+  ttlDays: number,
+  now: number,
+): string[] {
+  return entries.filter((entry) => {
+    const stamp = affirmed[`${kind}:${entry}`];
+    if (!stamp) return true;
+    const at = Date.parse(stamp);
+    return !Number.isFinite(at) || now - at <= ttlDays * DAY_MS;
+  });
+}
+
+// Rank the summary pool for THIS lesson: same lesson beats same unit beats topical
+// keyword overlap, with recency as the tiebreak — and the single newest summary always
+// rides so "last time we..." continuity never disappears under a topical pick.
+function pickRelevantSummaries(
+  rows: DbRow[],
+  lessonId: string,
+  unitLessonIds: Set<string>,
+  lessonTitle: string,
+): DbRow[] {
+  if (rows.length <= 3) return rows;
+  const keywords = new Set(
+    lessonTitle
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 4),
+  );
+  const scored = rows.map((row, index) => {
+    const rowLesson = typeof row.lesson_id === "string" ? row.lesson_id : "";
+    let score = 0;
+    if (rowLesson && rowLesson === lessonId) score += 6;
+    else if (rowLesson && unitLessonIds.has(rowLesson)) score += 3;
+    if (keywords.size) {
+      const text = JSON.stringify(row.summary ?? "").toLowerCase();
+      let hits = 0;
+      for (const word of keywords) {
+        if (text.includes(word)) hits += 1;
+        if (hits >= 3) break;
+      }
+      score += hits;
+    }
+    // Newest-first input order → a small recency tiebreak that can never outweigh a tier.
+    score += Math.max(0, 2 - index * 0.1);
+    return { row, index, score };
+  });
+  scored.sort((a, b) => b.score - a.score || a.index - b.index);
+  const picked = scored.slice(0, 3);
+  if (!picked.some((entry) => entry.index === 0)) {
+    picked[picked.length - 1] = scored.find((entry) => entry.index === 0)!;
+  }
+  // Newest-first again so the prompt reads chronologically sensibly.
+  return picked.sort((a, b) => a.index - b.index).map((entry) => entry.row);
+}
 
 function memoryForPrompt(
   memoryRow: DbRow | null,
@@ -3232,18 +3338,40 @@ function memoryForPrompt(
   const narrative = profileRaw
     ? String(profileRaw.narrative || "").slice(0, MEMORY_NARRATIVE_MAX)
     : "";
+  // Read-time decay (memory v2): expired entries are filtered here too, so a returning
+  // student's first turns don't carry labels the next write would prune anyway.
+  const affirmed = affirmedMap(profileRaw);
+  const now = Date.now();
+  const strengths = profileRaw
+    ? freshEntries(
+        stringArray(profileRaw.strengths),
+        "strengths",
+        affirmed,
+        MEMORY_TRAIT_TTL_DAYS,
+        now,
+      ).slice(0, MEMORY_LIST_MAX)
+    : [];
+  const struggles = profileRaw
+    ? freshEntries(
+        stringArray(profileRaw.struggles),
+        "struggles",
+        affirmed,
+        MEMORY_STRUGGLE_TTL_DAYS,
+        now,
+      ).slice(0, MEMORY_LIST_MAX)
+    : [];
+  const preferences = profileRaw
+    ? freshEntries(
+        stringArray(profileRaw.preferences),
+        "preferences",
+        affirmed,
+        MEMORY_TRAIT_TTL_DAYS,
+        now,
+      ).slice(0, MEMORY_LIST_MAX)
+    : [];
   const profile =
-    profileRaw &&
-    (narrative ||
-      stringArray(profileRaw.strengths).length ||
-      stringArray(profileRaw.struggles).length ||
-      stringArray(profileRaw.preferences).length)
-      ? {
-          narrative,
-          strengths: stringArray(profileRaw.strengths).slice(0, MEMORY_LIST_MAX),
-          struggles: stringArray(profileRaw.struggles).slice(0, MEMORY_LIST_MAX),
-          preferences: stringArray(profileRaw.preferences).slice(0, MEMORY_LIST_MAX),
-        }
+    profileRaw && (narrative || strengths.length || struggles.length || preferences.length)
+      ? { narrative, strengths, struggles, preferences }
       : null;
   const recent = summaryRows
     .slice(0, 3)
@@ -3685,19 +3813,55 @@ async function writeSessionMemory(
 
     // Rolling profile: replace the narrative (fall back to the prior one so a thin
     // model response can't blank it), union the lists newest-first, cap at 6.
-    const unionCapped = (next: unknown, prior: unknown) =>
-      uniqueStrings([...capList(next), ...capList(prior, MEMORY_LIST_MAX * 2)]).slice(
-        0,
-        MEMORY_LIST_MAX,
+    // Memory v2 decay: every entry the model re-affirms THIS session gets a fresh
+    // last-affirmed stamp; prior entries keep their old stamp (grandfathered to now if
+    // they predate the map) and are DROPPED once unaffirmed past their TTL — struggles
+    // fastest (a mastered struggle must stop following the student around).
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const priorAffirmed = affirmedMap(priorProfile);
+    const nextAffirmed: Record<string, string> = {};
+    const rollList = (kind: string, next: unknown, prior: unknown, ttlDays: number) => {
+      const fresh = capList(next);
+      const kept = freshEntries(
+        capList(prior, MEMORY_LIST_MAX * 2).filter((entry) => !fresh.includes(entry)),
+        kind,
+        priorAffirmed,
+        ttlDays,
+        nowMs,
       );
+      const merged = uniqueStrings([...fresh, ...kept]).slice(0, MEMORY_LIST_MAX);
+      for (const entry of merged) {
+        nextAffirmed[`${kind}:${entry}`] = fresh.includes(entry)
+          ? nowIso
+          : priorAffirmed[`${kind}:${entry}`] || nowIso;
+      }
+      return merged;
+    };
     const profile = {
       narrative: String(profileRaw.narrative || priorProfile.narrative || "").slice(
         0,
         MEMORY_NARRATIVE_MAX,
       ),
-      strengths: unionCapped(profileRaw.strengths, priorProfile.strengths),
-      struggles: unionCapped(profileRaw.struggles, priorProfile.struggles),
-      preferences: unionCapped(profileRaw.preferences, priorProfile.preferences),
+      strengths: rollList(
+        "strengths",
+        profileRaw.strengths,
+        priorProfile.strengths,
+        MEMORY_TRAIT_TTL_DAYS,
+      ),
+      struggles: rollList(
+        "struggles",
+        profileRaw.struggles,
+        priorProfile.struggles,
+        MEMORY_STRUGGLE_TTL_DAYS,
+      ),
+      preferences: rollList(
+        "preferences",
+        profileRaw.preferences,
+        priorProfile.preferences,
+        MEMORY_TRAIT_TTL_DAYS,
+      ),
+      affirmed: nextAffirmed,
     };
     if (
       profile.narrative ||
@@ -3708,13 +3872,65 @@ async function writeSessionMemory(
       await upsertRows(
         config,
         "student_memory",
-        [{ user_id: userId, profile, updated_at: new Date().toISOString() }],
+        [{ user_id: userId, profile, updated_at: nowIso }],
         "user_id",
       );
     }
   } catch (err) {
     // Best-effort by contract: memory must never affect the student's turn.
     console.error("memory_write_failed", errorMessage(err));
+  }
+}
+
+// --- Memory v2: abandonment sweep --------------------------------------------------
+// Completion-only writes skew memory toward finishers, and kids abandon sessions a lot.
+// On every FRESH session open (no session_id from the client) this sweep runs in the
+// background: the student's most recent other sessions that (a) never completed,
+// (b) have been idle past MEMORY_SWEEP_MIN_AGE_MS (not just a parallel tab),
+// (c) carry at least MEMORY_SWEEP_MIN_TURNS turns of substance, and (d) have no
+// summary yet, each get the normal writeSessionMemory pass — at most
+// MEMORY_SWEEP_MAX_SESSIONS per open to bound the model spend. Idempotent by
+// construction (summary inserts ignore duplicate session_ids) and best-effort like
+// every other memory path.
+const MEMORY_SWEEP_MIN_TURNS = 6;
+const MEMORY_SWEEP_MIN_AGE_MS = 30 * 60 * 1000;
+const MEMORY_SWEEP_MAX_SESSIONS = 2;
+
+async function sweepUnsummarizedSessions(
+  config: SupabaseConfig,
+  userId: string,
+  currentSessionId: string,
+): Promise<void> {
+  try {
+    const candidates = await loadMany(
+      config,
+      `learning_sessions?user_id=eq.${encodeURIComponent(userId)}&id=neq.${encodeURIComponent(currentSessionId)}&status=neq.complete&order=updated_at.desc&limit=6&select=id,lesson_id,updated_at`,
+    );
+    let written = 0;
+    for (const candidate of candidates) {
+      if (written >= MEMORY_SWEEP_MAX_SESSIONS) break;
+      const idleSince = Date.parse(String(candidate.updated_at || ""));
+      if (Number.isFinite(idleSince) && Date.now() - idleSince < MEMORY_SWEEP_MIN_AGE_MS) {
+        continue;
+      }
+      const sid = String(candidate.id);
+      const [summaryRows, turnRows] = await Promise.all([
+        loadMany(
+          config,
+          `session_summaries?session_id=eq.${encodeURIComponent(sid)}&select=id&limit=1`,
+        ),
+        loadMany(
+          config,
+          `learning_turns?session_id=eq.${encodeURIComponent(sid)}&select=id&limit=${MEMORY_SWEEP_MIN_TURNS}`,
+        ),
+      ]);
+      if (summaryRows.length > 0 || turnRows.length < MEMORY_SWEEP_MIN_TURNS) continue;
+      await writeSessionMemory(config, userId, sid, String(candidate.lesson_id || ""));
+      written += 1;
+    }
+  } catch (err) {
+    // Best-effort by contract: the sweep must never affect the student's turn.
+    console.error("memory_sweep_failed", errorMessage(err));
   }
 }
 
@@ -3754,6 +3970,12 @@ async function handleTypedRequest(
   const userId = String(user.id);
   const sessionId = String(session.id);
   const currentStage = stage(session.stage);
+
+  // Memory v2: a FRESH open (client sent no session_id) is the moment to sweep the
+  // student's abandoned sessions into memory — background, bounded, idempotent.
+  if (!body.session_id) {
+    scheduleBackground(sweepUnsummarizedSessions(config, userId, sessionId));
+  }
 
   // Teacher hold gate (fail-open): if a teacher has paused this live session, do NOT run the
   // mentor — return a benign "paused" turn (no grading, no writes). Read under the student's own

@@ -701,6 +701,9 @@ export type StudentMemoryProfile = {
   strengths?: string[];
   struggles?: string[];
   preferences?: string[];
+  // Memory v2 decay bookkeeping ("kind:text" -> ISO last-affirmed date). Server-maintained;
+  // the UI never renders it.
+  affirmed?: Record<string, string>;
 };
 
 export type StudentMemory = {

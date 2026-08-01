@@ -698,3 +698,35 @@ Claude-adjacent ivory pass. Its rules, as implemented:
   thing (the current lesson row). The three.js AmbientCanvas is retired from teacher/admin
   shells (login keeps its entry moment); --grad-* now speak the aurora family.
 - **Texture**: the faint 110px dot grid on the page surface, both themes.
+
+## 2026-08-01 — Memory v2: relevance + decay + sweep + reset, WITHOUT embeddings
+
+Memory v1 (session_summaries + student_memory) was recency-only, completion-only,
+never-forgetting, and student-erasable by nobody. v2 fixes all four while keeping the
+per-turn token budget FLAT (still ≤3 summaries + capped lists, ≈400 tokens):
+
+- **Relevance over recency, lexically.** The prompt's 3 summary slots are picked from a
+  pool of the newest 40 by tiered score: same lesson (+6) > same unit (+3, via one
+  sibling-lessons read) > lesson-title keyword hits (≤+3) > recency tiebreak (≤+2); the
+  single newest summary always rides for "last time we..." continuity. We deliberately
+  did NOT add vector retrieval: per-student corpora are tiny (tens of rows), the
+  candidates are already structured (lesson_id + short topic phrases), and embeddings
+  would add a per-write embedding call, a pgvector migration, and a query-time
+  embedding round-trip for marginal gain at this scale. Revisit only if summaries per
+  student outgrow the pool (≈40+) AND cross-course topical recall demonstrably matters.
+- **Decay.** Profile list entries carry last-affirmed stamps (profile.affirmed,
+  "kind:text" → ISO date). Struggles expire 45 days unaffirmed (a mastered struggle
+  must stop following the student around — the stale-label/self-fulfilling-profile
+  risk); strengths/preferences at 120 days. Enforced at write (pruned from the stored
+  row) AND read (a returning student's first turn is already clean). Mastery-flip-based
+  removal (drop a struggle when its skill turns secure) is noted in OPEN_QUESTIONS —
+  free-text struggles don't map cleanly onto skill keys.
+- **Abandonment sweep.** On each FRESH session open, a background task summarizes up to
+  2 of the student's idle (>30 min), non-complete, ≥6-turn, not-yet-summarized
+  sessions through the same writer. Completion-only writes skewed memory toward
+  finishers; kids abandon sessions constantly.
+- **Student-owned reset.** "Reset" on the memory card wholesale-deletes the profile and
+  ALL summaries under the student's own JWT (owner delete policies in
+  20260910000000_memory_v2.sql). This is the ONE exception to v1's append-only stance:
+  full-history erasure is a privacy affordance, not history forking — per-row edits
+  remain impossible.

@@ -341,3 +341,10 @@ Also noted: `fetchStudentProfileStats` (api.ts) now has zero UI consumers — th
 profile popup was its only caller. Kept (out of the cleanup's mandated scope, and the
 planned memory-panel-on-Home work is its natural consumer); `computeReviewDue` stays via
 its `reviewDue` field.
+
+- Memory v2 decay is time-based only (struggles 45d, traits 120d). Should a struggle ALSO
+  drop the moment its skill flips secure in student_mastery? Blocked on mapping: profile
+  struggles are free-text phrases ("mixes up REPEAT bounds") while mastery rows are skill
+  keys ("jargon.repeat") — matching needs either a model call per write or the memory
+  writer emitting skill keys alongside phrases. Cheap path if wanted: have the summary
+  prompt return skill_keys per struggle and store them in profile.affirmed's key.
