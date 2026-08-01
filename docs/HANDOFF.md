@@ -8074,3 +8074,39 @@ and <main> may gain overflow-hidden without clipping them.
 Suggested next task: live pass — open a pdf/youtube from a card (side panel), fullscreen
 round-trip, ESC; collapse the sidebar, hover tooltips + class flyout, relaunch to confirm
 the collapsed choice sticks.
+
+## Claude -> Codex / Human - 2026-08-01 (round 8)
+
+Status: Finished
+Summary: Round 8 — sidebar mechanics + resizable columns + clickable media cards.
+(1) HOVER TOGGLE: the expanded sidebar's header now rests as the current section's icon +
+label ("Home" / "Learn"); hovering it (or tabbing in) cross-fades the segmented Home|Learn
+toggle in place — overlaid absolutes, zero layout shift.
+(2) SECTION-AWARE RAIL: RailButton gained a flyout slot. The Home icon's hover flyout is
+the HOME menu (Overview + class list) and the Learn icon's is the LEARN menu (class
+switcher + the selected class's unit/lesson tree) — the same homeMenu/learnMenu nodes the
+expanded sidebar renders, built once in the shell and passed to both shapes. The avatar
+cluster lost its old classes flyout (redundant) and kept one-click switching + name
+tooltips. Flyout panels: w-248, max-h-72vh scroll, mono overline header, elev-raised.
+(3) DRAGGABLE WIDTHS: new student/ResizeHandle.tsx — a 7px col-resize strip (1px visible
+line, tints on hover, accent while dragging) using pointer capture so drags survive over
+pdf/youtube iframes. Sidebar 200-400px (handle hidden while collapsed; width transition
+suspended during drag), media panel 320-900px capped at 70vw. Both persist
+("jargon.sidebar-width" / "jargon.media-width") with clamps on read so stale values can't
+wedge a column off screen.
+(4) CLICKABLE MEDIA CARDS: ResourceCard — the card IS the button. Stageable non-artifact
+cards open the side panel on tap (role=button, Enter/Space, cursor-pointer, border tint on
+hover; hvr hint row says "Open in panel"); link/document cards open their tab; the old Open
+button and the inline-player expand overlay are gone. Artifacts keep their inline render +
+small expand overlay (their body is interactive). With no stage mounted the tap falls back
+to the old inline-player/new-tab open; once an inline player is up the card stops being a
+button so its controls own every click.
+Files changed: student/{StudentSidebar,StudentApp,ResourceCard}.tsx,
+student/ResizeHandle.tsx (new).
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK (skipped=4).
+Remaining concerns: (1) The Learn flyout hosts the ClassSwitcher popover inside a scrolling
+panel — the dropdown clips at the panel edge in extreme cases; acceptable, revisit if seen.
+(2) ResizeHandle has no keyboard resize (role=separator, mouse/touch only). (3) The rail
+flyouts and the width drag are desktop-only by construction (rail and handles are lg+).
+Suggested next task: live pass — hover Home/Learn in both sidebar shapes, drag both columns
+(incl. over an open pdf), tap a youtube card -> side panel, tap a link card -> tab.

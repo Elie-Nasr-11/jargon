@@ -32,6 +32,7 @@ import { ClassSummary } from "@/student/ClassSummary";
 import { checkpointRowsByClass } from "@/student/checkpoints";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
+import { ResizeHandle } from "@/student/ResizeHandle";
 import { StudentRail, StudentSidebar } from "@/student/StudentSidebar";
 import { LessonTree } from "@/student/LessonTree";
 import { LessonWelcome } from "@/student/LessonWelcome";
@@ -116,6 +117,42 @@ export function StudentApp({
       localStorage.setItem("jargon.sidebar-collapsed", next ? "1" : "0");
     } catch {
       // Storage can be unavailable (private mode) — the toggle still works for the session.
+    }
+  };
+
+  // Draggable column widths (sidebar + media panel), persisted like the collapse choice.
+  // Clamps live here so a stale stored value can never wedge a column off screen.
+  const clampSidebar = (w: number) => Math.min(400, Math.max(200, w));
+  const clampMedia = (w: number) => {
+    const max = Math.max(320, Math.min(900, Math.round(window.innerWidth * 0.7)));
+    return Math.min(max, Math.max(320, w));
+  };
+  const readWidth = (key: string, fallback: number, clamp: (w: number) => number) => {
+    try {
+      const raw = Number(localStorage.getItem(key));
+      return Number.isFinite(raw) && raw > 0 ? clamp(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    readWidth("jargon.sidebar-width", 260, clampSidebar),
+  );
+  const [mediaWidth, setMediaWidth] = useState(() =>
+    readWidth("jargon.media-width", 480, clampMedia),
+  );
+  // Live values for drag math + persistence without re-binding handlers per pixel.
+  const dragStartRef = useRef(0);
+  const sidebarWidthRef = useRef(sidebarWidth);
+  sidebarWidthRef.current = sidebarWidth;
+  const mediaWidthRef = useRef(mediaWidth);
+  mediaWidthRef.current = mediaWidth;
+  const [draggingSidebar, setDraggingSidebar] = useState(false);
+  const persistWidth = (key: string, value: number) => {
+    try {
+      localStorage.setItem(key, String(Math.round(value)));
+    } catch {
+      // Best-effort persistence.
     }
   };
 
@@ -274,38 +311,40 @@ export function StudentApp({
     onSelectSection("learn");
     void conversation.openLesson(lessonId);
   };
-  const sidebarBody =
-    section === "home" ? (
-      // Home: the sidebar is the class list — Overview + one row per class.
-      <ClassList
+  // The two section menus: Home = Overview + class list, Learn = the selected class's units
+  // and lessons under a switcher. The expanded sidebar shows the CURRENT section's menu; the
+  // collapsed rail serves each as its icon's hover flyout.
+  const homeMenu = (
+    <ClassList
+      classes={classes ?? []}
+      selectedClassId={classId ?? null}
+      dueByClass={dueByClass}
+      onSelectClass={(next) => {
+        closeDrawer();
+        onSelectClass(next);
+      }}
+    />
+  );
+  const learnMenu = (
+    <>
+      <ClassSwitcher
         classes={classes ?? []}
-        selectedClassId={classId ?? null}
-        dueByClass={dueByClass}
+        selectedClassId={scopeClassId}
         onSelectClass={(next) => {
           closeDrawer();
           onSelectClass(next);
         }}
       />
-    ) : (
-      // Learn: only the SELECTED class's units, with a switcher above the tree.
-      <>
-        <ClassSwitcher
-          classes={classes ?? []}
-          selectedClassId={scopeClassId}
-          onSelectClass={(next) => {
-            closeDrawer();
-            onSelectClass(next);
-          }}
-        />
-        <LessonTree
-          lessons={classLessons ?? conversation.lessons}
-          currentLessonId={conversation.lesson?.id ?? null}
-          progress={progress}
-          onOpenLesson={openLesson}
-          disabled={conversation.sending || conversation.booting}
-        />
-      </>
-    );
+      <LessonTree
+        lessons={classLessons ?? conversation.lessons}
+        currentLessonId={conversation.lesson?.id ?? null}
+        progress={progress}
+        onOpenLesson={openLesson}
+        disabled={conversation.sending || conversation.booting}
+      />
+    </>
+  );
+  const sidebarBody = section === "home" ? homeMenu : learnMenu;
   const sidebar = (
     <StudentSidebar
       email={email}
@@ -388,8 +427,9 @@ export function StudentApp({
           sidebar reads as a column of the same surface separated by a clean hairline. */}
         <aside
           aria-label="Sidebar"
-          className={`hidden h-full shrink-0 border-r border-border bg-depth-sub transition-[width] duration-(--dur) lg:block ${
-            sidebarCollapsed ? "w-[64px]" : "w-[260px]"
+          style={{ width: sidebarCollapsed ? 64 : sidebarWidth }}
+          className={`hidden h-full shrink-0 border-r border-border bg-depth-sub lg:block ${
+            draggingSidebar ? "" : "transition-[width] duration-(--dur)"
           }`}
         >
           {sidebarCollapsed ? (
@@ -403,6 +443,8 @@ export function StudentApp({
               dueByClass={dueByClass}
               onSelectClass={onSelectClass}
               onExpand={() => setCollapsed(false)}
+              homeMenu={homeMenu}
+              learnMenu={learnMenu}
             />
           ) : (
             <StudentSidebar
@@ -416,6 +458,22 @@ export function StudentApp({
             </StudentSidebar>
           )}
         </aside>
+        {!sidebarCollapsed ? (
+          <div className="hidden lg:contents">
+            <ResizeHandle
+              ariaLabel="Resize sidebar"
+              onStart={() => {
+                dragStartRef.current = sidebarWidthRef.current;
+                setDraggingSidebar(true);
+              }}
+              onDelta={(dx) => setSidebarWidth(clampSidebar(dragStartRef.current + dx))}
+              onEnd={() => {
+                setDraggingSidebar(false);
+                persistWidth("jargon.sidebar-width", sidebarWidthRef.current);
+              }}
+            />
+          </div>
+        ) : null}
 
         {/* Below lg the same column lives in a drawer (Radix Sheet: focus trap, ESC, scrim). */}
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
@@ -525,16 +583,28 @@ export function StudentApp({
                 <>
                   {chatSurface}
                   {mediaStage.stage ? (
-                    <aside
-                      aria-label="Media panel"
-                      className="flex w-[min(46%,640px)] min-w-[320px] shrink-0 flex-col border-l border-border"
-                    >
-                      <MediaStageViewer
-                        stage={mediaStage.stage}
-                        onMode={mediaStage.setMode}
-                        onClose={mediaStage.close}
+                    <>
+                      <ResizeHandle
+                        ariaLabel="Resize media panel"
+                        onStart={() => {
+                          dragStartRef.current = mediaWidthRef.current;
+                        }}
+                        // The panel grows as the handle moves LEFT (dx negative).
+                        onDelta={(dx) => setMediaWidth(clampMedia(dragStartRef.current - dx))}
+                        onEnd={() => persistWidth("jargon.media-width", mediaWidthRef.current)}
                       />
-                    </aside>
+                      <aside
+                        aria-label="Media panel"
+                        style={{ width: mediaWidth }}
+                        className="flex max-w-[70vw] shrink-0 flex-col border-l border-border"
+                      >
+                        <MediaStageViewer
+                          stage={mediaStage.stage}
+                          onMode={mediaStage.setMode}
+                          onClose={mediaStage.close}
+                        />
+                      </aside>
+                    </>
                   ) : null}
                 </>
               )}

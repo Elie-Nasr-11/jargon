@@ -155,8 +155,41 @@ export function ResourceCard({
   const mediaStage = useMediaStage();
   const canStage = mediaStage !== null && isStageable(resource);
 
+  // THE CARD IS THE BUTTON. Tapping a stageable media card raises the side panel directly;
+  // where no stage is mounted the tap falls back to the old open() (inline player / new tab).
+  // Artifacts stay non-clickable at card level — their body is interactive (Run gate, deck
+  // controls), so they keep the small expand overlay instead. Once an inline player is up,
+  // the card stops being a button so its controls own every click.
+  const cardClick =
+    !isArtifact && !inlineUrl && (canStage || canOpen)
+      ? () => {
+          if (canStage) mediaStage!.open(resource, "side");
+          else void open();
+        }
+      : null;
+
   return (
-    <article className="hvp rounded-card border border-border bg-depth-card p-3.5">
+    <article
+      onClick={cardClick ?? undefined}
+      role={cardClick ? "button" : undefined}
+      tabIndex={cardClick ? 0 : undefined}
+      aria-label={cardClick ? `Open ${resource.title}` : undefined}
+      onKeyDown={
+        cardClick
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                cardClick();
+              }
+            }
+          : undefined
+      }
+      className={`hvp rounded-card border border-border bg-depth-card p-3.5 ${
+        cardClick
+          ? "cursor-pointer transition-colors duration-(--dur-fast) hover:border-foreground/25"
+          : ""
+      }`}
+    >
       <div className="flex items-start gap-2.5">
         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-depth-sub text-muted-foreground">
           <Icon className="h-[15px] w-[15px]" strokeWidth={1.6} />
@@ -178,45 +211,29 @@ export function ResourceCard({
           {resource.student_instructions ? (
             <p className="mt-1.5 text-meta text-foreground">{resource.student_instructions}</p>
           ) : null}
-          {/* One action: Open. Expansion is progressive — it appears ON the opened media
-              (see the overlay below), not as a second row of choices here. The action row
-              itself tucks away until the card is hovered/focused (.hvp on the article). */}
-          {canOpen && !inlineUrl ? (
-            <div className="hvr mt-2 flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => void open()}
-                className="inline-flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-meta text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-              >
-                {opening ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.7} />
-                ) : rendersInline ? (
-                  <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
-                ) : (
-                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
-                )}
-                Open
-              </button>
+          {/* No Open button — the card itself is the action. This row is just the hover
+              hint (.hvr) saying what the tap will do. */}
+          {cardClick ? (
+            <div className="hvr mt-2 flex items-center gap-1.5 text-meta text-muted-foreground">
+              {opening ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.7} />
+              ) : canStage ? (
+                <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+              ) : rendersInline ? (
+                <Play className="h-3.5 w-3.5" strokeWidth={1.7} />
+              ) : (
+                <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.7} />
+              )}
+              {canStage ? "Open in panel" : "Open"}
             </div>
           ) : null}
         </div>
       </div>
 
-      {/* ---- Inline players (opened lazily; the tap IS the signing moment) ---- */}
+      {/* ---- Inline players (the no-stage fallback: opened lazily by the card tap; with a
+              stage mounted the tap goes straight to the side panel and this never renders) ---- */}
       {inlineUrl ? (
         <div className="relative mt-3 overflow-hidden rounded-control border border-border bg-code-background">
-          {/* Progressive expand: one button on the opened media — first tap raises the
-              side panel; the stage's own fullscreen toggle goes the rest of the way. */}
-          {canStage ? (
-            <button
-              type="button"
-              onClick={() => mediaStage!.open(resource, "side")}
-              aria-label={`Expand ${resource.title}`}
-              className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
-            >
-              <Maximize2 className="h-[13px] w-[13px]" strokeWidth={1.8} />
-            </button>
-          ) : null}
           {resource.resource_type === "pdf" || resource.resource_type === "youtube" ? (
             <iframe
               title={resource.title}

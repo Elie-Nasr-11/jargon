@@ -142,40 +142,59 @@ export function StudentSidebar({
 
   return (
     <div className="flex h-full min-h-0 flex-col pt-3">
-      {/* Primary: the two things the product is. A segmented control rather than two nav rows,
-          so the choice reads as a mode switch and not as another destination. (No wordmark —
-          the product doesn't need to introduce itself on every screen.) */}
+      {/* Primary: the two things the product is. At rest the header just names the current
+          section (icon + label); hovering it (or tabbing in) reveals the segmented Home|Learn
+          toggle in place — the switch appears exactly where the cursor already is, with no
+          layout shift (the toggle and the label overlay each other). */}
       <div className="mx-2 mb-2 flex shrink-0 items-center gap-1">
-        <div
-          role="tablist"
-          aria-label="Section"
-          className="flex min-w-0 flex-1 gap-1 rounded-control border border-border bg-depth-sub p-1"
-        >
-          {(
-            [
-              { id: "home" as const, label: "Home", icon: House },
-              { id: "learn" as const, label: "Learn", icon: MessageCircle },
-            ] satisfies { id: StudentSection; label: string; icon: typeof House }[]
-          ).map(({ id, label, icon: Icon }) => {
-            const active = section === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => onSelectSection(id)}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-3px)] px-2 py-1.5 text-body transition-colors duration-(--dur-fast) ${
-                  active
-                    ? "bg-background font-medium text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Icon className="h-[15px] w-[15px]" strokeWidth={1.6} />
-                {label}
-              </button>
-            );
-          })}
+        <div className="group relative min-w-0 flex-1">
+          <div
+            role="tablist"
+            aria-label="Section"
+            className="flex min-w-0 gap-1 rounded-control border border-border bg-depth-sub p-1 opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100 group-focus-within:opacity-100"
+          >
+            {(
+              [
+                { id: "home" as const, label: "Home", icon: House },
+                { id: "learn" as const, label: "Learn", icon: MessageCircle },
+              ] satisfies { id: StudentSection; label: string; icon: typeof House }[]
+            ).map(({ id, label, icon: Icon }) => {
+              const active = section === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => onSelectSection(id)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-3px)] px-2 py-1.5 text-body transition-colors duration-(--dur-fast) ${
+                    active
+                      ? "bg-background font-medium text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="h-[15px] w-[15px]" strokeWidth={1.6} />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex items-center gap-1.5 px-3 opacity-100 transition-opacity duration-(--dur-fast) group-hover:opacity-0 group-focus-within:opacity-0"
+          >
+            {section === "home" ? (
+              <House className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
+            ) : (
+              <MessageCircle
+                className="h-[15px] w-[15px] text-muted-foreground"
+                strokeWidth={1.6}
+              />
+            )}
+            <span className="text-body font-medium text-foreground">
+              {section === "home" ? "Home" : "Learn"}
+            </span>
+          </div>
         </div>
         {onCollapse ? (
           <button
@@ -223,36 +242,56 @@ export function StudentSidebar({
   );
 }
 
-// A rail button with the reference tooltip: a solid bubble that appears beside the icon on
-// hover/focus. pointer-events stay off the bubble so it never traps the cursor.
+// A rail button. Without a flyout it shows the reference tooltip — a solid label bubble
+// beside the icon on hover/focus (pointer-events off so it never traps the cursor). With a
+// flyout it instead opens a hover panel anchored to the icon (the pl-2 bridge keeps the
+// hover unbroken across the gap), so the icon IS the menu.
 function RailButton({
   label,
   active,
   onClick,
+  flyout,
   children,
 }: {
   label: string;
   active?: boolean;
   onClick: () => void;
+  flyout?: ReactNode;
   children: ReactNode;
 }) {
-  return (
+  const button = (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
       aria-current={active ? "true" : undefined}
-      className={`group relative flex h-9 w-9 items-center justify-center rounded-control transition-colors duration-(--dur-fast) ${
+      className={`${flyout ? "" : "group "}relative flex h-9 w-9 items-center justify-center rounded-control transition-colors duration-(--dur-fast) ${
         active
           ? "bg-muted text-foreground"
           : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
       }`}
     >
       {children}
-      <span className="pointer-events-none absolute left-full top-1/2 z-[var(--z-menu)] ml-2 -translate-y-1/2 whitespace-nowrap rounded-control bg-foreground px-2.5 py-1 text-meta font-medium text-background opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100 group-focus-visible:opacity-100">
-        {label}
-      </span>
+      {!flyout ? (
+        <span className="pointer-events-none absolute left-full top-1/2 z-[var(--z-menu)] ml-2 -translate-y-1/2 whitespace-nowrap rounded-control bg-foreground px-2.5 py-1 text-meta font-medium text-background opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100 group-focus-visible:opacity-100">
+          {label}
+        </span>
+      ) : null}
     </button>
+  );
+  if (!flyout) return button;
+  return (
+    <div className="group relative">
+      {button}
+      <div className="pointer-events-none absolute left-full top-0 z-[var(--z-menu)] pl-2 opacity-0 transition-opacity duration-(--dur-fast) group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+        <div className="max-h-[72vh] w-[248px] overflow-y-auto overscroll-contain rounded-card border border-border bg-background p-1.5 shadow-[var(--elev-raised)]">
+          <div className="mb-1 px-2.5 pt-1 font-mono text-overline uppercase tracking-[0.16em] text-muted-foreground">
+            {label}
+          </div>
+          {flyout}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -266,11 +305,16 @@ export type StudentRailProps = {
   dueByClass: Map<string, number>;
   onSelectClass: (classId: string | null) => void;
   onExpand: () => void;
+  // The two section menus, supplied by the shell (the same bodies the expanded sidebar
+  // shows): Home = Overview + class list, Learn = class switcher + lesson tree. Each renders
+  // as its icon's hover flyout, so the rail is section-aware without owning any data.
+  homeMenu: ReactNode;
+  learnMenu: ReactNode;
 };
 
-// The collapsed sidebar: a 64px icon rail. Hovering an icon shows its label bubble; hovering
-// the class cluster opens a flyout panel with the full class rows (the reference image's
-// Collections mechanics); the expand toggle at the top restores the full column.
+// The collapsed sidebar: a 64px icon rail. Hovering the Home or Learn icon opens that
+// section's full menu as a flyout; other icons show label bubbles; the class avatars are
+// one-click shortcuts with name tooltips; the expand toggle restores the full column.
 export function StudentRail({
   email,
   section,
@@ -281,6 +325,8 @@ export function StudentRail({
   dueByClass,
   onSelectClass,
   onExpand,
+  homeMenu,
+  learnMenu,
 }: StudentRailProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -292,13 +338,19 @@ export function StudentRail({
 
       <div className="my-1.5 h-px w-8 shrink-0 bg-border" aria-hidden />
 
-      <RailButton label="Home" active={section === "home"} onClick={() => onSelectSection("home")}>
+      <RailButton
+        label="Home"
+        active={section === "home"}
+        onClick={() => onSelectSection("home")}
+        flyout={homeMenu}
+      >
         <House className="h-[16px] w-[16px]" strokeWidth={1.6} />
       </RailButton>
       <RailButton
         label="Learn"
         active={section === "learn"}
         onClick={() => onSelectSection("learn")}
+        flyout={learnMenu}
       >
         <MessageCircle className="h-[16px] w-[16px]" strokeWidth={1.6} />
       </RailButton>
@@ -314,73 +366,37 @@ export function StudentRail({
 
       <div className="my-1.5 h-px w-8 shrink-0 bg-border" aria-hidden />
 
-      {/* The class cluster: avatars in the rail, the full rows in a hover flyout. The flyout
-          is reachable (the pl-2 bridge keeps the hover unbroken across the gap). */}
-      {classes.length ? (
-        <div className="group relative flex min-h-0 flex-col items-center gap-1 overflow-visible">
-          {classes.slice(0, 8).map((klass) => {
-            const active = klass.id === selectedClassId;
-            const due = dueByClass.get(klass.id) ?? 0;
-            return (
-              <button
-                key={klass.id}
-                type="button"
-                onClick={() => onSelectClass(klass.id)}
-                aria-label={klass.name}
-                aria-current={active ? "true" : undefined}
-                className={`relative rounded-full p-0.5 transition-colors duration-(--dur-fast) ${
-                  active ? "bg-muted" : "hover:bg-muted/60"
-                }`}
-              >
-                <ClassAvatar name={klass.name} size={7} />
-                {due > 0 ? (
-                  <span
-                    className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full"
-                    style={{ backgroundColor: "var(--mode-open)" }}
-                    aria-label={`${due} due`}
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-
-          <div className="pointer-events-none absolute left-full top-0 z-[var(--z-menu)] pl-2 opacity-0 transition-opacity duration-(--dur-fast) group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-            <div className="w-[220px] rounded-card border border-border bg-background p-1.5 shadow-[var(--elev-raised)]">
-              <div className="mb-1 px-2.5 pt-1 font-mono text-overline uppercase tracking-[0.16em] text-muted-foreground">
-                Classes
-              </div>
-              {classes.map((klass) => {
-                const active = klass.id === selectedClassId;
-                const due = dueByClass.get(klass.id) ?? 0;
-                return (
-                  <button
-                    key={klass.id}
-                    type="button"
-                    onClick={() => onSelectClass(klass.id)}
-                    className={`flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body transition-colors duration-(--dur-fast) hover:bg-muted ${
-                      active ? "font-semibold text-foreground" : "text-muted-foreground"
-                    }`}
-                  >
-                    <ClassAvatar name={klass.name} size={7} />
-                    <span className="min-w-0 flex-1 truncate">{klass.name}</span>
-                    {due > 0 ? (
-                      <span
-                        className="ds-tag shrink-0 px-1.5 py-0.5 text-[10px]"
-                        style={{
-                          ["--tag-bg" as string]: "var(--mode-open)",
-                          ["--tag-ink" as string]: "var(--mode-open-ink)",
-                        }}
-                      >
-                        {due}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* The class avatars: one-click shortcuts with name tooltips. The full rows live in
+          the Home/Learn icon flyouts above, so the cluster stays a quick-switch strip. */}
+      {classes.slice(0, 8).map((klass) => {
+        const active = klass.id === selectedClassId;
+        const due = dueByClass.get(klass.id) ?? 0;
+        return (
+          <span key={klass.id} className="group relative">
+            <button
+              type="button"
+              onClick={() => onSelectClass(klass.id)}
+              aria-label={klass.name}
+              aria-current={active ? "true" : undefined}
+              className={`relative rounded-full p-0.5 transition-colors duration-(--dur-fast) ${
+                active ? "bg-muted" : "hover:bg-muted/60"
+              }`}
+            >
+              <ClassAvatar name={klass.name} size={7} />
+              {due > 0 ? (
+                <span
+                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full"
+                  style={{ backgroundColor: "var(--mode-open)" }}
+                  aria-label={`${due} due`}
+                />
+              ) : null}
+            </button>
+            <span className="pointer-events-none absolute left-full top-1/2 z-[var(--z-menu)] ml-2 -translate-y-1/2 whitespace-nowrap rounded-control bg-foreground px-2.5 py-1 text-meta font-medium text-background opacity-0 transition-opacity duration-(--dur-fast) group-hover:opacity-100 group-focus-within:opacity-100">
+              {klass.name}
+            </span>
+          </span>
+        );
+      })}
 
       <div className="flex-1" />
 
