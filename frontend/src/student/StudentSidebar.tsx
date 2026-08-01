@@ -5,7 +5,6 @@ import {
   LogOut,
   MessageCircle,
   Moon,
-  PanelLeftClose,
   Sliders,
   Sun,
   User,
@@ -19,9 +18,9 @@ import { MENU_ITEMS, type StudentMenuItem, type StudentSection } from "@/student
 // Classes) is reached from where it's relevant — the chatbox pill, Home, or the account menu —
 // not from a nav column. Purely presentational: it takes state and callbacks, never fetches.
 //
-// Collapsing simply hides the whole column; the shell keeps a floating expand button at the
-// screen's top-left — the same spot as the collapse button in this header — so the toggle
-// reads as one button flipping in place.
+// Collapse/expand is entirely the shell's: ONE fixed button at the screen's top-left toggles
+// the column (which slides its width to zero). This header just leaves that button a gutter
+// (insetForToggle) so nothing ever sits under it.
 
 const MENU_ICONS: Record<
   StudentMenuItem,
@@ -37,8 +36,9 @@ export type StudentSidebarProps = {
   section: StudentSection;
   onSelectSection: (section: StudentSection) => void;
   onSelectMenuItem: (item: StudentMenuItem) => void;
-  // Present only where collapsing makes sense (the docked desktop column, not the drawer).
-  onCollapse?: () => void;
+  // The docked desktop column keeps a gutter at the header's left for the shell's fixed
+  // collapse/expand toggle (the drawer has no toggle, so no gutter).
+  insetForToggle?: boolean;
   // Rendered as the sidebar body — the class/unit/lesson tree, supplied by the shell so
   // this component stays free of data concerns.
   children?: ReactNode;
@@ -131,7 +131,7 @@ export function StudentSidebar({
   section,
   onSelectSection,
   onSelectMenuItem,
-  onCollapse,
+  insetForToggle,
   children,
 }: StudentSidebarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -140,21 +140,13 @@ export function StudentSidebar({
     <div className="flex h-full min-h-0 flex-col pt-3">
       {/* Primary: the two things the product is. A segmented control rather than two nav rows,
           so the choice reads as a mode switch and not as another destination. (No wordmark —
-          the product doesn't need to introduce itself on every screen.) */}
-      <div className="mx-2 mb-2 flex shrink-0 items-center gap-1">
-        {/* Collapse lives at the FAR LEFT so it occupies the exact spot where the floating
-            expand button appears once the column is gone — toggling reads as one button
-            flipping in place. */}
-        {onCollapse ? (
-          <button
-            type="button"
-            onClick={onCollapse}
-            aria-label="Collapse sidebar"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
-          >
-            <PanelLeftClose className="h-[15px] w-[15px]" strokeWidth={1.6} />
-          </button>
-        ) : null}
+          the product doesn't need to introduce itself on every screen.) The desktop column
+          leaves the header's left gutter free for the shell's fixed collapse toggle. */}
+      <div
+        className={`mb-2 flex shrink-0 items-center gap-1 ${
+          insetForToggle ? "ml-11 mr-2" : "mx-2"
+        }`}
+      >
         <div
           role="tablist"
           aria-label="Section"

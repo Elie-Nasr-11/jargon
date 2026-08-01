@@ -8127,3 +8127,22 @@ Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK (skip
 Remaining concerns: the collapse/expand pair aligns at ~8px,12px from the corner; if the
 sidebar header ever gains left padding the two positions must move together.
 Suggested next task: eyeball the collapse -> expand round-trip and the persisted width.
+
+## Claude -> Codex / Human - 2026-08-01 (round 8c)
+
+Status: Finished
+Summary: Collapse toggle fixed-in-place + animated slide. The collapse/expand control is now
+ONE button owned by the shell, fixed at the screen's top-left (left-2 top-3, lg+), mounted in
+BOTH states — it cannot move; only its PanelLeftClose/PanelLeftOpen icon flips. StudentSidebar
+lost its header collapse button and onCollapse prop; it gained insetForToggle (the desktop
+column's header keeps an ml-11 gutter clear of the fixed button; the mobile drawer passes
+nothing and keeps mx-2). The column now stays MOUNTED on collapse and slides: width animates
+sidebarWidth -> 0 (transition-[width,border-color] duration-(--dur)), content wrapped at its
+natural width inside overflow-hidden so nothing squishes mid-flight, border fades to
+transparent at 0, aria-hidden while collapsed. The width transition is suspended during
+resize-handle drags (draggingSidebar) so dragging tracks the pointer 1:1.
+Files changed: student/{StudentSidebar,StudentApp}.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK (skipped=4).
+Remaining concerns: while collapsed the sidebar's focusable content is width-clipped but
+still in the tab order behind aria-hidden — if keyboard audit flags it, add inert.
+Suggested next task: eyeball the slide in both themes + the toggle staying put.

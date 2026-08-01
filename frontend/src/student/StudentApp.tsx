@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Menu, PanelLeftOpen } from "lucide-react";
+import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { MentorControls } from "@/features/student/MentorControls";
 import {
@@ -147,6 +147,7 @@ export function StudentApp({
   sidebarWidthRef.current = sidebarWidth;
   const mediaWidthRef = useRef(mediaWidth);
   mediaWidthRef.current = mediaWidth;
+  const [draggingSidebar, setDraggingSidebar] = useState(false);
   const persistWidth = (key: string, value: number) => {
     try {
       localStorage.setItem(key, String(Math.round(value)));
@@ -422,47 +423,62 @@ export function StudentApp({
       <div className="flex h-screen w-full overflow-hidden bg-background">
         {/* Flat, solid shell: the page IS the background — no ambient layer, no shadows; the
           sidebar reads as a column of the same surface separated by a clean hairline. */}
-        {!sidebarCollapsed ? (
-          <>
-            <aside
-              aria-label="Sidebar"
-              style={{ width: sidebarWidth }}
-              className="hidden h-full shrink-0 border-r border-border bg-depth-sub lg:block"
-            >
-              <StudentSidebar
-                email={email}
-                section={section}
-                onSelectSection={onSelectSection}
-                onSelectMenuItem={onSelectMenuItem}
-                onCollapse={() => setCollapsed(true)}
-              >
-                {sidebarBody}
-              </StudentSidebar>
-            </aside>
-            <div className="hidden lg:contents">
-              <ResizeHandle
-                ariaLabel="Resize sidebar"
-                onStart={() => {
-                  dragStartRef.current = sidebarWidthRef.current;
-                }}
-                onDelta={(dx) => setSidebarWidth(clampSidebar(dragStartRef.current + dx))}
-                onEnd={() => persistWidth("jargon.sidebar-width", sidebarWidthRef.current)}
-              />
-            </div>
-          </>
-        ) : (
-          // Collapsed: the column is simply gone. The expand button floats at the screen's
-          // top-left — the exact spot the collapse button occupies when the column is open,
-          // so the toggle reads as one button flipping in place.
-          <button
-            type="button"
-            onClick={() => setCollapsed(false)}
-            aria-label="Expand sidebar"
-            className="fixed left-2 top-3 z-[var(--z-header)] hidden h-8 w-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground lg:flex"
-          >
+        {/* ONE toggle button, fixed at the screen's top-left, mounted in both states — it
+            literally cannot move on collapse/expand; only its icon flips. The sidebar header
+            leaves a gutter for it (insetForToggle). */}
+        <button
+          type="button"
+          onClick={() => setCollapsed(!sidebarCollapsed)}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sidebarCollapsed}
+          className="fixed left-2 top-3 z-[var(--z-header)] hidden h-8 w-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground lg:flex"
+        >
+          {sidebarCollapsed ? (
             <PanelLeftOpen className="h-[15px] w-[15px]" strokeWidth={1.6} />
-          </button>
-        )}
+          ) : (
+            <PanelLeftClose className="h-[15px] w-[15px]" strokeWidth={1.6} />
+          )}
+        </button>
+
+        {/* The column stays mounted and SLIDES: width animates to 0 (content clipped at its
+            natural width so nothing squishes mid-flight). The transition is suspended while
+            the resize handle drags so the width tracks the pointer 1:1. */}
+        <aside
+          aria-label="Sidebar"
+          aria-hidden={sidebarCollapsed}
+          style={{ width: sidebarCollapsed ? 0 : sidebarWidth }}
+          className={`hidden h-full shrink-0 overflow-hidden bg-depth-sub lg:block ${
+            sidebarCollapsed ? "border-r border-transparent" : "border-r border-border"
+          } ${draggingSidebar ? "" : "transition-[width,border-color] duration-(--dur)"}`}
+        >
+          <div style={{ width: sidebarWidth }} className="h-full">
+            <StudentSidebar
+              email={email}
+              section={section}
+              onSelectSection={onSelectSection}
+              onSelectMenuItem={onSelectMenuItem}
+              insetForToggle
+            >
+              {sidebarBody}
+            </StudentSidebar>
+          </div>
+        </aside>
+        {!sidebarCollapsed ? (
+          <div className="hidden lg:contents">
+            <ResizeHandle
+              ariaLabel="Resize sidebar"
+              onStart={() => {
+                dragStartRef.current = sidebarWidthRef.current;
+                setDraggingSidebar(true);
+              }}
+              onDelta={(dx) => setSidebarWidth(clampSidebar(dragStartRef.current + dx))}
+              onEnd={() => {
+                setDraggingSidebar(false);
+                persistWidth("jargon.sidebar-width", sidebarWidthRef.current);
+              }}
+            />
+          </div>
+        ) : null}
 
         {/* Below lg the same column lives in a drawer (Radix Sheet: focus trap, ESC, scrim). */}
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
