@@ -140,12 +140,12 @@ export function StudentSidebar({
     <div className="flex h-full min-h-0 flex-col pt-3">
       {/* Primary: the two things the product is. A segmented control rather than two nav rows,
           so the choice reads as a mode switch and not as another destination. (No wordmark —
-          the product doesn't need to introduce itself on every screen.) The desktop column
-          leaves the header's left gutter free for the shell's fixed collapse toggle. */}
+          the product doesn't need to introduce itself on every screen.) On the desktop column
+          the shell's fixed collapse toggle owns the top strip, and the control sits tidily on
+          its own row below it. */}
+      {insetForToggle ? <div className="h-8 shrink-0" aria-hidden /> : null}
       <div
-        className={`mb-2 flex shrink-0 items-center gap-1 ${
-          insetForToggle ? "ml-11 mr-2" : "mx-2"
-        }`}
+        className={`mx-2 mb-2 flex shrink-0 items-center gap-1 ${insetForToggle ? "mt-1.5" : ""}`}
       >
         <div
           role="tablist"

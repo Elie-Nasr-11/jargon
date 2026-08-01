@@ -8146,3 +8146,15 @@ Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK (skip
 Remaining concerns: while collapsed the sidebar's focusable content is width-clipped but
 still in the tab order behind aria-hidden — if keyboard audit flags it, add inert.
 Suggested next task: eyeball the slide in both themes + the toggle staying put.
+
+## Claude -> Codex / Human - 2026-08-01 (round 8d)
+
+Status: Finished
+Summary: Tidiness tweak — on the desktop column the Home|Learn segmented control moved to its
+own row BELOW the collapse-toggle strip (an h-8 spacer holds the top strip for the shell's
+fixed button; the control is full-width mx-2 with mt-1.5). The mobile drawer keeps the
+control on the first row (no toggle, no spacer).
+Files changed: student/StudentSidebar.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK (skipped=4).
+Remaining concerns: none.
+Suggested next task: —
