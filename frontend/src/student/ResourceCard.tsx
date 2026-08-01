@@ -150,7 +150,7 @@ export function ResourceCard({
 
   const canReadDeckAloud = Boolean(channel.accessToken && channel.lessonId);
 
-  // The media stage (half/full screen) — offered only where a provider is mounted and the
+  // The media stage (side panel / full screen) — offered only where a provider is mounted and the
   // kind can actually stage.
   const mediaStage = useMediaStage();
   const canStage = mediaStage !== null && isStageable(resource);
@@ -206,11 +206,11 @@ export function ResourceCard({
       {inlineUrl ? (
         <div className="relative mt-3 overflow-hidden rounded-control border border-border bg-code-background">
           {/* Progressive expand: one button on the opened media — first tap raises the
-              half-screen stage; the stage's own toggle goes the rest of the way. */}
+              side panel; the stage's own fullscreen toggle goes the rest of the way. */}
           {canStage ? (
             <button
               type="button"
-              onClick={() => mediaStage!.open(resource, "half")}
+              onClick={() => mediaStage!.open(resource, "side")}
               aria-label={`Expand ${resource.title}`}
               className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
             >
@@ -259,7 +259,7 @@ export function ResourceCard({
           {canStage ? (
             <button
               type="button"
-              onClick={() => mediaStage!.open(resource, "half")}
+              onClick={() => mediaStage!.open(resource, "side")}
               aria-label={`Expand ${resource.title}`}
               className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
             >
@@ -291,7 +291,7 @@ export function ResourceCard({
           {canStage ? (
             <button
               type="button"
-              onClick={() => mediaStage!.open(resource, "half")}
+              onClick={() => mediaStage!.open(resource, "side")}
               aria-label={`Expand ${resource.title}`}
               className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
             >

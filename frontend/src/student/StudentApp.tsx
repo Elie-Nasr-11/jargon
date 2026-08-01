@@ -32,7 +32,7 @@ import { ClassSummary } from "@/student/ClassSummary";
 import { checkpointRowsByClass } from "@/student/checkpoints";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
-import { StudentSidebar } from "@/student/StudentSidebar";
+import { StudentRail, StudentSidebar } from "@/student/StudentSidebar";
 import { LessonTree } from "@/student/LessonTree";
 import { LessonWelcome } from "@/student/LessonWelcome";
 import { SuggestionRows } from "@/student/suggestions";
@@ -101,6 +101,23 @@ export function StudentApp({
   // The sidebar is a docked column at lg+ and a drawer below it. Without the drawer there is no
   // navigation at all on a phone, which is where a lot of students actually are.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The docked column collapses to a 64px icon rail (reference desktop-app mechanics);
+  // the choice sticks across visits. The mobile drawer is always the full column.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("jargon.sidebar-collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setCollapsed = (next: boolean) => {
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem("jargon.sidebar-collapsed", next ? "1" : "0");
+    } catch {
+      // Storage can be unavailable (private mode) — the toggle still works for the session.
+    }
+  };
 
   // Mentor + voice settings: localStorage is the fast source of truth (useConversation reads
   // store.getMentor() every turn); student_settings is the cross-device copy. On mount the
@@ -234,8 +251,8 @@ export function StudentApp({
 
   const destinationSpec = destination ? DESTINATIONS.find((d) => d.id === destination) : undefined;
 
-  // The media stage: shell-owned because it drives the Learn layout (half = media over chat,
-  // full = media with the chat docked). Any ResourceCard below raises it via context.
+  // The media stage: shell-owned because it drives the Learn layout (side = media in a right
+  // panel, full = media with the chat docked). Any ResourceCard below raises it via context.
   const mediaStage = useMediaStageController();
   const stageOpen = mediaStage.stage !== null;
   // The stage renders in the Learn layout; raising it from Home or a destination panel jumps
@@ -257,6 +274,38 @@ export function StudentApp({
     onSelectSection("learn");
     void conversation.openLesson(lessonId);
   };
+  const sidebarBody =
+    section === "home" ? (
+      // Home: the sidebar is the class list — Overview + one row per class.
+      <ClassList
+        classes={classes ?? []}
+        selectedClassId={classId ?? null}
+        dueByClass={dueByClass}
+        onSelectClass={(next) => {
+          closeDrawer();
+          onSelectClass(next);
+        }}
+      />
+    ) : (
+      // Learn: only the SELECTED class's units, with a switcher above the tree.
+      <>
+        <ClassSwitcher
+          classes={classes ?? []}
+          selectedClassId={scopeClassId}
+          onSelectClass={(next) => {
+            closeDrawer();
+            onSelectClass(next);
+          }}
+        />
+        <LessonTree
+          lessons={classLessons ?? conversation.lessons}
+          currentLessonId={conversation.lesson?.id ?? null}
+          progress={progress}
+          onOpenLesson={openLesson}
+          disabled={conversation.sending || conversation.booting}
+        />
+      </>
+    );
   const sidebar = (
     <StudentSidebar
       email={email}
@@ -267,37 +316,7 @@ export function StudentApp({
       }}
       onSelectMenuItem={onSelectMenuItem}
     >
-      {section === "home" ? (
-        // Home: the sidebar is the class list — Overview + one row per class.
-        <ClassList
-          classes={classes ?? []}
-          selectedClassId={classId ?? null}
-          dueByClass={dueByClass}
-          onSelectClass={(next) => {
-            closeDrawer();
-            onSelectClass(next);
-          }}
-        />
-      ) : (
-        // Learn: only the SELECTED class's units, with a switcher above the tree.
-        <>
-          <ClassSwitcher
-            classes={classes ?? []}
-            selectedClassId={scopeClassId}
-            onSelectClass={(next) => {
-              closeDrawer();
-              onSelectClass(next);
-            }}
-          />
-          <LessonTree
-            lessons={classLessons ?? conversation.lessons}
-            currentLessonId={conversation.lesson?.id ?? null}
-            progress={progress}
-            onOpenLesson={openLesson}
-            disabled={conversation.sending || conversation.booting}
-          />
-        </>
-      )}
+      {sidebarBody}
     </StudentSidebar>
   );
 
@@ -369,9 +388,33 @@ export function StudentApp({
           sidebar reads as a column of the same surface separated by a clean hairline. */}
         <aside
           aria-label="Sidebar"
-          className="hidden h-full w-[260px] shrink-0 border-r border-border bg-depth-sub lg:block"
+          className={`hidden h-full shrink-0 border-r border-border bg-depth-sub transition-[width] duration-(--dur) lg:block ${
+            sidebarCollapsed ? "w-[64px]" : "w-[260px]"
+          }`}
         >
-          {sidebar}
+          {sidebarCollapsed ? (
+            <StudentRail
+              email={email}
+              section={section}
+              onSelectSection={onSelectSection}
+              onSelectMenuItem={onSelectMenuItem}
+              classes={classes ?? []}
+              selectedClassId={section === "home" ? (classId ?? null) : scopeClassId}
+              dueByClass={dueByClass}
+              onSelectClass={onSelectClass}
+              onExpand={() => setCollapsed(false)}
+            />
+          ) : (
+            <StudentSidebar
+              email={email}
+              section={section}
+              onSelectSection={onSelectSection}
+              onSelectMenuItem={onSelectMenuItem}
+              onCollapse={() => setCollapsed(true)}
+            >
+              {sidebarBody}
+            </StudentSidebar>
+          )}
         </aside>
 
         {/* Below lg the same column lives in a drawer (Radix Sheet: focus trap, ESC, scrim). */}
@@ -465,17 +508,36 @@ export function StudentApp({
           ) : (
             // Learn: the conversation, optionally sharing the area with the media stage.
             //   no stage   → the conversation owns the whole area.
-            //   half stage → media on top, conversation keeps the bottom half.
+            //   side stage → media in a right-hand panel; the conversation keeps the rest
+            //                (the Claude/Codex desktop pattern).
             //   full stage → media owns the area; the conversation docks bottom-right.
-            <div className="relative flex min-h-0 flex-1 flex-col">
-              {mediaStage.stage ? (
-                <MediaStageViewer
-                  stage={mediaStage.stage}
-                  onMode={mediaStage.setMode}
-                  onClose={mediaStage.close}
-                />
-              ) : null}
-              {mediaStage.stage?.mode === "full" ? <ChatDock>{chatSurface}</ChatDock> : chatSurface}
+            <div className="relative flex min-h-0 flex-1">
+              {mediaStage.stage?.mode === "full" ? (
+                <>
+                  <MediaStageViewer
+                    stage={mediaStage.stage}
+                    onMode={mediaStage.setMode}
+                    onClose={mediaStage.close}
+                  />
+                  <ChatDock>{chatSurface}</ChatDock>
+                </>
+              ) : (
+                <>
+                  {chatSurface}
+                  {mediaStage.stage ? (
+                    <aside
+                      aria-label="Media panel"
+                      className="flex w-[min(46%,640px)] min-w-[320px] shrink-0 flex-col border-l border-border"
+                    >
+                      <MediaStageViewer
+                        stage={mediaStage.stage}
+                        onMode={mediaStage.setMode}
+                        onClose={mediaStage.close}
+                      />
+                    </aside>
+                  ) : null}
+                </>
+              )}
             </div>
           )}
         </main>

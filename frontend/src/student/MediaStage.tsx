@@ -19,16 +19,16 @@ import { useConversationChannel } from "@/student/useConversation";
 import type { LessonChatResource } from "@/lib/types";
 
 // The MEDIA STAGE: any resource can leave its inline card and take over part of the main
-// area — HALF (media on top, the conversation keeps the bottom half) or FULL (media fills
-// the main area; the conversation docks bottom-right as a collapsible widget). The stage
-// lives INSIDE <main>, so the sidebar is never covered.
+// area — SIDE (a right-hand panel beside the conversation, the Claude/Codex desktop
+// pattern) or FULL (media fills the main area; the conversation docks bottom-right as a
+// collapsible widget). The stage lives INSIDE <main>, so the left sidebar is never covered.
 //
 // State is a context so any ResourceCard (transcript or Resources panel) can raise the
 // stage without prop-threading through the shell. The security posture is unchanged:
 // uploads sign lazily at open, artifacts render only through ArtifactFrame/DeckRenderer
 // (never a navigable URL), and the same telemetry events fire.
 
-export type MediaStageMode = "half" | "full";
+export type MediaStageMode = "side" | "full";
 export type MediaStageState = { resource: LessonChatResource; mode: MediaStageMode };
 
 type MediaStageValue = {
@@ -143,9 +143,7 @@ export function MediaStageViewer({
   return (
     <section
       aria-label={`${resource.title} — expanded media`}
-      className={`flex min-h-0 flex-col border-b border-border bg-background ${
-        mode === "half" ? "h-1/2 shrink-0" : "min-h-0 flex-1"
-      }`}
+      className="flex h-full min-h-0 flex-1 flex-col bg-background"
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
         <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">
@@ -154,16 +152,15 @@ export function MediaStageViewer({
         <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
           {resource.resource_type === "artifact" ? "activity" : resource.resource_type}
         </span>
-        {/* ONE progressive control: at half it expands to full; at full it shrinks back.
-            Together with the card's inline expand button this makes the ladder
-            inline → half → full a single repeated tap. */}
+        {/* Exactly two controls, the Claude/Codex desktop pattern: fullscreen (which flips
+            to "back to panel" at full) and close. */}
         <button
           type="button"
-          onClick={() => onMode(mode === "half" ? "full" : "half")}
-          aria-label={mode === "half" ? "Expand to full screen" : "Shrink to half screen"}
+          onClick={() => onMode(mode === "side" ? "full" : "side")}
+          aria-label={mode === "side" ? "Expand to full screen" : "Back to the side panel"}
           className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
         >
-          {mode === "half" ? (
+          {mode === "side" ? (
             <Maximize2 className="h-[14px] w-[14px]" strokeWidth={1.7} />
           ) : (
             <Minimize2 className="h-[14px] w-[14px]" strokeWidth={1.7} />
