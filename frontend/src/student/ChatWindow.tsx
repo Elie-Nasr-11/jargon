@@ -5,7 +5,7 @@ import { Chatbox } from "@/student/Chatbox";
 import { VoicePanel } from "@/student/VoicePanel";
 import { useConversationChannel } from "@/student/useConversation";
 import type { ComposerLanguage } from "@/components/Composer";
-import type { ChatAttachment } from "@/lib/types";
+import type { ChatAttachment, LessonChatResource } from "@/lib/types";
 import type { LessonOffers, TurnMode } from "@/student/turnModes";
 
 // The conversation surface: a scrolling transcript with the chatbox beneath it.
@@ -28,6 +28,8 @@ export type ChatWindowProps = {
   onSend: (text: string, attachments?: ChatAttachment[]) => void;
   onSendCode?: (code: string, language: ComposerLanguage) => void;
   sending?: boolean;
+  // What the mentor has attached this session — feeds the composer's resource-reference picker.
+  sessionResources?: LessonChatResource[];
   // The transcript. Supplied by the route so this component stays presentational.
   children?: ReactNode;
 };
@@ -40,6 +42,7 @@ export function ChatWindow({
   onSend,
   onSendCode,
   sending,
+  sessionResources,
   children,
 }: ChatWindowProps) {
   const channel = useConversationChannel();
@@ -120,6 +123,8 @@ export function ChatWindow({
             onSendCode={onSendCode}
             onToggleVoice={canVoice ? () => setVoiceOpen((v) => !v) : undefined}
             voiceActive={voiceOpen}
+            lessonId={channel.lessonId}
+            sessionResources={sessionResources}
             onVoiceEvent={channel.voiceEvent}
             // The hold locks the composer as well as the send path — a typeable box whose
             // Send silently fails would read as broken, not paused.

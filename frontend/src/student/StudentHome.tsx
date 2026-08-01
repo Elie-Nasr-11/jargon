@@ -12,7 +12,6 @@ import {
 import { formatDate, formatScore, relativeTime } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/motion";
 import { checkpointRows, type CheckpointRowModel } from "@/student/checkpoints";
-import { ClassesPanel } from "@/student/ClassesPanel";
 import type {
   Lesson,
   SessionSummary,
@@ -34,13 +33,10 @@ import type {
 export type StudentHomeProps = {
   // The shell's catalog — used to resolve the resume session's lesson without a second fetch.
   lessons: Lesson[];
-  currentLessonId: string | null;
   onOpenLesson: (lessonId: string) => void;
   // The shell's assessment bundle (null while loading) — feeds the due strip.
   assessments: StudentAssessmentBundle | null;
   onOpenAssessment: (assessmentId: string) => void;
-  // The shell's per-lesson 0..1 progress map — threads into the classes section.
-  progress?: Record<string, number>;
 };
 
 function greetingForHour(hour: number): string {
@@ -167,11 +163,9 @@ function DueRow({ row, onOpen }: { row: CheckpointRowModel; onOpen: () => void }
 
 export function StudentHome({
   lessons,
-  currentLessonId,
   onOpenLesson,
   assessments,
   onOpenAssessment,
-  progress,
 }: StudentHomeProps) {
   const [name, setName] = useState("");
   const [resumeLessonId, setResumeLessonId] = useState<string | null>(null);
@@ -366,17 +360,7 @@ export function StudentHome({
           </section>
         </div>
 
-        {/* ---- 3. Classes (moved here from the sidebar) -------------------------------- */}
-        <SectionLabel>Classes</SectionLabel>
-        <div className="pb-6">
-          <ClassesPanel
-            currentLessonId={currentLessonId}
-            onOpenLesson={onOpenLesson}
-            assessments={assessments}
-            onOpenAssessment={onOpenAssessment}
-            progress={progress}
-          />
-        </div>
+        {/* Classes live in the Home SIDEBAR now — each one opens its own summary page. */}
       </div>
     </section>
   );

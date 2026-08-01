@@ -18,15 +18,18 @@ export const Route = createFileRoute("/learn")({
   component: LearnRoute,
   validateSearch: (
     search: Record<string, unknown>,
-  ): { section?: StudentSection; to?: StudentDestination } => ({
+  ): { section?: StudentSection; to?: StudentDestination; class?: string } => ({
     section: isSection(search.section) ? search.section : undefined,
     to: isDestination(search.to) ? search.to : undefined,
+    // The selected class. Any string passes — an unknown id degrades to the default class
+    // in the shell rather than 404ing a shared link.
+    class: typeof search.class === "string" && search.class ? search.class : undefined,
   }),
 });
 
 function LearnRoute() {
   const navigate = useNavigate();
-  const { section, to } = Route.useSearch();
+  const { section, to, class: classId } = Route.useSearch();
   const [email, setEmail] = useState("");
 
   useEffect(() => {
@@ -49,7 +52,7 @@ function LearnRoute() {
   // Absent section = Learn, matching "the conversation is the default" from the old surface.
   const activeSection: StudentSection = section ?? "learn";
 
-  const go = (next: { section?: StudentSection; to?: StudentDestination }) => {
+  const go = (next: { section?: StudentSection; to?: StudentDestination; class?: string }) => {
     void navigate({ to: "/learn", search: next, replace: false });
   };
 
@@ -58,14 +61,23 @@ function LearnRoute() {
       email={email}
       section={activeSection}
       destination={to}
-      onSelectSection={(nextSection) => go({ section: nextSection })}
-      onSelectDestination={(destination) => go({ section: activeSection, to: destination })}
-      onCloseDestination={() => go({ section: activeSection })}
+      classId={classId}
+      // Section switches KEEP the selected class — the class is the student's working
+      // context, not a per-section detail. Home with a class = that class's summary page.
+      onSelectSection={(nextSection) => go({ section: nextSection, class: classId })}
+      onSelectClass={(nextClassId) =>
+        go({ section: activeSection, class: nextClassId ?? undefined })
+      }
+      onSelectDestination={(destination) =>
+        go({ section: activeSection, to: destination, class: classId })
+      }
+      onCloseDestination={() => go({ section: activeSection, class: classId })}
       onSelectMenuItem={(item) => {
         // Every menu item does something real (MVP bar: no dead nav). Profile's stats live
         // in Reports; Customize opens the mentor controls; sign-out clears the session.
-        if (item === "profile") go({ section: activeSection, to: "reports" });
-        else if (item === "customize") go({ section: activeSection, to: "customize" });
+        if (item === "profile") go({ section: activeSection, to: "reports", class: classId });
+        else if (item === "customize")
+          go({ section: activeSection, to: "customize", class: classId });
         else if (item === "sign-out") {
           void signOut()
             .catch(() => {

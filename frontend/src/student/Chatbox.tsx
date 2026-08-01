@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import {
   AudioLines,
+  BookOpen,
+  ChevronLeft,
   Code2,
+  FolderOpen,
   Loader2,
   Mic,
   Paperclip,
@@ -11,8 +14,20 @@ import {
   Type,
   X,
 } from "lucide-react";
-import { CHAT_UPLOAD_ACCEPT, MAX_CHAT_UPLOAD_FILES, uploadStudentUpload } from "@/lib/api";
-import type { ChatAttachment, VoiceInteractionEvent } from "@/lib/types";
+import {
+  CHAT_UPLOAD_ACCEPT,
+  MAX_CHAT_UPLOAD_FILES,
+  fetchLessonResources,
+  listStudentUploads,
+  studentUploadState,
+  uploadStudentUpload,
+} from "@/lib/api";
+import type {
+  ChatAttachment,
+  LessonChatResource,
+  StudentUpload,
+  VoiceInteractionEvent,
+} from "@/lib/types";
 import { CodeArea } from "@/components/CodeArea";
 import { Popover } from "@/components/Popover";
 import type { ComposerLanguage } from "@/components/Composer";
@@ -42,6 +57,12 @@ import type { LessonOffers, TurnMode } from "@/student/turnModes";
 type InputSurface = "text" | "code";
 
 const LANGUAGES: ComposerLanguage[] = ["jargon", "javascript", "python"];
+
+// The plus popover's views: the menu, and the two pickers behind it.
+type PlusView = "menu" | "uploads" | "resources";
+
+const PLUS_ROW =
+  "flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted";
 
 // --- Browser speech recognition (ported from components/Composer, the pre-v6 dictation) -------
 
@@ -118,6 +139,11 @@ export type ChatboxProps = {
   onVoiceEvent?: (event: VoiceInteractionEvent) => void;
   disabled?: boolean;
   placeholder?: string;
+  // Context for the plus menu's "Reference a resource" picker: without a lesson there is
+  // nothing to reference, so the row hides. sessionResources = what the mentor has already
+  // attached this session (merged with the lesson's published catalog, session copies win).
+  lessonId?: string | null;
+  sessionResources?: LessonChatResource[];
 };
 
 export function Chatbox({
@@ -132,6 +158,8 @@ export function Chatbox({
   onVoiceEvent,
   disabled,
   placeholder,
+  lessonId,
+  sessionResources,
 }: ChatboxProps) {
   const [text, setText] = useState("");
   const [surface, setSurface] = useState<InputSurface>("text");
@@ -159,7 +187,72 @@ export function Chatbox({
   // in the send circle.
   const draftEmpty = text.trim().length === 0 && attachments.length === 0 && !uploading;
   const [plusOpen, setPlusOpen] = useState(false);
+  const [plusView, setPlusView] = useState<PlusView>("menu");
+  // Picker data, fetched lazily when its view opens; null = loading.
+  const [uploads, setUploads] = useState<StudentUpload[] | null>(null);
+  const [refResources, setRefResources] = useState<LessonChatResource[] | null>(null);
   const canRun = code.trim().length > 0 && !disabled;
+
+  const closePlus = () => {
+    setPlusOpen(false);
+    setPlusView("menu");
+  };
+
+  const openUploadsPicker = () => {
+    setPlusView("uploads");
+    setUploads(null);
+    void listStudentUploads()
+      .then((rows) => setUploads(rows.filter((row) => studentUploadState(row) === "available")))
+      .catch(() => setUploads([]));
+  };
+
+  const openResourcePicker = () => {
+    setPlusView("resources");
+    setRefResources(null);
+    const session = sessionResources ?? [];
+    void fetchLessonResources(lessonId ?? "")
+      .catch(() => [] as LessonChatResource[])
+      .then((catalog) => {
+        // Session copies win by id — the same merge the Resources panel uses.
+        const known = new Set(session.map((r) => r.id));
+        setRefResources([...session, ...catalog.filter((r) => !known.has(r.id))]);
+      });
+  };
+
+  const pickExistingUpload = (upload: StudentUpload) => {
+    if (attachments.length + uploading >= MAX_CHAT_UPLOAD_FILES) {
+      setUploadError(`You can attach up to ${MAX_CHAT_UPLOAD_FILES} files.`);
+      closePlus();
+      return;
+    }
+    setAttachments((current) =>
+      current.some((a) => a.upload_id === upload.id)
+        ? current
+        : [
+            ...current,
+            {
+              upload_id: upload.id,
+              storage_path: upload.storage_path,
+              mime_type: upload.mime_type || "application/octet-stream",
+              filename: upload.original_filename,
+            },
+          ],
+    );
+    closePlus();
+  };
+
+  // Referencing is TEXT, visible and editable — the mentor's context carries the lesson's
+  // resource titles, so naming one is how the student points at it (and phrasing it as a
+  // request also attaches the card server-side). No hidden payload rides the turn.
+  const referenceResource = (resource: LessonChatResource) => {
+    setText((current) => {
+      const reference = `About "${resource.title}": `;
+      if (!current.trim()) return reference;
+      return current.endsWith(" ") ? `${current}${reference}` : `${current} ${reference}`;
+    });
+    closePlus();
+    areaRef.current?.focus();
+  };
 
   // A hot mic must not outlive the chatbox (or a disable — the hold lock disables the composer,
   // and dictation must stop with it).
@@ -396,19 +489,19 @@ export function Chatbox({
           onChange={(e) => void pickFiles(e)}
           className="hidden"
         />
-        {/* The PLUS: one circle that opens the compose menu — attach files, switch surface.
-            (PDFs are absent from CHAT_UPLOAD_ACCEPT on purpose: the edge function only
-            inlines text and images.) */}
+        {/* The PLUS: one circle that opens the compose menu — upload, pick from your
+            uploads, reference a resource, switch surface. (PDFs are absent from
+            CHAT_UPLOAD_ACCEPT on purpose: the edge function only inlines text and images.) */}
         <Popover
           open={plusOpen}
-          onClose={() => setPlusOpen(false)}
+          onClose={closePlus}
           placement="top-start"
-          panelClassName="w-[190px] rounded-card border border-border bg-background p-1.5"
+          panelClassName="w-[240px] rounded-card border border-border bg-background p-1.5"
           trigger={
             <button
               type="button"
               disabled={disabled}
-              onClick={() => setPlusOpen((v) => !v)}
+              onClick={() => (plusOpen ? closePlus() : setPlusOpen(true))}
               aria-expanded={plusOpen}
               aria-label="Add to your message"
               className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground disabled:opacity-40"
@@ -418,34 +511,116 @@ export function Chatbox({
             </button>
           }
         >
-          <button
-            type="button"
-            onClick={() => {
-              setPlusOpen(false);
-              fileRef.current?.click();
-            }}
-            className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-          >
-            <Paperclip className="h-[15px] w-[15px]" strokeWidth={1.5} />
-            Attach files
-          </button>
-          {onSendCode ? (
-            <button
-              type="button"
-              onClick={() => {
-                setPlusOpen(false);
-                setSurface((s) => (s === "text" ? "code" : "text"));
-              }}
-              className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-            >
-              {surface === "code" ? (
-                <Type className="h-[15px] w-[15px]" strokeWidth={1.5} />
-              ) : (
-                <Code2 className="h-[15px] w-[15px]" strokeWidth={1.5} />
-              )}
-              {surface === "code" ? "Write text" : "Write code"}
-            </button>
-          ) : null}
+          {plusView === "menu" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  closePlus();
+                  fileRef.current?.click();
+                }}
+                className={PLUS_ROW}
+              >
+                <Paperclip className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                Upload files
+              </button>
+              <button type="button" onClick={() => openUploadsPicker()} className={PLUS_ROW}>
+                <FolderOpen className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                Your uploads
+              </button>
+              {lessonId ? (
+                <button type="button" onClick={() => openResourcePicker()} className={PLUS_ROW}>
+                  <BookOpen className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                  Reference a resource
+                </button>
+              ) : null}
+              {onSendCode ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closePlus();
+                    setSurface((s) => (s === "text" ? "code" : "text"));
+                  }}
+                  className={PLUS_ROW}
+                >
+                  {surface === "code" ? (
+                    <Type className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                  ) : (
+                    <Code2 className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                  )}
+                  {surface === "code" ? "Write text" : "Write code"}
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={() => setPlusView("menu")} className={PLUS_ROW}>
+                <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={1.7} />
+                {plusView === "uploads" ? "Your uploads" : "Reference a resource"}
+              </button>
+              <div className="max-h-56 overflow-y-auto overscroll-contain">
+                {plusView === "uploads" ? (
+                  uploads === null ? (
+                    <p className="flex items-center gap-2 px-2.5 py-2 text-meta text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+                    </p>
+                  ) : uploads.length ? (
+                    uploads.map((upload) => {
+                      const attached = attachments.some((a) => a.upload_id === upload.id);
+                      return (
+                        <button
+                          key={upload.id}
+                          type="button"
+                          disabled={attached}
+                          onClick={() => pickExistingUpload(upload)}
+                          className={`${PLUS_ROW} disabled:opacity-40`}
+                        >
+                          <Paperclip className="h-[13px] w-[13px] shrink-0" strokeWidth={1.5} />
+                          <span className="min-w-0 flex-1 truncate">
+                            {upload.original_filename}
+                          </span>
+                          {attached ? (
+                            <span className="shrink-0 text-overline text-muted-foreground">
+                              added
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="px-2.5 py-2 text-meta text-muted-foreground">
+                      Nothing uploaded yet.
+                    </p>
+                  )
+                ) : refResources === null ? (
+                  <p className="flex items-center gap-2 px-2.5 py-2 text-meta text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+                  </p>
+                ) : refResources.length ? (
+                  refResources.map((resource) => (
+                    <button
+                      key={resource.id}
+                      type="button"
+                      onClick={() => referenceResource(resource)}
+                      className={PLUS_ROW}
+                    >
+                      <BookOpen className="h-[13px] w-[13px] shrink-0" strokeWidth={1.5} />
+                      <span className="min-w-0 flex-1 truncate">{resource.title}</span>
+                      <span className="shrink-0 text-overline uppercase text-muted-foreground">
+                        {resource.resource_type === "artifact"
+                          ? "activity"
+                          : resource.resource_type}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-2.5 py-2 text-meta text-muted-foreground">
+                    No materials in this lesson yet.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </Popover>
 
         <ModeSelector value={mode} onChange={onModeChange} disabled={disabled} />

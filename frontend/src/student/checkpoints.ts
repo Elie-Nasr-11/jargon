@@ -52,3 +52,18 @@ export function checkpointWorkDue(bundle: StudentAssessmentBundle): number {
   return checkpointRows(bundle).filter((r) => r.state === "todo" || r.state === "in_progress")
     .length;
 }
+
+// The unified rows resolved back to their class through the assessment's class_id. Feeds the
+// sidebar class list's due tags and each class summary's work section.
+export function checkpointRowsByClass(
+  bundle: StudentAssessmentBundle,
+): Map<string, CheckpointRowModel[]> {
+  const map = new Map<string, CheckpointRowModel[]>();
+  const classByAssessment = new Map(bundle.assessments.map((a) => [a.id, a.class_id]));
+  for (const row of checkpointRows(bundle)) {
+    const classId = classByAssessment.get(row.id);
+    if (!classId) continue;
+    map.set(classId, [...(map.get(classId) ?? []), row]);
+  }
+  return map;
+}

@@ -3,7 +3,9 @@ import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { MentorControls } from "@/features/student/MentorControls";
 import {
+  fetchClassScopedLessons,
   fetchStudentAssessments,
+  fetchStudentClasses,
   fetchStudentLessonProgress,
   fetchStudentSettings,
   upsertStudentSettings,
@@ -15,7 +17,7 @@ import {
   type MentorConfig,
   type VoiceSettings,
 } from "@/lib/jargon-store";
-import type { StudentAssessmentBundle } from "@/lib/types";
+import type { Lesson, StudentAssessmentBundle, StudentClass } from "@/lib/types";
 import { AssessmentSurface } from "@/student/AssessmentSurface";
 import { ChatWindow } from "@/student/ChatWindow";
 import {
@@ -25,7 +27,9 @@ import {
   useMediaStageController,
 } from "@/student/MediaStage";
 import { CheckpointsPanel } from "@/student/CheckpointsPanel";
-import { ClassesPanel } from "@/student/ClassesPanel";
+import { ClassList, ClassSwitcher } from "@/student/ClassList";
+import { ClassSummary } from "@/student/ClassSummary";
+import { checkpointRowsByClass } from "@/student/checkpoints";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
 import { StudentSidebar } from "@/student/StudentSidebar";
@@ -57,6 +61,10 @@ export type StudentAppProps = {
   email: string;
   section: StudentSection;
   destination?: StudentDestination;
+  // The selected class (URL ?class=). Absent on Home = the Overview; Learn falls back to
+  // the first class for tree scoping.
+  classId?: string;
+  onSelectClass: (classId: string | null) => void;
   onSelectSection: (section: StudentSection) => void;
   onSelectDestination: (destination: StudentDestination) => void;
   onCloseDestination: () => void;
@@ -78,6 +86,8 @@ export function StudentApp({
   email,
   section,
   destination,
+  classId,
+  onSelectClass,
   onSelectSection,
   onSelectDestination,
   onCloseDestination,
@@ -181,6 +191,46 @@ export function StudentApp({
   // component comment.
   const [openAssessmentId, setOpenAssessmentId] = useState<string | null>(null);
 
+  // ---- Class context ----------------------------------------------------------------------
+  // The student's classes (sidebar list, switcher) and the selected class's scoped lessons
+  // (the Learn tree + the class summary). URL ?class= is authoritative; Learn falls back to
+  // the first class so the tree is never the whole catalog.
+  const [classes, setClasses] = useState<StudentClass[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchStudentClasses()
+      .then((rows) => !cancelled && setClasses(rows))
+      .catch(() => !cancelled && setClasses([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const scopeClassId = classId ?? classes?.[0]?.id ?? null;
+  const summaryClass = classId && classes ? (classes.find((k) => k.id === classId) ?? null) : null;
+
+  const [classLessons, setClassLessons] = useState<Lesson[] | null>(null);
+  useEffect(() => {
+    if (!scopeClassId) {
+      setClassLessons(null);
+      return;
+    }
+    let cancelled = false;
+    setClassLessons(null);
+    void fetchClassScopedLessons(scopeClassId)
+      .then((rows) => !cancelled && setClassLessons(rows))
+      .catch(() => !cancelled && setClassLessons(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeClassId]);
+
+  // Per-class work rows: due tags in the sidebar list + each summary's work section.
+  const rowsByClass = assessments ? checkpointRowsByClass(assessments) : new Map<string, never[]>();
+  const dueByClass = new Map<string, number>();
+  for (const [id, rows] of rowsByClass) {
+    dueByClass.set(id, rows.filter((r) => r.state === "todo" || r.state === "in_progress").length);
+  }
+
   const destinationSpec = destination ? DESTINATIONS.find((d) => d.id === destination) : undefined;
 
   // The media stage: shell-owned because it drives the Learn layout (half = media over chat,
@@ -216,13 +266,37 @@ export function StudentApp({
       }}
       onSelectMenuItem={onSelectMenuItem}
     >
-      <LessonTree
-        lessons={conversation.lessons}
-        currentLessonId={conversation.lesson?.id ?? null}
-        progress={progress}
-        onOpenLesson={openLesson}
-        disabled={conversation.sending || conversation.booting}
-      />
+      {section === "home" ? (
+        // Home: the sidebar is the class list — Overview + one row per class.
+        <ClassList
+          classes={classes ?? []}
+          selectedClassId={classId ?? null}
+          dueByClass={dueByClass}
+          onSelectClass={(next) => {
+            closeDrawer();
+            onSelectClass(next);
+          }}
+        />
+      ) : (
+        // Learn: only the SELECTED class's units, with a switcher above the tree.
+        <>
+          <ClassSwitcher
+            classes={classes ?? []}
+            selectedClassId={scopeClassId}
+            onSelectClass={(next) => {
+              closeDrawer();
+              onSelectClass(next);
+            }}
+          />
+          <LessonTree
+            lessons={classLessons ?? conversation.lessons}
+            currentLessonId={conversation.lesson?.id ?? null}
+            progress={progress}
+            onOpenLesson={openLesson}
+            disabled={conversation.sending || conversation.booting}
+          />
+        </>
+      )}
     </StudentSidebar>
   );
 
@@ -238,6 +312,7 @@ export function StudentApp({
       sending={conversation.sending || conversation.booting}
       onSend={(text, attachments) => conversation.sendText(text, turnMode, attachments)}
       onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
+      sessionResources={conversation.resources}
     >
       {conversation.booting ? (
         <p className="mx-auto w-full max-w-3xl px-4 text-body text-muted-foreground">
@@ -322,15 +397,7 @@ export function StudentApp({
                 </button>
               </header>
               <div className="min-h-0 flex-1 overflow-y-auto">
-                {destination === "classes" ? (
-                  <ClassesPanel
-                    currentLessonId={conversation.lesson?.id ?? null}
-                    onOpenLesson={openLesson}
-                    assessments={assessments}
-                    onOpenAssessment={(id) => setOpenAssessmentId(id)}
-                    progress={progress}
-                  />
-                ) : destination === "resources" ? (
+                {destination === "resources" ? (
                   // The Resources PILL in the chatbox links here too — the current lesson's
                   // published materials plus anything the mentor attached this session.
                   <ResourcesPanel
@@ -362,14 +429,25 @@ export function StudentApp({
               </div>
             </section>
           ) : section === "home" ? (
-            <StudentHome
-              lessons={conversation.lessons}
-              currentLessonId={conversation.lesson?.id ?? null}
-              onOpenLesson={openLesson}
-              assessments={assessments}
-              onOpenAssessment={(id) => setOpenAssessmentId(id)}
-              progress={progress}
-            />
+            summaryClass ? (
+              // A class is selected in the sidebar: its summary page owns the main area.
+              <ClassSummary
+                klass={summaryClass}
+                lessons={classLessons}
+                progress={progress}
+                currentLessonId={conversation.lesson?.id ?? null}
+                assignmentRows={rowsByClass.get(summaryClass.id) ?? []}
+                onOpenLesson={openLesson}
+                onOpenAssessment={(id) => setOpenAssessmentId(id)}
+              />
+            ) : (
+              <StudentHome
+                lessons={conversation.lessons}
+                onOpenLesson={openLesson}
+                assessments={assessments}
+                onOpenAssessment={(id) => setOpenAssessmentId(id)}
+              />
+            )
           ) : (
             // Learn: the conversation, optionally sharing the area with the media stage.
             //   no stage   → the conversation owns the whole area.

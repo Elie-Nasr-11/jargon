@@ -11,7 +11,9 @@
 
 export type StudentSection = "home" | "learn";
 
-export type StudentDestination = "classes" | "resources" | "checkpoints" | "customize" | "reports";
+// "classes" retired 2026-07-31: classes live in the Home sidebar now, each with its own
+// summary page (?section=home&class=<id>) — no destination panel needed.
+export type StudentDestination = "resources" | "checkpoints" | "customize" | "reports";
 
 // Trimmed 2026-07-30 to what actually renders (MVP bar: no dead nav): notifications,
 // what's-new, help, and contact had no student-facing surface behind them. Profile opens
@@ -34,7 +36,6 @@ export type DestinationSpec = {
 // from the account menu, Classes inline on Home. The specs stay here because the panel
 // header and the ?to= URL contract still need them.
 export const DESTINATIONS: readonly DestinationSpec[] = [
-  { id: "classes", label: "Classes", hint: "Your units and lessons" },
   { id: "resources", label: "Resources", hint: "Everything your teachers have shared" },
   { id: "checkpoints", label: "Checkpoints", hint: "Quizzes and tests your teacher assigned" },
   { id: "customize", label: "Customize", hint: "How your mentor talks and teaches" },

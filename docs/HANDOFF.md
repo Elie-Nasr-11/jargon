@@ -7916,3 +7916,40 @@ a primary-row action, so nothing is unreachable. (4) Teacher hotlist hover-revea
 still to do.
 Suggested next task: live pass as demo-student — fresh lesson welcome, suggestion tap, media
 inline->half->full ladder, class cards, composer voice/send swap in both themes.
+
+## Claude -> Codex / Human - 2026-07-31 23:05
+
+Status: Finished
+Summary: Round 4 — class-centric navigation. (1) PLUS MENU attachment modes: the composer's
+plus popover now has views — Upload files (device), YOUR UPLOADS (listStudentUploads picker,
+available-only, builds ChatAttachments the server re-validates by upload_id), REFERENCE A
+RESOURCE (merges session resources + fetchLessonResources; picking inserts `About "title": `
+into the draft — visible/editable text; the mentor's context carries resource titles, and a
+request phrasing also attaches the card server-side), Write code/text. lessonId +
+sessionResources threaded Chatbox <- ChatWindow <- shell. (2) CLASS-SCOPED NAV: URL gains
+?class=; learn.tsx carries it through every navigation; shell owns classes
+(fetchStudentClasses), scopeClassId (param ?? first class), classLessons
+(fetchClassScopedLessons). The LEARN sidebar shows ONLY the selected class's units
+(LessonTree over classLessons) under a ClassSwitcher popover. The HOME sidebar is now a
+CLASS LIST (new student/ClassList.tsx): Overview row + per-class rows (monogram avatar, org,
+due tag from checkpointRowsByClass — lifted into student/checkpoints.ts — and aurora on the
+selected class). (3) HOME: the classes tier is gone from the overview;
+?section=home&class=X renders the new student/ClassSummary.tsx page — identity band with
+color-coded stat pills (n/m LESSONS green-when-complete, "n due" orange tag, AVG mono),
+Recent (resume row + latest 3 grades), Quizzes & assignments (due-first WorkRows, orange =
+actionable), Units & lessons (per-unit cards with mono fractions + segmented per-lesson
+progress bars: blue current / green done / ink ramp, rows with ProgressGlyph + hover
+Start/Continue/Revisit), Resources (fetchClassResources -> ResourceCards). ClassesPanel
+DELETED; the "classes" destination removed from navigation.ts (old ?to=classes URLs degrade
+to the section underneath).
+Files changed: student/{Chatbox,ChatWindow,StudentApp,StudentHome,navigation,checkpoints}.ts(x),
+student/{ClassList,ClassSummary}.tsx (new), student/ClassesPanel.tsx (deleted),
+routes/learn.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK.
+Remaining concerns: (1) fetchClassScopedLessons falls back to the FULL catalog for an
+unlinked class — such a class's tree/summary would show everything (correct per that
+helper's contract, worth knowing). (2) The Learn tree falls back to the whole catalog only
+while classes/classLessons load. (3) fetchStudentGrades is fetched per summary visit
+(cheap; could lift to the shell if it ever grows).
+Suggested next task: live pass — sidebar class list + summary page in both themes; plus-menu
+uploads picker after attaching a file once; reference insertion reaching the mentor.
