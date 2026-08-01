@@ -35,6 +35,7 @@ import { ReportsPanel } from "@/student/ReportsPanel";
 import { StudentSidebar } from "@/student/StudentSidebar";
 import { LessonTree } from "@/student/LessonTree";
 import { LessonWelcome } from "@/student/LessonWelcome";
+import { SuggestionRows } from "@/student/suggestions";
 import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import { useConversation } from "@/student/useConversation";
@@ -300,6 +301,14 @@ export function StudentApp({
     </StudentSidebar>
   );
 
+  // A never-opened lesson (blank, no mentor pretext): the welcome shows materials in the
+  // transcript area while the three suggested first moves hug the composer below.
+  const freshLesson =
+    !conversation.booting &&
+    !conversation.error &&
+    !conversation.messages.length &&
+    conversation.lesson;
+
   // The conversation surface, one instance reused by every Learn layout (plain, bottom-half
   // under the stage, or docked while media is full screen).
   const chatSurface = (
@@ -313,6 +322,20 @@ export function StudentApp({
       onSend={(text, attachments) => conversation.sendText(text, turnMode, attachments)}
       onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
       sessionResources={conversation.resources}
+      composerLead={
+        freshLesson ? (
+          // The tapped suggestion becomes the first turn (and sets its TurnMode).
+          <SuggestionRows
+            lesson={freshLesson}
+            activities={conversation.activities}
+            disabled={conversation.sending}
+            onSuggest={(prompt, mode) => {
+              setTurnMode(mode);
+              conversation.sendText(prompt, mode);
+            }}
+          />
+        ) : undefined
+      }
     >
       {conversation.booting ? (
         <p className="mx-auto w-full max-w-3xl px-4 text-body text-muted-foreground">
@@ -321,17 +344,7 @@ export function StudentApp({
       ) : conversation.error && !conversation.messages.length ? (
         <p className="mx-auto w-full max-w-3xl px-4 text-body text-danger">{conversation.error}</p>
       ) : !conversation.messages.length && conversation.lesson ? (
-        // A never-opened lesson: blank, no mentor pretext — materials + three ways in.
-        // The tapped suggestion becomes the first turn (and sets its TurnMode).
-        <LessonWelcome
-          lesson={conversation.lesson}
-          activities={conversation.activities}
-          disabled={conversation.sending}
-          onSuggest={(prompt, mode) => {
-            setTurnMode(mode);
-            conversation.sendText(prompt, mode);
-          }}
-        />
+        <LessonWelcome lesson={conversation.lesson} />
       ) : (
         <Transcript
           messages={conversation.messages}
@@ -446,6 +459,7 @@ export function StudentApp({
                 onOpenLesson={openLesson}
                 assessments={assessments}
                 onOpenAssessment={(id) => setOpenAssessmentId(id)}
+                classCount={classes ? classes.length : null}
               />
             )
           ) : (

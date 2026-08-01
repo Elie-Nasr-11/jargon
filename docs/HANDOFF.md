@@ -7988,3 +7988,42 @@ have no turns — they land on the blank LessonWelcome, which is correct.
 Suggested next task: live pass as demo-student — sidebar shows 4 classes with due tags; each
 summary page: stat pills, mixed segmented unit bars, due-first work rows incl. the Submitted
 state, resources render (pdf/audio/image reuse real storage files).
+
+## Claude -> Codex / Human - 2026-08-01 (round 6)
+
+Status: Finished
+Summary: Round 6 — three student-surface refinements. (1) OVERVIEW PARITY: extracted the
+summary-page vocabulary into student/summaryBits.tsx (SectionLabel mono-overline, WorkRow
+4-state row, StatPill outline/filled) — ClassSummary now imports them instead of local copies.
+StudentHome adopted the language: identity band keeps the serif greeting but gains the
+right-aligned stat cluster (N CLASSES mono pill via new classCount prop from the shell,
+"n due" filled open-orange tag, AVG mono pill over released grades); all cards gain
+shadow-card + semibold headers; Work due renders shared WorkRows (so Submitted + scored
+states now show on Home); grade rows get the mono tabular score + tighter rhythm; the resume
+button switched from group/group-hover to the standard .hvp/.hvr pair. Local DueRow deleted.
+(2) SUGGESTED PROMPTS moved to the composer: buildSuggestions + a new SuggestionRows
+component live in student/suggestions.tsx; ChatWindow gained a composerLead?: ReactNode slot
+rendered inside the existing max-w-3xl footer wrapper directly above the Chatbox (safe re:
+the test pin forbidding max-w-3xl inside the scroll div); StudentApp passes SuggestionRows
+when the lesson is fresh (no turns, no error, not booting) with the same set-mode-then-send
+tap behavior. The rows are deliberately quieter than resources: borderless, no fill, mono
+label + truncated prompt in muted ink, hvr arrow. LessonWelcome is now just the centered
+title card + up to 3 resource cards (props reduced to { lesson }).
+(3) CHATBOX AUTO-GROW: useLayoutEffect on areaRef — height tracks the draft up to 5 lines
+(cap derived from live line-height + padding), then overflowY switches to auto; snaps back
+when the draft empties. Cap applies to both input surfaces. Adapted from the teacher
+Composer's 3-line version (components/Composer.tsx).
+Files changed: student/{summaryBits,suggestions}.tsx (new), student/{StudentHome,
+ClassSummary,LessonWelcome,ChatWindow,StudentApp,Chatbox}.tsx.
+Tests run: tsc 0 errors, eslint 0 errors (2 prettier errors auto-fixed), build green,
+python suite 364 OK (skipped=4) — the ChatWindow overflow-y-auto/max-w-3xl slice pin stays
+green because composerLead renders inside the footer wrapper, after the scroll div closes.
+Remaining concerns: (1) The suggestion rows sit right above the ModeSelector — two
+mode-setting affordances adjacent; the rows disappear after the first turn so the overlap is
+brief. (2) StudentHome's AVG pill averages across ALL classes (released grades, unfiltered) —
+intentional for an overview, but worth a second look if per-class weighting ever matters.
+(3) The auto-grow effect runs on every keystroke (getComputedStyle each time, like the
+teacher composer) — fine in practice, memoizable if it ever shows in profiles.
+Suggested next task: live pass as demo-student — Overview stat pills + Submitted row render;
+fresh-lesson ghost rows above the composer in both themes; type 6+ lines to watch the grow/
+scroll handoff and the snap-back on send.

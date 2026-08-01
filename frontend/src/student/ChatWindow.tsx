@@ -30,6 +30,9 @@ export type ChatWindowProps = {
   sending?: boolean;
   // What the mentor has attached this session — feeds the composer's resource-reference picker.
   sessionResources?: LessonChatResource[];
+  // Rendered on the composer's centered axis, directly above the chatbox — the suggested
+  // first moves for a fresh lesson live here so they hug the input, not the transcript.
+  composerLead?: ReactNode;
   // The transcript. Supplied by the route so this component stays presentational.
   children?: ReactNode;
 };
@@ -43,6 +46,7 @@ export function ChatWindow({
   onSendCode,
   sending,
   sessionResources,
+  composerLead,
   children,
 }: ChatWindowProps) {
   const channel = useConversationChannel();
@@ -114,6 +118,7 @@ export function ChatWindow({
         </div>
 
         <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3">
+          {composerLead}
           <Chatbox
             mode={mode}
             onModeChange={onModeChange}

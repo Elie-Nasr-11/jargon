@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import {
   AudioLines,
   BookOpen,
@@ -192,6 +199,22 @@ export function Chatbox({
   const [uploads, setUploads] = useState<StudentUpload[] | null>(null);
   const [refResources, setRefResources] = useState<LessonChatResource[] | null>(null);
   const canRun = code.trim().length > 0 && !disabled;
+
+  // The input grows with the draft until 5 lines are visible, then scrolls inside the box.
+  // Runs on every text change — typed, dictated, or cleared on send — so the height always
+  // tracks the current value and snaps back when the box empties. The cap is derived from the
+  // LIVE line-height + padding so it stays correct if the type scale changes.
+  useLayoutEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const cs = getComputedStyle(el);
+    const lineHeight = parseFloat(cs.lineHeight) || 23;
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const max = Math.ceil(lineHeight * 5 + pad);
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }, [text, surface]);
 
   const closePlus = () => {
     setPlusOpen(false);

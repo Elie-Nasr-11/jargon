@@ -1,60 +1,19 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight } from "lucide-react";
 import { fetchLessonResources } from "@/lib/api";
 import { ResourceCard } from "@/student/ResourceCard";
-import type { Lesson, LessonActivity, LessonChatResource } from "@/lib/types";
-import type { TurnMode } from "@/student/turnModes";
+import type { Lesson, LessonChatResource } from "@/lib/types";
 
 // The blank lesson-open surface (no mentor pretext): a fresh lesson shows nothing but the
-// lesson's identity, its published materials, and three suggested prompts — the
-// ChatGPT/Claude new-chat pattern. The student's first act (a suggestion tap or a typed
-// message) is what starts the conversation; the mentor never speaks first.
-//
-// Suggestions derive client-side from the lesson + its authored steps (fetchLessonActivities
-// already rides the open round-trip) — no server call, no new contract.
+// lesson's identity and its published materials. The suggested first moves live with the
+// composer (SuggestionRows in suggestions.tsx) — this surface stays a quiet title card.
+// The student's first act (a suggestion tap or a typed message) starts the conversation;
+// the mentor never speaks first.
 
 export type LessonWelcomeProps = {
   lesson: Lesson;
-  activities: LessonActivity[];
-  disabled?: boolean;
-  onSuggest: (prompt: string, mode: TurnMode) => void;
 };
 
-type Suggestion = { prompt: string; mode: TurnMode; label: string };
-
-function buildSuggestions(lesson: Lesson, activities: LessonActivity[]): Suggestion[] {
-  const firstStep = activities[0]?.title?.trim();
-  const hasQuiz = activities.some(
-    (a) => a.activity_type === "multiple_choice" || a.mode === "assessment",
-  );
-  return [
-    {
-      mode: "lesson",
-      label: "Start the lesson",
-      prompt: firstStep
-        ? `Let's start the lesson — walk me through "${firstStep}".`
-        : `Let's start the lesson from the beginning.`,
-    },
-    {
-      mode: "discuss",
-      label: "Big picture first",
-      prompt: `Before we start, give me the big picture — what will I learn in "${lesson.title}"?`,
-    },
-    hasQuiz
-      ? {
-          mode: "quiz",
-          label: "Warm-up question",
-          prompt: `Give me a quick warm-up question on "${lesson.title}" to see what I already know.`,
-        }
-      : {
-          mode: "practice",
-          label: "Let me try first",
-          prompt: `Let me try the first step of "${lesson.title}" myself — give me something to attempt.`,
-        },
-  ];
-}
-
-export function LessonWelcome({ lesson, activities, disabled, onSuggest }: LessonWelcomeProps) {
+export function LessonWelcome({ lesson }: LessonWelcomeProps) {
   const [resources, setResources] = useState<LessonChatResource[]>([]);
 
   useEffect(() => {
@@ -69,8 +28,6 @@ export function LessonWelcome({ lesson, activities, disabled, onSuggest }: Lesso
       cancelled = true;
     };
   }, [lesson.id]);
-
-  const suggestions = buildSuggestions(lesson, activities);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col justify-center gap-6 px-4 py-10">
@@ -95,31 +52,6 @@ export function LessonWelcome({ lesson, activities, disabled, onSuggest }: Lesso
           ))}
         </div>
       ) : null}
-
-      {/* Three ways in. Ghost rows; hover = one surface step; the tap IS the first turn. */}
-      <div className="flex flex-col gap-2">
-        {suggestions.map((suggestion) => (
-          <button
-            key={suggestion.label}
-            type="button"
-            disabled={disabled}
-            onClick={() => onSuggest(suggestion.prompt, suggestion.mode)}
-            className="hvp flex items-center gap-3 rounded-control border border-border bg-depth-card px-4 py-3 text-left transition-colors duration-(--dur-fast) hover:bg-muted disabled:opacity-40"
-            style={{ boxShadow: "var(--inset-highlight)" }}
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block text-meta font-semibold text-muted-foreground">
-                {suggestion.label}
-              </span>
-              <span className="block truncate text-body text-foreground">{suggestion.prompt}</span>
-            </span>
-            <ArrowUpRight
-              className="hvr h-4 w-4 shrink-0 text-muted-foreground"
-              strokeWidth={1.7}
-            />
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

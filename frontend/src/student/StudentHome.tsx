@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
-import { ArrowRight, Brain, ClipboardCheck, GraduationCap, Loader2, Play } from "lucide-react";
+import { ArrowRight, Brain, GraduationCap, Loader2, Play } from "lucide-react";
 import {
   fetchMostRecentLearningSession,
   fetchProfile,
@@ -9,9 +9,10 @@ import {
   fetchStudentMemory,
   getSession,
 } from "@/lib/api";
-import { formatDate, formatScore, relativeTime } from "@/lib/format";
+import { formatScore, relativeTime } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/motion";
-import { checkpointRows, type CheckpointRowModel } from "@/student/checkpoints";
+import { checkpointRows } from "@/student/checkpoints";
+import { SectionLabel, StatPill, WorkRow } from "@/student/summaryBits";
 import type {
   Lesson,
   SessionSummary,
@@ -37,6 +38,8 @@ export type StudentHomeProps = {
   // The shell's assessment bundle (null while loading) — feeds the due strip.
   assessments: StudentAssessmentBundle | null;
   onOpenAssessment: (assessmentId: string) => void;
+  // The shell's class list length (null while loading) — the identity band's CLASSES pill.
+  classCount: number | null;
 };
 
 function greetingForHour(hour: number): string {
@@ -44,14 +47,6 @@ function greetingForHour(hour: number): string {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <h2 className="mb-2 text-overline font-medium uppercase tracking-[0.12em] text-muted-foreground">
-      {children}
-    </h2>
-  );
 }
 
 function Chips({ label, values }: { label: string; values: string[] }) {
@@ -110,10 +105,10 @@ function MemoryCard() {
   return (
     <section
       ref={cardRef}
-      className="rounded-card border border-border bg-depth-card p-4"
+      className="rounded-card border border-border bg-depth-card p-4 shadow-card"
       aria-label="What your mentor remembers"
     >
-      <h3 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
+      <h3 className="mb-2 flex items-center gap-2 text-body font-semibold text-foreground">
         <Brain className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
         What your mentor remembers
       </h3>
@@ -138,34 +133,12 @@ function MemoryCard() {
   );
 }
 
-function DueRow({ row, onOpen }: { row: CheckpointRowModel; onOpen: () => void }) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="hvp flex w-full items-center gap-2.5 rounded-control px-2 py-1.5 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
-      >
-        <ClipboardCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.7} />
-        <span className="min-w-0 flex-1 truncate text-body text-foreground">{row.title}</span>
-        {row.dueAt ? (
-          <span className="hvr shrink-0 text-meta text-muted-foreground">
-            Due {formatDate(row.dueAt)}
-          </span>
-        ) : null}
-        <span className="shrink-0 text-meta font-medium text-foreground">
-          {row.state === "in_progress" ? "Continue" : "Start"}
-        </span>
-      </button>
-    </li>
-  );
-}
-
 export function StudentHome({
   lessons,
   onOpenLesson,
   assessments,
   onOpenAssessment,
+  classCount,
 }: StudentHomeProps) {
   const [name, setName] = useState("");
   const [resumeLessonId, setResumeLessonId] = useState<string | null>(null);
@@ -223,19 +196,39 @@ export function StudentHome({
     [grades],
   );
 
+  const released = useMemo(() => (grades ?? []).filter((row) => row.score !== null), [grades]);
+  const average = released.length
+    ? released.reduce((sum, row) => sum + (row.score ?? 0), 0) / released.length
+    : null;
+
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6">
       <div className="mx-auto w-full max-w-4xl">
-        <h1 className="mb-6 font-serif text-[26px] tracking-tight text-foreground">
-          {greetingForHour(new Date().getHours())}
-          {name ? `, ${name}` : ""}
-        </h1>
+        {/* ---- Identity band: the serif greeting stays personal; the stat cluster mirrors
+             the class pages (mono counters, orange only when something is actionable). ---- */}
+        <header className="mb-7 flex flex-wrap items-center gap-4">
+          <h1 className="min-w-0 flex-1 truncate font-serif text-[26px] tracking-tight text-foreground">
+            {greetingForHour(new Date().getHours())}
+            {name ? `, ${name}` : ""}
+          </h1>
+          <div className="flex shrink-0 items-center gap-2">
+            {classCount !== null ? (
+              <StatPill ariaLabel={`${classCount} classes`}>
+                {classCount} {classCount === 1 ? "CLASS" : "CLASSES"}
+              </StatPill>
+            ) : null}
+            {due.length ? <StatPill filled>{due.length} due</StatPill> : null}
+            {average !== null ? (
+              <StatPill ariaLabel="Average released grade">AVG {formatScore(average)}</StatPill>
+            ) : null}
+          </div>
+        </header>
 
         {/* ---- 1. Recent activity ------------------------------------------------------ */}
         <SectionLabel>Recent activity</SectionLabel>
         <div className="mb-7 grid gap-3 md:grid-cols-2">
-          <section className="rounded-card border border-border bg-depth-card p-4">
-            <h3 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
+          <section className="rounded-card border border-border bg-depth-card p-4 shadow-card">
+            <h3 className="mb-2 flex items-center gap-2 text-body font-semibold text-foreground">
               <Play className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
               Pick up where you left off
             </h3>
@@ -247,10 +240,10 @@ export function StudentHome({
               <button
                 type="button"
                 onClick={() => onOpenLesson(resumeLesson.id)}
-                className="group flex w-full items-center gap-2.5 rounded-control border border-border px-3 py-2.5 text-left transition-colors duration-(--dur-fast) hover:border-foreground/40 hover:bg-muted"
+                className="hvp flex w-full items-center gap-2.5 rounded-control border border-border px-3 py-2.5 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-body font-medium text-foreground">
+                  <span className="block truncate text-body font-semibold text-foreground">
                     {resumeLesson.title}
                   </span>
                   {resumeLesson.unit_title ? (
@@ -260,7 +253,7 @@ export function StudentHome({
                   ) : null}
                 </span>
                 <ArrowRight
-                  className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-(--dur-fast) group-hover:translate-x-0.5"
+                  className="hvr h-4 w-4 shrink-0 text-muted-foreground"
                   strokeWidth={1.7}
                 />
               </button>
@@ -301,8 +294,8 @@ export function StudentHome({
         {/* ---- 2. Assignments, quizzes & grades ---------------------------------------- */}
         <SectionLabel>Assignments, quizzes &amp; grades</SectionLabel>
         <div className="mb-7 grid gap-3 md:grid-cols-2">
-          <section className="rounded-card border border-border bg-depth-card p-4">
-            <h3 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
+          <section className="rounded-card border border-border bg-depth-card p-4 shadow-card">
+            <h3 className="mb-2 flex items-center gap-2 text-body font-semibold text-foreground">
               Work due
               {due.length ? (
                 <span className="text-meta tabular-nums text-muted-foreground">{due.length}</span>
@@ -315,7 +308,7 @@ export function StudentHome({
             ) : due.length ? (
               <ul className="flex flex-col">
                 {due.slice(0, 5).map((row) => (
-                  <DueRow key={row.id} row={row} onOpen={() => onOpenAssessment(row.id)} />
+                  <WorkRow key={row.id} row={row} onOpen={onOpenAssessment} />
                 ))}
               </ul>
             ) : (
@@ -323,8 +316,8 @@ export function StudentHome({
             )}
           </section>
 
-          <section className="rounded-card border border-border bg-depth-card p-4">
-            <h3 className="mb-2 flex items-center gap-2 text-body font-medium text-foreground">
+          <section className="rounded-card border border-border bg-depth-card p-4 shadow-card">
+            <h3 className="mb-2 flex items-center gap-2 text-body font-semibold text-foreground">
               <GraduationCap
                 className="h-[15px] w-[15px] text-muted-foreground"
                 strokeWidth={1.6}
@@ -340,7 +333,7 @@ export function StudentHome({
                 {recentGrades.map((row) => (
                   <li
                     key={row.id}
-                    className="hvp flex items-baseline gap-3 border-b border-border py-2 last:border-0"
+                    className="hvp flex items-baseline gap-3 border-b border-border py-1.5 last:border-0"
                   >
                     <span className="min-w-0 flex-1 truncate text-body text-foreground">
                       {row.title}
@@ -348,7 +341,7 @@ export function StudentHome({
                     <span className="hvr shrink-0 text-meta capitalize text-muted-foreground">
                       {row.kind}
                     </span>
-                    <span className="shrink-0 text-meta font-medium tabular-nums text-foreground">
+                    <span className="shrink-0 font-mono text-meta font-semibold tabular-nums text-foreground">
                       {formatScore(row.score)}
                     </span>
                   </li>

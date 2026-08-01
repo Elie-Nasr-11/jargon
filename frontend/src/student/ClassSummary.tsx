@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ClipboardCheck, Loader2, Play } from "lucide-react";
+import { ArrowRight, Loader2, Play } from "lucide-react";
 import { groupByUnit } from "@/features/student/lessonGroups";
 import { fetchClassResources, fetchStudentGrades } from "@/lib/api";
 import { formatDate, formatScore } from "@/lib/format";
 import { ClassAvatar } from "@/student/ClassList";
 import { ProgressGlyph } from "@/student/LessonTree";
 import { ResourceCard } from "@/student/ResourceCard";
+import { SectionLabel, StatPill, WorkRow } from "@/student/summaryBits";
 import type { CheckpointRowModel } from "@/student/checkpoints";
 import type { Lesson, LessonChatResource, StudentClass, StudentGradeRow } from "@/lib/types";
 
@@ -27,14 +28,6 @@ export type ClassSummaryProps = {
   onOpenLesson: (lessonId: string) => void;
   onOpenAssessment: (assessmentId: string) => void;
 };
-
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <h2 className="mb-2 font-mono text-overline uppercase tracking-[0.16em] text-muted-foreground">
-      {children}
-    </h2>
-  );
-}
 
 // One thin segment per lesson — the unit's shape at a glance.
 function UnitBar({
@@ -67,58 +60,6 @@ function UnitBar({
         );
       })}
     </div>
-  );
-}
-
-function WorkRow({
-  row,
-  onOpen,
-}: {
-  row: CheckpointRowModel;
-  onOpen: (assessmentId: string) => void;
-}) {
-  const actionable = row.state === "todo" || row.state === "in_progress";
-  const body = (
-    <>
-      <ClipboardCheck
-        className="h-3.5 w-3.5 shrink-0"
-        strokeWidth={1.7}
-        style={{ color: actionable ? "var(--mode-open)" : "var(--ink-30)" }}
-      />
-      <span className="min-w-0 flex-1 truncate text-body text-foreground">{row.title}</span>
-      {row.dueAt ? (
-        <span className="hvr shrink-0 text-meta text-muted-foreground">
-          Due {formatDate(row.dueAt)}
-        </span>
-      ) : null}
-      <span
-        className="shrink-0 text-meta font-semibold"
-        style={{ color: actionable ? "var(--mode-open)" : "var(--ink-45)" }}
-      >
-        {row.state === "todo"
-          ? "Start"
-          : row.state === "in_progress"
-            ? "Continue"
-            : row.state === "waiting_review"
-              ? "Submitted"
-              : formatScore(row.score)}
-      </span>
-    </>
-  );
-  return (
-    <li>
-      {actionable ? (
-        <button
-          type="button"
-          onClick={() => onOpen(row.id)}
-          className="hvp flex w-full items-center gap-2.5 rounded-control px-2 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
-        >
-          {body}
-        </button>
-      ) : (
-        <div className="hvp flex w-full items-center gap-2.5 px-2 py-2">{body}</div>
-      )}
-    </li>
   );
 }
 
@@ -191,37 +132,15 @@ export function ClassSummary({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span
-              className="rounded-pill border border-border px-3 py-1.5 font-mono text-meta tracking-[0.08em]"
-              style={{
-                color:
-                  lessons && done === lessons.length && done > 0
-                    ? "var(--success)"
-                    : "var(--ink-62)",
-              }}
-              aria-label={`${done} of ${lessons?.length ?? 0} lessons complete`}
+            <StatPill
+              color={lessons && done === lessons.length && done > 0 ? "var(--success)" : undefined}
+              ariaLabel={`${done} of ${lessons?.length ?? 0} lessons complete`}
             >
               {done}/{lessons?.length ?? "…"} LESSONS
-            </span>
-            {due.length ? (
-              <span
-                className="ds-tag px-3 py-1.5 text-meta"
-                style={{
-                  ["--tag-bg" as string]: "var(--mode-open)",
-                  ["--tag-ink" as string]: "var(--mode-open-ink)",
-                }}
-              >
-                {due.length} due
-              </span>
-            ) : null}
+            </StatPill>
+            {due.length ? <StatPill filled>{due.length} due</StatPill> : null}
             {average !== null ? (
-              <span
-                className="rounded-pill border border-border px-3 py-1.5 font-mono text-meta tracking-[0.08em]"
-                style={{ color: "var(--ink-62)" }}
-                aria-label="Average released grade"
-              >
-                AVG {formatScore(average)}
-              </span>
+              <StatPill ariaLabel="Average released grade">AVG {formatScore(average)}</StatPill>
             ) : null}
           </div>
         </header>
