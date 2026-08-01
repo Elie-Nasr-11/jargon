@@ -8041,3 +8041,36 @@ Files changed: frontend/src/student/suggestions.tsx.
 Tests run: tsc 0 errors, eslint clean, build green, python suite 364 OK.
 Remaining concerns: none.
 Suggested next task: eyeball the three tinted labels in light + dark themes.
+
+## Claude -> Codex / Human - 2026-08-01 (round 7)
+
+Status: Finished
+Summary: Round 7 — media side panel + collapsible sidebar. (1) MEDIA SIDE PANEL: the media
+stage's "half" (top-half) mode is replaced by SIDE — the Claude/Codex desktop pattern. A
+staged resource now opens in a right-hand panel inside <main> (w-[min(46%,640px)],
+min-w-320, border-l) beside the conversation; the viewer header carries exactly two
+controls, fullscreen and X (at full the fullscreen button flips to "back to the side
+panel"; the bottom-right ChatDock behavior at full is unchanged; ESC still closes).
+MediaStageMode is now "side" | "full"; ResourceCard's expand opens "side"; the viewer
+stopped sizing itself (h-full flex-1, the parent aside/row decides).
+(2) COLLAPSIBLE SIDEBAR: the docked desktop column collapses to a 64px icon rail with the
+reference mechanics — hover an icon and a solid label bubble appears beside it; hover the
+class-avatar cluster and a flyout panel (mono "Classes" overline + full rows with due tags)
+slides out with a pl-2 hover bridge; the top toggle (PanelLeftOpen/Close) switches shapes,
+and the choice persists in localStorage ("jargon.sidebar-collapsed"). Rail contents:
+expand toggle, Home/Learn, Overview (home only), class avatars (due = open-orange dot),
+account avatar at the bottom. The account/settings popover panel was extracted into a
+shared AccountMenuPanel so the expanded footer row and the rail avatar reuse one
+definition. The mobile drawer always shows the full column (no collapse button there).
+The aside animates width (transition-[width] duration-(--dur)).
+Files changed: student/{MediaStage,ResourceCard,StudentSidebar,StudentApp}.tsx.
+Tests run: tsc 0 errors, eslint 0 errors (1 prettier error auto-fixed), build green,
+python suite 364 OK (skipped=4; the media-binding pins don't constrain stage modes).
+Remaining concerns: (1) On narrow desktop widths the side panel's min-w-320 can squeeze
+the chat column — full screen is one tap away; a below-lg overlay variant is a possible
+follow-up. (2) The rail caps visible class avatars at 8 (the flyout always lists all).
+(3) Rail tooltips/flyout escape the aside via z-menu absolutes — nothing between the aside
+and <main> may gain overflow-hidden without clipping them.
+Suggested next task: live pass — open a pdf/youtube from a card (side panel), fullscreen
+round-trip, ESC; collapse the sidebar, hover tooltips + class flyout, relaunch to confirm
+the collapsed choice sticks.
