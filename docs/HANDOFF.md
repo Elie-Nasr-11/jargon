@@ -7953,3 +7953,38 @@ while classes/classLessons load. (3) fetchStudentGrades is fetched per summary v
 (cheap; could lift to the shell if it ever grows).
 Suggested next task: live pass — sidebar class list + summary page in both themes; plus-menu
 uploads picker after attaching a file once; reference insertion reaching the mentor.
+
+## Claude -> Codex / Human - 2026-08-01 (round 5)
+
+Status: Finished
+Summary: Round 5 — DATA ONLY (no app code). Seeded three more demo classes in Demo Org so the
+class list + summary pages read fully populated for demo-student: (1) COMPUTER SCIENCE 9 ->
+itf-f (ch1 complete, ch2 2 done + 1 in-progress, ch3 1 in-progress, ch4 untouched; due
+"Systems & Signals Check" +2d; released grades 91/84/76; 4 resources: youtube/pdf/link/audio).
+(2) MATHEMATICS 7 -> the pressure-test math course, now PUBLISHED (course + course_version +
+all 22 lessons) and detached to the global catalog (organization_id -> null — required: RLS
+only shows students global-published or own-org courses, and the course belonged to a foreign
+test org); 2 new published quiz_items (demo-math7-mult-q1/q2); Addition unit complete,
+Multiplication 2 done + 1 in-progress; due "Multiplication Check" +1d; grades 88 quiz /
+95 returned assignment / 1 SUBMITTED assignment awaiting review; 3 resources.
+(3) JARGON FOUNDATIONS -> jargon-foundations course REPUBLISHED (was archived; course +
+version + 10 lessons) with 2 formerly-archived lesson1 quiz_items republished; lesson1-3
+complete, lesson4 in-progress; due "Processes Checkpoint" +4d; grades 79/92; 3 resources.
+Mechanics: due work = assessments + assessment_items + assessment_recipients(assigned) AND a
+mirroring checkpoints row (round-1 dual pattern); grades = checkpoints + checkpoint_recipients
+(complete/returned with scores, one 'submitted' with no score). All 21 fake learning_sessions
+are timestamped 2-14 days old — older than the student's real 07-31 sessions, so the Home
+resume card still prefers real activity. All rows use fixed 5d10/5da5/5dc9/5dae/5e55 UUID
+prefixes; every block is idempotent (on conflict / where not exists).
+Files changed: docs/HANDOFF.md only (all other work is live Supabase data).
+Tests run: RLS-simulated demo-student JWT verification — 4 classes, 3 course links resolve to
+17/22/10 published lessons, 6/6 assessment quiz items visible, 3 assigned due assessments,
+8 released/submitted grade rows, 4/3/3 resources per class, newest session still the real one.
+Remaining concerns: (1) pressure-test course + jargon-foundations are now published GLOBAL
+catalog courses — any class with no linked course (full-catalog fallback) sees them too; all
+are inert fixtures. (2) The pressure-test course's 5th unit ("New unit") has zero lessons —
+the summary/tree should render it empty or skip it; eyeball it. (3) Resumed fake sessions
+have no turns — they land on the blank LessonWelcome, which is correct.
+Suggested next task: live pass as demo-student — sidebar shows 4 classes with due tags; each
+summary page: stat pills, mixed segmented unit bars, due-first work rows incl. the Submitted
+state, resources render (pdf/audio/image reuse real storage files).
