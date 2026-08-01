@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Menu } from "lucide-react";
+import { Menu, PanelLeftOpen } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { MentorControls } from "@/features/student/MentorControls";
 import {
@@ -33,7 +33,7 @@ import { checkpointRowsByClass } from "@/student/checkpoints";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
 import { ResizeHandle } from "@/student/ResizeHandle";
-import { StudentRail, StudentSidebar } from "@/student/StudentSidebar";
+import { StudentSidebar } from "@/student/StudentSidebar";
 import { LessonTree } from "@/student/LessonTree";
 import { LessonWelcome } from "@/student/LessonWelcome";
 import { SuggestionRows } from "@/student/suggestions";
@@ -147,7 +147,6 @@ export function StudentApp({
   sidebarWidthRef.current = sidebarWidth;
   const mediaWidthRef = useRef(mediaWidth);
   mediaWidthRef.current = mediaWidth;
-  const [draggingSidebar, setDraggingSidebar] = useState(false);
   const persistWidth = (key: string, value: number) => {
     try {
       localStorage.setItem(key, String(Math.round(value)));
@@ -311,40 +310,38 @@ export function StudentApp({
     onSelectSection("learn");
     void conversation.openLesson(lessonId);
   };
-  // The two section menus: Home = Overview + class list, Learn = the selected class's units
-  // and lessons under a switcher. The expanded sidebar shows the CURRENT section's menu; the
-  // collapsed rail serves each as its icon's hover flyout.
-  const homeMenu = (
-    <ClassList
-      classes={classes ?? []}
-      selectedClassId={classId ?? null}
-      dueByClass={dueByClass}
-      onSelectClass={(next) => {
-        closeDrawer();
-        onSelectClass(next);
-      }}
-    />
-  );
-  const learnMenu = (
-    <>
-      <ClassSwitcher
+  // The section menus: Home = Overview + class list, Learn = the selected class's units and
+  // lessons under a switcher.
+  const sidebarBody =
+    section === "home" ? (
+      <ClassList
         classes={classes ?? []}
-        selectedClassId={scopeClassId}
+        selectedClassId={classId ?? null}
+        dueByClass={dueByClass}
         onSelectClass={(next) => {
           closeDrawer();
           onSelectClass(next);
         }}
       />
-      <LessonTree
-        lessons={classLessons ?? conversation.lessons}
-        currentLessonId={conversation.lesson?.id ?? null}
-        progress={progress}
-        onOpenLesson={openLesson}
-        disabled={conversation.sending || conversation.booting}
-      />
-    </>
-  );
-  const sidebarBody = section === "home" ? homeMenu : learnMenu;
+    ) : (
+      <>
+        <ClassSwitcher
+          classes={classes ?? []}
+          selectedClassId={scopeClassId}
+          onSelectClass={(next) => {
+            closeDrawer();
+            onSelectClass(next);
+          }}
+        />
+        <LessonTree
+          lessons={classLessons ?? conversation.lessons}
+          currentLessonId={conversation.lesson?.id ?? null}
+          progress={progress}
+          onOpenLesson={openLesson}
+          disabled={conversation.sending || conversation.booting}
+        />
+      </>
+    );
   const sidebar = (
     <StudentSidebar
       email={email}
@@ -425,55 +422,47 @@ export function StudentApp({
       <div className="flex h-screen w-full overflow-hidden bg-background">
         {/* Flat, solid shell: the page IS the background — no ambient layer, no shadows; the
           sidebar reads as a column of the same surface separated by a clean hairline. */}
-        <aside
-          aria-label="Sidebar"
-          style={{ width: sidebarCollapsed ? 64 : sidebarWidth }}
-          className={`hidden h-full shrink-0 border-r border-border bg-depth-sub lg:block ${
-            draggingSidebar ? "" : "transition-[width] duration-(--dur)"
-          }`}
-        >
-          {sidebarCollapsed ? (
-            <StudentRail
-              email={email}
-              section={section}
-              onSelectSection={onSelectSection}
-              onSelectMenuItem={onSelectMenuItem}
-              classes={classes ?? []}
-              selectedClassId={section === "home" ? (classId ?? null) : scopeClassId}
-              dueByClass={dueByClass}
-              onSelectClass={onSelectClass}
-              onExpand={() => setCollapsed(false)}
-              homeMenu={homeMenu}
-              learnMenu={learnMenu}
-            />
-          ) : (
-            <StudentSidebar
-              email={email}
-              section={section}
-              onSelectSection={onSelectSection}
-              onSelectMenuItem={onSelectMenuItem}
-              onCollapse={() => setCollapsed(true)}
-            >
-              {sidebarBody}
-            </StudentSidebar>
-          )}
-        </aside>
         {!sidebarCollapsed ? (
-          <div className="hidden lg:contents">
-            <ResizeHandle
-              ariaLabel="Resize sidebar"
-              onStart={() => {
-                dragStartRef.current = sidebarWidthRef.current;
-                setDraggingSidebar(true);
-              }}
-              onDelta={(dx) => setSidebarWidth(clampSidebar(dragStartRef.current + dx))}
-              onEnd={() => {
-                setDraggingSidebar(false);
-                persistWidth("jargon.sidebar-width", sidebarWidthRef.current);
-              }}
-            />
-          </div>
-        ) : null}
+          <>
+            <aside
+              aria-label="Sidebar"
+              style={{ width: sidebarWidth }}
+              className="hidden h-full shrink-0 border-r border-border bg-depth-sub lg:block"
+            >
+              <StudentSidebar
+                email={email}
+                section={section}
+                onSelectSection={onSelectSection}
+                onSelectMenuItem={onSelectMenuItem}
+                onCollapse={() => setCollapsed(true)}
+              >
+                {sidebarBody}
+              </StudentSidebar>
+            </aside>
+            <div className="hidden lg:contents">
+              <ResizeHandle
+                ariaLabel="Resize sidebar"
+                onStart={() => {
+                  dragStartRef.current = sidebarWidthRef.current;
+                }}
+                onDelta={(dx) => setSidebarWidth(clampSidebar(dragStartRef.current + dx))}
+                onEnd={() => persistWidth("jargon.sidebar-width", sidebarWidthRef.current)}
+              />
+            </div>
+          </>
+        ) : (
+          // Collapsed: the column is simply gone. The expand button floats at the screen's
+          // top-left — the exact spot the collapse button occupies when the column is open,
+          // so the toggle reads as one button flipping in place.
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            aria-label="Expand sidebar"
+            className="fixed left-2 top-3 z-[var(--z-header)] hidden h-8 w-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground lg:flex"
+          >
+            <PanelLeftOpen className="h-[15px] w-[15px]" strokeWidth={1.6} />
+          </button>
+        )}
 
         {/* Below lg the same column lives in a drawer (Radix Sheet: focus trap, ESC, scrim). */}
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>

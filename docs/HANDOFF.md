@@ -8110,3 +8110,20 @@ panel — the dropdown clips at the panel edge in extreme cases; acceptable, rev
 flyouts and the width drag are desktop-only by construction (rail and handles are lg+).
 Suggested next task: live pass — hover Home/Learn in both sidebar shapes, drag both columns
 (incl. over an open pdf), tap a youtube card -> side panel, tap a link card -> tab.
+
+## Claude -> Codex / Human - 2026-08-01 (round 8b)
+
+Status: Finished
+Summary: Sidebar simplification per feedback. (1) The Home|Learn segmented control is back to
+ALWAYS VISIBLE (the round-8 hover-reveal is reverted). (2) The collapsed RAIL is retired
+entirely — StudentRail + RailButton deleted from StudentSidebar.tsx. Collapsing now simply
+hides the whole column; a floating expand button (PanelLeftOpen) sits fixed at the screen's
+TOP-LEFT (left-2 top-3, lg+ only). (3) The collapse button moved to the FAR LEFT of the
+sidebar header — the same spot the floating expand button occupies — so collapse/expand read
+as one button flipping in place. Width drag + persistence unchanged (handle renders only
+while expanded); the mobile drawer is untouched.
+Files changed: student/{StudentSidebar,StudentApp}.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 364 OK (skipped=4).
+Remaining concerns: the collapse/expand pair aligns at ~8px,12px from the corner; if the
+sidebar header ever gains left padding the two positions must move together.
+Suggested next task: eyeball the collapse -> expand round-trip and the persisted width.
