@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { ArrowRight, Brain, GraduationCap, Loader2, Play } from "lucide-react";
+import { BrainMap } from "@/student/BrainMap";
 import {
   fetchMostRecentLearningSession,
   fetchProfile,
@@ -41,6 +42,9 @@ export type StudentHomeProps = {
   onOpenAssessment: (assessmentId: string) => void;
   // The shell's class list length (null while loading) — the identity band's CLASSES pill.
   classCount: number | null;
+  // The shell's progress map + current lesson — the brain map's node colors and aurora.
+  progress: Record<string, number>;
+  currentLessonId: string | null;
 };
 
 function greetingForHour(hour: number): string {
@@ -71,7 +75,14 @@ function Chips({ label, values }: { label: string; values: string[] }) {
   );
 }
 
-function MemoryCard({ onAfterReset }: { onAfterReset?: () => void }) {
+function MemoryCard({
+  onAfterReset,
+  map,
+}: {
+  onAfterReset?: () => void;
+  // The brain map constellation, supplied by StudentHome (it owns lessons/progress).
+  map?: ReactNode;
+}) {
   const [memory, setMemory] = useState<StudentMemory | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Reset ladder: idle → confirm (inline, no modal) → busy → back to the empty state.
@@ -181,6 +192,9 @@ function MemoryCard({ onAfterReset }: { onAfterReset?: () => void }) {
           <Chips label="Working on" values={profile?.struggles ?? []} />
         </>
       )}
+      {/* The brain map rides below whatever the memory says — it has value from the very
+          first lesson (progress colors) even before any memory exists. */}
+      {map ? <div className="mt-3 border-t border-border pt-2.5">{map}</div> : null}
     </section>
   );
 }
@@ -191,6 +205,8 @@ export function StudentHome({
   assessments,
   onOpenAssessment,
   classCount,
+  progress,
+  currentLessonId,
 }: StudentHomeProps) {
   const [name, setName] = useState("");
   const [resumeLessonId, setResumeLessonId] = useState<string | null>(null);
@@ -219,7 +235,9 @@ export function StudentHome({
     void fetchStudentGrades()
       .then((rows) => !cancelled && setGrades(rows))
       .catch(() => !cancelled && setGrades([]));
-    void fetchSessionSummaries(4)
+    // One read feeds two things: the recap strip (first 4) and the brain map's memory
+    // glows (every lesson a summary references).
+    void fetchSessionSummaries(40)
       .then((rows) => !cancelled && setRecaps(rows))
       .catch(() => {});
     return () => {
@@ -252,6 +270,17 @@ export function StudentHome({
   const average = released.length
     ? released.reduce((sum, row) => sum + (row.score ?? 0), 0) / released.length
     : null;
+
+  // Every lesson the mentor's session summaries reference — the brain map's memory glows.
+  const memoryLessonIds = useMemo(
+    () =>
+      new Set(
+        recaps
+          .map((recap) => recap.lesson_id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0),
+      ),
+    [recaps],
+  );
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6">
@@ -320,7 +349,7 @@ export function StudentHome({
                   Recent sessions
                 </div>
                 <ul className="flex flex-col gap-1.5">
-                  {recaps.map((recap) => {
+                  {recaps.slice(0, 4).map((recap) => {
                     const line =
                       recap.summary?.covered || recap.summary?.wins || recap.summary?.note || "";
                     if (!line) return null;
@@ -340,7 +369,18 @@ export function StudentHome({
             ) : null}
           </section>
 
-          <MemoryCard onAfterReset={() => setRecaps([])} />
+          <MemoryCard
+            onAfterReset={() => setRecaps([])}
+            map={
+              <BrainMap
+                lessons={lessons}
+                progress={progress}
+                currentLessonId={currentLessonId}
+                memoryLessonIds={memoryLessonIds}
+                onOpenLesson={onOpenLesson}
+              />
+            }
+          />
         </div>
 
         {/* ---- 2. Assignments, quizzes & grades ---------------------------------------- */}

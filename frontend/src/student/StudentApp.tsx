@@ -566,6 +566,8 @@ export function StudentApp({
                 assessments={assessments}
                 onOpenAssessment={(id) => setOpenAssessmentId(id)}
                 classCount={classes ? classes.length : null}
+                progress={progress}
+                currentLessonId={conversation.lesson?.id ?? null}
               />
             )
           ) : (

@@ -8198,3 +8198,34 @@ by design. (3) profile.affirmed rides inside the profile jsonb the teacher can r
 Suggested next task: live pass as demo-student — complete a short session, check the
 memory card + Reset round-trip; reopen a lesson from the seeded classes and confirm
 the mentor's memory references stay sane.
+
+## Claude -> Codex / Human - 2026-08-01 (round 10)
+
+Status: Finished
+Summary: THE BRAIN MAP — a mini constellation of the student's learning on the Home memory
+card (new student/BrainMap.tsx). Deliberately not an Obsidian force graph (the memory's
+phrases have no cross-links to make one honest); the skeleton is the structure that IS a
+graph: center "you" node → unit nodes (ring 1) → lesson dots (ring 2), laid out by a
+deterministic radial computation — angular slices weighted by unit size, staggered lesson
+radii, a 0.82 vertical squash for the card's wide viewport; no force sim, no dependency, no
+per-mount jitter. Dot colors speak the existing progress language (accent-blue current,
+success-green done, ink-45 started, hollow untouched); lessons referenced by the mentor's
+session summaries wear a discuss-yellow memory halo; the aurora stays rationed to the ONE
+live thing (the current lesson's halo + a faint center glow). Native <title> tooltips name
+the lesson + state + "in your mentor's memory"; every dot has a 9px invisible hit ring and
+a tap opens the lesson. Wiring: StudentHome gained progress + currentLessonId props (from
+the shell), fetchSessionSummaries bumped 4 -> 40 (one read now feeds the recap strip's
+first 4 AND the map's memory-glow set), MemoryCard gained a map slot rendered under a
+hairline below the memory content — shown even while memory is empty, since the progress
+constellation has value from lesson one.
+Files changed: student/BrainMap.tsx (new), student/{StudentHome,StudentApp}.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 380 OK (skipped=4).
+Remaining concerns: (1) Dots are pointer-only (no tabIndex/keyboard activation) — the same
+lessons are fully keyboard-reachable in the sidebar tree, but add focus rings if an a11y
+pass wants parity. (2) With ALL seeded classes the catalog is ~15 units/70+ lessons —
+dense but legible at dot size; if a real account outgrows that, cap the map to the
+selected class's lessons. (3) The memory-glow set reads the newest 40 summaries — older
+glows age out with the fetch window, which matches the memory system's own recency bias.
+Suggested next task: eyeball the constellation as demo-student in both themes (mixed
+progress + glows over the seeded classes), tap a dot, then Reset memory and watch the
+glows clear.
