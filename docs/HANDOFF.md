@@ -8027,3 +8027,17 @@ teacher composer) — fine in practice, memoizable if it ever shows in profiles.
 Suggested next task: live pass as demo-student — Overview stat pills + Submitted row render;
 fresh-lesson ghost rows above the composer in both themes; type 6+ lines to watch the grow/
 scroll handoff and the snap-back on send.
+
+## Claude -> Codex / Human - 2026-08-01 (round 6b)
+
+Status: Finished
+Summary: Suggestion labels now wear their mode's hue. Each SuggestionRows label ("START THE
+LESSON" / "BIG PICTURE FIRST" / "WARM-UP QUESTION" or "LET ME TRY FIRST") is tinted with its
+TurnMode's accent via the established off-tag text recipe — color-mix(in oklab,
+var(--mode-*) 60%, var(--foreground)) — the same mix OfferPills and the transcript eyebrows
+use, so lesson=blue, discuss=signature yellow, quiz=pink, practice=green, readable on both
+ladders, and the color previews the mode the tap will set.
+Files changed: frontend/src/student/suggestions.tsx.
+Tests run: tsc 0 errors, eslint clean, build green, python suite 364 OK.
+Remaining concerns: none.
+Suggested next task: eyeball the three tinted labels in light + dark themes.

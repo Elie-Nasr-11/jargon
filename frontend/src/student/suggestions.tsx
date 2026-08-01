@@ -1,6 +1,6 @@
 import { ArrowUpRight } from "lucide-react";
 import type { Lesson, LessonActivity } from "@/lib/types";
-import type { TurnMode } from "@/student/turnModes";
+import { turnModeSpec, type TurnMode } from "@/student/turnModes";
 
 // Suggested first moves for a never-opened lesson — the ChatGPT/Claude new-chat pattern.
 // Derived client-side from the lesson + its authored steps (fetchLessonActivities already
@@ -65,7 +65,14 @@ export function SuggestionRows({
           onClick={() => onSuggest(suggestion.prompt, suggestion.mode)}
           className="hvp flex items-center gap-2.5 rounded-control px-3 py-1.5 text-left transition-colors duration-(--dur-fast) hover:bg-muted disabled:opacity-40"
         >
-          <span className="shrink-0 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
+          {/* Each label wears its mode's hue (the same 60% foreground mix the off-tag mode
+              text uses everywhere) — the tap sets that TurnMode, so the color is a preview. */}
+          <span
+            className="shrink-0 font-mono text-overline uppercase tracking-[0.14em]"
+            style={{
+              color: `color-mix(in oklab, var(${turnModeSpec(suggestion.mode).accentVar}) 60%, var(--foreground))`,
+            }}
+          >
             {suggestion.label}
           </span>
           <span className="min-w-0 flex-1 truncate text-body text-muted-foreground">
