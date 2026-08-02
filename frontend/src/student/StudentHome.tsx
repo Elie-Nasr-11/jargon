@@ -25,10 +25,10 @@ import type {
 } from "@/lib/types";
 
 // Home, in three deliberate tiers (top to bottom = most to least likely next act):
-//   1. RECENT ACTIVITY — resume the last lesson + the last few session recaps, beside
-//      "What your mentor remembers" (memory v1).
+//   1. RECENT ACTIVITY — resume the last lesson + the last few session recaps (full width).
 //   2. ASSIGNMENTS, QUIZZES & GRADES — work due and the recent-grades strip.
-//   3. CLASSES — the class list (moved here from the sidebar), expanding to lessons on click.
+//   3. WHAT YOUR MENTOR REMEMBERS — the memory card + brain map, full width at the bottom
+//      (the showpiece gets the room; classes live in the sidebar).
 //
 // Disclosure follows the same ladder everywhere: primary facts just show; secondary detail
 // (dates, kinds, arrows) reveals on hover; deep content (a class's lesson list, an assessment)
@@ -316,9 +316,9 @@ export function StudentHome({
           </div>
         </header>
 
-        {/* ---- 1. Recent activity ------------------------------------------------------ */}
+        {/* ---- 1. Recent activity (full width) ----------------------------------------- */}
         <SectionLabel>Recent activity</SectionLabel>
-        <div className="mb-7 grid gap-3 md:grid-cols-2">
+        <div className="mb-7">
           <section className="rounded-card border border-border bg-depth-card p-4 shadow-card">
             <h3 className="mb-2 flex items-center gap-2 text-body font-semibold text-foreground">
               <Play className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
@@ -379,20 +379,6 @@ export function StudentHome({
               </div>
             ) : null}
           </section>
-
-          <MemoryCard
-            onAfterReset={() => setRecaps([])}
-            map={(memoryProfile) => (
-              <BrainMap
-                lessons={lessons}
-                progress={progress}
-                currentLessonId={currentLessonId}
-                memoryLessonIds={memoryLessonIds}
-                memoryProfile={memoryProfile}
-                onOpenLesson={onOpenLesson}
-              />
-            )}
-          />
         </div>
 
         {/* ---- 2. Assignments, quizzes & grades ---------------------------------------- */}
@@ -455,6 +441,23 @@ export function StudentHome({
               <p className="text-body text-muted-foreground">No graded work yet.</p>
             )}
           </section>
+        </div>
+
+        {/* ---- 3. What your mentor remembers (full width, with the brain map) ---------- */}
+        <div className="mb-7">
+          <MemoryCard
+            onAfterReset={() => setRecaps([])}
+            map={(memoryProfile) => (
+              <BrainMap
+                lessons={lessons}
+                progress={progress}
+                currentLessonId={currentLessonId}
+                memoryLessonIds={memoryLessonIds}
+                memoryProfile={memoryProfile}
+                onOpenLesson={onOpenLesson}
+              />
+            )}
+          />
         </div>
 
         {/* Classes live in the Home SIDEBAR now — each one opens its own summary page. */}

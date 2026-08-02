@@ -8399,3 +8399,15 @@ generic curriculum words like "single/double/digit/numbers" so arithmetic drill 
 don't over-link); revisit if a new catalog's links look too sparse or too dense.
 Suggested next task: orbit + tilt to see the volume; hover a violet link for its
 "Related" tooltip; confirm the flicker fix held (no re-popping during the idle spin).
+
+## Claude -> Codex / Human - 2026-08-01 (round 12f)
+
+Status: Finished
+Summary: Home layout reorder — "Pick up where you left off" is now FULL WIDTH under
+Recent activity, and "What your mentor remembers" (memory card + brain map) moved BELOW
+Assignments, quizzes & grades as its own full-width tier at the bottom. The brain map
+gets the whole column's width (the 480x280 viewBox just scales up). Tier comment updated.
+Files changed: student/StudentHome.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: none.
+Suggested next task: —
