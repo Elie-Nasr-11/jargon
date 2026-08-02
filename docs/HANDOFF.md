@@ -8411,3 +8411,20 @@ Files changed: student/StudentHome.tsx.
 Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
 Remaining concerns: none.
 Suggested next task: —
+
+## Claude -> Codex / Human - 2026-08-01 (round 12g)
+
+Status: Finished
+Summary: Brain map palette softened for the light ladder. New per-theme --map-* tokens in
+styles.css: on LIGHT they are color-mix'd toward the background (current 68%, done/
+strength 55%, struggle/preference/avoid 60%, note 72%, memory halo 60% — milky versions
+of the same hues); on DARK they resolve to the full tag hues unchanged (small bright
+stars belong on charcoal). BrainMap now paints lesson fills (current/done), the five
+satellite kinds, the live thread stroke, and the memory-halo gradient through these
+tokens — nothing else moved.
+Files changed: frontend/src/styles.css, student/BrainMap.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: mix percentages are eyeballed — nudge per-token if the live pass
+wants more or less ink in light mode.
+Suggested next task: compare the map in light vs dark — light should read soft/milky,
+dark unchanged.

@@ -51,11 +51,11 @@ const IDLE_SPIN_RAD_PER_TICK = 0.0035;
 
 // The general-memory kinds, each wearing its mode hue (same language as the tags).
 const MEMORY_KINDS: { key: keyof StudentMemoryProfile; label: string; color: string }[] = [
-  { key: "strengths", label: "Strength", color: "var(--mode-practice)" },
-  { key: "struggles", label: "Working on", color: "var(--mode-open)" },
-  { key: "preferences", label: "Preference", color: "var(--mode-quiz)" },
-  { key: "notes", label: "Note", color: "var(--mode-discuss)" },
-  { key: "avoid", label: "Steering around", color: "var(--mode-assignment)" },
+  { key: "strengths", label: "Strength", color: "var(--map-strength)" },
+  { key: "struggles", label: "Working on", color: "var(--map-struggle)" },
+  { key: "preferences", label: "Preference", color: "var(--map-preference)" },
+  { key: "notes", label: "Note", color: "var(--map-note)" },
+  { key: "avoid", label: "Steering around", color: "var(--map-avoid)" },
 ];
 
 // World-space node: a spherical position — ring radius, azimuth angle, and an ELEVATION
@@ -499,9 +499,9 @@ export function BrainMap({
           threadPoints = `${center.x},${center.y} ${cp.x},${cp.y} ${up.x},${up.y} ${lp.x},${lp.y}`;
         }
         const fill = current
-          ? "var(--accent-text)"
+          ? "var(--map-current)"
           : value >= 1
-            ? "var(--success)"
+            ? "var(--map-done)"
             : value > 0
               ? "var(--ink-45)"
               : "var(--depth-card)";
@@ -591,8 +591,8 @@ export function BrainMap({
             <stop offset="100%" stopColor="var(--aurora-3)" stopOpacity="0" />
           </radialGradient>
           <radialGradient id="brainmap-memory">
-            <stop offset="0%" stopColor="var(--mode-discuss)" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="var(--mode-discuss)" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--map-memory-halo)" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="var(--map-memory-halo)" stopOpacity="0" />
           </radialGradient>
         </defs>
 
@@ -626,7 +626,7 @@ export function BrainMap({
           <polyline
             points={threadPoints}
             fill="none"
-            stroke="var(--accent-text)"
+            stroke="var(--map-current)"
             strokeWidth="1.5"
             strokeLinecap="round"
             className="bmap-thread"

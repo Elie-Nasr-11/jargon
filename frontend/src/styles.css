@@ -823,3 +823,29 @@ select {
     animation: none;
   }
 }
+
+/* --- Brain map node hues (student/BrainMap.tsx) ------------------------------------
+   The raw tag hues read TOO BOLD as tiny dots on the white ladder, so the map speaks
+   through softened, background-mixed versions in light mode; dark keeps the full hues
+   (small bright stars belong on charcoal). Same per-theme resolution pattern as the
+   semantic status colors. */
+:root {
+  --map-current: color-mix(in oklab, var(--accent-text) 68%, var(--background));
+  --map-done: color-mix(in oklab, var(--success) 55%, var(--background));
+  --map-strength: color-mix(in oklab, var(--mode-practice) 55%, var(--background));
+  --map-struggle: color-mix(in oklab, var(--mode-open) 60%, var(--background));
+  --map-preference: color-mix(in oklab, var(--mode-quiz) 60%, var(--background));
+  --map-note: color-mix(in oklab, var(--mode-discuss) 72%, var(--background));
+  --map-avoid: color-mix(in oklab, var(--mode-assignment) 60%, var(--background));
+  --map-memory-halo: color-mix(in oklab, var(--mode-discuss) 60%, var(--background));
+}
+.dark {
+  --map-current: var(--accent-text);
+  --map-done: var(--success);
+  --map-strength: var(--mode-practice);
+  --map-struggle: var(--mode-open);
+  --map-preference: var(--mode-quiz);
+  --map-note: var(--mode-discuss);
+  --map-avoid: var(--mode-assignment);
+  --map-memory-halo: var(--mode-discuss);
+}
