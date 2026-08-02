@@ -679,21 +679,6 @@ export type ReviewDueSkill = {
   days_overdue: number;
 };
 
-// Post-v4.0 Phase 5: a first-class ad-hoc guided-review session (greenfield; not a learning_session).
-export type ReviewSession = {
-  id: string;
-  user_id: string;
-  skill_key: string;
-  tier: string | null;
-  lesson_id: string | null;
-  state: Record<string, unknown>;
-  status: "active" | "complete" | "abandoned";
-  score: number | null;
-  question_count: number;
-  created_at: string;
-  updated_at: string;
-};
-
 // Memory v1 (docs/MVP_SCOPE.md §9): the rolling per-student mentor memory profile. Written by the
 // chat fn's background completing-turn task; owner RLS scopes reads to the signed-in student.
 export type StudentMemoryProfile = {
@@ -741,7 +726,6 @@ export type StudentProfileStats = {
   progress: StudentProgressSummary;
   evidence: LearningEvidence[];
   reviewDue: ReviewDueSkill[];
-  reviewSessions: ReviewSession[];
 };
 
 // v4.0 Phase 3b: a class the signed-in student belongs to (for the LMS class views).
@@ -1168,8 +1152,6 @@ export type TypedChatEnvelope = {
   } | null;
   // Set only when a teacher has paused the session; the mentor did not run this turn.
   held?: boolean;
-  // P5: the review path returns the backing review_sessions row id (for continuation + completion).
-  review_session_id?: string;
   // Flow v3 (all optional — old stored envelopes replay fine): the Continue pill offer for
   // unacknowledged content steps, and the turn router's verdict (telemetry/hinting).
   continue_offer?: { label: string } | null;

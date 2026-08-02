@@ -1,9 +1,10 @@
-"""Trimmed 2026-07-30 (trunk unification): the ReviewDueChip pins are gone — the
-student-facing review chip retired with the old /chat surface (v7 deliberately
-removed the student review feature; the v6 /learn surface does not reconnect it),
-and its client helpers (invokeReview/completeReviewSession) left lib/api.ts with it.
-The migration, chat-fn review lifecycle, and teacher-view pins below are KEPT —
-the server path and the teacher-facing reads are still live."""
+"""Re-pinned 2026-08-02 (chat-flow Phase 1, docs/CHAT_FLOW_SCOPE.md §5.4): the isolated
+spaced-review path is REMOVED on the MVP branch — handleReviewRequest and its
+`body.review === true` entry left the chat fn (it had no student-surface caller and wrote
+rows nothing read), and the teacher's StudentReviewSessions view + its client helpers left
+the frontend with it. The greenfield `review_sessions` migration stays applied (tables are
+never unshipped) but inert; the full implementation is archived on main. These tests pin
+BOTH sides: the migration's invariants still hold, and the dead path stays dead."""
 from pathlib import Path
 import unittest
 
@@ -26,11 +27,11 @@ class ReviewSessionsStaticTests(unittest.TestCase):
         cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.teacher_view = TEACHER_VIEW.read_text(encoding="utf-8")
         cls.teacher = TEACHER.read_text(encoding="utf-8")
         cls.deploy = DEPLOY.read_text(encoding="utf-8")
 
     def test_greenfield_table_with_rls(self):
+        # The applied migration keeps its shape even though nothing writes the table now.
         for fragment in (
             "create table if not exists public.review_sessions",
             "review_sessions_status_check",
@@ -44,7 +45,7 @@ class ReviewSessionsStaticTests(unittest.TestCase):
         self.assertIn("20260730000000_review_sessions.sql", self.deploy)
 
     def test_migration_does_not_touch_live_session_tables(self):
-        # The chosen design is greenfield: it must NOT relax NOT NULL on the live-tutor hot tables.
+        # The chosen design was greenfield: it must NOT relax NOT NULL on the live-tutor hot tables.
         lowered = self.migration.lower()
         for forbidden in ("alter table public.learning_sessions", "alter table public.learning_turns",
                           "alter table public.lesson_attempts", "drop not null"):
@@ -57,26 +58,32 @@ class ReviewSessionsStaticTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8").lower()
             self.assertNotIn("alter column lesson_id drop not null", text, msg=str(path))
 
-    def test_chat_fn_review_session_lifecycle(self):
-        for fragment in (
-            'review_session_id?: string',
-            "review_sessions",
-            'reviewAction === "complete"',
-            "review_session_id: reviewSessionId || undefined",
+    def test_chat_fn_review_path_removed(self):
+        # The isolated review turn is gone: no handler, no entry branch, no envelope field,
+        # no dedicated rate-limit constants. The removal marker stays as the tombstone.
+        body = self.chat_fn.replace(
+            "the isolated spaced-review path (handleReviewRequest,", "", 1)
+        for gone in (
+            "handleReviewRequest(",
+            "record.review === true",
+            "review_session_id",
+            "REVIEW_RATE_LIMIT",
         ):
-            with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.chat_fn)
-        # Never creates a learning_sessions / learning_turns row on the review path.
-        self.assertIn("NEVER reads this table", self.chat_fn)
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, body)
+        self.assertIn("the isolated spaced-review path", self.chat_fn)
 
-    def test_frontend_wiring(self):
-        # Teacher-facing reads only: the student chip and its invoke/complete client
-        # helpers retired with /chat (see module docstring).
-        self.assertIn("export type ReviewSession", self.types)
-        self.assertIn("review_session_id?: string", self.types)
-        self.assertIn("fetchStudentReviewSessions", self.api)
-        self.assertIn("export function StudentReviewSessions", self.teacher_view)
-        self.assertIn("<StudentReviewSessions studentId={studentId} />", self.teacher)
+    def test_frontend_review_slice_removed(self):
+        self.assertFalse(TEACHER_VIEW.exists(), "StudentReviewSessions.tsx should be deleted")
+        for gone, where in (
+            ("fetchStudentReviewSessions", self.api),
+            ("reviewSessions", self.api),
+            ("export type ReviewSession ", self.types),
+            ("review_session_id", self.types),
+            ("StudentReviewSessions", self.teacher),
+        ):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, where)
 
 
 if __name__ == "__main__":

@@ -1,11 +1,8 @@
-"""Trimmed 2026-07-30 (trunk unification): the student review surface is gone —
-ReviewDueChip, its /chat mount, and the client helpers (fetchReviewDue,
-invokeReview, completeReviewSession) retired with the old /chat route (v7
-deliberately removed the student review feature; the v6 /learn surface does not
-reconnect it). KEPT below: the SM-2-lite due queue (computeReviewDue feeds the
-profile-stats bundle and remains deterministic/testable), the review types, the
-isolated chat-fn review path, and the lib/review.ts display helpers (the teacher's
-StudentReviewSessions view uses humanizeSkillKey)."""
+"""Re-pinned 2026-08-02 (chat-flow Phase 1): the isolated chat-fn review path was
+removed with the rest of the review slice (see test_review_sessions.py). KEPT below:
+the SM-2-lite due queue (computeReviewDue feeds the profile-stats bundle and remains
+deterministic/testable — teacher analytics on mastery, independent of the deleted
+path) and the lib/review.ts display helpers (ReportsPanel uses them)."""
 from pathlib import Path
 import unittest
 
@@ -45,13 +42,11 @@ class ReviewDueStaticTests(unittest.TestCase):
         self.assertIn("export type ReviewDueSkill", self.types)
         self.assertIn("reviewDue: ReviewDueSkill[]", self.types)
 
-    def test_chat_fn_review_handler_is_isolated_and_closes_loop(self):
-        # Fires ONLY on review:true (normal turn loop untouched), and refreshes the spacing clock.
-        self.assertIn("async function handleReviewRequest", self.chat_fn)
-        self.assertIn("if (record.review === true) return await handleReviewRequest", self.chat_fn)
-        # Stamps mode='revision' evidence + refreshes last_practiced_at via the shared writer.
-        self.assertIn('"revision"', self.chat_fn)
-        self.assertIn("writeEvidenceAndMastery", self.chat_fn)
+    def test_chat_fn_review_handler_removed(self):
+        # The isolated review turn left with chat-flow Phase 1; the due queue does not
+        # depend on it (last_practiced_at refreshes through normal lesson practice).
+        self.assertNotIn("async function handleReviewRequest", self.chat_fn)
+        self.assertNotIn("record.review === true", self.chat_fn)
 
     def test_review_format_helpers(self):
         self.assertIn("export function humanizeSkillKey", self.review)

@@ -75,7 +75,6 @@ import type {
   SessionSummary,
   StudentProfileStats,
   ReviewDueSkill,
-  ReviewSession,
   StudentProgressSummary,
   TeacherClassSummary,
   TeacherClassMembership,
@@ -800,15 +799,12 @@ export async function fetchStudentProfileStats(): Promise<StudentProfileStats> {
   const userId = session?.user?.id || null;
   const email = session?.user?.email || null;
   const safe = <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
-  const [profile, mastery, notes, progress, evidence, reviewSessions] = await Promise.all([
+  const [profile, mastery, notes, progress, evidence] = await Promise.all([
     userId ? safe(fetchProfile(userId), null) : Promise.resolve(null),
     safe(fetchStudentMastery(), [] as StudentMastery[]),
     safe(fetchStudentTeacherNotes(), [] as TeacherNote[]),
     safe(fetchStudentProgressSummary(), { lessonsStarted: 0, lessonsCompleted: 0 }),
     safe(fetchStudentEvidence(), [] as LearningEvidence[]),
-    userId
-      ? safe(fetchStudentReviewSessions(userId), [] as ReviewSession[])
-      : Promise.resolve([] as ReviewSession[]),
   ]);
   return {
     profile,
@@ -818,7 +814,6 @@ export async function fetchStudentProfileStats(): Promise<StudentProfileStats> {
     progress,
     evidence,
     reviewDue: computeReviewDue(mastery),
-    reviewSessions,
   };
 }
 
@@ -3149,24 +3144,6 @@ export async function generateLiveArtifact(input: {
     throw new Error(data.error || "The mentor couldn't build that this time.");
   }
   return { resource_id: data.resource_id, title: data.title || "Quick activity" };
-}
-
-// (Post-v4.0 Phase 4b + 5's invokeReview/completeReviewSession — the student-side spaced-review
-// turn loop — left with the retired /chat surface; v7 deliberately dropped the student review UI.
-// The server's review handler and the teacher-facing reads below remain.)
-
-// A student's recent review sessions. Used by the teacher's student-detail view (RLS
-// review_sessions_teacher_read via can_view_student) AND by the student's own profile
-// (review_sessions_owner permits self-read).
-export async function fetchStudentReviewSessions(studentId: string): Promise<ReviewSession[]> {
-  const { data, error } = await supabase
-    .from("review_sessions")
-    .select("*")
-    .eq("user_id", studentId)
-    .order("updated_at", { ascending: false })
-    .limit(20);
-  if (error) throw error;
-  return (data || []) as ReviewSession[];
 }
 
 export async function createRealtimeVoiceSession(input: {

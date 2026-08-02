@@ -27,7 +27,6 @@ import {
   type HotlistItem,
 } from "@/features/teacher/HotlistFeed";
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
-import { StudentReviewSessions } from "@/features/teacher/StudentReviewSessions";
 import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
 import { AssessmentGrading } from "@/features/teacher/AssessmentGrading";
 import { ClassStructurePanel } from "@/features/teacher/ClassStructurePanel";
@@ -3335,9 +3334,6 @@ function StudentDetail({
 
           <WorkspacePanel value="overview">
             <StudentAnalyticsPanel dashboard={dashboard} studentId={studentId} />
-            <div className="mt-4">
-              <StudentReviewSessions studentId={studentId} />
-            </div>
           </WorkspacePanel>
 
           <WorkspacePanel value="transcript">

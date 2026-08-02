@@ -34,7 +34,6 @@ export function ReportsPanel() {
             progress: { lessonsStarted: 0, lessonsCompleted: 0 },
             evidence: [],
             reviewDue: [],
-            reviewSessions: [],
           });
         }
       });
