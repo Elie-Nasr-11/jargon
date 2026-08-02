@@ -19,7 +19,8 @@ import type { Lesson, StudentMemoryProfile } from "@/lib/types";
 // 3D without a 3D library: every node lives on a disc in world space (ring radius +
 // angle + a small deterministic height so the disc sparkles instead of lying flat), and
 // a yaw/pitch camera projects it to the SVG with perspective — nearer stars render
-// bigger and brighter, farther ones smaller and dimmer, painter-sorted. The galaxy
+// bigger and brighter, farther ones smaller and dimmer (stable DOM order — see the
+// note at the render list; strict painter sorting restarted CSS animations). The galaxy
 // idles in a slow spin (killed by prefers-reduced-motion and by the first touch);
 // DRAGGING ORBITS the camera (yaw + pitch), the wheel still zooms 1-3x anchored on the
 // cursor, and the reset chip restores home (orientation, zoom, and the idle spin).
@@ -291,7 +292,7 @@ export function BrainMap({
   };
   // Depth cues: nearer = bigger + brighter. Normalized against the outer ring.
   const depthOpacity = (depth: number) =>
-    0.55 + 0.45 * Math.min(1, Math.max(0, (LESSON_RADIUS - depth) / (2 * LESSON_RADIUS)));
+    0.72 + 0.28 * Math.min(1, Math.max(0, (LESSON_RADIUS - depth) / (2 * LESSON_RADIUS)));
 
   if (!courses.length) return null;
 
@@ -473,7 +474,11 @@ export function BrainMap({
     }
   }
 
-  renderNodes.sort((a, b) => b.depth - a.depth);
+  // NO painter sort: reordering SVG children per frame moves DOM nodes, and a moved DOM
+  // node RESTARTS its CSS animations — which made stars visibly re-pop on every spin
+  // tick. Stable DOM order means the entrance runs once and the glow loops stay smooth;
+  // depth still reads through per-node size and brightness, and 3.5px dots barely
+  // overlap, so losing strict occlusion order is invisible in practice.
 
   return (
     <div className="relative">

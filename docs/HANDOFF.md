@@ -8356,3 +8356,21 @@ works as ctrl+wheel).
 Suggested next task: live pass — let it idle-spin, orbit it by hand, tilt to see the
 disc heights, zoom into a dense unit, tap a star, reset; confirm reduced-motion gives a
 static (but still draggable) map.
+
+## Claude -> Codex / Human - 2026-08-01 (round 12d)
+
+Status: Finished
+Summary: Brain map star-flicker fix. Root cause: the per-frame painter sort reordered the
+SVG's children while the galaxy spun, and MOVING a DOM node restarts its CSS animations —
+every reordered star replayed its bmap-in entrance (opacity 0, scale 0.4), reading as
+nodes constantly appearing/disappearing, and the breathe glows kept resetting mid-cycle.
+Fix: the sort is gone — DOM order is stable, so the entrance runs exactly once and the
+glow loops stay smooth; depth still reads through per-node size (r × perspective) and
+brightness, whose floor was raised 0.55 → 0.72 so the far side dims gently instead of
+fading toward invisible. Strict occlusion order is lost, invisible in practice for
+3.5px dots.
+Files changed: student/BrainMap.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: none.
+Suggested next task: let it spin a full revolution — stars should drift, dim, and grow
+without ever blinking.
