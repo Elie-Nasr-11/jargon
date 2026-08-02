@@ -21,6 +21,7 @@ import type {
   StudentAssessmentBundle,
   StudentGradeRow,
   StudentMemory,
+  StudentMemoryProfile,
 } from "@/lib/types";
 
 // Home, in three deliberate tiers (top to bottom = most to least likely next act):
@@ -80,8 +81,9 @@ function MemoryCard({
   map,
 }: {
   onAfterReset?: () => void;
-  // The brain map constellation, supplied by StudentHome (it owns lessons/progress).
-  map?: ReactNode;
+  // The brain map constellation, supplied by StudentHome (it owns lessons/progress) as a
+  // render prop so the card can hand it the loaded memory profile (the satellites).
+  map?: (profile: StudentMemoryProfile | null) => ReactNode;
 }) {
   const [memory, setMemory] = useState<StudentMemory | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -201,7 +203,9 @@ function MemoryCard({
       )}
       {/* The brain map rides below whatever the memory says — it has value from the very
           first lesson (progress colors) even before any memory exists. */}
-      {map ? <div className="mt-3 border-t border-border pt-2.5">{map}</div> : null}
+      {map ? (
+        <div className="mt-3 border-t border-border pt-2.5">{map(profile ?? null)}</div>
+      ) : null}
     </section>
   );
 }
@@ -378,15 +382,16 @@ export function StudentHome({
 
           <MemoryCard
             onAfterReset={() => setRecaps([])}
-            map={
+            map={(memoryProfile) => (
               <BrainMap
                 lessons={lessons}
                 progress={progress}
                 currentLessonId={currentLessonId}
                 memoryLessonIds={memoryLessonIds}
+                memoryProfile={memoryProfile}
                 onOpenLesson={onOpenLesson}
               />
-            }
+            )}
           />
         </div>
 

@@ -8281,3 +8281,31 @@ Files changed: student/{ProfilePanel,StudentApp}.tsx.
 Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
 Remaining concerns: none.
 Suggested next task: —
+
+## Claude -> Codex / Human - 2026-08-01 (round 12)
+
+Status: Finished
+Summary: BRAIN MAP v2 — flashier and more comprehensive. Structure grew a ring and a
+branch: center "you" → COURSE HUBS (monogram-in-ring, the class-level anchor) → unit
+nodes → lesson dots; and the GENERAL MEMORY now orbits the center as hue-coded
+satellites — up to 3 entries per kind (strengths=practice green, struggles=open orange,
+preferences=quiz pink, notes=discuss yellow, avoid=homework lavender), tooltip = kind +
+entry text, capped at 12. MemoryCard's map slot became a render prop so the loaded
+profile flows into the map (presentation only — the mentor still reads memory flat).
+Motion, rationed to three moves (styles.css bmap-* keyframes, all dead under
+prefers-reduced-motion): nodes POP in with a 16ms stagger (capped 640ms), the aurora/
+memory halos BREATHE (3.2s), and ONE LIVE THREAD — an animated dashed accent line
+tracing center → course → unit → current lesson — replaces the static aurora as the
+"one live thing". Slice math: courses weighted by lesson count, units subdivide their
+course's slice, lessons fan within their unit's slice; viewport bumped to 280 tall,
+y-squash 0.78.
+Files changed: student/{BrainMap,StudentHome}.tsx, frontend/src/styles.css.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: (1) Satellite tooltips truncate nothing — a very long memory phrase
+makes a wide native tooltip (harmless). (2) With ~70 lessons + 4 rings the map is dense
+in the half-width card; if it ever feels crowded the summary-page variant (per-class map)
+is the release valve. (3) The pop stagger recomputes on re-render (mount-only in
+practice — the card doesn't re-render the SVG after load).
+Suggested next task: eyeball as demo-student in both themes — course monograms, the
+breathing glows, the flowing thread while a lesson is open, satellites after a completed
+session; check reduced-motion kills all three moves.
