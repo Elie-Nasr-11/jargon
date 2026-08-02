@@ -8309,3 +8309,22 @@ practice — the card doesn't re-render the SVG after load).
 Suggested next task: eyeball as demo-student in both themes — course monograms, the
 breathing glows, the flowing thread while a lesson is open, satellites after a completed
 session; check reduced-motion kills all three moves.
+
+## Claude -> Codex / Human - 2026-08-01 (round 12b)
+
+Status: Finished
+Summary: Brain map zoom + pan (minimal). viewBox-based: wheel / trackpad-pinch zooms 1-3x
+anchored on the cursor (native non-passive wheel listener — page scroll stays untouched
+except over the map), dragging pans while zoomed (pointer capture; a >5px drag suppresses
+the lesson-dot click it would end on), clampView keeps the window inside the drawing and
+scale 1 snaps home so the resting state is always the whole map. A small RotateCcw reset
+chip appears top-right only while zoomed. Touch: at rest vertical page scroll passes
+through (touch-action pan-y); zoomed, the finger pans (touch-action none). Cursor flips
+grab/grabbing while zoomed.
+Files changed: student/BrainMap.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: no two-finger pinch-to-zoom on touch (trackpad pinch works via
+ctrl+wheel; phone users get the reset-able wheel-less view) — add a pointer-pair pinch if
+mobile testing wants it.
+Suggested next task: scroll-zoom into a dense unit, drag around, tap a dot (should open
+only when not dragging), reset.
