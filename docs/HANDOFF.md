@@ -8328,3 +8328,31 @@ ctrl+wheel; phone users get the reset-able wheel-less view) — add a pointer-pa
 mobile testing wants it.
 Suggested next task: scroll-zoom into a dense unit, drag around, tap a dot (should open
 only when not dragging), reset.
+
+## Claude -> Codex / Human - 2026-08-01 (round 12c)
+
+Status: Finished
+Summary: BRAIN MAP v3 — 3D, still plain SVG (no 3D library). The constellation became a
+GALAXY DISC: every node keeps its ring radius/angle but gains a deterministic per-id
+height (hash-based, no per-mount jitter), and a yaw/pitch perspective camera (FOCAL 620,
+pitch default 0.9 rad ≈ the old 2D ellipse squash) projects world→screen each render.
+Depth cues: nearer stars render bigger (r × perspective factor) and brighter (opacity
+0.55-1.0), painter-sorted back to front. Motion: a slow idle spin (~0.1 rad/s at 30fps
+ticks; killed by prefers-reduced-motion, document.hidden, and the student's first
+interaction), DRAG NOW ORBITS (horizontal = yaw, vertical = pitch clamped 0.35-1.35 rad)
+— it replaces round-12b's pan, which rotation makes redundant; wheel zoom (1-3x,
+cursor-anchored, native non-passive listener) and the >5px drag click-suppression stay.
+The reset chip appears when the camera has moved (zoom OR orientation) and restores
+home + re-arms the idle spin. Edges, live thread, aurora center, memory-halo glows,
+satellites, tooltips, and tap-to-open all reproject per frame and survive intact.
+Files changed: student/BrainMap.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: (1) The idle spin re-renders ~200 SVG elements at 30fps — measured
+fine on dev hardware; if a low-end device ever stutters, drop the tick to 15fps or pause
+when the card scrolls off screen (IntersectionObserver). (2) The pop-in stagger replays
+only on mount, not on orbit (same keys) — correct, but zooming during the entrance can
+look busy for the first ~0.6s. (3) Still no two-finger pinch on touch (trackpad pinch
+works as ctrl+wheel).
+Suggested next task: live pass — let it idle-spin, orbit it by hand, tilt to see the
+disc heights, zoom into a dense unit, tap a star, reset; confirm reduced-motion gives a
+static (but still draggable) map.

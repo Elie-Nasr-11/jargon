@@ -3,42 +3,50 @@ import {
   useMemo,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { RotateCcw } from "lucide-react";
+import { prefersReducedMotion } from "@/lib/motion";
 import type { Lesson, StudentMemoryProfile } from "@/lib/types";
 
-// THE BRAIN MAP v2: the student's whole second brain as one constellation.
+// THE BRAIN MAP v3 — the second brain as a 3D GALAXY, still plain SVG.
 //
 //   center "you"  →  course hubs (monogram)  →  unit nodes  →  lesson dots
+//   + the general memory (strengths/struggles/preferences/notes/avoid) as hue-coded
+//     satellite stars hugging the center.
 //
-// plus a SATELLITE ring hugging the center: the general memory itself — every profile
-// entry (strengths / struggles / preferences / notes / avoid) as a small hue-coded star,
-// so coursework memory and system memory are both visible without pretending they share
-// a hierarchy (the mentor reads them flat; this is presentation, not retrieval).
+// 3D without a 3D library: every node lives on a disc in world space (ring radius +
+// angle + a small deterministic height so the disc sparkles instead of lying flat), and
+// a yaw/pitch camera projects it to the SVG with perspective — nearer stars render
+// bigger and brighter, farther ones smaller and dimmer, painter-sorted. The galaxy
+// idles in a slow spin (killed by prefers-reduced-motion and by the first touch);
+// DRAGGING ORBITS the camera (yaw + pitch), the wheel still zooms 1-3x anchored on the
+// cursor, and the reset chip restores home (orientation, zoom, and the idle spin).
 //
-// Dot colors keep the app's progress language (accent-blue current, success-green done,
-// ink started, hollow untouched); session-summary lessons wear the discuss-yellow memory
-// halo. Flash, rationed: nodes pop in staggered on mount, glows breathe, and ONE live
-// thread (an animated dash line center → course → unit → current lesson) carries the
-// aurora's job of marking the live thing. All motion dies under prefers-reduced-motion.
-//
-// Layout stays a deterministic radial computation — no force sim, no dependency, no
-// per-mount jitter. Native <title> tooltips; a lesson tap opens it.
+// Everything else holds from v2: the app's progress color language, the discuss-yellow
+// memory halos, the animated live thread center → course → unit → current lesson, the
+// staggered pop-in, native <title> tooltips, and tap-to-open lessons. No dependencies,
+// no per-mount jitter — the world layout is deterministic; only the camera moves.
 
 const VIEW_W = 480;
 const VIEW_H = 280;
 const CX = VIEW_W / 2;
 const CY = VIEW_H / 2;
-const SATELLITE_RADIUS = 27;
-const COURSE_RADIUS = 56;
-const UNIT_RADIUS = 90;
-const LESSON_RADIUS = 122;
+const SATELLITE_RADIUS = 30;
+const COURSE_RADIUS = 62;
+const UNIT_RADIUS = 98;
+const LESSON_RADIUS = 132;
 // Alternate lesson dots between two radii so dense units don't collide.
-const LESSON_STAGGER = 12;
-// The card's viewport is wide and short — squash y so the rings fit as ellipses.
-const SQUASH = 0.78;
+const LESSON_STAGGER = 13;
+// Camera: focal length for the perspective divide; pitch defaults to ~51° (the ellipse
+// the 2D map used to fake), clamped so the disc can neither flatten to a line nor flip.
+const FOCAL = 620;
+const PITCH_DEFAULT = 0.9;
+const PITCH_MIN = 0.35;
+const PITCH_MAX = 1.35;
+const ZOOM_MAX = 3;
+const IDLE_SPIN_RAD_PER_TICK = 0.0035;
 
 // The general-memory kinds, each wearing its mode hue (same language as the tags).
 const MEMORY_KINDS: { key: keyof StudentMemoryProfile; label: string; color: string }[] = [
@@ -49,19 +57,24 @@ const MEMORY_KINDS: { key: keyof StudentMemoryProfile; label: string; color: str
   { key: "avoid", label: "Steering around", color: "var(--mode-assignment)" },
 ];
 
-type LessonNode = { lesson: Lesson; x: number; y: number };
-type UnitNode = { unitId: string; title: string; x: number; y: number; lessons: LessonNode[] };
-type CourseNode = { courseId: string; title: string; x: number; y: number; units: UnitNode[] };
+// World-space node: a ring position plus height above/below the disc.
+type World = { radius: number; angle: number; h: number };
+type LessonNode = World & { lesson: Lesson };
+type UnitNode = World & { unitId: string; title: string; lessons: LessonNode[] };
+type CourseNode = World & { courseId: string; title: string; units: UnitNode[] };
+type Projected = { x: number; y: number; depth: number; f: number };
 
-function polar(radius: number, angle: number) {
-  return { x: CX + radius * Math.cos(angle), y: CY + radius * Math.sin(angle) * SQUASH };
+// Deterministic per-id height so the disc has depth texture without per-mount jitter.
+function heightFor(id: string, amplitude: number): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return ((hash % 17) / 8 - 1) * amplitude;
 }
 
-// --- Zoom + pan (minimal, viewBox-based) -------------------------------------------
-// Wheel (and trackpad pinch, which arrives as ctrl+wheel) zooms 1-3x anchored on the
-// cursor; dragging pans while zoomed. The clamp keeps the view inside the drawing, and
-// scale 1 snaps home — so the resting state is always the whole map.
-const ZOOM_MAX = 3;
+function monogram(title: string): string {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  return ((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase();
+}
 
 type MapView = { x: number; y: number; scale: number };
 
@@ -74,11 +87,6 @@ function clampView(view: MapView): MapView {
     x: Math.min(VIEW_W - visibleW, Math.max(0, view.x)),
     y: Math.min(VIEW_H - visibleH, Math.max(0, view.y)),
   };
-}
-
-function monogram(title: string): string {
-  const words = title.trim().split(/\s+/).filter(Boolean);
-  return ((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase();
 }
 
 export function BrainMap({
@@ -96,8 +104,8 @@ export function BrainMap({
   memoryProfile?: StudentMemoryProfile | null;
   onOpenLesson: (lessonId: string) => void;
 }) {
-  // course → unit → lesson, all slices weighted by lesson count so dense courses get
-  // the angular room they need. Order is stable (catalog order), start at 12 o'clock.
+  // World layout: course → unit → lesson, slices weighted by lesson count so dense
+  // courses get the angular room they need. Stable catalog order, start at 12 o'clock.
   const courses = useMemo<CourseNode[]>(() => {
     const courseMap = new Map<string, { title: string; units: Map<string, UnitNode> }>();
     for (const lesson of lessons) {
@@ -110,17 +118,30 @@ export function BrainMap({
       const unitId = lesson.unit_id || "__none__";
       let unit = course.units.get(unitId);
       if (!unit) {
-        unit = { unitId, title: lesson.unit_title || "Lessons", x: 0, y: 0, lessons: [] };
+        unit = {
+          unitId,
+          title: lesson.unit_title || "Lessons",
+          radius: UNIT_RADIUS,
+          angle: 0,
+          h: heightFor(unitId, 6),
+          lessons: [],
+        };
         course.units.set(unitId, unit);
       }
-      unit.lessons.push({ lesson, x: 0, y: 0 });
+      unit.lessons.push({
+        lesson,
+        radius: LESSON_RADIUS,
+        angle: 0,
+        h: heightFor(lesson.id, 11),
+      });
     }
 
     const list = Array.from(courseMap, ([courseId, course]) => ({
       courseId,
       title: course.title,
-      x: 0,
-      y: 0,
+      radius: COURSE_RADIUS,
+      angle: 0,
+      h: 0,
       units: Array.from(course.units.values()),
     }));
     const weight = (units: UnitNode[]) =>
@@ -130,29 +151,21 @@ export function BrainMap({
     let cursor = -Math.PI / 2;
     for (const course of list) {
       const span = (weight(course.units) / total) * Math.PI * 2;
-      const coursePos = polar(COURSE_RADIUS, cursor + span / 2);
-      course.x = coursePos.x;
-      course.y = coursePos.y;
-      // Units subdivide the course slice; lessons fan across their unit's slice.
+      course.angle = cursor + span / 2;
       const unitTotal = course.units.reduce((sum, unit) => sum + unit.lessons.length + 1, 0);
       let unitCursor = cursor + span * 0.06;
       const unitSpanBudget = span * 0.88;
       for (const unit of course.units) {
         const unitSpan = ((unit.lessons.length + 1) / unitTotal) * unitSpanBudget;
-        const unitMid = unitCursor + unitSpan / 2;
-        const unitPos = polar(UNIT_RADIUS, unitMid);
-        unit.x = unitPos.x;
-        unit.y = unitPos.y;
+        unit.angle = unitCursor + unitSpan / 2;
         unit.lessons.forEach((node, index) => {
-          const angle =
+          node.angle =
             unit.lessons.length === 1
-              ? unitMid
+              ? unit.angle
               : unitCursor +
                 unitSpan * 0.08 +
                 (unitSpan * 0.84 * index) / (unit.lessons.length - 1);
-          const pos = polar(LESSON_RADIUS + (index % 2 === 0 ? 0 : LESSON_STAGGER), angle);
-          node.x = pos.x;
-          node.y = pos.y;
+          node.radius = LESSON_RADIUS + (index % 2 === 0 ? 0 : LESSON_STAGGER);
         });
         unitCursor += unitSpan;
       }
@@ -161,8 +174,8 @@ export function BrainMap({
     return list;
   }, [lessons]);
 
-  // The general memory as satellites orbiting "you": up to 3 entries per kind, evenly
-  // spaced, hue-coded by kind.
+  // The general memory as satellites orbiting "you": up to 3 entries per kind,
+  // hue-coded, alternating above/below the disc.
   const satellites = useMemo(() => {
     const entries: { text: string; label: string; color: string }[] = [];
     for (const kind of MEMORY_KINDS) {
@@ -172,40 +185,42 @@ export function BrainMap({
         entries.push({ text: String(value), label: kind.label, color: kind.color });
       }
     }
-    return entries.slice(0, 12).map((entry, index, all) => {
-      const angle = -Math.PI / 2 + (Math.PI * 2 * index) / all.length;
-      return { ...entry, ...polar(SATELLITE_RADIUS, angle) };
-    });
+    return entries.slice(0, 12).map((entry, index, all) => ({
+      ...entry,
+      radius: SATELLITE_RADIUS,
+      angle: -Math.PI / 2 + (Math.PI * 2 * index) / all.length,
+      h: index % 2 === 0 ? 8 : -8,
+    }));
   }, [memoryProfile]);
 
-  // The live thread: center → course → unit → current lesson, one animated dash line.
-  const thread = useMemo(() => {
-    if (!currentLessonId) return null;
-    for (const course of courses) {
-      for (const unit of course.units) {
-        const node = unit.lessons.find((entry) => entry.lesson.id === currentLessonId);
-        if (node) {
-          return `${CX},${CY} ${course.x},${course.y} ${unit.x},${unit.y} ${node.x},${node.y}`;
-        }
-      }
-    }
-    return null;
-  }, [courses, currentLessonId]);
-
-  const svgRef = useRef<SVGSVGElement>(null);
+  // --- Camera ----------------------------------------------------------------------
+  const [yaw, setYaw] = useState(0);
+  const [pitch, setPitch] = useState(PITCH_DEFAULT);
   const [view, setView] = useState<MapView>({ x: 0, y: 0, scale: 1 });
-  // Drag bookkeeping lives in refs (no re-render per move beyond the view update); the
-  // moved distance suppresses the click a drag would otherwise fire on a lesson dot.
-  const dragRef = useRef<{ px: number; py: number; vx: number; vy: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragRef = useRef<{ px: number; py: number; yaw: number; pitch: number } | null>(null);
   const movedRef = useRef(0);
+  const interactedRef = useRef(false);
 
-  // Native wheel listener (passive: false) — React's synthetic onWheel can't reliably
-  // preventDefault, and the page must not scroll while the cursor zooms the map.
+  // The idle spin: a gentle constant yaw until the student takes the wheel (or asks for
+  // reduced motion). ~30fps is plenty for a slow drift.
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const timer = window.setInterval(() => {
+      if (interactedRef.current || document.hidden) return;
+      setYaw((value) => value + IDLE_SPIN_RAD_PER_TICK);
+    }, 33);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Wheel zoom (native, passive: false — React's synthetic onWheel can't reliably
+  // preventDefault, and the page must not scroll while the cursor zooms the map).
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
+      interactedRef.current = true;
       const rect = el.getBoundingClientRect();
       const fx = (event.clientX - rect.left) / rect.width;
       const fy = (event.clientY - rect.top) / rect.height;
@@ -214,7 +229,6 @@ export function BrainMap({
           ZOOM_MAX,
           Math.max(1, prev.scale * Math.exp(-event.deltaY * 0.0018)),
         );
-        // Keep the point under the cursor stationary through the zoom.
         const px = prev.x + fx * (VIEW_W / prev.scale);
         const py = prev.y + fy * (VIEW_H / prev.scale);
         return clampView({ x: px - fx * (VIEW_W / scale), y: py - fy * (VIEW_H / scale), scale });
@@ -224,51 +238,249 @@ export function BrainMap({
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  // Drag ORBITS: horizontal movement spins the galaxy, vertical tilts it.
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { px: event.clientX, py: event.clientY, vx: view.x, vy: view.y };
+    dragRef.current = { px: event.clientX, py: event.clientY, yaw, pitch };
     movedRef.current = 0;
   };
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const drag = dragRef.current;
     if (!drag) return;
-    const rect = event.currentTarget.getBoundingClientRect();
     const dx = event.clientX - drag.px;
     const dy = event.clientY - drag.py;
     movedRef.current = Math.max(movedRef.current, Math.abs(dx) + Math.abs(dy));
-    setView((prev) =>
-      clampView({
-        scale: prev.scale,
-        x: drag.vx - dx * (VIEW_W / (prev.scale * rect.width)),
-        y: drag.vy - dy * (VIEW_H / (prev.scale * rect.height)),
-      }),
-    );
+    if (movedRef.current > 2) interactedRef.current = true;
+    setYaw(drag.yaw + dx * 0.008);
+    setPitch(Math.min(PITCH_MAX, Math.max(PITCH_MIN, drag.pitch + dy * 0.006)));
   };
   const onPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!dragRef.current) return;
     dragRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
-  // A real drag must not fire the lesson-dot click it ends on.
+  // A real orbit-drag must not fire the lesson-dot click it ends on.
   const onClickCapture = (event: ReactMouseEvent<SVGSVGElement>) => {
     if (movedRef.current > 5) {
       event.stopPropagation();
       event.preventDefault();
     }
   };
+  const resetCamera = () => {
+    setYaw(0);
+    setPitch(PITCH_DEFAULT);
+    setView({ x: 0, y: 0, scale: 1 });
+    interactedRef.current = false;
+  };
+
+  // --- Projection --------------------------------------------------------------------
+  const sinYaw = Math.sin(yaw);
+  const cosYaw = Math.cos(yaw);
+  const sinPitch = Math.sin(pitch);
+  const cosPitch = Math.cos(pitch);
+  const project = (world: World): Projected => {
+    const wx = world.radius * Math.cos(world.angle);
+    const wz = world.radius * Math.sin(world.angle);
+    const wy = world.h;
+    const x1 = wx * cosYaw - wz * sinYaw;
+    const z1 = wx * sinYaw + wz * cosYaw;
+    const y2 = wy * cosPitch - z1 * sinPitch;
+    const z2 = wy * sinPitch + z1 * cosPitch;
+    const f = FOCAL / (FOCAL + z2);
+    return { x: CX + x1 * f, y: CY + y2 * f, depth: z2, f };
+  };
+  // Depth cues: nearer = bigger + brighter. Normalized against the outer ring.
+  const depthOpacity = (depth: number) =>
+    0.55 + 0.45 * Math.min(1, Math.max(0, (LESSON_RADIUS - depth) / (2 * LESSON_RADIUS)));
 
   if (!courses.length) return null;
 
   const zoomed = view.scale > 1.01;
+  const movedCamera = zoomed || Math.abs(yaw) > 0.02 || Math.abs(pitch - PITCH_DEFAULT) > 0.02;
   let popIndex = 0;
   const pop = () => ({ animationDelay: `${Math.min(popIndex++ * 16, 640)}ms` });
 
+  // Project everything once per render, then paint back-to-front.
+  const renderNodes: { depth: number; node: React.ReactNode }[] = [];
+
+  for (const satellite of satellites) {
+    const p = project(satellite);
+    renderNodes.push({
+      depth: p.depth,
+      node: (
+        <g
+          key={`sat-${satellite.label}-${satellite.angle}`}
+          className="bmap-node"
+          style={pop()}
+          opacity={depthOpacity(p.depth)}
+        >
+          <title>{`${satellite.label}: ${satellite.text}`}</title>
+          <circle cx={p.x} cy={p.y} r={6 * p.f} fill={satellite.color} opacity="0.16" />
+          <circle cx={p.x} cy={p.y} r={2.4 * p.f} fill={satellite.color} />
+        </g>
+      ),
+    });
+  }
+
+  const edges: React.ReactNode[] = [];
+  const center = project({ radius: 0, angle: 0, h: 0 });
+  let threadPoints: string | null = null;
+
+  for (const course of courses) {
+    const cp = project(course);
+    edges.push(
+      <line
+        key={`e-${course.courseId}`}
+        x1={center.x}
+        y1={center.y}
+        x2={cp.x}
+        y2={cp.y}
+        stroke="var(--ink-16)"
+        strokeWidth="1"
+      />,
+    );
+    renderNodes.push({
+      depth: cp.depth,
+      node: (
+        <g
+          key={`c-${course.courseId}`}
+          className="bmap-node"
+          style={pop()}
+          opacity={depthOpacity(cp.depth)}
+        >
+          <title>{course.title}</title>
+          <circle
+            cx={cp.x}
+            cy={cp.y}
+            r={9 * cp.f}
+            fill="var(--depth-card)"
+            stroke="var(--ink-30)"
+            strokeWidth="1"
+          />
+          <text
+            x={cp.x}
+            y={cp.y + 2.6 * cp.f}
+            textAnchor="middle"
+            style={{ fontSize: `${7 * cp.f}px` }}
+            className="fill-[var(--ink-62)] font-mono font-bold uppercase tracking-[0.06em]"
+          >
+            {monogram(course.title)}
+          </text>
+        </g>
+      ),
+    });
+
+    for (const unit of course.units) {
+      const up = project(unit);
+      edges.push(
+        <line
+          key={`e-${unit.unitId}`}
+          x1={cp.x}
+          y1={cp.y}
+          x2={up.x}
+          y2={up.y}
+          stroke="var(--ink-16)"
+          strokeWidth="1"
+          strokeOpacity="0.75"
+        />,
+      );
+      renderNodes.push({
+        depth: up.depth,
+        node: (
+          <g
+            key={`u-${unit.unitId}`}
+            className="bmap-node"
+            style={pop()}
+            opacity={depthOpacity(up.depth)}
+          >
+            <title>{unit.title}</title>
+            <circle cx={up.x} cy={up.y} r={3.5 * up.f} fill="var(--ink-45)" />
+          </g>
+        ),
+      });
+
+      for (const node of unit.lessons) {
+        const lp = project(node);
+        edges.push(
+          <line
+            key={`e-${node.lesson.id}`}
+            x1={up.x}
+            y1={up.y}
+            x2={lp.x}
+            y2={lp.y}
+            stroke="var(--ink-16)"
+            strokeWidth="1"
+            strokeOpacity="0.5"
+          />,
+        );
+        const value = progress[node.lesson.id] ?? 0;
+        const current = node.lesson.id === currentLessonId;
+        const remembered = memoryLessonIds.has(node.lesson.id);
+        if (current) {
+          threadPoints = `${center.x},${center.y} ${cp.x},${cp.y} ${up.x},${up.y} ${lp.x},${lp.y}`;
+        }
+        const fill = current
+          ? "var(--accent-text)"
+          : value >= 1
+            ? "var(--success)"
+            : value > 0
+              ? "var(--ink-45)"
+              : "var(--depth-card)";
+        renderNodes.push({
+          depth: lp.depth,
+          node: (
+            <g
+              key={node.lesson.id}
+              onClick={() => onOpenLesson(node.lesson.id)}
+              className="bmap-node cursor-pointer"
+              style={pop()}
+              opacity={depthOpacity(lp.depth)}
+            >
+              <title>
+                {`${node.lesson.title}${current ? " — current" : value >= 1 ? " — done" : value > 0 ? " — in progress" : ""}${remembered ? " · in your mentor's memory" : ""}`}
+              </title>
+              {current ? (
+                <circle
+                  cx={lp.x}
+                  cy={lp.y}
+                  r={12 * lp.f}
+                  fill="url(#brainmap-aurora)"
+                  className="bmap-glow"
+                />
+              ) : remembered ? (
+                <circle
+                  cx={lp.x}
+                  cy={lp.y}
+                  r={9 * lp.f}
+                  fill="url(#brainmap-memory)"
+                  className="bmap-glow"
+                />
+              ) : null}
+              {/* A generous invisible hit area so small dots stay tappable. */}
+              <circle cx={lp.x} cy={lp.y} r={9 * lp.f} fill="transparent" />
+              <circle
+                cx={lp.x}
+                cy={lp.y}
+                r={3.5 * lp.f}
+                fill={fill}
+                stroke={value > 0 || current ? "none" : "var(--ink-30)"}
+                strokeWidth="1"
+              />
+            </g>
+          ),
+        });
+      }
+    }
+  }
+
+  renderNodes.sort((a, b) => b.depth - a.depth);
+
   return (
     <div className="relative">
-      {zoomed ? (
+      {movedCamera ? (
         <button
           type="button"
-          onClick={() => setView({ x: 0, y: 0, scale: 1 })}
+          onClick={resetCamera}
           aria-label="Reset the map view"
           className="absolute right-1 top-1 z-[var(--z-base)] flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
         >
@@ -279,15 +491,15 @@ export function BrainMap({
         ref={svgRef}
         viewBox={`${view.x} ${view.y} ${VIEW_W / view.scale} ${VIEW_H / view.scale}`}
         role="img"
-        aria-label="A map of your brain — courses, units, and lessons colored by progress, with what your mentor remembers orbiting the center. Scroll to zoom, drag to pan."
+        aria-label="A 3D map of your brain — courses, units, and lessons colored by progress, with what your mentor remembers orbiting the center. Drag to spin, scroll to zoom."
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onClickCapture={onClickCapture}
-        // At rest, vertical touch scrolling passes through; zoomed, the finger pans the map.
-        style={{ touchAction: zoomed ? "none" : "pan-y" }}
-        className={`block w-full ${zoomed ? "cursor-grab active:cursor-grabbing" : ""}`}
+        // Touch: a finger drag orbits the galaxy rather than scrolling the page.
+        style={{ touchAction: "none" }}
+        className="block w-full cursor-grab active:cursor-grabbing"
       >
         <defs>
           <radialGradient id="brainmap-aurora">
@@ -301,32 +513,12 @@ export function BrainMap({
           </radialGradient>
         </defs>
 
-        {/* Edges under everything: center→course→unit→lesson hairlines, fading outward. */}
-        {courses.map((course) => (
-          <g key={`edges-${course.courseId}`} stroke="var(--ink-16)" strokeWidth="1">
-            <line x1={CX} y1={CY} x2={course.x} y2={course.y} />
-            {course.units.map((unit) => (
-              <g key={unit.unitId}>
-                <line x1={course.x} y1={course.y} x2={unit.x} y2={unit.y} strokeOpacity="0.75" />
-                {unit.lessons.map((node) => (
-                  <line
-                    key={node.lesson.id}
-                    x1={unit.x}
-                    y1={unit.y}
-                    x2={node.x}
-                    y2={node.y}
-                    strokeOpacity="0.5"
-                  />
-                ))}
-              </g>
-            ))}
-          </g>
-        ))}
+        {edges}
 
         {/* The live thread — the one moving line, tracing the path to the current lesson. */}
-        {thread ? (
+        {threadPoints ? (
           <polyline
-            points={thread}
+            points={threadPoints}
             fill="none"
             stroke="var(--accent-text)"
             strokeWidth="1.5"
@@ -335,111 +527,25 @@ export function BrainMap({
           />
         ) : null}
 
-        {/* Center: the student, breathing aurora. */}
-        <circle cx={CX} cy={CY} r="18" fill="url(#brainmap-aurora)" className="bmap-glow" />
-        <circle cx={CX} cy={CY} r="6.5" fill="var(--foreground)" className="bmap-node" />
+        {/* Center: the student, breathing aurora — always painted with the stars. */}
+        <circle
+          cx={center.x}
+          cy={center.y}
+          r="18"
+          fill="url(#brainmap-aurora)"
+          className="bmap-glow"
+        />
+        <circle cx={center.x} cy={center.y} r="6.5" fill="var(--foreground)" />
         <text
-          x={CX}
-          y={CY + 17}
+          x={center.x}
+          y={center.y + 17}
           textAnchor="middle"
           className="fill-[var(--ink-45)] font-mono text-[8px] uppercase tracking-[0.14em]"
         >
           you
         </text>
 
-        {/* The general memory: hue-coded satellites orbiting the center. */}
-        {satellites.map((satellite, index) => (
-          <g key={`${satellite.label}-${index}`} className="bmap-node" style={pop()}>
-            <title>{`${satellite.label}: ${satellite.text}`}</title>
-            <circle cx={satellite.x} cy={satellite.y} r="6" fill={satellite.color} opacity="0.16" />
-            <circle cx={satellite.x} cy={satellite.y} r="2.4" fill={satellite.color} />
-          </g>
-        ))}
-
-        {courses.map((course) => (
-          <g key={course.courseId}>
-            {/* Course hub: monogram in a ring — the class-level anchor. */}
-            <g className="bmap-node" style={pop()}>
-              <title>{course.title}</title>
-              <circle
-                cx={course.x}
-                cy={course.y}
-                r="9"
-                fill="var(--depth-card)"
-                stroke="var(--ink-30)"
-                strokeWidth="1"
-              />
-              <text
-                x={course.x}
-                y={course.y + 2.6}
-                textAnchor="middle"
-                className="fill-[var(--ink-62)] font-mono text-[7px] font-bold uppercase tracking-[0.06em]"
-              >
-                {monogram(course.title)}
-              </text>
-            </g>
-
-            {course.units.map((unit) => (
-              <g key={unit.unitId}>
-                <g className="bmap-node" style={pop()}>
-                  <title>{unit.title}</title>
-                  <circle cx={unit.x} cy={unit.y} r="3.5" fill="var(--ink-45)" />
-                </g>
-                {unit.lessons.map((node) => {
-                  const value = progress[node.lesson.id] ?? 0;
-                  const current = node.lesson.id === currentLessonId;
-                  const remembered = memoryLessonIds.has(node.lesson.id);
-                  const fill = current
-                    ? "var(--accent-text)"
-                    : value >= 1
-                      ? "var(--success)"
-                      : value > 0
-                        ? "var(--ink-45)"
-                        : "var(--depth-card)";
-                  return (
-                    <g
-                      key={node.lesson.id}
-                      onClick={() => onOpenLesson(node.lesson.id)}
-                      className="bmap-node cursor-pointer"
-                      style={pop()}
-                    >
-                      <title>
-                        {`${node.lesson.title}${current ? " — current" : value >= 1 ? " — done" : value > 0 ? " — in progress" : ""}${remembered ? " · in your mentor's memory" : ""}`}
-                      </title>
-                      {current ? (
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r="12"
-                          fill="url(#brainmap-aurora)"
-                          className="bmap-glow"
-                        />
-                      ) : remembered ? (
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r="9"
-                          fill="url(#brainmap-memory)"
-                          className="bmap-glow"
-                        />
-                      ) : null}
-                      {/* A generous invisible hit area so 3.5px dots are actually tappable. */}
-                      <circle cx={node.x} cy={node.y} r="9" fill="transparent" />
-                      <circle
-                        cx={node.x}
-                        cy={node.y}
-                        r="3.5"
-                        fill={fill}
-                        stroke={value > 0 || current ? "none" : "var(--ink-30)"}
-                        strokeWidth="1"
-                      />
-                    </g>
-                  );
-                })}
-              </g>
-            ))}
-          </g>
-        ))}
+        {renderNodes.map((entry) => entry.node)}
       </svg>
     </div>
   );
