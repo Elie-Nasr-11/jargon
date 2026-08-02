@@ -8477,3 +8477,33 @@ work still surfaces on Home. (3) Phases 2 (streaming), 3 (continuity), 4 (hygien
 next per the owner's phase order.
 Suggested next task: live pass of Phase 1 (reload mid-step → Continue present; answered
 quiz stays answered; spine taps revisit; dock opens the assessment), then Phase 2.
+
+## Claude -> Codex / Human - 2026-08-02 (round 15 — chat-flow Phase 2)
+
+Status: Finished
+Summary: STREAMING. Server: stream:true → SSE (delta events = reply text extracted live
+from the streamed JSON via makeReplyExtractor; terminal envelope event = {status,
+envelope} identical to the JSON path), sseResponse wrapper + finishTurn closure (the
+whole attachment→mentor→persist pipeline runs inside the stream), streaming provider
+adapters for OpenAI (stream_options.include_usage) and Anthropic (message_start/
+content_block_delta/message_delta, max_tokens guard kept), usage still recorded. Rate
+limiter folded into loadContext wave 1 (recentStudentSends) — no serial pre-turn round
+trip. Client: invokeTypedChat gains onDelta + SSE parsing + inactivity watchdog (60s
+no-bytes for streams; flat 120s for JSON), useConversation buffers deltas and flushes
+into the thinking placeholder at ~12fps, Transcript paints streamed prose (MessageBody)
+in place of "Thinking…", autoscroll tracks the growing stream (scrollKey folds text
+length). Non-SSE responses (controls/replays/refusals/old server) parse exactly as
+before.
+Files changed: supabase/functions/chat/index.ts; lib/api.ts; student/{useConversation,
+Transcript,StudentApp}.tsx; features/student/chat/chatMessages.ts; tests
+(test_chat_streaming.py new; phase11 + student_surface re-pins); docs.
+Tests run: python suite 397 OK (skipped=4); tsc 0 errors; eslint 0 errors; build green;
+edge-fn ad-hoc tsc shows only the 4 pre-existing loose-typing artifacts (untouched).
+Remaining concerns: (1) The reply extractor assumes "reply" is the contract's first key
+(it is, per SYSTEM_PROMPT) — a contract reorder would silently disable live paint (not
+correctness); test pins guard the contract. (2) Voice realtime submits through the same
+loop and simply benefits; TTS read-aloud still waits for the final text. (3) Phase 3
+(continuity: rolling mid-session summary, envelope.session consumption, percent
+progress, completion affordance) is next.
+Suggested next task: live pass — send a turn and watch prose paint immediately; check a
+control turn (Continue) still lands instantly as JSON; then Phase 3.

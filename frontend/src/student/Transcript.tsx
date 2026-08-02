@@ -448,9 +448,15 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
         >
           {section.items.map((message) => {
             if (message.role === "thinking") {
+              // Chat-flow Phase 2: once deltas arrive, the placeholder paints the reply
+              // live; before the first delta it stays the quiet "Thinking…" line.
               return (
                 <Bubble key={message.id} align="start" tone="mentor">
-                  <span className="text-muted-foreground">Thinking…</span>
+                  {message.text ? (
+                    <MessageBody text={message.text} />
+                  ) : (
+                    <span className="text-muted-foreground">Thinking…</span>
+                  )}
                 </Bubble>
               );
             }

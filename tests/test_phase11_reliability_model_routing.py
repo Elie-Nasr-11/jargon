@@ -56,7 +56,9 @@ class Phase11ReliabilityModelRoutingTests(unittest.TestCase):
         for fragment in (
             "CHAT_RATE_LIMIT_WINDOW_MS",
             "CHAT_RATE_LIMIT_MAX",
-            "isChatRateLimited",
+            # Phase 2 (chat-flow): the limiter reads loadContext's wave-1 count — the
+            # dedicated isChatRateLimited round trip is gone, the 429 contract is not.
+            "recentStudentSends >= CHAT_RATE_LIMIT_MAX",
             "chat_rate_limit",
             "Too many chat turns at once",
             "429",

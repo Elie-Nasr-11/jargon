@@ -3087,24 +3087,98 @@ export async function invokeTypedChat(input: {
   // server validates it against a closed set and caps what the turn may discharge; absent or
   // unrecognized means today's behavior, so older callers are unaffected.
   mode?: string;
+  // Chat-flow Phase 2: when supplied, the call opts into the server's SSE path and this
+  // receives the mentor's reply text incrementally. The resolved envelope is identical to
+  // the JSON path's. Deterministic turns (controls, replays, refusals) still answer as
+  // plain JSON even when streaming was requested — both shapes are handled below.
+  onDelta?: (text: string) => void;
 }) {
-  const response = await fetchWithTimeout(functionUrl("chat"), {
-    method: "POST",
-    headers: authHeaders(await freshAccessToken(input.accessToken)),
-    body: JSON.stringify({
-      lesson_id: input.lessonId,
-      session_id: input.sessionId || undefined,
-      answer: input.answer,
-      control: input.control,
-      mentor_preferences: input.mentorPreferences,
-      mode: input.mode,
-    }),
-  });
-  const data = (await response.json()) as TypedChatEnvelope;
-  if (!response.ok || data.status === "error") {
-    throw new Error(data.reply || "Chat request failed.");
+  // Streaming has no fixed deadline — a healthy stream keeps bytes flowing, so the guard
+  // is INACTIVITY (no bytes for 60s), not total duration. The JSON path gets a flat
+  // budget sized for a 3-model-call turn instead of the old generic 30s (which aborted
+  // client-side while the server finished and persisted the reply anyway).
+  const controller = new AbortController();
+  let watchdog = 0;
+  const armWatchdog = (ms: number) => {
+    window.clearTimeout(watchdog);
+    watchdog = window.setTimeout(() => controller.abort(), ms);
+  };
+  armWatchdog(input.onDelta ? 60_000 : 120_000);
+  try {
+    const response = await fetch(functionUrl("chat"), {
+      method: "POST",
+      headers: authHeaders(await freshAccessToken(input.accessToken)),
+      signal: controller.signal,
+      body: JSON.stringify({
+        lesson_id: input.lessonId,
+        session_id: input.sessionId || undefined,
+        answer: input.answer,
+        control: input.control,
+        mentor_preferences: input.mentorPreferences,
+        mode: input.mode,
+        stream: input.onDelta ? true : undefined,
+      }),
+    });
+
+    const isSse = (response.headers.get("Content-Type") || "").includes("text/event-stream");
+    if (!isSse || !response.body) {
+      const data = (await response.json()) as TypedChatEnvelope;
+      if (!response.ok || data.status === "error") {
+        throw new Error(data.reply || "Chat request failed.");
+      }
+      return data;
+    }
+
+    // SSE: `delta` events carry reply text; the terminal `envelope` event carries the
+    // full envelope + status exactly as the JSON path would have returned them.
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let eventName = "";
+    let final: { status: number; envelope: TypedChatEnvelope } | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      armWatchdog(60_000);
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, idx).trimEnd();
+        buffer = buffer.slice(idx + 1);
+        if (line.startsWith("event:")) {
+          eventName = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          const payload = line.slice(5).trim();
+          if (eventName === "delta") {
+            try {
+              const parsed = JSON.parse(payload) as { text?: string };
+              if (parsed.text) input.onDelta?.(parsed.text);
+            } catch {
+              // A torn delta line is cosmetic — the envelope is authoritative.
+            }
+          } else if (eventName === "envelope") {
+            try {
+              final = JSON.parse(payload) as { status: number; envelope: TypedChatEnvelope };
+            } catch {
+              // Fall through to the missing-envelope error below.
+            }
+          }
+        }
+      }
+    }
+    if (!final) throw new Error("The mentor's reply stream ended unexpectedly. Try again.");
+    if (final.status >= 400 || final.envelope.status === "error") {
+      throw new Error(final.envelope.reply || "Chat request failed.");
+    }
+    return final.envelope;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("The mentor took too long to answer. Try again in a moment.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(watchdog);
   }
-  return data;
 }
 
 // P8: ask artifact-live to build a mentor activity for the current step. A long call by

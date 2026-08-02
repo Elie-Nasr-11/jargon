@@ -364,6 +364,60 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Chat-flow Phase 2: the SSE response wrapper. `run` is the turn's finishTurn closure;
+// its reply deltas stream out as `delta` events and its final Response (success OR a
+// typedError) is delivered whole as the terminal `envelope` event, status included, so
+// the client resolves exactly the same envelope it would have gotten from the JSON path.
+function sseResponse(
+  run: (onDelta: (text: string) => void) => Promise<Response>,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      const send = (event: string, data: string) => {
+        try {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
+        } catch {
+          // Client disconnected mid-stream; the turn still completes server-side.
+        }
+      };
+      (async () => {
+        try {
+          const response = await run((text) => send("delta", JSON.stringify({ text })));
+          send(
+            "envelope",
+            JSON.stringify({ status: response.status, envelope: await response.json() }),
+          );
+        } catch (err) {
+          send(
+            "envelope",
+            JSON.stringify({
+              status: 500,
+              envelope: {
+                status: "error",
+                reply: `Error: ${errorMessage(err)}`,
+                next_action: "reply",
+              },
+            }),
+          );
+        }
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
+      })();
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+    },
+  });
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
@@ -936,22 +990,6 @@ async function recentRowCount(
   return rows.length;
 }
 
-async function isChatRateLimited(
-  config: SupabaseConfig,
-  userId: string,
-  sessionId: string,
-): Promise<boolean> {
-  const since = encodeURIComponent(
-    new Date(Date.now() - CHAT_RATE_LIMIT_WINDOW_MS).toISOString(),
-  );
-  // Count only the STUDENT'S sends — mentor rows would silently halve the real ceiling.
-  const count = await recentRowCount(
-    config,
-    `learning_turns?user_id=eq.${encodeURIComponent(userId)}&session_id=eq.${encodeURIComponent(sessionId)}&role=eq.student&created_at=gte.${since}&select=id&limit=${CHAT_RATE_LIMIT_MAX + 1}`,
-  );
-  return count >= CHAT_RATE_LIMIT_MAX;
-}
-
 async function loadOrCreateSession(
   config: SupabaseConfig,
   userId: string,
@@ -1131,6 +1169,258 @@ async function callAnthropic(
     inputTokens: Number(usage.input_tokens || 0),
     outputTokens: Number(usage.output_tokens || 0),
     cachedTokens: Number(usage.cache_read_input_tokens || 0),
+    latencyMs: Date.now() - startedAt,
+  };
+}
+
+
+// --- Chat-flow Phase 2: SSE streaming ---------------------------------------------
+// The mentor's output contract is a JSON object whose FIRST key is "reply". This
+// stateful extractor eats the raw JSON as it streams and emits just the reply string's
+// contents (unescaped, incl. \uXXXX) so the client can paint prose live while the full
+// object still arrives for parsing. If the model deviates (reply not first, malformed),
+// extraction stops emitting — harmless: the final envelope carries the whole reply.
+function makeReplyExtractor(emit: (text: string) => void): (chunk: string) => void {
+  let head = "";
+  let phase: "seek" | "inside" | "done" = "seek";
+  let escaped = false;
+  let inUnicode = false;
+  let unicodeHex = "";
+  return (chunk: string) => {
+    if (phase === "done" || !chunk) return;
+    if (phase === "seek") {
+      head += chunk;
+      const match = head.match(/"reply"\s*:\s*"/);
+      if (!match || match.index === undefined) {
+        if (head.length > 4000) phase = "done";
+        return;
+      }
+      chunk = head.slice(match.index + match[0].length);
+      head = "";
+      phase = "inside";
+    }
+    let out = "";
+    for (const ch of chunk) {
+      if (inUnicode) {
+        unicodeHex += ch;
+        if (unicodeHex.length === 4) {
+          const code = Number.parseInt(unicodeHex, 16);
+          if (Number.isFinite(code)) out += String.fromCharCode(code);
+          unicodeHex = "";
+          inUnicode = false;
+        }
+        continue;
+      }
+      if (escaped) {
+        escaped = false;
+        if (ch === "n") out += "\n";
+        else if (ch === "t") out += "\t";
+        else if (ch === "u") inUnicode = true;
+        else if (ch === "r") { /* swallow \r */ }
+        else out += ch;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        phase = "done";
+        break;
+      }
+      out += ch;
+    }
+    if (out) emit(out);
+  };
+}
+
+// Minimal SSE line reader for the provider streams: yields each "data:" payload.
+async function readSseStream(
+  body: ReadableStream<Uint8Array>,
+  onData: (data: string) => void,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (line.startsWith("data:")) onData(line.slice(5).trim());
+    }
+  }
+}
+
+// Streaming mentor call: same JSON-mode contract and result shape as callModel, but raw
+// tokens flow through onRaw as they arrive. Mentor turn only — router and graders stay
+// blocking (small, parallel, and their output is never shown to anyone).
+async function callModelStream(
+  messages: unknown[],
+  route: ModelRoute,
+  onRaw: (chunk: string) => void,
+): Promise<OpenAIResult> {
+  const provider = envText("TUTOR_PROVIDER", "openai").toLowerCase();
+  const model = modelFor(route);
+  const temperature = temperatureFor(route);
+  if (provider === "anthropic") {
+    return await callAnthropicStream(messages, route, model, onRaw);
+  }
+  return await callOpenAIStream(messages, route, model, temperature, onRaw);
+}
+
+async function callOpenAIStream(
+  messages: unknown[],
+  route: ModelRoute,
+  model: string,
+  temperature: number,
+  onRaw: (chunk: string) => void,
+): Promise<OpenAIResult> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
+  const startedAt = Date.now();
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature,
+      response_format: { type: "json_object" },
+      stream: true,
+      stream_options: { include_usage: true },
+    }),
+  });
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error?.message || res.statusText);
+  }
+  let content = "";
+  let usage: DbRow = {};
+  let resolvedModel = model;
+  await readSseStream(res.body, (data) => {
+    if (data === "[DONE]") return;
+    let parsed: DbRow;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return;
+    }
+    const delta = (parsed as { choices?: { delta?: { content?: unknown } }[] })
+      ?.choices?.[0]?.delta?.content;
+    if (typeof delta === "string" && delta) {
+      content += delta;
+      onRaw(delta);
+    }
+    if (parsed.usage && typeof parsed.usage === "object") usage = parsed.usage as DbRow;
+    if (typeof parsed.model === "string") resolvedModel = parsed.model;
+  });
+  const promptDetails =
+    usage.prompt_tokens_details && typeof usage.prompt_tokens_details === "object"
+      ? (usage.prompt_tokens_details as DbRow)
+      : {};
+  return {
+    content,
+    model: resolvedModel,
+    route,
+    provider: "openai",
+    inputTokens: Number(usage.prompt_tokens || 0),
+    outputTokens: Number(usage.completion_tokens || 0),
+    cachedTokens: Number(promptDetails.cached_tokens || 0),
+    latencyMs: Date.now() - startedAt,
+  };
+}
+
+async function callAnthropicStream(
+  messages: unknown[],
+  route: ModelRoute,
+  model: string,
+  onRaw: (chunk: string) => void,
+): Promise<OpenAIResult> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
+  const rows = messages as DbRow[];
+  const system = `${rows
+    .filter((m) => m.role === "system")
+    .map((m) => String(m.content || ""))
+    .join("\n\n")}\n\nRespond with ONLY a single valid JSON object and nothing else.`;
+  const convo = rows
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: Array.isArray(m.content) ? m.content : String(m.content || ""),
+    }));
+  const startedAt = Date.now();
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      system,
+      messages: convo.length ? convo : [{ role: "user", content: "Begin." }],
+      max_tokens: 4096,
+      stream: true,
+    }),
+  });
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => null);
+    throw new Error(
+      (data as { error?: { message?: string } })?.error?.message || res.statusText,
+    );
+  }
+  let content = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cachedTokens = 0;
+  let resolvedModel = model;
+  let stopReason = "";
+  await readSseStream(res.body, (data) => {
+    let parsed: DbRow;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (parsed.type === "message_start") {
+      const message = (parsed.message || {}) as DbRow;
+      const usage = (message.usage || {}) as DbRow;
+      inputTokens = Number(usage.input_tokens || 0);
+      cachedTokens = Number(usage.cache_read_input_tokens || 0);
+      if (typeof message.model === "string") resolvedModel = message.model;
+    } else if (parsed.type === "content_block_delta") {
+      const delta = (parsed.delta || {}) as DbRow;
+      if (delta.type === "text_delta" && typeof delta.text === "string" && delta.text) {
+        content += delta.text;
+        onRaw(delta.text);
+      }
+    } else if (parsed.type === "message_delta") {
+      const usage = (parsed.usage || {}) as DbRow;
+      outputTokens = Number(usage.output_tokens || outputTokens);
+      const delta = (parsed.delta || {}) as DbRow;
+      if (typeof delta.stop_reason === "string") stopReason = delta.stop_reason;
+    }
+  });
+  if (stopReason === "max_tokens") {
+    throw new Error("Anthropic reply was truncated at max_tokens; raise max_tokens.");
+  }
+  return {
+    content: extractJsonObject(content),
+    model: resolvedModel,
+    route,
+    provider: "anthropic",
+    inputTokens,
+    outputTokens,
+    cachedTokens,
     latencyMs: Date.now() - startedAt,
   };
 }
@@ -2951,6 +3241,10 @@ async function loadContext(
   milestone: DbRow | null;
   quiz: DbRow | null;
   recentTurns: DbRow[];
+  // Chat-flow Phase 2: the student's send count in the rate-limit window, counted in
+  // wave 1 alongside everything else — the limiter no longer costs its own serial
+  // round trip before the turn starts.
+  recentStudentSends: number;
   mastery: DbRow[];
   resources: DbRow[];
   resourceChunks: DbRow[];
@@ -2976,6 +3270,7 @@ async function loadContext(
     lesson,
     allActivities,
     recentTurns,
+    recentStudentSends,
     mastery,
     resources,
     resourceInteractions,
@@ -2995,6 +3290,10 @@ async function loadContext(
       config,
       `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=12&select=role,stage,response_mode,content,payload,created_at`,
     ),
+    recentRowCount(
+      config,
+      `learning_turns?user_id=eq.${encodeURIComponent(userId)}&session_id=eq.${encodeURIComponent(String(session.id))}&role=eq.student&created_at=gte.${encodeURIComponent(new Date(Date.now() - CHAT_RATE_LIMIT_WINDOW_MS).toISOString())}&select=id&limit=${CHAT_RATE_LIMIT_MAX + 1}`,
+    ).catch(() => 0),
     loadMany(
       config,
       `student_mastery?user_id=eq.${encodeURIComponent(userId)}&select=skill_key,level,score`,
@@ -3112,6 +3411,7 @@ async function loadContext(
     milestone,
     quiz,
     recentTurns,
+    recentStudentSends,
     mastery,
     resources,
     resourceChunks,
@@ -3977,6 +4277,10 @@ async function handleTypedRequest(
   // v5.0 student-declared turn mode. Absent (any client older than the selector) or
   // unrecognized → null → today's behavior, unchanged.
   const declaredMode = studentTurnMode(body.mode);
+  // Chat-flow Phase 2: stream === true opts this turn into the SSE path. Deterministic
+  // early returns (control turns, replays, refusals, errors) still respond as plain JSON
+  // regardless — they are fast and have no prose to stream; the client handles both.
+  const wantsStream = body.stream === true;
   if (!lessonId) return typedError("lesson_id is required.", 400);
 
   let config: SupabaseConfig;
@@ -4392,7 +4696,9 @@ async function handleTypedRequest(
     helpPolicy.finalAnswerPolicy === "never" ||
     (helpPolicy.finalAnswerPolicy === "after_attempt" && !hasAttempt);
 
-    if (await isChatRateLimited(config, userId, sessionId)) {
+    // Chat-flow Phase 2: the limiter reads the count loadContext already fetched in its
+    // parallel wave — no dedicated serial round trip before the turn starts.
+    if (context.recentStudentSends >= CHAT_RATE_LIMIT_MAX) {
       scheduleBackground(
         recordRuntimeEvent(config, {
           userId,
@@ -5161,6 +5467,13 @@ async function handleTypedRequest(
       },
     ];
 
+    // Chat-flow Phase 2: everything from attachment resolution through the final envelope
+    // runs inside this closure so the STREAMING branch can execute it inside an SSE
+    // ReadableStream while the JSON branch simply awaits it. onReplyDelta receives the
+    // mentor's reply text incrementally (already unescaped); null = no streaming.
+    const finishTurn = async (
+      onReplyDelta: ((text: string) => void) | null,
+    ): Promise<Response> => {
     // v9: attach the student's files to THIS user turn as vision/text blocks (main route only — the
     // graders never see them). resolveAttachments re-reads ownership + fetches bytes under the
     // caller's JWT; over budget → a text note. Blocks go AFTER the authoritative payload text.
@@ -5176,7 +5489,9 @@ async function handleTypedRequest(
       msgs[1] = { role: "user", content: [{ type: "text", text: base }, ...attachmentBlocks] };
     }
 
-    const openAIResult = await callModel(messages, true, "default");
+    const openAIResult = onReplyDelta
+      ? await callModelStream(messages, "default", makeReplyExtractor(onReplyDelta))
+      : await callModel(messages, true, "default");
     scheduleBackground(
       recordModelUsage(
         config,
@@ -5843,6 +6158,10 @@ async function handleTypedRequest(
     }
 
     return json(envelope);
+    };
+
+    if (wantsStream) return sseResponse(finishTurn);
+    return await finishTurn(null);
   } catch (err) {
     scheduleBackground(
       recordRuntimeEvent(config, {

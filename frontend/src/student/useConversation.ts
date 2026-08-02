@@ -586,6 +586,25 @@ export function useConversation() {
         { id: thinkingId, role: "thinking" as const },
       ]);
 
+      // Chat-flow Phase 2: stream the mentor's reply into the thinking placeholder as it
+      // arrives. Deltas are buffered and flushed at ~12fps — a setMessages per token would
+      // re-render the whole transcript hundreds of times per turn for no visible gain.
+      let streamedText = "";
+      let flushTimer = 0;
+      const flushStream = () => {
+        flushTimer = 0;
+        const snapshot = streamedText;
+        setMessages((current) =>
+          current.map((m) =>
+            m.id === thinkingId && m.role === "thinking" ? { ...m, text: snapshot } : m,
+          ),
+        );
+      };
+      const onDelta = (text: string) => {
+        streamedText += text;
+        if (!flushTimer) flushTimer = window.setTimeout(flushStream, 80);
+      };
+
       const work = (async (): Promise<TypedChatEnvelope | null> => {
         try {
           const session = await getSession();
@@ -600,6 +619,7 @@ export function useConversation() {
             control: options?.control,
             mentorPreferences: mentorToPreferences(store.getMentor()),
             mode,
+            onDelta,
           });
           applyEnvelope(envelope);
           setMessages((current) => [
@@ -627,6 +647,7 @@ export function useConversation() {
           setError(message);
           return null;
         } finally {
+          window.clearTimeout(flushTimer);
           sendingRef.current = false;
           setSending(false);
         }

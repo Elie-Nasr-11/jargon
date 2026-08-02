@@ -435,7 +435,13 @@ export function StudentApp({
     <ChatWindow
       mode={turnMode}
       onModeChange={setTurnMode}
-      scrollKey={lastMessage ? lastMessage.id : ""}
+      // The streamed placeholder keeps one id while its text grows — fold the text length
+      // in so autoscroll tracks the live reply too (the near-bottom guard still applies).
+      scrollKey={
+        lastMessage
+          ? `${lastMessage.id}:${lastMessage.role === "thinking" ? (lastMessage.text?.length ?? 0) : 0}`
+          : ""
+      }
       offers={conversation.offers}
       // Resources is not a conversation mode — it opens the materials destination.
       onOpenResources={() => onSelectDestination("resources")}

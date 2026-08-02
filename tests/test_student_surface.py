@@ -30,7 +30,7 @@ MODEL = (FRONT / "features" / "student" / "chat" / "chatMessages.ts").read_text(
 
 class StudentSurfaceWire(unittest.TestCase):
     def test_turn_mode_reaches_the_request_body(self):
-        fn = API[API.index("export async function invokeTypedChat(") :][:1400]
+        fn = API[API.index("export async function invokeTypedChat(") :][:4000]
         self.assertIn("mode?: string", fn)
         self.assertIn("mode: input.mode", fn)
 

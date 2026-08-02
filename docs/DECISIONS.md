@@ -759,3 +759,28 @@ Decisions shipped in Phase 1:
 - Also: turnMode resets to the spine on lesson switch; the transcript autoscrolls
   (bottom-anchored, never yanking a reader who scrolled up); a conversation idle >30 min
   shows re-entry rows (pick up / recap / check me).
+
+## 2026-08-02 — Chat-flow Phase 2: the mentor streams (SSE in place, JSON contract kept)
+
+- **Transport**: the same `chat` function serves both shapes. `stream: true` opts a turn
+  into `text/event-stream`; deterministic early returns (control turns, replays, refusals,
+  auth/validation errors) still answer as plain JSON — they are instant and have no prose
+  to stream — and the client handles both by Content-Type. No second endpoint.
+- **The JSON output contract survives streaming.** The mentor still emits
+  {reply, understanding, misconception, inquiry} (misconception rows and the
+  confusion/curiosity split depend on it). Streaming works by a stateful extractor
+  (makeReplyExtractor) that eats the raw JSON as it arrives and emits just the `reply`
+  string's contents — "reply" is the contract's first key, so prose flows from the first
+  tokens. If a model ever deviates, extraction silently stops and the terminal envelope
+  still carries everything: the failure mode is "no live paint", never a wrong reply.
+- **Envelope-as-terminal-event**: the SSE stream ends with one `envelope` event carrying
+  {status, envelope} — byte-equivalent to the JSON path's response, so applyEnvelope,
+  persistence, dedup replay, and every downstream consumer are untouched. finishTurn
+  (the whole post-grader pipeline) runs inside the stream; the turn completes server-side
+  even if the client disconnects mid-stream.
+- **Routers/graders stay blocking** — small, parallel, and their output is never shown.
+- **Timeouts are phase-aware**: streams are guarded by INACTIVITY (60s without bytes),
+  not total duration; the JSON path's flat budget rises 30s → 120s (the old generic cap
+  aborted client-side while the server finished and persisted the reply anyway).
+- **The rate limiter lost its serial round trip**: the windowed student-send count rides
+  loadContext's wave-1 Promise.all (recentStudentSends); the 429 contract is unchanged.

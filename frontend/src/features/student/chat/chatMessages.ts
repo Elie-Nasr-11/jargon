@@ -86,7 +86,10 @@ export type Msg =
     }
   | { id: string; role: "teacher"; text: string; createdAt?: string }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
-  | { id: string; role: "thinking" };
+  // Chat-flow Phase 2: `text` accumulates the mentor's streamed reply while the turn is
+  // in flight — the placeholder paints prose live, then the real envelope message
+  // replaces it. Absent until the first delta arrives ("Thinking…" renders meanwhile).
+  | { id: string; role: "thinking"; text?: string };
 
 export const uid = () => Math.random().toString(36).slice(2);
 
