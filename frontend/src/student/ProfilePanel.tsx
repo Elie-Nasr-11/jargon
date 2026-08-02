@@ -14,10 +14,11 @@ import { ClassAvatar } from "@/student/ClassList";
 import { SectionLabel, StatPill } from "@/student/summaryBits";
 import type { StudentClass, StudentGradeRow } from "@/lib/types";
 
-// The student's Profile panel (round 11): who you are, your account, your standing note
-// to the mentor, and your classes at a glance. Everything here edits the student's OWN
-// rows under owner RLS — grade stays read-only (the school sets it), and the mentor note
-// is style-only by the server's STUDENT INSTRUCTIONS guardrail.
+// The student's Profile panel (round 11): who you are, your account, and your classes at
+// a glance. Everything here edits the student's OWN rows under owner RLS — grade stays
+// read-only (the school sets it). The standing mentor note (MentorNoteCard, exported
+// below) mounts on the CUSTOMIZE surface instead: it shapes HOW the mentor teaches, and
+// stays style-only by the server's STUDENT INSTRUCTIONS guardrail.
 
 const FIELD =
   "w-full rounded-control border border-border bg-depth-field px-3 py-2 text-body text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40";
@@ -43,12 +44,11 @@ export function ProfilePanel() {
   const [grade, setGrade] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  // Identity + mentor note drafts (editable copies of the profile row).
+  // Identity drafts (editable copies of the profile row). The mentor note lives on the
+  // CUSTOMIZE surface (MentorNoteCard below) with the rest of the mentor-shaping controls.
   const [fullName, setFullName] = useState("");
   const [preferredName, setPreferredName] = useState("");
-  const [instructions, setInstructions] = useState("");
   const [identityState, setIdentityState] = useState<SaveState>("idle");
-  const [noteState, setNoteState] = useState<SaveState>("idle");
 
   // Account.
   const [password, setPassword] = useState("");
@@ -72,7 +72,6 @@ export function ProfilePanel() {
         if (cancelled) return;
         setFullName(profile?.name ?? "");
         setPreferredName(profile?.preferred_name ?? "");
-        setInstructions(profile?.mentor_instructions ?? "");
         setGrade(profile?.grade ?? null);
         setLoaded(true);
       })
@@ -268,39 +267,6 @@ export function ProfilePanel() {
         </Card>
       </section>
 
-      {/* ---- Mentor note -------------------------------------------------------------- */}
-      <section>
-        <SectionLabel>Note to your mentor</SectionLabel>
-        <Card>
-          <textarea
-            className={`${FIELD} min-h-[88px] resize-none`}
-            value={instructions}
-            maxLength={500}
-            placeholder='Standing instructions for how you like to learn — "use soccer examples", "let me try before hints"…'
-            onChange={(e) => {
-              setInstructions(e.target.value);
-              setNoteState("idle");
-            }}
-          />
-          <div className="mt-2 flex items-center gap-2">
-            <span className="flex-1 text-meta text-muted-foreground">
-              Style only — your mentor keeps its teaching rules.{" "}
-              <span className="font-mono tabular-nums">{instructions.length}/500</span>
-            </span>
-            <button
-              type="button"
-              disabled={noteState === "busy"}
-              onClick={() =>
-                save({ mentor_instructions: instructions.trim() || null }, setNoteState)
-              }
-              className={SAVE_BUTTON}
-            >
-              {saveLabel(noteState)}
-            </button>
-          </div>
-        </Card>
-      </section>
-
       {/* ---- Classes & performance ---------------------------------------------------- */}
       <section>
         <SectionLabel>Classes &amp; performance</SectionLabel>
@@ -351,5 +317,76 @@ export function ProfilePanel() {
         </Card>
       </section>
     </div>
+  );
+}
+
+// The student's standing note to their mentor — mounted on the CUSTOMIZE surface (it
+// shapes HOW the mentor teaches, so it lives with tone/pace/voice, not with account
+// info). Self-contained: loads and saves its own profile column.
+export function MentorNoteCard() {
+  const [instructions, setInstructions] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [noteState, setNoteState] = useState<SaveState>("idle");
+
+  useEffect(() => {
+    let cancelled = false;
+    void getSession()
+      .then(async (session) => {
+        const userId = session?.user?.id;
+        if (!userId) return;
+        const profile = await fetchProfile(userId).catch(() => null);
+        if (cancelled) return;
+        setInstructions(profile?.mentor_instructions ?? "");
+        setLoaded(true);
+      })
+      .catch(() => !cancelled && setLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <section className="mt-6">
+      <SectionLabel>Note to your mentor</SectionLabel>
+      <Card>
+        {!loaded ? (
+          <p className="flex items-center gap-2 text-meta text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+          </p>
+        ) : (
+          <>
+            <textarea
+              className={`${FIELD} min-h-[88px] resize-none`}
+              value={instructions}
+              maxLength={500}
+              placeholder='Standing instructions for how you like to learn — "use soccer examples", "let me try before hints"…'
+              onChange={(e) => {
+                setInstructions(e.target.value);
+                setNoteState("idle");
+              }}
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <span className="flex-1 text-meta text-muted-foreground">
+                Style only — your mentor keeps its teaching rules.{" "}
+                <span className="font-mono tabular-nums">{instructions.length}/500</span>
+              </span>
+              <button
+                type="button"
+                disabled={noteState === "busy"}
+                onClick={() => {
+                  setNoteState("busy");
+                  void updateOwnProfile({ mentor_instructions: instructions.trim() || null })
+                    .then(() => setNoteState("done"))
+                    .catch(() => setNoteState("error"));
+                }}
+                className={SAVE_BUTTON}
+              >
+                {saveLabel(noteState)}
+              </button>
+            </div>
+          </>
+        )}
+      </Card>
+    </section>
   );
 }

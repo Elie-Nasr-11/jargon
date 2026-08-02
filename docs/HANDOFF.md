@@ -8268,3 +8268,16 @@ preferred_name/mentor_instructions via can_view_student but doesn't render them 
 Suggested next task: live pass — set a preferred name + a mentor note as demo-student,
 open a lesson and confirm the mentor uses the name and honors the style note; change
 password round-trip; check the new memory chips after a completed session.
+
+## Claude -> Codex / Human - 2026-08-01 (round 11b)
+
+Status: Finished
+Summary: "Note to your mentor" moved from Profile to CUSTOMIZE (it shapes HOW the mentor
+teaches, so it lives with tone/pace/voice). Extracted as a self-contained MentorNoteCard
+(exported from ProfilePanel.tsx — loads/saves its own profiles.mentor_instructions column)
+and mounted under MentorControls on the customize destination; the Profile page keeps
+Identity, Account, and Classes & performance. Server contract unchanged.
+Files changed: student/{ProfilePanel,StudentApp}.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: none.
+Suggested next task: —

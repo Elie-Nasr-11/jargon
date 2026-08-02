@@ -31,7 +31,7 @@ import { ClassList, ClassSwitcher } from "@/student/ClassList";
 import { ClassSummary } from "@/student/ClassSummary";
 import { checkpointRowsByClass } from "@/student/checkpoints";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
-import { ProfilePanel } from "@/student/ProfilePanel";
+import { MentorNoteCard, ProfilePanel } from "@/student/ProfilePanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
 import { ResizeHandle } from "@/student/ResizeHandle";
 import { StudentSidebar } from "@/student/StudentSidebar";
@@ -541,6 +541,9 @@ export function StudentApp({
                       voice={voice}
                       onVoiceChange={saveVoice}
                     />
+                    {/* The standing mentor note shapes HOW the mentor teaches — it
+                        belongs with these controls, not on the Profile page. */}
+                    <MentorNoteCard />
                   </div>
                 ) : destination === "profile" ? (
                   <ProfilePanel />
