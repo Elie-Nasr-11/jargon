@@ -701,6 +701,10 @@ export type StudentMemoryProfile = {
   strengths?: string[];
   struggles?: string[];
   preferences?: string[];
+  // Memory files (round 11): overarching takeaways — free-form observations and topics
+  // the mentor quietly steers around.
+  notes?: string[];
+  avoid?: string[];
   // Memory v2 decay bookkeeping ("kind:text" -> ISO last-affirmed date). Server-maintained;
   // the UI never renders it.
   affirmed?: Record<string, string>;
@@ -1035,6 +1039,10 @@ export type Profile = {
   id: string;
   name: string | null;
   grade: string | null;
+  // Round 11: what the student wants to be called + their standing mentor note
+  // (style-only custom instruction — the chat fn guardrails it server-side).
+  preferred_name?: string | null;
+  mentor_instructions?: string | null;
 };
 
 export type Organization = {

@@ -371,6 +371,35 @@ export async function fetchProfile(userId: string) {
   return (data as Profile | null) || null;
 }
 
+// Round 11 profile page: the student edits their own row (RLS "Users can update own
+// profile"). Only the columns the profile page owns — never role/grade escalation paths.
+export async function updateOwnProfile(patch: {
+  name?: string | null;
+  preferred_name?: string | null;
+  mentor_instructions?: string | null;
+}): Promise<void> {
+  const session = await getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error("Sign in to update your profile.");
+  const { error } = await supabase.from("profiles").update(patch).eq("id", userId);
+  if (error) throw error;
+}
+
+// Password change for the signed-in student (GoTrue validates strength server-side).
+export async function changeOwnPassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+// The email-link fallback for a student who wants to re-set from scratch.
+export async function sendPasswordReset(): Promise<void> {
+  const session = await getSession();
+  const email = session?.user?.email;
+  if (!email) throw new Error("Sign in to reset your password.");
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (error) throw error;
+}
+
 export async function isPlatformAdmin(userId: string) {
   const { data, error } = await supabase
     .from("platform_admins")

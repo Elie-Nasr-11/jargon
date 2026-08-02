@@ -127,7 +127,12 @@ function MemoryCard({
   }, [loaded]);
 
   const profile = memory?.profile;
-  const empty = !profile?.narrative && !profile?.strengths?.length && !profile?.struggles?.length;
+  const empty =
+    !profile?.narrative &&
+    !profile?.strengths?.length &&
+    !profile?.struggles?.length &&
+    !profile?.notes?.length &&
+    !profile?.avoid?.length;
 
   return (
     <section
@@ -190,6 +195,8 @@ function MemoryCard({
           ) : null}
           <Chips label="Strengths" values={profile?.strengths ?? []} />
           <Chips label="Working on" values={profile?.struggles ?? []} />
+          <Chips label="Notes" values={profile?.notes ?? []} />
+          <Chips label="Steering around" values={profile?.avoid ?? []} />
         </>
       )}
       {/* The brain map rides below whatever the memory says — it has value from the very

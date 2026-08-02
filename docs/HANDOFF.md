@@ -8229,3 +8229,42 @@ glows age out with the fetch window, which matches the memory system's own recen
 Suggested next task: eyeball the constellation as demo-student in both themes (mixed
 progress + glows over the seeded classes), tap a dot, then Reset memory and watch the
 glows clear.
+
+## Claude -> Codex / Human - 2026-08-01 (round 11)
+
+Status: Finished
+Summary: MEMORY FILES + STUDENT PROFILE. (1) MEMORY FILES: the rolling profile gained two
+overarching-takeaway files — notes (observations worth carrying across sessions) and avoid
+(topics/approaches that upset, bore, or derail the student; the summarizer may add one
+ONLY on clear transcript evidence). Both ride the full v2 machinery (rollList, affirmed
+stamps, 120d trait TTL, read+write decay, caps) and the prompt view. New system rules:
+profile.avoid = quiet steering — never name the list, never skip curriculum the lesson
+itself requires; the memory card shows both as "Notes" / "Steering around" chips (Reset
+erases them with everything else). (2) STUDENT PROFILE: profiles gained preferred_name +
+mentor_instructions (additive migration 20260915000000_student_profile.sql, applied live +
+in the deploy list; existing owner select/update RLS covers both). The chat fn now
+addresses the student by preferred name (first word of full name as fallback) via
+student.name, and carries student.instructions — the student's Claude-style standing note,
+hard-capped at 500 chars and STYLE-ONLY by the STUDENT INSTRUCTIONS guardrail (it can
+never change policy/safety/grading; offending parts are ignored silently). (3) PROFILE
+PANEL: "Profile" in the account menu now opens a real destination (it aliased Reports):
+Identity (preferred + full name, editable; grade read-only pill — the school sets it),
+Account (email read-only, password change via GoTrue with match/length checks, email-me-a-
+reset-link), Note to your mentor (500-char textarea with live counter + "style only"
+hint), Classes & performance (per-class rows with avg over released grades + graded count,
+org name on hover). New student/ProfilePanel.tsx; navigation gained the "profile"
+destination; the old ?to=profile → Reports alias is gone.
+Files changed: supabase/functions/chat/index.ts, supabase/migrations/
+20260915000000_student_profile.sql (new), .github/workflows/deploy-backend.yml,
+frontend/src/lib/{api,types}.ts, frontend/src/student/{ProfilePanel.tsx (new),
+StudentHome.tsx,StudentApp.tsx,navigation.ts}, frontend/src/routes/learn.tsx,
+tests/test_student_profile.py (new, 12 pins).
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: (1) mentor_instructions is student-authored text riding into the
+prompt — the guardrail + cap are the defense; a profanity/abuse filter is a possible
+follow-up if pilots show misuse. (2) Email is display-only (no email-change flow — GoTrue
+double-confirmation UX is its own round). (3) The teacher surface can read
+preferred_name/mentor_instructions via can_view_student but doesn't render them yet.
+Suggested next task: live pass — set a preferred name + a mentor note as demo-student,
+open a lesson and confirm the mentor uses the name and honors the style note; change
+password round-trip; check the new memory chips after a completed session.

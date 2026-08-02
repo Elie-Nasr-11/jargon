@@ -13,14 +13,14 @@ export type StudentSection = "home" | "learn";
 
 // "classes" retired 2026-07-31: classes live in the Home sidebar now, each with its own
 // summary page (?section=home&class=<id>) — no destination panel needed.
-export type StudentDestination = "resources" | "checkpoints" | "customize" | "reports";
+export type StudentDestination = "resources" | "checkpoints" | "customize" | "reports" | "profile";
 
 // Trimmed 2026-07-30 to what actually renders (MVP bar: no dead nav): notifications,
 // what's-new, help, and contact had no student-facing surface behind them. Profile opens
-// Reports (the old profile popup's stats live there), customize opens Customize, and
-// sign-out signs out. The removed items return with their surfaces. The light/dark toggle
-// also lives in this menu but is not a StudentMenuItem — it flips state in place rather
-// than navigating.
+// the Profile panel (round 11 — it aliased Reports before that), customize opens
+// Customize, and sign-out signs out. The removed items return with their surfaces. The
+// light/dark toggle also lives in this menu but is not a StudentMenuItem — it flips state
+// in place rather than navigating.
 export type StudentMenuItem = "profile" | "customize" | "sign-out";
 
 export type DestinationSpec = {
@@ -40,6 +40,9 @@ export const DESTINATIONS: readonly DestinationSpec[] = [
   { id: "checkpoints", label: "Checkpoints", hint: "Quizzes and tests your teacher assigned" },
   { id: "customize", label: "Customize", hint: "How your mentor talks and teaches" },
   { id: "reports", label: "Reports", hint: "Your grades and progress" },
+  // Round 11: Profile got its own surface (it used to alias Reports) — who you are, your
+  // account, your standing note to the mentor, and your classes at a glance.
+  { id: "profile", label: "Profile", hint: "Your info, account, and mentor note" },
 ] as const;
 
 export type MenuItemSpec = {

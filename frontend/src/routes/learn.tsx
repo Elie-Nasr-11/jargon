@@ -75,7 +75,7 @@ function LearnRoute() {
       onSelectMenuItem={(item) => {
         // Every menu item does something real (MVP bar: no dead nav). Profile's stats live
         // in Reports; Customize opens the mentor controls; sign-out clears the session.
-        if (item === "profile") go({ section: activeSection, to: "reports", class: classId });
+        if (item === "profile") go({ section: activeSection, to: "profile", class: classId });
         else if (item === "customize")
           go({ section: activeSection, to: "customize", class: classId });
         else if (item === "sign-out") {

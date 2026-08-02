@@ -31,6 +31,7 @@ import { ClassList, ClassSwitcher } from "@/student/ClassList";
 import { ClassSummary } from "@/student/ClassSummary";
 import { checkpointRowsByClass } from "@/student/checkpoints";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
+import { ProfilePanel } from "@/student/ProfilePanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
 import { ResizeHandle } from "@/student/ResizeHandle";
 import { StudentSidebar } from "@/student/StudentSidebar";
@@ -541,6 +542,8 @@ export function StudentApp({
                       onVoiceChange={saveVoice}
                     />
                   </div>
+                ) : destination === "profile" ? (
+                  <ProfilePanel />
                 ) : (
                   // reports — grades + proficiency.
                   <ReportsPanel />
