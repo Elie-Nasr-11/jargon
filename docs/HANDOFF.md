@@ -8428,3 +8428,29 @@ Remaining concerns: mix percentages are eyeballed — nudge per-token if the liv
 wants more or less ink in light mode.
 Suggested next task: compare the map in light vs dark — light should read soft/milky,
 dark unchanged.
+
+## Claude -> Codex / Human - 2026-08-02 (round 13 — scoping only)
+
+Status: Finished (scope doc; no code changed)
+Summary: Chat-flow scoping. A very-thorough code sweep of the whole flow (server
+chat/index.ts ~6.1k lines, client useConversation/StudentApp/Chatbox/Transcript/
+chatMessages, data tables) produced docs/CHAT_FLOW_SCOPE.md: §1 verified current-state
+map (much already works: persisted transcript + rehydration, mid-lesson resume, retry
+with idempotent replay, memory injection, consent-first artifacts), §2 a 21-item
+code-verified gap inventory — headliners: backtracking built but unreachable while
+server copy advertises a clickable progress bar that doesn't exist; continue_offer and
+quiz chosen-state lost on reload (soft-lock / phantom answers); checkpoints described
+as "docked above the message box" with no dock and no panel entry point; declared turn
+mode invisible to the model (caps grading, absent from prompt); no streaming; 30s client
+timeout vs 3-model-call turns; hard 8×400-char history window with no mid-session
+summarization; envelope.session ignored while the client refetches progress every send;
+progress binary despite step-level truth; cost always null; 1,095-line Composer.tsx kept
+for one type; ~260-line review path nothing calls. §4 proposes four phases (1 honesty
+fixes → 2 streaming/latency → 3 continuity/context → 4 hygiene); §5 lists the five
+owner decisions (phase order, checkpoint dock vs reroute, SSE-in-place, delete vs wire
+review path, attachments-to-graders policy).
+Files changed: docs/CHAT_FLOW_SCOPE.md (new), docs/HANDOFF.md.
+Tests run: none (docs only).
+Remaining concerns: none — waiting on owner picks from CHAT_FLOW_SCOPE §5 before
+implementation.
+Suggested next task: owner reads §4/§5, picks; then Phase 1.
