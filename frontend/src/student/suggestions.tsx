@@ -41,23 +41,49 @@ export function buildSuggestions(lesson: Lesson, activities: LessonActivity[]): 
   ];
 }
 
+// Chat-flow Phase 1: re-entry moves for a conversation the student walked away from
+// (last message > 30 min old). Same ghost-row furniture as the opener suggestions —
+// an abandoned session deserves a way back in, not a blank composer.
+export function buildReentrySuggestions(lesson: Lesson): Suggestion[] {
+  return [
+    {
+      mode: "lesson",
+      label: "Pick up",
+      prompt: "Let's pick up where we left off.",
+    },
+    {
+      mode: "discuss",
+      label: "Recap",
+      prompt: `Recap what we've covered so far in "${lesson.title}".`,
+    },
+    {
+      mode: "quiz",
+      label: "Check me",
+      prompt: "Quiz me quickly on what we covered last time before we go on.",
+    },
+  ];
+}
+
 // The composer lead: ghost rows hugging the top of the chatbox. Deliberately quieter than the
 // resource cards up in the welcome — no border, no fill, ink only — so materials outrank
 // canned openers. Hover is one surface step; the tap IS the first turn.
 export function SuggestionRows({
   lesson,
   activities,
+  suggestions,
   disabled,
   onSuggest,
 }: {
   lesson: Lesson;
   activities: LessonActivity[];
+  // Optional override (re-entry rows); defaults to the never-opened-lesson openers.
+  suggestions?: Suggestion[];
   disabled?: boolean;
   onSuggest: (prompt: string, mode: TurnMode) => void;
 }) {
   return (
     <div className="mb-1.5 flex flex-col gap-0.5">
-      {buildSuggestions(lesson, activities).map((suggestion) => (
+      {(suggestions ?? buildSuggestions(lesson, activities)).map((suggestion) => (
         <button
           key={suggestion.label}
           type="button"

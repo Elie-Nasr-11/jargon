@@ -40,6 +40,7 @@ import {
   liveCommentToMessage,
   mentorToPreferences,
   sortTimedMessages,
+  withRestoredQuizChoices,
   turnToMessage,
   uid,
   type Msg,
@@ -342,10 +343,12 @@ export function useConversation() {
         ]);
         if (isStale()) return;
         setMessages(
-          sortTimedMessages([
-            ...(turns.map(turnToMessage).filter(Boolean) as Msg[]),
-            ...comments.map(liveCommentToMessage),
-          ]),
+          withRestoredQuizChoices(
+            sortTimedMessages([
+              ...(turns.map(turnToMessage).filter(Boolean) as Msg[]),
+              ...comments.map(liveCommentToMessage),
+            ]),
+          ),
         );
       } else {
         // No session yet: stay BLANK — no auto-generated opening turn (no pretext). The

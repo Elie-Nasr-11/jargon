@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Eye, PauseCircle, Undo2 } from "lucide-react";
 import { store } from "@/lib/jargon-store";
+import { prefersReducedMotion } from "@/lib/motion";
 import { Chatbox } from "@/student/Chatbox";
 import { VoicePanel } from "@/student/VoicePanel";
 import { useConversationChannel } from "@/student/useConversation";
@@ -33,6 +34,10 @@ export type ChatWindowProps = {
   // Rendered on the composer's centered axis, directly above the chatbox — the suggested
   // first moves for a fresh lesson live here so they hug the input, not the transcript.
   composerLead?: ReactNode;
+  // Chat-flow Phase 1: the latest message's id. A change means the transcript grew (or a
+  // placeholder resolved) — the window scrolls to the bottom, unless the student has
+  // scrolled up to reread. Empty string = no messages.
+  scrollKey?: string;
   // The transcript. Supplied by the route so this component stays presentational.
   children?: ReactNode;
 };
@@ -47,9 +52,27 @@ export function ChatWindow({
   sending,
   sessionResources,
   composerLead,
+  scrollKey,
   children,
 }: ChatWindowProps) {
   const channel = useConversationChannel();
+  // Autoscroll: keep the newest message in view. Instant on the first paint of a
+  // conversation (a reload should land at the bottom, not animate there), smooth after;
+  // never yanks a student who scrolled up more than ~200px to reread.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sawFirstKeyRef = useRef(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !scrollKey) return;
+    const first = !sawFirstKeyRef.current;
+    sawFirstKeyRef.current = true;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    if (!first && !nearBottom) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: first || prefersReducedMotion() ? "auto" : "smooth",
+    });
+  }, [scrollKey]);
   // Live voice is window-owned state: opening the panel is a conversation-surface act, and the
   // panel must unmount (full WebRTC/mic teardown) whenever this window goes away.
   const [voiceOpen, setVoiceOpen] = useState(false);
@@ -113,7 +136,10 @@ export function ChatWindow({
             while each section keeps its MESSAGES in a centered, width-capped reading column
             (full-bleed text across a 1440px window is unreadable). The composer sits on that
             same centered axis so the conversation reads as one column. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4 pt-2">
+        <div
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4 pt-2"
+        >
           {children}
         </div>
 

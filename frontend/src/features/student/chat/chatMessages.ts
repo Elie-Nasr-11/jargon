@@ -49,6 +49,8 @@ export type Msg =
       // (any turn written before modes existed), which renders WITHOUT section chrome rather
       // than being relabelled as something we cannot actually verify.
       turnMode?: string;
+      // Chat-flow Phase 1: the quiz choice this persisted answer carried (reload restoration).
+      choiceId?: string;
     }
   | {
       id: string;
@@ -58,10 +60,11 @@ export type Msg =
       choices?: ChatChoice[];
       resources?: LessonChatResource[];
       // Flow v3: this message offered the Continue pill (content step awaiting an
-      // explicit continue). Only the latest bot message's offer renders live.
+      // explicit continue). Only the latest bot message's offer renders live; since
+      // chat-flow Phase 1 it IS restored from the persisted envelope on reload.
       continueOffer?: { label: string };
-      // P8: this message offered a live mentor-built activity. Live-turn only, like
-      // continueOffer (never replayed from history).
+      // P8: this message offered a live mentor-built activity. Live-turn only —
+      // deliberately NOT replayed from history (artifact-live enforces once-per-step).
       artifactOffer?: { label: string; kind: "html_sim" | "deck"; activity_id: string };
       createdAt?: string;
       // Error bubbles must never become the "latest mentor message" — that would strip the
@@ -151,6 +154,9 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       attachments: Array.isArray(turn.payload?.attachments)
         ? (turn.payload.attachments as ChatAttachment[])
         : undefined,
+      // Chat-flow Phase 1: the persisted answer's choice_id, so a reloaded transcript can
+      // re-stamp `chosen` on the quiz message this turn answered (withRestoredQuizChoices).
+      choiceId: typeof turn.payload?.choice_id === "string" ? turn.payload.choice_id : undefined,
       turnMode: typeof turn.payload?.turn_mode === "string" ? turn.payload.turn_mode : undefined,
       createdAt: turn.created_at,
     };
@@ -168,6 +174,17 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       choices,
       resources,
       turnMode: typeof payload.turn_mode === "string" ? payload.turn_mode : undefined,
+      // Chat-flow Phase 1: restore the Continue offer from the persisted envelope. The
+      // transcript renders it only on the LATEST bot message, so an offer that was already
+      // accepted (a later turn exists) stays retired — but a student who reloads mid-content
+      // step gets their button back instead of a soft-lock (the prompt forbids "type next").
+      // artifact_offer stays live-turn-only by design (artifact-live enforces once-per-step).
+      continueOffer:
+        payload.continue_offer &&
+        typeof payload.continue_offer === "object" &&
+        typeof (payload.continue_offer as { label?: unknown }).label === "string"
+          ? { label: (payload.continue_offer as { label: string }).label }
+          : undefined,
       // Persisted envelope payloads carry the arc; older turns simply don't have one.
       lessonArc:
         payload.lesson_arc && typeof payload.lesson_arc === "object"
@@ -177,6 +194,27 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
     };
   }
   return null;
+}
+
+// Chat-flow Phase 1: after a reload, re-stamp `chosen` on quiz messages from the persisted
+// student answers that followed them — otherwise the latest bot message re-renders LIVE
+// choice buttons for a question that was already answered, and tapping one sends a stale
+// phantom answer. Walks in timestamp order; each choice-carrying student turn retires the
+// nearest preceding unanswered quiz message.
+export function withRestoredQuizChoices(messages: Msg[]): Msg[] {
+  const result = [...messages];
+  for (let i = 0; i < result.length; i += 1) {
+    const message = result[i];
+    if (message.role !== "user" || !message.choiceId) continue;
+    for (let j = i - 1; j >= 0; j -= 1) {
+      const candidate = result[j];
+      if (candidate.role === "bot" && candidate.choices?.length && !candidate.chosen) {
+        result[j] = { ...candidate, chosen: message.choiceId };
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 export function liveCommentToMessage(comment: TeacherLiveComment): Msg {

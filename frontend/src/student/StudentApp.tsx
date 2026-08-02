@@ -37,7 +37,7 @@ import { ResizeHandle } from "@/student/ResizeHandle";
 import { StudentSidebar } from "@/student/StudentSidebar";
 import { LessonTree } from "@/student/LessonTree";
 import { LessonWelcome } from "@/student/LessonWelcome";
-import { SuggestionRows } from "@/student/suggestions";
+import { SuggestionRows, buildReentrySuggestions } from "@/student/suggestions";
 import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import { useConversation } from "@/student/useConversation";
@@ -310,6 +310,10 @@ export function StudentApp({
     // visible rather than happening behind whatever panel is open.
     closeDrawer();
     onSelectSection("learn");
+    // Chat-flow Phase 1: each lesson starts back on the spine — a Discuss detour in the
+    // previous lesson must not silently carry its register (and its gates-off ceiling)
+    // into the next one.
+    setTurnMode(DEFAULT_TURN_MODE);
     void conversation.openLesson(lessonId);
   };
   // The section menus: Home = Overview + class list, Learn = the selected class's units and
@@ -366,12 +370,33 @@ export function StudentApp({
     !conversation.messages.length &&
     conversation.lesson;
 
+  // Chat-flow Phase 1: a conversation the student walked away from (last message > 30 min
+  // old) gets re-entry rows instead of a blank composer. Sending anything makes the newest
+  // message fresh, so the rows retire themselves after the first turn back.
+  const lastMessageAt = (() => {
+    for (let i = conversation.messages.length - 1; i >= 0; i -= 1) {
+      const message = conversation.messages[i];
+      if ("createdAt" in message && message.createdAt) return Date.parse(message.createdAt);
+    }
+    return null;
+  })();
+  const staleReturn =
+    !conversation.booting &&
+    !conversation.error &&
+    conversation.messages.length > 0 &&
+    lastMessageAt !== null &&
+    Date.now() - lastMessageAt > 30 * 60 * 1000
+      ? conversation.lesson
+      : null;
+
   // The conversation surface, one instance reused by every Learn layout (plain, bottom-half
   // under the stage, or docked while media is full screen).
+  const lastMessage = conversation.messages[conversation.messages.length - 1];
   const chatSurface = (
     <ChatWindow
       mode={turnMode}
       onModeChange={setTurnMode}
+      scrollKey={lastMessage ? lastMessage.id : ""}
       offers={conversation.offers}
       // Resources is not a conversation mode — it opens the materials destination.
       onOpenResources={() => onSelectDestination("resources")}
@@ -380,11 +405,12 @@ export function StudentApp({
       onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
       sessionResources={conversation.resources}
       composerLead={
-        freshLesson ? (
-          // The tapped suggestion becomes the first turn (and sets its TurnMode).
+        freshLesson || staleReturn ? (
+          // The tapped suggestion becomes the (first or returning) turn and sets its TurnMode.
           <SuggestionRows
-            lesson={freshLesson}
+            lesson={(freshLesson || staleReturn) as Lesson}
             activities={conversation.activities}
+            suggestions={staleReturn ? buildReentrySuggestions(staleReturn as Lesson) : undefined}
             disabled={conversation.sending}
             onSuggest={(prompt, mode) => {
               setTurnMode(mode);
