@@ -58,19 +58,24 @@ const MEMORY_KINDS: { key: keyof StudentMemoryProfile; label: string; color: str
   { key: "avoid", label: "Steering around", color: "var(--mode-assignment)" },
 ];
 
-// World-space node: a ring position plus height above/below the disc.
-type World = { radius: number; angle: number; h: number };
+// World-space node: a spherical position — ring radius, azimuth angle, and an ELEVATION
+// angle above/below the equator. Elevations compose down the tree (course → unit →
+// lesson, each offset from its parent) so branches stay short and the hierarchy reads
+// while the stars fill the volume instead of lying on a disc.
+type World = { radius: number; angle: number; el: number };
 type LessonNode = World & { lesson: Lesson };
 type UnitNode = World & { unitId: string; title: string; lessons: LessonNode[] };
 type CourseNode = World & { courseId: string; title: string; units: UnitNode[] };
 type Projected = { x: number; y: number; depth: number; f: number };
 
-// Deterministic per-id height so the disc has depth texture without per-mount jitter.
-function heightFor(id: string, amplitude: number): number {
+// Deterministic per-id elevation offset (radians) — volume without per-mount jitter.
+function elevationFor(id: string, amplitude: number): number {
   let hash = 0;
   for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) | 0;
   return ((hash % 17) / 8 - 1) * amplitude;
 }
+
+const clampEl = (value: number, limit: number) => Math.min(limit, Math.max(-limit, value));
 
 function monogram(title: string): string {
   const words = title.trim().split(/\s+/).filter(Boolean);
@@ -124,7 +129,7 @@ export function BrainMap({
           title: lesson.unit_title || "Lessons",
           radius: UNIT_RADIUS,
           angle: 0,
-          h: heightFor(unitId, 6),
+          el: 0,
           lessons: [],
         };
         course.units.set(unitId, unit);
@@ -133,7 +138,7 @@ export function BrainMap({
         lesson,
         radius: LESSON_RADIUS,
         angle: 0,
-        h: heightFor(lesson.id, 11),
+        el: 0,
       });
     }
 
@@ -142,7 +147,7 @@ export function BrainMap({
       title: course.title,
       radius: COURSE_RADIUS,
       angle: 0,
-      h: 0,
+      el: elevationFor(courseId, 0.3),
       units: Array.from(course.units.values()),
     }));
     const weight = (units: UnitNode[]) =>
@@ -159,6 +164,7 @@ export function BrainMap({
       for (const unit of course.units) {
         const unitSpan = ((unit.lessons.length + 1) / unitTotal) * unitSpanBudget;
         unit.angle = unitCursor + unitSpan / 2;
+        unit.el = clampEl(course.el + elevationFor(unit.unitId, 0.3), 0.55);
         unit.lessons.forEach((node, index) => {
           node.angle =
             unit.lessons.length === 1
@@ -167,6 +173,7 @@ export function BrainMap({
                 unitSpan * 0.08 +
                 (unitSpan * 0.84 * index) / (unit.lessons.length - 1);
           node.radius = LESSON_RADIUS + (index % 2 === 0 ? 0 : LESSON_STAGGER);
+          node.el = clampEl(unit.el + elevationFor(node.lesson.id, 0.28), 0.7);
         });
         unitCursor += unitSpan;
       }
@@ -190,9 +197,77 @@ export function BrainMap({
       ...entry,
       radius: SATELLITE_RADIUS,
       angle: -Math.PI / 2 + (Math.PI * 2 * index) / all.length,
-      h: index % 2 === 0 ? 8 : -8,
+      el: index % 2 === 0 ? 0.42 : -0.42,
     }));
   }, [memoryProfile]);
+
+  // ASSOCIATIVE LINKS: faint cross-links between lessons that share topic words in
+  // their titles (2+ meaningful tokens, different units) — honest lexical signal, the
+  // "this connects to that" texture of a knowledge graph. Capped at 8 strongest so the
+  // web reads as texture, never hairball. Same-unit pairs are skipped (siblings already
+  // share a hub).
+  const topicLinks = useMemo(() => {
+    const stop = new Set([
+      "introduction",
+      "understanding",
+      "using",
+      "with",
+      "your",
+      "what",
+      "into",
+      "exercise",
+      "practice",
+      "homework",
+      "class",
+      "involving",
+      "problems",
+      "single",
+      "double",
+      "digit",
+      "numbers",
+    ]);
+    const entries: { id: string; unitId: string; title: string; tokens: Set<string> }[] = [];
+    for (const course of courses) {
+      for (const unit of course.units) {
+        for (const node of unit.lessons) {
+          const tokens = new Set(
+            node.lesson.title
+              .toLowerCase()
+              .split(/[^a-z0-9]+/)
+              .filter((word) => word.length >= 4 && !stop.has(word)),
+          );
+          if (tokens.size) {
+            entries.push({
+              id: node.lesson.id,
+              unitId: unit.unitId,
+              title: node.lesson.title,
+              tokens,
+            });
+          }
+        }
+      }
+    }
+    const links: { a: string; b: string; score: number; label: string }[] = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      for (let j = i + 1; j < entries.length; j += 1) {
+        if (entries[i].unitId === entries[j].unitId) continue;
+        let score = 0;
+        for (const token of entries[i].tokens) {
+          if (entries[j].tokens.has(token)) score += 1;
+        }
+        if (score >= 2) {
+          links.push({
+            a: entries[i].id,
+            b: entries[j].id,
+            score,
+            label: `Related: ${entries[i].title} ↔ ${entries[j].title}`,
+          });
+        }
+      }
+    }
+    links.sort((x, y) => y.score - x.score);
+    return links.slice(0, 8);
+  }, [courses]);
 
   // --- Camera ----------------------------------------------------------------------
   const [yaw, setYaw] = useState(0);
@@ -280,9 +355,10 @@ export function BrainMap({
   const sinPitch = Math.sin(pitch);
   const cosPitch = Math.cos(pitch);
   const project = (world: World): Projected => {
-    const wx = world.radius * Math.cos(world.angle);
-    const wz = world.radius * Math.sin(world.angle);
-    const wy = world.h;
+    const horizontal = world.radius * Math.cos(world.el);
+    const wx = horizontal * Math.cos(world.angle);
+    const wz = horizontal * Math.sin(world.angle);
+    const wy = world.radius * Math.sin(world.el);
     const x1 = wx * cosYaw - wz * sinYaw;
     const z1 = wx * sinYaw + wz * cosYaw;
     const y2 = wy * cosPitch - z1 * sinPitch;
@@ -324,7 +400,8 @@ export function BrainMap({
   }
 
   const edges: React.ReactNode[] = [];
-  const center = project({ radius: 0, angle: 0, h: 0 });
+  const lessonProjections = new Map<string, Projected>();
+  const center = project({ radius: 0, angle: 0, el: 0 });
   let threadPoints: string | null = null;
 
   for (const course of courses) {
@@ -402,6 +479,7 @@ export function BrainMap({
 
       for (const node of unit.lessons) {
         const lp = project(node);
+        lessonProjections.set(node.lesson.id, lp);
         edges.push(
           <line
             key={`e-${node.lesson.id}`}
@@ -519,6 +597,29 @@ export function BrainMap({
         </defs>
 
         {edges}
+
+        {/* Associative links: the faint aurora-violet web of "related by topic". */}
+        {topicLinks.map((link) => {
+          const a = lessonProjections.get(link.a);
+          const b = lessonProjections.get(link.b);
+          if (!a || !b) return null;
+          return (
+            <line
+              key={`assoc-${link.a}-${link.b}`}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              stroke="var(--grad-1)"
+              strokeWidth="1"
+              strokeOpacity="0.3"
+              strokeDasharray="2 5"
+              strokeLinecap="round"
+            >
+              <title>{link.label}</title>
+            </line>
+          );
+        })}
 
         {/* The live thread — the one moving line, tracing the path to the current lesson. */}
         {threadPoints ? (

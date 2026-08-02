@@ -8374,3 +8374,28 @@ Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skip
 Remaining concerns: none.
 Suggested next task: let it spin a full revolution — stars should drift, dim, and grow
 without ever blinking.
+
+## Claude -> Codex / Human - 2026-08-01 (round 12e)
+
+Status: Finished
+Summary: Brain map — volumetric layout + associative topic links. (1) VOLUME: nodes left
+the disc. World positions became spherical (radius + azimuth + ELEVATION angle);
+elevations are deterministic per-id and COMPOSE down the tree — course ±0.3 rad, unit =
+course ± 0.3 (clamped 0.55), lesson = unit ± 0.28 (clamped 0.7) — so branches stay short
+and the hierarchy reads while stars genuinely fill 3D space; satellites alternate ±0.42.
+Projection updated (horizontal = r·cos(el), y = r·sin(el)); orbiting/tilting now reveals
+real depth structure instead of a flat plane. (2) TOPIC LINKS: faint aurora-violet dashed
+lines connect lessons whose TITLES share 2+ meaningful tokens (stopworded, ≥4 chars,
+different units only — siblings already share a hub), capped at the 8 strongest so the
+web reads as texture, never hairball; each link carries a "Related: A ↔ B" tooltip. With
+the seeded data this lights up honestly — the Foundations lessons mirror IT Frontiers
+chapter titles, so cross-course "Systems & Signals" pairs link up. Lexical by decision,
+consistent with the memory retrieval (DECISIONS 2026-08-01); links render under the
+stars, reprojected every frame.
+Files changed: student/BrainMap.tsx.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: the stopword list is hand-tuned for the current catalog (it drops
+generic curriculum words like "single/double/digit/numbers" so arithmetic drill titles
+don't over-link); revisit if a new catalog's links look too sparse or too dense.
+Suggested next task: orbit + tilt to see the volume; hover a violet link for its
+"Related" tooltip; confirm the flicker fix held (no re-popping during the idle spin).
