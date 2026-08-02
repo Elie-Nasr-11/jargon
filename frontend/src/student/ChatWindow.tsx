@@ -3,6 +3,7 @@ import { Eye, PauseCircle, Undo2 } from "lucide-react";
 import { store } from "@/lib/jargon-store";
 import { prefersReducedMotion } from "@/lib/motion";
 import { Chatbox } from "@/student/Chatbox";
+import { LessonSpine } from "@/student/LessonSpine";
 import { VoicePanel } from "@/student/VoicePanel";
 import { useConversationChannel } from "@/student/useConversation";
 import type { ComposerLanguage } from "@/components/Composer";
@@ -96,6 +97,16 @@ export function ChatWindow({
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-4">
       <section aria-label="Conversation" className="flex min-h-0 flex-1 flex-col">
+        {/* Chat-flow Phase 1: the tappable spine — done steps navigate (revisit), the
+            current step wears the lesson hue, upcoming stay inert. */}
+        {channel.lessonArc ? (
+          <LessonSpine
+            arc={channel.lessonArc}
+            busy={sending || channel.sending || held}
+            onNavigate={channel.sendNavigate}
+          />
+        ) : null}
+
         {/* Live-session status chips, centered above the transcript. Presence first (ambient,
             informational), then the hold (blocking, warning-toned). */}
         {channel.teacherViewers > 0 || held || channel.revisitFrontier ? (
