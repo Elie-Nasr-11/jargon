@@ -730,3 +730,32 @@ per-turn token budget FLAT (still ≤3 summaries + capped lists, ≈400 tokens):
   20260910000000_memory_v2.sql). This is the ONE exception to v1's append-only stance:
   full-history erasure is a privacy affordance, not history forking — per-row edits
   remain impossible.
+
+## 2026-08-02 — Chat-flow Phase 1: the flow stops lying (CHAT_FLOW_SCOPE.md is the inventory)
+
+Owner picks (recorded from the scope round): phases run 1→2→3→4; checkpoints get the
+promised composer DOCK (not a copy reroute); the isolated spaced-review path is DELETED on
+this branch (archive on main; review_sessions stays applied, inert); grading gates stay
+prose-only for the MVP (attachments reach only the mentor).
+
+Decisions shipped in Phase 1:
+
+- **The declared TurnMode is model-visible.** turn.student_mode rides every prompt payload
+  and a mode CHANGE appends a REGISTER SHIFT nod to the directive. applyModeCeiling stays
+  the sole authority on gates — this is voice, not grading. Previously the mode silently
+  rewrote the routed kind while the model was never told the register changed.
+- **Reload restores the flow's live affordances.** continue_offer rehydrates from the
+  persisted envelope (latest-bot-only rendering keeps accepted offers retired) and quiz
+  messages re-stamp `chosen` from the following student turn's choice_id
+  (withRestoredQuizChoices). artifact_offer stays live-turn-only by design.
+- **The spine is real.** LessonSpine renders one chip per arc step above the transcript;
+  done steps (steps_done ledger) fire the existing navigate control turn — sendNavigate
+  finally has its caller, and the server's "clickable progress bar" copy is now true. The
+  label counts DISCHARGED steps per the v5.0 requirement-ledger decision, not the cursor.
+- **The checkpoint dock exists.** Due/in-progress assessment rows for the class in scope
+  dock above the composer (max 2, assignment-lavender chrome) and open the assessment
+  surface — making the prompt's "docked above the message box" line honest. The R17
+  sidebar cleanup stands: no sidebar re-entry for CheckpointsPanel.
+- Also: turnMode resets to the spine on lesson switch; the transcript autoscrolls
+  (bottom-anchored, never yanking a reader who scrolled up); a conversation idle >30 min
+  shows re-entry rows (pick up / recap / check me).

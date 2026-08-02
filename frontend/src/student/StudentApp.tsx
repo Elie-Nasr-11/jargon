@@ -389,6 +389,45 @@ export function StudentApp({
       ? conversation.lesson
       : null;
 
+  // Chat-flow Phase 1: the checkpoint DOCK — the panel above the message box the server's
+  // prompt has been promising ("your checkpoint work is docked above the message box").
+  // Due/in-progress work for the class in scope, capped at two rows; a tap opens the
+  // assessment surface. Scored/waiting rows stay off the dock — it is a to-do surface.
+  const dockRows = (rowsByClass.get(scopeClassId ?? "") ?? [])
+    .filter((row) => row.state === "todo" || row.state === "in_progress")
+    .slice(0, 2);
+  const checkpointDock = dockRows.length ? (
+    <div className="mb-1.5 flex flex-col gap-1">
+      {dockRows.map((row) => (
+        <button
+          key={row.id}
+          type="button"
+          onClick={() => setOpenAssessmentId(row.id)}
+          className="flex items-center gap-2.5 rounded-pill border px-3.5 py-1.5 text-left transition-colors duration-(--dur-fast) hover:brightness-105"
+          style={{
+            borderColor: "color-mix(in oklab, var(--mode-assignment) 40%, transparent)",
+            background: "color-mix(in oklab, var(--mode-assignment) 12%, var(--background))",
+          }}
+        >
+          <span
+            className="shrink-0 font-mono text-overline uppercase tracking-[0.14em]"
+            style={{
+              color: "color-mix(in oklab, var(--mode-assignment) 60%, var(--foreground))",
+            }}
+          >
+            {row.state === "in_progress" ? "Resume" : "Checkpoint"}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-body text-foreground">{row.title}</span>
+          <span className="shrink-0 text-meta text-muted-foreground">
+            {row.dueAt
+              ? `due ${new Date(row.dueAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+              : "open"}
+          </span>
+        </button>
+      ))}
+    </div>
+  ) : null;
+
   // The conversation surface, one instance reused by every Learn layout (plain, bottom-half
   // under the stage, or docked while media is full screen).
   const lastMessage = conversation.messages[conversation.messages.length - 1];
@@ -405,18 +444,25 @@ export function StudentApp({
       onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
       sessionResources={conversation.resources}
       composerLead={
-        freshLesson || staleReturn ? (
-          // The tapped suggestion becomes the (first or returning) turn and sets its TurnMode.
-          <SuggestionRows
-            lesson={(freshLesson || staleReturn) as Lesson}
-            activities={conversation.activities}
-            suggestions={staleReturn ? buildReentrySuggestions(staleReturn as Lesson) : undefined}
-            disabled={conversation.sending}
-            onSuggest={(prompt, mode) => {
-              setTurnMode(mode);
-              conversation.sendText(prompt, mode);
-            }}
-          />
+        checkpointDock || freshLesson || staleReturn ? (
+          <>
+            {checkpointDock}
+            {freshLesson || staleReturn ? (
+              // The tapped suggestion becomes the (first or returning) turn and sets its TurnMode.
+              <SuggestionRows
+                lesson={(freshLesson || staleReturn) as Lesson}
+                activities={conversation.activities}
+                suggestions={
+                  staleReturn ? buildReentrySuggestions(staleReturn as Lesson) : undefined
+                }
+                disabled={conversation.sending}
+                onSuggest={(prompt, mode) => {
+                  setTurnMode(mode);
+                  conversation.sendText(prompt, mode);
+                }}
+              />
+            ) : null}
+          </>
         ) : undefined
       }
     >

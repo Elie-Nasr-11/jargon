@@ -8454,3 +8454,26 @@ Tests run: none (docs only).
 Remaining concerns: none — waiting on owner picks from CHAT_FLOW_SCOPE §5 before
 implementation.
 Suggested next task: owner reads §4/§5, picks; then Phase 1.
+
+## Claude -> Codex / Human - 2026-08-02 (round 14 — chat-flow Phase 1)
+
+Status: Finished
+Summary: Chat-flow Phase 1 (honesty fixes) shipped in four commits: 1a server (ebc995a)
+turn.student_mode in the payload + REGISTER SHIFT directive nod on mode change; review
+path deleted end to end (handler, entry branch, teacher view, client helpers, envelope
+field) with tests re-pinned to the removal. 1b client (bf9c312) continue_offer + quiz
+chosen restored on reload, turnMode resets on lesson switch, transcript autoscroll,
+re-entry suggestion rows after 30 min idle. 1c (963823f) LessonSpine — the tappable
+step-chip spine wired to sendNavigate. 1d checkpoint dock above the composer (this
+commit). DECISIONS entry records the owner picks from CHAT_FLOW_SCOPE §5.
+Files changed: supabase/functions/chat/index.ts; student/{ChatWindow,StudentApp,
+LessonSpine(new),useConversation,suggestions}.tsx; features/student/chat/chatMessages.ts;
+lib/{api,types}.ts; features/teacher/{TeacherConsole}.tsx (+ StudentReviewSessions
+deleted); tests/test_review_{sessions,due}.py; docs.
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 392 OK (skipped=4).
+Remaining concerns: (1) The spine's revisit taps are capped by the server's existing
+navigate gating — untouched. (2) The dock scopes to the class in scope; cross-class due
+work still surfaces on Home. (3) Phases 2 (streaming), 3 (continuity), 4 (hygiene) are
+next per the owner's phase order.
+Suggested next task: live pass of Phase 1 (reload mid-step → Continue present; answered
+quiz stays answered; spine taps revisit; dock opens the assessment), then Phase 2.
