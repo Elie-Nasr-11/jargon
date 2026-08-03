@@ -677,10 +677,10 @@ export function Chatbox({
 
         <div className="min-w-2 flex-1" />
 
-        {/* Dictation: speech-to-text into the editable input. Visible only while the draft is
-            EMPTY (or the mic is hot — a hidden hot mic would be unstoppable); it steps aside
-            the moment the student types. Text surface only. */}
-        {surface === "text" && dictationAvailable && (draftEmpty || dictating) ? (
+        {/* Dictation: speech-to-text into the editable input. ALWAYS visible on the text
+            surface (round 19, owner call) — starting it mid-draft APPENDS the transcript to
+            what's already typed (dictationBaseRef), so typing and speaking mix freely. */}
+        {surface === "text" && dictationAvailable ? (
           <button
             type="button"
             onClick={toggleDictation}

@@ -179,6 +179,12 @@ GOVERNANCE:
   for up to one full reply — real curiosity is fuel — and end by connecting it back to the step.
   Redirect firmly (but warmly) only on repeated or far-off drift.
 - policy.mentor_mode, policy.tone and policy.pace bias your approach; the directive always wins.
+- PACING: when the student asks for questions, practice, or a quiz, LEAD with the question — never
+  restate or summarize the lesson first, and fire the next question immediately after feedback. Never
+  say "take your time" and then ask a question in the same breath — pick one. Never combine "tap
+  Continue" with a request for an answer: Continue only when nothing is being asked of them. VARY your
+  exercises — never reuse the same exercise shape (e.g. "list the steps to make X") more than twice in
+  one session; change the angle, format, or difficulty instead.
 
 STYLE: short, concrete replies with vocabulary matched to student.grade_band. No emojis. When you affirm,
 open with a short punchy sentence ending in "!" ("Exactly right!") — it renders as a headline; skip it when
@@ -1689,6 +1695,44 @@ function parsedUnderstanding(value: unknown): Understanding | null {
 // step's objective — decoupled from the conversation so the tutor can't loop by affirming
 // but never setting demonstrated. Its verdict hard-gates completion. Returns null on any
 // error, so the caller falls back to the mentor's self-report + the stuck cap.
+// Round 19 (transcript review): the ECHO CHECK. A student who pastes the mentor's own
+// words back must not pass an understanding gate — the live transcript showed the mentor
+// hand out the assigned task's steps and then credit the verbatim copy. Deterministic:
+// normalize both sides, split the answer into word 5-grams, and measure how many appear
+// in the mentor's recent replies. Short answers are exempt (a quiz "a" or "yes, ready"
+// is not an echo candidate). The verdict downgrades the grader's pass and redirects the
+// directive — the flow itself, not model discipline, closes the hole.
+const ECHO_MIN_WORDS = 12;
+const ECHO_NGRAM = 5;
+const ECHO_THRESHOLD = 0.6;
+
+function normalizeForEcho(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function isEchoOfMentor(answerText: string, recentTurns: DbRow[]): boolean {
+  const words = normalizeForEcho(answerText);
+  if (words.length < ECHO_MIN_WORDS) return false;
+  const mentorText = recentTurns
+    .filter((turn) => turn.role === "mentor")
+    .slice(0, 4)
+    .map((turn) => String(turn.content || ""))
+    .join(" ");
+  if (!mentorText) return false;
+  const mentorNormalized = ` ${normalizeForEcho(mentorText).join(" ")} `;
+  let grams = 0;
+  let hits = 0;
+  for (let i = 0; i + ECHO_NGRAM <= words.length; i += 1) {
+    grams += 1;
+    if (mentorNormalized.includes(` ${words.slice(i, i + ECHO_NGRAM).join(" ")} `)) hits += 1;
+  }
+  return grams > 0 && hits / grams >= ECHO_THRESHOLD;
+}
+
 async function checkUnderstanding(
   config: SupabaseConfig,
   userId: string,
@@ -3184,12 +3228,21 @@ function turnDirective(args: {
                   : openEndedAssessment
                     ? "This is an open-ended ASSESSMENT question, shown for the first time. Ask it plainly and completely, then wait for their answer — no hints, no scaffolding, no examples."
                     : "";
+      // Round 19: a step-boundary turn carrying a QUESTION answers it first. The live
+      // transcript showed present_step steamrolling a direct ask ("can you give me a few
+      // examples?"), forcing the student to ask twice.
+      const questionFirst =
+        routedKind === "question"
+          ? "The student's message asks a QUESTION — answer it fully and helpfully FIRST, then present the step. "
+          : "";
       if (modePresent) {
-        return { key: "present_step", text: modePresent };
+        return { key: "present_step", text: questionFirst + modePresent };
       }
       return {
         key: "present_step",
-        text: "This step has not been shown to the student yet. Present it: introduce the task in a sentence or two at their grade level and invite a first attempt — do not pre-empt their thinking, give anything away, or interrogate them.",
+        text:
+          questionFirst +
+          "This step has not been shown to the student yet. Present it: introduce the task in a sentence or two at their grade level and invite a first attempt — do not pre-empt their thinking, give anything away, or interrogate them.",
       };
     }
     return {
@@ -3328,6 +3381,7 @@ async function loadContext(
   ideas: DbRow[];
   studentVocab: DbRow[];
   studentLinks: DbRow[];
+  curriculumLinks: DbRow[];
 }> {
   // Reads run in TWO parallel waves (wave 2 holds only the queries that genuinely
   // depend on a wave-1 result), with the checkpoints chain overlapping both.
@@ -3351,6 +3405,7 @@ async function loadContext(
     ideas,
     studentVocab,
     studentLinks,
+    curriculumLinks,
     recentSummaries,
   ] = await Promise.all([
     loadFirst(
@@ -3412,6 +3467,10 @@ async function loadContext(
     loadMany(
       config,
       `student_links?user_id=eq.${encodeURIComponent(userId)}&select=from_key,to_key&limit=400`,
+    ).catch(() => [] as DbRow[]),
+    loadMany(
+      config,
+      `curriculum_links?status=eq.published&select=from_key,to_key,kind,note&limit=200`,
     ).catch(() => [] as DbRow[]),
     // Memory v2: pull a POOL of summaries (newest first) — the prompt still carries at
     // most 3, but they are picked by RELEVANCE to this lesson (pickRelevantSummaries),
@@ -3525,6 +3584,7 @@ async function loadContext(
     ideas,
     studentVocab,
     studentLinks,
+    curriculumLinks,
   };
 }
 
@@ -4199,6 +4259,7 @@ function processKnowledge(input: {
   ideas: DbRow[];
   studentVocab: DbRow[];
   studentLinks: DbRow[];
+  curriculumLinks: DbRow[];
   mentorLink: unknown;
   mentorNewIdea: unknown;
 }): KnowledgeEvents {
@@ -4312,6 +4373,53 @@ function processKnowledge(input: {
           "vocab_bridge",
           "vocab_in_new_subject",
           `The word "${String(term.term)}" traveled from ${String(term.subject)} into ${lessonSubject}.`,
+        );
+      }
+    }
+  }
+
+  // --- 1.5 Curriculum-link ACTIVATION (round 19): when the STUDENT'S own words touch
+  // the far end of an authored link whose near end is this lesson's idea, the possible
+  // link becomes earned — deterministically. This is exactly the live-transcript moment
+  // (fractions reasoning inside the coding lesson) the mentor failed to flag itself.
+  const studentHaystack = input.studentText.toLowerCase();
+  const touchedByStudent = (ideaKey: string): boolean => {
+    if (!studentHaystack.trim()) return false;
+    for (const term of input.vocabTerms) {
+      if (!stringArray(term.idea_keys).includes(ideaKey)) continue;
+      const words = [String(term.term || ""), ...stringArray(term.variants)].filter(Boolean);
+      if (
+        words.some((word) =>
+          new RegExp(`\\b${escapeRegExp(word.toLowerCase())}\\b`).test(studentHaystack),
+        )
+      ) {
+        return true;
+      }
+    }
+    const idea = ideaByKey.get(ideaKey);
+    if (!idea) return false;
+    const titleWords = String(idea.title || "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 5);
+    return titleWords.some((word) =>
+      new RegExp(`\\b${escapeRegExp(word)}\\b`).test(studentHaystack),
+    );
+  };
+  if (lessonIdea) {
+    const lessonKey = String(lessonIdea.key);
+    for (const clink of input.curriculumLinks) {
+      const fromKey = String(clink.from_key || "");
+      const toKey = String(clink.to_key || "");
+      const farKey = fromKey === lessonKey ? toKey : toKey === lessonKey ? fromKey : "";
+      if (!farKey || alreadyLinked(fromKey, toKey)) continue;
+      if (touchedByStudent(farKey)) {
+        mintLink(
+          fromKey,
+          toKey,
+          String(clink.kind || "same_pattern"),
+          "student_articulated",
+          String(clink.note || ""),
         );
       }
     }
@@ -5286,6 +5394,22 @@ async function handleTypedRequest(
         : Promise.resolve(null),
       studentTurnPromise,
     ]);
+    // Round 19: the echo check overrides a grader pass earned with the mentor's own
+    // words. The grader saw a perfect answer; the flow knows where it came from.
+    const answerEchoesMentor =
+      answer?.mode === "text" && content
+        ? isEchoOfMentor(content, context.recentTurns)
+        : false;
+    const effectiveUnderstanding =
+      answerEchoesMentor && gradedUnderstanding?.demonstrated
+        ? {
+            ...gradedUnderstanding,
+            demonstrated: false,
+            level: "partial" as const,
+            note: "restated the mentor's own words — needs their own phrasing",
+          }
+        : gradedUnderstanding;
+
     // Routed kind resolution: explicit control wins; code/MCQ are attempts by
     // construction; router verdict next; heuristic fallback keeps legacy behavior for
     // text turns when the router errored. null = fully legacy (e.g. file answers).
@@ -5315,7 +5439,7 @@ async function handleTypedRequest(
     const routerDisagreement = Boolean(
       routerResult &&
         routerResult.kind !== "answer_attempt" &&
-        gradedUnderstanding?.demonstrated === true,
+        effectiveUnderstanding?.demonstrated === true,
     );
     // --- Flow v3 P4: pre-emption notes ---------------------------------------
     // The grader may flag that this message ALSO covered upcoming step objectives.
@@ -5329,7 +5453,7 @@ async function handleTypedRequest(
       !Array.isArray(session.preempted)
         ? (session.preempted as DbRow)
         : {};
-    const preemptedHits = (gradedUnderstanding?.preempted ?? [])
+    const preemptedHits = (effectiveUnderstanding?.preempted ?? [])
       .map((hit) => {
         // Map the grader's 1-based step number back to the activity id it was shown;
         // forward-of-cursor by construction (only upcoming steps were offered). First
@@ -5365,8 +5489,8 @@ async function handleTypedRequest(
     const openEndedMiss: Assessment | null =
       stepMode === "assessment" &&
       stepModeType === "open_ended" &&
-      gradedUnderstanding !== null &&
-      gradedUnderstanding.demonstrated !== true &&
+      effectiveUnderstanding !== null &&
+      effectiveUnderstanding.demonstrated !== true &&
       !inferredHelp &&
       intent !== "confused" &&
       // Flow v3: only a routed ANSWER ATTEMPT can record a miss — a question, tangent, or
@@ -5378,7 +5502,7 @@ async function handleTypedRequest(
             score: 0,
             passed: false,
             feedback:
-              gradedUnderstanding.note || "That answer isn't quite there yet.",
+              effectiveUnderstanding.note || "That answer isn't quite there yet.",
             source: "orchestrator",
           }
         : null;
@@ -5413,7 +5537,7 @@ async function handleTypedRequest(
       requirements,
       answer,
       effectiveOrchestratorAssessment,
-      gradedUnderstanding,
+      effectiveUnderstanding,
       turnStartedIso,
       stepMode,
       routedKind,
@@ -5495,7 +5619,7 @@ async function handleTypedRequest(
       activityMode,
       stepMode,
       stepModeType,
-      gradedUnderstanding,
+      gradedUnderstanding: effectiveUnderstanding,
       gradedCode,
       runtimeTimedOut,
       assessment: effectiveOrchestratorAssessment,
@@ -5537,6 +5661,11 @@ async function handleTypedRequest(
         assignment: "assignment help — homework register; honor the help ceiling strictly",
       };
       directive.text += ` REGISTER SHIFT: the student just switched the conversation to ${declaredMode.toUpperCase()} (${registerNods[declaredMode] || "honor the new register"}). Acknowledge the shift in one natural beat, then proceed in it.`;
+    }
+    // Round 19: an echoed answer never earns credit — and the mentor must SAY so kindly.
+    if (answerEchoesMentor) {
+      directive.text +=
+        " ECHO CHECK: the student's message largely restates YOUR own recent words — do not credit it as their understanding. Warmly ask them to put the idea in their OWN words or with their OWN example before moving on.";
     }
     // P8: the student just accepted the build offer and artifact-live finished — this
     // turn PRESENTS the card. Full override: the composed directive would otherwise
@@ -5882,7 +6011,7 @@ async function handleTypedRequest(
                   feedback: effectiveOrchestratorAssessment.feedback || "",
                 }
               : null,
-            understanding_check: gradedUnderstanding,
+            understanding_check: effectiveUnderstanding,
             help_request: helpRequest || null,
             hint_rung: hintRung,
             intent,
@@ -5959,14 +6088,14 @@ async function handleTypedRequest(
     // "secure" mastery tier. A stuck-cap conclusion has no demonstrated verdict and earns
     // nothing.
     const understandingAssessment: Assessment | null =
-      gradedUnderstanding?.demonstrated === true && requirements.understanding
+      effectiveUnderstanding?.demonstrated === true && requirements.understanding
         ? {
-            score: gradedUnderstanding.level === "solid" ? 0.8 : 0.65,
+            score: effectiveUnderstanding.level === "solid" ? 0.8 : 0.65,
             passed: true,
             // Keep the feedback affirmative on a PASSED row (the grader's note names
             // what is still missing — a diagnosis, not a verdict).
-            feedback: gradedUnderstanding.note
-              ? `Explained the step's idea; still building: ${gradedUnderstanding.note}`
+            feedback: effectiveUnderstanding.note
+              ? `Explained the step's idea; still building: ${effectiveUnderstanding.note}`
               : "Explained the step's idea in their own words.",
             source: "orchestrator",
           }
@@ -5975,7 +6104,7 @@ async function handleTypedRequest(
     // The dedicated grader is authoritative for text completion (it hard-gates the loop);
     // the mentor's self-reported understanding is only the fallback when no grader ran.
     const understanding =
-      gradedUnderstanding ?? parsedUnderstanding(parsed.understanding);
+      effectiveUnderstanding ?? parsedUnderstanding(parsed.understanding);
     const finalState = applyTurn(
       stepStateBefore,
       requirements,
@@ -6062,6 +6191,7 @@ async function handleTypedRequest(
         ideas: context.ideas,
         studentVocab: context.studentVocab,
         studentLinks: context.studentLinks,
+        curriculumLinks: context.curriculumLinks,
         mentorLink: parsed.link ?? null,
         mentorNewIdea: parsed.new_idea ?? null,
       });

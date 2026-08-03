@@ -80,8 +80,10 @@ export function OfferPills({
   onOpenResources,
   disabled,
 }: OfferPillsProps) {
-  const available = CONDITIONAL_MODES.filter((spec) =>
-    spec.id === "quiz" ? offers.quiz : offers.homework,
+  // Round 19: the pill for the CURRENTLY SELECTED mode hides — the ModeSelector already
+  // announces it, and "Quiz ▾" beside a solid "Quiz" tag read as a duplicate control.
+  const available = CONDITIONAL_MODES.filter(
+    (spec) => (spec.id === "quiz" ? offers.quiz : offers.homework) && mode !== spec.id,
   );
 
   if (!available.length && !offers.resources) return null;

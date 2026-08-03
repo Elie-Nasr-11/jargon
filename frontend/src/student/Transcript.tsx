@@ -413,10 +413,15 @@ function groupIntoSections(messages: Msg[]): Section[] {
     const current = sections[sections.length - 1];
     // Non-opening messages (thinking, output, teacher) always continue the open section so a
     // reply and its "Thinking…" placeholder never get split across two boxes.
-    if (current && (!opensSection || mode === current.mode)) {
+    // Transcript smoothing (round 19): a lesson-mode run that spans several steps must
+    // not wear one step label — a mentor reply arriving with a DIFFERENT arc step starts
+    // a fresh section, so each stretch is labelled with the step it actually happened on.
+    const arcStep = message.role === "bot" && message.lessonArc ? message.lessonArc.step : null;
+    const stepChanged = arcStep !== null && current?.arc != null && current.arc.step !== arcStep;
+    if (current && (!opensSection || mode === current.mode) && !stepChanged) {
       current.items.push(message);
     } else {
-      sections.push({ mode, items: [message], arc: null });
+      sections.push({ mode: mode ?? current?.mode, items: [message], arc: null });
     }
     const open = sections[sections.length - 1];
     if (message.role === "bot" && message.lessonArc) open.arc = message.lessonArc;

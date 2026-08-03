@@ -8635,3 +8635,41 @@ Remaining concerns: the 522s are Supabase-side — if they persist beyond ~15 mi
 Restart project in the dashboard; the DB and all data are confirmed intact.
 Suggested next task: once the gateway recovers, the live framework pass (it already
 worked once — the 18:26 turn is the proof).
+
+## Claude -> Codex / Human - 2026-08-03 (round 19 — live-transcript smoothing)
+
+Status: Finished
+Summary: Every defect from the owner's live transcript review, fixed:
+(1) ECHO CHECK (the serious one) — a student answer that substantially restates the
+mentor's own recent words (word 5-gram overlap ≥0.6 over the last 4 mentor turns, min 12
+words) can no longer pass an understanding gate: the grader's pass is downgraded to an
+effectiveUnderstanding of partial/not-demonstrated at the FLOW layer, and the directive
+gains an ECHO CHECK nod telling the mentor to warmly ask for their own words. Closes the
+jam-sandwich hole (mentor handed out the assigned task's steps; verbatim paste-back
+discharged the gate).
+(2) QUESTION-FIRST — present_step turns whose routed kind is `question` now answer the
+question fully before presenting ("can you give me a few examples?" no longer gets
+steamrolled).
+(3) CURRICULUM-LINK ACTIVATION — when the STUDENT'S own words touch the far idea of an
+authored curriculum link whose near end is the current lesson's idea (via that idea's
+vocab terms or title words), the link mints deterministically as student_articulated —
+exactly the fractions-inside-coding moment the model failed to flag itself.
+(4) PACING prompt rules — lead with the question in question-led modes, no re-summaries
+between questions, never "take your time" + immediate question, never "tap Continue" +
+a request in one breath, vary exercise shapes (max twice per session).
+(5) UI — the conditional-mode offer pill hides while that mode is selected (no more
+"Quiz ▾" + solid "Quiz" duplicate); transcript sections SPLIT when the arc step changes
+(a run spanning steps 2→4 no longer wears one "Step 4/4" eyebrow); and the DICTATION
+button stays visible and functional while typing (owner request) — starting it mid-draft
+appends the transcript to what's typed.
+Files changed: supabase/functions/chat/index.ts; student/{Chatbox,OfferPills,
+Transcript}.tsx; tests/test_transcript_smoothing.py (new); docs.
+Tests run: python suite 418 OK (skipped=4); tsc 0 errors; eslint 0 errors; build green;
+edge-fn ad-hoc tsc: only the 3 pre-existing artifacts.
+Remaining concerns: echo threshold (0.6/12 words/5-grams) is a first calibration — a
+paraphrase-heavy student should never trip it, but watch the live feel; the activation
+heuristic requires the far idea's vocab/title words in the STUDENT text (mentor-only
+mentions deliberately don't mint).
+Suggested next task: replay the same lesson as the demo student — ask for examples at a
+step boundary (answered first), paste the mentor's words back (gently rejected), mention
+fractions again (link toast + arc), watch the mic stay put while typing.
