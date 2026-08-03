@@ -2754,6 +2754,16 @@ function applyTurn(
   routedKind: RoutedKind | null = null,
 ): StepState {
   if (!before.presented_at) {
+    // Round 22i (Portability transcript): presentation is what the MENTOR does, not what
+    // the student sends. A conversation turn — a question, tangent, or meta remark
+    // (including everything Discuss/Open lift to "question") — answers the student
+    // WITHOUT teaching the step, so it must not stamp presented_at: the live transcript
+    // showed a discuss question "presenting" step 1, whose Continue then concluded a step
+    // whose material was never shown. The stamp for a turn whose directive actually
+    // presents happens at the directive site (presentsThisTurn).
+    if (routedKind === "question" || routedKind === "tangent" || routedKind === "meta") {
+      return { ...before };
+    }
     return { ...before, presented_at: nowIso };
   }
   const after = { ...before };
@@ -3032,7 +3042,11 @@ function turnDirective(args: {
         text:
           "The student asked YOU a question. Answer it fully and directly FIRST — a real answer, not a redirect or a counter-question; this turn does not grade or advance anything. Then reconnect to the step in one line." +
           (requirements.acknowledge
-            ? " The Continue button on screen moves them on when they're ready."
+            ? presentedBefore
+              ? " The Continue button on screen moves them on when they're ready."
+              : // Round 22i: the step's material hasn't been shown yet, so Continue
+                // PRESENTS it — never imply it skips ahead.
+                " The Continue button on screen will bring up this step's material when they're ready — this step hasn't been taught yet, so never imply Continue skips it."
             : ""),
       };
     }
@@ -3263,7 +3277,7 @@ function turnDirective(args: {
         : "";
       return {
         key: "explanation_pending",
-        text: `This step needs the STUDENT to articulate the idea in their own words, and they have not yet.${gap} Work toward that without handing them the conclusion — address the specific gap; do not merely re-ask a question they already answered. When only a piece is missing, ask them to put the WHOLE idea together in one message (the grader credits only what their latest message contains by itself — fragments alone never pass).`,
+        text: `This step needs the STUDENT to articulate the idea in their own words, and they have not yet.${gap} If their message ALSO asked a question — even folded into an answer — answer it briefly FIRST; never ignore it. Then work toward the articulation without handing them the conclusion: NEVER write out the completed answer, list, or comparisons yourself (that turns the step into copy-bait, and a copied answer is rejected anyway) — give ONE pointed hint at the weakest spot instead, and do not merely re-ask a question they already answered. When only a piece is missing, ask them to put the WHOLE idea together in one message (the grader credits only what their latest message contains by itself — fragments alone never pass).`,
       };
     }
     if (!presentedBefore) {
@@ -5718,6 +5732,10 @@ async function handleTypedRequest(
       navAction,
       preemptedNote,
     });
+    // Round 22i: conversation turns no longer stamp presented_at in applyTurn — the
+    // stamp belongs to the turn whose directive ACTUALLY presents the step's material.
+    const presentsThisTurn =
+      directive.key === "present_step" || directive.key === "present_step_preempted";
     // P4: on the turn that DETECTED pre-emption, let the mentor nod at it without
     // teaching ahead — the credit is delivered when the pre-empted step arrives.
     if (preemptedHits.length) {
@@ -6232,6 +6250,11 @@ async function handleTypedRequest(
       stepMode,
       routedKind,
     );
+    // Round 22i: the directive presented the step this turn (see presentsThisTurn) —
+    // record it, since conversation-kind turns no longer stamp it inside applyTurn.
+    if (presentsThisTurn && !finalState.presented_at) {
+      finalState.presented_at = turnStartedIso;
+    }
     const finalFlow = inRevisit
       ? revisitFlow
       : deriveTurn(finalState, requirements, presentedBefore, activityMode);

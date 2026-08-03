@@ -126,6 +126,45 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class PresentationIntegrityStaticTests(unittest.TestCase):
+    """Round 22i (Portability transcript): a step counts as presented only when the
+    MENTOR actually presents it — conversation turns can no longer 'present' a step
+    whose material was never shown, so Continue can't conclude unseen steps."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
+
+    def test_conversation_turns_do_not_stamp_presentation(self):
+        self.assertIn(
+            'if (routedKind === "question" || routedKind === "tangent" || routedKind === "meta") {',
+            self.chat_fn,
+        )
+
+    def test_presenting_directive_stamps_presentation(self):
+        self.assertIn("const presentsThisTurn =", self.chat_fn)
+        self.assertIn(
+            "if (presentsThisTurn && !finalState.presented_at) {", self.chat_fn
+        )
+
+    def test_continue_copy_honest_on_unpresented_steps(self):
+        self.assertIn(
+            "will bring up this step's material when they're ready", self.chat_fn
+        )
+
+    def test_pending_articulation_never_writes_the_answers(self):
+        # The live transcript showed one partial attempt earning the mentor's full
+        # comparison list — copy-bait the echo gate then rejects.
+        self.assertIn(
+            "NEVER write out the completed answer, list, or comparisons yourself",
+            self.chat_fn,
+        )
+        self.assertIn(
+            "If their message ALSO asked a question — even folded into an answer — answer it briefly FIRST",
+            self.chat_fn,
+        )
+
+
 class StreamingProseStaticTests(unittest.TestCase):
     """Round 21: blur-in gray streaming, sentence whiten, live formatting, richer prose."""
 

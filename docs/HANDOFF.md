@@ -8929,3 +8929,32 @@ Remaining concerns: .stream-word is display:inline-block (filter needs a box) �
 as units, which reads fine; if long unbroken tokens ever overflow, add overflow-wrap.
 Suggested next task: live feel pass — watch a long reply: gray trail behind one white
 sentence, words misting in at the tail.
+
+## Claude -> Codex / Human - 2026-08-03 (Round 22i: steps can no longer be concluded unseen)
+
+Status: Finished
+Summary: The owner's "Portability" transcript showed the lesson eating its own steps:
+a Discuss question stamped step 1 presented_at (applyTurn stamped it on ANY first turn),
+so the following Continue CONCLUDED a step whose material was never shown; "next" in
+Discuss (lifted to routedKind "question" by the mode ceiling) re-answered with the
+lesson overview; steps 1-2 delivered only closing summaries. Fixes:
+(1) STRUCTURAL — applyTurn no longer stamps presented_at for conversation kinds
+(question/tangent/meta, which includes everything Discuss/Open lift); the stamp now
+happens at the directive site (presentsThisTurn: present_step/present_step_preempted
+writes presented_at into finalState). Continue or any lesson-register message on an
+unpresented step now PRESENTS it — teaching can no longer be skipped by conversation.
+(2) question_answer's button copy is honest per state: on an unpresented step it says
+Continue "will bring up this step's material" (never implies skipping).
+(3) explanation_pending: answer an embedded question FIRST (the live "how can we link
+this to other topics and vocab words?" was flat-out ignored), and NEVER write out the
+completed answers/comparisons (the mentor handed the full list after one partial
+attempt — copy-bait the echo gate then rejects).
+Files changed: supabase/functions/chat/index.ts; tests/test_transcript_smoothing.py
+(PresentationIntegrityStaticTests; suite 442 OK).
+Tests run: python 442 OK; chat fn esbuild-parse clean.
+Remaining concerns: with the fix, a student who ONLY asks questions never trips
+presentation — the step waits for a Continue/lesson message (deliberate: better than
+marking unseen material presented); watch that question_answer's reconnect line keeps
+pointing them onward.
+Suggested next task: replay the Portability opening — big-picture question in Discuss,
+then Continue (expect the step actually taught), then Continue again (expect the close).
