@@ -132,7 +132,7 @@ class SafeMarkdownInvariants(unittest.TestCase):
         self.assertIn("BLOCK_MD_RE.test(raw)", TRANSCRIPT)
         # …and only mentor bubbles opt in — student/teacher text stays literal pre-wrap.
         self.assertIn("markdown={!message.isError}", TRANSCRIPT)
-        self.assertIn("{markdown ? renderInline(raw, vocab) : raw}", TRANSCRIPT)
+        self.assertIn("{markdown ? renderProse(raw, vocab, String(key ?? \"p\")) : raw}", TRANSCRIPT)
         self.assertIn("whitespace-pre-wrap", TRANSCRIPT)
 
     def test_links_are_https_only_and_noopener(self):

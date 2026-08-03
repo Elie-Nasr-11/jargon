@@ -8705,3 +8705,29 @@ the map's memory language — easy to swap if the owner wants a dedicated hue; i
 frequency ("about once per step") is prompt-tuned, watch for over-asking.
 Suggested next task: live pass — let the mentor invite a connection, answer it, and
 watch the center flash play before the toast; take a checkpoint and see its marker.
+
+## Claude -> Codex / Human - 2026-08-03 (round 21 — streaming text presentation)
+
+Status: Finished
+Summary: The streamed reply gets its cinematic treatment (owner spec) and mentor prose
+stops being flat text. STREAMING: the thinking placeholder now renders through a new
+StreamingBody — fenced code becomes a real CodeBlock AS IT ARRIVES; prose splits into
+sentences where the forming TAIL is soft blurred GRAY (blur 1.6px, muted color) and each
+sentence, the moment it completes, SHARPENS AND WHITENS (stream-whiten 450ms). Inline
+markdown applies live — bold streams in bold, italic italic, code code, the instant its
+pair closes. PROSE (settled + live): sentences ending in "?" wear the accent
+(prose-question — questions and calls-to-action read as things to act on), lists step
+out of the prose indented behind a hairline divider rule (border-l-2 + pl-6), and
+inline code carries its own hue (practice-green mix) so code reads as code at a glance.
+Reduced motion: no blur, no whiten animation, text appears settled. Block lists settle
+into full list styling when the final message replaces the stream (mid-stream they read
+as plain "- " lines — noted, acceptable). One stale pin re-anchored (renderProse now
+guards the same markdown gate).
+Files changed: student/Transcript.tsx, frontend/src/styles.css,
+tests/test_transcript_smoothing.py (extended) + one re-pin, docs.
+Tests run: python suite 424 OK (skipped=4); tsc 0 errors; eslint 0 errors; build green.
+Remaining concerns: the whiten replays per completed sentence at ~12fps flush — verified
+smooth in build; if a low-end device stutters, lengthen the flush interval. Question
+detection is end-of-sentence "?" only (deliberately conservative).
+Suggested next task: live pass — watch a reply blur in gray and whiten sentence by
+sentence, with bold/code forming mid-stream; check a list and an inline-code reply.

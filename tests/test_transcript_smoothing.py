@@ -124,3 +124,42 @@ class GrowthMomentsStaticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StreamingProseStaticTests(unittest.TestCase):
+    """Round 21: blur-in gray streaming, sentence whiten, live formatting, richer prose."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.transcript = TRANSCRIPT.read_text(encoding="utf-8")
+        cls.styles = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
+
+    def test_streaming_body_sentence_treatment(self):
+        for fragment in (
+            "function StreamingBody(",
+            "function splitSentences(",
+            # Tail = blurred gray; completed sentences whiten; live inline markdown.
+            'className="stream-tail"',
+            "stream-done",
+            "<StreamingBody text={message.text} />",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.transcript)
+        self.assertIn("filter: blur(1.6px);", self.styles)
+        self.assertIn("@keyframes stream-whiten", self.styles)
+        # Reduced motion: no blur, no whiten.
+        self.assertIn(".stream-tail {\n    filter: none;", self.styles)
+
+    def test_prose_is_not_flat(self):
+        # Questions wear the accent, settled and live.
+        self.assertIn("function isQuestionSentence(", self.transcript)
+        self.assertIn("prose-question", self.transcript)
+        self.assertIn(".prose-question {", self.styles)
+        # Lists indent behind a divider rule; inline code carries its own hue.
+        self.assertIn("border-l-2 border-border pl-6", self.transcript)
+        self.assertIn("inline-code-hue", self.transcript)
+        self.assertIn(".inline-code-hue {", self.styles)
+
+
+if __name__ == "__main__":
+    unittest.main()

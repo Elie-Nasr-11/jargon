@@ -183,7 +183,7 @@ function renderInline(text: string, vocab?: VocabPass): ReactNode[] {
       return (
         <code
           key={i}
-          className="rounded-md bg-code-background px-1.5 py-0.5 font-mono text-[0.9em] text-code-foreground"
+          className="inline-code-hue rounded-md bg-code-background px-1.5 py-0.5 font-mono text-[0.9em]"
         >
           {code[1]}
         </code>
@@ -237,7 +237,7 @@ function renderBlocks(text: string, vocab?: VocabPass): ReactNode[] {
     if (!joined.trim()) return;
     nodes.push(
       <p key={nodes.length} className="whitespace-pre-wrap">
-        {renderInline(joined, vocab)}
+        {renderProse(joined, vocab, `b${nodes.length}`)}
       </p>,
     );
   };
@@ -247,12 +247,16 @@ function renderBlocks(text: string, vocab?: VocabPass): ReactNode[] {
     list = null;
     const rows = items.map((item, i) => <li key={i}>{renderInline(item, vocab)}</li>);
     nodes.push(
+      // Round 21: lists step out of the prose — indented behind a hairline divider rule.
       ordered ? (
-        <ol key={nodes.length} className="list-decimal space-y-1 pl-5">
+        <ol
+          key={nodes.length}
+          className="ml-1 list-decimal space-y-1.5 border-l-2 border-border pl-6"
+        >
           {rows}
         </ol>
       ) : (
-        <ul key={nodes.length} className="list-disc space-y-1 pl-5">
+        <ul key={nodes.length} className="ml-1 list-disc space-y-1.5 border-l-2 border-border pl-6">
           {rows}
         </ul>
       ),
@@ -306,6 +310,69 @@ function renderBlocks(text: string, vocab?: VocabPass): ReactNode[] {
 // Text with its fenced blocks lifted out. Code gets the highlighted block; prose segments keep
 // whitespace. `markdown` (mentor bubbles only) turns on the safe subset above — student and
 // teacher text stays literal.
+// --- Round 21: sentence-aware prose ------------------------------------------------
+// A completed sentence is one followed by more text; the trailing fragment is the TAIL.
+// Streaming renders the tail as soft blurred GRAY (still forming) and each sentence, the
+// moment it completes, sharpens and whitens (stream-whiten). Questions — sentences that
+// end in "?" — wear the accent in both live and settled prose, so "something to act on"
+// never reads as flat text.
+function splitSentences(text: string): { done: string[]; tail: string } {
+  const parts = text.split(/(?<=[.!?…]["')\]]?)\s+/);
+  if (parts.length <= 1) return { done: [], tail: text };
+  return { done: parts.slice(0, -1), tail: parts[parts.length - 1] };
+}
+
+function isQuestionSentence(sentence: string): boolean {
+  return /[?]["')\]]?\s*$/.test(sentence.trim());
+}
+
+// Settled prose, sentence-decorated: questions get the accent treatment; everything else
+// renders as before. Used by MessageBody's plain path so final messages match the live one.
+function renderProse(raw: string, vocab?: VocabPass, keyBase = "s"): ReactNode[] {
+  const { done, tail } = splitSentences(raw);
+  const sentences = tail ? [...done, tail] : done;
+  return sentences.map((sentence, i) => (
+    <span
+      key={`${keyBase}-${i}`}
+      className={isQuestionSentence(sentence) ? "prose-question" : undefined}
+    >
+      {renderInline(sentence, vocab)}
+      {i < sentences.length - 1 ? " " : null}
+    </span>
+  ));
+}
+
+// The live streaming body: fenced code renders as real code blocks AS IT ARRIVES; prose
+// splits into whitened sentences + the blurred gray tail. Inline markdown applies live —
+// bold streams in bold the moment its pair closes. (Block lists settle into full list
+// styling when the final message replaces this; mid-stream they read as plain lines.)
+function StreamingBody({ text }: { text: string }) {
+  const segments = parseFencedBlocks(text);
+  return (
+    <>
+      {segments.map((segment, i) => {
+        if (segment.kind === "code") return <CodeBlock key={i} code={segment.code} />;
+        const raw = segment.text.replace(/^\n+/, "");
+        if (!raw.trim()) return null;
+        const { done, tail } = splitSentences(raw);
+        return (
+          <span key={i} className="whitespace-pre-wrap">
+            {done.map((sentence, j) => (
+              <span
+                key={j}
+                className={`stream-done${isQuestionSentence(sentence) ? " prose-question" : ""}`}
+              >
+                {renderInline(sentence)}{" "}
+              </span>
+            ))}
+            {tail ? <span className="stream-tail">{renderInline(tail)}</span> : null}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function MessageBody({
   text,
   markdown,
@@ -326,7 +393,7 @@ function MessageBody({
     }
     return (
       <span key={key} className="whitespace-pre-wrap">
-        {markdown ? renderInline(raw, vocab) : raw}
+        {markdown ? renderProse(raw, vocab, String(key ?? "p")) : raw}
       </span>
     );
   };
@@ -593,7 +660,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
               return (
                 <Bubble key={message.id} align="start" tone="mentor">
                   {message.text ? (
-                    <MessageBody text={message.text} />
+                    <StreamingBody text={message.text} />
                   ) : (
                     <span className="text-muted-foreground">Thinking…</span>
                   )}

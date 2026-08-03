@@ -1021,3 +1021,45 @@ select {
 .gflash-label {
   animation: gflash-label-in 2.4s ease both;
 }
+
+/* --- Round 21: streaming prose (student/Transcript.tsx StreamingBody) --------------
+   The forming tail is soft blurred GRAY; a sentence sharpens and WHITENS the moment it
+   completes. Questions wear the accent so "something to act on" never reads flat.
+   Reduced motion: no blur, no whiten animation — text just appears settled. */
+.stream-tail {
+  color: var(--muted-foreground);
+  filter: blur(1.6px);
+  opacity: 0.85;
+}
+@keyframes stream-whiten {
+  from {
+    color: var(--muted-foreground);
+    filter: blur(1.6px);
+    opacity: 0.85;
+  }
+  to {
+    color: var(--foreground);
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+.stream-done {
+  animation: stream-whiten 0.45s ease both;
+}
+.prose-question {
+  color: var(--accent-text);
+  font-weight: 500;
+}
+/* Inline code carries its own hue — code should read as code at a glance. */
+.inline-code-hue {
+  color: color-mix(in oklab, var(--mode-practice) 65%, var(--foreground));
+}
+@media (prefers-reduced-motion: reduce) {
+  .stream-tail {
+    filter: none;
+    opacity: 1;
+  }
+  .stream-done {
+    animation: none;
+  }
+}
