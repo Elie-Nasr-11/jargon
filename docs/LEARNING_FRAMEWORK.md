@@ -1,6 +1,6 @@
 # The Learning Framework — Ideas, Vocab, Links (Sketch)
 
-Status: design sketch, 2026-08-02 (owner ideas round; nothing built yet).
+Status: design sketch, 2026-08-02 — §6 DECIDED by owner same day; ready for F1.
 Companion to CHAT_FLOW_SCOPE.md (flow, fully shipped) and the memory decisions
 (2026-08-01). This doc turns the owner's direction into a buildable shape.
 
@@ -16,6 +16,18 @@ pop animation shows the link forming — and it's visible in the brain view.
 
 ### Idea (= learning objective)
 The atomic unit of the knowledge graph and the unit ALL progress is tracked against.
+
+**Two origins, one graph (owner decision 2026-08-02):**
+- **Authored ideas** — each lesson carries a PRIMARY idea (teacher/AI-draft-approved).
+  These are the progress spine: mastery is tracked against them, and they are the
+  guaranteed skeleton every student's brain shares.
+- **Emergent ideas** — the brain GROWS from conversation. When a student pushes on,
+  reasons about, or names a concept beyond the authored set, the mentor proposes a new
+  idea node (a `new_idea` field on the JSON contract, validated/deduped server-side
+  against existing ideas exactly like `link` and `misconception`). Emergent ideas are
+  STUDENT-SCOPED — they are that student's brain growing, not the curriculum changing —
+  and they enrich the graph and can be linked, but do not gate lesson progress. A
+  student who thinks more literally grows a bigger brain.
 
 - Today's nearest ancestors: `milestones.objective` (authored per step, prompt-only) and
   `skill_key` strings (`student_mastery`, flat, ungoverned). Neither is first-class.
@@ -69,7 +81,14 @@ turn that's already running):
    conversation genuinely carries logic across ideas/subjects. The orchestrator
    validates both ideas exist before writing — the LLM proposes, the server disposes
    (same trust posture as grading).
-3. **Student articulation** (the strongest signal, later phase): the understanding
+3. **Emergent idea minting** (owner decision): the mentor's contract gains
+   `new_idea: {title, one_liner, related_idea_keys}` — proposed only when the student
+   genuinely pushed into territory beyond the authored set. The server dedupes
+   (normalized title match against authored + this student's emergent ideas), caps
+   minting (≤1 per turn, bounded per session), and writes the student-scoped idea +
+   its links. The envelope carries it as an `idea_events` entry → the brain visibly
+   grows a NEW star.
+4. **Student articulation** (the strongest signal, later phase): the understanding
    grader gets one extra output bit — "did the student themselves draw a cross-idea
    connection?" — gated the same way as everything else the grader emits.
 
@@ -97,9 +116,11 @@ encounter (per subject, at most); everything else accumulates silently into the 
 The galaxy keeps its skeleton (you → courses → units → lessons, memory satellites) and
 gains the knowledge layer:
 
-- **Idea stars**: ideas attach to the lessons that teach them — rendered on demand (a
-  zoom threshold or a layer toggle: Lessons / Ideas / Vocab) so the default view stays
-  calm.
+- **Idea stars**: authored ideas attach to the lessons that teach them — rendered on
+  demand (a zoom threshold or a layer toggle: Lessons / Ideas / Vocab) so the default
+  view stays calm. **Emergent ideas render distinctly** (aurora-tinted, orbiting the
+  subject they were born in): the part of the brain that exists because THIS student
+  thought — the more they push, the more stars only they have.
 - **Earned arcs**: `student_links` render as PERMANENT bright arcs between idea stars
   (cross-subject arcs are the long, spectacular ones — geometry to biology crosses the
   whole disc). The current lexical topic links (round 12e) retire in favor of real
@@ -132,19 +153,20 @@ gains the knowledge layer:
   teacher analytics, mentor prompt context); grader gains the articulation bit;
   class/teacher views of the class's collective link graph.
 
-## 6. Open decisions (owner)
+## 6. Decisions (owner, 2026-08-02)
 
-1. **Subject taxonomy**: is subject = course (Math, Biology, IT — what the demo has),
-   or a separate curated list courses map into? (Recommend: course.subject column,
-   curated small list — links are "cross-subject", so the taxonomy is load-bearing.)
-2. **Idea granularity**: per-step (fine, ~4-6 ideas/lesson) or per-lesson (~1-2)?
-   (Recommend: per-lesson primary idea + optional per-step sub-ideas; coarse first —
-   fine granularity multiplies authoring cost and thins mastery signal.)
-3. **Highlight density**: every occurrence of every known term, or first-per-message?
-   (Recommend: first-per-message, full density on tap-to-reveal.)
-4. **Who sees links first**: student-only at F3, or teacher dashboards simultaneously?
-5. **The vocab dropdown while streaming**: hold all vocab/link UI until the reply
-   finishes (recommended — one thing at a time), or fire mid-stream?
+1. **Subject = course.** No separate taxonomy; every course is its own subject, so
+   "cross-subject" means "cross-course". Revisit only if two same-discipline courses
+   ever make the links feel false.
+2. **Idea granularity: lesson-primary + EMERGENT.** One authored primary idea per
+   lesson as the progress spine; beyond that, the brain grows from conversation — the
+   mentor mints student-scoped emergent ideas when the student pushes and thinks (see
+   §1 and §2.3). The brain's size reflects the student's thinking, not just coverage.
+3. **Highlight density: first occurrence per message** (full card on tap anywhere).
+4. **Who sees links first**: student-first at F3; teacher views follow in F4
+   (defaulted — not explicitly picked).
+5. **Notification timing: after the reply finishes streaming** — highlights, the
+   definition dropdown, and link/idea toasts all wait for the text to settle.
 
 ## 7. Explicitly not in this sketch
 
