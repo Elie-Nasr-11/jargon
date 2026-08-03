@@ -1118,6 +1118,10 @@ export type LessonArc = {
   // Flow v3: activity ids the student has actually completed — the clickable-stepper
   // set (cursor position alone can't express this during a revisit).
   steps_done?: string[];
+  // Round 22: true only on the ADVANCING turn's arc — the arc points at the next step
+  // (the stepper needs that immediately) but the reply's content wraps the step that
+  // just finished, so the transcript keeps that message under the old section marker.
+  transition?: boolean;
 };
 
 export type TypedChatEnvelope = {

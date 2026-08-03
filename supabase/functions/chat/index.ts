@@ -184,7 +184,9 @@ GOVERNANCE:
   say "take your time" and then ask a question in the same breath — pick one. Never combine "tap
   Continue" with a request for an answer: Continue only when nothing is being asked of them. VARY your
   exercises — never reuse the same exercise shape (e.g. "list the steps to make X") more than twice in
-  one session; change the angle, format, or difficulty instead.
+  one session; change the angle, format, or difficulty instead. VARY your openers too — never begin two
+  replies in a row with the same phrase ("Exactly right!", "Great job!"); praise specifically or start
+  from what the student said.
 - INVITE THINKING ACROSS SUBJECTS: about once per step, at a natural beat (right after an idea lands
   or a step concludes — never mid-task), invite the student to CONNECT what they're learning to another
   subject or to something they already know: "where does this same pattern show up somewhere else?", or
@@ -1784,7 +1786,14 @@ async function checkUnderstanding(
     "understanding of THIS step's objective? The earlier turns are background for " +
     "resolving references (\"it\", \"that one\") — they are NEVER evidence; understanding " +
     "shown in an earlier turn but absent from the latest message does not count. Do not " +
-    "credit vague, circular, or off-topic answers. Separately: if the latest message ALSO " +
+    "credit vague, circular, or off-topic answers. NAMED-CRITERION RULE: when the task or " +
+    "the mentor's most recent question names a specific framework, test, distinction, or " +
+    "set of terms the student is asked to apply (e.g. \"which of the two tests did it " +
+    "fail — relevant or checkable?\"), demonstrated=true ALSO requires the latest message " +
+    "to actually engage that named framework; a thoughtful answer in a completely " +
+    "different frame is level=partial, with the note naming the unused framework (the " +
+    "mentor's question in the background defines WHAT was asked — it is still never " +
+    "evidence of the student's understanding). Separately: if the latest message ALSO " +
     "clearly covers one of the numbered UPCOMING step objectives, report it under " +
     '"preempted" with that step\'s number and a short note capturing the student\'s ' +
     "insight (only clear cases — never stretch; return an EMPTY preempted array when " +
@@ -2944,6 +2953,26 @@ function turnDirective(args: {
   const openEndedAssessment =
     stepMode === "assessment" && stepModeType === "open_ended";
 
+  // Round 22 (transcript kinks): every concluding directive carries this. A concluding
+  // reply lands AFTER the step has advanced — the Continue button is already gone, and
+  // finishTurn appends a deterministic hand-off line ("That completes … Next up …") that
+  // names the next part and tells the student to send a message. The live transcript
+  // showed the model saying "tap Continue to explore the next part" (a button that no
+  // longer existed) right above that suffix — two contradictory calls to action, and the
+  // next part named twice.
+  const CONCLUDE_HANDOFF =
+    " This reply ENDS the step: never mention the Continue button or any button (it is gone once this reply lands), never name or preview the next part, and never ask if they're ready to move on — a short hand-off line naming what's next is appended after your reply automatically.";
+
+  // Round 22 (transcript kinks): a bare "ready"-style message is a signal to proceed,
+  // not an answer — the live transcript showed "ready" earning a full re-ask of a task
+  // that was already on screen, bullets and all. Detected here (not in the router) so a
+  // meta-routed "ready" can't fall into the summarize/reassure branch either.
+  const bareReadiness =
+    answer?.mode === "text" &&
+    /^(ok(ay)?|sure|yes|yep|yeah|ready|redy|reddy|reaedy|go|continue|next|done|k|go ahead|sounds good|i'?m ready|lets? go|let's go)[.!\s]*$/i.test(
+      String(answer.text || "").trim(),
+    );
+
   const pick = (): TurnDirective => {
     // --- Flow v3 navigation branches (win over everything: a revisit turn must never
     // read as an attempt, a completion, or a post-completion follow-up) ---------------
@@ -2998,7 +3027,7 @@ function turnDirective(args: {
             : ""),
       };
     }
-    if (routedKind === "meta" && !quizActive) {
+    if (routedKind === "meta" && !quizActive && !bareReadiness) {
       return {
         key: "meta_reply",
         text: "The student said something about the lesson or process itself, not an attempt. Respond to it helpfully — summarize, reassure, or adjust pace — then hand the floor back without grading anything.",
@@ -3046,11 +3075,15 @@ function turnDirective(args: {
         return gradedUnderstanding?.demonstrated
           ? {
               key: "revision_concluded",
-              text: 'They recalled what this revision step targets. Affirm the retention warmly in ONE line (e.g. "you\'ve still got a solid grip on this!") and conclude the step — do not open a new question.',
+              text:
+                'They recalled what this revision step targets. Affirm the retention warmly in ONE line (e.g. "you\'ve still got a solid grip on this!") and conclude the step — do not open a new question.' +
+                CONCLUDE_HANDOFF,
             }
           : {
               key: "revision_stuck",
-              text: "They could not fully recall this after several tries and the step is now wrapping up. Do NOT praise it as solid or claim they have it down. State the step's key idea plainly in one or two sentences — this is the ONE time you give it — reassure them it's worth revisiting later, and close warmly.",
+              text:
+                "They could not fully recall this after several tries and the step is now wrapping up. Do NOT praise it as solid or claim they have it down. State the step's key idea plainly in one or two sentences — this is the ONE time you give it — reassure them it's worth revisiting later, and close warmly." +
+                CONCLUDE_HANDOFF,
             };
       }
       return {
@@ -3059,11 +3092,16 @@ function turnDirective(args: {
       };
     }
     if (gradedUnderstanding?.demonstrated) {
+      // Round 22: a multi-part answer must be engaged part by part — the live transcript
+      // showed a student's own evidence proposal waved through under a generic
+      // "Exactly right!" that never touched it.
       return {
         key: "understanding_demonstrated",
-        text: openEndedAssessment
-          ? `The student's answer PASSED this assessment question (grader level=${gradedUnderstanding.level}). Confirm it briefly, reinforce in one sentence why it's right, and conclude the step.`
-          : `The student HAS just demonstrated understanding of this step (grader level=${gradedUnderstanding.level}). Affirm warmly in one sentence and conclude the step — do not ask another question about it or offer more help.`,
+        text:
+          (openEndedAssessment
+            ? `The student's answer PASSED this assessment question (grader level=${gradedUnderstanding.level}). Confirm it briefly and reinforce in one sentence why it's right. If their answer had several parts — especially anything they proposed, suggested, or asked on their own — engage each part specifically before concluding; never wave a multi-part answer through with one generic praise line.`
+            : `The student HAS just demonstrated understanding of this step (grader level=${gradedUnderstanding.level}). Affirm warmly and conclude the step — do not ask another question about it or offer more help. If their answer had several parts or added an idea of their own, name what was strong about each in a phrase, not a paragraph.`) +
+          CONCLUDE_HANDOFF,
       };
     }
     // --- v4 mode sub-ladder (docs/PLATFORM.md) --------------------------------
@@ -3095,8 +3133,10 @@ function turnDirective(args: {
             ? "Confirm they know where the task lives (the work panel above the message box) and that they can return here anytime, then conclude the step."
             : stepMode === "inquiry"
               ? "They have no more questions. Close the step warmly in a sentence or two."
-              : "Respond briefly to their reaction, reinforce the ONE key idea in a sentence, and conclude the step.";
-      return { key: `${stepMode}_concluded`, text: closing };
+              : // Round 22: a Continue tap is not a contribution — the live transcript
+                // showed the mentor crediting "thinking" a bare tap never produced.
+                "Conclude the step in one or two sentences. If they shared a reaction or thought, respond to it briefly; if they just tapped Continue without sharing anything, do NOT invent, credit, or reference thinking they never showed (no \"now that you've thought about…\") — restate the ONE key idea plainly and close.";
+      return { key: `${stepMode}_concluded`, text: closing + CONCLUDE_HANDOFF };
     }
     // Open-ended assessment concluding via the stuck cap (final attempt used up). A
     // demonstrated PASS is already handled by understanding_demonstrated above, so this is
@@ -3109,7 +3149,9 @@ function turnDirective(args: {
     ) {
       return {
         key: "assessment_concluded",
-        text: "This was the student's last attempt on this assessment question and the step is now wrapping up. Acknowledge their effort briefly and let them know you're moving on — do NOT reveal or teach the correct answer, and do NOT invite another attempt.",
+        text:
+          "This was the student's last attempt on this assessment question and the step is now wrapping up. Acknowledge their effort briefly and let them know you're moving on — do NOT reveal or teach the correct answer, and do NOT invite another attempt." +
+          CONCLUDE_HANDOFF,
       };
     }
     // Open-ended assessment miss (still has attempts left): grading is strict and hint-free.
@@ -3133,7 +3175,9 @@ function turnDirective(args: {
     if (codePassedThisTurn && !quizActive) {
       return {
         key: "code_objective_met",
-        text: "The student's code runs and accomplishes this step's objective. Affirm once and conclude the step — do not demand a specific wording, topic, or a match to a shown example.",
+        text:
+          "The student's code runs and accomplishes this step's objective. Affirm once and conclude the step — do not demand a specific wording, topic, or a match to a shown example." +
+          CONCLUDE_HANDOFF,
       };
     }
     if (
@@ -3146,7 +3190,9 @@ function turnDirective(args: {
       // Stuck-cap conclusion: the step is wrapping without a demonstrated understanding.
       return {
         key: "step_concluding_stuck",
-        text: "The student has worked at this several times without fully landing it and the step is now wrapping up. State the step's idea plainly in one or two sentences — this is the ONE time you give it — then close warmly.",
+        text:
+          "The student has worked at this several times without fully landing it and the step is now wrapping up. State the step's idea plainly in one or two sentences — this is the ONE time you give it — then close warmly." +
+          CONCLUDE_HANDOFF,
       };
     }
     if (quizActive && !stepStateBefore.quiz_presented_at) {
@@ -3162,7 +3208,9 @@ function turnDirective(args: {
     if (answer?.mode === "multiple_choice" && assessment?.passed === true) {
       return {
         key: "quiz_passed",
-        text: "The student tapped the correct answer (deterministically graded — see turn.grade and turn.message). Affirm briefly, reinforce in one sentence WHY it's right, and conclude the step — do not re-read the options or ask another question about it.",
+        text:
+          "The student tapped the correct answer (deterministically graded — see turn.grade and turn.message). Affirm briefly, reinforce in one sentence WHY it's right, and conclude the step — do not re-read the options or ask another question about it." +
+          CONCLUDE_HANDOFF,
       };
     }
     if (answer?.mode === "multiple_choice" && assessment?.passed === false) {
@@ -3181,6 +3229,12 @@ function turnDirective(args: {
       return {
         key: "run_failed",
         text: "The student's code run did not pass (see turn.run_summary and turn.grade). Give the lightest help that unblocks the ONE thing to fix — a pointed question or a single hint at turn.hint_rung — then ask them to run it again.",
+      };
+    }
+    if (bareReadiness && presentedBefore && !quizActive) {
+      return {
+        key: "readiness_ack",
+        text: 'The student sent a bare "ready"-style acknowledgement — a signal to proceed, NOT an answer or a question. The task is already on screen just above; do NOT restate, rephrase, or re-explain any part of it. Reply with ONE short line that asks directly for the thing the step is waiting on (e.g. "Great — what\'s your example?").',
       };
     }
     if (
@@ -3645,6 +3699,11 @@ type LessonArc = {
   // client's clickable-stepper set. Cursor position alone can't express this during a
   // revisit, where completed steps sit AFTER the cursor.
   steps_done?: string[];
+  // Round 22: set on the ADVANCING turn's envelope only. The arc already points at the
+  // next step (the stepper needs that immediately), but the reply's CONTENT wraps the
+  // step that just finished — the transcript uses this flag to keep that message under
+  // the old step's section marker instead of opening the new step's section one early.
+  transition?: boolean;
 };
 
 // Build the lesson-arc view (step N of M, what's done, what's next) so the mentor can
@@ -6334,7 +6393,7 @@ async function handleTypedRequest(
       // Advance the progress indicator in sync with the hand-off (the session cursor just
       // moved to the next activity), so the client shows the new step immediately. The
       // done-set includes the step that just finished (mirrors the steps_done merge below).
-      envelope.lesson_arc =
+      const advancedArc =
         buildLessonArc(
           context.activities,
           nextActivityRow,
@@ -6342,6 +6401,11 @@ async function handleTypedRequest(
             ? { ...stepsDoneBefore, [context.activity.id]: { via: "gates" } }
             : stepsDoneBefore,
         ) ?? envelope.lesson_arc;
+      // transition: this reply's content wraps the OLD step even though the arc points at
+      // the new one — the client's section markers key on this (see LessonArc.transition).
+      envelope.lesson_arc = advancedArc
+        ? { ...advancedArc, transition: true }
+        : advancedArc;
     }
 
     // Unified completion gate (checkpoint unification P1): a lesson is complete only when its

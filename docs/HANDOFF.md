@@ -8731,3 +8731,43 @@ smooth in build; if a low-end device stutters, lengthen the flush interval. Ques
 detection is end-of-sentence "?" only (deliberately conservative).
 Suggested next task: live pass — watch a reply blur in gray and whiten sentence by
 sentence, with bold/code forming mid-stream; check a list and an inline-code reply.
+
+## Claude -> Codex / Human - 2026-08-03 (Round 22: six kinks from the demo-lesson transcript)
+
+Status: Finished
+Summary: The owner's demo run of "Claims and the reasons behind them" surfaced six kinks;
+all fixed.
+(1) CONCLUDE_HANDOFF — every concluding directive (understanding_demonstrated, all
+${stepMode}_concluded closings, assessment_concluded, step_concluding_stuck,
+code_objective_met, quiz_passed, both revision closings) now tells the model the reply
+ENDS the step: never mention the (already gone) Continue button, never name/preview the
+next part, never ask "ready?" — the deterministic arcSuffix handles the hand-off. Closes
+the "tap Continue to explore the next part" + "Send a message when you're ready"
+double-CTA the transcript showed twice.
+(2) The content-step closing explicitly forbids crediting thinking a bare Continue tap
+never produced ("now that you've thought about…" over skipped work).
+(3) bareReadiness — a bare "ready"-style message (ok/sure/ready/go/continue/…) on an
+already-presented step gets ONE line asking directly for the deliverable, never a full
+re-ask; hoisted above the meta branch so a meta-routed "ready" can't summarize either.
+(4) NAMED-CRITERION RULE in the understanding grader: when the task or the mentor's
+latest question names a framework/test the student must apply ("relevant or
+checkable?"), demonstrated requires engaging it — thoughtful-in-a-different-frame is
+partial with a note naming the unused framework.
+(5) Multi-part answers: the demonstrated directives require engaging each part
+(especially student-proposed ideas) instead of one generic praise line; PACING gains
+"VARY your openers" (no back-to-back "Exactly right!").
+(6) Marker off-by-one: the advancing envelope's lesson_arc now carries transition:true;
+the transcript keeps that message under the OLD step's section (stepChanged skips it,
+and a transition arc never becomes a section's eyebrow), so "Step N+1" no longer sits
+above the step-N wrap-up.
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/Transcript.tsx;
+frontend/src/lib/types.ts; tests/test_transcript_smoothing.py (TransitionKinksStaticTests).
+Tests run: python suite 430 OK (skipped=4); tsc 0 errors; eslint 0 errors; build green.
+Remaining concerns: bareReadiness is a fixed word list (typos beyond redy/reddy/reaedy
+fall through to the normal ladder — safe, just unoptimized); the named-criterion rule
+leans on the grader model honoring it — watch a live pass. transition is additive on the
+persisted envelope, so old turns render exactly as before.
+Suggested next task: replay the demo lesson — tap Continue at a step boundary (expect a
+short close + the hand-off line only), type "ready" mid-step (expect a one-liner), and
+answer a named-criterion question in a different frame (expect a nudge back to the
+test's terms).

@@ -483,8 +483,16 @@ function groupIntoSections(messages: Msg[]): Section[] {
     // Transcript smoothing (round 19): a lesson-mode run that spans several steps must
     // not wear one step label — a mentor reply arriving with a DIFFERENT arc step starts
     // a fresh section, so each stretch is labelled with the step it actually happened on.
-    const arcStep = message.role === "bot" && message.lessonArc ? message.lessonArc.step : null;
-    const stepChanged = arcStep !== null && current?.arc != null && current.arc.step !== arcStep;
+    // Round 22: EXCEPT the advancing turn itself (arc.transition) — its arc already
+    // points at the next step but its content wraps the one that just finished, so it
+    // stays in the old section and the new marker opens on the next real message.
+    const messageArc = message.role === "bot" ? (message.lessonArc ?? null) : null;
+    const arcStep = messageArc ? messageArc.step : null;
+    const stepChanged =
+      arcStep !== null &&
+      current?.arc != null &&
+      current.arc.step !== arcStep &&
+      !messageArc?.transition;
     // Round 20: every CHECKPOINT gets its own section marker — a mentor message that
     // presents quiz choices opens a fresh, checkpoint-flagged section even mid-mode.
     const opensCheckpoint =
@@ -500,7 +508,9 @@ function groupIntoSections(messages: Msg[]): Section[] {
       });
     }
     const open = sections[sections.length - 1];
-    if (message.role === "bot" && message.lessonArc) open.arc = message.lessonArc;
+    // A transition arc never becomes the section's eyebrow — it names the NEXT step while
+    // the section's content belongs to the finished one (round 22 off-by-one fix).
+    if (messageArc && !messageArc.transition) open.arc = messageArc;
   }
   return sections;
 }

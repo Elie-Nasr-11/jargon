@@ -161,5 +161,69 @@ class StreamingProseStaticTests(unittest.TestCase):
         self.assertIn(".inline-code-hue {", self.styles)
 
 
+class TransitionKinksStaticTests(unittest.TestCase):
+    """Round 22 (demo-lesson transcript review): the advancing turn stops pointing at a
+    Continue button that no longer exists, bare "ready" stops earning a full re-ask,
+    graders enforce a named criterion, multi-part answers get engaged part by part, and
+    the section marker stops landing one message early."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
+        cls.transcript = TRANSCRIPT.read_text(encoding="utf-8")
+        cls.types = (ROOT / "frontend" / "src" / "lib" / "types.ts").read_text(
+            encoding="utf-8"
+        )
+
+    def test_concluding_turns_carry_the_handoff_rule(self):
+        self.assertIn("const CONCLUDE_HANDOFF =", self.chat_fn)
+        self.assertIn(
+            "never mention the Continue button or any button (it is gone once this reply lands)",
+            self.chat_fn,
+        )
+        # Every concluding directive appends it — declaration + 8 concatenations.
+        self.assertGreaterEqual(self.chat_fn.count("CONCLUDE_HANDOFF"), 9)
+        self.assertIn("closing + CONCLUDE_HANDOFF", self.chat_fn)
+
+    def test_continue_tap_never_credits_unshown_thinking(self):
+        self.assertIn(
+            "do NOT invent, credit, or reference thinking they never showed",
+            self.chat_fn,
+        )
+
+    def test_bare_readiness_gets_one_line_not_a_reask(self):
+        self.assertIn("const bareReadiness =", self.chat_fn)
+        self.assertIn('key: "readiness_ack",', self.chat_fn)
+        self.assertIn("do NOT restate, rephrase, or re-explain any part of it", self.chat_fn)
+        # A meta-routed "ready" must not fall into summarize/reassure either.
+        self.assertIn(
+            'routedKind === "meta" && !quizActive && !bareReadiness', self.chat_fn
+        )
+
+    def test_grader_enforces_named_criterion(self):
+        self.assertIn("NAMED-CRITERION RULE:", self.chat_fn)
+        self.assertIn(
+            "requires the latest message ", self.chat_fn
+        )
+
+    def test_multipart_answers_and_praise_variance(self):
+        self.assertIn(
+            "never wave a multi-part answer through with one generic praise line",
+            self.chat_fn,
+        )
+        self.assertIn("VARY your openers too", self.chat_fn)
+
+    def test_transition_arc_keeps_marker_off_by_one_fixed(self):
+        # Server stamps the advancing turn's arc.
+        self.assertIn("{ ...advancedArc, transition: true }", self.chat_fn)
+        # Client type carries the flag; the splitter and the eyebrow both respect it.
+        self.assertIn("transition?: boolean;", self.types)
+        self.assertIn("!messageArc?.transition;", self.transcript)
+        self.assertIn(
+            "if (messageArc && !messageArc.transition) open.arc = messageArc;",
+            self.transcript,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
