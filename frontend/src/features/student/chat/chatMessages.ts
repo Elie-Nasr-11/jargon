@@ -9,7 +9,7 @@
 //
 // Extracted ahead of v5.0 P2's turn-mode work so the mode state machine lands in a file a human
 // can still read. Pure move: no behavior change.
-import type { ComposerLanguage } from "@/components/Composer";
+import type { ComposerLanguage } from "@/lib/composerLanguage";
 import type { RunResult } from "@/lib/code-runner";
 import type { JargonTokenKind } from "@/lib/jargon-syntax";
 import type { MentorConfig } from "@/lib/jargon-store";

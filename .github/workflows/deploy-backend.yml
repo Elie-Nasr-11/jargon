@@ -94,7 +94,8 @@ jobs:
             supabase/migrations/20260820000000_artifact_resources.sql \
             supabase/migrations/20260901000000_live_artifact_scoping.sql \
             supabase/migrations/20260910000000_memory_v2.sql \
-            supabase/migrations/20260915000000_student_profile.sql ; do
+            supabase/migrations/20260915000000_student_profile.sql \
+            supabase/migrations/20260920000000_session_running_summary.sql ; do
             echo "Applying $f"
             # Body goes through a temp file, not a shell argument: large seed migrations
             # (e.g. the Book F content seed, ~254KB) exceed the kernel's per-argument

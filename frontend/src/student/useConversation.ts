@@ -32,7 +32,7 @@ import type {
   TypedChatEnvelope,
   VoiceInteractionEvent,
 } from "@/lib/types";
-import type { ComposerLanguage } from "@/components/Composer";
+import type { ComposerLanguage } from "@/lib/composerLanguage";
 import {
   deriveLessonArc,
   envelopeMessage,
@@ -223,6 +223,14 @@ export function useConversation() {
   // Flow v3 backtracking: non-null while the server holds a revisit frame open. Drives the
   // "return to where you were" chip.
   const [revisitFrontier, setRevisitFrontier] = useState<string | null>(null);
+  // Chat-flow Phase 3: the authoritative session snapshot — seeded from the resumed row,
+  // kept current by every envelope. Drives local progress updates + the completion
+  // hand-off without a refetch.
+  const [sessionSnapshot, setSessionSnapshot] = useState<{
+    status: string | null;
+    current_activity_id: string | null;
+    activities_complete: boolean;
+  } | null>(null);
   // True while a teacher has this session paused (session_holds). Locks the composer and the
   // send path; the server enforces it regardless (held envelope) — this is UX, not security.
   const [held, setHeld] = useState(false);
@@ -264,6 +272,15 @@ export function useConversation() {
   const applyEnvelope = useCallback(
     (envelope: TypedChatEnvelope) => {
       if (envelope.session_id) setSession(envelope.session_id);
+      // Chat-flow Phase 3: the envelope's authoritative session snapshot finally has a
+      // consumer — progress and the completion hand-off update from IT, not a refetch.
+      if (envelope.session) {
+        setSessionSnapshot({
+          status: envelope.session.status ?? null,
+          current_activity_id: envelope.session.current_activity_id ?? null,
+          activities_complete: envelope.session.activities_complete === true,
+        });
+      }
       setOffers(offersFromEnvelope(envelope));
       // Accumulate: a later turn attaching nothing must not clear what was already shown.
       if (envelope.resources?.length) {
@@ -305,6 +322,7 @@ export function useConversation() {
       setError("");
       setLessonArc(null); // clear immediately so no stale spine flashes during the fetch
       setRevisitFrontier(null);
+      setSessionSnapshot(null);
       setHeldState(false);
 
       const session = await getSession();
@@ -327,6 +345,13 @@ export function useConversation() {
 
       if (existing?.id) {
         setSession(existing.id);
+        // The persisted row seeds the snapshot so a completed lesson still shows its
+        // hand-off after a reload (envelopes then keep it current).
+        setSessionSnapshot({
+          status: existing.status ?? null,
+          current_activity_id: existing.current_activity_id ?? null,
+          activities_complete: existing.activities_complete === true,
+        });
         setLessonArc(deriveLessonArc(activities, existing.current_activity_id ?? null));
         // A reload mid-revisit restores the Return chip from the persisted frame.
         setRevisitFrontier(
@@ -1028,6 +1053,7 @@ export function useConversation() {
     held,
     lessonArc,
     revisitFrontier,
+    sessionSnapshot,
     sendText,
     sendCode,
     sendChoice,

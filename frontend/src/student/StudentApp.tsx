@@ -208,14 +208,35 @@ export function StudentApp({
         // Keep the last known map rather than blanking dots on a transient failure.
       });
   }, []);
-  const prevSendingRef = useRef(false);
-  useEffect(() => {
-    if (prevSendingRef.current && !conversation.sending) refreshProgress();
-    prevSendingRef.current = conversation.sending;
-  }, [conversation.sending, refreshProgress]);
   useEffect(() => {
     refreshProgress();
   }, [refreshProgress]);
+  // Chat-flow Phase 3: after a send, the envelope's own arc + session snapshot update the
+  // map LOCALLY — the every-send refetch of the whole progress table is gone. Fractions
+  // mirror the server rule: discharged-step ratio, floored/capped, complete = 1.
+  const liveArc = conversation.lessonArc;
+  const liveSnapshot = conversation.sessionSnapshot;
+  const liveLessonId = conversation.lesson?.id ?? null;
+  useEffect(() => {
+    if (!liveLessonId) return;
+    const complete =
+      liveSnapshot?.status === "complete" || liveSnapshot?.activities_complete === true;
+    const fraction = complete
+      ? 1
+      : liveArc && liveArc.total > 0
+        ? Math.max(
+            0.1,
+            Math.min(
+              0.95,
+              (liveArc.steps_done?.length ?? liveArc.completed.length) / liveArc.total,
+            ),
+          )
+        : null;
+    if (fraction === null) return;
+    setProgress((current) =>
+      (current[liveLessonId] ?? 0) >= fraction ? current : { ...current, [liveLessonId]: fraction },
+    );
+  }, [liveArc, liveSnapshot, liveLessonId]);
 
   // The formal-work bundle: one fetch feeds the sidebar badge, Home's due strip, the
   // Checkpoints panel, and the assessment surface. Refreshed after a submit lands.
@@ -428,6 +449,50 @@ export function StudentApp({
     </div>
   ) : null;
 
+  // Chat-flow Phase 3: the COMPLETION HAND-OFF. When the session snapshot says the lesson
+  // is complete, a success-toned row above the composer celebrates and offers the next
+  // lesson in the scoped catalog order. The conversation stays open beneath it — a
+  // finished lesson is still a place to ask questions.
+  const lessonComplete =
+    conversation.sessionSnapshot?.status === "complete" && conversation.messages.length > 0;
+  const handoffList = classLessons ?? conversation.lessons;
+  const nextLesson = (() => {
+    if (!lessonComplete || !conversation.lesson) return null;
+    const index = handoffList.findIndex((l) => l.id === conversation.lesson?.id);
+    return index >= 0 ? (handoffList[index + 1] ?? null) : null;
+  })();
+  const completionRow = lessonComplete ? (
+    <div
+      className="mb-1.5 flex items-center gap-2.5 rounded-pill border px-3.5 py-1.5"
+      style={{
+        borderColor: "color-mix(in oklab, var(--success) 40%, transparent)",
+        background: "color-mix(in oklab, var(--success) 10%, var(--background))",
+      }}
+    >
+      <span
+        className="shrink-0 font-mono text-overline uppercase tracking-[0.14em]"
+        style={{ color: "color-mix(in oklab, var(--success) 60%, var(--foreground))" }}
+      >
+        Lesson complete
+      </span>
+      <span className="min-w-0 flex-1 truncate text-body text-muted-foreground">
+        {nextLesson
+          ? "Nice work — keep the streak going."
+          : "Nice work — that's this unit wrapped."}
+      </span>
+      {nextLesson ? (
+        <button
+          type="button"
+          onClick={() => openLesson(nextLesson.id)}
+          className="shrink-0 rounded-pill border border-border px-3 py-1 text-meta font-semibold text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
+        >
+          Next:{" "}
+          {nextLesson.title.length > 32 ? `${nextLesson.title.slice(0, 32)}…` : nextLesson.title}
+        </button>
+      ) : null}
+    </div>
+  ) : null;
+
   // The conversation surface, one instance reused by every Learn layout (plain, bottom-half
   // under the stage, or docked while media is full screen).
   const lastMessage = conversation.messages[conversation.messages.length - 1];
@@ -450,8 +515,9 @@ export function StudentApp({
       onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
       sessionResources={conversation.resources}
       composerLead={
-        checkpointDock || freshLesson || staleReturn ? (
+        completionRow || checkpointDock || freshLesson || staleReturn ? (
           <>
+            {completionRow}
             {checkpointDock}
             {freshLesson || staleReturn ? (
               // The tapped suggestion becomes the (first or returning) turn and sets its TurnMode.

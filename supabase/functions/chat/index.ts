@@ -69,7 +69,8 @@ Each turn you receive one JSON payload: "directive" is the orchestrator's author
 follow it, adapting its wording to the conversation. "turn" is the student's latest message plus grading
 facts; "turn.student_mode" is the conversation register the student has selected from the chatbox
 (lesson/practice/discuss/open/quiz/assignment) — match that register; "policy" is the teacher's help
-policy; "student" is who you're teaching; "history" is the recent conversation, oldest first.
+policy; "student" is who you're teaching; "conversation_so_far" (when present) summarizes the earlier
+part of THIS session beyond the verbatim window; "history" is the recent conversation, oldest first.
 
 CONVERSATION CRAFT — every turn:
 - Read the student's latest message FIRST and respond to what it actually says. Credit ONLY this latest
@@ -326,7 +327,7 @@ type OpenAIResult = {
 };
 
 type ModelRoute = "default" | "understanding";
-type ModelUsageTaskType = "mentor_turn" | "grading";
+type ModelUsageTaskType = "mentor_turn" | "grading" | "routing" | "summarization";
 
 type Assessment = {
   score?: number;
@@ -932,6 +933,40 @@ async function recordRuntimeEvent(
   }
 }
 
+// Chat-flow Phase 4: estimated cost from a small per-model price table (USD per 1M
+// tokens; cached input billed at the provider's discount). Prefix-matched longest-first
+// so "gpt-4o-mini" wins over "gpt-4o". Unknown models record null, never a guess.
+const MODEL_PRICES: [string, { input: number; cachedInput: number; output: number }][] = [
+  ["gpt-4o-mini", { input: 0.15, cachedInput: 0.075, output: 0.6 }],
+  ["gpt-4o", { input: 2.5, cachedInput: 1.25, output: 10 }],
+  ["gpt-4.1-mini", { input: 0.4, cachedInput: 0.1, output: 1.6 }],
+  ["gpt-4.1", { input: 2, cachedInput: 0.5, output: 8 }],
+  ["claude-3-5-haiku", { input: 0.8, cachedInput: 0.08, output: 4 }],
+  ["claude-haiku-4-5", { input: 1, cachedInput: 0.1, output: 5 }],
+  ["claude-sonnet", { input: 3, cachedInput: 0.3, output: 15 }],
+  ["claude-opus", { input: 5, cachedInput: 0.5, output: 25 }],
+];
+
+function estimatedCostUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  cachedTokens: number,
+): number | null {
+  const name = (model || "").toLowerCase();
+  const priced = MODEL_PRICES.filter(([prefix]) => name.startsWith(prefix)).sort(
+    (a, b) => b[0].length - a[0].length,
+  )[0];
+  if (!priced) return null;
+  const price = priced[1];
+  const cached = Math.max(0, Math.min(cachedTokens || 0, inputTokens || 0));
+  const fresh = Math.max(0, (inputTokens || 0) - cached);
+  const usd =
+    (fresh * price.input + cached * price.cachedInput + (outputTokens || 0) * price.output) /
+    1_000_000;
+  return Math.round(usd * 1e6) / 1e6;
+}
+
 async function recordModelUsage(
   config: SupabaseConfig,
   userId: string,
@@ -952,7 +987,12 @@ async function recordModelUsage(
       input_tokens: usage.inputTokens,
       output_tokens: usage.outputTokens,
       cached_tokens: usage.cachedTokens,
-      estimated_cost_usd: null,
+      estimated_cost_usd: estimatedCostUsd(
+        usage.model,
+        usage.inputTokens,
+        usage.outputTokens,
+        usage.cachedTokens,
+      ),
       latency_ms: usage.latencyMs,
       status,
       payload: { route: usage.route },
@@ -4046,6 +4086,81 @@ const MEMORY_TURN_CHARS = 280;
 const MEMORY_TRANSCRIPT_CHARS = 6000;
 const MEMORY_LIST_ENTRY_CHARS = 80;
 
+// Chat-flow Phase 3: the ROLLING MID-SESSION SUMMARY. The prompt's verbatim history
+// window is 8 turns x 400 chars, so long sessions forgot their own beginning. This
+// background task keeps a compact summary of the conversation SO FAR on the session row
+// (running_summary), refreshed by the cheap model whenever the student-turn count pulls
+// >= RUNNING_SUMMARY_EVERY ahead of what's already folded in (summarized_turns). The
+// payload feeds it as conversation_so_far, ahead of the verbatim window. Best-effort by
+// construction: any failure leaves the previous summary standing.
+const RUNNING_SUMMARY_EVERY = 6;
+const RUNNING_SUMMARY_TURNS = 24;
+
+async function refreshRunningSummary(
+  config: SupabaseConfig,
+  userId: string,
+  sessionId: string,
+  lessonId: string,
+): Promise<void> {
+  try {
+    const studentRows = await loadMany(
+      config,
+      `learning_turns?session_id=eq.${encodeURIComponent(sessionId)}&role=eq.student&select=id&limit=500`,
+    );
+    const studentCount = studentRows.length;
+    const session = await loadFirst(
+      config,
+      `learning_sessions?id=eq.${encodeURIComponent(sessionId)}&select=running_summary,summarized_turns`,
+    );
+    if (!session) return;
+    const summarized = Number(session.summarized_turns || 0);
+    if (studentCount - summarized < RUNNING_SUMMARY_EVERY) return;
+
+    const turns = await loadMany(
+      config,
+      `learning_turns?session_id=eq.${encodeURIComponent(sessionId)}&order=created_at.desc&limit=${RUNNING_SUMMARY_TURNS}&select=role,content`,
+    );
+    if (!turns.length) return;
+    const transcript = turns
+      .slice()
+      .reverse()
+      .map(
+        (turn) =>
+          `${String(turn.role || "student")}: ${String(turn.content || "").slice(0, MEMORY_TURN_CHARS)}`,
+      )
+      .join("\n")
+      .slice(0, MEMORY_TRANSCRIPT_CHARS);
+    const prior = typeof session.running_summary === "string" ? session.running_summary : "";
+
+    const result = await callModel(
+      [
+        {
+          role: "system",
+          content:
+            "You maintain a compact running summary of one tutoring session for the tutor's own memory. Merge the prior summary with the newest turns into AT MOST 120 words of plain text: what was taught and attempted, where the student struggled or asked questions, anything they said about themselves or how they want to learn, and where the conversation currently stands. No headings, no lists, no preamble.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ prior_summary: prior || null, newest_turns: transcript }),
+        },
+      ],
+      false,
+      "understanding",
+    );
+    scheduleBackground(
+      recordModelUsage(config, userId, sessionId, lessonId, result, "summarization"),
+    );
+    const summary = String(result.content || "").trim().slice(0, 1200);
+    if (!summary) return;
+    await patchRows(config, `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`, {
+      running_summary: summary,
+      summarized_turns: studentCount,
+    });
+  } catch {
+    // Best-effort: the previous summary (or none) keeps serving.
+  }
+}
+
 async function writeSessionMemory(
   config: SupabaseConfig,
   userId: string,
@@ -5426,6 +5541,13 @@ async function handleTypedRequest(
                   };
                 })
               : [],
+          // Chat-flow Phase 3: the rolling summary of everything BEFORE the verbatim
+          // window — so a long session stops forgetting its own beginning. Absent until
+          // the background writer has run at least once.
+          conversation_so_far:
+            typeof session.running_summary === "string" && session.running_summary
+              ? session.running_summary
+              : undefined,
           // Fresh arrays only (slice/map) — context.recentTurns is read newest-first by
           // the dedup replay and the graders; the model reads oldest-first.
           history: context.recentTurns
@@ -6116,6 +6238,14 @@ async function handleTypedRequest(
     ) {
       scheduleBackground(
         writeSessionMemory(config, userId, sessionId, lessonId),
+      );
+    }
+    // Chat-flow Phase 3: keep the rolling mid-session summary fresh. Scheduled every
+    // turn; the task itself is a cheap count + early exit until RUNNING_SUMMARY_EVERY
+    // new student turns have accumulated.
+    if (nextStatus !== "complete") {
+      scheduleBackground(
+        refreshRunningSummary(config, userId, sessionId, lessonId),
       );
     }
 

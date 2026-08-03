@@ -37,7 +37,7 @@ import type {
 } from "@/lib/types";
 import { CodeArea } from "@/components/CodeArea";
 import { Popover } from "@/components/Popover";
-import type { ComposerLanguage } from "@/components/Composer";
+import type { ComposerLanguage } from "@/lib/composerLanguage";
 import { ModeSelector } from "@/student/ModeSelector";
 import { OfferPills } from "@/student/OfferPills";
 import { stageInputMeta } from "@/student/useConversation";

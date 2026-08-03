@@ -6,7 +6,7 @@ import { Chatbox } from "@/student/Chatbox";
 import { LessonSpine } from "@/student/LessonSpine";
 import { VoicePanel } from "@/student/VoicePanel";
 import { useConversationChannel } from "@/student/useConversation";
-import type { ComposerLanguage } from "@/components/Composer";
+import type { ComposerLanguage } from "@/lib/composerLanguage";
 import type { ChatAttachment, LessonChatResource } from "@/lib/types";
 import type { LessonOffers, TurnMode } from "@/student/turnModes";
 

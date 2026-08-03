@@ -885,24 +885,38 @@ export async function fetchClassScopedLessons(classId: string): Promise<Lesson[]
 // v4.0 Phase 3b: a per-lesson progress fraction (0..1) for the signed-in student, derived from
 // their own learning_sessions. A completed lesson is 1; a lesson with a session still in progress
 // is 0.5; anything unstarted is absent (callers default to 0). This replaces the hardcoded-0 bars.
+// Chat-flow Phase 3: REAL fractions, not the old binary 0.5/1. A live session's value is
+// its discharged-step ratio (steps_done / the lesson's activity count), floored at 0.1 so
+// "started" is always visible and capped at 0.95 so only true completion reads full. The
+// tree rings and the brain map inherit gradation for free.
 export async function fetchStudentLessonProgress(): Promise<Record<string, number>> {
   const session = await getSession();
   if (!session?.user?.id) return {};
-  const { data, error } = await supabase
-    .from("learning_sessions")
-    .select("lesson_id,status,activities_complete")
-    .eq("user_id", session.user.id);
-  if (error) throw error;
-  const rows = (data || []) as Array<{
+  const [sessionsRes, activitiesRes] = await Promise.all([
+    supabase
+      .from("learning_sessions")
+      .select("lesson_id,status,activities_complete,steps_done")
+      .eq("user_id", session.user.id),
+    supabase.from("lesson_activities").select("lesson_id"),
+  ]);
+  if (sessionsRes.error) throw sessionsRes.error;
+  const totals = new Map<string, number>();
+  for (const row of (activitiesRes.data || []) as Array<{ lesson_id: string | null }>) {
+    if (row.lesson_id) totals.set(row.lesson_id, (totals.get(row.lesson_id) ?? 0) + 1);
+  }
+  const rows = (sessionsRes.data || []) as Array<{
     lesson_id: string | null;
     status: string | null;
     activities_complete: boolean | null;
+    steps_done: unknown;
   }>;
   const progress: Record<string, number> = {};
   for (const row of rows) {
     if (!row.lesson_id) continue;
     const done = row.status === "complete" || row.activities_complete === true;
-    const value = done ? 1 : 0.5;
+    const total = totals.get(row.lesson_id) ?? 0;
+    const stepsDone = Array.isArray(row.steps_done) ? row.steps_done.length : 0;
+    const value = done ? 1 : total > 0 ? Math.max(0.1, Math.min(0.95, stepsDone / total)) : 0.5;
     // Keep the most-progressed session per lesson.
     progress[row.lesson_id] = Math.max(progress[row.lesson_id] ?? 0, value);
   }
@@ -953,13 +967,17 @@ export async function fetchMostRecentLearningSession(): Promise<LearningSession 
 }
 
 export async function fetchLearningTurns(sessionId: string) {
+  // Chat-flow Phase 4: capped insurance — fetch the NEWEST 400 turns and restore order
+  // client-side. Real sessions sit far below the cap (the rate limiter alone bounds the
+  // pace); a pathological one loses only its oldest history instead of an unbounded fetch.
   const { data, error } = await supabase
     .from("learning_turns")
     .select("*")
     .eq("session_id", sessionId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(400);
   if (error) throw error;
-  return (data || []) as LearningTurn[];
+  return ((data || []) as LearningTurn[]).reverse();
 }
 
 export async function fetchTeacherLiveComments(sessionId: string) {

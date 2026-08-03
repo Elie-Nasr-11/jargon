@@ -8507,3 +8507,31 @@ loop and simply benefits; TTS read-aloud still waits for the final text. (3) Pha
 progress, completion affordance) is next.
 Suggested next task: live pass — send a turn and watch prose paint immediately; check a
 control turn (Continue) still lands instantly as JSON; then Phase 3.
+
+## Claude -> Codex / Human - 2026-08-02 (round 16 — chat-flow Phases 3+4, scope complete)
+
+Status: Finished
+Summary: The chat-flow scope is now FULLY BUILT (Phases 1-4). This round: (P3a) rolling
+mid-session summary — migration 20260920 (running_summary/summarized_turns, in the deploy
+list), background refreshRunningSummary every ~6 student turns, conversation_so_far in
+the payload + SYSTEM_PROMPT contract line; (P3b) envelope.session consumed via
+sessionSnapshot (seeded on resume, enveloped per turn), StudentApp updates progress
+locally (every-send refetch gone), fetchStudentLessonProgress returns real step-ratio
+fractions (0.1 floor/0.95 cap); (P3c) completion hand-off row (success-toned, next lesson
+in scoped order, conversation stays open); (P4) estimatedCostUsd price table in chat +
+artifact-live + resource-processing (artifact-live also gains a whole-build token TALLY —
+its usage rows were 0-token), Composer.tsx deleted (ComposerLanguage → lib/
+composerLanguage.ts), fetchLearningTurns capped at newest 400.
+Files changed: supabase/functions/{chat,artifact-live,resource-processing}/index.ts;
+supabase/migrations/20260920000000_session_running_summary.sql (new);
+.github/workflows/deploy-backend.yml; lib/{api,composerLanguage(new)}.ts;
+student/{useConversation,StudentApp}.tsx; components/Composer.tsx (deleted);
+tests/test_chat_continuity.py (new); docs.
+Tests run: python suite 404 OK (skipped=4); tsc 0 errors; eslint 0 errors; build green.
+Remaining concerns: (1) Price table is hand-maintained — revisit when models change.
+(2) The completion row uses scoped catalog order for "next"; cross-unit hand-off ends
+with "unit wrapped" copy. (3) The rolling summary is per-session; Phase-3-of-memory
+(class rollups) remains the future tier per the 2026-08-01 conversation.
+Suggested next task: live pass — long session (>6 turns) then check conversation_so_far
+lands next turn; complete a lesson → hand-off row; tree shows fractional rings; admin
+Cost tab now shows dollars.

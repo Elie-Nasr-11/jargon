@@ -784,3 +784,35 @@ Decisions shipped in Phase 1:
   aborted client-side while the server finished and persisted the reply anyway).
 - **The rate limiter lost its serial round trip**: the windowed student-send count rides
   loadContext's wave-1 Promise.all (recentStudentSends); the 429 contract is unchanged.
+
+## 2026-08-02 — Chat-flow Phases 3+4: continuity + hygiene (the scope is fully built)
+
+Phase 3 (continuity):
+- **Rolling mid-session summary.** learning_sessions gains running_summary +
+  summarized_turns (migration 20260920, additive, in the deploy list). A background
+  cheap-model task (refreshRunningSummary) refreshes the summary whenever the student-turn
+  count pulls ≥6 ahead of what's folded in; the payload feeds it as conversation_so_far
+  AHEAD of the verbatim 8-turn window. Long sessions stop forgetting their own beginning;
+  cost is one cheap call per ~6 student turns, recorded as task_type "summarization".
+- **The envelope's session snapshot finally has its consumer.** useConversation keeps a
+  sessionSnapshot (seeded from the resumed row, updated by every envelope); StudentApp
+  updates the progress map LOCALLY from the live arc + snapshot — the every-send refetch
+  of the whole progress table is gone.
+- **Progress is a real fraction.** fetchStudentLessonProgress computes discharged-step
+  ratio (steps_done / lesson activity count), floored 0.1 / capped 0.95, complete = 1 —
+  the binary 0.5 dies; tree rings and the brain map inherit gradation for free.
+- **Completion hand-off.** A success-toned row above the composer celebrates a completed
+  session and offers the next lesson in the scoped catalog order; the conversation stays
+  open beneath it (a finished lesson is still a place to ask questions).
+
+Phase 4 (hygiene):
+- **estimated_cost_usd is real** in all three model-calling functions, from one small
+  prefix-matched price table (USD/1M tokens, cached input at the provider discount;
+  unknown model → null, never a guess). artifact-live additionally now TALLIES tokens
+  across its whole build (outline + build + repair) onto its reservation row — its usage
+  rows were 0-token before, so artifact spend was invisible.
+- **components/Composer.tsx (1,095 lines) is deleted**; every consumer imported only the
+  ComposerLanguage type, which now lives in lib/composerLanguage.ts.
+- **Transcript fetch capped** at the newest 400 turns (order restored client-side) —
+  insurance, not policy; real sessions sit far below it.
+- Deferred by owner decision (CHAT_FLOW_SCOPE §5): attachments stay out of the graders.

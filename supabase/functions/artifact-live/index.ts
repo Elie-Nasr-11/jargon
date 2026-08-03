@@ -149,10 +149,48 @@ function artifactModel(): string {
   );
 }
 
+// Chat-flow Phase 4: estimated cost from a small per-model price table (USD per 1M
+// tokens; cached input at the provider discount). Prefix-matched longest-first; unknown
+// models record null, never a guess. Mirrors the table in chat/index.ts.
+const MODEL_PRICES: [string, { input: number; cachedInput: number; output: number }][] = [
+  ["gpt-4o-mini", { input: 0.15, cachedInput: 0.075, output: 0.6 }],
+  ["gpt-4o", { input: 2.5, cachedInput: 1.25, output: 10 }],
+  ["gpt-4.1-mini", { input: 0.4, cachedInput: 0.1, output: 1.6 }],
+  ["gpt-4.1", { input: 2, cachedInput: 0.5, output: 8 }],
+  ["claude-3-5-haiku", { input: 0.8, cachedInput: 0.08, output: 4 }],
+  ["claude-haiku-4-5", { input: 1, cachedInput: 0.1, output: 5 }],
+  ["claude-sonnet", { input: 3, cachedInput: 0.3, output: 15 }],
+  ["claude-opus", { input: 5, cachedInput: 0.5, output: 25 }],
+];
+
+function estimatedCostUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  cachedTokens: number,
+): number | null {
+  const name = (model || "").toLowerCase();
+  const priced = MODEL_PRICES.filter(([prefix]) => name.startsWith(prefix)).sort(
+    (a, b) => b[0].length - a[0].length,
+  )[0];
+  if (!priced) return null;
+  const price = priced[1];
+  const cached = Math.max(0, Math.min(cachedTokens || 0, inputTokens || 0));
+  const fresh = Math.max(0, (inputTokens || 0) - cached);
+  const usd =
+    (fresh * price.input + cached * price.cachedInput + (outputTokens || 0) * price.output) /
+    1_000_000;
+  return Math.round(usd * 1e6) / 1e6;
+}
+
+// Chat-flow Phase 4: an optional running tally so the caller can bill the WHOLE build
+// (outline + slides/sim + a possible repair pass) onto its one reservation row.
+type TokenTally = { inputTokens: number; outputTokens: number; cachedTokens: number };
+
 async function callModelJson(
   systemPrompt: string,
   userPrompt: string,
-  opts?: { model?: string; maxTokens?: number; timeoutMs?: number },
+  opts?: { model?: string; maxTokens?: number; timeoutMs?: number; tally?: TokenTally },
 ): Promise<DbRow> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("AI authoring is not configured (OPENAI_API_KEY missing).");
@@ -194,6 +232,16 @@ async function callModelJson(
         ? String((data.error as DbRow).message || "Model request failed.")
         : "Model request failed.";
     throw new Error(message);
+  }
+  if (opts?.tally && data?.usage && typeof data.usage === "object") {
+    const usage = data.usage as DbRow;
+    const details =
+      usage.prompt_tokens_details && typeof usage.prompt_tokens_details === "object"
+        ? (usage.prompt_tokens_details as DbRow)
+        : {};
+    opts.tally.inputTokens += Number(usage.prompt_tokens || 0);
+    opts.tally.outputTokens += Number(usage.completion_tokens || 0);
+    opts.tally.cachedTokens += Number(details.cached_tokens || 0);
   }
   const content = data?.choices?.[0]?.message?.content;
   try {
@@ -683,6 +731,7 @@ async function handleGenerate(config: Config, body: DbRow): Promise<Response> {
   let lintOk = true;
   let repaired = false;
   let generationError = "";
+  const tally: TokenTally = { inputTokens: 0, outputTokens: 0, cachedTokens: 0 };
 
   try {
     if (kind === "deck") {
@@ -703,6 +752,7 @@ async function handleGenerate(config: Config, body: DbRow): Promise<Response> {
         model,
         maxTokens: 4000,
         timeoutMs: 60000,
+        tally,
       });
       deck = validateDeck(result.deck);
       if (!deck) generationError = "Couldn't produce a valid deck this time.";
@@ -724,6 +774,7 @@ async function handleGenerate(config: Config, body: DbRow): Promise<Response> {
         model,
         maxTokens: 6000,
         timeoutMs: 85000,
+        tally,
       });
       artifactHtml = cleanText(result.html);
       let lint = lintArtifactHtml(artifactHtml);
@@ -732,7 +783,7 @@ async function handleGenerate(config: Config, body: DbRow): Promise<Response> {
           `Build an interactive activity for this:\n${brief}\n\nThe previous version failed these ` +
           `safety checks: ${lint.violations.join(", ")}. Rebuild it WITHOUT any of those — no network ` +
           "calls, no external resources, no storage APIs, no nested iframes. Return the full corrected HTML document.";
-        result = await callModelJson(system, repair, { model, maxTokens: 6000, timeoutMs: 55000 });
+        result = await callModelJson(system, repair, { model, maxTokens: 6000, timeoutMs: 55000, tally });
         const repairedHtml = cleanText(result.html);
         if (repairedHtml) {
           artifactHtml = repairedHtml;
@@ -763,6 +814,15 @@ async function handleGenerate(config: Config, body: DbRow): Promise<Response> {
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({
           model,
+          input_tokens: tally.inputTokens,
+          output_tokens: tally.outputTokens,
+          cached_tokens: tally.cachedTokens,
+          estimated_cost_usd: estimatedCostUsd(
+            model,
+            tally.inputTokens,
+            tally.outputTokens,
+            tally.cachedTokens,
+          ),
           latency_ms: latencyMs,
           status: succeeded ? "ok" : "error",
           payload: {

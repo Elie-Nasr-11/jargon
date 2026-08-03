@@ -111,6 +111,40 @@ function errorResponse(message: string, status = 500): Response {
   return json({ status: "error", error: message }, status);
 }
 
+// Chat-flow Phase 4: estimated cost from a small per-model price table (USD per 1M
+// tokens; cached input at the provider discount). Prefix-matched longest-first; unknown
+// models record null, never a guess. Mirrors the table in chat/index.ts.
+const MODEL_PRICES: [string, { input: number; cachedInput: number; output: number }][] = [
+  ["gpt-4o-mini", { input: 0.15, cachedInput: 0.075, output: 0.6 }],
+  ["gpt-4o", { input: 2.5, cachedInput: 1.25, output: 10 }],
+  ["gpt-4.1-mini", { input: 0.4, cachedInput: 0.1, output: 1.6 }],
+  ["gpt-4.1", { input: 2, cachedInput: 0.5, output: 8 }],
+  ["claude-3-5-haiku", { input: 0.8, cachedInput: 0.08, output: 4 }],
+  ["claude-haiku-4-5", { input: 1, cachedInput: 0.1, output: 5 }],
+  ["claude-sonnet", { input: 3, cachedInput: 0.3, output: 15 }],
+  ["claude-opus", { input: 5, cachedInput: 0.5, output: 25 }],
+];
+
+function estimatedCostUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  cachedTokens: number,
+): number | null {
+  const name = (model || "").toLowerCase();
+  const priced = MODEL_PRICES.filter(([prefix]) => name.startsWith(prefix)).sort(
+    (a, b) => b[0].length - a[0].length,
+  )[0];
+  if (!priced) return null;
+  const price = priced[1];
+  const cached = Math.max(0, Math.min(cachedTokens || 0, inputTokens || 0));
+  const fresh = Math.max(0, (inputTokens || 0) - cached);
+  const usd =
+    (fresh * price.input + cached * price.cachedInput + (outputTokens || 0) * price.output) /
+    1_000_000;
+  return Math.round(usd * 1e6) / 1e6;
+}
+
 function emptyOpenAiUsage(): OpenAiUsage {
   return { inputTokens: 0, outputTokens: 0, cachedTokens: 0 };
 }
@@ -223,7 +257,12 @@ async function insertModelUsage(
         input_tokens: input.usage?.inputTokens || 0,
         output_tokens: input.usage?.outputTokens || 0,
         cached_tokens: input.usage?.cachedTokens || 0,
-        estimated_cost_usd: null,
+        estimated_cost_usd: estimatedCostUsd(
+          input.model,
+          input.usage?.inputTokens || 0,
+          input.usage?.outputTokens || 0,
+          input.usage?.cachedTokens || 0,
+        ),
         latency_ms: input.latencyMs,
         status: input.status,
         payload: input.payload || {},
