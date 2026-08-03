@@ -86,9 +86,15 @@ class ChatStreamingStaticTests(unittest.TestCase):
         self.assertIn("if (!isSse || !response.body)", self.api)
 
     def test_client_paints_deltas_into_thinking_placeholder(self):
-        # Buffered flush (~12fps), not a re-render per token.
+        # Round 22g: deltas release SENTENCE BY SENTENCE — each completed sentence is held
+        # ~0.2s/word (clamped) before the next lands, so students read one at a time.
         self.assertIn("const onDelta = (text: string) => {", self.convo)
-        self.assertIn("window.setTimeout(flushStream, 80)", self.convo)
+        self.assertIn("const WORD_MS = 200;", self.convo)
+        self.assertIn("const HOLD_MIN_MS = 400;", self.convo)
+        self.assertIn("const HOLD_MAX_MS = 4_000;", self.convo)
+        self.assertIn("Math.min(HOLD_MAX_MS, Math.max(HOLD_MIN_MS, words * WORD_MS))", self.convo)
+        # The settle never jumps ahead of the reading: a mid-pace envelope waits its turn.
+        self.assertIn("pendingSettle = settle;", self.convo)
         # The placeholder type carries the streamed text; the transcript renders it.
         self.assertIn('role: "thinking"; text?: string', self.messages)
         self.assertIn("message.text ? (", self.transcript)

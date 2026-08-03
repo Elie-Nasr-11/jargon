@@ -198,6 +198,28 @@ class TransitionKinksStaticTests(unittest.TestCase):
         self.assertIn('className="ml-4 list-none space-y-1.5 border-l-2 border-border pl-6"', self.transcript)
         self.assertNotIn("list-disc", self.transcript)
 
+    def test_growth_flash_owns_the_screen_with_a_note(self):
+        # Owner (R22g): dim+blur overlay behind the flash, resistance line draw, and a
+        # plain-language note ("New link between A and B" / "New word: x — definition").
+        flash = (ROOT / "frontend" / "src" / "student" / "GrowthFlash.tsx").read_text(
+            encoding="utf-8"
+        )
+        styles = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
+        toasts = (ROOT / "frontend" / "src" / "student" / "KnowledgeToasts.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("gflash-overlay", flash)
+        self.assertIn("function noteFor(", flash)
+        self.assertIn("New link between ${toast.event.from_title}", flash)
+        self.assertIn("New word: ${toast.event.term}", flash)
+        self.assertIn(".gflash-overlay {", styles)
+        self.assertIn("backdrop-filter: blur(5px);", styles)
+        self.assertIn("@keyframes gflash-note-in", styles)
+        # Resistance draw: the offset grinds down in shrinking, stalling increments.
+        self.assertIn("stroke-dashoffset: 54;", styles)
+        self.assertIn("stroke-dashoffset: 29;", styles)
+        self.assertIn("setFlash(null), 3_300", toasts)
+
     def test_no_step_count_boilerplate_divider_signifies_instead(self):
         # Owner (R22e): the appended "That completes step N of M… Send a message" line is
         # gone — the mentor closes naturally and the transcript divider marks the change.

@@ -915,29 +915,59 @@ select {
 /* --- The growth flash (student/GrowthFlash.tsx) ------------------------------------
    Owner-specced center-screen moment: yellow draws the new connection, the far node
    lights and glows, then EVERYTHING settles to gray — known now, part of the record.
-   One 2.4s pass; the container fades itself out; reduced motion never mounts it. */
+   Round 22g: the moment owns the screen (dim + blur overlay behind it), the line draws
+   against RESISTANCE (fast burst, grinding middle, break-through), and a plain-language
+   note fades in underneath. One 3.2s pass; the container fades itself out; reduced
+   motion never mounts it. */
 @keyframes gflash-fade {
   0%,
-  82% {
+  86% {
     opacity: 1;
   }
   100% {
     opacity: 0;
   }
 }
-@keyframes gflash-line-draw {
+@keyframes gflash-overlay-in {
   0% {
+    opacity: 0;
+  }
+  10%,
+  100% {
+    opacity: 1;
+  }
+}
+/* Resistance: quick bite at the start, then the offset grinds down in shrinking,
+   stalling increments — effort — before breaking through to the far node. */
+@keyframes gflash-line-draw {
+  0%,
+  8% {
     stroke-dashoffset: 100;
     stroke: var(--mode-discuss);
   }
-  12% {
-    stroke-dashoffset: 100;
+  20% {
+    stroke-dashoffset: 60;
+  }
+  30% {
+    stroke-dashoffset: 54;
   }
   42% {
+    stroke-dashoffset: 32;
+  }
+  50% {
+    stroke-dashoffset: 29;
+  }
+  60% {
+    stroke-dashoffset: 10;
+  }
+  66% {
+    stroke-dashoffset: 7;
+  }
+  72% {
     stroke-dashoffset: 0;
     stroke: var(--mode-discuss);
   }
-  72% {
+  88% {
     stroke: var(--mode-discuss);
   }
   100% {
@@ -947,7 +977,7 @@ select {
 }
 @keyframes gflash-a-settle {
   0%,
-  72% {
+  88% {
     fill: var(--mode-discuss);
   }
   100% {
@@ -956,13 +986,13 @@ select {
 }
 @keyframes gflash-b-light {
   0%,
-  38% {
+  68% {
     fill: var(--ink-30);
   }
-  50% {
+  76% {
     fill: var(--mode-discuss);
   }
-  72% {
+  88% {
     fill: var(--mode-discuss);
   }
   100% {
@@ -971,16 +1001,16 @@ select {
 }
 @keyframes gflash-glow-ping {
   0%,
-  40% {
+  70% {
     opacity: 0;
     transform: scale(0.6);
     stroke: var(--mode-discuss);
   }
-  52% {
+  78% {
     opacity: 0.8;
     transform: scale(1);
   }
-  78% {
+  94% {
     opacity: 0;
     transform: scale(1.8);
   }
@@ -988,38 +1018,45 @@ select {
     opacity: 0;
   }
 }
-@keyframes gflash-label-in {
+@keyframes gflash-note-in {
   0%,
-  30% {
+  14% {
     opacity: 0;
+    transform: translateY(6px);
   }
-  55% {
-    opacity: 1;
-  }
+  30%,
   100% {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 .gflash {
-  animation: gflash-fade 2.4s ease both;
+  animation: gflash-fade 3.2s ease both;
+}
+/* The rest of the screen steps back while the moment plays. */
+.gflash-overlay {
+  background: color-mix(in oklab, var(--background) 55%, transparent);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: gflash-overlay-in 3.2s ease both;
 }
 .gflash-line {
   stroke-dasharray: 100;
-  animation: gflash-line-draw 2.4s ease both;
+  animation: gflash-line-draw 3.2s ease both;
 }
 .gflash-a {
-  animation: gflash-a-settle 2.4s ease both;
+  animation: gflash-a-settle 3.2s ease both;
 }
 .gflash-b {
-  animation: gflash-b-light 2.4s ease both;
+  animation: gflash-b-light 3.2s ease both;
 }
 .gflash-glow {
   transform-box: fill-box;
   transform-origin: center;
-  animation: gflash-glow-ping 2.4s ease both;
+  animation: gflash-glow-ping 3.2s ease both;
 }
-.gflash-label {
-  animation: gflash-label-in 2.4s ease both;
+.gflash-note {
+  animation: gflash-note-in 3.2s ease both;
 }
 
 /* --- Round 21: streaming prose (student/Transcript.tsx StreamingBody) --------------

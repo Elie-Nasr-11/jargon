@@ -676,23 +676,77 @@ export function useConversation() {
         { id: thinkingId, role: "thinking" as const },
       ]);
 
-      // Chat-flow Phase 2: stream the mentor's reply into the thinking placeholder as it
-      // arrives. Deltas are buffered and flushed at ~12fps — a setMessages per token would
-      // re-render the whole transcript hundreds of times per turn for no visible gain.
+      // Chat-flow Phase 2 + Round 22g (owner): stream the mentor's reply into the thinking
+      // placeholder SENTENCE BY SENTENCE. The raw deltas accumulate off-screen; a completed
+      // sentence is released as a unit and HELD (~0.2s per word of the sentence just shown,
+      // clamped 0.4–4s) before the next one lands — the student reads one sentence at a
+      // time instead of racing a token firehose. While the pacer is caught up with the
+      // model, the live forming tail streams through (the blurred R21 tail); when it's
+      // behind, the extra text simply waits its turn. Tail repaints stay ~12fps.
+      const WORD_MS = 200;
+      const HOLD_MIN_MS = 400;
+      const HOLD_MAX_MS = 4_000;
+      const SENTENCE_BREAK_RE = /(?<=[.!?…]["')\]]?)\s+/g;
       let streamedText = "";
-      let flushTimer = 0;
-      const flushStream = () => {
-        flushTimer = 0;
-        const snapshot = streamedText;
+      let revealedCount = 0; // complete sentences released to the transcript
+      let releaseTimer = 0;
+      let tailTimer = 0;
+      // Envelope that arrived while sentences were still being paced out — the pump settles
+      // it once the last one lands, so the final swap never jumps ahead of the reading.
+      let pendingSettle: (() => void) | null = null;
+      const breaks = () =>
+        Array.from(streamedText.matchAll(SENTENCE_BREAK_RE), (m) => ({
+          at: m.index ?? 0,
+          len: m[0].length,
+        }));
+      const paint = () => {
+        const b = breaks();
+        // Caught up → show everything incl. the forming tail; behind → cut at the last
+        // released boundary (keeping its whitespace so released sentences render settled).
+        const snapshot =
+          revealedCount >= b.length
+            ? streamedText
+            : streamedText.slice(
+                0,
+                b[revealedCount - 1] ? b[revealedCount - 1].at + b[revealedCount - 1].len : 0,
+              );
         setMessages((current) =>
           current.map((m) =>
             m.id === thinkingId && m.role === "thinking" ? { ...m, text: snapshot } : m,
           ),
         );
       };
+      const pump = () => {
+        releaseTimer = 0;
+        const b = breaks();
+        if (revealedCount < b.length) {
+          const start = revealedCount > 0 ? b[revealedCount - 1].at + b[revealedCount - 1].len : 0;
+          const sentence = streamedText.slice(start, b[revealedCount].at);
+          revealedCount += 1;
+          paint();
+          const words = sentence.split(/\s+/).filter(Boolean).length;
+          const hold = Math.min(HOLD_MAX_MS, Math.max(HOLD_MIN_MS, words * WORD_MS));
+          releaseTimer = window.setTimeout(pump, hold);
+          return;
+        }
+        if (pendingSettle) {
+          const settle = pendingSettle;
+          pendingSettle = null;
+          settle();
+          return;
+        }
+        paint();
+      };
       const onDelta = (text: string) => {
         streamedText += text;
-        if (!flushTimer) flushTimer = window.setTimeout(flushStream, 80);
+        if (!releaseTimer && revealedCount < breaks().length) {
+          pump();
+        } else if (revealedCount >= breaks().length && !tailTimer) {
+          tailTimer = window.setTimeout(() => {
+            tailTimer = 0;
+            paint();
+          }, 80);
+        }
       };
 
       const work = (async (): Promise<TypedChatEnvelope | null> => {
@@ -711,11 +765,22 @@ export function useConversation() {
             mode,
             onDelta,
           });
-          applyEnvelope(envelope);
-          setMessages((current) => [
-            ...current.filter((m) => m.id !== thinkingId),
-            envelopeMessage(envelope, mode),
-          ]);
+          const settle = () => {
+            applyEnvelope(envelope);
+            setMessages((current) => [
+              ...current.filter((m) => m.id !== thinkingId),
+              envelopeMessage(envelope, mode),
+            ]);
+          };
+          // Round 22g: if sentences are still being paced out, the pump settles once the
+          // last one lands (so the final swap never jumps ahead of the reading). Otherwise
+          // settle now — deterministic/non-streamed turns take this path directly.
+          if (releaseTimer || revealedCount < breaks().length) {
+            pendingSettle = settle;
+            if (!releaseTimer) pump();
+          } else {
+            settle();
+          }
           return envelope;
         } catch (err) {
           const message = friendlyError(err, "That didn't send.");
@@ -734,10 +799,16 @@ export function useConversation() {
               retryControl: options?.control,
             },
           ]);
+          // Kill the pacer outright — the thinking bubble it painted into is gone, and a
+          // queued settle must never fire over an error bubble.
+          window.clearTimeout(releaseTimer);
+          window.clearTimeout(tailTimer);
+          releaseTimer = 0;
+          tailTimer = 0;
+          pendingSettle = null;
           setError(message);
           return null;
         } finally {
-          window.clearTimeout(flushTimer);
           sendingRef.current = false;
           setSending(false);
         }

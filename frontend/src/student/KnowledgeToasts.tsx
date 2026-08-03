@@ -148,7 +148,8 @@ export function KnowledgeToasts({ onSeeBrain }: { onSeeBrain?: () => void }) {
       candidates[0];
     for (const toast of candidates) flashedRef.current.add(toast.id);
     setFlash(pick);
-    const timer = window.setTimeout(() => setFlash(null), 2_500);
+    // Round 22g: the flash runs 3.2s (resistance draw + note read time) — unmount just after.
+    const timer = window.setTimeout(() => setFlash(null), 3_300);
     return () => window.clearTimeout(timer);
   }, [channel.knowledgeToasts]);
 

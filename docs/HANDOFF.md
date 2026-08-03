@@ -8881,3 +8881,31 @@ Files changed: supabase/functions/chat/index.ts (escape); .github/workflows/test
 Tests run: python 436 OK; esbuild parse of every edge function clean.
 Remaining concerns: esbuild parses but does not typecheck — the 3 pre-existing loose-typing
 artifacts stay invisible to it, which is fine (the deploy bundler's bar is parsing).
+
+## Claude -> Codex / Human - 2026-08-03 (Round 22g: sentence pacing + growth flash focus)
+
+Status: Finished
+Summary: Two owner asks. (1) SENTENCE PACING — the streamed reply now releases one
+sentence at a time: raw deltas accumulate off-screen and each completed sentence is
+held ~0.2s x its word count (clamped 0.4-4s) before the next lands, so students read
+sentence by sentence instead of racing tokens. While the pacer is caught up, the live
+blurred tail streams as before; when behind, extra text waits. The final envelope swap
+DEFERS until the last sentence has landed (pendingSettle in useConversation), so
+settling never jumps ahead of the reading; errors kill the pacer outright. Slicing is
+by character position at sentence boundaries, so newlines/markdown are preserved
+exactly. (2) GROWTH FLASH — the moment owns the screen: dim+blur overlay
+(.gflash-overlay, color-mix + backdrop blur), the yellow line draws against RESISTANCE
+(offset grinds down in shrinking, stalling increments before breaking through), and a
+plain-language note fades in underneath ("New link between A and B" / "New word: x —
+definition" / "New idea: t", clamped 140 chars). In-SVG micro-labels removed — the note
+is the label. Timeline retimed to 3.2s (unmount 3.3s).
+Files changed: frontend/src/student/{useConversation.ts,GrowthFlash.tsx,
+KnowledgeToasts.tsx}; frontend/src/styles.css; tests/{test_chat_streaming.py,
+test_transcript_smoothing.py}.
+Tests run: python 437 OK; tsc 0 errors; eslint clean; build green; all edge functions
+esbuild-parse clean.
+Remaining concerns: 0.2s/word ~ 300wpm — young readers may want 0.25-0.3s/word (one
+constant, WORD_MS); if a model burst ends a turn long before pacing finishes, the
+composer unlocks while sentences are still landing (deliberate — typing over the tail
+is allowed). backdrop-filter needs GPU — old devices degrade to dim-only (acceptable).
+Suggested next task: live feel pass on pacing speed and the overlay intensity.
