@@ -192,7 +192,9 @@ OUTPUT — return ONLY this JSON object, nothing else:
   "reply": "student-facing mentor message",
   "understanding": { "demonstrated": false, "level": "none | partial | solid", "note": "" },
   "misconception": null,
-  "inquiry": null
+  "inquiry": null,
+  "link": null,
+  "new_idea": null
 }
 Set understanding.demonstrated=true ONLY when the student's own words in the LATEST message are essentially
 correct and complete for THIS step's objective. When you spot a recurring conceptual error worth remembering,
@@ -200,7 +202,13 @@ set "misconception" to { "skill_key": "...", "pattern": "...", "hint": "..." }; 
 Set "inquiry" to "confusion" when the student's LATEST message signals they don't understand, are stuck, or
 are asking for help; to "curiosity" when they ask a genuine question that reaches BEYOND the current task
 (wanting to know more, a "what if" / "why does" / connecting to another idea); otherwise null. A plain attempt
-to answer the step is never an inquiry.`;
+to answer the step is never an inquiry.
+Set "link" to { "from_idea": "<key>", "to_idea": "<key>", "note": "<one line>" } ONLY when this turn's
+conversation genuinely carried reasoning between two ideas listed in knowledge.idea_keys (e.g. the same
+pattern showing up across subjects). Set "new_idea" to { "title": "...", "one_liner": "...",
+"related_idea_keys": ["<key>"] } ONLY when the student themselves pushed into a real concept beyond every
+listed idea — their thinking growing the map, not you teaching ahead. Both stay null on most turns; never
+invent keys not listed in knowledge.`;
 
 type Stage =
   | "intro"
@@ -238,6 +246,18 @@ type Envelope = {
   session?: EnvelopeSession | null;
   // Set only when a teacher has paused this session; the mentor did not run this turn.
   held?: boolean;
+  // Learning framework (F2/F3): display events for THIS turn — at most one of each, by
+  // the guardrail. Graph state lives in the tables; these only drive the client toasts.
+  vocab_events?: { term: string; definition: string; subject: string }[];
+  link_events?: {
+    from_key: string;
+    to_key: string;
+    from_title: string;
+    to_title: string;
+    kind: string;
+    note: string;
+  }[];
+  idea_events?: { key: string; title: string; one_liner: string; subject: string }[];
   // Flow v3 (all optional — old clients ignore them, old stored payloads replay fine):
   // the Continue pill offer for unacknowledged content steps, the router's verdict for
   // this turn, and the router-vs-grader disagreement flag (tuning telemetry).
@@ -477,6 +497,10 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     session: envelopeSession(partial.session),
     // Optional; omitted from the wire unless a teacher paused this turn.
     held: partial.held === true ? true : undefined,
+    // Learning framework passthrough (arrays only; absent stays absent).
+    vocab_events: Array.isArray(partial.vocab_events) ? partial.vocab_events : undefined,
+    link_events: Array.isArray(partial.link_events) ? partial.link_events : undefined,
+    idea_events: Array.isArray(partial.idea_events) ? partial.idea_events : undefined,
     // Flow v3 passthrough (shape-tolerant), so a dedup REPLAY of a stored envelope keeps
     // its Continue offer and navigation frame. Tri-state matters: absent stays absent —
     // a held/error envelope must not read as "navigation cleared" on the client.
@@ -3298,6 +3322,12 @@ async function loadContext(
   // failure yields absent memory and never blocks the turn.
   memory: DbRow | null;
   recentSummaries: DbRow[];
+  // Learning framework (F2/F3) — all best-effort; absent knowledge never blocks a turn.
+  lessonSubject: string;
+  vocabTerms: DbRow[];
+  ideas: DbRow[];
+  studentVocab: DbRow[];
+  studentLinks: DbRow[];
 }> {
   // Reads run in TWO parallel waves (wave 2 holds only the queries that genuinely
   // depend on a wave-1 result), with the checkpoints chain overlapping both.
@@ -3316,6 +3346,11 @@ async function loadContext(
     resourceInteractions,
     profile,
     memory,
+    lessonSubjectRow,
+    vocabTerms,
+    ideas,
+    studentVocab,
+    studentLinks,
     recentSummaries,
   ] = await Promise.all([
     loadFirst(
@@ -3355,6 +3390,29 @@ async function loadContext(
       config,
       `student_memory?user_id=eq.${encodeURIComponent(userId)}&select=profile,updated_at&limit=1`,
     ).catch(() => null),
+    // Learning framework (all best-effort): the lesson's subject (= course title), the
+    // published vocab set, the idea graph visible to this student (authored + own
+    // emergent, via RLS), and this student's vocab/link state for dedupe + detection.
+    loadFirst(
+      config,
+      `lesson_subjects?lesson_id=eq.${encodeURIComponent(lessonId)}&select=subject&limit=1`,
+    ).catch(() => null),
+    loadMany(
+      config,
+      `vocab_terms?status=eq.published&select=id,term,variants,definition,subject,idea_keys&limit=200`,
+    ).catch(() => [] as DbRow[]),
+    loadMany(
+      config,
+      `ideas?status=eq.published&select=key,title,one_liner,subject,lesson_id,origin,user_id&limit=300`,
+    ).catch(() => [] as DbRow[]),
+    loadMany(
+      config,
+      `student_vocab?user_id=eq.${encodeURIComponent(userId)}&select=term_id,subjects_seen,first_defined_at&limit=300`,
+    ).catch(() => [] as DbRow[]),
+    loadMany(
+      config,
+      `student_links?user_id=eq.${encodeURIComponent(userId)}&select=from_key,to_key&limit=400`,
+    ).catch(() => [] as DbRow[]),
     // Memory v2: pull a POOL of summaries (newest first) — the prompt still carries at
     // most 3, but they are picked by RELEVANCE to this lesson (pickRelevantSummaries),
     // not recency alone, so an old insight resurfaces when its topic comes back around.
@@ -3462,6 +3520,11 @@ async function loadContext(
     pendingCheckpointsOk: pendingResult !== null,
     memory,
     recentSummaries: relevantSummaries,
+    lessonSubject: typeof lessonSubjectRow?.subject === "string" ? lessonSubjectRow.subject : "",
+    vocabTerms,
+    ideas,
+    studentVocab,
+    studentLinks,
   };
 }
 
@@ -4085,6 +4148,227 @@ const MEMORY_TURNS_LIMIT = 20;
 const MEMORY_TURN_CHARS = 280;
 const MEMORY_TRANSCRIPT_CHARS = 6000;
 const MEMORY_LIST_ENTRY_CHARS = 80;
+
+// =====================================================================================
+// LEARNING FRAMEWORK (F2/F3, docs/LEARNING_FRAMEWORK.md) — the knowledge processor.
+// Runs once per mentor turn, after the reply resolves: deterministic vocab sighting,
+// cross-subject link minting, mentor-flagged links, and emergent-idea minting. The LLM
+// proposes (link / new_idea contract fields); this code disposes — every write is
+// validated against the known idea set and deduped against the student's graph.
+// Guardrail: at most ONE of each display event per turn; everything else lands silently.
+// =====================================================================================
+
+type KnowledgeEvents = {
+  vocab_events: { term: string; definition: string; subject: string }[];
+  link_events: {
+    from_key: string;
+    to_key: string;
+    from_title: string;
+    to_title: string;
+    kind: string;
+    note: string;
+  }[];
+  idea_events: { key: string; title: string; one_liner: string; subject: string }[];
+};
+
+function slugifyIdeaKey(title: string): string {
+  return `em-${title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)}`;
+}
+
+function normalizeTitle(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function processKnowledge(input: {
+  config: SupabaseConfig;
+  userId: string;
+  sessionId: string;
+  lessonId: string;
+  lessonSubject: string;
+  replyText: string;
+  studentText: string;
+  vocabTerms: DbRow[];
+  ideas: DbRow[];
+  studentVocab: DbRow[];
+  studentLinks: DbRow[];
+  mentorLink: unknown;
+  mentorNewIdea: unknown;
+}): KnowledgeEvents {
+  const events: KnowledgeEvents = { vocab_events: [], link_events: [], idea_events: [] };
+  const writes: Promise<unknown>[] = [];
+  const { config, userId, sessionId, lessonSubject } = input;
+
+  const ideaByKey = new Map<string, DbRow>();
+  for (const idea of input.ideas) ideaByKey.set(String(idea.key || ""), idea);
+  const linkedPairs = new Set(
+    input.studentLinks.map((l) => `${String(l.from_key)}::${String(l.to_key)}`),
+  );
+  const pairKey = (a: string, b: string) => `${a}::${b}`;
+  const alreadyLinked = (a: string, b: string) =>
+    linkedPairs.has(pairKey(a, b)) || linkedPairs.has(pairKey(b, a));
+  const lessonIdea = input.ideas.find(
+    (idea) => idea.lesson_id === input.lessonId && !idea.user_id,
+  );
+
+  const mintLink = (
+    fromKey: string,
+    toKey: string,
+    kind: string,
+    evidence: string,
+    note: string,
+  ) => {
+    const from = ideaByKey.get(fromKey);
+    const to = ideaByKey.get(toKey);
+    if (!from || !to || fromKey === toKey || alreadyLinked(fromKey, toKey)) return false;
+    linkedPairs.add(pairKey(fromKey, toKey));
+    writes.push(
+      insertRow(config, "student_links", {
+        user_id: userId,
+        from_key: fromKey,
+        to_key: toKey,
+        kind,
+        evidence_kind: evidence,
+        note: note.slice(0, 300),
+        session_id: sessionId,
+      }).catch(() => null),
+    );
+    if (events.link_events.length < 1) {
+      events.link_events.push({
+        from_key: fromKey,
+        to_key: toKey,
+        from_title: String(from.title || fromKey),
+        to_title: String(to.title || toKey),
+        kind,
+        note: note.slice(0, 300),
+      });
+    }
+    return true;
+  };
+
+  // --- 1. Deterministic vocab sighting over the turn's combined text -----------------
+  const haystack = `${input.replyText}\n${input.studentText}`.toLowerCase();
+  const seenByTermId = new Map(
+    input.studentVocab.map((row) => [String(row.term_id), row]),
+  );
+  for (const term of input.vocabTerms) {
+    const words = [String(term.term || ""), ...stringArray(term.variants)].filter(Boolean);
+    const hit = words.some((word) =>
+      new RegExp(`\\b${escapeRegExp(word.toLowerCase())}\\b`).test(haystack),
+    );
+    if (!hit) continue;
+    const termId = String(term.id);
+    const existing = seenByTermId.get(termId);
+    if (!existing) {
+      // First encounter ever: row + (at most one) definition dropdown.
+      const surfaced = events.vocab_events.length < 1;
+      writes.push(
+        insertRow(config, "student_vocab", {
+          user_id: userId,
+          term_id: termId,
+          subjects_seen: lessonSubject ? [lessonSubject] : [],
+          first_defined_at: surfaced ? new Date().toISOString() : null,
+        }).catch(() => null),
+      );
+      seenByTermId.set(termId, { term_id: termId, subjects_seen: [lessonSubject] });
+      if (surfaced) {
+        events.vocab_events.push({
+          term: String(term.term || ""),
+          definition: String(term.definition || ""),
+          subject: String(term.subject || ""),
+        });
+      }
+      continue;
+    }
+    // Known term seen in a NEW subject: record the travel; if it crossed subjects,
+    // the word just bridged two ideas — mint the earned link.
+    const subjectsSeen = stringArray(existing.subjects_seen);
+    if (lessonSubject && !subjectsSeen.includes(lessonSubject)) {
+      existing.subjects_seen = [...subjectsSeen, lessonSubject];
+      writes.push(
+        patchRows(
+          config,
+          `student_vocab?user_id=eq.${encodeURIComponent(userId)}&term_id=eq.${encodeURIComponent(termId)}`,
+          { subjects_seen: existing.subjects_seen },
+        ).catch(() => null),
+      );
+      const homeIdeaKey = stringArray(term.idea_keys)[0] || "";
+      const lessonIdeaKey = lessonIdea ? String(lessonIdea.key) : "";
+      if (
+        homeIdeaKey &&
+        lessonIdeaKey &&
+        String(term.subject || "") !== lessonSubject
+      ) {
+        mintLink(
+          homeIdeaKey,
+          lessonIdeaKey,
+          "vocab_bridge",
+          "vocab_in_new_subject",
+          `The word "${String(term.term)}" traveled from ${String(term.subject)} into ${lessonSubject}.`,
+        );
+      }
+    }
+  }
+
+  // --- 2. Mentor-flagged link (validated like misconception) --------------------------
+  const link = input.mentorLink as { from_idea?: unknown; to_idea?: unknown; note?: unknown } | null;
+  if (link && typeof link === "object") {
+    const fromKey = typeof link.from_idea === "string" ? link.from_idea.trim() : "";
+    const toKey = typeof link.to_idea === "string" ? link.to_idea.trim() : "";
+    const note = typeof link.note === "string" ? link.note : "";
+    if (fromKey && toKey) {
+      mintLink(fromKey, toKey, "same_pattern", "mentor_flagged", note);
+    }
+  }
+
+  // --- 3. Emergent idea minting (≤1 per turn, deduped by normalized title/key) --------
+  const newIdea = input.mentorNewIdea as
+    | { title?: unknown; one_liner?: unknown; related_idea_keys?: unknown }
+    | null;
+  if (newIdea && typeof newIdea === "object" && typeof newIdea.title === "string") {
+    const title = newIdea.title.trim().slice(0, 80);
+    const normalized = normalizeTitle(title);
+    const key = slugifyIdeaKey(title);
+    const duplicate =
+      !title ||
+      !normalized ||
+      ideaByKey.has(key) ||
+      input.ideas.some((idea) => normalizeTitle(String(idea.title || "")) === normalized);
+    if (!duplicate) {
+      const oneLiner =
+        typeof newIdea.one_liner === "string" ? newIdea.one_liner.trim().slice(0, 200) : "";
+      const ideaRow: DbRow = { key, title, one_liner: oneLiner, subject: lessonSubject };
+      ideaByKey.set(key, ideaRow);
+      writes.push(
+        insertRow(config, "ideas", {
+          key,
+          title,
+          one_liner: oneLiner,
+          subject: lessonSubject,
+          origin: "emergent",
+          status: "published",
+          lesson_id: input.lessonId,
+          user_id: userId,
+        }).catch(() => null),
+      );
+      events.idea_events.push({ key, title, one_liner: oneLiner, subject: lessonSubject });
+      // The newborn idea links to what it grew from (validated keys only, cap 2).
+      for (const related of stringArray(newIdea.related_idea_keys).slice(0, 2)) {
+        mintLink(key, related, "same_pattern", "mentor_flagged", `Grew out of thinking about ${related}.`);
+      }
+    }
+  }
+
+  for (const write of writes) scheduleBackground(write);
+  return events;
+}
 
 // Chat-flow Phase 3: the ROLLING MID-SESSION SUMMARY. The prompt's verbatim history
 // window is 8 turns x 400 chars, so long sessions forgot their own beginning. This
@@ -5544,6 +5828,26 @@ async function handleTypedRequest(
           // Chat-flow Phase 3: the rolling summary of everything BEFORE the verbatim
           // window — so a long session stops forgetting its own beginning. Absent until
           // the background writer has run at least once.
+          // Learning framework: the idea graph the mentor may reference — the lesson's
+          // primary idea, every key it may cite in "link"/"new_idea" validation, and the
+          // student's own emergent ideas (so it never re-mints one).
+          knowledge: {
+            subject: context.lessonSubject || undefined,
+            lesson_idea: (() => {
+              const idea = context.ideas.find(
+                (row) => row.lesson_id === lessonId && !row.user_id,
+              );
+              return idea
+                ? { key: String(idea.key), title: String(idea.title || "") }
+                : undefined;
+            })(),
+            idea_keys: context.ideas.slice(0, 60).map((row) => String(row.key)),
+            emergent_ideas: context.ideas
+              .filter((row) => row.user_id)
+              .slice(0, 10)
+              .map((row) => ({ key: String(row.key), title: String(row.title || "") })),
+            links_made: context.studentLinks.length,
+          },
           conversation_so_far:
             typeof session.running_summary === "string" && session.running_summary
               ? session.running_summary
@@ -5740,6 +6044,33 @@ async function handleTypedRequest(
               context.quiz,
             ),
     });
+
+    // Learning framework (F2/F3): run the knowledge processor over the finished turn —
+    // vocab sightings, cross-subject bridges, mentor-flagged links, emergent ideas.
+    // Deterministic + validated; its display events ride THIS envelope (client shows
+    // them after the stream settles), its writes go to background.
+    try {
+      const knowledge = processKnowledge({
+        config,
+        userId,
+        sessionId,
+        lessonId,
+        lessonSubject: context.lessonSubject,
+        replyText: envelope.reply,
+        studentText: content,
+        vocabTerms: context.vocabTerms,
+        ideas: context.ideas,
+        studentVocab: context.studentVocab,
+        studentLinks: context.studentLinks,
+        mentorLink: parsed.link ?? null,
+        mentorNewIdea: parsed.new_idea ?? null,
+      });
+      if (knowledge.vocab_events.length) envelope.vocab_events = knowledge.vocab_events;
+      if (knowledge.link_events.length) envelope.link_events = knowledge.link_events;
+      if (knowledge.idea_events.length) envelope.idea_events = knowledge.idea_events;
+    } catch {
+      // Knowledge is enrichment — a processor failure must never cost the turn.
+    }
     // v6: drive the chatbox's inline pills. A pill appears only when there is something behind
     // it, so each flag is read off state this turn already computed:
     //   quiz     — the step's own requirement, so it tracks a bound quiz appearing or passing

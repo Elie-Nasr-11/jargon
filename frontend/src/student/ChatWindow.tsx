@@ -3,6 +3,7 @@ import { Eye, PauseCircle, Undo2 } from "lucide-react";
 import { store } from "@/lib/jargon-store";
 import { prefersReducedMotion } from "@/lib/motion";
 import { Chatbox } from "@/student/Chatbox";
+import { KnowledgeToasts } from "@/student/KnowledgeToasts";
 import { VoicePanel } from "@/student/VoicePanel";
 import { useConversationChannel } from "@/student/useConversation";
 import type { ComposerLanguage } from "@/lib/composerLanguage";
@@ -38,6 +39,8 @@ export type ChatWindowProps = {
   // placeholder resolved) — the window scrolls to the bottom, unless the student has
   // scrolled up to reread. Empty string = no messages.
   scrollKey?: string;
+  // Learning framework: "See it in your brain" jump target (Home's brain map).
+  onSeeBrain?: () => void;
   // The transcript. Supplied by the route so this component stays presentational.
   children?: ReactNode;
 };
@@ -53,6 +56,7 @@ export function ChatWindow({
   sessionResources,
   composerLead,
   scrollKey,
+  onSeeBrain,
   children,
 }: ChatWindowProps) {
   const channel = useConversationChannel();
@@ -95,7 +99,11 @@ export function ChatWindow({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-4">
-      <section aria-label="Conversation" className="flex min-h-0 flex-1 flex-col">
+      <section aria-label="Conversation" className="relative flex min-h-0 flex-1 flex-col">
+        {/* Learning framework: vocab definition dropdown (top center) + growth toasts
+            (top right). Fed by the channel's toast queue — filled only after a turn's
+            stream settles. */}
+        <KnowledgeToasts onSeeBrain={onSeeBrain} />
         {/* Live-session status chips, centered above the transcript. Presence first (ambient,
             informational), then the hold (blocking, warning-toned). */}
         {channel.teacherViewers > 0 || held || channel.revisitFrontier ? (

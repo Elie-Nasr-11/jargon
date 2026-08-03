@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   fetchLatestLearningSession,
+  fetchVocabTerms,
   fetchLearningTurns,
   fetchLessonActivities,
   fetchLiveSessionViewers,
@@ -19,6 +20,10 @@ import { store } from "@/lib/jargon-store";
 import { supabase } from "@/lib/supabase";
 import type {
   ChatAttachment,
+  IdeaEvent,
+  LinkEvent,
+  VocabEvent,
+  VocabTerm,
   ChatInputModality,
   Lesson,
   LessonActivity,
@@ -99,7 +104,19 @@ export type ConversationChannel = {
   voiceEvent: (event: VoiceInteractionEvent) => void;
   // P8: the student accepted the mentor's "build me a quick activity" offer (see buildArtifact).
   buildArtifact: (offer: ArtifactOffer) => void;
+  // Learning framework (F2/F3): the published vocab set (for transcript highlighting),
+  // the live toast queue (vocab dropdown / link / idea events, filled AFTER a turn's
+  // stream settles), dismissal, and re-showing a definition from a tapped highlight.
+  vocabTerms: VocabTerm[];
+  knowledgeToasts: KnowledgeToast[];
+  dismissToast: (id: string) => void;
+  showVocabCard: (event: VocabEvent) => void;
 };
+
+export type KnowledgeToast =
+  | { id: string; kind: "vocab"; event: VocabEvent }
+  | { id: string; kind: "link"; event: LinkEvent }
+  | { id: string; kind: "idea"; event: IdeaEvent };
 
 export type ArtifactOffer = { label: string; kind: "html_sim" | "deck"; activity_id: string };
 
@@ -119,6 +136,10 @@ const EMPTY_CHANNEL: ConversationChannel = {
   sendVoiceTurn: async () => null,
   voiceEvent: () => {},
   buildArtifact: () => {},
+  vocabTerms: [],
+  knowledgeToasts: [],
+  dismissToast: () => {},
+  showVocabCard: () => {},
 };
 
 let channelSnapshot: ConversationChannel = EMPTY_CHANNEL;
@@ -231,6 +252,31 @@ export function useConversation() {
     current_activity_id: string | null;
     activities_complete: boolean;
   } | null>(null);
+  // Learning framework: the published vocab set (one fetch per app life — it's shared
+  // curriculum data) and the live toast queue.
+  const [vocabTerms, setVocabTerms] = useState<VocabTerm[]>([]);
+  const [knowledgeToasts, setKnowledgeToasts] = useState<KnowledgeToast[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchVocabTerms()
+      .then((terms) => !cancelled && setVocabTerms(terms))
+      .catch(() => {
+        // No vocab = no highlighting; the conversation itself is unaffected.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const dismissToast = useCallback((id: string) => {
+    setKnowledgeToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+  const showVocabCard = useCallback((event: VocabEvent) => {
+    const id = uid();
+    setKnowledgeToasts((current) => [
+      ...current.filter((toast) => !(toast.kind === "vocab" && toast.event.term === event.term)),
+      { id, kind: "vocab", event },
+    ]);
+  }, []);
   // True while a teacher has this session paused (session_holds). Locks the composer and the
   // send path; the server enforces it regardless (held envelope) — this is UX, not security.
   const [held, setHeld] = useState(false);
@@ -301,6 +347,23 @@ export function useConversation() {
       }
       // Server-authoritative hold: a turn submitted while paused comes back held → re-lock.
       if (envelope.held) setHeldState(true);
+      // Learning framework: this turn's knowledge events become toasts. applyEnvelope
+      // runs after the stream settles, so the timing decision (owner: notify after the
+      // reply finishes) holds by construction. Queue capped so a backlog can't stack.
+      const toasts: KnowledgeToast[] = [
+        ...(envelope.idea_events ?? []).map(
+          (event): KnowledgeToast => ({ id: uid(), kind: "idea", event }),
+        ),
+        ...(envelope.link_events ?? []).map(
+          (event): KnowledgeToast => ({ id: uid(), kind: "link", event }),
+        ),
+        ...(envelope.vocab_events ?? []).map(
+          (event): KnowledgeToast => ({ id: uid(), kind: "vocab", event }),
+        ),
+      ];
+      if (toasts.length) {
+        setKnowledgeToasts((current) => [...current, ...toasts].slice(-3));
+      }
     },
     [setHeldState],
   );
@@ -1017,6 +1080,10 @@ export function useConversation() {
       sendVoiceTurn,
       voiceEvent,
       buildArtifact,
+      vocabTerms,
+      knowledgeToasts,
+      dismissToast,
+      showVocabCard,
     });
   }, [
     held,
@@ -1034,6 +1101,10 @@ export function useConversation() {
     sendVoiceTurn,
     voiceEvent,
     buildArtifact,
+    vocabTerms,
+    knowledgeToasts,
+    dismissToast,
+    showVocabCard,
   ]);
 
   // A stale snapshot must not outlive the conversation that published it.

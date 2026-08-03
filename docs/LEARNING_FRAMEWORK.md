@@ -1,6 +1,7 @@
 # The Learning Framework — Ideas, Vocab, Links (Sketch)
 
-Status: design sketch, 2026-08-02 — §6 DECIDED by owner same day; ready for F1.
+Status: BUILT, 2026-08-02 (round 18, F1-F4 in one pass). §6 decisions honored
+throughout; this doc is now the reference for how the shipped system works.
 Companion to CHAT_FLOW_SCOPE.md (flow, fully shipped) and the memory decisions
 (2026-08-01). This doc turns the owner's direction into a buildable shape.
 

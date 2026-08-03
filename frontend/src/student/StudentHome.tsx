@@ -3,7 +3,10 @@ import gsap from "gsap";
 import { ArrowRight, Brain, GraduationCap, Loader2, Play } from "lucide-react";
 import { BrainMap } from "@/student/BrainMap";
 import {
+  fetchCurriculumLinks,
+  fetchIdeas,
   fetchMostRecentLearningSession,
+  fetchStudentLinks,
   fetchProfile,
   fetchSessionSummaries,
   fetchStudentGrades,
@@ -16,7 +19,10 @@ import { prefersReducedMotion } from "@/lib/motion";
 import { checkpointRows } from "@/student/checkpoints";
 import { SectionLabel, StatPill, WorkRow } from "@/student/summaryBits";
 import type {
+  CurriculumLinkRow,
+  IdeaNode,
   Lesson,
+  StudentLinkRow,
   SessionSummary,
   StudentAssessmentBundle,
   StudentGradeRow,
@@ -223,6 +229,26 @@ export function StudentHome({
   const [resumeLessonId, setResumeLessonId] = useState<string | null>(null);
   const [resumeChecked, setResumeChecked] = useState(false);
   const [grades, setGrades] = useState<StudentGradeRow[] | null>(null);
+  // Learning framework (F4): the knowledge layer for the brain map — best-effort reads,
+  // an empty graph just renders the familiar galaxy.
+  const [ideas, setIdeas] = useState<IdeaNode[]>([]);
+  const [studentLinks, setStudentLinks] = useState<StudentLinkRow[]>([]);
+  const [curriculumLinks, setCurriculumLinks] = useState<CurriculumLinkRow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchIdeas()
+      .then((rows) => !cancelled && setIdeas(rows))
+      .catch(() => {});
+    void fetchStudentLinks()
+      .then((rows) => !cancelled && setStudentLinks(rows))
+      .catch(() => {});
+    void fetchCurriculumLinks()
+      .then((rows) => !cancelled && setCurriculumLinks(rows))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [recaps, setRecaps] = useState<SessionSummary[]>([]);
 
   useEffect(() => {
@@ -454,6 +480,9 @@ export function StudentHome({
                 currentLessonId={currentLessonId}
                 memoryLessonIds={memoryLessonIds}
                 memoryProfile={memoryProfile}
+                ideas={ideas}
+                studentLinks={studentLinks}
+                curriculumLinks={curriculumLinks}
                 onOpenLesson={onOpenLesson}
               />
             )}

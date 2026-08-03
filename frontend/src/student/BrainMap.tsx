@@ -8,7 +8,13 @@ import {
 } from "react";
 import { RotateCcw } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
-import type { Lesson, StudentMemoryProfile } from "@/lib/types";
+import type {
+  CurriculumLinkRow,
+  IdeaNode,
+  Lesson,
+  StudentLinkRow,
+  StudentMemoryProfile,
+} from "@/lib/types";
 
 // THE BRAIN MAP v3 — the second brain as a 3D GALAXY, still plain SVG.
 //
@@ -101,6 +107,9 @@ export function BrainMap({
   currentLessonId,
   memoryLessonIds,
   memoryProfile,
+  ideas,
+  studentLinks,
+  curriculumLinks,
   onOpenLesson,
 }: {
   lessons: Lesson[];
@@ -108,6 +117,11 @@ export function BrainMap({
   currentLessonId: string | null;
   memoryLessonIds: Set<string>;
   memoryProfile?: StudentMemoryProfile | null;
+  // Learning framework (F4): the knowledge layer — authored + emergent ideas, the
+  // student's earned links (bright, permanent), the curriculum's possible links (faint).
+  ideas?: IdeaNode[];
+  studentLinks?: StudentLinkRow[];
+  curriculumLinks?: CurriculumLinkRow[];
   onOpenLesson: (lessonId: string) => void;
 }) {
   // World layout: course → unit → lesson, slices weighted by lesson count so dense
@@ -201,73 +215,87 @@ export function BrainMap({
     }));
   }, [memoryProfile]);
 
-  // ASSOCIATIVE LINKS: faint cross-links between lessons that share topic words in
-  // their titles (2+ meaningful tokens, different units) — honest lexical signal, the
-  // "this connects to that" texture of a knowledge graph. Capped at 8 strongest so the
-  // web reads as texture, never hairball. Same-unit pairs are skipped (siblings already
-  // share a hub).
-  const topicLinks = useMemo(() => {
-    const stop = new Set([
-      "introduction",
-      "understanding",
-      "using",
-      "with",
-      "your",
-      "what",
-      "into",
-      "exercise",
-      "practice",
-      "homework",
-      "class",
-      "involving",
-      "problems",
-      "single",
-      "double",
-      "digit",
-      "numbers",
-    ]);
-    const entries: { id: string; unitId: string; title: string; tokens: Set<string> }[] = [];
+  // LEARNING FRAMEWORK (F4): idea stars + knowledge arcs — the graph becomes real, and
+  // the lexical topic links retire in its favor. Authored ideas ride just outside the
+  // lesson that teaches them; pool ideas (no lesson) and EMERGENT ideas (grown from this
+  // student's own thinking) orbit their subject's course hub — emergent ones wear the
+  // aurora. Arcs connect idea worlds: curriculum links render FAINT (possible),
+  // student links render BRIGHT (earned, permanent); a link made in the last few
+  // minutes draws itself with the flow animation.
+  type IdeaWorld = World & { idea: IdeaNode };
+  const knowledge = useMemo(() => {
+    const worlds = new Map<string, IdeaWorld>();
+    const lessonWorld = new Map<string, World>();
     for (const course of courses) {
       for (const unit of course.units) {
-        for (const node of unit.lessons) {
-          const tokens = new Set(
-            node.lesson.title
-              .toLowerCase()
-              .split(/[^a-z0-9]+/)
-              .filter((word) => word.length >= 4 && !stop.has(word)),
-          );
-          if (tokens.size) {
-            entries.push({
-              id: node.lesson.id,
-              unitId: unit.unitId,
-              title: node.lesson.title,
-              tokens,
-            });
-          }
-        }
+        for (const node of unit.lessons) lessonWorld.set(node.lesson.id, node);
       }
     }
-    const links: { a: string; b: string; score: number; label: string }[] = [];
-    for (let i = 0; i < entries.length; i += 1) {
-      for (let j = i + 1; j < entries.length; j += 1) {
-        if (entries[i].unitId === entries[j].unitId) continue;
-        let score = 0;
-        for (const token of entries[i].tokens) {
-          if (entries[j].tokens.has(token)) score += 1;
-        }
-        if (score >= 2) {
-          links.push({
-            a: entries[i].id,
-            b: entries[j].id,
-            score,
-            label: `Related: ${entries[i].title} ↔ ${entries[j].title}`,
-          });
-        }
+    const courseByTitle = new Map(courses.map((course) => [course.title, course]));
+    for (const idea of ideas ?? []) {
+      const anchor = idea.lesson_id ? lessonWorld.get(idea.lesson_id) : undefined;
+      if (anchor && idea.origin === "authored") {
+        worlds.set(idea.key, {
+          idea,
+          radius: anchor.radius + 15,
+          angle: anchor.angle + elevationFor(`${idea.key}:a`, 0.06),
+          el: clampEl(anchor.el + elevationFor(idea.key, 0.16), 0.8),
+        });
+        continue;
       }
+      const hub = courseByTitle.get(idea.subject);
+      worlds.set(idea.key, {
+        idea,
+        radius: COURSE_RADIUS + 18,
+        angle: (hub ? hub.angle : -Math.PI / 2) + elevationFor(`${idea.key}:a`, 0.55),
+        el: clampEl((hub ? hub.el : 0) + elevationFor(idea.key, 0.32), 0.7),
+      });
     }
-    links.sort((x, y) => y.score - x.score);
-    return links.slice(0, 8);
-  }, [courses]);
+    const now = Date.now();
+    const earnedPairs = new Set<string>();
+    const arcs: {
+      fromKey: string;
+      toKey: string;
+      from: IdeaWorld;
+      to: IdeaWorld;
+      earned: boolean;
+      fresh: boolean;
+      label: string;
+    }[] = [];
+    for (const link of studentLinks ?? []) {
+      const from = worlds.get(link.from_key);
+      const to = worlds.get(link.to_key);
+      if (!from || !to) continue;
+      earnedPairs.add(`${link.from_key}::${link.to_key}`);
+      earnedPairs.add(`${link.to_key}::${link.from_key}`);
+      arcs.push({
+        fromKey: link.from_key,
+        toKey: link.to_key,
+        from,
+        to,
+        earned: true,
+        fresh: now - Date.parse(link.created_at) < 10 * 60 * 1000,
+        label: link.note || `${from.idea.title} ↔ ${to.idea.title}`,
+      });
+    }
+    for (const link of curriculumLinks ?? []) {
+      // An earned link outranks its faint curriculum twin — render once, bright.
+      if (earnedPairs.has(`${link.from_key}::${link.to_key}`)) continue;
+      const from = worlds.get(link.from_key);
+      const to = worlds.get(link.to_key);
+      if (!from || !to) continue;
+      arcs.push({
+        fromKey: link.from_key,
+        toKey: link.to_key,
+        from,
+        to,
+        earned: false,
+        fresh: false,
+        label: link.note || `${from.idea.title} ↔ ${to.idea.title}`,
+      });
+    }
+    return { worlds, arcs };
+  }, [courses, ideas, studentLinks, curriculumLinks]);
 
   // --- Camera ----------------------------------------------------------------------
   const [yaw, setYaw] = useState(0);
@@ -399,8 +427,47 @@ export function BrainMap({
     });
   }
 
+  // Idea stars: authored ideas are small ringed dots by their lesson; emergent ideas
+  // wear the aurora — the part of the brain that exists because THIS student thought.
+  for (const world of knowledge.worlds.values()) {
+    const p = project(world);
+    const emergent = world.idea.origin === "emergent";
+    renderNodes.push({
+      depth: p.depth,
+      node: (
+        <g
+          key={`idea-${world.idea.key}`}
+          className="bmap-node"
+          style={pop()}
+          opacity={depthOpacity(p.depth)}
+        >
+          <title>
+            {`${emergent ? "Your idea: " : "Idea: "}${world.idea.title}${world.idea.one_liner ? ` — ${world.idea.one_liner}` : ""}`}
+          </title>
+          {emergent ? (
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={7 * p.f}
+              fill="url(#brainmap-aurora)"
+              className="bmap-glow"
+            />
+          ) : null}
+          <circle
+            cx={p.x}
+            cy={p.y}
+            r={2.6 * p.f}
+            fill={emergent ? "var(--grad-1)" : "var(--depth-card)"}
+            stroke={emergent ? "none" : "var(--grad-1)"}
+            strokeWidth="1"
+            strokeOpacity={emergent ? undefined : 0.55}
+          />
+        </g>
+      ),
+    });
+  }
+
   const edges: React.ReactNode[] = [];
-  const lessonProjections = new Map<string, Projected>();
   const center = project({ radius: 0, angle: 0, el: 0 });
   let threadPoints: string | null = null;
 
@@ -479,7 +546,6 @@ export function BrainMap({
 
       for (const node of unit.lessons) {
         const lp = project(node);
-        lessonProjections.set(node.lesson.id, lp);
         edges.push(
           <line
             key={`e-${node.lesson.id}`}
@@ -598,25 +664,26 @@ export function BrainMap({
 
         {edges}
 
-        {/* Associative links: the faint aurora-violet web of "related by topic". */}
-        {topicLinks.map((link) => {
-          const a = lessonProjections.get(link.a);
-          const b = lessonProjections.get(link.b);
-          if (!a || !b) return null;
+        {/* Knowledge arcs: curriculum links FAINT (what could connect), earned student
+            links BRIGHT and permanent — a fresh one draws itself with the flow dash. */}
+        {knowledge.arcs.map((arc) => {
+          const a = project(arc.from);
+          const b = project(arc.to);
           return (
             <line
-              key={`assoc-${link.a}-${link.b}`}
+              key={`arc-${arc.fromKey}-${arc.toKey}-${arc.earned ? "e" : "c"}`}
               x1={a.x}
               y1={a.y}
               x2={b.x}
               y2={b.y}
               stroke="var(--grad-1)"
-              strokeWidth="1"
-              strokeOpacity="0.3"
-              strokeDasharray="2 5"
+              strokeWidth={arc.earned ? 1.4 : 1}
+              strokeOpacity={arc.earned ? 0.85 : 0.22}
+              strokeDasharray={arc.earned ? undefined : "2 5"}
               strokeLinecap="round"
+              className={arc.fresh ? "bmap-thread" : undefined}
             >
-              <title>{link.label}</title>
+              <title>{arc.label}</title>
             </line>
           );
         })}

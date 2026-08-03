@@ -8578,3 +8578,36 @@ Tests run: none (docs only).
 Remaining concerns: none — awaiting owner picks on §6, then F1.
 Suggested next task: owner reads §5/§6, picks; F1 (foundations + demo seed) is the
 natural first build.
+
+## Claude -> Codex / Human - 2026-08-02 (round 18 — the learning framework, F1-F4)
+
+Status: Finished
+Summary: The whole framework in one round. F1 migration 20260925 (ideas/vocab_terms/
+curriculum_links/student_links/student_vocab + lesson_subjects view + owner-write RLS +
+guarded demo seed), deploy list updated. F2/F3 server: loadContext wave-1 gains 5
+knowledge reads; processKnowledge (deterministic sighting → student_vocab rows +
+subjects_seen travel → vocab_bridge minting; mentor `link`/`new_idea` validated, deduped,
+capped ≤1 display event/kind/turn; enrichment-never-fails-the-turn); contract + payload
+`knowledge` key + envelope vocab/link/idea_events passthrough. F2/F3 client: vocab
+matcher threaded through the Transcript markdown renderers (first-per-message,
+subject-hued .vocab-mark, tap re-shows card), KnowledgeToasts (top-center definition
+dropdown, top-right growth toasts with See-it-in-your-brain → Home), toast queue filled
+in applyEnvelope (post-stream by construction, capped 3). F4 BrainMap v4 (idea stars by
+lesson, emergent aurora stars by subject hub, faint-vs-bright arcs, fresh-link flow
+animation, lexical topicLinks retired), StudentHome fetches+passes the graph.
+Files changed: supabase/migrations/20260925000000_learning_framework.sql (new),
+.github/workflows/deploy-backend.yml, supabase/functions/chat/index.ts,
+lib/{types,api}.ts, student/{useConversation,Transcript,ChatWindow,StudentApp,
+StudentHome,BrainMap,KnowledgeToasts(new)}.tsx, frontend/src/styles.css,
+tests/test_learning_framework.py (new) + one re-pin, docs.
+Tests run: python suite 411 OK (skipped=4); tsc 0 errors; eslint 0 errors; build green;
+edge-fn ad-hoc tsc: only the 3 pre-existing loose-typing artifacts.
+Remaining concerns: (1) Emergent-idea minting has a per-turn cap but no per-session cap
+— watch the demo student's brain for over-minting; one constant if needed. (2) Vocab
+matching is exact word-boundary (variants authored per term) — no stemming by design.
+(3) The seed covers the 4 MVP lessons; Book F lessons have no ideas yet (authoring pass
+or AI-draft in studio-lite is the natural follow-up). (4) Teacher-side views of the
+class link graph = F4 tail, deferred.
+Suggested next task: live pass as demo student — open the math lesson, mention
+"instructions" (vocab travels from coding → dropdown + possibly a link toast), watch
+the arc draw in the brain; then seed/author ideas for Book F.

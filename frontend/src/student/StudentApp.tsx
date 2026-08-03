@@ -500,6 +500,9 @@ export function StudentApp({
     <ChatWindow
       mode={turnMode}
       onModeChange={setTurnMode}
+      // "See it in your brain": the growth toasts jump to Home, where the brain map
+      // (with the fresh arc/star) lives at the bottom.
+      onSeeBrain={() => onSelectSection("home")}
       // The streamed placeholder keeps one id while its text grows — fold the text length
       // in so autoscroll tracks the live reply too (the near-bottom guard still applies).
       scrollKey={

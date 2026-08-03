@@ -72,6 +72,10 @@ import type {
   StudentUpload,
   StudentMastery,
   StudentMemory,
+  StudentLinkRow,
+  CurriculumLinkRow,
+  IdeaNode,
+  VocabTerm,
   SessionSummary,
   StudentProfileStats,
   ReviewDueSkill,
@@ -3349,4 +3353,50 @@ export async function invokeJargonRun(input: {
   }
   if (!data) throw new Error("Jargon run returned an empty response.");
   return data;
+}
+
+// --- Learning framework reads (docs/LEARNING_FRAMEWORK.md) -----------------------------
+// All best-effort at the call sites; RLS scopes ideas to published-authored + the
+// student's own emergent rows, and student links to the owner (+ their teachers).
+export async function fetchVocabTerms(): Promise<VocabTerm[]> {
+  const { data, error } = await supabase
+    .from("vocab_terms")
+    .select("id,term,variants,definition,subject,idea_keys,lesson_id")
+    .eq("status", "published")
+    .limit(200);
+  if (error) throw error;
+  return (data || []) as VocabTerm[];
+}
+
+export async function fetchIdeas(): Promise<IdeaNode[]> {
+  const { data, error } = await supabase
+    .from("ideas")
+    .select("id,key,title,one_liner,subject,origin,lesson_id,user_id,created_at")
+    .eq("status", "published")
+    .limit(300);
+  if (error) throw error;
+  return (data || []) as IdeaNode[];
+}
+
+export async function fetchStudentLinks(): Promise<StudentLinkRow[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const { data, error } = await supabase
+    .from("student_links")
+    .select("id,from_key,to_key,kind,evidence_kind,note,created_at")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false })
+    .limit(400);
+  if (error) throw error;
+  return (data || []) as StudentLinkRow[];
+}
+
+export async function fetchCurriculumLinks(): Promise<CurriculumLinkRow[]> {
+  const { data, error } = await supabase
+    .from("curriculum_links")
+    .select("id,from_key,to_key,kind,note")
+    .eq("status", "published")
+    .limit(400);
+  if (error) throw error;
+  return (data || []) as CurriculumLinkRow[];
 }

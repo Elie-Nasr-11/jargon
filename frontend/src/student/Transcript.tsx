@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { ArrowRight, Check, Paperclip, RotateCcw, Sparkles } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
@@ -8,7 +8,7 @@ import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ResourceCard } from "@/student/ResourceCard";
 import { isTurnMode, modeAccentValue, turnModeSpec } from "@/student/turnModes";
 import { useConversationChannel } from "@/student/useConversation";
-import type { LessonArc, TypedChatAnswer } from "@/lib/types";
+import type { LessonArc, TypedChatAnswer, VocabEvent, VocabTerm } from "@/lib/types";
 import {
   choiceLabel,
   choiceValue,
@@ -82,7 +82,101 @@ function CodeBlock({ code }: { code: ChatCodeBlock }) {
 const INLINE_MD_RE =
   /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^\s*][^*\n]*\*|\[[^\]\n]+\]\(https:\/\/[^\s)]+\))/g;
 
-function renderInline(text: string): ReactNode[] {
+// --- Learning framework (F2): vocab highlighting -------------------------------------
+// One pass object per MENTOR message: a combined word-boundary regex over every published
+// term + variant, a canonical lookup, and a per-message `seen` set so each term
+// highlights once per message (owner decision). Tapping a mark re-shows its definition
+// card through the same toast queue the first-encounter dropdown uses. Highlighting
+// applies to FINAL text only — the streaming placeholder never gets a pass object.
+export type VocabPass = {
+  regexSource: string;
+  byWord: Map<string, VocabTerm>;
+  seen: Set<string>;
+  show: (event: VocabEvent) => void;
+};
+
+const SUBJECT_HUES = [
+  "--mode-lesson",
+  "--mode-practice",
+  "--mode-discuss",
+  "--mode-open",
+  "--mode-quiz",
+  "--mode-assignment",
+];
+export function subjectHueVar(subject: string): string {
+  let hash = 0;
+  for (let i = 0; i < subject.length; i += 1) hash = (hash * 31 + subject.charCodeAt(i)) | 0;
+  return SUBJECT_HUES[Math.abs(hash) % SUBJECT_HUES.length];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function buildVocabMatcher(
+  terms: VocabTerm[],
+  show: (event: VocabEvent) => void,
+): {
+  regexSource: string;
+  byWord: Map<string, VocabTerm>;
+  show: (event: VocabEvent) => void;
+} | null {
+  const byWord = new Map<string, VocabTerm>();
+  const words: string[] = [];
+  for (const term of terms) {
+    for (const word of [term.term, ...(term.variants || [])]) {
+      const lower = String(word || "").toLowerCase();
+      if (!lower || byWord.has(lower)) continue;
+      byWord.set(lower, term);
+      words.push(escapeRegExp(lower));
+    }
+  }
+  if (!words.length) return null;
+  // Longest-first so "instructions" wins over "instruction" at the same position.
+  words.sort((a, b) => b.length - a.length);
+  return { regexSource: `\\b(?:${words.join("|")})\\b`, byWord, show };
+}
+
+function highlightRun(part: string, vocab: VocabPass, keyBase: string): ReactNode {
+  const re = new RegExp(vocab.regexSource, "gi");
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(part))) {
+    const word = match[0];
+    const term = vocab.byWord.get(word.toLowerCase());
+    if (!term || vocab.seen.has(term.term)) continue;
+    vocab.seen.add(term.term);
+    if (match.index > last) nodes.push(part.slice(last, match.index));
+    const event: VocabEvent = {
+      term: term.term,
+      definition: term.definition,
+      subject: term.subject,
+    };
+    nodes.push(
+      <span
+        key={`${keyBase}-${match.index}`}
+        role="button"
+        tabIndex={0}
+        className="vocab-mark"
+        style={{ ["--vocab-hue" as string]: `var(${subjectHueVar(term.subject)})` }}
+        title={`${term.term} — tap for the definition`}
+        onClick={() => vocab.show(event)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") vocab.show(event);
+        }}
+      >
+        {word}
+      </span>,
+    );
+    last = match.index + word.length;
+  }
+  if (!nodes.length) return part;
+  if (last < part.length) nodes.push(part.slice(last));
+  return nodes;
+}
+
+function renderInline(text: string, vocab?: VocabPass): ReactNode[] {
   return text.split(INLINE_MD_RE).map((part, i) => {
     const code = part.match(/^`([^`\n]+)`$/);
     if (code) {
@@ -121,7 +215,7 @@ function renderInline(text: string): ReactNode[] {
         </a>
       );
     }
-    return <Fragment key={i}>{part}</Fragment>;
+    return <Fragment key={i}>{vocab ? highlightRun(part, vocab, String(i)) : part}</Fragment>;
   });
 }
 
@@ -131,7 +225,7 @@ const BLOCK_MD_RE = /^\s{0,3}(#{2,3}\s+\S|-\s+\S|\d{1,3}\.\s+\S)/m;
 
 // Line-based block pass: ##/### headings, consecutive -/1. lists, blank-line-separated
 // paragraphs. Unsupported syntax (# h1, > quotes, tables) stays literal paragraph text.
-function renderBlocks(text: string): ReactNode[] {
+function renderBlocks(text: string, vocab?: VocabPass): ReactNode[] {
   const lines = text.split("\n");
   const nodes: ReactNode[] = [];
   let paragraph: string[] = [];
@@ -143,7 +237,7 @@ function renderBlocks(text: string): ReactNode[] {
     if (!joined.trim()) return;
     nodes.push(
       <p key={nodes.length} className="whitespace-pre-wrap">
-        {renderInline(joined)}
+        {renderInline(joined, vocab)}
       </p>,
     );
   };
@@ -151,7 +245,7 @@ function renderBlocks(text: string): ReactNode[] {
     if (!list) return;
     const { ordered, items } = list;
     list = null;
-    const rows = items.map((item, i) => <li key={i}>{renderInline(item)}</li>);
+    const rows = items.map((item, i) => <li key={i}>{renderInline(item, vocab)}</li>);
     nodes.push(
       ordered ? (
         <ol key={nodes.length} className="list-decimal space-y-1 pl-5">
@@ -212,19 +306,27 @@ function renderBlocks(text: string): ReactNode[] {
 // Text with its fenced blocks lifted out. Code gets the highlighted block; prose segments keep
 // whitespace. `markdown` (mentor bubbles only) turns on the safe subset above — student and
 // teacher text stays literal.
-function MessageBody({ text, markdown }: { text: string; markdown?: boolean }) {
+function MessageBody({
+  text,
+  markdown,
+  vocab,
+}: {
+  text: string;
+  markdown?: boolean;
+  vocab?: VocabPass;
+}) {
   const segments = parseFencedBlocks(text);
   const renderText = (raw: string, key?: number) => {
     if (markdown && BLOCK_MD_RE.test(raw)) {
       return (
         <div key={key} className="space-y-2">
-          {renderBlocks(raw)}
+          {renderBlocks(raw, vocab)}
         </div>
       );
     }
     return (
       <span key={key} className="whitespace-pre-wrap">
-        {markdown ? renderInline(raw) : raw}
+        {markdown ? renderInline(raw, vocab) : raw}
       </span>
     );
   };
@@ -411,6 +513,12 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
   // Live-conversation context the shell does not thread as props: the hold lock (which also
   // freezes live pills), the continue/retry control senders, and the read-aloud call context.
   const channel = useConversationChannel();
+  // Learning framework (F2): one compiled vocab matcher for the whole transcript; each
+  // mentor message gets a FRESH `seen` set so terms highlight once per message.
+  const vocabMatcher = useMemo(
+    () => buildVocabMatcher(channel.vocabTerms, channel.showVocabCard),
+    [channel.vocabTerms, channel.showVocabCard],
+  );
   const voice = store.getVoice();
   const inert = disabled || channel.held;
 
@@ -529,7 +637,15 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
               <MentorRise key={message.id} animate={isNew}>
                 <div className="hvp flex flex-col gap-2">
                   <Bubble align="start" tone={message.isError ? "error" : "mentor"}>
-                    <MessageBody text={message.text} markdown={!message.isError} />
+                    <MessageBody
+                      text={message.text}
+                      markdown={!message.isError}
+                      vocab={
+                        vocabMatcher && !message.isError
+                          ? { ...vocabMatcher, seen: new Set<string>() }
+                          : undefined
+                      }
+                    />
                     {/* An error bubble carries the answer that failed, so Retry re-sends it
                         verbatim rather than asking the student to retype. A failed CONTROL turn
                         retries through the channel so its control rides along — a failed

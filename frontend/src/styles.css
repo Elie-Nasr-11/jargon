@@ -849,3 +849,65 @@ select {
   --map-avoid: var(--mode-assignment);
   --map-memory-halo: var(--mode-discuss);
 }
+
+/* --- Knowledge toasts (student/KnowledgeToasts.tsx) --------------------------------
+   The vocab definition DROPS from the top; link/idea growth toasts POP in from the
+   right with a one-beat spark. Reduced motion renders both static (classes withheld). */
+@keyframes ktoast-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ktoast-pop {
+  0% {
+    opacity: 0;
+    transform: translateX(16px) scale(0.96);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ktoast-spark {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: scale(1.35) rotate(-8deg);
+  }
+  60% {
+    transform: scale(1.1) rotate(6deg);
+  }
+}
+.ktoast-drop {
+  animation: ktoast-drop var(--dur-slow) ease both;
+}
+.ktoast-pop {
+  animation: ktoast-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.ktoast-spark {
+  animation: ktoast-spark 0.9s ease 0.3s 2;
+}
+/* Vocab highlight in the transcript: an underline-dot in the term's subject hue. */
+.vocab-mark {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in oklab, var(--vocab-hue, var(--accent-text)) 65%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: background-color var(--dur-fast) ease;
+}
+.vocab-mark:hover {
+  background: color-mix(in oklab, var(--vocab-hue, var(--accent-text)) 12%, transparent);
+  border-radius: 4px;
+}

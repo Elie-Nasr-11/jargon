@@ -816,3 +816,36 @@ Phase 4 (hygiene):
 - **Transcript fetch capped** at the newest 400 turns (order restored client-side) —
   insurance, not policy; real sessions sit far below it.
 - Deferred by owner decision (CHAT_FLOW_SCOPE §5): attachments stay out of the graders.
+
+## 2026-08-02 — The learning framework ships (F1-F4, docs/LEARNING_FRAMEWORK.md)
+
+Built in one pass per owner direction ("build the whole thing"):
+
+- **Schema (migration 20260925)**: ideas (authored + student-scoped emergent, key-unique
+  per scope), vocab_terms (variants for matching), curriculum_links (possible),
+  student_links (earned, unique per student-pair, never unmade), student_vocab
+  (encounter state incl. subjects_seen), and the lesson_subjects view (subject = course
+  title, one query per turn). RLS: published knowledge readable by authenticated;
+  student rows owner + can_view_student; writes owner-scoped (the chat fn writes under
+  the caller's JWT). Demo seed: 4 authored ideas, 8 vocab terms, 4 cross-course links —
+  existence-guarded, idempotent.
+- **Detection (chat fn, processKnowledge)**: deterministic word-boundary vocab sighting
+  over reply+student text; subjects_seen travel tracking; a word crossing subjects mints
+  a vocab_bridge student link between its home idea and the lesson's primary idea. The
+  mentor contract gained `link` and `new_idea` — both validated against the known idea
+  set, deduped (normalized title for ideas, pair-set for links), capped (≤1 display
+  event of each kind per turn), written under RLS, and NEVER able to fail the turn.
+  Payload gained `knowledge` (subject, lesson idea, citable keys, emergent list, link
+  count); SYSTEM_PROMPT documents both fields with "never invent keys".
+- **Chat UX**: subject-hued underline-dot highlights on final mentor prose only (first
+  occurrence per message; tap re-shows the card), the definition dropdown from the top
+  center, growth toasts (link/idea) top right with "See it in your brain" jumping to
+  Home. All display waits for the stream to settle (events ride the envelope, which
+  resolves post-stream — the timing decision holds by construction).
+- **Brain map v4**: authored idea stars ride their lesson; pool + EMERGENT ideas orbit
+  their subject's hub, emergent wearing the aurora ("Your idea: …"); curriculum links
+  render faint (possible) vs student links bright (earned, permanent), a link made in
+  the last 10 minutes draws itself with the flow animation. The round-12e lexical topic
+  links are RETIRED — the map now shows real, earned structure.
+- Progress spine note: mastery-by-idea rides the existing skill_key bridge (idea.key
+  adopts that vocabulary); step-based fractions remain the lesson-level display.

@@ -1152,6 +1152,12 @@ export type TypedChatEnvelope = {
   } | null;
   // Set only when a teacher has paused the session; the mentor did not run this turn.
   held?: boolean;
+  // Learning framework (F2/F3): this turn's display events — at most one of each. The
+  // graph state lives in the tables; these only drive the toasts. Live-turn only
+  // (never replayed from history, like artifact_offer).
+  vocab_events?: VocabEvent[];
+  link_events?: LinkEvent[];
+  idea_events?: IdeaEvent[];
   // Flow v3 (all optional — old stored envelopes replay fine): the Continue pill offer for
   // unacknowledged content steps, and the turn router's verdict (telemetry/hinting).
   continue_offer?: { label: string } | null;
@@ -1629,4 +1635,53 @@ export type StudentAssignmentBundle = {
   recipients: AssignmentRecipient[];
   submissions: AssignmentSubmission[];
   files: AssignmentSubmissionFile[];
+};
+
+// --- Learning framework (docs/LEARNING_FRAMEWORK.md) -----------------------------------
+export type VocabEvent = { term: string; definition: string; subject: string };
+export type LinkEvent = {
+  from_key: string;
+  to_key: string;
+  from_title: string;
+  to_title: string;
+  kind: string;
+  note: string;
+};
+export type IdeaEvent = { key: string; title: string; one_liner: string; subject: string };
+
+export type VocabTerm = {
+  id: string;
+  term: string;
+  variants: string[];
+  definition: string;
+  subject: string;
+  idea_keys: string[];
+  lesson_id: string | null;
+};
+export type IdeaNode = {
+  id: string;
+  key: string;
+  title: string;
+  one_liner: string;
+  subject: string;
+  origin: "authored" | "emergent";
+  lesson_id: string | null;
+  user_id: string | null;
+  created_at: string;
+};
+export type StudentLinkRow = {
+  id: string;
+  from_key: string;
+  to_key: string;
+  kind: string;
+  evidence_kind: string;
+  note: string;
+  created_at: string;
+};
+export type CurriculumLinkRow = {
+  id: string;
+  from_key: string;
+  to_key: string;
+  kind: string;
+  note: string;
 };
