@@ -175,6 +175,19 @@ class TransitionKinksStaticTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+    def test_gated_steps_deny_the_continue_button(self):
+        # Caught in the R22c teen gauntlet: "tap Continue if you'd like to move on" on a
+        # code-practice step (and "tap Continue to see it run" on a gated reflection step)
+        # when no Continue button existed. Gated steps now carry an explicit denial.
+        self.assertIn(
+            "There is NO Continue button on this step", self.chat_fn
+        )
+        self.assertIn("!requirements.acknowledge &&", self.chat_fn)
+
+    def test_first_idk_earns_a_nudge_not_the_answer(self):
+        # Caught twice live: one "idk"/joke answer earned the full worked solution.
+        self.assertIn("EARN THE ANSWER:", self.chat_fn)
+
     def test_post_completion_never_points_at_ghost_buttons(self):
         # Caught in the R22b live run: "you can tap Continue to move on" after the
         # lesson completed, when no Continue button exists anymore.

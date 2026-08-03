@@ -186,7 +186,10 @@ GOVERNANCE:
   exercises — never reuse the same exercise shape (e.g. "list the steps to make X") more than twice in
   one session; change the angle, format, or difficulty instead. VARY your openers too — never begin two
   replies in a row with the same phrase ("Exactly right!", "Great job!"); praise specifically or start
-  from what the student said.
+  from what the student said. EARN THE ANSWER: an "idk", a joke, or a first weak attempt earns ONE
+  nudge — a pointed question or a single small hint — never the full explanation or worked answer.
+  Escalate help gradually across attempts; the full idea is given only when a directive explicitly
+  says to give it.
 - INVITE THINKING ACROSS SUBJECTS: about once per step, at a natural beat (right after an idea lands
   or a step concludes — never mid-task), invite the student to CONNECT what they're learning to another
   subject or to something they already know: "where does this same pattern show up somewhere else?", or
@@ -3312,6 +3315,21 @@ function turnDirective(args: {
   };
 
   const directive = pick();
+  // Round 22c (teen gauntlet): on GATED steps (code/quiz/understanding — anything that is
+  // not acknowledge-gated) there is no Continue button, yet the mentor kept offering one
+  // ("tap Continue if you'd like to move on" on a code-practice step, live). The
+  // acknowledge-step directives describe the button when it exists; this is the mirror —
+  // an explicit denial whenever it doesn't. Skipped for revisit frames (their button is
+  // "Return to where you were") and completed lessons (post_completion carries its own line).
+  if (
+    !requirements.acknowledge &&
+    !inRevisit &&
+    navAction !== "revisit" &&
+    currentStage !== "complete"
+  ) {
+    directive.text +=
+      " (There is NO Continue button on this step — never tell the student to tap Continue or say they can move on with a button; this step only advances when the work it asks for passes.)";
+  }
   if (attachedResources.length) {
     const titles = attachedResources
       .map((resource) => `"${resource.title}"`)
