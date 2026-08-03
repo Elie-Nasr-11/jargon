@@ -188,6 +188,16 @@ class TransitionKinksStaticTests(unittest.TestCase):
         # Caught twice live: one "idk"/joke answer earned the full worked solution.
         self.assertIn("EARN THE ANSWER:", self.chat_fn)
 
+    def test_replies_carry_visual_texture(self):
+        # Owner (R22d): no bland replies — the prompt teaches the client's render palette.
+        self.assertIn("- TEXTURE:", self.chat_fn)
+        self.assertIn("never send a flat wall of prose", self.chat_fn)
+
+    def test_lists_drop_bullet_dots_and_indent_the_rule(self):
+        # Owner (R22d): no bullet dots; the indented divider rule alone marks the list.
+        self.assertIn('className="ml-4 list-none space-y-1.5 border-l-2 border-border pl-6"', self.transcript)
+        self.assertNotIn("list-disc", self.transcript)
+
     def test_post_completion_never_points_at_ghost_buttons(self):
         # Caught in the R22b live run: "you can tap Continue to move on" after the
         # lesson completed, when no Continue button exists anymore.

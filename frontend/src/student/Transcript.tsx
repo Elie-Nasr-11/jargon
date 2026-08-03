@@ -248,15 +248,17 @@ function renderBlocks(text: string, vocab?: VocabPass): ReactNode[] {
     const rows = items.map((item, i) => <li key={i}>{renderInline(item, vocab)}</li>);
     nodes.push(
       // Round 21: lists step out of the prose — indented behind a hairline divider rule.
+      // Owner (R22d): no bullet dots — the indented divider rule alone marks the list;
+      // ordered lists keep their numbers (they carry meaning).
       ordered ? (
         <ol
           key={nodes.length}
-          className="ml-1 list-decimal space-y-1.5 border-l-2 border-border pl-6"
+          className="ml-4 list-decimal space-y-1.5 border-l-2 border-border pl-6"
         >
           {rows}
         </ol>
       ) : (
-        <ul key={nodes.length} className="ml-1 list-disc space-y-1.5 border-l-2 border-border pl-6">
+        <ul key={nodes.length} className="ml-4 list-none space-y-1.5 border-l-2 border-border pl-6">
           {rows}
         </ul>
       ),

@@ -8826,3 +8826,20 @@ helpfulness bias; if it keeps over-giving, the next lever is threading attempts-
 into the text-step directives the way hint_rung works for code.
 Suggested next task: a third short gauntlet after this deploy to confirm the ghost-button
 denial and the nudge-first behavior stick.
+
+## Claude -> Codex / Human - 2026-08-03 (Round 22d: list UI + reply texture)
+
+Status: Finished
+Summary: Two owner asks. (1) List UI — bullet dots removed (ul is list-none; ol keeps
+its numbers) and the gray divider rule indented (ml-1 -> ml-4); text still sits pl-6
+behind the rule. (2) No bland replies — new SYSTEM_PROMPT TEXTURE block teaches the
+mentor the client's render palette (bold = bright, backticks = hued code, questions =
+accent color, lists = indented rule) and asks for varied cadence — one or two touches
+per reply, never decoration for its own sake. The renderer itself already colors these;
+the prompt now makes the mentor actually use them.
+Files changed: frontend/src/student/Transcript.tsx; supabase/functions/chat/index.ts;
+tests/test_transcript_smoothing.py (3 new pins; suite 435 OK).
+Tests run: python 435 OK; tsc 0 errors; eslint clean; build green.
+Remaining concerns: TEXTURE is taste-calibrated by prompt ("one or two touches") — if
+replies start looking like confetti, tighten the block; ol numbering kept deliberately.
+Suggested next task: eyeball one live lesson reply for the new texture + dotless lists.
