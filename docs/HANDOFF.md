@@ -8554,3 +8554,27 @@ Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 404 OK (skip
 Remaining concerns: sendNavigate is UI-unreachable again (kept: the server path is tested
 and a future entry point — e.g. tapping a section eyebrow — can rewire it in one line).
 Suggested next task: —
+
+## Claude -> Codex / Human - 2026-08-02 (round 17 — learning framework sketch)
+
+Status: Finished (design doc; no code changed)
+Summary: docs/LEARNING_FRAMEWORK.md — the owner's ideas/vocab/links direction turned into
+a buildable shape. Three nouns: IDEAS (= learning objectives, the unit all progress maps
+to; idea.key adopts the existing skill_key vocabulary so student_mastery becomes idea
+mastery with zero rewrites), VOCAB TERMS (subject-homed, definition-carrying, matched
+deterministically with variants), LINKS split into curriculum links (authored/derived,
+what CAN connect — prerequisite/same_pattern/contrast/vocab_bridge) and student links
+(EARNED, permanent, the pop-animation moment). Detection rides the existing turn
+pipeline: deterministic vocab sighting, a mentor JSON `link` field validated like
+misconception, later a grader articulation bit. Chat UX: subject-hued term highlighting
+(final text only), first-encounter definition dropdown from the top, link toast with
+"see it in your brain" jumping to the map where the new arc draws itself. Brain v4:
+idea stars + vocab dust + earned-bright/possible-faint arcs (the lexical topic links
+retire), progress remapped to ideas-mastered/total. Four shippable phases F1-F4; five
+owner decisions in §6 (subject taxonomy, idea granularity, highlight density, teacher
+visibility timing, stream-vs-hold for the dropdown).
+Files changed: docs/LEARNING_FRAMEWORK.md (new), docs/HANDOFF.md.
+Tests run: none (docs only).
+Remaining concerns: none — awaiting owner picks on §6, then F1.
+Suggested next task: owner reads §5/§6, picks; F1 (foundations + demo seed) is the
+natural first build.
