@@ -175,6 +175,13 @@ class TransitionKinksStaticTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+    def test_post_completion_never_points_at_ghost_buttons(self):
+        # Caught in the R22b live run: "you can tap Continue to move on" after the
+        # lesson completed, when no Continue button exists anymore.
+        self.assertIn(
+            "There is NO Continue button after completion", self.chat_fn
+        )
+
     def test_concluding_turns_carry_the_handoff_rule(self):
         self.assertIn("const CONCLUDE_HANDOFF =", self.chat_fn)
         self.assertIn(

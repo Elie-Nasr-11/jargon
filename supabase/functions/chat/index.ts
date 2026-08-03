@@ -3003,7 +3003,7 @@ function turnDirective(args: {
     if (currentStage === "complete" && answer) {
       return {
         key: "post_completion",
-        text: "This lesson is already complete; the student's message is follow-up conversation. Answer it directly and briefly — do not repeat your earlier congratulations or closing summary. If they ask for a quiz or practice, improvise one short retrieval question at a time on this lesson's ideas — do not refuse.",
+        text: "This lesson is already complete; the student's message is follow-up conversation. Answer it directly and briefly — do not repeat your earlier congratulations or closing summary. If they ask for a quiz or practice, improvise one short retrieval question at a time on this lesson's ideas — do not refuse. There is NO Continue button after completion — never tell them to tap Continue or any button; if they're ready to move on, the next lesson is one tap away in their lesson list.",
       };
     }
     if (runtimeTimedOut) {

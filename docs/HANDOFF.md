@@ -8771,3 +8771,29 @@ Suggested next task: replay the demo lesson — tap Continue at a step boundary 
 short close + the hand-off line only), type "ready" mid-step (expect a one-liner), and
 answer a named-criterion question in a different frame (expect a nudge back to the
 test's terms).
+
+## Claude -> Codex / Human - 2026-08-03 (Round 22b: live end-to-end run as a lazy student)
+
+Status: Finished
+Summary: Drove the DEPLOYED chat function through the full "Why fractions are division"
+lesson as the demo student, playing it lazy/rushed/jokey (transport: temporary http/pg_net
+extensions calling the edge function from inside the DB, since the sandbox blocks direct
+egress; all helpers and both extensions dropped afterward — DB restored to prior state).
+Verified live: transition turns close clean with transition:true and ONE call to action;
+bare "ready"/"ok go" gets a one-line direct ask; the echo gate rejected a verbatim
+paste-back mid-lesson; an own-words clumsy answer passed and both its parts were engaged;
+"can we skip this" got one quick recall question, not a lecture; quiz presented without
+narrating options, wrong tap got targeted feedback, right tap completed the lesson.
+Knowledge pipeline minted a live vocab sighting ("divide", Number Sense).
+One NEW kink caught and fixed: post_completion replies could still say "tap Continue to
+move on" after the lesson completed (no Continue exists there) — directive now forbids
+ghost buttons post-completion, pinned in TransitionKinksStaticTests.
+Watch items (not fixed, judgment calls): (a) practice-step generosity — one jokey
+non-answer ("give everyone one and ill eat the extra lol") earned the full worked
+solution at hint_level medium; (b) the quiz "just tell me" deflection restates the
+fraction's meaning, which nearly mirrors the correct option's wording.
+Files changed: supabase/functions/chat/index.ts (post_completion directive);
+tests/test_transcript_smoothing.py.
+Tests run: python suite 431 OK (skipped=4).
+Suggested next task: consider a "worked-solution budget" for practice steps (first weak
+attempt gets a nudge, not the full answer) if the generosity bothers the live feel.
