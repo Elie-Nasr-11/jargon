@@ -344,10 +344,13 @@ function renderProse(raw: string, vocab?: VocabPass, keyBase = "s"): ReactNode[]
   ));
 }
 
-// The live streaming body: fenced code renders as real code blocks AS IT ARRIVES; prose
-// splits into whitened sentences + the blurred gray tail. Inline markdown applies live —
-// bold streams in bold the moment its pair closes. (Block lists settle into full list
-// styling when the final message replaces this; mid-stream they read as plain lines.)
+// The live streaming body: fenced code renders as real code blocks AS IT ARRIVES.
+// Round 22h (owner): the reading FOCUS is the newest sentence — only the LATEST completed
+// sentence is white (.stream-done whitens it in); everything read before it steps back to
+// the sidebar's unselected gray (.stream-past). Forming words blur in ONE AT A TIME
+// (.stream-word). When the final message replaces this body, the whole reply goes white.
+// (Inline markdown on the forming tail applies per word, so multi-word bold/italic snaps
+// in when its sentence completes — which under sentence pacing is when it's read.)
 function StreamingBody({ text }: { text: string }) {
   const segments = parseFencedBlocks(text);
   return (
@@ -362,12 +365,24 @@ function StreamingBody({ text }: { text: string }) {
             {done.map((sentence, j) => (
               <span
                 key={j}
-                className={`stream-done${isQuestionSentence(sentence) ? " prose-question" : ""}`}
+                className={`${j === done.length - 1 ? "stream-done" : "stream-past"}${isQuestionSentence(sentence) ? " prose-question" : ""}`}
               >
                 {renderInline(sentence)}{" "}
               </span>
             ))}
-            {tail ? <span className="stream-tail">{renderInline(tail)}</span> : null}
+            {tail ? (
+              <span className="stream-tail">
+                {tail.split(/(\s+)/).map((part, k) =>
+                  part.trim() ? (
+                    <span key={k} className="stream-word">
+                      {renderInline(part)}
+                    </span>
+                  ) : (
+                    part
+                  ),
+                )}
+              </span>
+            ) : null}
           </span>
         );
       })}

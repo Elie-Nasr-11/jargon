@@ -8909,3 +8909,23 @@ constant, WORD_MS); if a model burst ends a turn long before pacing finishes, th
 composer unlocks while sentences are still landing (deliberate — typing over the tail
 is allowed). backdrop-filter needs GPU — old devices degrade to dim-only (acceptable).
 Suggested next task: live feel pass on pacing speed and the overlay intensity.
+
+## Claude -> Codex / Human - 2026-08-03 (Round 22h: focus-gray streaming + word blur-in)
+
+Status: Finished
+Summary: Owner refinement on the streaming presentation. While a reply streams, only the
+LATEST completed sentence is white (.stream-done whitens it in); every sentence before it
+steps back to the sidebar's unselected-lesson gray (.stream-past = muted-foreground with a
+400ms color ease) — the eye tracks exactly one sentence. Forming words now blur in ONE AT
+A TIME (.stream-word spans, 300ms blur(6px)->0 entrance; the whole-tail constant blur is
+gone, tail is plain gray). When the final message settles, MessageBody renders the whole
+reply white as before. Reduced motion: no word animation, no whiten, no transition.
+Note: inline markdown on the forming tail now applies per word, so multi-word bold snaps
+in when its sentence completes — which under sentence pacing is when it's actually read.
+Files changed: frontend/src/student/Transcript.tsx; frontend/src/styles.css;
+tests/test_transcript_smoothing.py (new pins; suite 438 OK).
+Tests run: python 438 OK; tsc 0 errors; eslint clean; build green.
+Remaining concerns: .stream-word is display:inline-block (filter needs a box) — words wrap
+as units, which reads fine; if long unbroken tokens ever overflow, add overflow-wrap.
+Suggested next task: live feel pass — watch a long reply: gray trail behind one white
+sentence, words misting in at the tail.

@@ -150,6 +150,18 @@ class StreamingProseStaticTests(unittest.TestCase):
         # Reduced motion: no blur, no whiten.
         self.assertIn(".stream-tail {\n    filter: none;", self.styles)
 
+    def test_focus_gray_past_sentences_and_word_blur_in(self):
+        # Owner (R22h): while streaming, only the LATEST sentence is white — earlier ones
+        # step back to the sidebar's unselected gray — and forming words blur in one at a
+        # time. The settled message renders all-white (MessageBody plain foreground).
+        self.assertIn(
+            'j === done.length - 1 ? "stream-done" : "stream-past"', self.transcript
+        )
+        self.assertIn('className="stream-word"', self.transcript)
+        self.assertIn("tail.split(/(\\s+)/)", self.transcript)
+        self.assertIn(".stream-past {", self.styles)
+        self.assertIn("@keyframes stream-word-in", self.styles)
+
     def test_prose_is_not_flat(self):
         # Questions wear the accent, settled and live.
         self.assertIn("function isQuestionSentence(", self.transcript)

@@ -1059,14 +1059,30 @@ select {
   animation: gflash-note-in 3.2s ease both;
 }
 
-/* --- Round 21: streaming prose (student/Transcript.tsx StreamingBody) --------------
-   The forming tail is soft blurred GRAY; a sentence sharpens and WHITENS the moment it
-   completes. Questions wear the accent so "something to act on" never reads flat.
-   Reduced motion: no blur, no whiten animation — text just appears settled. */
+/* --- Round 21/22h: streaming prose (student/Transcript.tsx StreamingBody) ----------
+   The reading focus is the NEWEST sentence: only the latest completed sentence is white
+   (it whitens in); every sentence read before it steps back to the sidebar's unselected
+   gray. Forming words blur in one at a time. When the final message settles, the whole
+   reply goes white (MessageBody renders plain foreground).
+   Reduced motion: no blur, no whiten — text just appears settled. */
 .stream-tail {
   color: var(--muted-foreground);
-  filter: blur(1.6px);
-  opacity: 0.85;
+  opacity: 0.9;
+}
+/* Each forming word blurs in individually as it arrives. */
+@keyframes stream-word-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+.stream-word {
+  display: inline-block;
+  animation: stream-word-in 0.3s ease-out both;
 }
 @keyframes stream-whiten {
   from {
@@ -1080,8 +1096,14 @@ select {
     opacity: 1;
   }
 }
+/* The latest completed sentence: white, freshly sharpened — this is the one being read. */
 .stream-done {
   animation: stream-whiten 0.45s ease both;
+}
+/* Sentences already read: the sidebar's unselected gray (same muted token), eased back. */
+.stream-past {
+  color: var(--muted-foreground);
+  transition: color 0.4s ease;
 }
 .prose-question {
   color: var(--accent-text);
@@ -1096,7 +1118,13 @@ select {
     filter: none;
     opacity: 1;
   }
+  .stream-word {
+    animation: none;
+  }
   .stream-done {
     animation: none;
+  }
+  .stream-past {
+    transition: none;
   }
 }
