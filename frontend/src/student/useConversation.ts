@@ -113,10 +113,12 @@ export type ConversationChannel = {
   showVocabCard: (event: VocabEvent) => void;
 };
 
+// `fresh` marks envelope-driven events (a link/word actually just earned) — the center
+// growth flash plays only for those; tapping a highlight to re-read a definition doesn't.
 export type KnowledgeToast =
-  | { id: string; kind: "vocab"; event: VocabEvent }
-  | { id: string; kind: "link"; event: LinkEvent }
-  | { id: string; kind: "idea"; event: IdeaEvent };
+  | { id: string; kind: "vocab"; event: VocabEvent; fresh?: boolean }
+  | { id: string; kind: "link"; event: LinkEvent; fresh?: boolean }
+  | { id: string; kind: "idea"; event: IdeaEvent; fresh?: boolean };
 
 export type ArtifactOffer = { label: string; kind: "html_sim" | "deck"; activity_id: string };
 
@@ -352,13 +354,13 @@ export function useConversation() {
       // reply finishes) holds by construction. Queue capped so a backlog can't stack.
       const toasts: KnowledgeToast[] = [
         ...(envelope.idea_events ?? []).map(
-          (event): KnowledgeToast => ({ id: uid(), kind: "idea", event }),
+          (event): KnowledgeToast => ({ id: uid(), kind: "idea", event, fresh: true }),
         ),
         ...(envelope.link_events ?? []).map(
-          (event): KnowledgeToast => ({ id: uid(), kind: "link", event }),
+          (event): KnowledgeToast => ({ id: uid(), kind: "link", event, fresh: true }),
         ),
         ...(envelope.vocab_events ?? []).map(
-          (event): KnowledgeToast => ({ id: uid(), kind: "vocab", event }),
+          (event): KnowledgeToast => ({ id: uid(), kind: "vocab", event, fresh: true }),
         ),
       ];
       if (toasts.length) {

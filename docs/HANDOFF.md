@@ -8673,3 +8673,35 @@ mentions deliberately don't mint).
 Suggested next task: replay the same lesson as the demo student — ask for examples at a
 step boundary (answered first), paste the mentor's words back (gently rejected), mention
 fractions again (link toast + arc), watch the mic stay put while typing.
+
+## Claude -> Codex / Human - 2026-08-03 (round 20 — intentionality: invitations + growth moments)
+
+Status: Finished
+Summary: Three owner asks. (1) THINK-INVITATIONS — the mentor now actively invites the
+student to draw commonalities across subjects/lessons instead of only distilling: the
+knowledge payload gains possible_links (the authored curriculum links touching this
+lesson's idea, far-idea title + subject + hint, cap 4) and the SYSTEM_PROMPT gains the
+INVITE THINKING rule — about once per step at a natural beat, turn a possible link into
+a QUESTION aimed at its subject, NEVER state the connection (a link only counts when the
+student draws it — which the round-19 student_articulated activation then mints).
+(2) THE CENTER GROWTH FLASH (owner-specced animation) — new GrowthFlash component +
+gflash-* keyframes: for a LINK, a yellow circle draws a yellow line across to a gray
+circle, the gray circle lights yellow with a glow ping, then everything settles to gray
+(known now); for VOCAB/IDEA, one line draws into a single circle, it flashes yellow,
+then line + circle settle gray together. Center of the conversation surface, ~2.4s,
+tiny mono labels naming what connected, one play per FRESH envelope event (a tapped
+highlight re-showing a definition never replays it; KnowledgeToast gains `fresh`),
+links outrank vocab when both land, skipped under reduced motion.
+(3) CHECKPOINT SECTION MARKERS — a mentor message presenting quiz choices opens its own
+transcript section wearing a quiz-hued "Checkpoint" rule, regardless of surrounding
+mode; the answer + verdict stay under it until the step advances.
+Files changed: supabase/functions/chat/index.ts; student/{GrowthFlash(new),
+KnowledgeToasts,Transcript,useConversation}.tsx; frontend/src/styles.css;
+tests/test_transcript_smoothing.py (extended); docs.
+Tests run: python suite 422 OK (skipped=4); tsc 0 errors; eslint 0 errors; build green;
+edge-fn ad-hoc tsc: only the 3 pre-existing artifacts.
+Remaining concerns: the flash's yellow is the discuss/memory hue (--mode-discuss) per
+the map's memory language — easy to swap if the owner wants a dedicated hue; invitation
+frequency ("about once per step") is prompt-tuned, watch for over-asking.
+Suggested next task: live pass — let the mentor invite a connection, answer it, and
+watch the center flash play before the toast; take a checkpoint and see its marker.

@@ -403,7 +403,7 @@ function MentorRise({ animate, children }: { animate: boolean; children: ReactNo
 
 // A run of consecutive messages that happened in one mode. `arc` is the lesson arc as of the
 // LAST mentor turn in the run — what the section's step eyebrow reports.
-type Section = { mode?: string; items: Msg[]; arc: LessonArc | null };
+type Section = { mode?: string; items: Msg[]; arc: LessonArc | null; checkpoint?: boolean };
 
 function groupIntoSections(messages: Msg[]): Section[] {
   const sections: Section[] = [];
@@ -418,10 +418,19 @@ function groupIntoSections(messages: Msg[]): Section[] {
     // a fresh section, so each stretch is labelled with the step it actually happened on.
     const arcStep = message.role === "bot" && message.lessonArc ? message.lessonArc.step : null;
     const stepChanged = arcStep !== null && current?.arc != null && current.arc.step !== arcStep;
-    if (current && (!opensSection || mode === current.mode) && !stepChanged) {
+    // Round 20: every CHECKPOINT gets its own section marker — a mentor message that
+    // presents quiz choices opens a fresh, checkpoint-flagged section even mid-mode.
+    const opensCheckpoint =
+      message.role === "bot" && !!message.choices?.length && !current?.checkpoint;
+    if (current && (!opensSection || mode === current.mode) && !stepChanged && !opensCheckpoint) {
       current.items.push(message);
     } else {
-      sections.push({ mode: mode ?? current?.mode, items: [message], arc: null });
+      sections.push({
+        mode: mode ?? current?.mode,
+        items: [message],
+        arc: null,
+        checkpoint: opensCheckpoint || undefined,
+      });
     }
     const open = sections[sections.length - 1];
     if (message.role === "bot" && message.lessonArc) open.arc = message.lessonArc;
@@ -476,12 +485,29 @@ function ModeRule({ label }: { label: string }) {
 function ModeSection({
   mode,
   arc,
+  checkpoint,
   children,
 }: {
   mode?: string;
   arc: LessonArc | null;
+  checkpoint?: boolean;
   children: ReactNode;
 }) {
+  // Round 20: checkpoints wear their own marker regardless of the surrounding mode —
+  // the moment of being tested deserves a visible line in the record.
+  if (checkpoint) {
+    const spec = turnModeSpec("quiz");
+    return (
+      <section
+        aria-label="Checkpoint section"
+        className="mt-5 first:mt-1"
+        style={{ ["--mode-accent" as string]: modeAccentValue(spec) }}
+      >
+        <ModeRule label="Checkpoint" />
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pt-3">{children}</div>
+      </section>
+    );
+  }
   // Unknown mode: no rule, no label. Never claim a mode we did not record.
   if (!mode || !isTurnMode(mode))
     return (
@@ -558,6 +584,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
           key={`${section.mode ?? "unknown"}-${sectionIndex}`}
           mode={section.mode}
           arc={section.arc}
+          checkpoint={section.checkpoint}
         >
           {section.items.map((message) => {
             if (message.role === "thinking") {

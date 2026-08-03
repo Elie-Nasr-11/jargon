@@ -911,3 +911,113 @@ select {
   background: color-mix(in oklab, var(--vocab-hue, var(--accent-text)) 12%, transparent);
   border-radius: 4px;
 }
+
+/* --- The growth flash (student/GrowthFlash.tsx) ------------------------------------
+   Owner-specced center-screen moment: yellow draws the new connection, the far node
+   lights and glows, then EVERYTHING settles to gray — known now, part of the record.
+   One 2.4s pass; the container fades itself out; reduced motion never mounts it. */
+@keyframes gflash-fade {
+  0%,
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes gflash-line-draw {
+  0% {
+    stroke-dashoffset: 100;
+    stroke: var(--mode-discuss);
+  }
+  12% {
+    stroke-dashoffset: 100;
+  }
+  42% {
+    stroke-dashoffset: 0;
+    stroke: var(--mode-discuss);
+  }
+  72% {
+    stroke: var(--mode-discuss);
+  }
+  100% {
+    stroke-dashoffset: 0;
+    stroke: var(--ink-45);
+  }
+}
+@keyframes gflash-a-settle {
+  0%,
+  72% {
+    fill: var(--mode-discuss);
+  }
+  100% {
+    fill: var(--ink-45);
+  }
+}
+@keyframes gflash-b-light {
+  0%,
+  38% {
+    fill: var(--ink-30);
+  }
+  50% {
+    fill: var(--mode-discuss);
+  }
+  72% {
+    fill: var(--mode-discuss);
+  }
+  100% {
+    fill: var(--ink-45);
+  }
+}
+@keyframes gflash-glow-ping {
+  0%,
+  40% {
+    opacity: 0;
+    transform: scale(0.6);
+    stroke: var(--mode-discuss);
+  }
+  52% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  78% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes gflash-label-in {
+  0%,
+  30% {
+    opacity: 0;
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+.gflash {
+  animation: gflash-fade 2.4s ease both;
+}
+.gflash-line {
+  stroke-dasharray: 100;
+  animation: gflash-line-draw 2.4s ease both;
+}
+.gflash-a {
+  animation: gflash-a-settle 2.4s ease both;
+}
+.gflash-b {
+  animation: gflash-b-light 2.4s ease both;
+}
+.gflash-glow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gflash-glow-ping 2.4s ease both;
+}
+.gflash-label {
+  animation: gflash-label-in 2.4s ease both;
+}

@@ -73,3 +73,54 @@ class TranscriptSmoothingStaticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GrowthMomentsStaticTests(unittest.TestCase):
+    """Round 20: think-invitations, the center growth flash, checkpoint markers."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
+        cls.transcript = TRANSCRIPT.read_text(encoding="utf-8")
+        cls.styles = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
+        cls.flash = (ROOT / "frontend" / "src" / "student" / "GrowthFlash.tsx").read_text(
+            encoding="utf-8"
+        )
+        cls.toasts = (ROOT / "frontend" / "src" / "student" / "KnowledgeToasts.tsx").read_text(
+            encoding="utf-8"
+        )
+
+    def test_think_invitations(self):
+        self.assertIn("- INVITE THINKING ACROSS SUBJECTS:", self.chat_fn)
+        self.assertIn("NEVER state the connection", self.chat_fn)
+        self.assertIn("possible_links: (() => {", self.chat_fn)
+
+    def test_growth_flash_component_and_keyframes(self):
+        self.assertIn("export function GrowthFlash(", self.flash)
+        # Link = two circles + line; vocab = one line into one circle.
+        self.assertIn('const isLink = toast.kind === "link";', self.flash)
+        for keyframe in (
+            "gflash-line-draw",
+            "gflash-b-light",
+            "gflash-a-settle",
+            "gflash-glow-ping",
+            "gflash-fade",
+        ):
+            with self.subTest(keyframe=keyframe):
+                self.assertIn(keyframe, self.styles)
+        # Yellow is the discuss/memory hue; everything settles to gray (ink).
+        self.assertIn("stroke: var(--mode-discuss);", self.styles)
+        self.assertIn("fill: var(--ink-45);", self.styles)
+
+    def test_flash_plays_once_per_fresh_event(self):
+        self.assertIn("toast.fresh && !flashedRef.current.has(toast.id)", self.toasts)
+        self.assertIn("<GrowthFlash key={flash.id} toast={flash} />", self.toasts)
+
+    def test_checkpoint_section_markers(self):
+        self.assertIn("const opensCheckpoint =", self.transcript)
+        self.assertIn('<ModeRule label="Checkpoint" />', self.transcript)
+        self.assertIn("checkpoint={section.checkpoint}", self.transcript)
+
+
+if __name__ == "__main__":
+    unittest.main()

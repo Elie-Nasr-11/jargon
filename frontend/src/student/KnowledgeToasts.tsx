@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GrowthFlash } from "@/student/GrowthFlash";
 import { BookOpen, Link2, Sparkles, X } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
 import { useConversationChannel, type KnowledgeToast } from "@/student/useConversation";
@@ -131,7 +132,27 @@ function GrowthToast({
 
 export function KnowledgeToasts({ onSeeBrain }: { onSeeBrain?: () => void }) {
   const channel = useConversationChannel();
-  if (!channel.knowledgeToasts.length) return null;
+  // Round 20: the center growth flash — one play per FRESH toast (links outrank vocab
+  // when both land on a turn), tracked by id so re-renders never replay it.
+  const flashedRef = useRef(new Set<string>());
+  const [flash, setFlash] = useState<KnowledgeToast | null>(null);
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const candidates = channel.knowledgeToasts.filter(
+      (toast) => toast.fresh && !flashedRef.current.has(toast.id),
+    );
+    if (!candidates.length) return;
+    const pick =
+      candidates.find((toast) => toast.kind === "link") ??
+      candidates.find((toast) => toast.kind === "idea") ??
+      candidates[0];
+    for (const toast of candidates) flashedRef.current.add(toast.id);
+    setFlash(pick);
+    const timer = window.setTimeout(() => setFlash(null), 2_500);
+    return () => window.clearTimeout(timer);
+  }, [channel.knowledgeToasts]);
+
+  if (!channel.knowledgeToasts.length && !flash) return null;
   const vocab = channel.knowledgeToasts.filter((t) => t.kind === "vocab");
   const growth = channel.knowledgeToasts.filter((t) => t.kind !== "vocab");
   return (
@@ -146,6 +167,8 @@ export function KnowledgeToasts({ onSeeBrain }: { onSeeBrain?: () => void }) {
           />
         ))}
       </div>
+      {/* Round 20: the owner-specced center-screen forming moment. */}
+      {flash ? <GrowthFlash key={flash.id} toast={flash} /> : null}
       {/* Growth: links + new ideas, top right. */}
       <div className="pointer-events-none absolute right-3 top-2 z-[var(--z-overlay)] flex flex-col items-end gap-2">
         {growth.map((toast) => (

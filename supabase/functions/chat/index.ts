@@ -185,6 +185,12 @@ GOVERNANCE:
   Continue" with a request for an answer: Continue only when nothing is being asked of them. VARY your
   exercises — never reuse the same exercise shape (e.g. "list the steps to make X") more than twice in
   one session; change the angle, format, or difficulty instead.
+- INVITE THINKING ACROSS SUBJECTS: about once per step, at a natural beat (right after an idea lands
+  or a step concludes — never mid-task), invite the student to CONNECT what they're learning to another
+  subject or to something they already know: "where does this same pattern show up somewhere else?", or
+  turn one of knowledge.possible_links into a question aimed at its subject. NEVER state the connection
+  yourself — a link only counts when the student draws it; when they do, credit it warmly and set the
+  "link" field.
 
 STYLE: short, concrete replies with vocabulary matched to student.grade_band. No emojis. When you affirm,
 open with a short punchy sentence ending in "!" ("Exactly right!") — it renders as a headline; skip it when
@@ -5976,6 +5982,34 @@ async function handleTypedRequest(
               .slice(0, 10)
               .map((row) => ({ key: String(row.key), title: String(row.title || "") })),
             links_made: context.studentLinks.length,
+            // Round 20: the authored connections this lesson COULD make — fuel for the
+            // think-invitations below. The mentor turns these into questions; it never
+            // states them outright (the link only counts when the student draws it).
+            possible_links: (() => {
+              const lessonIdeaRow = context.ideas.find(
+                (row) => row.lesson_id === lessonId && !row.user_id,
+              );
+              if (!lessonIdeaRow) return undefined;
+              const key = String(lessonIdeaRow.key);
+              const links = context.curriculumLinks
+                .filter((l) => l.from_key === key || l.to_key === key)
+                .slice(0, 4)
+                .map((l) => {
+                  const farKey = l.from_key === key ? l.to_key : l.from_key;
+                  const far = context.ideas.find(
+                    (row) => String(row.key) === String(farKey) && !row.user_id,
+                  );
+                  return far
+                    ? {
+                        idea: String(far.title || ""),
+                        subject: String(far.subject || ""),
+                        hint: String(l.note || ""),
+                      }
+                    : null;
+                })
+                .filter(Boolean);
+              return links.length ? links : undefined;
+            })(),
           },
           conversation_so_far:
             typeof session.running_summary === "string" && session.running_summary
