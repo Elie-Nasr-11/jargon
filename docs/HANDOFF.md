@@ -8611,3 +8611,27 @@ class link graph = F4 tail, deferred.
 Suggested next task: live pass as demo student — open the math lesson, mention
 "instructions" (vocab travels from coding → dropdown + possibly a link toast), watch
 the arc draw in the brain; then seed/author ideas for Book F.
+
+## Claude -> Codex / Human - 2026-08-03 (round 18b — outage diagnosis + routing-usage fix)
+
+Status: Finished (diagnosis + one small fix)
+Summary: "Platform isn't opening" root-caused. NOT our code: Render serves fine (app
+renders, demo login works), the frontend build boots clean in headless chromium, and the
+learning framework ran a full 200-OK turn in production at ~18:26 UTC (ideas/vocab/
+lesson_subjects/student_links all served). At ~18:28 the project's PUBLIC API GATEWAY
+(*.supabase.co data plane) began returning 522 on EVERYTHING — REST, auth, and even
+Supabase's own internal mgmt calls — while the database itself stayed alive and healthy
+(verified via the management-API SQL path; data intact). Supabase-side gateway wedge;
+fix is wait-or-restart from the dashboard (Settings → General → Restart project).
+Bonus bug found in the postgres logs and fixed: the turn ROUTER's model-usage rows have
+been silently dropped since Flow v3 — task_type 'routing' was never in
+model_usage_events_task_type_check (best-effort write, so invisible until the Phase 4
+cost work). Migration 20260926 widens the constraint; applied LIVE via the management
+API already, and added to the deploy list for parity.
+Files changed: supabase/migrations/20260926000000_model_usage_routing_task.sql (new),
+.github/workflows/deploy-backend.yml, docs/HANDOFF.md.
+Tests run: python suite green (n/a to this change beyond the deploy-list line).
+Remaining concerns: the 522s are Supabase-side — if they persist beyond ~15 min, hit
+Restart project in the dashboard; the DB and all data are confirmed intact.
+Suggested next task: once the gateway recovers, the live framework pass (it already
+worked once — the 18:26 turn is the proof).
