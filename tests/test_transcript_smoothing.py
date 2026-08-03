@@ -198,6 +198,19 @@ class TransitionKinksStaticTests(unittest.TestCase):
         self.assertIn('className="ml-4 list-none space-y-1.5 border-l-2 border-border pl-6"', self.transcript)
         self.assertNotIn("list-disc", self.transcript)
 
+    def test_no_step_count_boilerplate_divider_signifies_instead(self):
+        # Owner (R22e): the appended "That completes step N of M… Send a message" line is
+        # gone — the mentor closes naturally and the transcript divider marks the change.
+        self.assertNotIn("That completes", self.chat_fn)
+        self.assertNotIn("Send a message when you're ready", self.chat_fn)
+        self.assertNotIn("arcSuffix", self.chat_fn)
+        self.assertIn("never announce completion mechanically", self.chat_fn)
+        # Client: the step divider appears immediately after a transition turn and renders
+        # dimmed when it sits inside the same mode block.
+        self.assertIn("soft?: boolean;", self.transcript)
+        self.assertIn("pendingArcDivider", self.transcript)
+        self.assertIn("opacity-55", self.transcript)
+
     def test_post_completion_never_points_at_ghost_buttons(self):
         # Caught in the R22b live run: "you can tap Continue to move on" after the
         # lesson completed, when no Continue button exists anymore.
@@ -208,7 +221,7 @@ class TransitionKinksStaticTests(unittest.TestCase):
     def test_concluding_turns_carry_the_handoff_rule(self):
         self.assertIn("const CONCLUDE_HANDOFF =", self.chat_fn)
         self.assertIn(
-            "never mention the Continue button or any button (it is gone once this reply lands)",
+            "Never mention the Continue button or any button (it is gone once this reply lands)",
             self.chat_fn,
         )
         # Every concluding directive appends it — declaration + 8 concatenations.

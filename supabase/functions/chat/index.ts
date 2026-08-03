@@ -2964,14 +2964,13 @@ function turnDirective(args: {
     stepMode === "assessment" && stepModeType === "open_ended";
 
   // Round 22 (transcript kinks): every concluding directive carries this. A concluding
-  // reply lands AFTER the step has advanced — the Continue button is already gone, and
-  // finishTurn appends a deterministic hand-off line ("That completes … Next up …") that
-  // names the next part and tells the student to send a message. The live transcript
-  // showed the model saying "tap Continue to explore the next part" (a button that no
-  // longer existed) right above that suffix — two contradictory calls to action, and the
-  // next part named twice.
+  // reply lands AFTER the step has advanced — the Continue button is already gone, so a
+  // "tap Continue" close points at nothing (the live transcript showed exactly that).
+  // Round 22e: no automatic hand-off line is appended anymore either (owner: keep it
+  // natural; the transcript's step divider signifies the change) — so the close itself
+  // must stay clean: no button talk, no step-counting, no next-part recital.
   const CONCLUDE_HANDOFF =
-    " This reply ENDS the step: never mention the Continue button or any button (it is gone once this reply lands), never name or preview the next part, and never ask if they're ready to move on — a short hand-off line naming what's next is appended after your reply automatically.";
+    " This reply ENDS the step: close naturally in one or two sentences. Never mention the Continue button or any button (it is gone once this reply lands), never announce completion mechanically (no \"that completes…\", no \"step N of M done\"), and never recite the next part's title — the interface marks the change with a divider. End so that simply replying feels like the natural next thing; vary how you close, never a formula.";
 
   // Round 22 (transcript kinks): a bare "ready"-style message is a signal to proceed,
   // not an answer — the live transcript showed "ready" earning a full re-ask of a task
@@ -6407,14 +6406,9 @@ async function handleTypedRequest(
             (a) => String(a.id) === advanceToActivityId,
           ) || null
         : null;
-      const nextTitle = nextActivityRow ? String(nextActivityRow.title || "") : "";
-      const arcSuffix =
-        lessonArc && nextTitle
-          ? `That completes ${
-              lessonArc.current ? `"${lessonArc.current.title}"` : "this part"
-            } — step ${lessonArc.step} of ${lessonArc.total} done. Next up: "${nextTitle}". Send a message when you're ready.`
-          : "That completes this part — send a message when you're ready for the next part.";
-      envelope.reply = `${envelope.reply}\n\n${arcSuffix}`.trim();
+      // Round 22e (owner): no appended step-count boilerplate — the mentor's own close
+      // is the text, and the transcript's step divider (driven by the transition arc
+      // below) is what signifies the step change.
       // Advance the progress indicator in sync with the hand-off (the session cursor just
       // moved to the next activity), so the client shows the new step immediately. The
       // done-set includes the step that just finished (mirrors the steps_done merge below).

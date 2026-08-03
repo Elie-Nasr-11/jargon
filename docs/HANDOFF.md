@@ -8843,3 +8843,26 @@ Tests run: python 435 OK; tsc 0 errors; eslint clean; build green.
 Remaining concerns: TEXTURE is taste-calibrated by prompt ("one or two touches") — if
 replies start looking like confetti, tighten the block; ol numbering kept deliberately.
 Suggested next task: eyeball one live lesson reply for the new texture + dotless lists.
+
+## Claude -> Codex / Human - 2026-08-03 (Round 22e: natural step closes, divider signifies)
+
+Status: Finished
+Summary: Owner: stop saying "That completes step X of Y. Next up: … Send a message" — keep
+closes natural and let the DIVIDER signify the step change; same-mode step dividers can be
+sub-full-opacity. Server: the advancing block no longer appends any hand-off line;
+CONCLUDE_HANDOFF rewritten — close naturally in 1-2 sentences, no button talk, no
+mechanical completion announcements, no next-part recital, vary the close. Client:
+sections opened by a step change INSIDE one mode block are marked soft and their ModeRule
+renders at 55% opacity (mode changes and checkpoints stay full); a transition turn sets a
+pendingArc so the NEXT opening message (usually the student's reply) starts the new
+step's section already wearing its "Step N/M · title" eyebrow; and when the conversation
+currently ENDS on a transition turn, the next step's dimmed divider renders immediately —
+the step change is visible without any prose announcing it.
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/Transcript.tsx;
+tests/test_transcript_smoothing.py (updated pins; suite 436 OK).
+Tests run: python 436 OK; tsc 0 errors; eslint clean (prettier autofix); build green.
+Remaining concerns: with no appended line, the cue to keep going is the mentor's natural
+close + the immediate divider — if students stall at step boundaries, consider a subtle
+client-side "continue" affordance rather than reintroducing prose.
+Suggested next task: live pass over a full lesson to feel the new boundaries (and the
+dotless lists + texture from R22d).

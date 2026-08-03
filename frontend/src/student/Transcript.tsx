@@ -472,10 +472,22 @@ function MentorRise({ animate, children }: { animate: boolean; children: ReactNo
 
 // A run of consecutive messages that happened in one mode. `arc` is the lesson arc as of the
 // LAST mentor turn in the run — what the section's step eyebrow reports.
-type Section = { mode?: string; items: Msg[]; arc: LessonArc | null; checkpoint?: boolean };
+// Round 22e: `soft` marks a step divider INSIDE one mode block (step-to-step within
+// Lesson) — it renders dimmed, while a real mode change keeps full opacity.
+type Section = {
+  mode?: string;
+  items: Msg[];
+  arc: LessonArc | null;
+  checkpoint?: boolean;
+  soft?: boolean;
+};
 
 function groupIntoSections(messages: Msg[]): Section[] {
   const sections: Section[] = [];
+  // Round 22e: set by a transition turn (step just wrapped); the NEXT opening message —
+  // usually the student's reply — starts the new step's section under a soft divider
+  // that already knows the step eyebrow (the transition arc points at the next step).
+  let pendingArc: LessonArc | null = null;
   for (const message of messages) {
     const opensSection = message.role === "user" || message.role === "bot";
     const mode = opensSection ? message.turnMode : undefined;
@@ -486,8 +498,7 @@ function groupIntoSections(messages: Msg[]): Section[] {
     // not wear one step label — a mentor reply arriving with a DIFFERENT arc step starts
     // a fresh section, so each stretch is labelled with the step it actually happened on.
     // Round 22: EXCEPT the advancing turn itself (arc.transition) — its arc already
-    // points at the next step but its content wraps the one that just finished, so it
-    // stays in the old section and the new marker opens on the next real message.
+    // points at the next step but its content wraps the one that just finished.
     const messageArc = message.role === "bot" ? (message.lessonArc ?? null) : null;
     const arcStep = messageArc ? messageArc.step : null;
     const stepChanged =
@@ -499,16 +510,29 @@ function groupIntoSections(messages: Msg[]): Section[] {
     // presents quiz choices opens a fresh, checkpoint-flagged section even mid-mode.
     const opensCheckpoint =
       message.role === "bot" && !!message.choices?.length && !current?.checkpoint;
-    if (current && (!opensSection || mode === current.mode) && !stepChanged && !opensCheckpoint) {
+    const startsNextStep = opensSection && pendingArc != null;
+    if (
+      current &&
+      (!opensSection || mode === current.mode) &&
+      !stepChanged &&
+      !opensCheckpoint &&
+      !startsNextStep
+    ) {
       current.items.push(message);
     } else {
+      const sameMode = current != null && (mode ?? current.mode) === current.mode;
       sections.push({
         mode: mode ?? current?.mode,
         items: [message],
-        arc: null,
+        // A section opened off a transition already knows its step eyebrow.
+        arc: startsNextStep ? pendingArc : null,
         checkpoint: opensCheckpoint || undefined,
+        // Step-to-step inside the same mode block: dimmed divider, not a full rule.
+        soft: ((startsNextStep || stepChanged) && sameMode && !opensCheckpoint) || undefined,
       });
     }
+    if (opensSection) pendingArc = null;
+    if (messageArc?.transition) pendingArc = messageArc;
     const open = sections[sections.length - 1];
     // A transition arc never becomes the section's eyebrow — it names the NEXT step while
     // the section's content belongs to the finished one (round 22 off-by-one fix).
@@ -522,7 +546,7 @@ function groupIntoSections(messages: Msg[]): Section[] {
 // appended at the bottom (the student just switched modes) is in view immediately, and an old
 // section scrolled back into view plays the same entrance. IntersectionObserver drives both
 // cases with one mechanism; reduced motion renders the final state straight away.
-function ModeRule({ label }: { label: string }) {
+function ModeRule({ label, soft }: { label: string; soft?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
   useEffect(() => {
@@ -548,7 +572,7 @@ function ModeRule({ label }: { label: string }) {
     <div
       ref={ref}
       aria-hidden
-      className={`mode-divider flex items-center gap-3 px-4 ${inView ? "in-view" : ""}`}
+      className={`mode-divider flex items-center gap-3 px-4 ${soft ? "opacity-55" : ""} ${inView ? "in-view" : ""}`}
     >
       <span className="mode-rule mode-rule-l" />
       {/* The board's divider label: mono micro-label in the section's hue, sitting directly
@@ -565,11 +589,13 @@ function ModeSection({
   mode,
   arc,
   checkpoint,
+  soft,
   children,
 }: {
   mode?: string;
   arc: LessonArc | null;
   checkpoint?: boolean;
+  soft?: boolean;
   children: ReactNode;
 }) {
   // Round 20: checkpoints wear their own marker regardless of the surrounding mode —
@@ -603,8 +629,9 @@ function ModeSection({
       className="mt-5 first:mt-1"
       style={{ ["--mode-accent" as string]: modeAccentValue(spec) }}
     >
-      {/* The rule spans the window; the messages stay in the centered reading column. */}
-      <ModeRule label={eyebrow} />
+      {/* The rule spans the window; the messages stay in the centered reading column.
+          Step-to-step dividers inside one mode block render dimmed (round 22e). */}
+      <ModeRule label={eyebrow} soft={soft} />
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pt-3">{children}</div>
     </section>
   );
@@ -652,6 +679,11 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
 
   const lastBotId = [...messages].reverse().find((m) => m.role === "bot" && !m.isError)?.id;
   const sections = groupIntoSections(messages);
+  // Round 22e: the conversation currently ENDS on a transition turn (a step just wrapped,
+  // no reply yet) — surface the next step's dimmed divider immediately.
+  const lastMessage = messages[messages.length - 1];
+  const pendingArcDivider =
+    lastMessage?.role === "bot" && lastMessage.lessonArc?.transition ? lastMessage.lessonArc : null;
   // Mounted only when the conversation context is live — a ReadAloud button that cannot reach
   // the TTS endpoint would fall straight to browser speech and misreport telemetry.
   const canReadAloud = Boolean(channel.accessToken && channel.lessonId);
@@ -664,6 +696,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
           mode={section.mode}
           arc={section.arc}
           checkpoint={section.checkpoint}
+          soft={section.soft}
         >
           {section.items.map((message) => {
             if (message.role === "thinking") {
@@ -884,6 +917,19 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
           })}
         </ModeSection>
       ))}
+      {/* Round 22e: a step just wrapped and the student hasn't replied yet — show the next
+          step's divider right away (dimmed) so the change is signified without any
+          "that completes step N" prose. Their reply opens the real section under the
+          same eyebrow, so this hands off seamlessly. */}
+      {pendingArcDivider ? (
+        <section
+          aria-hidden
+          className="mt-5"
+          style={{ ["--mode-accent" as string]: modeAccentValue(turnModeSpec("lesson")) }}
+        >
+          <ModeRule label={stepEyebrowLabel(pendingArcDivider) || "Next"} soft />
+        </section>
+      ) : null}
     </div>
   );
 }
