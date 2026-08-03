@@ -8866,3 +8866,18 @@ close + the immediate divider — if students stall at step boundaries, consider
 client-side "continue" affordance rather than reintroducing prose.
 Suggested next task: live pass over a full lesson to feel the new boundaries (and the
 dotless lists + texture from R22d).
+
+## Claude -> Codex / Human - 2026-08-03 (Round 22f: deploy fix — unescaped backticks in TEXTURE)
+
+Status: Finished
+Summary: The R22d TEXTURE block wrote `backticked` with raw backticks INSIDE the
+SYSTEM_PROMPT template literal, terminating the string — the chat function failed to
+bundle and the backend deploy went red on 345f1c5 and f811c28 (production kept running
+1aaf287; Tests stayed green because the python suite never parses TS). Fixed by escaping
+(\`backticked\`), verified with esbuild across ALL edge functions, and the Tests workflow
+gained a "Syntax-parse edge functions" step (esbuild per function) so this class of error
+fails in Tests before the deploy job ever runs.
+Files changed: supabase/functions/chat/index.ts (escape); .github/workflows/tests.yml.
+Tests run: python 436 OK; esbuild parse of every edge function clean.
+Remaining concerns: esbuild parses but does not typecheck — the 3 pre-existing loose-typing
+artifacts stay invisible to it, which is fine (the deploy bundler's bar is parsing).

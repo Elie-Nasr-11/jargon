@@ -26,3 +26,13 @@ jobs:
 
       - name: Run test suite
         run: python3 -m unittest discover -s tests
+
+      # Parse every edge function so a syntax error (e.g. an unescaped backtick inside the
+      # SYSTEM_PROMPT template literal — it happened) fails HERE, not in the deploy job's
+      # bundler. esbuild transpiles without typechecking, which is exactly the bundler's bar.
+      - name: Syntax-parse edge functions
+        run: |
+          for f in supabase/functions/*/index.ts; do
+            echo "Parsing $f"
+            npx --yes esbuild "$f" --outfile=/dev/null --format=esm --log-level=error
+          done
