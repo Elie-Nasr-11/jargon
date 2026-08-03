@@ -8535,3 +8535,22 @@ with "unit wrapped" copy. (3) The rolling summary is per-session; Phase-3-of-mem
 Suggested next task: live pass — long session (>6 turns) then check conversation_so_far
 lands next turn; complete a lesson → hand-off row; tree shows fractional rings; admin
 Cost tab now shows dollars.
+
+## Claude -> Codex / Human - 2026-08-02 (round 16b)
+
+Status: Finished
+Summary: The top progress bar (LessonSpine) is REMOVED by owner call — component deleted,
+ChatWindow mount gone. Phase 1's honesty rule still holds: the two server copy strings
+that promised "clickable steps in the progress bar" were rewritten — navigate_back_offer
+now has the mentor revisit the earlier idea conversationally (re-explain in place, then
+guide onward), and the incomplete-step refusal drops its tap instruction. The revisit
+machinery (navigate/resume control turns, nav frames, the mid-revisit Return chip) stays
+fully server-supported; it simply has no UI entry point again. Section eyebrows
+(Step N/M · title) still label the transcript; fractional progress lives in the tree
+rings + brain map.
+Files changed: student/ChatWindow.tsx, student/LessonSpine.tsx (deleted),
+supabase/functions/chat/index.ts (two copy strings).
+Tests run: tsc 0 errors, eslint 0 errors, build green, python suite 404 OK (skipped=4).
+Remaining concerns: sendNavigate is UI-unreachable again (kept: the server path is tested
+and a future entry point — e.g. tapping a section eyebrow — can rewire it in one line).
+Suggested next task: —

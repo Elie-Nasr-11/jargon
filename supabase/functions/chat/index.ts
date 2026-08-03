@@ -2894,7 +2894,7 @@ function turnDirective(args: {
     if (routedKind === "navigate_back") {
       return {
         key: "navigate_back_offer",
-        text: "The student wants to go BACK to an earlier step. You cannot move them yourself — tell them the completed steps in the progress bar at the top are clickable: tapping one revisits it, and a Return button brings them back here. If it's clear WHICH step they mean, name it; answer any question they folded in.",
+        text: "The student wants to go BACK to an earlier step. You cannot move the lesson backwards — instead, revisit the earlier idea RIGHT HERE in conversation: briefly re-explain or review whatever they're reaching for (name the step if it's clear which one they mean), answer any question they folded in, then guide them onward from the current step.",
       };
     }
     if (currentStage === "complete" && answer) {
@@ -4550,7 +4550,7 @@ async function handleTypedRequest(
         makeEnvelope({
           status: "ok",
           reply:
-            "You can revisit any step you've already completed — tap one of the checked steps in the progress bar. That one isn't finished yet.",
+            "That step isn't finished yet — only steps you've already completed can be revisited.",
           session_id: sessionId,
           lesson_id: lessonId,
           stage: currentStage,
