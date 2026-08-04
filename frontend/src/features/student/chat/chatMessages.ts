@@ -296,7 +296,16 @@ export function normalizeLanguage(language: string | undefined): ComposerLanguag
   return "jargon";
 }
 
-export type MessageSegment = { kind: "text"; text: string } | { kind: "code"; code: ChatCodeBlock };
+// R29: two fence languages are DIAGRAMS, not code — ```graph plots functions and
+// ```geometry draws figures, both from a JSON body. They are parsed here (one seam for
+// every surface that renders messages) and carry the parsed spec plus the raw source, so a
+// malformed body can fall back to showing what the author actually wrote.
+export type ChatFigureBlock = { kind: "graph" | "geometry"; spec: unknown; source: string };
+
+export type MessageSegment =
+  | { kind: "text"; text: string }
+  | { kind: "code"; code: ChatCodeBlock }
+  | { kind: "figure"; figure: ChatFigureBlock };
 
 export function parseFencedBlocks(text: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
@@ -308,11 +317,30 @@ export function parseFencedBlocks(text: string): MessageSegment[] {
     if (match.index > cursor) {
       segments.push({ kind: "text", text: text.slice(cursor, match.index) });
     }
+    const fenceLang = (match[1] || "").trim().toLowerCase();
+    const body = match[2].replace(/\n$/, "");
+    if (fenceLang === "graph" || fenceLang === "geometry") {
+      let spec: unknown = null;
+      try {
+        spec = JSON.parse(body);
+      } catch {
+        spec = null;
+      }
+      // Unparseable JSON degrades to a code block showing the source — never a blank hole
+      // in the lesson, and the teacher can see what to fix.
+      segments.push(
+        spec && typeof spec === "object"
+          ? { kind: "figure", figure: { kind: fenceLang, spec, source: body } }
+          : { kind: "code", code: { language: "jargon", source: body } },
+      );
+      cursor = match.index + match[0].length;
+      continue;
+    }
     segments.push({
       kind: "code",
       code: {
         language: normalizeLanguage(match[1]),
-        source: match[2].replace(/\n$/, ""),
+        source: body,
       },
     });
     cursor = match.index + match[0].length;

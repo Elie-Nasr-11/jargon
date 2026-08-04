@@ -9210,3 +9210,62 @@ The class block only runs when admin-seed's Demo Org exists (prod: it does).
 Suggested next task: log in as demo-student, open Systems Lab, and run the full
 gauntlet — lesson, practice pill, discuss pill, code run, MCQ, vocab tap, link
 toast, Knowledge card review as demo-teacher.
+
+## Claude -> Codex / Human - 2026-08-04 (R29: math rendering + the campus demo)
+
+Status: Finished
+Summary: Two halves. (1) MATH IS NOW FIRST-CLASS, the way code already was.
+KaTeX typesets $inline$ and $$display$$ math anywhere mentor prose or a step prompt
+renders; math is split off BEFORE the markdown pass so 2*x*y inside a formula is not
+read as italics. Two new fenced languages render as figures: ```graph plots functions
+(themed SVG, axes, ticks, legend, points, asymptotes) and ```geometry draws figures
+from NAMED points (segments, angles with right-angle squares, circles, polygons, and
+unitCircle:true for the unit circle with axes). Plotted formulas run through a
+hand-written shunting-yard parser (lib/plotExpression.ts) - no eval, no Function
+constructor, closed function whitelist, own-property lookups only. The + menu gains
+"Write an equation": a symbol/template keyboard with a live KaTeX preview that inserts
+$...$ at the caret. The chat fn's SYSTEM_PROMPT gained a MATH AND FIGURES block
+teaching all three, including "never dump a figure the student should be building".
+(2) THE CAMPUS DEMO: three classes built from the five uploaded PDFs. Mathematics 10
+(5 lessons: arithmetic + geometric sequences and series, unit circle and radians,
+identities, graphing transformations) follows the Grade 10 AFL paper's eight assessed
+outcomes and uses real LaTeX, a unit-circle geometry figure and sine/tangent plots.
+Biology 10 (3 lessons: chloroplast and photosystems, light-dependent reactions, Calvin
+cycle and limiting factors) follows the PIB photosynthesis paper, including its MCQs
+verbatim and its limiting-factor curves as a real ```graph. History 10 (3 lessons:
+Johnson's "Mapping the Loss", the 1916 segregation ordinance, Dejung's interwar middle
+classes) teaches source work and quotes the readings directly. 11 lessons, 44 steps
+(all carrying idea_keys), 7 quiz items, 23 published ideas, 29 vocab terms, 27 links
+(including cross-subject ones into the existing courses), 27 practice-bank items, and
+draft queues on three lessons for the Knowledge card. The five PDFs are committed to
+frontend/public/readings/ and served as pdf resources with RELATIVE urls, each with an
+approved resource_text_chunks passage transcribed from the document - the maths and
+biology papers are scans with no text layer, so without those chunks extract_knowledge
+would read nothing. Students carl / elissar / elie were created in production (bcrypt
+password JargonDemo123!, confirmed email, identity + profile rows, mirroring what
+admin-seed's Auth Admin call produces) and every student is enrolled in all three
+classes with one upcoming assignment and one returned scored quiz each.
+Verified: full migration chain applied on a scratch Postgres 16 with auth/storage
+shims - clean run, idempotent re-runs, sweep/re-publish cycle, 17 row assertions, zero
+dangling links, each student showing 3 classes and 6 pieces of work. The expression
+parser has its own Node check suite (14 evaluation cases + 6 rejection cases); it
+caught three real bugs before ship: -x^2 evaluating to +9 (unary minus was binding
+tighter than ^), "constructor" resolving as a known function through the prototype
+chain, and incomplete expressions like "2+" silently drawing nothing.
+Files changed: frontend/src/lib/{mathText.tsx,plotExpression.ts} (new);
+frontend/src/student/{GraphBlock.tsx,GeometryBlock.tsx,EquationPad.tsx} (new);
+frontend/src/student/{Transcript.tsx,Chatbox.tsx}; frontend/src/features/student/chat/
+chatMessages.ts; frontend/src/{main.tsx,styles.css}; frontend/package.json (katex);
+frontend/public/readings/*.pdf (new); supabase/functions/chat/index.ts (prompt block);
+supabase/migrations/2026100300*_campus_*.sql (4 new); .github/workflows/
+deploy-backend.yml; tests/test_math_rendering.py + tests/test_campus_demo.py (new;
+suite 519 OK).
+Remaining concerns: the mentor has never been live-tested on this content - the math
+figures in particular are worth watching (does it draw when it should, and does it
+resist drawing the answer?). The YouTube embed ids are external and can rot. The
+biology limiting-factor curves are shaped to match the paper's figure, not measured
+data. Physics/chemistry need no new renderer: equations cover them, though a reaction
+-arrow notation would be a small future addition.
+Suggested next task: live-test as carl through a maths lesson end to end, watching
+equation rendering, the graph/geometry blocks, the equation pad, and whether the
+brain's cross-subject links fire between biology and maths.

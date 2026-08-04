@@ -5,8 +5,11 @@ import { prefersReducedMotion } from "@/lib/motion";
 import { splitSentences } from "@/lib/sentences";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
 import { store } from "@/lib/jargon-store";
+import { renderWithMath } from "@/lib/mathText";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ResourceCard } from "@/student/ResourceCard";
+import { GraphBlock, type GraphSpec } from "@/student/GraphBlock";
+import { GeometryBlock, type GeometrySpec } from "@/student/GeometryBlock";
 import {
   CHECKPOINT_SPEC,
   modeAccentValue,
@@ -23,6 +26,7 @@ import {
   parseFencedBlocks,
   stepEyebrowLabel,
   type ChatCodeBlock,
+  type ChatFigureBlock,
   type Msg,
 } from "@/features/student/chat/chatMessages";
 
@@ -75,6 +79,16 @@ function CodeBlock({ code }: { code: ChatCodeBlock }) {
         </code>
       </pre>
     </figure>
+  );
+}
+
+// R29: the two diagram fences render as figures. One component so every call site
+// (transcript, streaming body) draws them identically.
+function FigureBlock({ figure }: { figure: ChatFigureBlock }) {
+  return figure.kind === "graph" ? (
+    <GraphBlock spec={figure.spec as GraphSpec} />
+  ) : (
+    <GeometryBlock spec={figure.spec as GeometrySpec} />
   );
 }
 
@@ -182,7 +196,17 @@ function highlightRun(part: string, vocab: VocabPass, keyBase: string): ReactNod
   return nodes;
 }
 
+// R29: MATH IS VERBATIM, so it is split off BEFORE the markdown pass — otherwise `2*x*y`
+// inside a formula would be read as italics and `_` as emphasis. renderInline is now the
+// math-aware entry point; renderInlineMd is the original markdown pass, unchanged, applied
+// only to the prose between formulas.
 function renderInline(text: string, vocab?: VocabPass): ReactNode[] {
+  return renderWithMath(text, (part, key) => (
+    <Fragment key={key}>{renderInlineMd(part, vocab)}</Fragment>
+  ));
+}
+
+function renderInlineMd(text: string, vocab?: VocabPass): ReactNode[] {
   return text.split(INLINE_MD_RE).map((part, i) => {
     const code = part.match(/^`([^`\n]+)`$/);
     if (code) {
@@ -348,6 +372,9 @@ function StreamingBody({ text }: { text: string }) {
     <>
       {segments.map((segment, i) => {
         if (segment.kind === "code") return <CodeBlock key={i} code={segment.code} />;
+        // A figure only renders once its JSON body has fully arrived (parseFencedBlocks
+        // needs the closing fence), so mid-stream it simply isn't a figure segment yet.
+        if (segment.kind === "figure") return <FigureBlock key={i} figure={segment.figure} />;
         const raw = segment.text.replace(/^\n+/, "");
         if (!raw.trim()) return null;
         const { done, tail } = splitSentences(raw);
@@ -413,6 +440,8 @@ function MessageBody({
       {segments.map((segment, i) =>
         segment.kind === "code" ? (
           <CodeBlock key={i} code={segment.code} />
+        ) : segment.kind === "figure" ? (
+          <FigureBlock key={i} figure={segment.figure} />
         ) : segment.text.trim() ? (
           renderText(segment.text.replace(/^\n+|\n+$/g, ""), i)
         ) : null,

@@ -4,6 +4,9 @@ import { RouterProvider } from "@tanstack/react-router";
 import gsap from "gsap";
 import { getRouter } from "./router";
 import { prefersReducedMotion } from "./lib/motion";
+// KaTeX's stylesheet must load before styles.css so the app's math rules (which bind it
+// to the theme) win on equal specificity. Fonts are bundled by Vite as assets.
+import "katex/dist/katex.min.css";
 import "./styles.css";
 
 // Honor prefers-reduced-motion for GSAP-driven animation. GSAP runs in JS and is

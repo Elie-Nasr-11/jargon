@@ -18,6 +18,7 @@ import {
   Play,
   Plus,
   Send,
+  Sigma,
   Type,
   X,
 } from "lucide-react";
@@ -37,6 +38,7 @@ import type {
 } from "@/lib/types";
 import { CodeArea } from "@/components/CodeArea";
 import { Popover } from "@/components/Popover";
+import { EquationPad } from "@/student/EquationPad";
 import type { ComposerLanguage } from "@/lib/composerLanguage";
 import { ModeSelector } from "@/student/ModeSelector";
 import { OfferPills } from "@/student/OfferPills";
@@ -65,8 +67,8 @@ type InputSurface = "text" | "code";
 
 const LANGUAGES: ComposerLanguage[] = ["jargon", "javascript", "python"];
 
-// The plus popover's views: the menu, and the two pickers behind it.
-type PlusView = "menu" | "uploads" | "resources";
+// The plus popover's views: the menu, the two pickers, and the equation pad behind it.
+type PlusView = "menu" | "uploads" | "resources" | "equation";
 
 const PLUS_ROW =
   "flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted";
@@ -262,6 +264,25 @@ export function Chatbox({
           ],
     );
     closePlus();
+  };
+
+  // R29: the equation pad writes `$...$` into the draft at the caret, like any other typed
+  // text — the student can still edit it, and the transcript typesets it on send.
+  const insertEquation = (latex: string) => {
+    const el = areaRef.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const before = text.slice(0, start);
+    const after = text.slice(end);
+    const spacer = before && !before.endsWith(" ") ? " " : "";
+    const next = `${before}${spacer}${latex} ${after}`;
+    setText(next);
+    closePlus();
+    const caret = before.length + spacer.length + latex.length + 1;
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(caret, caret);
+    });
   };
 
   // Referencing is TEXT, visible and editable — the mentor's context carries the lesson's
@@ -519,7 +540,7 @@ export function Chatbox({
           open={plusOpen}
           onClose={closePlus}
           placement="top-start"
-          panelClassName="w-[240px] rounded-card border border-border bg-background p-1.5"
+          panelClassName={`${plusView === "equation" ? "w-[310px]" : "w-[240px]"} rounded-card border border-border bg-background p-1.5`}
           trigger={
             <button
               type="button"
@@ -557,6 +578,10 @@ export function Chatbox({
                   Reference a resource
                 </button>
               ) : null}
+              <button type="button" onClick={() => setPlusView("equation")} className={PLUS_ROW}>
+                <Sigma className="h-[15px] w-[15px]" strokeWidth={1.5} />
+                Write an equation
+              </button>
               {onSendCode ? (
                 <button
                   type="button"
@@ -575,6 +600,8 @@ export function Chatbox({
                 </button>
               ) : null}
             </>
+          ) : plusView === "equation" ? (
+            <EquationPad onInsert={insertEquation} onCancel={() => setPlusView("menu")} />
           ) : (
             <>
               <button type="button" onClick={() => setPlusView("menu")} className={PLUS_ROW}>

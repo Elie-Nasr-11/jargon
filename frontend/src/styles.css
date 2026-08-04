@@ -898,6 +898,31 @@ select {
 .ktoast-spark {
   animation: ktoast-spark 0.9s ease 0.3s 2;
 }
+/* --- MATH (R29) ------------------------------------------------------------------
+   KaTeX ships its own stylesheet (imported in main.tsx). These rules only bind it to
+   the app's theme: KaTeX colors glyphs with `color: inherit` by default, so math picks
+   up the surrounding text color and works in light and dark with no per-theme rules.
+   The two jobs here are SIZE (KaTeX's 1.21em default is oversized next to Manrope's
+   body size) and OVERFLOW (a long display equation must scroll inside its own line,
+   never widen the transcript column). */
+.math-inline .katex {
+  font-size: 1.06em;
+}
+.math-display {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.35rem 0;
+}
+.math-display .katex-display {
+  margin: 0.35rem 0;
+}
+/* An equation the mentor got wrong renders as KaTeX's error token — make it read as a
+   problem with the formula rather than as content. */
+.katex .katex-error {
+  color: var(--danger);
+}
+
 /* Vocab highlight in the transcript: an underline-dot in the term's subject hue. */
 .vocab-mark {
   cursor: pointer;
