@@ -8971,3 +8971,19 @@ surfaces; router+grader merge for latency. Full design in docs/BRAIN_FIRST_SCOPE
 (read model, consumers, intake, phasing A-E, 4 open decisions).
 Files changed: docs/BRAIN_FIRST_SCOPE.md (new); docs/HANDOFF.md.
 Suggested next task: owner picks phase order + answers the 4 decisions; build begins.
+
+## Claude -> Codex / Human - 2026-08-03 (Brain-first FULL plan)
+
+Status: Planning complete, build not started (owner directive)
+Summary: docs/BRAIN_FIRST_PLAN.md now holds the complete implementation plan for the
+brain-first consolidation, phase by phase with schema, signatures, directive changes,
+deletions, and test strategy. Owner decisions locked: progress = blend (steps-done
+in-lesson, mastery on class/home); typed "next"/"ready" ACTS as Continue; practice
+questions = teacher banks primary, mentor-generated under strict guidelines otherwise.
+Recommended order A (3 modes + Continue-only + mode_offer pills + mentor_preferences
+retired) -> E (assessTurn merge + surface cache/preload) -> B (student_idea_mastery +
+loadBrainContext) -> C (recall openers, mastery compression, practice gym, link mine,
+tier-calibrated grading, progress blend) -> D (extract_knowledge intake + practice_items
++ studio-lite review). Every phase additive/tolerant; simplification ledger included.
+Files changed: docs/BRAIN_FIRST_PLAN.md (new); docs/HANDOFF.md.
+Suggested next task: owner green-lights the order (or reorders); build Phase A.
