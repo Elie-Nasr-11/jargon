@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { prefetchLesson } from "@/lib/api";
 import { Collapsible } from "@/components/Collapsible";
 import { groupByUnit } from "@/features/student/lessonGroups";
 import type { Lesson } from "@/lib/types";
@@ -94,6 +95,9 @@ export function LessonTree({
         type="button"
         disabled={disabled && !current}
         onClick={() => onOpenLesson(lesson.id)}
+        // Phase E: hovering (or touch-starting) a lesson warms its steps, session, and
+        // transcript so the actual open paints from cache.
+        onPointerEnter={() => prefetchLesson(lesson.id)}
         aria-current={current ? "true" : undefined}
         className={`relative flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-body transition-colors duration-(--dur-fast) disabled:opacity-40 ${
           current

@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { runJavaScript, runPython } from "@/lib/code-runner";
 import { sentenceBreaks } from "@/lib/sentences";
+import { invalidateSurface } from "@/lib/surfaceCache";
 import { store } from "@/lib/jargon-store";
 import { supabase } from "@/lib/supabase";
 import type {
@@ -352,6 +353,15 @@ export function useConversation() {
       // Learning framework: this turn's knowledge events become toasts. applyEnvelope
       // runs after the stream settles, so the timing decision (owner: notify after the
       // reply finishes) holds by construction. Queue capped so a backlog can't stack.
+      // Phase E: a settled turn changed conversational state server-side — drop the
+      // cached surfaces that could now be stale (reopen within TTL must refetch).
+      invalidateSurface("turns:");
+      invalidateSurface("session:");
+      invalidateSurface("progress");
+      if (envelope.link_events?.length || envelope.idea_events?.length) {
+        invalidateSurface("ideas");
+        invalidateSurface("student_links");
+      }
       const toasts: KnowledgeToast[] = [
         ...(envelope.idea_events ?? []).map(
           (event): KnowledgeToast => ({ id: uid(), kind: "idea", event, fresh: true }),

@@ -1784,7 +1784,12 @@ function isEchoOfMentor(answerText: string, recentTurns: DbRow[]): boolean {
   return grams > 0 && hits / grams >= ECHO_THRESHOLD;
 }
 
-async function checkUnderstanding(
+// Phase E (brain-first): ONE fast assessment call per text turn, replacing the separate
+// router (classifyTurn) + understanding grader (checkUnderstanding). Same verdict
+// semantics, half the round-trips: the mentor stream starts one model call sooner.
+// The echo gate stays code-side; heuristicKind remains the outage fallback; parse
+// failure returns nulls and every consumer degrades exactly as before.
+async function assessTurn(
   config: SupabaseConfig,
   userId: string,
   sessionId: string | null,
@@ -1795,10 +1800,16 @@ async function checkUnderstanding(
   recentTurns: DbRow[],
   // Flow v3 P4: upcoming step objectives (≤3) so the grader can flag pre-emption —
   // "the student's message ALSO covered a future step's idea". Detection only.
-  upcomingSteps: { id: string; title: string; prompt: string }[] = [],
-): Promise<GradedUnderstanding | null> {
+  upcomingSteps: { id: string; title: string; prompt: string }[],
+  // When false (routing-only turns: non-graded steps), the model is told to return
+  // understanding: null and the grading rules are omitted from the ask.
+  gradeExplanation: boolean,
+): Promise<{ router: RouterVerdict | null; understanding: GradedUnderstanding | null } | null> {
   const text = (studentText || "").trim();
   if (!text) return null;
+  const stepLine = activity
+    ? `Current step (${String(activity.mode || activity.activity_type || "step")}): ${String(activity.title || "")} — ${String(activity.prompt || "").slice(0, 160)}`
+    : "Current step: unknown";
   const objective = [
     milestone?.objective ? `Objective: ${String(milestone.objective)}` : "",
     activity?.prompt ? `Task/prompt: ${String(activity.prompt)}` : "",
@@ -1820,31 +1831,50 @@ async function checkUnderstanding(
         `${index + 1}. ${step.title || `Step ${index + 1}`} — ${step.prompt.slice(0, 140)}`,
     )
     .join("\n");
+  const classifyBlock =
+    "TASK 1 — CLASSIFY the student\'s latest message. Kinds: " +
+    '"answer_attempt" (they are answering/attempting the current step\'s task), ' +
+    '"question" (they are asking the tutor something — clarification, curiosity, help), ' +
+    '"continue_signal" (they clearly signal readiness to move on: "ok", "next", "got it"), ' +
+    '"navigate_back" (they want to RETURN to an earlier step: "can we go back to…", "redo the last part"), ' +
+    '"tangent" (related-but-off-step exploration or chatter), ' +
+    '"meta" (about the lesson/process itself: summaries, frustration, logistics). ' +
+    "A message can contain both an attempt and a question — prefer answer_attempt when a " +
+    "substantive attempt is present. ";
   // Grade the LATEST message only: crediting things said in earlier turns is exactly the
   // stale-credit bug this grader exists to prevent (the conversation model already
   // handles continuity; the GATE must reflect what the student can produce now).
+  const gradeBlock = gradeExplanation
+    ? "TASK 2 — GRADE the latest message as a strict but fair grader for a children\'s " +
+      "tutoring app. Judge ONLY the student\'s LATEST message, quoted at the end: does it, " +
+      "BY ITSELF, demonstrate understanding of THIS step\'s objective? The earlier turns " +
+      'are background for resolving references ("it", "that one") — they are ' +
+      "NEVER evidence; understanding shown in an earlier turn but absent from the latest message " +
+      "does not count. Do not credit vague, circular, or off-topic answers. " +
+      "NAMED-CRITERION RULE: when the task or the mentor\'s most recent question names a " +
+      "specific framework, test, distinction, or set of terms the student is asked to " +
+      'apply (e.g. "which of the two tests did it fail — relevant or checkable?"), ' +
+      "demonstrated=true ALSO requires the latest message to actually engage that named " +
+      "framework; a thoughtful answer in a completely different frame is level=partial, " +
+      "with the note naming the unused framework (the mentor\'s question in the background " +
+      "defines WHAT was asked — it is still never evidence of the student\'s " +
+      "understanding). Separately: if the latest message ALSO clearly covers one of the " +
+      'numbered UPCOMING step objectives, report it under "preempted" with that step\'s ' +
+      "number and a short note capturing the student\'s insight (only clear cases — never " +
+      "stretch; an EMPTY preempted array is the normal case). "
+    : 'TASK 2 — no grading on this turn: always return "understanding": null and "preempted": []. ';
   const system =
-    "You are a strict but fair grader for a children's tutoring app. Judge ONLY the " +
-    "student's LATEST message, quoted at the end: does it, BY ITSELF, demonstrate " +
-    "understanding of THIS step's objective? The earlier turns are background for " +
-    "resolving references (\"it\", \"that one\") — they are NEVER evidence; understanding " +
-    "shown in an earlier turn but absent from the latest message does not count. Do not " +
-    "credit vague, circular, or off-topic answers. NAMED-CRITERION RULE: when the task or " +
-    "the mentor's most recent question names a specific framework, test, distinction, or " +
-    "set of terms the student is asked to apply (e.g. \"which of the two tests did it " +
-    "fail — relevant or checkable?\"), demonstrated=true ALSO requires the latest message " +
-    "to actually engage that named framework; a thoughtful answer in a completely " +
-    "different frame is level=partial, with the note naming the unused framework (the " +
-    "mentor's question in the background defines WHAT was asked — it is still never " +
-    "evidence of the student's understanding). Separately: if the latest message ALSO " +
-    "clearly covers one of the numbered UPCOMING step objectives, report it under " +
-    '"preempted" with that step\'s number and a short note capturing the student\'s ' +
-    "insight (only clear cases — never stretch; return an EMPTY preempted array when " +
-    "none, which is the normal case). Return ONLY a JSON object: " +
-    '{"demonstrated": boolean, "level": "none|partial|solid", "note": "one short phrase ' +
-    'naming what is still missing, or empty when solid", "preempted": []} — each ' +
-    'preempted entry, when any, is {"step": number, "note": "short paraphrase of their insight"}.';
-  const userMsg = `${objective || "Objective: explain the concept in the student's own words."}\n\nUpcoming step objectives (pre-emption detection ONLY — never grade the current step against these):\n${upcoming || "(none)"}\n\nRecent conversation (background only — NOT evidence):\n${recent}\n\nStudent's LATEST message (grade this):\n${text}`;
+    "You assess ONE student message in a tutoring chat. " +
+    classifyBlock +
+    gradeBlock +
+    "Return ONLY JSON: " +
+    '{"kind":"answer_attempt|question|continue_signal|navigate_back|tangent|meta",' +
+    '"confidence":0.0-1.0,' +
+    '"understanding": {"demonstrated": boolean, "level": "none|partial|solid", "note": ' +
+    '"one short phrase naming what is still missing, or empty when solid"} or null,' +
+    '"preempted": [] — each entry, when any, is {"step": number, "note": "short paraphrase ' +
+    'of their insight"}}.';
+  const userMsg = `${stepLine}\n${objective || "Objective: explain the concept in the student\'s own words."}\n\nUpcoming step objectives (pre-emption detection ONLY — never grade the current step against these):\n${upcoming || "(none)"}\n\nRecent conversation (background only — NOT evidence):\n${recent || "(none)"}\n\nStudent\'s LATEST message (classify${gradeExplanation ? " and grade" : ""} this):\n${text}`;
   try {
     const result = await callModel(
       [
@@ -1854,32 +1884,56 @@ async function checkUnderstanding(
       true,
       "understanding",
     );
-    // Record the extra grader call so cost/usage telemetry isn't undercounted (best-effort).
+    // ONE recorded call where there used to be two (best-effort telemetry).
     scheduleBackground(
-      recordModelUsage(config, userId, sessionId, lessonId, result, "grading"),
+      recordModelUsage(
+        config,
+        userId,
+        sessionId,
+        lessonId,
+        result,
+        gradeExplanation ? "grading" : "routing",
+      ),
     );
     const raw = JSON.parse(extractJsonObject(result.content)) as DbRow;
-    const verdict = parsedUnderstanding(raw);
-    if (!verdict) return null;
-    // Tolerant pre-emption parse: anything malformed just drops (the feature is additive).
-    const preempted: PreemptedHit[] = Array.isArray(raw.preempted)
-      ? (raw.preempted as unknown[])
-          .map((entry) => {
-            if (!entry || typeof entry !== "object") return null;
-            const hit = entry as DbRow;
-            const step = Number(hit.step);
-            if (!Number.isInteger(step) || step < 1 || step > upcomingSteps.length) {
-              return null;
-            }
-            const note =
-              typeof hit.note === "string" ? hit.note.trim().slice(0, 240) : "";
-            // A hit with no note is dropped outright: the arrival directive would
-            // otherwise credit a fabricated "insight" the student never voiced.
-            return note ? { step, note } : null;
-          })
-          .filter((hit): hit is PreemptedHit => hit !== null)
-      : [];
-    return preempted.length ? { ...verdict, preempted } : verdict;
+    const kind = String(raw.kind || "");
+    const confidence = Number(raw.confidence);
+    const router: RouterVerdict | null = ROUTED_KINDS.has(kind)
+      ? {
+          kind: kind as RoutedKind,
+          confidence: Number.isFinite(confidence) ? confidence : 0.5,
+        }
+      : null;
+    let understanding: GradedUnderstanding | null = null;
+    if (gradeExplanation) {
+      const verdict = parsedUnderstanding(
+        raw.understanding && typeof raw.understanding === "object"
+          ? (raw.understanding as DbRow)
+          : {},
+      );
+      if (verdict) {
+        // Tolerant pre-emption parse: anything malformed just drops (additive feature).
+        const preempted: PreemptedHit[] = Array.isArray(raw.preempted)
+          ? (raw.preempted as unknown[])
+              .map((entry) => {
+                if (!entry || typeof entry !== "object") return null;
+                const hit = entry as DbRow;
+                const step = Number(hit.step);
+                if (!Number.isInteger(step) || step < 1 || step > upcomingSteps.length) {
+                  return null;
+                }
+                const note =
+                  typeof hit.note === "string" ? hit.note.trim().slice(0, 240) : "";
+                // A hit with no note is dropped outright: the arrival directive would
+                // otherwise credit a fabricated "insight" the student never voiced.
+                return note ? { step, note } : null;
+              })
+              .filter((hit): hit is PreemptedHit => hit !== null)
+          : [];
+        understanding = preempted.length ? { ...verdict, preempted } : verdict;
+      }
+    }
+    return { router, understanding };
   } catch {
     return null;
   }
@@ -2058,62 +2112,6 @@ function heuristicKind(text: string): RouterVerdict {
   return { kind: "answer_attempt", confidence: 0.3 };
 }
 
-async function classifyTurn(
-  config: SupabaseConfig,
-  userId: string,
-  sessionId: string | null,
-  lessonId: string | null,
-  activity: DbRow | null,
-  studentText: string,
-  recentTurns: DbRow[],
-  upcomingTitles: string[],
-): Promise<RouterVerdict | null> {
-  const text = (studentText || "").trim();
-  if (!text) return null;
-  const stepLine = activity
-    ? `Current step (${String(activity.mode || activity.activity_type || "step")}): ${String(activity.title || "")} — ${String(activity.prompt || "").slice(0, 160)}`
-    : "Current step: unknown";
-  const recent = recentTurns
-    .slice(0, 2)
-    .reverse()
-    .map((t) => `${String(t.role)}: ${String(t.content || "").slice(0, 160)}`)
-    .join("\n");
-  const system =
-    "You classify ONE student message in a tutoring chat. Kinds: " +
-    '"answer_attempt" (they are answering/attempting the current step\'s task), ' +
-    '"question" (they are asking the tutor something — clarification, curiosity, help), ' +
-    '"continue_signal" (they clearly signal readiness to move on: "ok", "next", "got it"), ' +
-    '"navigate_back" (they want to RETURN to an earlier step: "can we go back to…", "redo the last part"), ' +
-    '"tangent" (related-but-off-step exploration or chatter), ' +
-    '"meta" (about the lesson/process itself: summaries, frustration, logistics). ' +
-    "A message can contain both an attempt and a question — prefer answer_attempt when a " +
-    "substantive attempt is present. Return ONLY JSON: " +
-    '{"kind":"answer_attempt|question|continue_signal|navigate_back|tangent|meta","confidence":0.0-1.0}.';
-  const userMsg = `${stepLine}\nUpcoming steps: ${upcomingTitles.slice(0, 3).join(" | ") || "none"}\n\nRecent turns:\n${recent || "(none)"}\n\nStudent message:\n${text}`;
-  try {
-    const result = await callModel(
-      [
-        { role: "system", content: system },
-        { role: "user", content: userMsg },
-      ],
-      true,
-      "understanding",
-    );
-    scheduleBackground(
-      recordModelUsage(config, userId, sessionId, lessonId, result, "routing"),
-    );
-    const parsed = JSON.parse(extractJsonObject(result.content)) as DbRow;
-    const kind = String(parsed.kind || "");
-    if (!ROUTED_KINDS.has(kind)) return null;
-    const confidence = Number(parsed.confidence);
-    return {
-      kind: kind as RoutedKind,
-      confidence: Number.isFinite(confidence) ? confidence : 0.5,
-    };
-  } catch {
-    return null;
-  }
-}
 
 // --- Pedagogy signals --------------------------------------------------------
 // Pure + deterministic signals fed to the model: who the student is (diagnosis),
@@ -5526,9 +5524,11 @@ async function handleTypedRequest(
         title: String(a.title || ""),
         prompt: String(a.prompt || ""),
       }));
-    const [gradedUnderstanding, gradedCode, routerResult] = await Promise.all([
-      isTextExplanation
-        ? checkUnderstanding(
+    // Phase E: ONE assessment call classifies AND grades the text turn (assessTurn),
+    // where the router and understanding grader used to be two separate model calls.
+    const [assessed, gradedCode] = await Promise.all([
+      routerEligible || isTextExplanation
+        ? assessTurn(
             config,
             userId,
             sessionId,
@@ -5538,6 +5538,7 @@ async function handleTypedRequest(
             content,
             context.recentTurns,
             upcomingSteps,
+            isTextExplanation,
           )
         : Promise.resolve(null),
       codeNeedsJudge
@@ -5553,20 +5554,12 @@ async function handleTypedRequest(
             context.recentTurns,
           )
         : Promise.resolve(null),
-      routerEligible
-        ? classifyTurn(
-            config,
-            userId,
-            sessionId,
-            lessonId,
-            context.activity,
-            content,
-            context.recentTurns,
-            upcomingSteps.map((step) => step.title),
-          )
-        : Promise.resolve(null),
       studentTurnPromise,
     ]);
+    const gradedUnderstanding = isTextExplanation
+      ? (assessed?.understanding ?? null)
+      : null;
+    const routerResult = assessed?.router ?? null;
     // Round 19: the echo check overrides a grader pass earned with the mentor's own
     // words. The grader saw a perfect answer; the flow knows where it came from.
     const answerEchoesMentor =

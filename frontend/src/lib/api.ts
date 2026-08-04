@@ -1,5 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { functionUrl, supabase, supabaseAnonKey } from "@/lib/supabase";
+import { cached, warm } from "@/lib/surfaceCache";
 import { parseArtifactConfig } from "@/lib/artifact-schema";
 import type { DeckSpec } from "@/lib/artifact-schema";
 import type {
@@ -536,7 +537,7 @@ export async function fetchLessons(options: { includeDrafts?: boolean } = {}) {
 // fetchLessons() output — so the live student sees an identical list until a teacher links courses.
 // `pinnedLessonId` (the student's currently-open lesson) is always retained even if scoped out, so
 // scoping can never strand a student mid-lesson with no way back to their in-progress work.
-export async function fetchStudentCatalog(pinnedLessonId?: string | null): Promise<Lesson[]> {
+async function fetchStudentCatalogUncached(pinnedLessonId?: string | null): Promise<Lesson[]> {
   const all = await fetchLessons();
   try {
     const session = await getSession();
@@ -824,7 +825,7 @@ export async function fetchStudentProfileStats(): Promise<StudentProfileStats> {
 // v4.0 Phase 3b: the classes the signed-in student belongs to (for the LMS class views).
 // Class read is via the "Members can view their classes" RLS; org names are best-effort (a
 // student may not be an org member) and fall back to null.
-export async function fetchStudentClasses(): Promise<StudentClass[]> {
+async function fetchStudentClassesUncached(): Promise<StudentClass[]> {
   const session = await getSession();
   if (!session?.user?.id) return [];
   const { data: membershipRows, error: membershipError } = await supabase
@@ -875,7 +876,7 @@ export async function fetchStudentClasses(): Promise<StudentClass[]> {
 
 // v4.0 Phase 3b: the published lessons scoped to a single class — its linked courses, or the full
 // catalog when the class has no links. Powers the class dashboard + unit views.
-export async function fetchClassScopedLessons(classId: string): Promise<Lesson[]> {
+async function fetchClassScopedLessonsUncached(classId: string): Promise<Lesson[]> {
   const all = await fetchLessons();
   try {
     const linked = new Set(await fetchClassCourses(classId));
@@ -893,7 +894,7 @@ export async function fetchClassScopedLessons(classId: string): Promise<Lesson[]
 // its discharged-step ratio (steps_done / the lesson's activity count), floored at 0.1 so
 // "started" is always visible and capped at 0.95 so only true completion reads full. The
 // tree rings and the brain map inherit gradation for free.
-export async function fetchStudentLessonProgress(): Promise<Record<string, number>> {
+async function fetchStudentLessonProgressUncached(): Promise<Record<string, number>> {
   const session = await getSession();
   if (!session?.user?.id) return {};
   const [sessionsRes, activitiesRes] = await Promise.all([
@@ -927,7 +928,7 @@ export async function fetchStudentLessonProgress(): Promise<Record<string, numbe
   return progress;
 }
 
-export async function fetchLessonActivities(lessonId: string) {
+async function fetchLessonActivitiesUncached(lessonId: string) {
   const { data, error } = await supabase
     .from("lesson_activities")
     .select("*")
@@ -937,7 +938,7 @@ export async function fetchLessonActivities(lessonId: string) {
   return (data || []) as LessonActivity[];
 }
 
-export async function fetchLatestLearningSession(lessonId: string) {
+async function fetchLatestLearningSessionUncached(lessonId: string) {
   // Newest-first is the authoritative pick: the server never re-picks a session
   // (without a session_id it creates a fresh one), so the client's choice here is
   // what the whole turn loop will use. The explicit user filter is belt-and-braces
@@ -970,7 +971,7 @@ export async function fetchMostRecentLearningSession(): Promise<LearningSession 
   return ((data || [])[0] as LearningSession | undefined) || null;
 }
 
-export async function fetchLearningTurns(sessionId: string) {
+async function fetchLearningTurnsUncached(sessionId: string) {
   // Chat-flow Phase 4: capped insurance — fetch the NEWEST 400 turns and restore order
   // client-side. Real sessions sit far below the cap (the rate limiter alone bounds the
   // pace); a pathological one loses only its oldest history instead of an unbounded fetch.
@@ -2944,7 +2945,7 @@ export async function updateAssessmentStatus(assessmentId: string, status: Asses
   return data.data?.assessment || null;
 }
 
-export async function fetchStudentAssessments(): Promise<StudentAssessmentBundle> {
+async function fetchStudentAssessmentsUncached(): Promise<StudentAssessmentBundle> {
   const {
     data: { user },
     error: userError,
@@ -3359,7 +3360,7 @@ export async function invokeJargonRun(input: {
 // --- Learning framework reads (docs/LEARNING_FRAMEWORK.md) -----------------------------
 // All best-effort at the call sites; RLS scopes ideas to published-authored + the
 // student's own emergent rows, and student links to the owner (+ their teachers).
-export async function fetchVocabTerms(): Promise<VocabTerm[]> {
+async function fetchVocabTermsUncached(): Promise<VocabTerm[]> {
   const { data, error } = await supabase
     .from("vocab_terms")
     .select("id,term,variants,definition,subject,idea_keys,lesson_id")
@@ -3369,7 +3370,7 @@ export async function fetchVocabTerms(): Promise<VocabTerm[]> {
   return (data || []) as VocabTerm[];
 }
 
-export async function fetchIdeas(): Promise<IdeaNode[]> {
+async function fetchIdeasUncached(): Promise<IdeaNode[]> {
   const { data, error } = await supabase
     .from("ideas")
     .select("id,key,title,one_liner,subject,origin,lesson_id,user_id,created_at")
@@ -3379,7 +3380,7 @@ export async function fetchIdeas(): Promise<IdeaNode[]> {
   return (data || []) as IdeaNode[];
 }
 
-export async function fetchStudentLinks(): Promise<StudentLinkRow[]> {
+async function fetchStudentLinksUncached(): Promise<StudentLinkRow[]> {
   const session = await getSession();
   if (!session?.user?.id) return [];
   const { data, error } = await supabase
@@ -3392,7 +3393,7 @@ export async function fetchStudentLinks(): Promise<StudentLinkRow[]> {
   return (data || []) as StudentLinkRow[];
 }
 
-export async function fetchCurriculumLinks(): Promise<CurriculumLinkRow[]> {
+async function fetchCurriculumLinksUncached(): Promise<CurriculumLinkRow[]> {
   const { data, error } = await supabase
     .from("curriculum_links")
     .select("id,from_key,to_key,kind,note")
@@ -3400,4 +3401,74 @@ export async function fetchCurriculumLinks(): Promise<CurriculumLinkRow[]> {
     .limit(400);
   if (error) throw error;
   return (data || []) as CurriculumLinkRow[];
+}
+
+// --- Phase E: cached surface reads -------------------------------------------------
+// Same names and signatures as before (static pins included); bodies above became
+// *Uncached impls. TTLs are short where conversational state moves (session/turns —
+// also envelope-invalidated in useConversation) and long where content is authored.
+
+export async function fetchStudentCatalog(pinnedLessonId?: string | null): Promise<Lesson[]> {
+  return cached(`catalog:${pinnedLessonId ?? ""}`, 120_000, () =>
+    fetchStudentCatalogUncached(pinnedLessonId),
+  );
+}
+
+export async function fetchStudentClasses(): Promise<StudentClass[]> {
+  return cached("classes", 120_000, fetchStudentClassesUncached);
+}
+
+export async function fetchClassScopedLessons(classId: string): Promise<Lesson[]> {
+  return cached(`class_lessons:${classId}`, 120_000, () =>
+    fetchClassScopedLessonsUncached(classId),
+  );
+}
+
+export async function fetchStudentLessonProgress(): Promise<Record<string, number>> {
+  return cached("progress", 45_000, fetchStudentLessonProgressUncached);
+}
+
+export async function fetchLessonActivities(lessonId: string) {
+  return cached(`activities:${lessonId}`, 300_000, () => fetchLessonActivitiesUncached(lessonId));
+}
+
+export async function fetchLatestLearningSession(lessonId: string) {
+  return cached(`session:${lessonId}`, 15_000, () => fetchLatestLearningSessionUncached(lessonId));
+}
+
+export async function fetchLearningTurns(sessionId: string) {
+  return cached(`turns:${sessionId}`, 15_000, () => fetchLearningTurnsUncached(sessionId));
+}
+
+export async function fetchStudentAssessments(): Promise<StudentAssessmentBundle> {
+  return cached("assessments", 60_000, fetchStudentAssessmentsUncached);
+}
+
+export async function fetchVocabTerms(): Promise<VocabTerm[]> {
+  return cached("vocab_terms", 300_000, fetchVocabTermsUncached);
+}
+
+export async function fetchIdeas(): Promise<IdeaNode[]> {
+  return cached("ideas", 300_000, fetchIdeasUncached);
+}
+
+export async function fetchStudentLinks(): Promise<StudentLinkRow[]> {
+  return cached("student_links", 60_000, fetchStudentLinksUncached);
+}
+
+export async function fetchCurriculumLinks(): Promise<CurriculumLinkRow[]> {
+  return cached("curriculum_links", 300_000, fetchCurriculumLinksUncached);
+}
+
+// Hover/intent prefetch: warm what opening this lesson will need — its steps, its
+// latest session, and (once the session id is known) its transcript.
+export function prefetchLesson(lessonId: string): void {
+  warm(`activities:${lessonId}`, 300_000, () => fetchLessonActivitiesUncached(lessonId));
+  warm(`session:${lessonId}`, 15_000, () => fetchLatestLearningSessionUncached(lessonId));
+  void fetchLatestLearningSession(lessonId)
+    .then((session) => {
+      const id = session && typeof session.id === "string" ? session.id : null;
+      if (id) warm(`turns:${id}`, 15_000, () => fetchLearningTurnsUncached(id));
+    })
+    .catch(() => {});
 }

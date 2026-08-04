@@ -9027,3 +9027,35 @@ in C); the mode_offer source is model-proposed until C makes it deterministic; w
 that the register-shift nod doesn't over-announce on offer accepts (the accept directive
 wins the ladder, nod appends after — acceptable, monitor live feel).
 Suggested next task: Phase E (assessTurn merge + surface cache/preload) per the plan.
+
+## Claude -> Codex / Human - 2026-08-03 (R24: Brain-first Phase E — speed)
+
+Status: Finished
+Summary: Phase E of docs/BRAIN_FIRST_PLAN.md.
+E1 ASSESSTURN MERGE: classifyTurn (router) + checkUnderstanding (grader) folded into ONE
+assessTurn model call returning {kind, confidence, understanding, preempted}. A text
+turn is now 2 model calls (assess -> mentor) instead of 3 — the mentor stream starts a
+full round-trip sooner. Everything semantic survives verbatim: strict latest-message
+grading, NAMED-CRITERION rule, pre-emption detection, the closed kind set, heuristicKind
+outage fallback, code-side echo gate; grading-only fields are skipped on routing-only
+turns (gradeExplanation flag). One usage record per call, task honest to what ran
+("grading" when grading, else "routing").
+E2 SURFACE CACHE + PREFETCH: new lib/surfaceCache.ts — in-memory read-through cache
+(fresh-or-fetch, shared in-flight promises, per-key TTL, auth-change wipe; deliberately
+NOT stale-while-revalidate since components don't subscribe). Twelve hot fetchers
+wrapped with names/signatures intact (bodies became *Uncached impls): catalog/classes/
+class_lessons 120s, progress 45s, activities/vocab/ideas/curriculum_links 300s,
+assessments/student_links 60s, session/turns 15s. useConversation invalidates turns/
+session/progress (+ideas/links on events) when an envelope settles, so conversational
+reopens inside the TTL are honest. LessonTree rows warm activities+session+turns on
+pointerenter — an open after hover paints from cache.
+Files changed: supabase/functions/chat/index.ts; frontend/src/lib/{surfaceCache.ts,
+api.ts}; frontend/src/student/{useConversation.ts,LessonTree.tsx};
+tests/{test_phase_e_performance.py,test_flow_v3_router.py}.
+Tests run: python 452 OK; tsc 0 errors; eslint clean; build green; edge-fn parse clean.
+Remaining concerns: the merged assess prompt is longer than the old router prompt —
+watch routing quality on trivial "ok"-type turns (heuristic fallback still catches
+misparses); cache TTLs are first guesses (feel pass welcome); Home still runs several
+independent effects — if it still feels slow, the next lever is the student_home_bundle
+RPC from the plan.
+Suggested next task: Phase B (student_idea_mastery + loadBrainContext) per the plan.

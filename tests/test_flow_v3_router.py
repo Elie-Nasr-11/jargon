@@ -28,7 +28,9 @@ MIGRATION = (
 
 class FlowV3RouterInvariants(unittest.TestCase):
     def test_router_exists_with_closed_kind_set(self):
-        self.assertIn("async function classifyTurn(", CHAT)
+        # Phase E: the router lives inside the merged assessTurn (one call classifies AND
+        # grades); heuristicKind remains the outage fallback.
+        self.assertIn("async function assessTurn(", CHAT)
         self.assertIn("function heuristicKind(", CHAT)
         for kind in (
             "answer_attempt",
@@ -68,13 +70,14 @@ class FlowV3RouterInvariants(unittest.TestCase):
             self.assertIn(f'key: "{key}"', CHAT)
 
     def test_router_runs_parallel_with_graders(self):
-        # The router must live inside the same Promise.all as the graders (zero serial
-        # latency), not as its own awaited call.
+        # Phase E: classification+grading are ONE call (assessTurn), batched with the code
+        # judge and the student-turn insert — zero serial pre-mentor latency.
         batch = re.search(
-            r"const \[gradedUnderstanding, gradedCode, routerResult\] = await Promise\.all",
+            r"const \[assessed, gradedCode\] = await Promise\.all",
             CHAT,
         )
         self.assertIsNotNone(batch)
+        self.assertIn("routerEligible || isTextExplanation", CHAT)
 
     def test_client_model_carries_the_continue_offer(self):
         # The shared transcript model (consumed by the v6 surface) maps
