@@ -9176,3 +9176,37 @@ long extractions if they navigate away. practiceBank picks the FIRST published i
 for the target idea; rotation/spacing is a future nicety.
 Suggested next task: watch the brain hooks live as published knowledge accumulates;
 calibrate thresholds (0.7 weak / 0.8 compress / tier bands) against real transcripts.
+
+## Claude -> Codex / Human - 2026-08-04 (R28: Systems Lab — the everything demo class)
+
+Status: Finished
+Summary: A second demo class built to exercise every feature in one place.
+New global subject "Systems Thinking" / course "How Systems Work" with two lessons:
+"Feedback loops: how systems steer" (explanation -> inquiry -> applied practice ->
+open-ended assessment with 5 rubric criteria) and "Model a thermostat in Jargon"
+(explanation -> prediction -> runnable code step -> MCQ with bound quiz item; the
+starter program was run through the hardened interpreter and expected_output is its
+actual output — pinned by a test that re-runs it). Ships with a PUBLISHED knowledge
+graph: 3 ideas (steps carry idea_keys), 6 vocab terms, 5 cross-subject links into
+all three MVP subjects (vocab_bridge/same_pattern/contrast/prerequisite), and a
+7-item teacher practice bank — so recall openers, mastery, practice targeting,
+TEACHER BANK priority, frontier offers, vocab taps, and link toasts all have signal
+from turn one. A DRAFT set (1 idea, 1 vocab, 1 link, 2 practice) seeds the
+studio-lite Knowledge card with a real review queue. Two lesson resources (YouTube
+embed + external link) light the media stage. If the demo org exists, a "Systems
+Lab" class is created with demo student+teacher enrolled, the course linked via
+class_courses, an upcoming assignment (Work due; due date self-refreshes on
+redeploy) and a returned assessment scored 0.9 (Grades + AVG pill).
+Verified: full migration chain (shims for auth/storage/realtime) applied on a local
+scratch Postgres 16; the file ran clean, ran twice idempotently, the redeploy sweep
+cycle re-publishes correctly, and 19 row-count assertions passed. That run caught
+and fixed one real bug (recipient insert column/select mismatch).
+Files changed: supabase/migrations/20261002000000_systems_lab_demo.sql (new);
+.github/workflows/deploy-backend.yml (registered AFTER the Book-F sweep);
+tests/test_systems_lab_demo.py (new; suite 485 OK).
+Remaining concerns: the YouTube embed id (TED-Ed feedback loops) is external and
+could rot — swap the URL in the seed if the media stage shows an unavailable video.
+The class block only runs when admin-seed's Demo Org exists (prod: it does).
+Suggested next task: log in as demo-student, open Systems Lab, and run the full
+gauntlet — lesson, practice pill, discuss pill, code run, MCQ, vocab tap, link
+toast, Knowledge card review as demo-teacher.

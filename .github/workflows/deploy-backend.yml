@@ -99,7 +99,8 @@ jobs:
             supabase/migrations/20260925000000_learning_framework.sql \
             supabase/migrations/20260926000000_model_usage_routing_task.sql \
             supabase/migrations/20260930000000_brain_mastery.sql \
-            supabase/migrations/20261001000000_practice_items.sql ; do
+            supabase/migrations/20261001000000_practice_items.sql \
+            supabase/migrations/20261002000000_systems_lab_demo.sql ; do
             echo "Applying $f"
             # Body goes through a temp file, not a shell argument: large seed migrations
             # (e.g. the Book F content seed, ~254KB) exceed the kernel's per-argument
