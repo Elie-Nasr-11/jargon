@@ -9092,3 +9092,34 @@ step-level idea_keys are authored/extracted (coarse but honest); thresholds (0.7
 alpha 0.3, 45-day decay) are first calibrations.
 Suggested next task: Phase C — the consumers (recall openers, mastery compression,
 practice targeting, frontier invites, tier-calibrated grading, progress blend).
+
+## Claude -> Codex / Human - 2026-08-03 (R26: Brain-first Phase C — the brain drives teaching)
+
+Status: Finished
+Summary: Phase C of docs/BRAIN_FIRST_PLAN.md — every hook computed in CODE (brainHints)
+and consumed by the directive layer, never left to model vibes.
+RECALL OPENERS: presenting a step whose ideas (or authored-link prerequisites) include a
+FADING idea (brain.weak) prepends one recall beat before the presentation.
+MASTERY COMPRESSION: presenting a step whose mapped ideas are ALL effective >= 0.8
+presents COMPRESSED (credit, add the new angle, one check) — the mastery twin of P4
+conversation-detected pre-emption, which still wins when both apply.
+PRACTICE TARGETING: the practice register now names its target — weakest idea first
+(from evidence); with no weak spots on record it stretches the top strength at higher
+difficulty. (Teacher banks take priority when Phase D lands.)
+BRAIN-SYNTHESIZED OFFERS: on an advancing turn where the model proposed no mode_offer,
+the brain does — a weak idea on the step just closed earns [Practice this idea]; else an
+unearned frontier link earns [Talk it through]. Signal-driven, never decorative.
+TIER-CALIBRATED GRADING: assessTurn now receives stepTier (beginner/developing/solid,
+averaged from the step's idea evidence) — a beginner's "demonstrated" is plain-language
+correctness; a solid student's requires precision.
+Also: the payload's brain key reuses the ONE precomputed buildBrainContext object
+(hints + payload share it; no second derivation).
+Files changed: supabase/functions/chat/index.ts; tests/test_brain_phase_b.py
+(BrainDrivesTeaching class; suite 464 OK).
+Tests run: python 464 OK; edge-fn parse clean.
+Remaining concerns: all thresholds are first calibrations (0.7 weak, 0.8 compress,
+0.35/0.7 tier bands); brain hooks are dark until mastery evidence accumulates and
+ideas/links exist for the content (Phase D intake lights them up everywhere); the
+progress BLEND client surfaces (mastery on Home/Class + BrainMap strength halos) are
+the remaining B4/C slice — next round alongside or before Phase D.
+Suggested next task: client blend surfaces, then Phase D (extract_knowledge intake).

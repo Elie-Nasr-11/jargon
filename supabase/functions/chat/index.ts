@@ -1811,6 +1811,10 @@ async function assessTurn(
   // When false (routing-only turns: non-graded steps), the model is told to return
   // understanding: null and the grading rules are omitted from the ask.
   gradeExplanation: boolean,
+  // Phase C: the student's evidence-based standing on this step's ideas (null = no
+  // evidence yet). Calibrates "demonstrated" — a beginner's solid is plain-language
+  // correctness; a solid student's solid requires precision.
+  stepTier: string | null = null,
 ): Promise<{ router: RouterVerdict | null; understanding: GradedUnderstanding | null } | null> {
   const text = (studentText || "").trim();
   if (!text) return null;
@@ -1870,10 +1874,15 @@ async function assessTurn(
       "number and a short note capturing the student\'s insight (only clear cases — never " +
       "stretch; an EMPTY preempted array is the normal case). "
     : 'TASK 2 — no grading on this turn: always return "understanding": null and "preempted": []. ';
+  const tierLine =
+    gradeExplanation && stepTier
+      ? `Student's current evidence-based level on this step's ideas: ${stepTier}. Calibrate "demonstrated" accordingly — for a beginner, plain-language correctness is enough; for a solid student, expect precision. `
+      : "";
   const system =
     "You assess ONE student message in a tutoring chat. " +
     classifyBlock +
     gradeBlock +
+    tierLine +
     "Return ONLY JSON: " +
     '{"kind":"answer_attempt|question|continue_signal|navigate_back|tangent|meta",' +
     '"confidence":0.0-1.0,' +
@@ -3155,6 +3164,13 @@ function turnDirective(args: {
   studentMode: StudentTurnMode | null;
   // Phase A: non-null when THIS turn is the student tapping a mode hand-off pill.
   modeOfferAccept: { mode: "practice" | "discuss"; topic: string } | null;
+  // Phase C: the brain's precomputed teaching hints (code-derived, never model vibes).
+  brainHints: {
+    recallIdea: string | null;
+    compress: boolean;
+    practiceTarget: string | null;
+    practiceStretch: string | null;
+  };
 }): TurnDirective {
   const {
     currentStage,
@@ -3178,6 +3194,7 @@ function turnDirective(args: {
     preemptedNote,
     studentMode,
     modeOfferAccept,
+    brainHints,
   } = args;
 
   const quizActive = draftFlow.nextAction === "choose";
@@ -3267,7 +3284,13 @@ function turnDirective(args: {
     ) {
       return {
         key: "practice_register",
-        text: "PRACTICE register — nothing here touches the lesson's gates. Keep the loop brisk: if they just attempted your last exercise, give specific feedback (what's right, the ONE thing to fix), then pose the NEXT exercise; if they asked or said something else, respond to it briefly and offer the next exercise. ONE question at a time, grounded in this lesson's material, varied in shape and difficulty — never a list of questions, never the worked answer before an attempt.",
+        text:
+          "PRACTICE register — nothing here touches the lesson's gates. Keep the loop brisk: if they just attempted your last exercise, give specific feedback (what's right, the ONE thing to fix), then pose the NEXT exercise; if they asked or said something else, respond to it briefly and offer the next exercise. ONE question at a time, grounded in this lesson's material, varied in shape and difficulty — never a list of questions, never the worked answer before an attempt." +
+          (brainHints.practiceTarget
+            ? ` TARGET their weakest idea first: "${brainHints.practiceTarget}" (from their mastery evidence) — exercises should work it until it firms up.`
+            : brainHints.practiceStretch
+              ? ` No weak spots on record — STRETCH them on "${brainHints.practiceStretch}" at a notch higher difficulty.`
+              : ""),
       };
     }
     // --- Flow v3 routed-conversation branches ---------------------------------
@@ -3557,14 +3580,26 @@ function turnDirective(args: {
         routedKind === "question"
           ? "The student's message asks a QUESTION — answer it fully and helpfully FIRST, then present the step. "
           : "";
+      // Phase C: mastery-known compression — every idea this step teaches is already
+      // solid in their evidence, so present COMPRESSED (never skipped). Conversation-
+      // detected pre-emption (above) wins when both apply; this is the mastery twin.
+      const compression = brainHints.compress
+        ? " MASTERY NOTE: their evidence shows this step's ideas are already SOLID — present COMPRESSED: credit that in a line, add only what's new or deeper, then ONE quick check question. Do not re-teach from scratch, and do not skip any pointed-at material or task."
+        : "";
+      // Phase C: a fading prerequisite underpins this step — open with ONE recall beat.
+      const recall = !brainHints.compress && brainHints.recallIdea
+        ? ` RECALL OPENER: before presenting, ask ONE quick recall question on "${brainHints.recallIdea}" — their evidence shows it fading, and this step builds on it. Then present as directed.`
+        : "";
       if (modePresent) {
-        return { key: "present_step", text: questionFirst + modePresent };
+        return { key: "present_step", text: questionFirst + modePresent + compression + recall };
       }
       return {
         key: "present_step",
         text:
           questionFirst +
-          "This step has not been shown to the student yet. Present it: introduce the task in a sentence or two at their grade level and invite a first attempt — do not pre-empt their thinking, give anything away, or interrogate them.",
+          "This step has not been shown to the student yet. Present it: introduce the task in a sentence or two at their grade level and invite a first attempt — do not pre-empt their thinking, give anything away, or interrogate them." +
+          compression +
+          recall,
       };
     }
     return {
@@ -5540,6 +5575,63 @@ async function handleTypedRequest(
     orchestratorAssessment,
   );
   const helpPolicy = resolveHelpPolicy(context.lesson);
+  // --- Phase C: the brain's deterministic teaching hints (computed in CODE, consumed
+  // by the directive layer — never left to model vibes). One buildBrainContext call
+  // serves the hints here AND the payload's `brain` key below.
+  const brain = buildBrainContext({
+    lessonId,
+    ideas: context.ideas,
+    ideaMastery: context.ideaMastery,
+    curriculumLinks: context.curriculumLinks,
+    studentLinks: context.studentLinks,
+    vocabTerms: context.vocabTerms,
+    studentVocab: context.studentVocab,
+  });
+  const stepIdeaKeys = evidenceIdeaKeys(context.activity, context.ideas, lessonId);
+  const effByKey = new Map(
+    context.ideaMastery.map((row) => [
+      String(row.idea_key),
+      effectiveMastery(row.score, row.last_evidence_at),
+    ]),
+  );
+  // A weak idea "underpins" this step when it IS one of the step's ideas or an authored
+  // link ties it to one — that's when a recall opener earns its interruption.
+  const weakUnderpinningStep = brain.weak.find(
+    (weakIdea) =>
+      stepIdeaKeys.includes(weakIdea.idea_key) ||
+      context.curriculumLinks.some(
+        (link) =>
+          (stepIdeaKeys.includes(String(link.from_key)) &&
+            String(link.to_key) === weakIdea.idea_key) ||
+          (stepIdeaKeys.includes(String(link.to_key)) &&
+            String(link.from_key) === weakIdea.idea_key),
+      ),
+  );
+  const brainHints = {
+    // Open the step's presentation with ONE recall beat on this fading prerequisite.
+    recallIdea: weakUnderpinningStep ? weakUnderpinningStep.title : null,
+    // Every mapped idea already solid (evidence exists and effective >= 0.8) → present
+    // compressed. Generalizes P4 pre-emption from conversation-detected to mastery-known.
+    compress:
+      stepIdeaKeys.length > 0 &&
+      stepIdeaKeys.every((key) => (effByKey.get(key) ?? 0) >= 0.8),
+    // Practice targeting: weakest first; with no weak spots on record, stretch a strength.
+    practiceTarget: brain.weak[0]?.title ?? null,
+    practiceStretch: !brain.weak.length ? (brain.strong[0]?.title ?? null) : null,
+    // The one frontier connection worth inviting right now.
+    frontier: brain.frontier[0] ?? null,
+  };
+  // Grader calibration: the student's standing on THIS step's ideas, from evidence.
+  const stepEffectives = stepIdeaKeys
+    .map((key) => effByKey.get(key))
+    .filter((value): value is number => typeof value === "number");
+  const stepTier = !stepEffectives.length
+    ? null
+    : stepEffectives.reduce((a, b) => a + b, 0) / stepEffectives.length < 0.35
+      ? "beginner"
+      : stepEffectives.reduce((a, b) => a + b, 0) / stepEffectives.length < 0.7
+        ? "developing"
+        : "solid";
   // The hint rung the mentor may reveal at this turn (1-4; 0 = no hint asked). "Show me
   // how" starts at rung 2. Clamped: body.hint_rung is client-supplied and unvalidated —
   // an out-of-range rung would leak past the 1-4 ladder into the prompt and telemetry.
@@ -5719,6 +5811,7 @@ async function handleTypedRequest(
             context.recentTurns,
             upcomingSteps,
             isTextExplanation,
+            stepTier,
           )
         : Promise.resolve(null),
       codeNeedsJudge
@@ -5982,6 +6075,7 @@ async function handleTypedRequest(
       navAction,
       preemptedNote,
       studentMode: declaredMode,
+      brainHints,
       modeOfferAccept:
         controlType === "mode_offer" &&
         (control?.mode === "practice" || control?.mode === "discuss")
@@ -6375,23 +6469,13 @@ async function handleTypedRequest(
           // Phase B: the brain read model — ranked weakness/strength, unearned frontier
           // links, and bridge vocab. Compact and capped; Phase C's deterministic hooks
           // consume the same object.
-          brain: (() => {
-            const brain = buildBrainContext({
-              lessonId,
-              ideas: context.ideas,
-              ideaMastery: context.ideaMastery,
-              curriculumLinks: context.curriculumLinks,
-              studentLinks: context.studentLinks,
-              vocabTerms: context.vocabTerms,
-              studentVocab: context.studentVocab,
-            });
-            return brain.weak.length ||
-              brain.strong.length ||
-              brain.frontier.length ||
-              brain.traveled.length
+          brain:
+            brain.weak.length ||
+            brain.strong.length ||
+            brain.frontier.length ||
+            brain.traveled.length
               ? brain
-              : undefined;
-          })(),
+              : undefined,
           conversation_so_far:
             typeof session.running_summary === "string" && session.running_summary
               ? session.running_summary
@@ -6770,6 +6854,27 @@ async function handleTypedRequest(
       envelope.lesson_arc = advancedArc
         ? { ...advancedArc, transition: true }
         : advancedArc;
+      // Phase C: when the model didn't propose a hand-off pill, the BRAIN can — a weak
+      // idea on the step just closed earns [Practice this idea]; else an unearned
+      // frontier link earns [Talk it through]. Signal-driven, never decorative.
+      if (!envelope.mode_offer && !inRevisit) {
+        const weakHere = brain.weak.find((weakIdea) =>
+          stepIdeaKeys.includes(weakIdea.idea_key),
+        );
+        if (weakHere) {
+          envelope.mode_offer = {
+            mode: "practice",
+            topic: weakHere.title,
+            label: "Practice this idea",
+          };
+        } else if (brainHints.frontier) {
+          envelope.mode_offer = {
+            mode: "discuss",
+            topic: `how ${brainHints.frontier.from_title} connects to ${brainHints.frontier.to_title}`,
+            label: "Talk it through",
+          };
+        }
+      }
     }
 
     // Unified completion gate (checkpoint unification P1): a lesson is complete only when its

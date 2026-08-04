@@ -41,7 +41,7 @@ class BrainReadModel(unittest.TestCase):
             self.assertIn(cap, CHAT)
 
     def test_brain_rides_the_payload_and_prompt(self):
-        self.assertIn("brain: (() => {", CHAT)
+        self.assertIn("brain:\n            brain.weak.length ||", CHAT)
         self.assertIn("- BRAIN: turn.brain (when present)", CHAT)
 
     def test_evidence_writer_wired_to_grading(self):
@@ -52,6 +52,36 @@ class BrainReadModel(unittest.TestCase):
         self.assertIn('answerEchoesMentor\n      ? "neutral"', CHAT)
         self.assertIn("recordIdeaEvidence(", CHAT)
         self.assertIn("function evidenceIdeaKeys(", CHAT)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class BrainDrivesTeaching(unittest.TestCase):
+    """Phase C: the brain's consumers — all computed in code, consumed by directives."""
+
+    def test_hints_computed_in_code(self):
+        self.assertIn("const brainHints = {", CHAT)
+        self.assertIn("const weakUnderpinningStep", CHAT)
+        self.assertIn("const stepTier =", CHAT)
+
+    def test_recall_opener_and_mastery_compression(self):
+        self.assertIn("RECALL OPENER: before presenting", CHAT)
+        self.assertIn("MASTERY NOTE: their evidence shows this step's ideas are already SOLID", CHAT)
+
+    def test_practice_targets_weakness_and_stretches_strength(self):
+        self.assertIn("TARGET their weakest idea first:", CHAT)
+        self.assertIn("STRETCH them on", CHAT)
+
+    def test_brain_synthesizes_mode_offers_on_beat_close(self):
+        self.assertIn("if (!envelope.mode_offer && !inRevisit) {", CHAT)
+        self.assertIn('label: "Practice this idea",', CHAT)
+        self.assertIn('label: "Talk it through",', CHAT)
+
+    def test_grading_calibrates_by_step_tier(self):
+        self.assertIn("stepTier: string | null = null,", CHAT)
+        self.assertIn("evidence-based level on this step's ideas", CHAT)
 
 
 if __name__ == "__main__":
