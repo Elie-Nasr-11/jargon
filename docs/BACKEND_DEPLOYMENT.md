@@ -13,7 +13,10 @@ Fill this in after the live Render engine is created:
 - Supabase migrations applied live: `0001_init`, `0002_lesson_spine`, `0003_learning_session_runtime`
 - Supabase edge functions deployed live: `run` v2, `chat` v2
 - Supabase `chat` OpenAI secret: `YES - legacy chat and typed lesson chat returned status ok`
-- Render static front-end URL: `UNVERIFIED - https://jargon.onrender.com/ timed out during smoke`
+- Render static front-end URL: `https://jargon-9bv5.onrender.com/` (verified 2026-08-04:
+  serves the current Vite bundle, and files under `frontend/public/` — e.g.
+  `/readings/*.pdf` — are served directly, ahead of the SPA catch-all rewrite).
+  NOT `jargon.onrender.com`, which still answers with an unrelated legacy CRA app.
 
 ## Render
 
