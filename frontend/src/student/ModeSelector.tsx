@@ -2,20 +2,17 @@ import { useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Popover } from "@/components/Popover";
 import {
-  ALWAYS_MODES,
+  PICKER_MODES,
   modeAccentValue,
   modeInkValue,
   turnModeSpec,
   type TurnMode,
 } from "@/student/turnModes";
 
-// The mode picker that lives in the chatbox. Lists ONLY the four always-available modes, with a
-// one-line hint each — the hints are the whole point, since "Discuss" vs "Open" is not
-// self-evident to a 12-year-old.
-//
-// Quiz and Homework are deliberately NOT in here: they exist only when the lesson has one, and a
-// dropdown whose length changes per lesson is harder to learn than a fixed list plus visible
-// inline pills. Chatbox renders those.
+// The mode picker that lives in the chatbox. Phase A: exactly three registers — Lesson,
+// Practice, Discuss — with a one-line hint each (the hints are the whole point for a
+// 12-year-old). Quiz and Homework are NOT conversation modes: they're teacher posts that
+// live in the work dock and class pages.
 
 export type ModeSelectorProps = {
   value: TurnMode;
@@ -53,7 +50,7 @@ export function ModeSelector({ value, onChange, disabled }: ModeSelectorProps) {
         </button>
       }
     >
-      {ALWAYS_MODES.map((mode) => {
+      {PICKER_MODES.map((mode) => {
         const selected = mode.id === value;
         return (
           <button
@@ -61,7 +58,7 @@ export function ModeSelector({ value, onChange, disabled }: ModeSelectorProps) {
             type="button"
             onClick={() => {
               setOpen(false);
-              onChange(mode.id);
+              onChange(mode.id as TurnMode);
             }}
             className="flex w-full items-start gap-2.5 rounded-control px-2.5 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
             style={{ ["--mode-accent" as string]: `var(${mode.accentVar})` }}

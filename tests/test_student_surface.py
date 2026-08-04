@@ -54,25 +54,27 @@ class StudentSurfaceWire(unittest.TestCase):
         for src in (HOOK, TRANSCRIPT):
             self.assertNotIn("type Msg =", src)
 
-    def test_dropdown_holds_exactly_the_always_available_modes(self):
-        block = MODES[MODES.index("export const ALWAYS_MODES") : MODES.index("export const CONDITIONAL_MODES")]
-        for mode in ("lesson", "practice", "discuss", "open"):
+    def test_dropdown_holds_exactly_the_three_modes(self):
+        # Phase A: exactly lesson/practice/discuss. Quiz/assignment are teacher posts
+        # (work dock), "open" folded into discuss.
+        block = MODES[MODES.index("export const PICKER_MODES") : MODES.index("const LEGACY_MODE_SPECS")]
+        for mode in ("lesson", "practice", "discuss"):
             self.assertIn(f'id: "{mode}"', block)
-        # Quiz and homework are conditional — a dropdown whose length changes per lesson is
-        # harder to learn than a fixed list plus visible inline pills.
         self.assertNotIn('id: "quiz"', block)
         self.assertNotIn('id: "assignment"', block)
+        self.assertNotIn('id: "open"', block)
 
     def test_checkpoints_mode_is_gone(self):
         self.assertNotIn("checkpoints", MODES)
 
-    def test_homework_keeps_the_assignment_wire_id(self):
-        # The server's mode whitelist accepts "assignment"; only the student-facing LABEL says
-        # Homework. Renaming the id would fall through to legacy behaviour server-side.
-        block = MODES[MODES.index("export const CONDITIONAL_MODES") :]
-        self.assertIn('id: "assignment"', block)
-        self.assertIn('label: "Homework"', block)
-        self.assertIn('"assignment"', CHAT_FN)
+    def test_legacy_mode_ids_render_but_are_not_pickable(self):
+        # Historical transcripts recorded open/quiz/assignment turns — those sections keep
+        # their labels via LEGACY_MODE_SPECS, but the ids never re-enter the picker.
+        block = MODES[MODES.index("const LEGACY_MODE_SPECS") :]
+        for mode in ("open", "quiz", "assignment"):
+            self.assertIn(f'id: "{mode}"', block)
+        # And the server maps them tolerantly instead of treating them as unknown.
+        self.assertIn('if (value === "quiz" || value === "assignment") return "lesson";', CHAT_FN)
 
     def test_resources_is_not_a_turn_mode(self):
         # Opening materials sends no turn and cannot change the conversation's contract, so it
@@ -82,10 +84,9 @@ class StudentSurfaceWire(unittest.TestCase):
         self.assertNotIn("resources", union)
 
     def test_a_pill_only_appears_when_the_lesson_offers_it(self):
-        # No guessing: homework has no client-side proxy signal, so its pill stays hidden until
-        # the server sends availability rather than pointing a student at work that may not exist.
+        # Phase A: the only inline pill left is Resources — quiz/homework are dock items.
         self.assertIn("sent?.homework ?? false", HOOK)
-        self.assertIn("if (!available.length && !offers.resources) return null;", PILLS)
+        self.assertIn("if (!offers.resources) return null;", PILLS)
 
     def test_errors_are_humanised_for_any_thrown_shape(self):
         # supabase-js rejects with PLAIN OBJECTS carrying a message, not Error instances. An
@@ -131,7 +132,8 @@ class ModeSections(unittest.TestCase):
         tail = fn.find("\nfunction ")
         if tail != -1:
             fn = fn[:tail]
-        self.assertIn("if (!mode || !isTurnMode(mode))", fn)
+        self.assertIn("const spec = renderModeSpec(mode);", fn)
+        self.assertIn("if (!spec)", fn)
 
     def test_only_student_and_mentor_messages_open_a_section(self):
         # Thinking placeholders and teacher interjections are not the student picking a mode; if

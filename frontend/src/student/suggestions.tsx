@@ -29,7 +29,7 @@ export function buildSuggestions(lesson: Lesson, activities: LessonActivity[]): 
     },
     hasQuiz
       ? {
-          mode: "quiz",
+          mode: "practice",
           label: "Warm-up question",
           prompt: `Give me a quick warm-up question on "${lesson.title}" to see what I already know.`,
         }
@@ -57,7 +57,7 @@ export function buildReentrySuggestions(lesson: Lesson): Suggestion[] {
       prompt: `Recap what we've covered so far in "${lesson.title}".`,
     },
     {
-      mode: "quiz",
+      mode: "practice",
       label: "Check me",
       prompt: "Quiz me quickly on what we covered last time before we go on.",
     },

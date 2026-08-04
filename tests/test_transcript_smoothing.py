@@ -62,8 +62,12 @@ class TranscriptSmoothingStaticTests(unittest.TestCase):
         self.assertIn("{surface === \"text\" && dictationAvailable ? (", chatbox)
         self.assertNotIn("dictationAvailable && (draftEmpty || dictating)", chatbox)
 
-    def test_offer_pill_hides_for_selected_mode(self):
-        self.assertIn("&& mode !== spec.id", PILLS.read_text(encoding="utf-8"))
+    def test_offer_pills_are_resources_only(self):
+        # Phase A superseded the round-19 hide-while-selected logic: quiz/homework left the
+        # chatbox entirely (teacher posts in the dock); only Resources remains inline.
+        pills = PILLS.read_text(encoding="utf-8")
+        self.assertNotIn("CONDITIONAL_MODES", pills)
+        self.assertIn("if (!offers.resources) return null;", pills)
 
     def test_sections_split_when_arc_step_changes(self):
         transcript = TRANSCRIPT.read_text(encoding="utf-8")
@@ -176,7 +180,7 @@ class StreamingProseStaticTests(unittest.TestCase):
     def test_streaming_body_sentence_treatment(self):
         for fragment in (
             "function StreamingBody(",
-            "function splitSentences(",
+            "import { splitSentences } from \"@/lib/sentences\";",
             # Tail = blurred gray; completed sentences whiten; live inline markdown.
             'className="stream-tail"',
             "stream-done",

@@ -16,6 +16,7 @@ import {
   recordVoiceInteraction,
 } from "@/lib/api";
 import { runJavaScript, runPython } from "@/lib/code-runner";
+import { sentenceBreaks } from "@/lib/sentences";
 import { store } from "@/lib/jargon-store";
 import { supabase } from "@/lib/supabase";
 import type {
@@ -43,7 +44,6 @@ import {
   envelopeMessage,
   formatRunOutput,
   liveCommentToMessage,
-  mentorToPreferences,
   sortTimedMessages,
   withRestoredQuizChoices,
   turnToMessage,
@@ -686,7 +686,6 @@ export function useConversation() {
       const WORD_MS = 200;
       const HOLD_MIN_MS = 400;
       const HOLD_MAX_MS = 4_000;
-      const SENTENCE_BREAK_RE = /(?<=[.!?…]["')\]]?)\s+/g;
       let streamedText = "";
       let revealedCount = 0; // complete sentences released to the transcript
       let releaseTimer = 0;
@@ -694,11 +693,7 @@ export function useConversation() {
       // Envelope that arrived while sentences were still being paced out — the pump settles
       // it once the last one lands, so the final swap never jumps ahead of the reading.
       let pendingSettle: (() => void) | null = null;
-      const breaks = () =>
-        Array.from(streamedText.matchAll(SENTENCE_BREAK_RE), (m) => ({
-          at: m.index ?? 0,
-          len: m[0].length,
-        }));
+      const breaks = () => sentenceBreaks(streamedText);
       const paint = () => {
         const b = breaks();
         // Caught up → show everything incl. the forming tail; behind → cut at the last
@@ -761,7 +756,6 @@ export function useConversation() {
             sessionId: sessionRef.current,
             answer,
             control: options?.control,
-            mentorPreferences: mentorToPreferences(store.getMentor()),
             mode,
             onDelta,
           });
@@ -936,6 +930,18 @@ export function useConversation() {
       control: { type: "continue" },
     });
   }, [sendAnswer]);
+
+  // Phase A: accepting a mode hand-off pill. A deterministic CONTROL turn (no synthesized
+  // student prose beyond the pill's label as the echo); the caller flips the picker so
+  // follow-up typed messages ride the new register.
+  const sendModeOffer = useCallback(
+    (offer: { mode: "practice" | "discuss"; topic: string; label: string }) => {
+      void sendAnswer({ mode: "text", text: "", client_msg_id: uid() }, offer.mode, offer.label, {
+        control: { type: "mode_offer", mode: offer.mode, topic: offer.topic },
+      });
+    },
+    [sendAnswer],
+  );
 
   // Return from a revisit to exactly where the lesson left off (the server restores the paused
   // step state and clears the frame).
@@ -1202,6 +1208,7 @@ export function useConversation() {
     sendCode,
     sendChoice,
     sendContinue,
+    sendModeOffer,
     sendResume,
     sendNavigate,
     openLesson,

@@ -1165,6 +1165,9 @@ export type TypedChatEnvelope = {
   // Flow v3 (all optional — old stored envelopes replay fine): the Continue pill offer for
   // unacknowledged content steps, and the turn router's verdict (telemetry/hinting).
   continue_offer?: { label: string } | null;
+  // Phase A (brain-first): mode hand-off pill — [Practice this idea] / [Talk it through]
+  // rendered next to Continue; only the latest offer is live.
+  mode_offer?: { mode: "practice" | "discuss"; topic: string; label: string } | null;
   turn_kind?: string;
   router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for this student. Live-turn only
@@ -1182,8 +1185,11 @@ export type TypedChatEnvelope = {
 // Flow v3 structured client affordances: the Continue button (and, later, stepper
 // navigation) post a control turn instead of synthetic text.
 export type TypedChatControl = {
-  type: "continue" | "navigate" | "resume" | "artifact_ready";
+  type: "continue" | "navigate" | "resume" | "artifact_ready" | "mode_offer";
   target_activity_id?: string;
+  // mode_offer accepts: which register and what topic the pill carried.
+  mode?: "practice" | "discuss";
+  topic?: string;
   // artifact_ready: the lesson_resources row artifact-live just created.
   resource_id?: string;
 };

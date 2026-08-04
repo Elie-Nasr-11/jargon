@@ -2,11 +2,17 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import gsap from "gsap";
 import { ArrowRight, Check, Paperclip, RotateCcw, Sparkles } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
+import { splitSentences } from "@/lib/sentences";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
 import { store } from "@/lib/jargon-store";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ResourceCard } from "@/student/ResourceCard";
-import { isTurnMode, modeAccentValue, turnModeSpec } from "@/student/turnModes";
+import {
+  CHECKPOINT_SPEC,
+  modeAccentValue,
+  renderModeSpec,
+  turnModeSpec,
+} from "@/student/turnModes";
 import { useConversationChannel } from "@/student/useConversation";
 import type { LessonArc, TypedChatAnswer, VocabEvent, VocabTerm } from "@/lib/types";
 import {
@@ -309,21 +315,6 @@ function renderBlocks(text: string, vocab?: VocabPass): ReactNode[] {
   return nodes;
 }
 
-// Text with its fenced blocks lifted out. Code gets the highlighted block; prose segments keep
-// whitespace. `markdown` (mentor bubbles only) turns on the safe subset above — student and
-// teacher text stays literal.
-// --- Round 21: sentence-aware prose ------------------------------------------------
-// A completed sentence is one followed by more text; the trailing fragment is the TAIL.
-// Streaming renders the tail as soft blurred GRAY (still forming) and each sentence, the
-// moment it completes, sharpens and whitens (stream-whiten). Questions — sentences that
-// end in "?" — wear the accent in both live and settled prose, so "something to act on"
-// never reads as flat text.
-function splitSentences(text: string): { done: string[]; tail: string } {
-  const parts = text.split(/(?<=[.!?…]["')\]]?)\s+/);
-  if (parts.length <= 1) return { done: [], tail: text };
-  return { done: parts.slice(0, -1), tail: parts[parts.length - 1] };
-}
-
 function isQuestionSentence(sentence: string): boolean {
   return /[?]["')\]]?\s*$/.test(sentence.trim());
 }
@@ -616,7 +607,7 @@ function ModeSection({
   // Round 20: checkpoints wear their own marker regardless of the surrounding mode —
   // the moment of being tested deserves a visible line in the record.
   if (checkpoint) {
-    const spec = turnModeSpec("quiz");
+    const spec = CHECKPOINT_SPEC;
     return (
       <section
         aria-label="Checkpoint section"
@@ -628,14 +619,15 @@ function ModeSection({
       </section>
     );
   }
-  // Unknown mode: no rule, no label. Never claim a mode we did not record.
-  if (!mode || !isTurnMode(mode))
+  // Unknown mode: no rule, no label. Never claim a mode we did not record. Legacy ids
+  // (open/quiz/assignment, from before Phase A) still resolve — history keeps its labels.
+  const spec = renderModeSpec(mode);
+  if (!spec)
     return (
       <div className="mx-auto mt-3 flex w-full max-w-3xl flex-col gap-3 px-4 first:mt-1">
         {children}
       </div>
     );
-  const spec = turnModeSpec(mode);
   // Lesson sections carry the step eyebrow; every other mode labels itself.
   const eyebrow = (mode === "lesson" && stepEyebrowLabel(arc)) || spec.label;
   return (

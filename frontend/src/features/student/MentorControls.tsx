@@ -2,9 +2,10 @@ import { useLayoutEffect, useRef } from "react";
 import gsap from "gsap";
 import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
 
-// The mentor controls, mounted inside the Mentor modal: personality (tone · verbosity ·
-// difficulty) PLUS voice (voice · reading speed) when the voice props are passed — voice lives
-// with the mentor's talking style rather than a separate settings surface.
+// The mentor controls, mounted inside the Mentor modal. Phase A: the personality dials
+// (tone/verbosity/difficulty -> mentor_preferences) are RETIRED — the mentor calibrates from
+// the conversation, the student's profile note, and (Phase B+) the brain. What remains is
+// voice: which voice, and how fast it reads.
 
 const VOICE_OPTIONS: { label: string; value: VoiceSettings["voiceName"] }[] = [
   { label: "Marin", value: "marin" },
@@ -30,30 +31,12 @@ export function MentorControls({
   voice?: VoiceSettings;
   onVoiceChange?: (v: VoiceSettings) => void;
 }) {
-  const groups: {
-    key: keyof MentorConfig;
-    label: string;
-    options: MentorConfig[keyof MentorConfig][];
-  }[] = [
-    { key: "tone", label: "Tone", options: ["Friendly", "Direct", "Socratic"] },
-    { key: "verbosity", label: "Verbosity", options: ["Concise", "Balanced", "Detailed"] },
-    { key: "difficulty", label: "Difficulty", options: ["Gentle", "Standard", "Challenging"] },
-  ];
   const voiceLabel = VOICE_OPTIONS.find((o) => o.value === voice?.voiceName)?.label ?? "Marin";
   const speedLabel = SPEED_OPTIONS.find((o) => o.value === voice?.readAloudRate)?.label ?? "Normal";
   return (
     <div>
-      <p className="text-[13px] text-muted-foreground">Shape how the tutor talks — and sounds.</p>
+      <p className="text-[13px] text-muted-foreground">Choose how the mentor sounds.</p>
       <div className="mt-5 space-y-4">
-        {groups.map((g) => (
-          <MentorGroup
-            key={g.key as string}
-            label={g.label}
-            options={g.options as string[]}
-            value={mentor[g.key] as string}
-            onSelect={(opt) => onChange({ ...mentor, [g.key]: opt } as MentorConfig)}
-          />
-        ))}
         {voice && onVoiceChange ? (
           <>
             <MentorGroup

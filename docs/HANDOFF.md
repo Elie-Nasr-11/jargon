@@ -8987,3 +8987,43 @@ tier-calibrated grading, progress blend) -> D (extract_knowledge intake + practi
 + studio-lite review). Every phase additive/tolerant; simplification ledger included.
 Files changed: docs/BRAIN_FIRST_PLAN.md (new); docs/HANDOFF.md.
 Suggested next task: owner green-lights the order (or reorders); build Phase A.
+
+## Claude -> Codex / Human - 2026-08-03 (R23: Brain-first Phase A — modes + advancing)
+
+Status: Finished
+Summary: Phase A of docs/BRAIN_FIRST_PLAN.md, built end to end.
+THREE MODES: TurnMode = lesson | practice | discuss (PICKER_MODES); quiz/assignment are
+teacher posts (dock/class pages) and "open" folded into discuss. Legacy ids render
+historical transcript sections via LEGACY_MODE_SPECS (never pickable); the server maps
+open->discuss, quiz|assignment->lesson tolerantly. applyModeCeiling caps discuss AND
+practice (neither discharges lesson gates); practice got its own directive register
+(practice_register: brisk exercise loop, one question at a time); MCQ taps are
+ceiling-exempt like controls (buttons on server-rendered options) and the client sends
+choice taps as mode "lesson". OfferPills is Resources-only.
+MENTOR_PREFERENCES RETIRED: personality dials removed from MentorControls (voice-only
+now); the client stops sending mentor_preferences (api input optional); the prompt's
+policy block is teacher-only (help ceiling + lesson tone/pace); mentor_mode still
+persists on the session row for the console but the model never sees it.
+CONTINUE-ONLY ADVANCING: typed readiness ACTS as Continue (continue_signal), and the
+router-outage fallback narrowed to CONTINUE_SIGNAL_RE — ordinary sentences never
+acknowledge a content step even with the router down.
+MODE_OFFER PILLS: mentor JSON contract gains mode_offer {mode, topic, label}; the
+orchestrator validates (makeEnvelope passthrough) and gates it to beat-closing turns
+(advancing/step-complete, never in revisit or under live choices); CONCLUDE_HANDOFF
+tells the mentor the pill carries the action (no action sentences in prose); the client
+renders the pill (mode-hued, above the composer, latest-message-only), tapping flips the
+picker and sends control {type:"mode_offer", mode, topic}; the accept turn's directive
+starts the register immediately (one exercise / one inviting question).
+SHARED SENTENCES: lib/sentences.ts is now the single boundary definition
+(Transcript + useConversation both import it).
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/{turnModes.ts,
+ModeSelector.tsx,OfferPills.tsx,Chatbox.tsx,StudentApp.tsx,Transcript.tsx,
+useConversation.ts,suggestions.tsx}; frontend/src/features/student/MentorControls.tsx;
+frontend/src/lib/{types.ts,api.ts,sentences.ts}; features/student/chat/chatMessages.ts;
+tests/{test_turn_modes.py,test_student_surface.py,test_transcript_smoothing.py}.
+Tests run: python 446 OK; tsc 0 errors; eslint clean; build green; edge-fn parse clean.
+Remaining concerns: practice register is Phase-A conversational (brain targeting lands
+in C); the mode_offer source is model-proposed until C makes it deterministic; watch
+that the register-shift nod doesn't over-announce on offer accepts (the accept directive
+wins the ladder, nod appends after — acceptable, monitor live feel).
+Suggested next task: Phase E (assessTurn merge + surface cache/preload) per the plan.

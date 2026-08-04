@@ -6,21 +6,19 @@
 // surface called all three "mode", which is the single biggest source of confusion in this
 // codebase — keep these three words distinct.
 //
-// TWO GROUPS, deliberately:
-//   * ALWAYS — the four ways to talk to the tutor about any lesson. These live in the dropdown.
-//   * CONDITIONAL — quiz and homework only exist when the lesson actually has one. They sit
-//     INLINE beside the dropdown as pills, not inside it, because a dropdown that sometimes has
-//     six entries and sometimes four is harder to learn than a fixed list plus visible extras.
-//     Their presence is itself the signal that there is something to do.
+// Brain-first Phase A: THREE modes. Quiz and assignment are teacher POSTS (work items in the
+// dock and class pages), not conversation registers — their availability is the dock's job.
+// "Open" folded into Discuss. Legacy ids (open/quiz/assignment) survive ONLY as render specs so
+// historical transcript sections keep their labels; they are never pickable.
 //
-// The backend already accepts a `mode` on the turn and caps what a turn may discharge: `discuss`
-// and `open` can never close a progression gate. See supabase/functions/chat/index.ts
+// The backend accepts a `mode` on the turn and caps what a turn may discharge: `discuss` and
+// `practice` can never close a lesson gate. See supabase/functions/chat/index.ts
 // (applyModeCeiling) and docs/PLATFORM.md §10.
 
-export type TurnMode = "lesson" | "practice" | "discuss" | "open" | "quiz" | "assignment";
+export type TurnMode = "lesson" | "practice" | "discuss";
 
 export type TurnModeSpec = {
-  id: TurnMode;
+  id: string;
   label: string;
   // One line, shown in the picker. Written for a student, not a developer.
   hint: string;
@@ -33,9 +31,9 @@ export type TurnModeSpec = {
   accentVar: string;
 };
 
-// The dropdown. Always available, in this order — `lesson` leads because it is the default:
+// The picker. Always these three, in this order — `lesson` leads because it is the default:
 // the spine of the conversation when the student hasn't chosen anything else.
-export const ALWAYS_MODES: readonly TurnModeSpec[] = [
+export const PICKER_MODES: readonly TurnModeSpec[] = [
   {
     id: "lesson",
     label: "Lesson",
@@ -46,67 +44,76 @@ export const ALWAYS_MODES: readonly TurnModeSpec[] = [
   {
     id: "practice",
     label: "Practice",
-    hint: "Try it yourself and get feedback",
-    canProgress: true,
+    hint: "Solve exercises to build proficiency — doesn't move the lesson",
+    canProgress: false,
     accentVar: "--mode-practice",
   },
   {
     id: "discuss",
     label: "Discuss",
-    hint: "Talk it through — nothing here is graded",
+    hint: "Explore ideas, recap, and fill gaps — nothing here is graded",
     canProgress: false,
     accentVar: "--mode-discuss",
   },
+] as const;
+
+// Historical transcript sections may carry these ids (recorded before Phase A). Render-only:
+// the label and hue stay honest to what the student did back then; never pickable now.
+const LEGACY_MODE_SPECS: readonly TurnModeSpec[] = [
   {
     id: "open",
     label: "Open",
-    hint: "Ask anything, on or off the lesson",
+    hint: "",
     canProgress: false,
     accentVar: "--mode-open",
   },
-] as const;
-
-// Shown as inline pills ONLY when the lesson has one. `assignment` keeps its id because that is
-// the value the server's mode whitelist accepts; only the student-facing label says "Homework".
-// Renaming the id would silently fall back to legacy behaviour server-side.
-export const CONDITIONAL_MODES: readonly TurnModeSpec[] = [
   {
     id: "quiz",
     label: "Quiz",
-    hint: "Answer the questions for this step",
-    canProgress: true,
+    hint: "",
+    canProgress: false,
     accentVar: "--mode-quiz",
   },
   {
     id: "assignment",
     label: "Homework",
-    hint: "Work on something you'll hand in",
-    canProgress: true,
+    hint: "",
+    canProgress: false,
     accentVar: "--mode-assignment",
   },
 ] as const;
 
-export const TURN_MODES: readonly TurnModeSpec[] = [...ALWAYS_MODES, ...CONDITIONAL_MODES];
-
 export const DEFAULT_TURN_MODE: TurnMode = "lesson";
 
-const BY_ID = new Map<TurnMode, TurnModeSpec>(TURN_MODES.map((m) => [m.id, m]));
+const PICKER_BY_ID = new Map<string, TurnModeSpec>(PICKER_MODES.map((m) => [m.id, m]));
+const RENDER_BY_ID = new Map<string, TurnModeSpec>(
+  [...PICKER_MODES, ...LEGACY_MODE_SPECS].map((m) => [m.id, m]),
+);
 
 export function turnModeSpec(id: TurnMode): TurnModeSpec {
   // Every TurnMode has a spec by construction; the fallback keeps a bad cast from crashing the
   // composer.
-  return BY_ID.get(id) ?? ALWAYS_MODES[0];
+  return PICKER_BY_ID.get(id) ?? PICKER_MODES[0];
 }
 
 export function isTurnMode(value: unknown): value is TurnMode {
-  return typeof value === "string" && BY_ID.has(value as TurnMode);
+  return typeof value === "string" && PICKER_BY_ID.has(value);
 }
 
+// Rendering resolver: picker modes AND legacy ids — a transcript section recorded as "quiz"
+// still wears its pink label. Null for anything unknown (render no chrome; never invent).
+export function renderModeSpec(value: unknown): TurnModeSpec | null {
+  return typeof value === "string" ? (RENDER_BY_ID.get(value) ?? null) : null;
+}
+
+// The checkpoint section marker keeps the quiz hue — being tested has its own color even
+// though "quiz" is no longer a conversation mode.
+export const CHECKPOINT_SPEC: TurnModeSpec =
+  LEGACY_MODE_SPECS.find((m) => m.id === "quiz") ?? PICKER_MODES[0];
+
 // The CSS value a mode wrapper should set as --mode-accent. Design system (docs/design-system,
-// board 5a): every mode owns a full hue — Lesson blue, Practice green, Discuss yellow, Open
-// orange, Quiz pink, Homework lavender. The old off-spine desaturation is retired; progression
-// honesty lives in the server ceiling and the canProgress affordances, not in washed-out chips.
-// Still token-derived: no hex codes leak into components, and both themes resolve.
+// board 5a): every mode owns a full hue. Still token-derived: no hex codes leak into
+// components, and both themes resolve.
 export function modeAccentValue(spec: TurnModeSpec): string {
   return `var(${spec.accentVar})`;
 }
@@ -117,10 +124,8 @@ export function modeInkValue(spec: TurnModeSpec): string {
   return `var(${spec.accentVar}-ink, var(--background))`;
 }
 
-// What this lesson currently offers. Resources is NOT a TurnMode — opening materials sends no
-// turn and cannot change the conversation's contract — so it rides alongside rather than in the
-// union. Absent/false hides the affordance: a pill only ever appears when there is something
-// behind it.
+// What this lesson currently offers. Post-Phase A only `resources` drives chatbox chrome
+// (quiz/homework are dock work items); the other flags are kept for envelope compatibility.
 export type LessonOffers = {
   quiz: boolean;
   homework: boolean;

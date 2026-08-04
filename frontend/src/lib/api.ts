@@ -3104,7 +3104,8 @@ export async function invokeTypedChat(input: {
   sessionId?: string | null;
   answer?: TypedChatAnswer;
   control?: TypedChatControl;
-  mentorPreferences: MentorPreferences;
+  // Phase A: retired — old callers may still pass it; the server ignores it.
+  mentorPreferences?: MentorPreferences;
   // v6: the student-declared TurnMode for THIS message (see src/student/turnModes.ts). The
   // server validates it against a closed set and caps what the turn may discharge; absent or
   // unrecognized means today's behavior, so older callers are unaffected.

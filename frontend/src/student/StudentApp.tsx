@@ -41,7 +41,13 @@ import { SuggestionRows, buildReentrySuggestions } from "@/student/suggestions";
 import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import { useConversation } from "@/student/useConversation";
-import { DEFAULT_TURN_MODE, type TurnMode } from "@/student/turnModes";
+import {
+  DEFAULT_TURN_MODE,
+  modeAccentValue,
+  modeInkValue,
+  turnModeSpec,
+  type TurnMode,
+} from "@/student/turnModes";
 import {
   DESTINATIONS,
   type StudentDestination,
@@ -410,6 +416,34 @@ export function StudentApp({
       ? conversation.lesson
       : null;
 
+  // Phase A: the live mode hand-off pill — [Practice this idea] / [Talk it through] — rides
+  // the LATEST mentor message only (like the Continue pill) and renders above the composer.
+  // Tapping it flips the picker to that register and sends the deterministic accept control.
+  const lastBotMessage = [...conversation.messages]
+    .reverse()
+    .find((m) => m.role === "bot" && !m.isError);
+  const liveModeOffer =
+    lastBotMessage && lastBotMessage.role === "bot" ? lastBotMessage.modeOffer : undefined;
+  const modeOfferRow = liveModeOffer ? (
+    <div className="mb-1.5 flex justify-center">
+      <button
+        type="button"
+        disabled={conversation.sending || conversation.booting}
+        onClick={() => {
+          setTurnMode(liveModeOffer.mode);
+          conversation.sendModeOffer(liveModeOffer);
+        }}
+        className="ds-tag gap-1.5 rounded-pill px-4 py-1.5 text-body font-bold shadow-card transition-transform duration-(--dur-fast) hover:scale-[1.02] disabled:opacity-40"
+        style={{
+          ["--tag-bg" as string]: modeAccentValue(turnModeSpec(liveModeOffer.mode)),
+          ["--tag-ink" as string]: modeInkValue(turnModeSpec(liveModeOffer.mode)),
+        }}
+      >
+        {liveModeOffer.label}
+      </button>
+    </div>
+  ) : null;
+
   // Chat-flow Phase 1: the checkpoint DOCK — the panel above the message box the server's
   // prompt has been promising ("your checkpoint work is docked above the message box").
   // Due/in-progress work for the class in scope, capped at two rows; a tap opens the
@@ -518,9 +552,10 @@ export function StudentApp({
       onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
       sessionResources={conversation.resources}
       composerLead={
-        completionRow || checkpointDock || freshLesson || staleReturn ? (
+        completionRow || checkpointDock || modeOfferRow || freshLesson || staleReturn ? (
           <>
             {completionRow}
+            {modeOfferRow}
             {checkpointDock}
             {freshLesson || staleReturn ? (
               // The tapped suggestion becomes the (first or returning) turn and sets its TurnMode.
@@ -555,11 +590,10 @@ export function StudentApp({
           disabled={conversation.sending}
           onRetry={(answer) => void conversation.retry(answer, turnMode)}
           onChoose={(choiceId, label) => {
-            // Answering a quiz is a Quiz-mode act. The server fails closed on a choice sent
-            // in a conversation mode (correct), but that would read as a dead button — so
-            // picking an option moves the student into Quiz rather than being refused.
-            setTurnMode("quiz");
-            void conversation.sendChoice(choiceId, label, "quiz");
+            // Phase A: an MCQ tap is a LESSON act (the options are the lesson's own quiz
+            // step) — the server also exempts choice taps from the mode ceiling, so the
+            // picker stays wherever the student left it.
+            void conversation.sendChoice(choiceId, label, "lesson");
           }}
         />
       )}

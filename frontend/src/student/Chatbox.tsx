@@ -666,14 +666,8 @@ export function Chatbox({
           </label>
         ) : null}
 
-        {/* Quiz / Homework / Resources — only the ones this lesson actually has. */}
-        <OfferPills
-          offers={offers}
-          mode={mode}
-          onModeChange={onModeChange}
-          onOpenResources={onOpenResources}
-          disabled={disabled}
-        />
+        {/* Resources — the only inline pill left; quiz/homework live in the work dock. */}
+        <OfferPills offers={offers} onOpenResources={onOpenResources} disabled={disabled} />
 
         <div className="min-w-2 flex-1" />
 
