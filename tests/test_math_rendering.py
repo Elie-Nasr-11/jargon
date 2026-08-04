@@ -36,8 +36,10 @@ class EquationRendering(unittest.TestCase):
         self.assertIn("renderWithMath(text, (part, key)", TRANSCRIPT)
 
     def test_dollar_syntax_does_not_eat_prices(self):
-        # The single-dollar branch forbids a leading space and any newline in the body.
-        self.assertIn(r"\$([^\s$][^$\n]*?)\$", PLOT + MATH)
+        # "it cost $5 and $8 total" must stay prose: no leading/trailing space in the
+        # body, no newline, and no digit after the closing delimiter.
+        self.assertIn(r"\$(?![0-9])", MATH)
+        self.assertIn(r"[^\s$](?:[^$\n]*[^\s$])?", MATH)
 
 
 class FigureBlocks(unittest.TestCase):

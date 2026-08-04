@@ -19,11 +19,13 @@ export type MathRun =
   | { kind: "math"; tex: string; display: boolean };
 
 // $$…$$ first (greedy pairs of doubles), then single $…$ that is NOT part of a $$ pair.
-// The single-dollar body forbids leading/trailing whitespace and newlines, so prices and
-// stray dollars in ordinary prose ("it cost $5 and $8") do not become math: "$5 and $8"
-// has a space after the opening $ only in the closing candidate, and a run spanning a
-// newline is rejected outright.
-const MATH_RE = /\$\$([\s\S]+?)\$\$|\$([^\s$][^$\n]*?)\$/g;
+//
+// Prose contains dollars that are money, not mathematics, and "it cost $5 and $8 total"
+// must not typeset " 5 and " as a formula. Three rules make the single-dollar form safe:
+// the body may not START or END with whitespace, it may not span a newline, and the
+// closing $ may not be followed by a digit — which is what rejects the money case, since
+// there the "closing" delimiter is really the next price's opening one.
+const MATH_RE = /\$\$([\s\S]+?)\$\$|\$([^\s$](?:[^$\n]*[^\s$])?)\$(?![0-9])/g;
 
 export function splitMath(text: string): MathRun[] {
   const runs: MathRun[] = [];
