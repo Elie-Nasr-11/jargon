@@ -3,6 +3,7 @@ import gsap from "gsap";
 import { ArrowRight, Brain, GraduationCap, Loader2, Play } from "lucide-react";
 import { BrainMap } from "@/student/BrainMap";
 import {
+  fetchIdeaMastery,
   fetchCurriculumLinks,
   fetchIdeas,
   fetchMostRecentLearningSession,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/api";
 import { formatScore, relativeTime } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/motion";
+import { masteryBands, type IdeaMasteryRow } from "@/lib/mastery";
 import { checkpointRows } from "@/student/checkpoints";
 import { SectionLabel, StatPill, WorkRow } from "@/student/summaryBits";
 import type {
@@ -232,12 +234,16 @@ export function StudentHome({
   // Learning framework (F4): the knowledge layer for the brain map — best-effort reads,
   // an empty graph just renders the familiar galaxy.
   const [ideas, setIdeas] = useState<IdeaNode[]>([]);
+  const [ideaMastery, setIdeaMastery] = useState<IdeaMasteryRow[]>([]);
   const [studentLinks, setStudentLinks] = useState<StudentLinkRow[]>([]);
   const [curriculumLinks, setCurriculumLinks] = useState<CurriculumLinkRow[]>([]);
   useEffect(() => {
     let cancelled = false;
     void fetchIdeas()
       .then((rows) => !cancelled && setIdeas(rows))
+      .catch(() => {});
+    void fetchIdeaMastery()
+      .then((rows) => !cancelled && setIdeaMastery(rows))
       .catch(() => {});
     void fetchStudentLinks()
       .then((rows) => !cancelled && setStudentLinks(rows))
@@ -471,6 +477,19 @@ export function StudentHome({
 
         {/* ---- 3. What your mentor remembers (full width, with the brain map) ---------- */}
         <div className="mb-7">
+          {(() => {
+            // Phase C blend: what you KNOW (mastery bands), next to what you've DONE.
+            const bands = masteryBands(ideaMastery);
+            const total = bands.solid + bands.growing + bands.refresh;
+            return total > 0 ? (
+              <div className="mb-2 flex items-center gap-3 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
+                <span>What you know</span>
+                <span style={{ color: "var(--mode-practice)" }}>{bands.solid} solid</span>
+                <span>{bands.growing} growing</span>
+                <span style={{ color: "var(--mode-discuss)" }}>{bands.refresh} to refresh</span>
+              </div>
+            ) : null;
+          })()}
           <MemoryCard
             onAfterReset={() => setRecaps([])}
             map={(memoryProfile) => (
@@ -483,6 +502,7 @@ export function StudentHome({
                 ideas={ideas}
                 studentLinks={studentLinks}
                 curriculumLinks={curriculumLinks}
+                mastery={masteryBands(ideaMastery).byKey}
                 onOpenLesson={onOpenLesson}
               />
             )}

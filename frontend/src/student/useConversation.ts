@@ -358,6 +358,7 @@ export function useConversation() {
       invalidateSurface("turns:");
       invalidateSurface("session:");
       invalidateSurface("progress");
+      invalidateSurface("idea_mastery");
       if (envelope.link_events?.length || envelope.idea_events?.length) {
         invalidateSurface("ideas");
         invalidateSurface("student_links");

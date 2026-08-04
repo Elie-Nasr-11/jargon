@@ -3472,3 +3472,25 @@ export function prefetchLesson(lessonId: string): void {
     })
     .catch(() => {});
 }
+
+// Phase B/C: this student's idea-level mastery evidence (owner-RLS). Cached briefly;
+// useConversation invalidates "idea_mastery" when a turn settles (evidence just moved).
+async function fetchIdeaMasteryUncached(): Promise<
+  { idea_key: string; score: number; attempts: number; last_evidence_at: string | null }[]
+> {
+  const { data, error } = await supabase
+    .from("student_idea_mastery")
+    .select("idea_key,score,attempts,last_evidence_at")
+    .limit(300);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    idea_key: String(row.idea_key),
+    score: Number(row.score) || 0,
+    attempts: Number(row.attempts) || 0,
+    last_evidence_at: row.last_evidence_at ? String(row.last_evidence_at) : null,
+  }));
+}
+
+export async function fetchIdeaMastery() {
+  return cached("idea_mastery", 60_000, fetchIdeaMasteryUncached);
+}

@@ -110,6 +110,7 @@ export function BrainMap({
   ideas,
   studentLinks,
   curriculumLinks,
+  mastery,
   onOpenLesson,
 }: {
   lessons: Lesson[];
@@ -122,6 +123,8 @@ export function BrainMap({
   ideas?: IdeaNode[];
   studentLinks?: StudentLinkRow[];
   curriculumLinks?: CurriculumLinkRow[];
+  // Phase C blend: effective strength per idea_key — drives the star's strength halo.
+  mastery?: Map<string, number>;
   onOpenLesson: (lessonId: string) => void;
 }) {
   // World layout: course → unit → lesson, slices weighted by lesson count so dense
@@ -432,6 +435,9 @@ export function BrainMap({
   for (const world of knowledge.worlds.values()) {
     const p = project(world);
     const emergent = world.idea.origin === "emergent";
+    // Phase C blend: the strength halo — a solid idea wears a firm practice-green ring,
+    // a fading one a warm dashed discuss-yellow ring asking for a refresh.
+    const strength = mastery?.get(world.idea.key);
     renderNodes.push({
       depth: p.depth,
       node: (
@@ -442,8 +448,20 @@ export function BrainMap({
           opacity={depthOpacity(p.depth)}
         >
           <title>
-            {`${emergent ? "Your idea: " : "Idea: "}${world.idea.title}${world.idea.one_liner ? ` — ${world.idea.one_liner}` : ""}`}
+            {`${emergent ? "Your idea: " : "Idea: "}${world.idea.title}${world.idea.one_liner ? ` — ${world.idea.one_liner}` : ""}${typeof strength === "number" ? ` — strength ${Math.round(strength * 100)}%` : ""}`}
           </title>
+          {typeof strength === "number" ? (
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={(3.8 + 3.2 * strength) * p.f}
+              fill="none"
+              stroke={strength >= 0.4 ? "var(--mode-practice)" : "var(--mode-discuss)"}
+              strokeWidth="1"
+              strokeOpacity={0.2 + 0.4 * strength}
+              strokeDasharray={strength < 0.4 ? "2 2" : undefined}
+            />
+          ) : null}
           {emergent ? (
             <circle
               cx={p.x}

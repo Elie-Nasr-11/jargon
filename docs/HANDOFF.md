@@ -9123,3 +9123,21 @@ ideas/links exist for the content (Phase D intake lights them up everywhere); th
 progress BLEND client surfaces (mastery on Home/Class + BrainMap strength halos) are
 the remaining B4/C slice — next round alongside or before Phase D.
 Suggested next task: client blend surfaces, then Phase D (extract_knowledge intake).
+
+## Claude -> Codex / Human - 2026-08-03 (R27a: progress blend — what you KNOW)
+
+Status: Finished
+Summary: The client half of the blend decision. lib/mastery.ts mirrors the server's
+effective-mastery math (EMA + floored decay, same constants) and bands rows into
+solid (>=0.75) / growing (0.4-0.75) / needs-refresh (<0.4), evidence-only.
+fetchIdeaMastery (cached 60s, invalidated when a turn settles). StudentHome shows a
+"What you know: N solid · N growing · N to refresh" strip above the memory card
+(hidden until evidence exists), and BrainMap idea stars wear STRENGTH HALOS — a firm
+practice-green ring scaling with effective strength, or a warm dashed discuss-yellow
+ring when the idea is fading; the star's tooltip gains "strength NN%". In-lesson
+progress stays steps-done (owner: blend).
+Files changed: frontend/src/lib/{mastery.ts,api.ts}; frontend/src/student/
+{BrainMap.tsx,StudentHome.tsx,useConversation.ts}.
+Tests run: python 464 OK; tsc 0 errors; eslint clean; build green.
+Suggested next task: Phase D — extract_knowledge intake + practice_items + studio-lite
+Knowledge review tab.
