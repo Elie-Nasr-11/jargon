@@ -205,6 +205,13 @@ GOVERNANCE:
   yourself — a link only counts when the student draws it; when they do, credit it warmly and set the
   "link" field.
 
+- BRAIN: turn.brain (when present) is this student's knowledge state. brain.weak = ideas fading or
+  never landed — shore them up when they touch the current material (a one-line refresh, an example
+  that leans on them). brain.strong = secure ideas — stretch instead of re-teaching. brain.frontier =
+  connections they COULD make but haven't — turn these into invitations (never state the connection).
+  brain.traveled = words they've met in 2+ subjects — bridge words worth leaning on. Let the brain bias
+  your emphasis and examples; the directive always wins.
+
 STYLE: short, concrete replies with vocabulary matched to student.grade_band. No emojis. When you affirm,
 open with a short punchy sentence ending in "!" ("Exactly right!") — it renders as a headline; skip it when
 nothing is earned. Emphasize 1-3 key concept words with **double asterisks**; most words stay plain.
@@ -2113,6 +2120,170 @@ function heuristicKind(text: string): RouterVerdict {
 }
 
 
+// --- Brain read model (Phase B, docs/BRAIN_FIRST_PLAN.md) ---------------------------
+// Idea-level mastery: an EMA in [0,1] updated free from the existing grading path, with
+// READ-TIME decay (never stored) so knowledge fades toward "needs a refresh" — floored,
+// never to zero. buildBrainContext ranks it into the compact `brain` payload key the
+// mentor (and Phase C's deterministic hooks) consume.
+const MASTERY_EMA_ALPHA = 0.3;
+const MASTERY_DECAY_DAYS = 45;
+const MASTERY_DECAY_FLOOR = 0.4;
+const BRAIN_WEAK_MAX = 5;
+const BRAIN_STRONG_MAX = 3;
+const BRAIN_FRONTIER_MAX = 3;
+const BRAIN_TRAVELED_MAX = 5;
+
+function effectiveMastery(score: unknown, lastEvidenceAt: unknown): number {
+  const base = Math.max(0, Math.min(1, Number(score) || 0));
+  const at = typeof lastEvidenceAt === "string" ? Date.parse(lastEvidenceAt) : NaN;
+  if (!Number.isFinite(at)) return base;
+  const days = Math.max(0, (Date.now() - at) / 86_400_000);
+  const decay = Math.max(MASTERY_DECAY_FLOOR, Math.exp(-days / MASTERY_DECAY_DAYS));
+  return base * decay;
+}
+
+type BrainContext = {
+  weak: { idea_key: string; title: string; effective: number; attempts: number }[];
+  strong: { idea_key: string; title: string; effective: number }[];
+  frontier: {
+    from_key: string;
+    to_key: string;
+    from_title: string;
+    to_title: string;
+    kind: string;
+    note: string;
+  }[];
+  traveled: { term: string; subjects: string[] }[];
+};
+
+function buildBrainContext(input: {
+  lessonId: string;
+  ideas: DbRow[];
+  ideaMastery: DbRow[];
+  curriculumLinks: DbRow[];
+  studentLinks: DbRow[];
+  vocabTerms: DbRow[];
+  studentVocab: DbRow[];
+}): BrainContext {
+  const titleByKey = new Map(
+    input.ideas.map((row) => [String(row.key), String(row.title || "")]),
+  );
+  const scored = input.ideaMastery
+    .filter((row) => Number(row.attempts) > 0 && titleByKey.has(String(row.idea_key)))
+    .map((row) => ({
+      idea_key: String(row.idea_key),
+      title: titleByKey.get(String(row.idea_key)) || String(row.idea_key),
+      effective: Math.round(effectiveMastery(row.score, row.last_evidence_at) * 100) / 100,
+      attempts: Number(row.attempts) || 0,
+    }));
+  const weak = scored
+    .filter((row) => row.effective < 0.7)
+    .sort((a, b) => a.effective - b.effective)
+    .slice(0, BRAIN_WEAK_MAX);
+  const strong = scored
+    .filter((row) => row.effective >= 0.75)
+    .sort((a, b) => b.effective - a.effective)
+    .slice(0, BRAIN_STRONG_MAX)
+    .map(({ idea_key, title, effective }) => ({ idea_key, title, effective }));
+  // Frontier: authored links touching THIS lesson's ideas that the student has not
+  // earned yet — unordered dedupe against student_links (a link earned either way is
+  // earned).
+  const lessonKeys = new Set(
+    input.ideas
+      .filter((row) => String(row.lesson_id || "") === input.lessonId && !row.user_id)
+      .map((row) => String(row.key)),
+  );
+  const earned = new Set(
+    input.studentLinks.map((row) =>
+      [String(row.from_key), String(row.to_key)].sort().join("|"),
+    ),
+  );
+  const frontier: BrainContext["frontier"] = [];
+  for (const link of input.curriculumLinks) {
+    if (frontier.length >= BRAIN_FRONTIER_MAX) break;
+    const from = String(link.from_key);
+    const to = String(link.to_key);
+    if (!lessonKeys.has(from) && !lessonKeys.has(to)) continue;
+    if (earned.has([from, to].sort().join("|"))) continue;
+    if (!titleByKey.has(from) || !titleByKey.has(to)) continue;
+    frontier.push({
+      from_key: from,
+      to_key: to,
+      from_title: titleByKey.get(from) || from,
+      to_title: titleByKey.get(to) || to,
+      kind: String(link.kind || ""),
+      note: String(link.note || ""),
+    });
+  }
+  // Traveled vocab: words this student has met in 2+ subjects — bridge words.
+  const termById = new Map(
+    input.vocabTerms.map((row) => [String(row.id), String(row.term || "")]),
+  );
+  const traveled = input.studentVocab
+    .filter((row) => Array.isArray(row.subjects_seen) && row.subjects_seen.length >= 2)
+    .slice(0, BRAIN_TRAVELED_MAX)
+    .map((row) => ({
+      term: termById.get(String(row.term_id)) || "",
+      subjects: (row.subjects_seen as unknown[]).map(String).slice(0, 4),
+    }))
+    .filter((row) => row.term);
+  return { weak, strong, frontier, traveled };
+}
+
+// The ideas a graded turn is evidence FOR: the step's authored idea_keys when present,
+// else the lesson's authored ideas (Phase D fills idea_keys at intake).
+function evidenceIdeaKeys(activity: DbRow | null, ideas: DbRow[], lessonId: string): string[] {
+  const authored = Array.isArray(activity?.idea_keys)
+    ? (activity?.idea_keys as unknown[]).map(String).filter(Boolean)
+    : [];
+  if (authored.length) return authored.slice(0, 6);
+  return ideas
+    .filter((row) => String(row.lesson_id || "") === lessonId && !row.user_id)
+    .map((row) => String(row.key))
+    .slice(0, 4);
+}
+
+// EMA evidence write (best-effort, background, caller-JWT/RLS-owner). pass pulls the
+// score toward 1, fail toward 0, neutral (echo-rejected) only counts the attempt.
+async function recordIdeaEvidence(
+  config: SupabaseConfig,
+  userId: string,
+  ideaKeys: string[],
+  result: "pass" | "fail" | "neutral",
+): Promise<void> {
+  const keys = uniqueStrings(ideaKeys).slice(0, 6);
+  if (!keys.length) return;
+  try {
+    const existing = await loadMany(
+      config,
+      `student_idea_mastery?user_id=eq.${encodeURIComponent(userId)}&idea_key=in.(${keys
+        .map(encodeURIComponent)
+        .join(",")})&select=idea_key,score,attempts`,
+    );
+    const byKey = new Map(existing.map((row) => [String(row.idea_key), row]));
+    const nowIso = new Date().toISOString();
+    const rows = keys.map((key) => {
+      const row = byKey.get(key);
+      const prev = Math.max(0, Math.min(1, Number(row?.score) || 0));
+      const target = result === "pass" ? 1 : 0;
+      const score =
+        result === "neutral" ? prev : prev + MASTERY_EMA_ALPHA * (target - prev);
+      return {
+        user_id: userId,
+        idea_key: key,
+        score: Math.round(score * 1000) / 1000,
+        attempts: (Number(row?.attempts) || 0) + 1,
+        last_result: result,
+        last_evidence_at: nowIso,
+        updated_at: nowIso,
+      };
+    });
+    await upsertRows(config, "student_idea_mastery", rows);
+  } catch {
+    // Mastery is enrichment — a write failure never costs the turn.
+  }
+}
+
 // --- Pedagogy signals --------------------------------------------------------
 // Pure + deterministic signals fed to the model: who the student is (diagnosis),
 // the teacher's help policy, detected intent/help requests, and the mentor's own
@@ -3548,6 +3719,8 @@ async function loadContext(
   studentVocab: DbRow[];
   studentLinks: DbRow[];
   curriculumLinks: DbRow[];
+  // Phase B: idea-level mastery evidence (the brain read model ranks from this).
+  ideaMastery: DbRow[];
 }> {
   // Reads run in TWO parallel waves (wave 2 holds only the queries that genuinely
   // depend on a wave-1 result), with the checkpoints chain overlapping both.
@@ -3572,6 +3745,7 @@ async function loadContext(
     studentVocab,
     studentLinks,
     curriculumLinks,
+    ideaMastery,
     recentSummaries,
   ] = await Promise.all([
     loadFirst(
@@ -3637,6 +3811,11 @@ async function loadContext(
     loadMany(
       config,
       `curriculum_links?status=eq.published&select=from_key,to_key,kind,note&limit=200`,
+    ).catch(() => [] as DbRow[]),
+    // Phase B: this student's idea-level mastery (best-effort; absent = no brain hints).
+    loadMany(
+      config,
+      `student_idea_mastery?user_id=eq.${encodeURIComponent(userId)}&select=idea_key,score,attempts,last_evidence_at&limit=300`,
     ).catch(() => [] as DbRow[]),
     // Memory v2: pull a POOL of summaries (newest first) — the prompt still carries at
     // most 3, but they are picked by RELEVANCE to this lesson (pickRelevantSummaries),
@@ -3751,6 +3930,7 @@ async function loadContext(
     studentVocab,
     studentLinks,
     curriculumLinks,
+    ideaMastery,
   };
 }
 
@@ -6192,6 +6372,26 @@ async function handleTypedRequest(
               return links.length ? links : undefined;
             })(),
           },
+          // Phase B: the brain read model — ranked weakness/strength, unearned frontier
+          // links, and bridge vocab. Compact and capped; Phase C's deterministic hooks
+          // consume the same object.
+          brain: (() => {
+            const brain = buildBrainContext({
+              lessonId,
+              ideas: context.ideas,
+              ideaMastery: context.ideaMastery,
+              curriculumLinks: context.curriculumLinks,
+              studentLinks: context.studentLinks,
+              vocabTerms: context.vocabTerms,
+              studentVocab: context.studentVocab,
+            });
+            return brain.weak.length ||
+              brain.strong.length ||
+              brain.frontier.length ||
+              brain.traveled.length
+              ? brain
+              : undefined;
+          })(),
           conversation_so_far:
             typeof session.running_summary === "string" && session.running_summary
               ? session.running_summary
@@ -6420,6 +6620,34 @@ async function handleTypedRequest(
       if (knowledge.idea_events.length) envelope.idea_events = knowledge.idea_events;
     } catch {
       // Knowledge is enrichment — a processor failure must never cost the turn.
+    }
+    // Phase B: a GRADED turn writes idea-level mastery evidence (background,
+    // best-effort). pass/fail from whichever grader ran; an echo-rejected answer is
+    // neutral (counts the attempt, moves no score); ungraded conversation writes nothing.
+    const evidenceResult: "pass" | "fail" | "neutral" | null = answerEchoesMentor
+      ? "neutral"
+      : effectiveUnderstanding
+        ? effectiveUnderstanding.demonstrated
+          ? "pass"
+          : "fail"
+        : gradedCode?.demonstrated === true
+          ? "pass"
+          : (answer?.mode === "multiple_choice" || answer?.mode === "code") &&
+              assessment?.source === "orchestrator" &&
+              typeof assessment.passed === "boolean"
+            ? assessment.passed
+              ? "pass"
+              : "fail"
+            : null;
+    if (evidenceResult) {
+      scheduleBackground(
+        recordIdeaEvidence(
+          config,
+          userId,
+          evidenceIdeaKeys(context.activity, context.ideas, lessonId),
+          evidenceResult,
+        ),
+      );
     }
     // v6: drive the chatbox's inline pills. A pill appears only when there is something behind
     // it, so each flag is read off state this turn already computed:

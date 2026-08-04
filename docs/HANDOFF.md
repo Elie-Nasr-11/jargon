@@ -9059,3 +9059,36 @@ misparses); cache TTLs are first guesses (feel pass welcome); Home still runs se
 independent effects — if it still feels slow, the next lever is the student_home_bundle
 RPC from the plan.
 Suggested next task: Phase B (student_idea_mastery + loadBrainContext) per the plan.
+
+## Claude -> Codex / Human - 2026-08-03 (R25: Brain-first Phase B — the brain read model)
+
+Status: Finished
+Summary: Phase B of docs/BRAIN_FIRST_PLAN.md.
+SCHEMA (20260930000000_brain_mastery.sql, in the deploy list): student_idea_mastery
+(PK user_id+idea_key; score EMA 0..1, attempts, last_result pass|fail|neutral,
+last_evidence_at; RLS owner select/insert/update — caller-JWT writes like
+student_links) + lesson_activities.idea_keys text[] (step->ideas mapping; Phase D fills
+it at intake; null falls back to the lesson's authored ideas).
+EVIDENCE WRITER: every GRADED turn now writes mastery evidence in the background
+(recordIdeaEvidence, best-effort): pass pulls the EMA toward 1 (alpha 0.3), fail toward
+0, echo-rejected answers are NEUTRAL (attempt counted, score unmoved); ungraded
+conversation writes nothing. Sources: assessTurn's understanding verdict, the code
+judge, and orchestrator MCQ/code grades.
+READ MODEL: buildBrainContext derives — in code, from the already-batched context loads
+plus ONE new batched mastery query — { weak (effective<0.7, asc, <=5), strong (>=0.75,
+desc, <=3), frontier (authored links touching this lesson's ideas not yet earned,
+unordered-deduped vs student_links, <=3), traveled (vocab seen in 2+ subjects, <=5) }.
+effective = score x max(0.4, exp(-days/45)) — read-time decay, floored, never stored.
+The payload gains a compact `brain` key (omitted when empty) and the SYSTEM_PROMPT a
+BRAIN block: weak -> shore up, strong -> stretch, frontier -> invite (never state),
+traveled -> bridge words; directive always wins.
+Files changed: supabase/functions/chat/index.ts; supabase/migrations/
+20260930000000_brain_mastery.sql (new); .github/workflows/deploy-backend.yml;
+tests/test_brain_phase_b.py (new).
+Tests run: python 459 OK; tsc 0 errors; build green; edge-fn parse clean.
+Remaining concerns: mastery starts empty — the brain key stays absent until graded
+turns accumulate (correct cold-start); evidence attributes to the LESSON's ideas until
+step-level idea_keys are authored/extracted (coarse but honest); thresholds (0.7/0.75,
+alpha 0.3, 45-day decay) are first calibrations.
+Suggested next task: Phase C — the consumers (recall openers, mastery compression,
+practice targeting, frontier invites, tier-calibrated grading, progress blend).
