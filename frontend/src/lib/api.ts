@@ -1247,6 +1247,43 @@ export async function invokeCurriculumAdmin(input: {
   });
 }
 
+// --- Lesson knowledge intake (brain-first Phase D) ------------------------
+// extract_knowledge drafts ideas/vocab/links/practice from lesson content and
+// approved resources; list/review power the studio-lite Knowledge card. All
+// three re-check author access server-side (assertCanAuthor).
+
+export function extractLessonKnowledge(input: { accessToken: string; lessonId: string }) {
+  // Extraction runs a model call over the full lesson corpus — allow ~90s.
+  return callCurriculumAdmin(
+    input.accessToken,
+    { action: "extract_knowledge", lesson_id: input.lessonId },
+    90_000,
+  );
+}
+
+export function listLessonKnowledge(input: { accessToken: string; lessonId: string }) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "list_knowledge",
+    lesson_id: input.lessonId,
+  });
+}
+
+export function reviewLessonKnowledge(input: {
+  accessToken: string;
+  lessonId: string;
+  kind: "idea" | "vocab" | "link" | "practice";
+  id: string;
+  decision: "publish" | "discard";
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "review_knowledge",
+    lesson_id: input.lessonId,
+    kind: input.kind,
+    id: input.id,
+    decision: input.decision,
+  });
+}
+
 // --- Structure management (curriculum redesign Phase 1) -------------------
 // Create / rename / reorder / move / archive / delete curriculum nodes directly,
 // decoupled from the monolithic lesson blueprint save. The edge function resolves

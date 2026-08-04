@@ -2373,7 +2373,263 @@ Deno.serve(async (req: Request) => {
     if (action === "instantiate_template") return await instantiateTemplate(config, actorId, record);
     if (action === "archive_template") return await archiveTemplate(config, actorId, record);
     if (action === "set_class_courses") return await setClassCourses(config, actorId, record);
+
+// --- Brain-first Phase D: the content-agnostic knowledge intake -----------------------
+// extract_knowledge drafts the brain graph (ideas / vocab / curriculum links / practice
+// items / step->idea mapping) from ANY lesson's own material. HARD RULES: everything is
+// written status='draft' (except the step mapping, which is invisible to students and
+// only improves evidence attribution); published rows are never mutated; re-running
+// skips anything that already exists. Teachers review in studio-lite's Knowledge tab
+// (list_knowledge / review_knowledge below) — nothing reaches students unreviewed.
+
+async function selectMany(config: Config, path: string): Promise<DbRow[]> {
+  const data = await serviceFetch(config, `/rest/v1/${path}`);
+  return Array.isArray(data)
+    ? (data.filter((item) => item && typeof item === "object") as DbRow[])
+    : [];
+}
+
+function slugKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+const LINK_KINDS = new Set(["prerequisite", "same_pattern", "contrast", "vocab_bridge"]);
+const PRACTICE_DIFFICULTIES = new Set(["intro", "core", "stretch"]);
+
+async function extractKnowledge(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+
+  const [lesson, activities, subjectRow, orgIdeas, existingVocab, existingLinks, resources] =
+    await Promise.all([
+      selectFirst(config, `lessons?id=eq.${enc(lessonId)}&select=id,title,tutor_prompt,level,grade_band`),
+      selectMany(config, `lesson_activities?lesson_id=eq.${enc(lessonId)}&order=position.asc&select=id,title,prompt,mode`),
+      selectFirst(config, `lesson_subjects?lesson_id=eq.${enc(lessonId)}&select=subject`),
+      selectMany(config, `ideas?user_id=is.null&select=key,title,subject,status&limit=400`),
+      selectMany(config, `vocab_terms?select=term&limit=500`),
+      selectMany(config, `curriculum_links?select=from_key,to_key,kind&limit=500`),
+      selectMany(config, `lesson_resources?lesson_id=eq.${enc(lessonId)}&status=eq.published&select=id&limit=10`),
+    ]);
+  if (!lesson) throw new Error("Lesson not found.");
+  const resourceIds = resources.map((row) => String(row.id)).filter(Boolean);
+  const chunks = resourceIds.length
+    ? await selectMany(
+        config,
+        `resource_text_chunks?resource_id=in.(${resourceIds.map(enc).join(",")})&status=eq.approved&limit=24&select=chunk_text`,
+      ).catch(() => [] as DbRow[])
+    : [];
+
+  const subject = cleanText(subjectRow?.subject);
+  const ideaIndex = orgIdeas
+    .slice(0, 200)
+    .map((row) => `${row.key} — ${row.title} (${row.subject || "?"})`)
+    .join("\n");
+  const stepsText = activities
+    .map((a, i) => `STEP ${i + 1} [id=${a.id}] (${a.mode || "step"}): ${a.title} — ${String(a.prompt || "").slice(0, 400)}`)
+    .join("\n");
+  const chunkText = chunks
+    .map((c) => String(c.chunk_text || "").slice(0, 300))
+    .join("\n")
+    .slice(0, 4000);
+
+  const system =
+    "You extract a KNOWLEDGE GRAPH from one lesson of school curriculum, for a teaching " +
+    "platform. From the material only (never invent facts beyond it), propose: " +
+    "IDEAS — the 1-4 atomic learning objectives this lesson teaches (title, one_liner in " +
+    "student language); VOCAB — 0-6 terms a student must know (term, variants array of " +
+    "matchable word forms, a definition a child reads, in this lesson's subject); LINKS — " +
+    "0-5 connections between THIS lesson's ideas and the EXISTING idea index provided " +
+    "(kinds: prerequisite | same_pattern | contrast | vocab_bridge; note = one line a " +
+    "mentor could turn into a question); PRACTICE — 2-3 exercises PER idea (prompt, " +
+    "expected = the idea a correct answer must demonstrate, difficulty intro|core|stretch); " +
+    "STEP_IDEAS — for each step id, which of the proposed idea keys it teaches. " +
+    "Idea keys must be short kebab-case slugs. Return ONLY JSON: " +
+    '{"ideas":[{"key":"","title":"","one_liner":""}],"vocab":[{"term":"","variants":[],' +
+    '"definition":""}],"links":[{"from_key":"","to_key":"","kind":"","note":""}],' +
+    '"practice":[{"idea_key":"","prompt":"","expected":"","difficulty":"core"}],' +
+    '"step_ideas":{"<step_id>":["<idea_key>"]}}';
+  const userMsg = `Lesson: ${lesson.title} (level ${lesson.level || "?"}; subject ${subject || "?"})\nMentor framing: ${String(lesson.tutor_prompt || "").slice(0, 500)}\n\nSteps:\n${stepsText}\n\nResource excerpts:\n${chunkText || "(none)"}\n\nEXISTING idea index (link ONLY to these keys or to this lesson's own proposed keys):\n${ideaIndex || "(none yet)"}`;
+
+  const raw = await callModelJson(system, userMsg, { maxTokens: 4000, timeoutMs: 55000 });
+
+  const existingIdeaKeys = new Set(orgIdeas.map((row) => String(row.key)));
+  const existingTerms = new Set(existingVocab.map((row) => String(row.term).toLowerCase()));
+  const existingLinkSet = new Set(
+    existingLinks.map((row) => `${row.from_key}|${row.to_key}|${row.kind}`),
+  );
+  const drafted = { ideas: 0, vocab: 0, links: 0, practice: 0, steps: 0 };
+  const draftedKeys = new Set<string>();
+
+  const proposedIdeas = Array.isArray(raw.ideas) ? (raw.ideas as DbRow[]).slice(0, 4) : [];
+  for (const idea of proposedIdeas) {
+    const key = slugKey(cleanText(idea.key) || cleanText(idea.title));
+    const title = cleanText(idea.title);
+    if (!key || !title || existingIdeaKeys.has(key) || draftedKeys.has(key)) continue;
+    await insertRow(config, "ideas", {
+      key,
+      title: title.slice(0, 120),
+      one_liner: cleanText(idea.one_liner).slice(0, 200),
+      subject,
+      origin: "authored",
+      status: "draft",
+      lesson_id: lessonId,
+    });
+    draftedKeys.add(key);
+    drafted.ideas += 1;
+  }
+  const citableKeys = new Set([...existingIdeaKeys, ...draftedKeys]);
+
+  const proposedVocab = Array.isArray(raw.vocab) ? (raw.vocab as DbRow[]).slice(0, 6) : [];
+  for (const entry of proposedVocab) {
+    const term = cleanText(entry.term).toLowerCase();
+    const definition = cleanText(entry.definition);
+    if (!term || !definition || existingTerms.has(term)) continue;
+    await insertRow(config, "vocab_terms", {
+      term,
+      variants: Array.isArray(entry.variants)
+        ? (entry.variants as unknown[]).map((v) => cleanText(v).toLowerCase()).filter(Boolean).slice(0, 6)
+        : [],
+      definition: definition.slice(0, 300),
+      subject,
+      idea_keys: [...draftedKeys].slice(0, 4),
+      status: "draft",
+      lesson_id: lessonId,
+    });
+    existingTerms.add(term);
+    drafted.vocab += 1;
+  }
+
+  const proposedLinks = Array.isArray(raw.links) ? (raw.links as DbRow[]).slice(0, 5) : [];
+  for (const link of proposedLinks) {
+    const from = slugKey(cleanText(link.from_key));
+    const to = slugKey(cleanText(link.to_key));
+    const kind = cleanText(link.kind);
+    if (!from || !to || from === to || !LINK_KINDS.has(kind)) continue;
+    if (!citableKeys.has(from) || !citableKeys.has(to)) continue;
+    if (existingLinkSet.has(`${from}|${to}|${kind}`)) continue;
+    await insertRow(config, "curriculum_links", {
+      from_key: from,
+      to_key: to,
+      kind,
+      note: cleanText(link.note).slice(0, 200),
+      status: "draft",
+    });
+    existingLinkSet.add(`${from}|${to}|${kind}`);
+    drafted.links += 1;
+  }
+
+  const proposedPractice = Array.isArray(raw.practice) ? (raw.practice as DbRow[]).slice(0, 12) : [];
+  for (const item of proposedPractice) {
+    const ideaKey = slugKey(cleanText(item.idea_key));
+    const prompt = cleanText(item.prompt);
+    if (!ideaKey || !prompt || !citableKeys.has(ideaKey)) continue;
+    await insertRow(config, "practice_items", {
+      idea_key: ideaKey,
+      lesson_id: lessonId,
+      prompt: prompt.slice(0, 500),
+      expected: cleanText(item.expected).slice(0, 300),
+      difficulty: PRACTICE_DIFFICULTIES.has(cleanText(item.difficulty))
+        ? cleanText(item.difficulty)
+        : "core",
+      status: "draft",
+      created_by: actorId,
+    });
+    drafted.practice += 1;
+  }
+
+  const stepIdeas =
+    raw.step_ideas && typeof raw.step_ideas === "object" && !Array.isArray(raw.step_ideas)
+      ? (raw.step_ideas as DbRow)
+      : {};
+  const activityIds = new Set(activities.map((a) => String(a.id)));
+  for (const [stepId, keys] of Object.entries(stepIdeas)) {
+    if (!activityIds.has(stepId) || !Array.isArray(keys)) continue;
+    const mapped = (keys as unknown[])
+      .map((k) => slugKey(cleanText(k)))
+      .filter((k) => citableKeys.has(k))
+      .slice(0, 4);
+    if (!mapped.length) continue;
+    await patchRows(config, `lesson_activities?id=eq.${enc(stepId)}`, { idea_keys: mapped });
+    drafted.steps += 1;
+  }
+
+  return json({ status: "ok", drafted });
+}
+
+const KNOWLEDGE_TABLES: Record<string, string> = {
+  idea: "ideas",
+  vocab: "vocab_terms",
+  link: "curriculum_links",
+  practice: "practice_items",
+};
+
+async function listKnowledge(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+  const ideas = await selectMany(
+    config,
+    `ideas?lesson_id=eq.${enc(lessonId)}&user_id=is.null&select=id,key,title,one_liner,status&order=created_at.asc&limit=50`,
+  );
+  const ideaKeys = ideas.map((row) => String(row.key));
+  const keyFilter = ideaKeys.map(enc).join(",");
+  const [vocab, links, practice] = await Promise.all([
+    selectMany(
+      config,
+      `vocab_terms?lesson_id=eq.${enc(lessonId)}&select=id,term,definition,variants,status&order=created_at.asc&limit=50`,
+    ),
+    ideaKeys.length
+      ? selectMany(
+          config,
+          `curriculum_links?or=(from_key.in.(${keyFilter}),to_key.in.(${keyFilter}))&select=id,from_key,to_key,kind,note,status&limit=50`,
+        )
+      : Promise.resolve([] as DbRow[]),
+    selectMany(
+      config,
+      `practice_items?lesson_id=eq.${enc(lessonId)}&status=neq.retired&select=id,idea_key,prompt,expected,difficulty,status&order=created_at.asc&limit=60`,
+    ),
+  ]);
+  return json({ status: "ok", ideas, vocab, links, practice });
+}
+
+async function reviewKnowledge(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  const kind = cleanText(body.kind);
+  const id = cleanText(body.id);
+  const decision = cleanText(body.decision);
+  const table = KNOWLEDGE_TABLES[kind];
+  if (!lessonId || !table || !id) throw new Error("lesson_id, kind, and id are required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+  if (decision === "publish") {
+    await patchRows(config, `${table}?id=eq.${enc(id)}`, { status: "published" });
+  } else if (decision === "discard") {
+    // Drafts only — a published row is retired (practice) or left alone, never deleted
+    // out from under students.
+    if (kind === "practice") {
+      await patchRows(config, `${table}?id=eq.${enc(id)}`, { status: "retired" });
+    } else {
+      await serviceFetch(config, `/rest/v1/${table}?id=eq.${enc(id)}&status=eq.draft`, {
+        method: "DELETE",
+      });
+    }
+  } else {
+    throw new Error("decision must be publish or discard.");
+  }
+  return json({ status: "ok" });
+}
+
     if (action === "generate") return await generateDraft(config, actorId, record);
+    if (action === "extract_knowledge") return await extractKnowledge(config, actorId, record);
+    if (action === "list_knowledge") return await listKnowledge(config, actorId, record);
+    if (action === "review_knowledge") return await reviewKnowledge(config, actorId, record);
     return errorResponse("Unsupported curriculum-admin action.", 400);
   } catch (error) {
     const message = errorMessage(error);

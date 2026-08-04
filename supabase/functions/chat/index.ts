@@ -3170,6 +3170,7 @@ function turnDirective(args: {
     compress: boolean;
     practiceTarget: string | null;
     practiceStretch: string | null;
+    practiceBank: { prompt: string; expected: string } | null;
   };
 }): TurnDirective {
   const {
@@ -3290,7 +3291,10 @@ function turnDirective(args: {
             ? ` TARGET their weakest idea first: "${brainHints.practiceTarget}" (from their mastery evidence) — exercises should work it until it firms up.`
             : brainHints.practiceStretch
               ? ` No weak spots on record — STRETCH them on "${brainHints.practiceStretch}" at a notch higher difficulty.`
-              : ""),
+              : "") +
+          (brainHints.practiceBank
+            ? ` TEACHER BANK (use FIRST, verbatim or lightly adapted): "${brainHints.practiceBank.prompt}"${brainHints.practiceBank.expected ? ` — a correct answer must demonstrate: ${brainHints.practiceBank.expected}.` : ""}`
+            : ""),
       };
     }
     // --- Flow v3 routed-conversation branches ---------------------------------
@@ -3756,6 +3760,8 @@ async function loadContext(
   curriculumLinks: DbRow[];
   // Phase B: idea-level mastery evidence (the brain read model ranks from this).
   ideaMastery: DbRow[];
+  // Phase D: published teacher practice banks (RLS: published-only readable).
+  practiceItems: DbRow[];
 }> {
   // Reads run in TWO parallel waves (wave 2 holds only the queries that genuinely
   // depend on a wave-1 result), with the checkpoints chain overlapping both.
@@ -3781,6 +3787,7 @@ async function loadContext(
     studentLinks,
     curriculumLinks,
     ideaMastery,
+    practiceItems,
     recentSummaries,
   ] = await Promise.all([
     loadFirst(
@@ -3851,6 +3858,11 @@ async function loadContext(
     loadMany(
       config,
       `student_idea_mastery?user_id=eq.${encodeURIComponent(userId)}&select=idea_key,score,attempts,last_evidence_at&limit=300`,
+    ).catch(() => [] as DbRow[]),
+    // Phase D: teacher practice banks — PRIMARY practice material when provided.
+    loadMany(
+      config,
+      `practice_items?status=eq.published&select=idea_key,prompt,expected,difficulty&limit=100`,
     ).catch(() => [] as DbRow[]),
     // Memory v2: pull a POOL of summaries (newest first) — the prompt still carries at
     // most 3, but they are picked by RELEVANCE to this lesson (pickRelevantSummaries),
@@ -3966,6 +3978,7 @@ async function loadContext(
     studentLinks,
     curriculumLinks,
     ideaMastery,
+    practiceItems,
   };
 }
 
@@ -5618,6 +5631,21 @@ async function handleTypedRequest(
     // Practice targeting: weakest first; with no weak spots on record, stretch a strength.
     practiceTarget: brain.weak[0]?.title ?? null,
     practiceStretch: !brain.weak.length ? (brain.strong[0]?.title ?? null) : null,
+    // Phase D (owner): teacher banks are PRIMARY practice material when provided —
+    // the first published item for the target idea rides the directive verbatim.
+    practiceBank: (() => {
+      const targetKey = brain.weak[0]?.idea_key ?? brain.strong[0]?.idea_key ?? null;
+      if (!targetKey) return null;
+      const item = context.practiceItems.find(
+        (row) => String(row.idea_key) === targetKey,
+      );
+      return item
+        ? {
+            prompt: String(item.prompt || "").slice(0, 400),
+            expected: String(item.expected || "").slice(0, 240),
+          }
+        : null;
+    })(),
     // The one frontier connection worth inviting right now.
     frontier: brain.frontier[0] ?? null,
   };

@@ -297,7 +297,50 @@ export type CurriculumAdminResponse = {
   position?: number;
   unit_position?: number;
   ordered_ids?: string[];
+  // Brain-first Phase D: lesson knowledge intake (extract_knowledge / list_knowledge).
+  drafted?: { ideas: number; vocab: number; links: number; practice: number; steps: number };
+  ideas?: KnowledgeIdeaRow[];
+  vocab?: KnowledgeVocabRow[];
+  links?: KnowledgeLinkRow[];
+  practice?: KnowledgePracticeRow[];
   error?: string;
+};
+
+// Rows the studio-lite Knowledge card reviews (curriculum-admin list_knowledge).
+// status: "draft" awaits teacher review; "published" is live for students;
+// practice items can also be "retired" (hidden but never deleted).
+export type KnowledgeIdeaRow = {
+  id: string;
+  key: string;
+  title: string;
+  one_liner: string | null;
+  status: string;
+};
+
+export type KnowledgeVocabRow = {
+  id: string;
+  term: string;
+  definition: string;
+  variants: string[] | null;
+  status: string;
+};
+
+export type KnowledgeLinkRow = {
+  id: string;
+  from_key: string;
+  to_key: string;
+  kind: string;
+  note: string | null;
+  status: string;
+};
+
+export type KnowledgePracticeRow = {
+  id: string;
+  idea_key: string;
+  prompt: string;
+  expected: string | null;
+  difficulty: string;
+  status: string;
 };
 
 export type LessonResourceType =

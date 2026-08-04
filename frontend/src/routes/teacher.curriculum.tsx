@@ -74,6 +74,7 @@ import type {
   LessonActivity,
   LessonResource,
 } from "@/lib/types";
+import { KnowledgeCard } from "@/features/teacher/KnowledgeCard";
 import { extractPdfTextChunksFromUrl } from "@/lib/pdf-extract";
 import { notifyErr } from "@/lib/feedback";
 import { useUndoable } from "@/hooks/useUndoable";
@@ -2102,6 +2103,8 @@ function LessonDetail({
         ) : (
           <div className="grid gap-5">
             <LessonMetaForm lesson={lesson} milestone={milestone} busy={busy} onSave={onSaveMeta} />
+
+            <KnowledgeCard lessonId={lesson.id} />
 
             <section className="rounded-card border border-border bg-depth-sub p-4">
               <div className="mb-3 flex items-center justify-between gap-2">

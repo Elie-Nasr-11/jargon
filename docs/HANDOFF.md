@@ -9141,3 +9141,38 @@ Files changed: frontend/src/lib/{mastery.ts,api.ts}; frontend/src/student/
 Tests run: python 464 OK; tsc 0 errors; eslint clean; build green.
 Suggested next task: Phase D — extract_knowledge intake + practice_items + studio-lite
 Knowledge review tab.
+
+## Claude -> Codex / Human - 2026-08-04 (R27b Phase D: knowledge intake + practice banks)
+
+Status: Finished
+Summary: The last brain-first phase — the intake that lights the brain up for ANY
+content. curriculum-admin gains three actions: extract_knowledge reads a lesson's
+steps + approved resource chunks, calls the model once (JSON mode), and DRAFTS a
+knowledge graph — ideas (<=4, deduped by key), vocab (<=6, deduped by term), links
+(<=5, both endpoints must cite existing org ideas or this run's drafts, valid kinds
+only), practice items (<=12, citable idea_key, difficulty intro|core|stretch), plus
+lesson_activities.idea_keys step mapping. Everything lands status=draft.
+list_knowledge/review_knowledge power the new studio-lite Knowledge card
+(features/teacher/KnowledgeCard.tsx, mounted in LessonDetail's edit view under the
+basics form): one "Draft knowledge" button, grouped rows, Publish/Discard per draft.
+Discard deletes drafts only (&status=eq.draft guard); published practice retires,
+never deletes. New practice_items table (RLS: published-only student read; writes are
+service-role) rides the deploy list. The chat fn now loads published practice_items
+into context and the practice directive names the TEACHER BANK item for the target
+idea FIRST (owner: teacher banks primary, generated content under guidelines
+otherwise). This completes docs/BRAIN_FIRST_PLAN.md — all phases A/E/B/C/D live.
+Files changed: supabase/functions/curriculum-admin/index.ts (knowledge module +
+dispatch); supabase/functions/chat/index.ts (practiceItems load + bank directive);
+supabase/migrations/20261001000000_practice_items.sql; .github/workflows/
+deploy-backend.yml; frontend/src/lib/{api.ts,types.ts}; frontend/src/features/
+teacher/KnowledgeCard.tsx (new); frontend/src/routes/teacher.curriculum.tsx;
+tests/test_brain_phase_d.py (new; suite 474 OK).
+Tests run: python 474 OK (4 skipped); tsc 0 errors; eslint 0 errors; build green;
+esbuild parse of every edge fn clean.
+Remaining concerns: extraction quality is untested against real teacher content —
+the guardrails guarantee shape, not pedagogy; a review pass by the teacher is the
+backstop by design. The Knowledge card polls nothing — teachers hit Reload after
+long extractions if they navigate away. practiceBank picks the FIRST published item
+for the target idea; rotation/spacing is a future nicety.
+Suggested next task: watch the brain hooks live as published knowledge accumulates;
+calibrate thresholds (0.7 weak / 0.8 compress / tier bands) against real transcripts.
