@@ -8958,3 +8958,16 @@ marking unseen material presented); watch that question_answer's reconnect line 
 pointing them onward.
 Suggested next task: replay the Portability opening — big-picture question in Discuss,
 then Continue (expect the step actually taught), then Continue again (expect the close).
+
+## Claude -> Codex / Human - 2026-08-03 (Brain-first scope written)
+
+Status: Scope only, no code
+Summary: Owner set the direction after the critical review: content-agnostic platform;
+the BRAIN is the source of truth informing everything (flow, linking, weakness focus,
+strength honing); modes collapse to lesson/practice/discuss (quiz/assignment are teacher
+posts, open removed, mentor_preferences retired); advancing consolidates on Continue
+with mode_offer pills replacing buried action sentences; preload/caching for slow
+surfaces; router+grader merge for latency. Full design in docs/BRAIN_FIRST_SCOPE.md
+(read model, consumers, intake, phasing A-E, 4 open decisions).
+Files changed: docs/BRAIN_FIRST_SCOPE.md (new); docs/HANDOFF.md.
+Suggested next task: owner picks phase order + answers the 4 decisions; build begins.
