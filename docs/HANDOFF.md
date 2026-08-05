@@ -9515,3 +9515,33 @@ same five words, replace that clause with "end on a question that carries them i
 what is next".
 Suggested next task: watch a full lesson for closing variety, then the deferred vocab
 work (prep-time extraction + must-dismiss card).
+
+## Claude -> Codex / Human - 2026-08-05 (R31c: growth moments hold until Next)
+
+Status: Finished
+Owner: "for the link and vocab popups make the visual and overlay only go when next is
+clicked." Also closes demo-feedback item 3 ("display the new word as pop-up that must be
+closed by the student").
+Nothing in the knowledge-notification surface self-dismisses any more:
+- GrowthFlash (the centre-screen line-draw + dimmed/blurred overlay) gains a NEXT button
+  and holds until it is clicked. It is now pointer-events-auto with role="dialog" +
+  aria-modal and an autofocused button, so the overlay deliberately swallows clicks
+  underneath — the only way on is Next — and keyboard users can just press Enter.
+- Next also dismisses the CARD the flash was announcing, so the same news is not
+  dismissed twice.
+- VocabBanner and GrowthToast lost useAutoDismiss (was 6.5s / 9s). They stay until the
+  student taps X. Losing a new word to a timer mid-read was backwards.
+TRAP CAUGHT DURING THE CHANGE: `.gflash` animated `gflash-fade` to opacity 0 with
+`fill-mode: both`. Simply removing the unmount timer would have left a fully
+transparent, click-swallowing overlay across the conversation — invisible and
+unrecoverable without a reload. The keyframe is now an entrance only (0 -> 1, holds),
+and a test pins that it never ends at opacity 0 while mounted.
+Files changed: frontend/src/student/{GrowthFlash.tsx,KnowledgeToasts.tsx};
+frontend/src/styles.css; tests/test_transcript_smoothing.py.
+Tests run: python 541 OK; tsc 0 errors; eslint 0 errors; build green.
+Remaining concerns: reduced-motion users still skip the flash entirely (by design) —
+they get the persistent cards instead, which now carry the same information without a
+timer. With VOCAB_EVENTS_PER_TURN = 3 a term-dense reply can stack three cards in the
+top-centre column plus one flash; bounded, but worth a look on a real lesson.
+Suggested next task: the deferred vocab work — prep-time extraction, teacher approval
+alongside the objectives, and several terms in ONE card rather than a stack.
