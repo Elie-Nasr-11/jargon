@@ -211,6 +211,12 @@ GOVERNANCE:
 - "resources": when the directive says card(s) are attached below your reply, tell the student to tap Open on
   the card — never say you can't share it. Never claim a resource was viewed unless resource_interactions
   proves it. Cite document chunks by resource title/page and audio/video chunks by title/time range.
+CLOSING A LESSON: before you wrap the LESSON up (not an individual step), the student must have
+(a) met the lesson's stated objective and (b) shown they know the new vocabulary this lesson
+introduced. Check both in the closing exchange: ask them to state the objective's idea in their own
+words, and to say what one or two of the lesson's key terms mean. If either is shaky, teach that gap
+now and close afterwards — a lesson is not finished because the steps ran out, it is finished when
+the student can do what it promised.
 - After the lesson is complete, answer follow-ups directly and briefly; never repeat
   congratulations. If they ask to be quizzed or want more practice, improvise short retrieval
   questions ONE at a time on what the lesson covered and respond to their answers — never
@@ -3317,8 +3323,23 @@ function turnDirective(args: {
   // Round 22e: no automatic hand-off line is appended anymore either (owner: keep it
   // natural; the transcript's step divider signifies the change) — so the close itself
   // must stay clean: no button talk, no step-counting, no next-part recital.
+  // R31 (demo feedback): two changes here. (1) SERVE THE ASK FIRST — a live transcript
+  // showed a student asking "now list the steps that occur around the ATP synthase" and
+  // the mentor closing the step with a wrap-up instead, ignoring them outright. Closing a
+  // step never outranks answering what they just asked for. (2) ASK, DON'T POINT AT A
+  // BUTTON — the reviewer asked that the step end with "Shall we continue?" so advancing
+  // is a conversational beat rather than a competing affordance. A typed yes/ok/sure/next
+  // already advances (CONTINUE_SIGNAL_RE), so the question is a real control, not decor.
   const CONCLUDE_HANDOFF =
-    " This reply ENDS the step: close naturally in one or two sentences. Never mention the Continue button or any button (it is gone once this reply lands), never announce completion mechanically (no \"that completes…\", no \"step N of M done\"), and never recite the next part's title — the interface marks the change with a divider. If one more rep or an open conversation would genuinely serve them here, set mode_offer (the pill carries that action — never write it as a sentence). End so that simply replying feels like the natural next thing; vary how you close, never a formula.";
+    " This reply ENDS the step. FIRST: if the student's latest message asked for anything — a list," +
+    " a rephrasing, an example, a question about the material — DO THAT FULLY before you close." +
+    " Never wrap up over an unanswered request; if serving it takes the whole reply, serve it and" +
+    " close next turn. Then close naturally in a sentence or two and END WITH \"Shall we continue?\"" +
+    " (or a natural variant of that question). Never name the Continue button or any button," +
+    " never announce completion mechanically (no \"that completes…\", no \"step N of M done\")," +
+    " and never recite the next part's title — the interface marks the change with a divider." +
+    " If one more rep or an open conversation would genuinely serve them here, set mode_offer (the" +
+    " pill carries that action — never write it as a sentence). Vary how you close; never a formula.";
 
   // Round 22 (transcript kinks): a bare "ready"-style message is a signal to proceed,
   // not an answer — the live transcript showed "ready" earning a full re-ask of a task
@@ -4781,6 +4802,11 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// R31: how many first-encounter vocab cards one reply may surface (they stack in a
+// single dismissible popup client-side). Bounded so a term-dense reply cannot bury the
+// lesson under cards.
+const VOCAB_EVENTS_PER_TURN = 3;
+
 function processKnowledge(input: {
   config: SupabaseConfig;
   userId: string;
@@ -4848,8 +4874,14 @@ function processKnowledge(input: {
     return true;
   };
 
-  // --- 1. Deterministic vocab sighting over the turn's combined text -----------------
-  const haystack = `${input.replyText}\n${input.studentText}`.toLowerCase();
+  // --- 1. Deterministic vocab sighting over the MENTOR'S TEACHING --------------------
+  // R31 (demo feedback: "only extracted from the lesson — it extracted from my prompt"):
+  // this used to scan the student's own message too, so typing a word the lesson had not
+  // taught yet fired its "new word" card. A term counts as ENCOUNTERED only when the
+  // MENTOR uses it — that is the moment the lesson actually introduces it. The student's
+  // text still drives the subject-travel/link logic further down, where "the learner used
+  // this word in a new subject" is exactly the signal we want.
+  const haystack = String(input.replyText).toLowerCase();
   const seenByTermId = new Map(
     input.studentVocab.map((row) => [String(row.term_id), row]),
   );
@@ -4862,8 +4894,10 @@ function processKnowledge(input: {
     const termId = String(term.id);
     const existing = seenByTermId.get(termId);
     if (!existing) {
-      // First encounter ever: row + (at most one) definition dropdown.
-      const surfaced = events.vocab_events.length < 1;
+      // First encounter ever: row + definition card. R31 (demo feedback #4): a reply that
+      // introduces several new terms used to surface only the first and silently swallow
+      // the rest; up to VOCAB_EVENTS_PER_TURN now ride the same popup.
+      const surfaced = events.vocab_events.length < VOCAB_EVENTS_PER_TURN;
       writes.push(
         insertRow(config, "student_vocab", {
           user_id: userId,

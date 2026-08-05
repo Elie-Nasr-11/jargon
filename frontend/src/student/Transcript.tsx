@@ -339,6 +339,12 @@ function renderBlocks(text: string, vocab?: VocabPass): ReactNode[] {
   return nodes;
 }
 
+// R31: does the reply END by asking the student something? Trailing whitespace and a
+// closing quote/bracket are tolerated so "…what do you notice?\"" still counts.
+export function endsWithQuestion(text: string): boolean {
+  return /\?["')\]]?\s*$/.test(String(text || "").trim());
+}
+
 function isQuestionSentence(sentence: string): boolean {
   return /[?]["')\]]?\s*$/.test(sentence.trim());
 }
@@ -968,8 +974,18 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                   ) : null}
                   {/* Flow v3: the Continue pill rides the message that offered it and is live
                       only while that message is the latest — like quiz choices, an old offer
-                      must not stay pressable. */}
-                  {message.continueOffer && isLatestBot && !message.isError ? (
+                      must not stay pressable.
+                      R31 (demo feedback: "remove the Continue button especially when it is
+                      posing a question"): a reply that ASKS the student something must not
+                      also show a button that skips past the asking — two competing
+                      affordances, and the button always wins. When the mentor ends on a
+                      question the pill is withheld and the student answers in words;
+                      a typed yes/ok/sure/next advances exactly as the button would
+                      (CONTINUE_SIGNAL_RE, server-side). */}
+                  {message.continueOffer &&
+                  isLatestBot &&
+                  !message.isError &&
+                  !endsWithQuestion(message.text) ? (
                     <div className="flex pl-1">
                       {/* The primary pill (board: "Continue lesson") — inverts per theme. */}
                       <button

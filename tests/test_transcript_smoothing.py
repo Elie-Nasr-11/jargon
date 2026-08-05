@@ -297,10 +297,10 @@ class TransitionKinksStaticTests(unittest.TestCase):
 
     def test_concluding_turns_carry_the_handoff_rule(self):
         self.assertIn("const CONCLUDE_HANDOFF =", self.chat_fn)
-        self.assertIn(
-            "Never mention the Continue button or any button (it is gone once this reply lands)",
-            self.chat_fn,
-        )
+        self.assertIn("Never name the Continue button or any button", self.chat_fn)
+        # R31 (demo feedback): a step closes by ASKING, and never over an unanswered request.
+        self.assertIn('END WITH \\"Shall we continue?\\"', self.chat_fn)
+        self.assertIn("Never wrap up over an unanswered request", self.chat_fn)
         # Every concluding directive appends it — declaration + 8 concatenations.
         self.assertGreaterEqual(self.chat_fn.count("CONCLUDE_HANDOFF"), 9)
         self.assertIn("closing + CONCLUDE_HANDOFF", self.chat_fn)

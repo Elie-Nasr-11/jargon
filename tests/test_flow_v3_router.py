@@ -104,7 +104,12 @@ class FlowV3RouterInvariants(unittest.TestCase):
         # Like retired quiz choices, an old Continue offer must not stay pressable once the
         # conversation has moved on.
         transcript = (REPO / "frontend" / "src" / "student" / "Transcript.tsx").read_text()
-        self.assertIn("message.continueOffer && isLatestBot", transcript)
+        self.assertIn("message.continueOffer &&", transcript)
+        self.assertIn("isLatestBot &&", transcript)
+        # R31 (demo feedback): a reply that ASKS the student something must not also offer a
+        # button that skips the asking — the pill is withheld on question-ending replies.
+        self.assertIn("!endsWithQuestion(message.text)", transcript)
+        self.assertIn("export function endsWithQuestion(", transcript)
 
     def test_revisit_frame_offers_the_return_chip(self):
         window = (REPO / "frontend" / "src" / "student" / "ChatWindow.tsx").read_text()

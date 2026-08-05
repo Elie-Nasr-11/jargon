@@ -73,7 +73,10 @@ class LearningFrameworkStaticTests(unittest.TestCase):
             "function slugifyIdeaKey(",
             'origin: "emergent"',
             "events.link_events.length < 1",
-            "events.vocab_events.length < 1",
+            "events.vocab_events.length < VOCAB_EVENTS_PER_TURN",
+            # R31 (demo feedback): a term counts as encountered when the MENTOR uses it —
+            # scanning the student's own message fired cards for words never taught.
+            "const haystack = String(input.replyText).toLowerCase();",
             "Knowledge is enrichment",
         ):
             with self.subTest(fragment=fragment):

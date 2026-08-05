@@ -9434,3 +9434,48 @@ Replies sit at ~80-90 words against a 60-80 target — close, not exact. Nothing
 extracts figures from a NEWLY uploaded PDF; that remains the next real build.
 Suggested next task: automatic figure extraction on resource upload (render pages,
 detect image regions, draft rows into the same review queue).
+
+## Claude -> Codex / Human - 2026-08-05 (R31: demo feedback round)
+
+Status: Finished
+Context: live demo feedback (WhatsApp screenshots). The figure work landed well —
+"This is great… superb" on the chloroplast diagram with its caption and "What do you
+notice in this image?". Six issues raised; all addressed.
+1) IGNORED REQUEST (worst). Transcript shows the student asking "now list the steps
+   that occur around the ATP synthase" and the mentor closing the step with a wrap-up
+   instead — the ask was never served. CONCLUDE_HANDOFF now leads with: serve any ask
+   in the student's latest message FULLY before closing, and never wrap up over an
+   unanswered request (serve it and close next turn if it takes the whole reply).
+2) CONTINUE BUTTON. Reviewer: "remove the Continue button especially when it is posing
+   a question… have it conclude its output with 'Shall we continue?'". Implemented as:
+   the step closes by ASKING "Shall we continue?" (server), and the client WITHHOLDS
+   the Continue pill on any reply that ends in a question (endsWithQuestion) — two
+   competing affordances, and the button always won. A typed yes/ok/sure/next already
+   advances (CONTINUE_SIGNAL_RE), so the question is a real control, not decoration.
+   NOTE the tension with the earlier owner decision "consolidate advancing on Continue
+   (you don't want students to type if there's nothing to say)": the pill still appears
+   on pure-content turns that ask nothing. Say the word to remove it outright.
+3) VOCAB SOURCE. Real bug: processKnowledge scanned `replyText + studentText`, so a
+   word the STUDENT typed fired its "new word" card even if the lesson never taught it.
+   Now mentor-reply only — a term is encountered when the lesson introduces it. The
+   student's text still drives the subject-travel/link logic, which is where "learner
+   used this word in a new subject" is the signal we actually want.
+4) MULTIPLE VOCAB PER REPLY. The cap was hard-coded 1, silently swallowing the rest;
+   now VOCAB_EVENTS_PER_TURN = 3.
+5) LESSON CLOSE GATE. New SYSTEM_PROMPT block: before wrapping the LESSON the student
+   must have met the objective AND shown they know the new vocabulary — check both in
+   the closing exchange and teach the gap first. "A lesson is not finished because the
+   steps ran out, it is finished when the student can do what it promised."
+Four stale pins re-anchored (not weakened) to the new invariants; CONCLUDE_HANDOFF was
+REFLOWED so pinned phrases stay contiguous rather than relaxing the assertions.
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/Transcript.tsx;
+tests/{test_flow_v3_router,test_learning_framework,test_transcript_smoothing}.py.
+Tests run: python 541 OK; tsc 0 errors; eslint 0 errors; build green; edge parse clean.
+NOT DONE (feedback 2 + 3, deliberately deferred — they are teacher-side authoring, not
+a prompt tweak): vocab is not yet extracted from the lesson at PREP time and approved
+by the teacher alongside the objectives, and the vocab card is still a dismissible
+toast rather than a pop-up the student MUST close. Both belong with the extract/review
+flow (extract_knowledge already drafts vocab; it needs to run at lesson prep and the
+client needs a blocking card). Next build.
+Suggested next task: vocab at prep time (teacher-approved, covering the lesson's main
+terms) + a must-dismiss vocab card that can carry several terms at once.
