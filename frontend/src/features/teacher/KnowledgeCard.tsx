@@ -163,8 +163,9 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
 
       <p className="mb-3 text-meta text-muted-foreground">
         The mentor teaches from what is published here: ideas become trackable strengths, vocab gets
-        defined on tap, links connect lessons, and practice items are used verbatim before anything
-        generated.
+        defined on tap, links connect lessons, practice items are used verbatim before anything
+        generated, and figures are shown to students while the idea they illustrate is being taught.
+        Nothing on this card reaches a student until you publish it.
       </p>
 
       {error ? <p className="mb-3 text-meta text-destructive">{error}</p> : null}
@@ -172,8 +173,9 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
 
       {loaded && total === 0 && !loading ? (
         <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
-          Nothing extracted yet. Draft knowledge reads the steps and approved resources, then
-          proposes ideas, vocab, links, and practice for review.
+          Nothing here yet. Draft knowledge reads the steps and approved resources, then proposes
+          ideas, vocab, links, and practice for review. Figures are added when a lesson&rsquo;s
+          source material is processed.
         </div>
       ) : (
         <div className="grid gap-4">

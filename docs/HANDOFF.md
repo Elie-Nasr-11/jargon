@@ -9407,3 +9407,30 @@ worth watching. Figure placement is proven on ONE step; the other seven publishe
 figures are unproven live. Nothing extracts figures from a NEWLY uploaded PDF yet.
 Suggested next task: watch the demo for figure placement on the other lessons, then
 automate extraction on resource upload.
+
+## Claude -> Codex / Human - 2026-08-05 (R30d: figure proving pass + card copy)
+
+Status: Finished
+Summary: Proved figures on THREE lessons, not one (the gap flagged in R30c).
+- camp-bio-l1 "what does a chloroplast look like inside" -> 417 chars, chloroplast
+  cross-section shown, no Continue narration, closes asking them to describe it.
+- camp-math-l3 "i dont really get how the unit circle gives you sin and cos" -> 541
+  chars, coordinate-grid figure shown, AND LaTeX ($\cos\theta$) in the same reply, so
+  the math renderer and the figure path coexist.
+- camp-bio-l3 "how does the calvin cycle actually work" -> 503 chars. This lesson has
+  TWO published figures; the reply showed exactly ONE, and it was the step-matched
+  "Calvin cycle by carbon count" — the one-per-reply cap and the idea binding both
+  hold when there is a choice to get wrong.
+Also: the Knowledge card's copy still described a four-kind card, so it now names
+figures and states plainly that nothing reaches a student until published.
+Files changed: frontend/src/features/teacher/KnowledgeCard.tsx (copy only);
+docs/HANDOFF.md.
+Tests run: python 541 OK; tsc 0 errors; eslint 0 errors; build green.
+Demo state: all three testers reset to 0 open sessions with their 18 work items
+intact; pg_net dropped again after this proving pass.
+Remaining concerns: five published figures still unexercised live (the two bio
+graphs, the tangent axes, and the two drafts are review-queue fodder by design).
+Replies sit at ~80-90 words against a 60-80 target — close, not exact. Nothing
+extracts figures from a NEWLY uploaded PDF; that remains the next real build.
+Suggested next task: automatic figure extraction on resource upload (render pages,
+detect image regions, draft rows into the same review queue).
