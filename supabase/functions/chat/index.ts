@@ -3272,6 +3272,8 @@ function turnDirective(args: {
     compress: boolean;
     practiceTarget: string | null;
     practiceStretch: string | null;
+    // R30b: a teacher-approved figure for THIS step's idea, not yet shown this session.
+    figure: { id: string; title: string } | null;
     practiceBank: { prompt: string; expected: string } | null;
   };
 }): TurnDirective {
@@ -3696,8 +3698,23 @@ function turnDirective(args: {
       const recall = !brainHints.compress && brainHints.recallIdea
         ? ` RECALL OPENER: before presenting, ask ONE quick recall question on "${brainHints.recallIdea}" — their evidence shows it fading, and this step builds on it. Then present as directed.`
         : "";
+      // R30b (tester feedback #6, confirmed live): present_step replies were running to
+      // 800+ characters of bulleted lecture and closing with "any questions?". The size
+      // rule lives in the SYSTEM prompt, but the directive outranks it, so it is restated
+      // HERE, where it actually binds.
+      const brevity =
+        " SIZE: keep this to about 60-80 words — one idea, not a summary of the whole" +
+        " topic. Close by asking them for something specific they must produce (an" +
+        ' example, their own wording, a prediction). Never close with "does that make' +
+        ' sense", "any questions", or an invitation to tap Continue.';
+      const figureLine = brainHints.figure
+        ? ` FIGURE: show the approved figure for this step — put [[figure:${brainHints.figure.id}]] on its own line where they should look at it ("${brainHints.figure.title}"), then ask what they notice in it. Do not describe the picture in prose; the image does that work.`
+        : "";
       if (modePresent) {
-        return { key: "present_step", text: questionFirst + modePresent + compression + recall };
+        return {
+          key: "present_step",
+          text: questionFirst + modePresent + compression + recall + figureLine + brevity,
+        };
       }
       return {
         key: "present_step",
@@ -3705,7 +3722,9 @@ function turnDirective(args: {
           questionFirst +
           "This step has not been shown to the student yet. Present it: introduce the task in a sentence or two at their grade level and invite a first attempt — do not pre-empt their thinking, give anything away, or interrogate them." +
           compression +
-          recall,
+          recall +
+          figureLine +
+          brevity,
       };
     }
     return {
@@ -5742,6 +5761,20 @@ async function handleTypedRequest(
     compress:
       stepIdeaKeys.length > 0 &&
       stepIdeaKeys.every((key) => (effByKey.get(key) ?? 0) >= 0.8),
+    // R30b: the figure to show on this step. Deterministic, because a live turn proved the
+    // SYSTEM prompt alone does not get figures shown — the turn DIRECTIVE outranks it. So
+    // the directive names the exact id, the same way the teacher practice bank is named.
+    // Skipped once the marker appears in recent turns: shown once, not every turn.
+    figure: (() => {
+      const stepKeys = new Set(stepIdeaKeys);
+      const match = context.figures.find((row) => stepKeys.has(String(row.idea_key)));
+      if (!match) return null;
+      const marker = `[[figure:${String(match.id)}]]`;
+      const alreadyShown = context.recentTurns.some((turn) =>
+        String(turn.content || "").includes(marker),
+      );
+      return alreadyShown ? null : { id: String(match.id), title: String(match.title || "") };
+    })(),
     // Practice targeting: weakest first; with no weak spots on record, stretch a strength.
     practiceTarget: brain.weak[0]?.title ?? null,
     practiceStretch: !brain.weak.length ? (brain.strong[0]?.title ?? null) : null,
