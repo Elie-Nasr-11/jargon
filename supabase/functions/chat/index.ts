@@ -168,6 +168,27 @@ re-read or re-narrate them (introduce the question briefly only when the directi
 presentation). Wrong choice -> brief targeted feedback on why that choice fails, then point back at the
 options.
 
+FIGURES: "figures" lists illustrations lifted from the teacher's own materials (diagrams, graphs, labelled
+axes), each with the idea it illustrates. When you are teaching an idea that has a figure, SHOW IT — put
+[[figure:<id>]] on its own line at the point in your reply where a student should look at it, using the id
+exactly as given. The interface renders the image there. Rules: at most ONE figure per reply; only ids from
+this list (never invent one); refer to what is IN the figure ("the stacked layers labelled B") instead of
+describing the picture as a whole; and never show the same figure twice in a session unless the student asks
+to see it again. A figure replaces explanation — show it and ask them what they notice, do not narrate it.
+
+TEACHER MATERIALS: "materials" lists what the teacher posted for this lesson and whether the student has
+OPENED each one. The teacher chose these deliberately — a lesson built on a reading, a paper or a video does
+not work if the student never looks at it.
+- If an unopened material is the SOURCE for what you are about to teach, do not summarize it and carry on.
+  Point them at it by name, say in one line what to look for in it, and ask them to open it. It is on screen —
+  they open it in one tap.
+- Once they have opened it, teach FROM it: refer to what they saw, and ask what they noticed rather than
+  re-narrating it.
+- Never fabricate what a material contains. If you have not been given its text, ask them what they found in
+  it rather than describing it yourself.
+- A student who insists on skipping it is not blocked — help them anyway, but say plainly what they are
+  missing by skipping it.
+
 Code steps: a failed run gets the lightest help that unblocks the ONE thing to fix. A runtime timeout is our
 infrastructure hiccup, never the student's mistake — reassure them it's on us and ask them to run it again;
 never grade or critique timed-out code. When the grade says the code accomplishes the objective, affirm once
@@ -305,6 +326,15 @@ type Envelope = {
   // R30: operator-facing fault detail on error envelopes. `reply` carries the calm
   // student line; this keeps the real cause visible in the network response for us.
   error?: string;
+  // R30: figures referenced by this reply's [[figure:id]] markers, resolved server-side
+  // so the client renders from data it was given rather than guessing at an id.
+  figures?: {
+    id: string;
+    title: string;
+    caption: string;
+    image_url: string;
+    alt_text: string;
+  }[];
   session_id: string | null;
   lesson_id: string | null;
   stage: Stage;
@@ -556,6 +586,9 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     // R30: operator-facing fault detail (see typedError) — omitted on healthy turns.
     ...(typeof partial.error === "string" && partial.error
       ? { error: partial.error }
+      : {}),
+    ...(Array.isArray(partial.figures) && partial.figures.length
+      ? { figures: partial.figures }
       : {}),
     session_id:
       typeof partial.session_id === "string" ? partial.session_id : null,
@@ -3831,6 +3864,8 @@ async function loadContext(
   ideaMastery: DbRow[];
   // Phase D: published teacher practice banks (RLS: published-only readable).
   practiceItems: DbRow[];
+  // R30: teacher-approved figures for this lesson (published only).
+  figures: DbRow[];
 }> {
   // Reads run in TWO parallel waves (wave 2 holds only the queries that genuinely
   // depend on a wave-1 result), with the checkpoints chain overlapping both.
@@ -3857,6 +3892,7 @@ async function loadContext(
     curriculumLinks,
     ideaMastery,
     practiceItems,
+    figures,
     recentSummaries,
   ] = await Promise.all([
     loadFirst(
@@ -3934,6 +3970,12 @@ async function loadContext(
     loadMany(
       config,
       `practice_items?status=eq.published&select=idea_key,prompt,expected,difficulty&limit=100`,
+    ).catch(() => [] as DbRow[]),
+    // R30 (tester feedback #4): the lesson's APPROVED figures. Draft crops are never
+    // loaded, so an unreviewed extraction cannot reach a student.
+    loadMany(
+      config,
+      `lesson_figures?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=position.asc&limit=12&select=id,idea_key,title,caption,image_url,alt_text`,
     ).catch(() => [] as DbRow[]),
     // Memory v2: pull a POOL of summaries (newest first) — the prompt still carries at
     // most 3, but they are picked by RELEVANCE to this lesson (pickRelevantSummaries),
@@ -4050,6 +4092,7 @@ async function loadContext(
     curriculumLinks,
     ideaMastery,
     practiceItems,
+    figures,
   };
 }
 
@@ -6370,6 +6413,28 @@ async function handleTypedRequest(
             resource_type: resource.resource_type,
             student_instructions: String(resource.student_instructions || "").slice(0, 240),
           })),
+          // R30 (tester feedback #2: "students should at least open the resources posted
+          // by the teacher before proceeding"). Same rows as `resources`, plus whether
+          // THIS student has opened each one — derived from resource_interactions, which
+          // the context already loads. The mentor uses it to send them to the material
+          // instead of summarizing past it; see the TEACHER MATERIALS prompt block.
+          // R30: the approved figure set for this lesson, addressable by id. The mentor
+          // places [[figure:id]] in its reply; the client swaps it for the image.
+          figures: context.figures.map((figure) => ({
+            id: figure.id,
+            idea_key: figure.idea_key,
+            title: figure.title,
+            shows: String(figure.caption || "").slice(0, 200),
+          })),
+          materials: context.resources.map((resource) => ({
+            title: resource.title,
+            resource_type: resource.resource_type,
+            opened: context.resourceInteractions.some(
+              (event) =>
+                String(event.resource_id) === String(resource.id) &&
+                String(event.event_type) !== "shown",
+            ),
+          })),
           // Phase A: mentor_preferences retired — policy is TEACHER controls only
           // (help ceiling + the lesson's authored tone/pace). The old student
           // mentor_mode no longer rides the prompt; the session column persists it
@@ -6808,6 +6873,35 @@ async function handleTypedRequest(
       if (knowledge.idea_events.length) envelope.idea_events = knowledge.idea_events;
     } catch {
       // Knowledge is enrichment — a processor failure must never cost the turn.
+    }
+    // R30: resolve [[figure:id]] markers the mentor placed in its reply. Only ids from
+    // THIS lesson's approved set resolve; an invented or unapproved id is stripped from
+    // the text so a student never sees a raw marker. At most one figure per reply.
+    {
+      const markers = [...String(envelope.reply || "").matchAll(/\[\[figure:([^\]\s]+)\]\]/g)];
+      if (markers.length) {
+        const approved = new Map(
+          context.figures.map((figure) => [String(figure.id), figure]),
+        );
+        const shown: NonNullable<Envelope["figures"]> = [];
+        for (const marker of markers) {
+          const figure = approved.get(marker[1]);
+          if (!figure || shown.length >= 1) continue;
+          shown.push({
+            id: String(figure.id),
+            title: String(figure.title || ""),
+            caption: String(figure.caption || ""),
+            image_url: String(figure.image_url || ""),
+            alt_text: String(figure.alt_text || ""),
+          });
+        }
+        // Drop markers that resolved to nothing (kept ones are rendered client-side).
+        envelope.reply = String(envelope.reply || "").replace(
+          /\[\[figure:([^\]\s]+)\]\]/g,
+          (whole, id) => (shown.some((figure) => figure.id === id) ? whole : ""),
+        );
+        if (shown.length) envelope.figures = shown;
+      }
     }
     // Phase B: a GRADED turn writes idea-level mastery evidence (background,
     // best-effort). pass/fail from whichever grader ran; an echo-rejected answer is

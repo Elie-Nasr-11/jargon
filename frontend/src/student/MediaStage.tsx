@@ -216,9 +216,25 @@ export function MediaStageViewer({
             )}
           </div>
         ) : failed ? (
-          <p className="p-4 text-body text-muted-foreground">
-            This material couldn&rsquo;t be opened. It may have been removed.
-          </p>
+          // R30 (tester feedback #1: "fix error when opening or expanding pdf"). A failed
+          // embed is no longer a dead end: some browsers and extensions refuse to frame a
+          // PDF at all, which is indistinguishable from a missing file. Offer the direct
+          // link, which works in every case where the file exists.
+          <div className="flex flex-col items-start gap-2 p-4">
+            <p className="text-body text-muted-foreground">
+              This didn&rsquo;t open inside the app. It should still open in a new tab.
+            </p>
+            {url || resource.external_url ? (
+              <a
+                href={url || resource.external_url || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+              >
+                Open {resource.title} in a new tab
+              </a>
+            ) : null}
+          </div>
         ) : !url ? (
           <p className="flex items-center gap-2 p-4 text-body text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Opening…
@@ -228,6 +244,7 @@ export function MediaStageViewer({
             title={resource.title}
             src={url}
             className="h-full w-full"
+            onError={() => setFailed(true)}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />

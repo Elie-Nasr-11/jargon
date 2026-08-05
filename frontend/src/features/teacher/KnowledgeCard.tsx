@@ -9,6 +9,7 @@ import {
 import type {
   KnowledgeIdeaRow,
   KnowledgeLinkRow,
+  KnowledgeFigureRow,
   KnowledgePracticeRow,
   KnowledgeVocabRow,
 } from "@/lib/types";
@@ -19,16 +20,17 @@ import type {
 // each draft row is then published or discarded here. Published rows are what the
 // mentor's brain reads — nothing reaches students without passing this review.
 
-type KnowledgeKind = "idea" | "vocab" | "link" | "practice";
+type KnowledgeKind = "idea" | "vocab" | "link" | "practice" | "figure";
 
 type KnowledgeRows = {
   ideas: KnowledgeIdeaRow[];
   vocab: KnowledgeVocabRow[];
   links: KnowledgeLinkRow[];
   practice: KnowledgePracticeRow[];
+  figures: KnowledgeFigureRow[];
 };
 
-const EMPTY_ROWS: KnowledgeRows = { ideas: [], vocab: [], links: [], practice: [] };
+const EMPTY_ROWS: KnowledgeRows = { ideas: [], vocab: [], links: [], practice: [], figures: [] };
 
 async function requireToken(): Promise<string> {
   const session = await getSession();
@@ -56,6 +58,7 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
         vocab: data.vocab || [],
         links: data.links || [],
         practice: data.practice || [],
+        figures: data.figures || [],
       });
       setLoaded(true);
     } catch (cause) {
@@ -111,8 +114,14 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
     rows.ideas.filter((r) => r.status === "draft").length +
     rows.vocab.filter((r) => r.status === "draft").length +
     rows.links.filter((r) => r.status === "draft").length +
-    rows.practice.filter((r) => r.status === "draft").length;
-  const total = rows.ideas.length + rows.vocab.length + rows.links.length + rows.practice.length;
+    rows.practice.filter((r) => r.status === "draft").length +
+    rows.figures.filter((r) => r.status === "draft").length;
+  const total =
+    rows.ideas.length +
+    rows.vocab.length +
+    rows.links.length +
+    rows.practice.length +
+    rows.figures.length;
 
   return (
     <section className="rounded-card border border-border bg-depth-sub p-4">
@@ -210,6 +219,21 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
             onReview={onReview}
           />
           <KnowledgeGroup
+            label="Figures"
+            count={rows.figures.length}
+            rows={rows.figures.map((row) => ({
+              id: row.id,
+              status: row.status,
+              title: row.title,
+              detail: row.caption || row.image_url,
+              mono: row.idea_key || undefined,
+              thumb: row.image_url,
+            }))}
+            kind="figure"
+            busyId={busyId}
+            onReview={onReview}
+          />
+          <KnowledgeGroup
             label="Practice"
             count={rows.practice.length}
             rows={rows.practice.map((row) => ({
@@ -235,6 +259,8 @@ type GroupRow = {
   title: string;
   detail: string;
   mono?: string;
+  // R30: figures show the actual crop — approving an image you cannot see is guesswork.
+  thumb?: string;
 };
 
 function KnowledgeGroup({
@@ -272,20 +298,29 @@ function KnowledgeGroup({
                 isDraft ? "border-border bg-depth-card" : "border-transparent"
               }`}
             >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-body text-foreground">{row.title}</span>
-                  {row.mono ? (
-                    <span className="shrink-0 font-mono text-meta text-muted-foreground/70">
-                      {row.mono}
-                    </span>
+              <div className="flex min-w-0 gap-3">
+                {row.thumb ? (
+                  <img
+                    src={row.thumb}
+                    alt=""
+                    className="h-14 w-20 shrink-0 rounded border border-border bg-white object-contain"
+                  />
+                ) : null}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-body text-foreground">{row.title}</span>
+                    {row.mono ? (
+                      <span className="shrink-0 font-mono text-meta text-muted-foreground/70">
+                        {row.mono}
+                      </span>
+                    ) : null}
+                  </div>
+                  {row.detail ? (
+                    <p className="mt-0.5 line-clamp-2 text-meta text-muted-foreground">
+                      {row.detail}
+                    </p>
                   ) : null}
                 </div>
-                {row.detail ? (
-                  <p className="mt-0.5 line-clamp-2 text-meta text-muted-foreground">
-                    {row.detail}
-                  </p>
-                ) : null}
               </div>
               {isDraft ? (
                 <div className="flex shrink-0 items-center gap-1.5">

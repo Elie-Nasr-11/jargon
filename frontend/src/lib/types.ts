@@ -273,6 +273,16 @@ export type CurriculumTemplate = {
   created_at: string;
 };
 
+// R30 (tester feedback #4): an illustration lifted from a teacher's own material and bound
+// to the idea it explains. Only teacher-approved (published) figures ever reach a student.
+export type LessonFigure = {
+  id: string;
+  title: string;
+  caption: string;
+  image_url: string;
+  alt_text: string;
+};
+
 export type CurriculumAdminResponse = {
   status: "ok" | "error";
   node_type?: CurriculumNodeType | "step";
@@ -303,6 +313,7 @@ export type CurriculumAdminResponse = {
   vocab?: KnowledgeVocabRow[];
   links?: KnowledgeLinkRow[];
   practice?: KnowledgePracticeRow[];
+  figures?: KnowledgeFigureRow[];
   error?: string;
 };
 
@@ -331,6 +342,15 @@ export type KnowledgeLinkRow = {
   to_key: string;
   kind: string;
   note: string | null;
+  status: string;
+};
+
+export type KnowledgeFigureRow = {
+  id: string;
+  idea_key: string | null;
+  title: string;
+  caption: string | null;
+  image_url: string;
   status: string;
 };
 
@@ -1205,6 +1225,9 @@ export type TypedChatEnvelope = {
   vocab_events?: VocabEvent[];
   link_events?: LinkEvent[];
   idea_events?: IdeaEvent[];
+  // R30: figures this reply referenced with [[figure:id]], resolved server-side from the
+  // lesson's teacher-approved set. Rendered inline where the marker sits.
+  figures?: LessonFigure[];
   // Flow v3 (all optional — old stored envelopes replay fine): the Continue pill offer for
   // unacknowledged content steps, and the turn router's verdict (telemetry/hinting).
   continue_offer?: { label: string } | null;

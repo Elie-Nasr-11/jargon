@@ -17,7 +17,7 @@ import {
   turnModeSpec,
 } from "@/student/turnModes";
 import { useConversationChannel } from "@/student/useConversation";
-import type { LessonArc, TypedChatAnswer, VocabEvent, VocabTerm } from "@/lib/types";
+import type { LessonArc, LessonFigure, TypedChatAnswer, VocabEvent, VocabTerm } from "@/lib/types";
 import {
   choiceLabel,
   choiceValue,
@@ -408,15 +408,67 @@ function StreamingBody({ text }: { text: string }) {
   );
 }
 
+// R30 (tester feedback #4): a figure lifted from the teacher's own material, shown at the
+// point in the reply where the mentor placed its [[figure:id]] marker. Only figures the
+// server resolved from the lesson's APPROVED set arrive here, so an unreviewed crop can
+// never render. Clicking opens the full-size image in a new tab.
+function SourceFigure({ figure }: { figure: LessonFigure }) {
+  return (
+    <figure className="my-3 overflow-hidden rounded-card border border-border bg-depth-sub">
+      <a href={figure.image_url} target="_blank" rel="noopener noreferrer" title="Open full size">
+        <img
+          src={figure.image_url}
+          alt={figure.alt_text || figure.title}
+          loading="lazy"
+          // The scans are grayscale line art: a white plate keeps them legible in dark mode.
+          className="max-h-[420px] w-full bg-white object-contain"
+        />
+      </a>
+      {figure.title || figure.caption ? (
+        <figcaption className="border-t border-border px-3 py-2 text-meta text-muted-foreground">
+          {figure.title ? <span className="text-foreground">{figure.title}</span> : null}
+          {figure.title && figure.caption ? " — " : null}
+          {figure.caption}
+        </figcaption>
+      ) : null}
+    </figure>
+  );
+}
+
+// Split a reply on its figure markers so the image lands exactly where the mentor put it.
+const FIGURE_MARKER_RE = /\[\[figure:([^\]\s]+)\]\]/g;
+
 function MessageBody({
   text,
   markdown,
   vocab,
+  figures,
 }: {
   text: string;
   markdown?: boolean;
   vocab?: VocabPass;
+  figures?: LessonFigure[];
 }) {
+  // Figures first: each marker becomes a real block, the prose around it renders as usual.
+  if (figures?.length && FIGURE_MARKER_RE.test(text)) {
+    FIGURE_MARKER_RE.lastIndex = 0;
+    const byId = new Map(figures.map((figure) => [figure.id, figure]));
+    const parts = text.split(FIGURE_MARKER_RE);
+    return (
+      <>
+        {parts.map((part, i) => {
+          // Odd indices are the captured ids; even indices are prose.
+          if (i % 2 === 1) {
+            const figure = byId.get(part);
+            return figure ? <SourceFigure key={`fig-${i}`} figure={figure} /> : null;
+          }
+          return part.trim() ? (
+            <MessageBody key={`txt-${i}`} text={part.trim()} markdown={markdown} vocab={vocab} />
+          ) : null;
+        })}
+      </>
+    );
+  }
   const segments = parseFencedBlocks(text);
   const renderText = (raw: string, key?: number) => {
     if (markdown && BLOCK_MD_RE.test(raw)) {
@@ -820,6 +872,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                     <MessageBody
                       text={message.text}
                       markdown={!message.isError}
+                      figures={message.figures}
                       vocab={
                         vocabMatcher && !message.isError
                           ? { ...vocabMatcher, seen: new Set<string>() }

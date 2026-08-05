@@ -16,6 +16,7 @@ import type { MentorConfig } from "@/lib/jargon-store";
 import type {
   ChatAttachment,
   ChatInputModality,
+  LessonFigure,
   JargonRunResponse,
   LearningTurn,
   LessonActivity,
@@ -59,6 +60,8 @@ export type Msg =
       code?: ChatCodeBlock;
       choices?: ChatChoice[];
       resources?: LessonChatResource[];
+      // R30: figures this reply showed, resolved from the lesson's approved set.
+      figures?: LessonFigure[];
       // Flow v3: this message offered the Continue pill (content step awaiting an
       // explicit continue). Only the latest bot message's offer renders live; since
       // chat-flow Phase 1 it IS restored from the persisted envelope on reload.
@@ -245,6 +248,8 @@ export function envelopeMessage(envelope: TypedChatEnvelope, turnMode?: string):
     text: envelope.reply || "I'm ready.",
     choices: envelope.choices?.length ? envelope.choices : undefined,
     resources: envelope.resources?.length ? envelope.resources : undefined,
+    // R30: figures this reply showed, rendered inline where its [[figure:id]] marker sits.
+    figures: envelope.figures?.length ? envelope.figures : undefined,
     // Flow v3: the Continue pill rides the message that offered it, so (like retired
     // quiz choices) it stays anchored to its turn and only the LATEST offer is live.
     continueOffer: envelope.continue_offer ?? undefined,

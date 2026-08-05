@@ -2567,6 +2567,8 @@ const KNOWLEDGE_TABLES: Record<string, string> = {
   vocab: "vocab_terms",
   link: "curriculum_links",
   practice: "practice_items",
+  // R30: teacher review for extracted figures (publish / discard), same flow as the rest.
+  figure: "lesson_figures",
 };
 
 async function listKnowledge(config: Config, actorId: string, body: DbRow): Promise<Response> {
@@ -2580,7 +2582,7 @@ async function listKnowledge(config: Config, actorId: string, body: DbRow): Prom
   );
   const ideaKeys = ideas.map((row) => String(row.key));
   const keyFilter = ideaKeys.map(enc).join(",");
-  const [vocab, links, practice] = await Promise.all([
+  const [vocab, links, practice, figures] = await Promise.all([
     selectMany(
       config,
       `vocab_terms?lesson_id=eq.${enc(lessonId)}&select=id,term,definition,variants,status&order=created_at.asc&limit=50`,
@@ -2595,8 +2597,12 @@ async function listKnowledge(config: Config, actorId: string, body: DbRow): Prom
       config,
       `practice_items?lesson_id=eq.${enc(lessonId)}&status=neq.retired&select=id,idea_key,prompt,expected,difficulty,status&order=created_at.asc&limit=60`,
     ),
+    selectMany(
+      config,
+      `lesson_figures?lesson_id=eq.${enc(lessonId)}&status=neq.retired&select=id,idea_key,title,caption,image_url,status&order=position.asc&limit=40`,
+    ),
   ]);
-  return json({ status: "ok", ideas, vocab, links, practice });
+  return json({ status: "ok", ideas, vocab, links, practice, figures });
 }
 
 async function reviewKnowledge(config: Config, actorId: string, body: DbRow): Promise<Response> {
@@ -2613,7 +2619,7 @@ async function reviewKnowledge(config: Config, actorId: string, body: DbRow): Pr
   } else if (decision === "discard") {
     // Drafts only — a published row is retired (practice) or left alone, never deleted
     // out from under students.
-    if (kind === "practice") {
+    if (kind === "practice" || kind === "figure") {
       await patchRows(config, `${table}?id=eq.${enc(id)}`, { status: "retired" });
     } else {
       await serviceFetch(config, `/rest/v1/${table}?id=eq.${enc(id)}&status=eq.draft`, {

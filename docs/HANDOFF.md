@@ -9314,3 +9314,53 @@ Remaining concerns / NOT yet done (4 tester items):
     Knowledge card) or runs fully automatic.
 Suggested next task: items (3) and (2) (cheap, both server+welcome card), then (4)
 as its own round once the approval question is settled.
+
+## Claude -> Codex / Human - 2026-08-05 (R30b: figures, objectives, resource gate, PDF fallback)
+
+Status: Finished (the remaining 4 tester items)
+Summary:
+(4) FIGURES from source material. Both scanned PDFs are page-image-only (pdfimages
+shows one full-page scan per page, no embedded figures), so "pull out the images"
+means CROPPING figure regions. Eight figures cropped from the biology paper and the
+trig AFL (chloroplast, photosystem membrane, Calvin cycle, rate-limiting curves,
+mutant-chlorophyll graph, radioactive-carbon graph, coordinate grid, tangent axes),
+committed to frontend/public/figures (308KB total). New lesson_figures table binds
+each to the IDEA it illustrates, with draft/published/retired status and a
+published-only student read policy — a figure is never shown for the wrong topic and
+an unreviewed crop never reaches a student. The mentor places [[figure:id]] in its
+reply; the server resolves markers against THIS lesson's approved set (max 1/reply,
+unknown ids stripped) and ships the resolved figures on the envelope; the transcript
+renders them inline at the marker. Teacher review runs through the existing Knowledge
+card, which now shows a thumbnail — approving an image you cannot see is guesswork.
+(3) OBJECTIVES: "What you'll learn" was the mentor improvising. It now reads the
+TEACHER-APPROVED milestone objective + expected_evidence.student_can — the same rows
+the grader marks against, so promise/teaching/assessment cannot drift.
+(2) RESOURCE GATE: the payload gained `materials` (each posted resource + whether this
+student has OPENED it, from resource_interactions), plus a TEACHER MATERIALS prompt
+block: point them at an unopened source instead of summarizing past it, teach FROM it
+once opened, never fabricate its contents, and never hard-block a student who skips.
+(1) PDF ERROR: NOT REPRODUCED — readings serve 200/application/pdf, RLS lets students
+view and log interactions (verified by impersonating carl), and the envelope carries
+external_url. Hardened instead: a failed embed now offers a working "open in a new
+tab" link and the iframe's onError trips the fallback, so a browser that refuses to
+frame a PDF is no longer a dead end. Still want the exact error text if it recurs.
+Verified: full migration chain on a scratch Postgres 16 (shimmed auth/storage/
+realtime) — applied clean, idempotent on re-run. That run caught TWO figures bound to
+idea keys that do not exist (light-dependent-reactions, graph-transformations); fixed
+to electron-transport / trig-graphs, and all 8 now resolve.
+Files changed: supabase/functions/chat/index.ts; supabase/functions/curriculum-admin/
+index.ts; supabase/migrations/20261004000000_lesson_figures.sql (new); .github/
+workflows/deploy-backend.yml; frontend/public/figures/*.png (new, 8);
+frontend/src/lib/{api.ts,types.ts}; frontend/src/student/{LessonWelcome.tsx,
+Transcript.tsx,MediaStage.tsx}; frontend/src/features/student/chat/chatMessages.ts;
+frontend/src/features/teacher/KnowledgeCard.tsx; tests/test_r30_figures_objectives.py
+(new; suite 541 OK).
+Tests run: python 541 OK (4 skipped); tsc 0 errors; eslint 0 errors; build green;
+esbuild parse of chat + curriculum-admin clean.
+Remaining concerns: figure crops were placed by eye from the page scans and are good
+but not pixel-perfect (the teacher review queue is the backstop, and two are seeded as
+drafts deliberately). Nothing yet EXTRACTS figures from a newly uploaded PDF — this
+round ships the schema, the serving path, the review UI and a seeded set; automatic
+extraction on upload is the next build. The mentor's figure usage is unproven live.
+Suggested next task: watch a live lesson for figure placement, then automate
+extraction on resource upload (render pages, detect image regions, draft rows).
