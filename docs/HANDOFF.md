@@ -9269,3 +9269,48 @@ data. Physics/chemistry need no new renderer: equations cover them, though a rea
 Suggested next task: live-test as carl through a maths lesson end to end, watching
 equation rendering, the graph/geometry blocks, the equation pad, and whether the
 brain's cross-subject links fire between biology and maths.
+
+## Claude -> Codex / Human - 2026-08-05 (R30a: tester feedback — faults, memory, turn size)
+
+Status: Finished (first 3 of 7 tester items; 4 remain)
+Summary: Testers hit "the AI didn't output anything and there was a big error".
+Diagnosed live via pg_net from inside the DB (the sandbox proxy blocks supabase.co
+directly). Evidence: elie's camp-bio-l1 session ran 5 healthy turns 16:47-16:53 on
+08-04, then TWELVE consecutive 500s 16:56-17:00, each ~700ms, with NO model call
+attempted in that window (model_usage_events stops at 16:53:48) - so the fault was
+pre-model, during context load, and transient: resuming that same session today
+returns 200, and camp-math-l3 answers with correct LaTeX + a geometry figure. Root
+cause of that 4-minute window is NOT recoverable (postgres logs keep ~100 rows; the
+api log endpoint errors). What IS fixed is the defect that made it awful: typedError
+put the RAW internal message where the mentor's reply goes, so students read a DB
+constraint name and the turn died with no way forward.
+Fixes: (1) typedError now shows STUDENT_SAFE_ERROR for internal faults, with an
+isStudentFacingMessage allowlist so deliberate messages (rate limit, validation,
+auth) pass through; the real cause survives on a new operator-only envelope.error
+field plus existing telemetry. (2) The prompt's verbatim history window was 8 turns
+x 400 chars - the mentor literally forgot mid-explanation, which testers read as
+choppy discourse ("allow us more tokens"). Widened to 16 x 1200, DB fetch 12 -> 20.
+It was never an output cap: the OpenAI path sets no max_tokens. (3) New SIZE AND
+TURN-TAKING prompt block: one idea per reply, 2-4 sentences default, never two new
+concepts in one turn, and every teaching reply must end asking the student to
+PRODUCE something; "Does that make sense?" / "Any questions?" explicitly banned.
+Full explanations still allowed when directly asked.
+Files changed: supabase/functions/chat/index.ts; tests/test_r30_turn_quality.py
+(new; suite 527 OK).
+Tests run: python 527 OK (4 skipped); esbuild parse of chat fn clean.
+Remaining concerns / NOT yet done (4 tester items):
+  - (1) "Error opening/expanding pdf" — NOT REPRODUCED. The readings serve correctly
+    (200, application/pdf) and resolveResourceUrl returns the relative URL, which an
+    iframe resolves against the app origin. Need the exact error text or which
+    resource was tapped.
+  - (2) Gate: students should open teacher resources before proceeding.
+  - (3) "What you'll learn" should come from teacher-approved objectives (milestones
+    already carry objective + expected_evidence — wire those to the welcome card).
+  - (4) Pull images/illustrations out of provided PDFs and show them inline/sidebar
+    when the adjacent topic comes up. BIGGEST item: extraction pipeline + storage +
+    figure->idea binding + display. Note both scanned PDFs (trig, biology) have NO
+    text layer, so figures there are cropped page regions. Owner call pending on
+    whether figure->topic binding needs teacher approval (recommended, mirrors the
+    Knowledge card) or runs fully automatic.
+Suggested next task: items (3) and (2) (cheap, both server+welcome card), then (4)
+as its own round once the approval question is settled.

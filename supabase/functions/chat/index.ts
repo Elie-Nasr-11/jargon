@@ -99,6 +99,21 @@ CONVERSATION CRAFT — every turn:
   screen: the student taps it to move on. Never ask them to type "next" or "ready" — invite questions
   and point at Continue instead. Questions and side-discussion never advance a step by themselves.
 
+SIZE AND TURN-TAKING — this is a CONVERSATION, not a lecture. Students disengage from walls of text.
+- ONE idea per reply. Default to 2-4 sentences (roughly 60 words). Never deliver two new concepts in
+  one turn: teach the first, hand the turn back, teach the second only after they have engaged.
+- If explaining something fully would take more than ~4 sentences, it is TOO BIG for one turn. Give
+  the first piece only, then ask for something back. The rest is the next turn's job.
+- END BY ASKING FOR SOMETHING. Every teaching reply closes with a specific request that makes them
+  produce, not just nod: give me an example, say it in your own words, predict what happens if...,
+  which of these two..., what is the next step. "Does that make sense?" and "Any questions?" are
+  BANNED — they invite "yes" and teach nothing.
+- Never number a long list of points as one reply. If you catch yourself writing "First... Second...
+  Third...", stop after the first and ask them something.
+- These limits are about NEW teaching. Answering a direct question, correcting a misconception, or a
+  student explicitly asking for a full explanation or summary may run longer — be as long as the
+  answer honestly needs, then still hand the turn back.
+
 TEACHING METHOD — always the LIGHTEST help that unblocks, escalating in this order:
 1. One pointed question that exposes the student's thinking.
 2. ONE hint at the given rung (turn.hint_rung, 1-4): each rung strictly more revealing than the last; rung 4
@@ -287,6 +302,9 @@ type NextAction =
 type Envelope = {
   status: "ok" | "error";
   reply: string;
+  // R30: operator-facing fault detail on error envelopes. `reply` carries the calm
+  // student line; this keeps the real cause visible in the network response for us.
+  error?: string;
   session_id: string | null;
   lesson_id: string | null;
   stage: Stage;
@@ -535,6 +553,10 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
   return {
     status: partial.status === "error" ? "error" : "ok",
     reply: typeof partial.reply === "string" ? partial.reply : "",
+    // R30: operator-facing fault detail (see typedError) — omitted on healthy turns.
+    ...(typeof partial.error === "string" && partial.error
+      ? { error: partial.error }
+      : {}),
     session_id:
       typeof partial.session_id === "string" ? partial.session_id : null,
     lesson_id: typeof partial.lesson_id === "string" ? partial.lesson_id : null,
@@ -631,16 +653,44 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
   };
 }
 
+// R30 (tester feedback: "the AI just didn't output anything and there was a big error"):
+// an unexpected server fault used to put its RAW internal text where the mentor's reply
+// goes, so students read database constraint names and fetch failures. The raw message
+// still rides telemetry and the envelope's `error` field for us; `reply` — the only part a
+// student reads — becomes a calm line that tells them what to do next. Deliberate
+// user-facing messages (validation, rate limit, auth) pass through unchanged: they are
+// written FOR students and are recognized by the allowlist below.
+const STUDENT_SAFE_ERROR =
+  "Something went wrong on our side just then — that one is on us, not you. Send your message again and it should go through.";
+
+// Messages authored for students; anything else is internal and gets the safe line.
+function isStudentFacingMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("too many chat turns") ||
+    lower.includes("lesson_id is required") ||
+    lower.includes("request body must be") ||
+    lower.includes("authentication is required") ||
+    lower.includes("authenticated") ||
+    lower.includes("sign in")
+  );
+}
+
 function typedError(
   message: string,
   status = 500,
   context: Partial<Envelope> = {},
 ): Response {
+  const shown = isStudentFacingMessage(message)
+    ? `Error: ${message}`
+    : STUDENT_SAFE_ERROR;
   return json(
     makeEnvelope({
       ...context,
       status: "error",
-      reply: `Error: ${message}`,
+      // The operator-facing detail survives on `error` even when `reply` is the safe line.
+      error: message,
+      reply: shown,
       next_action: "reply",
       guardrail: { redirected: false, reason: null },
     }),
@@ -3819,7 +3869,9 @@ async function loadContext(
     ),
     loadMany(
       config,
-      `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=12&select=role,stage,response_mode,content,payload,created_at`,
+      // R30: 12 -> 20 so the widened 16-turn prompt window is actually fed (the extra
+      // rows also serve the echo gate and the dedup replay, which read the same list).
+      `learning_turns?session_id=eq.${encodeURIComponent(String(session.id))}&order=created_at.desc&limit=20&select=role,stage,response_mode,content,payload,created_at`,
     ),
     recentRowCount(
       config,
@@ -6529,11 +6581,16 @@ async function handleTypedRequest(
               : undefined,
           // Fresh arrays only (slice/map) — context.recentTurns is read newest-first by
           // the dedup replay and the graders; the model reads oldest-first.
+          // R30 (tester feedback: "discourse should be more smooth"): the window was 8
+          // turns x 400 chars, which truncated mid-explanation and made the mentor forget
+          // what it had just said — the conversation read as disjointed. Widened to 16 x
+          // 1200. Cost is contained: this payload is prompt-cache-stable, and the rolling
+          // summary still covers anything older than the verbatim window.
           history: context.recentTurns
-            .slice(0, 8)
+            .slice(0, 16)
             .map((turn) => ({
               role: turn.role,
-              content: String(turn.content || "").slice(0, 400),
+              content: String(turn.content || "").slice(0, 1200),
             }))
             .reverse(),
           turn: {
