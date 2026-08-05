@@ -9364,3 +9364,46 @@ round ships the schema, the serving path, the review UI and a seeded set; automa
 extraction on upload is the next build. The mentor's figure usage is unproven live.
 Suggested next task: watch a live lesson for figure placement, then automate
 extraction on resource upload (render pages, detect image regions, draft rows).
+
+## Claude -> Codex / Human - 2026-08-05 (R30c: made the R30 rules actually bind)
+
+Status: Finished — demo-ready
+Summary: R30a/R30b shipped the rules in the SYSTEM prompt; a LIVE turn proved they
+were not binding. Asked "what does a chloroplast actually look like inside" on
+camp-bio-l1 (a step WITH an approved figure), the deployed mentor returned 801 chars
+of bulleted lecture, showed NO figure, and closed with "feel free to ask any
+questions" — the exact ending the system prompt bans. Cause: the turn DIRECTIVE
+outranks the system prompt (documented ladder), so rules that only live in the system
+prompt lose on every step-presentation turn. Fixes, all in the directive layer where
+they bind: brainHints gains `figure` (the approved figure whose idea_key matches this
+step, suppressed once its marker appears in recentTurns so it shows once per session),
+and present_step now carries the figure id plus an explicit SIZE + closing rule.
+Separately, the system prompt told the mentor to "point at Continue" while the new
+rule bans closing with an invitation to tap it — it obeyed both, so every reply ended
+with "Tap Continue". The Continue line now says the button is visible and needs no
+narration.
+Live re-verification on the SAME prompt after deploy: 417 chars (was 801), figure
+shown (Chloroplast cross-section -> /figures/chloroplast-diagram.png), no Continue
+narration, closes by asking the student to describe what they see. That is the target
+behavior.
+INCIDENT (recorded so it is not repeated): the working tree was found reset to an
+older commit mid-round, so a directive fix had been applied to a chat/index.ts that
+lacked the whole R30b figures context — it PARSED (esbuild only checks syntax) but
+referenced context.figures that did not exist, and pushing it would have reverted
+R30a+R30b. Caught because the local test count dropped 541 -> 519 and the push was
+rejected. Recovered by resetting to origin (which held the good commits) and
+re-applying on the correct base. Lesson: after any unexpected push rejection, diff
+local against origin BEFORE force-resolving, and treat a falling test count as a
+missing-files signal.
+Demo state: all three testers' sessions cleared (0 open sessions, 18 work items
+intact); pg_net dropped after live testing.
+Files changed: supabase/functions/chat/index.ts.
+Tests run: python 541 OK; edge parse clean; Tests CI green on d4e3e40 + 2358f9d;
+Deploy backend green on d4e3e40 (2358f9d deploying at handoff).
+Remaining concerns: the verified turn ran on d4e3e40; 2358f9d only strengthens the
+Continue behavior (it was already absent in that sample, but by luck rather than
+rule). Replies still land nearer 90 words than the 60-80 asked for — acceptable, and
+worth watching. Figure placement is proven on ONE step; the other seven published
+figures are unproven live. Nothing extracts figures from a NEWLY uploaded PDF yet.
+Suggested next task: watch the demo for figure placement on the other lessons, then
+automate extraction on resource upload.
