@@ -118,7 +118,7 @@ class GrowthMomentsStaticTests(unittest.TestCase):
 
     def test_flash_plays_once_per_fresh_event(self):
         self.assertIn("toast.fresh && !flashedRef.current.has(toast.id)", self.toasts)
-        self.assertIn("<GrowthFlash key={flash.id} toast={flash} />", self.toasts)
+        self.assertIn("<GrowthFlash key={flash.id} toast={flash} onNext={handleNext} />", self.toasts)
 
     def test_checkpoint_section_markers(self):
         self.assertIn("const opensCheckpoint =", self.transcript)
@@ -273,7 +273,18 @@ class TransitionKinksStaticTests(unittest.TestCase):
         # Resistance draw: the offset grinds down in shrinking, stalling increments.
         self.assertIn("stroke-dashoffset: 54;", styles)
         self.assertIn("stroke-dashoffset: 29;", styles)
-        self.assertIn("setFlash(null), 3_300", toasts)
+        # R31c (owner): the visual and overlay hold until the student clicks Next —
+        # no timer dismisses them, and the cards no longer self-dismiss either.
+        self.assertNotIn("setFlash(null), 3_300", toasts)
+        self.assertNotIn("useAutoDismiss", toasts)
+        self.assertIn("const handleNext = () => {", toasts)
+        self.assertIn("onNext: () => void", flash)
+        self.assertIn('aria-modal="true"', flash)
+        self.assertIn("pointer-events-auto absolute inset-0", flash)
+        # The container must NOT animate itself to opacity 0 while it stays mounted —
+        # that would leave an invisible full-screen blocker over the conversation.
+        fade = styles[styles.index("@keyframes gflash-fade") : styles.index("@keyframes gflash-overlay-in")]
+        self.assertIn("8%,\n  100% {\n    opacity: 1;", fade)
 
     def test_no_step_count_boilerplate_divider_signifies_instead(self):
         # Owner (R22e): the appended "That completes step N of M… Send a message" line is

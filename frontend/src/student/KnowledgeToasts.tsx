@@ -10,19 +10,14 @@ import { useConversationChannel, type KnowledgeToast } from "@/student/useConver
 //   LINK / IDEA — the "your brain just grew" toasts, top right, with a spark and a
 //   "See it in your brain" jump to the Home map where the new arc/star lives.
 // All of these appear only after the streamed reply settles (owner decision — the
-// events ride the envelope, which resolves post-stream). Auto-dismiss; tap X to close
-// early; reduced motion renders them static.
-
-const VOCAB_DISMISS_MS = 6_500;
-const LINK_DISMISS_MS = 9_000;
-
-function useAutoDismiss(toast: KnowledgeToast, dismiss: (id: string) => void) {
-  useEffect(() => {
-    const ms = toast.kind === "vocab" ? VOCAB_DISMISS_MS : LINK_DISMISS_MS;
-    const timer = window.setTimeout(() => dismiss(toast.id), ms);
-    return () => window.clearTimeout(timer);
-  }, [toast, dismiss]);
-}
+// events ride the envelope, which resolves post-stream).
+//
+// R31c (owner: "make the visual and overlay only go when next is clicked"): NOTHING here
+// dismisses itself any more. The centre flash holds behind its overlay until the student
+// clicks Next, and the cards stay until they close them. A new word or a new connection
+// is the point of the lesson — losing it to a 6-second timer while the student is still
+// reading was exactly backwards. Reduced motion skips the flash (the cards still carry
+// the information, and they now persist).
 
 function VocabBanner({
   toast,
@@ -31,7 +26,6 @@ function VocabBanner({
   toast: Extract<KnowledgeToast, { kind: "vocab" }>;
   dismiss: (id: string) => void;
 }) {
-  useAutoDismiss(toast, dismiss);
   return (
     <div
       role="status"
@@ -72,7 +66,6 @@ function GrowthToast({
   dismiss: (id: string) => void;
   onSeeBrain?: () => void;
 }) {
-  useAutoDismiss(toast, dismiss);
   const isLink = toast.kind === "link";
   const headline = isLink
     ? `New link: ${toast.event.from_title} ↔ ${toast.event.to_title}`
@@ -148,10 +141,16 @@ export function KnowledgeToasts({ onSeeBrain }: { onSeeBrain?: () => void }) {
       candidates[0];
     for (const toast of candidates) flashedRef.current.add(toast.id);
     setFlash(pick);
-    // Round 22g: the flash runs 3.2s (resistance draw + note read time) — unmount just after.
-    const timer = window.setTimeout(() => setFlash(null), 3_300);
-    return () => window.clearTimeout(timer);
+    // R31c: no timer — the flash is dismissed by the student, in handleNext below.
   }, [channel.knowledgeToasts]);
+
+  // Next closes the moment AND the card it was announcing, so the student is not asked
+  // to dismiss the same news twice.
+  const handleNext = () => {
+    const current = flash;
+    setFlash(null);
+    if (current) channel.dismissToast(current.id);
+  };
 
   if (!channel.knowledgeToasts.length && !flash) return null;
   const vocab = channel.knowledgeToasts.filter((t) => t.kind === "vocab");
@@ -169,7 +168,7 @@ export function KnowledgeToasts({ onSeeBrain }: { onSeeBrain?: () => void }) {
         ))}
       </div>
       {/* Round 20: the owner-specced center-screen forming moment. */}
-      {flash ? <GrowthFlash key={flash.id} toast={flash} /> : null}
+      {flash ? <GrowthFlash key={flash.id} toast={flash} onNext={handleNext} /> : null}
       {/* Growth: links + new ideas, top right. */}
       <div className="pointer-events-none absolute right-3 top-2 z-[var(--z-overlay)] flex flex-col items-end gap-2">
         {growth.map((toast) => (

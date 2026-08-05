@@ -15,9 +15,15 @@ import type { KnowledgeToast } from "@/student/useConversation";
 // word: x — definition"). The tiny in-SVG labels are gone; the note is the label.
 //
 // One flash per FRESH event (envelope-driven; tapping a highlight to re-read a
-// definition never replays it), ~3.2s, self-contained CSS keyframes (gflash-*), skipped
+// definition never replays it), self-contained CSS keyframes (gflash-*), skipped
 // entirely under prefers-reduced-motion (the toasts already carry the information).
 // Yellow is the discuss/memory hue — the same yellow the brain map's memory halos wear.
+//
+// R31c (owner): the visual and its overlay HOLD until the student clicks Next. They used
+// to disappear on a 3.2s timer, which meant a student reading the note lost it mid-
+// sentence. Nothing here is time-limited now: the student decides when the moment is
+// over. (The container's fade-OUT keyframe was removed with this change — leaving it
+// while the element stayed mounted would have left an invisible full-screen blocker.)
 
 const NOTE_MAX = 140;
 
@@ -33,10 +39,18 @@ function noteFor(toast: KnowledgeToast): string {
   return clampNote(`New idea: ${toast.event.title}`);
 }
 
-export function GrowthFlash({ toast }: { toast: KnowledgeToast }) {
+export function GrowthFlash({ toast, onNext }: { toast: KnowledgeToast; onNext: () => void }) {
   const isLink = toast.kind === "link";
   return (
-    <div aria-hidden className="gflash pointer-events-none absolute inset-0 z-[var(--z-overlay)]">
+    // pointer-events-auto: the overlay deliberately swallows clicks underneath, so the
+    // only way on is the Next button — which is what "must be closed by the student"
+    // means. role/aria-modal + the autofocused button make that reachable by keyboard.
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={noteFor(toast)}
+      className="gflash pointer-events-auto absolute inset-0 z-[var(--z-overlay)]"
+    >
       {/* The rest of the screen steps back: dimmed + blurred while the moment plays. */}
       <div className="gflash-overlay absolute inset-0" />
       <div className="relative flex h-full w-full flex-col items-center justify-center gap-4">
@@ -64,6 +78,14 @@ export function GrowthFlash({ toast }: { toast: KnowledgeToast }) {
         <p className="gflash-note max-w-[min(80vw,26rem)] text-balance text-center text-sm font-medium leading-snug text-foreground">
           {noteFor(toast)}
         </p>
+        <button
+          type="button"
+          autoFocus
+          onClick={onNext}
+          className="gflash-note rounded-pill bg-primary px-5 py-1.5 text-body font-bold text-background shadow-card transition-transform duration-(--dur-fast) hover:scale-[1.02]"
+        >
+          Next
+        </button>
       </div>
     </div>
   );

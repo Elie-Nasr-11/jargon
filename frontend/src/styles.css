@@ -944,13 +944,16 @@ select {
    against RESISTANCE (fast burst, grinding middle, break-through), and a plain-language
    note fades in underneath. One 3.2s pass; the container fades itself out; reduced
    motion never mounts it. */
+/* R31c (owner): the moment no longer fades itself out — it HOLDS until the student
+   clicks Next. This is the entrance only; without it the container animated to
+   opacity 0 with fill-mode both and left an invisible full-screen blocker behind. */
 @keyframes gflash-fade {
-  0%,
-  86% {
-    opacity: 1;
-  }
-  100% {
+  0% {
     opacity: 0;
+  }
+  8%,
+  100% {
+    opacity: 1;
   }
 }
 @keyframes gflash-overlay-in {
