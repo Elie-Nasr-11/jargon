@@ -100,16 +100,17 @@ class FlowV3RouterInvariants(unittest.TestCase):
         # navigation, not degrade into a bare text turn.
         self.assertIn("retryControl: options?.control", hook)
 
-    def test_continue_pill_is_live_only_on_the_latest_message(self):
-        # Like retired quiz choices, an old Continue offer must not stay pressable once the
-        # conversation has moved on.
+    def test_no_continue_button_is_rendered(self):
+        # R31b (owner): "Remove continue. Always have advancement engaging." The button is
+        # GONE — advancing is a conversational beat, so the surface must render no pill for
+        # continue_offer at all. The envelope field survives (turn loop + replay unchanged).
         transcript = (REPO / "frontend" / "src" / "student" / "Transcript.tsx").read_text()
-        self.assertIn("message.continueOffer &&", transcript)
-        self.assertIn("isLatestBot &&", transcript)
-        # R31 (demo feedback): a reply that ASKS the student something must not also offer a
-        # button that skips the asking — the pill is withheld on question-ending replies.
-        self.assertIn("!endsWithQuestion(message.text)", transcript)
-        self.assertIn("export function endsWithQuestion(", transcript)
+        self.assertNotIn("channel.sendContinue", transcript)
+        self.assertNotIn("message.continueOffer.label", transcript)
+        self.assertNotIn('"Continue"', transcript)
+        # And the mentor is told plainly that no button exists, so it cannot point at one.
+        self.assertIn("THERE IS NO CONTINUE BUTTON", CHAT)
+        self.assertIn("The student\n  moves forward BY REPLYING TO YOU", CHAT)
 
     def test_revisit_frame_offers_the_return_chip(self):
         window = (REPO / "frontend" / "src" / "student" / "ChatWindow.tsx").read_text()

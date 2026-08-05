@@ -9479,3 +9479,39 @@ flow (extract_knowledge already drafts vocab; it needs to run at lesson prep and
 client needs a blocking card). Next build.
 Suggested next task: vocab at prep time (teacher-approved, covering the lesson's main
 terms) + a must-dismiss vocab card that can carry several terms at once.
+
+## Claude -> Codex / Human - 2026-08-05 (R31b: the Continue button is gone)
+
+Status: Finished
+Owner: "Remove continue please. Always have advancement engaging."
+This reverses the R23 Phase A decision to consolidate advancing on a Continue button.
+Advancing is now purely conversational: the mentor ends every teaching turn with
+something worth replying to, and the student's reply moves the lesson on.
+- CLIENT: the Continue pill render is deleted outright (with its now-dead ArrowRight
+  import and the endsWithQuestion helper added earlier this round). envelope
+  .continue_offer is STILL sent and persisted, so the turn loop keeps its shape and
+  older transcripts replay unchanged — the surface simply renders no button for it.
+  Deliberate: removing the field would be a wire-format change for zero user gain.
+- SERVER: the system prompt no longer claims a button exists. It now states THERE IS NO
+  CONTINUE BUTTON, that the student moves forward BY REPLYING, and that every teaching
+  turn must end with something worth replying to — a check on what was just taught, a
+  request for their example, or an invitation to the next idea. Explicitly: "make it
+  engaging, never a bare 'shall we move on?' attached to a wall of text", and never
+  write tap/click/press-the-button in any variant.
+- Advancement paths unchanged underneath: a typed yes/ok/sure/ready/next hits
+  CONTINUE_SIGNAL_RE, and a real answer satisfies the step's gate. Both already worked;
+  the button was one of three ways, and the least engaging.
+Pin rewritten: test_continue_pill_is_live_only_on_the_latest_message ->
+test_no_continue_button_is_rendered, asserting the pill is ABSENT and the mentor is
+told no button exists.
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/Transcript.tsx;
+tests/test_flow_v3_router.py.
+Tests run: python 541 OK; tsc 0 errors; eslint 0 errors; build green; edge parse clean.
+Remaining concerns: CONCLUDE_HANDOFF still says END WITH "Shall we continue?" from
+R31 — with the button gone that is now the ONLY explicit advance prompt, and it risks
+becoming the formula the owner just asked us to avoid. It is bounded by "or a natural
+variant" plus the new engaging-close rule, but WATCH IT: if every step ends with the
+same five words, replace that clause with "end on a question that carries them into
+what is next".
+Suggested next task: watch a full lesson for closing variety, then the deferred vocab
+work (prep-time extraction + must-dismiss card).
