@@ -9611,3 +9611,63 @@ numbered list AND carried a graph plus a figure — heavy for one turn, and in t
 with the "one idea per reply, never number a long list" rule. The step's own content is
 a five-step method, so this may be correct; watch it on a real lesson before tightening.
 Suggested next task: watch a maths lesson for reply weight, then the deferred vocab work.
+
+## Claude -> Codex / Human - 2026-08-06 15:20
+
+Status: Finished
+Task: Build a class around the owner-supplied "Cranial Nerves 1 & 2" lecture deck.
+
+WHAT SHIPPED — campus class 4, NEUROANATOMY, built from the deck itself rather than from
+general knowledge. Every clinical sign taught (anosmia, ptosis, the two strabismus
+directions, trigeminal neuralgia, Bell's palsy, tongue deviation) and both mnemonics
+("On Old Olympus' Towering Top...", "LR6 SO4, all the rest 3") come from the slides.
+
+  Subject "Human Anatomy" -> course "Neuroanatomy: The Cranial Nerves" -> 5 lessons,
+  4 steps each (3 discussion + 1 graded MCQ) = 20 steps. The deck's own per-nerve shape
+  (origin and course / function / clinical testing / applied anatomy) is the lesson shape.
+    l1 Twelve pairs: reading the map
+    l2 The special senses: olfactory (I) and optic (II)   <- the chiasm is the lesson
+    l3 Moving the eye: III, IV, VI                        <- derive the palsy, don't recall it
+    l4 One face, three divisions: the trigeminal (V)
+    l5 From the pons down: VII to XII
+  Knowledge graph: 13 ideas (12 published + 1 deliberate draft), 13 vocab terms,
+  11 practice items (10 published + 1 draft), 5 quiz items DERIVED from the mcq steps
+  (id = "<activity>-quiz", so a quiz can never drift from its step's prompt/choices),
+  4 cross-subject links reaching Reasoning Well, Photosynthesis and How Systems Work.
+  3 figures cropped from the deck's own slides (2 published, 1 draft for the review queue),
+  each with real alt text. The deck ships compressed 21.3MB -> 1.36MB (Ghostscript /ebook).
+  Class "Anatomy 1" with carl/elissar/elie enrolled, one assignment due and one returned
+  quiz, so Work due and Recent grades both have real rows on day one.
+
+CHANGED WHILE VALIDATING: the deck was attached to lessons 1 and 4 only. Lessons 2, 3
+and 5 had no teacher material, so the "open the resource before proceeding" gate had
+nothing to ask for there. All five now carry it with a section-specific instruction.
+
+VALIDATION (scratch Postgres 16 + Supabase shims, full 63-migration chain in deploy order):
+  - chain applies clean; the neuroanatomy migration is idempotent across 3 re-runs
+    (acts=20 ideas=13 vocab=13 figs=3 prac=11 res=5 recips=6 members=4, stable).
+  - seeded a demo org so the class-wiring DO block actually EXECUTED rather than taking
+    its skip branch — that block is where a column/value arity bug shipped once before.
+  - every lesson_figures.idea_key, practice_items.idea_key, vocab_terms.idea_keys and
+    lesson_activities.idea_keys resolves to a published idea. Zero broken bindings.
+    (This check caught two dead figure bindings on the previous class; it is now a pin.)
+  - every quiz correct_choice_id exists in that item's choices.
+
+Files changed: supabase/migrations/20261005000000_campus_neuroanatomy.sql (new);
+.github/workflows/deploy-backend.yml (registered LAST, after the Book-F sweep, after
+lesson_figures, after campus_wiring); tests/test_campus_neuroanatomy.py (new, 24 tests);
+frontend/public/figures/{cranial-nerves-brain-map,nervous-system-overview,olfactory-pathway}.png;
+frontend/public/readings/cranial-nerves.pdf.
+
+Tests run: python 570 OK (was 546); tsc/eslint/build clean.
+
+Remaining concerns:
+  - Two pre-existing curriculum_links point at DRAFT ideas (equilibrium -> feedback-loop,
+    restrictive-covenant -> law-as-instrument). Intentional-looking (the drafts are the
+    review queue's work), but a link whose endpoint is never approved can never be earned.
+    Worth a decision: approve the drafts, or retire the links.
+  - Figures were cropped by hand again. Automatic extraction from an uploaded PDF still
+    does not exist (schema, serving and review UI all do).
+
+Suggested next task: the deferred vocab work — terms extracted at PREP time and approved
+alongside objectives, and one must-dismiss card carrying SEVERAL terms instead of a stack.
