@@ -438,29 +438,54 @@ function SourceFigure({ figure }: { figure: LessonFigure }) {
 // Split a reply on its figure markers so the image lands exactly where the mentor put it.
 const FIGURE_MARKER_RE = /\[\[figure:([^\]\s]+)\]\]/g;
 
-// R31f: [[material:id]] is an ATTACH instruction, not text — the server turns it into a
-// resource card rendered below the reply. Stripped here as well as server-side, because
-// the reply STREAMS: without this the raw marker is visible for the seconds between the
-// token arriving and the envelope landing.
-const MATERIAL_MARKER_RE = /[ \t]*\[\[material:[^\]\s]+\]\][ \t]*\n?/g;
-
-function stripMaterialMarkers(text: string): string {
-  return MATERIAL_MARKER_RE.test(text) ? text.replace(MATERIAL_MARKER_RE, "").trimEnd() : text;
-}
+// R31f: [[material:id]] marks where the mentor handed a reading over. It renders INLINE,
+// exactly like a figure — the card lands at the point in the sentence where it was
+// offered ("here it is:"), not in a tray under a wall of text the student has to hunt
+// through. renderMaterial resolves an id to its card; anything it declines (an unknown id,
+// or a message whose resources have not landed yet MID-STREAM) is dropped, so a raw
+// marker never reaches a student.
+const MATERIAL_MARKER_RE = /\[\[material:([^\]\s]+)\]\]/g;
 
 function MessageBody({
-  text: rawText,
+  text,
   markdown,
   vocab,
   figures,
+  renderMaterial,
 }: {
   text: string;
   markdown?: boolean;
   vocab?: VocabPass;
   figures?: LessonFigure[];
+  renderMaterial?: (id: string) => ReactNode;
 }) {
-  const text = stripMaterialMarkers(rawText);
-  // Figures first: each marker becomes a real block, the prose around it renders as usual.
+  // Materials first: they are the coarsest split, and a handed-over reading is its own
+  // beat in the reply. The prose on either side recurses through the normal path.
+  if (MATERIAL_MARKER_RE.test(text)) {
+    MATERIAL_MARKER_RE.lastIndex = 0;
+    const parts = text.split(MATERIAL_MARKER_RE);
+    return (
+      <>
+        {parts.map((part, i) => {
+          // Odd indices are the captured ids; even indices are prose.
+          if (i % 2 === 1) {
+            const card = renderMaterial?.(part);
+            return card ? <Fragment key={`mat-${i}`}>{card}</Fragment> : null;
+          }
+          return part.trim() ? (
+            <MessageBody
+              key={`txt-${i}`}
+              text={part.trim()}
+              markdown={markdown}
+              vocab={vocab}
+              figures={figures}
+            />
+          ) : null;
+        })}
+      </>
+    );
+  }
+  // Figures next: each marker becomes a real block, the prose around it renders as usual.
   if (figures?.length && FIGURE_MARKER_RE.test(text)) {
     FIGURE_MARKER_RE.lastIndex = 0;
     const byId = new Map(figures.map((figure) => [figure.id, figure]));
@@ -876,6 +901,26 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
             const isLatestBot = message.id === lastBotId;
             const liveChoices = isLatestBot && message.choices?.length && !message.chosen;
             const isNew = seen !== null && !seen.has(message.id);
+            // R31f: a material the mentor handed over mid-sentence renders THERE. Ids
+            // consumed inline are recorded so the tray below does not show the same card
+            // twice; anything the mentor did not place inline still lands in the tray, so
+            // step-bound materials are unaffected.
+            const inlinedMaterials = new Set<string>();
+            const renderMaterial = (id: string) => {
+              const resource = message.resources?.find((row) => String(row.id) === id);
+              if (!resource) return null;
+              inlinedMaterials.add(String(resource.id));
+              return (
+                <ResourceCard
+                  resource={resource}
+                  lessonId={channel.lessonId}
+                  sessionId={channel.sessionId}
+                />
+              );
+            };
+            const trayResources = (message.resources ?? []).filter(
+              (resource) => !inlinedMaterials.has(String(resource.id)),
+            );
             return (
               <MentorRise key={message.id} animate={isNew}>
                 <div className="hvp flex flex-col gap-2">
@@ -884,6 +929,7 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                       text={message.text}
                       markdown={!message.isError}
                       figures={message.figures}
+                      renderMaterial={renderMaterial}
                       vocab={
                         vocabMatcher && !message.isError
                           ? { ...vocabMatcher, seen: new Set<string>() }
@@ -924,9 +970,9 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                   {/* Materials the mentor attached to THIS reply, so "have a look at this" points
                       at something. Unlike quiz choices these stay rendered on older messages — a
                       resource does not expire the way a live question does. */}
-                  {message.resources?.length ? (
+                  {trayResources.length ? (
                     <div className="flex flex-col gap-2 pl-1">
-                      {message.resources.map((resource) => (
+                      {trayResources.map((resource) => (
                         <ResourceCard
                           key={resource.id}
                           resource={resource}

@@ -195,10 +195,11 @@ not work if the student never looks at it.
 - A student who insists on skipping it is not blocked — help them anyway, but say plainly what they are
   missing by skipping it.
 - HANDING ONE OVER: when the student asks for the materials — in any wording, however they spell it — put
-  [[material:<id>]] on its own line, using an id from "materials" exactly as given. The interface renders
-  the openable card there. Do NOT answer such a request by describing the readings in prose or by telling
-  them where to find them; give them the thing. At most TWO per reply, only ids from this list, never
-  invented.
+  [[material:<id>]] on its own line, using an id from "materials" exactly as given. The openable card
+  renders INLINE right there, so place it at the point in your reply where you are handing that reading
+  over ("Here's the prologue itself:"), naming it in the sentence before. One line per material. Do NOT
+  answer such a request by describing the readings in prose or by saying where to find them — give them
+  the thing. At most TWO per reply, only ids from this list, never invented.
 
 Code steps: a failed run gets the lightest help that unblocks the ONE thing to fix. A runtime timeout is our
 infrastructure hiccup, never the student's mistake — reassure them it's on us and ask them to run it again;
@@ -7033,11 +7034,15 @@ async function handleTypedRequest(
           if (handed.some((r) => String(r.id) === marker[1])) continue;
           handed.push(resourceForEnvelope(row));
         }
-        // Markers are an ATTACH instruction, not renderable text: strip them all, then
-        // merge what resolved into the reply's cards (never duplicating one already
-        // attached by resourcesForResponse).
+        // A RESOLVED marker stays where the mentor put it: the client renders the card
+        // INLINE at that point, so a reading handed over mid-sentence appears in the
+        // sentence that offers it rather than in a tray below the reply. Only markers
+        // that resolved to nothing are stripped — a student must never see raw syntax.
+        const handedIds = new Set(handed.map((resource) => String(resource.id)));
         envelope.reply = String(envelope.reply || "")
-          .replace(/[ \t]*\[\[material:[^\]\s]+\]\][ \t]*\n?/g, "")
+          .replace(/[ \t]*\[\[material:([^\]\s]+)\]\][ \t]*(\n?)/g, (whole, id, nl) =>
+            handedIds.has(String(id)) ? whole : nl,
+          )
           .trim();
         if (handed.length) {
           const already = new Set(

@@ -9769,3 +9769,36 @@ Remaining concerns:
 
 Suggested next task: live Discuss turn — confirm [Back to the lesson] renders and returns
 to Lesson mode, and that asking for the readings attaches cards rather than describing them.
+
+## Claude -> Codex / Human - 2026-08-06 17:05
+
+Status: Finished
+Task: Owner — "lets have the mentor give an inline resource when asked."
+
+The [[material:id]] contract shipped an hour ago put the card in the TRAY below the reply
+(the server stripped the marker and appended to envelope.resources). Now the resolved
+marker SURVIVES and the card renders exactly where the mentor placed it — the same
+treatment figures already get, so a reading handed over mid-sentence appears in the
+sentence that offers it instead of under a wall of text.
+
+  - Server: only markers that resolved to NOTHING are stripped; a resolved one is left in
+    place for the client. Unknown/unapproved ids still never reach a student.
+  - Client: MessageBody splits on the material marker FIRST (coarsest split, and a handed-
+    over reading is its own beat), rendering ResourceCard inline via a renderMaterial
+    resolver. Prose either side recurses through the normal path, so figures, fences and
+    markdown are unaffected.
+  - Ids consumed inline are recorded and filtered out of the tray below, so a card is
+    never shown twice. Materials the mentor did NOT place inline still land in the tray —
+    step-bound presentation materials behave exactly as before.
+  - Mid-stream the envelope's resources have not landed, so renderMaterial resolves
+    nothing and the marker renders as nothing. No raw syntax, no flash.
+  - Prompt updated to match: place the marker at the hand-over point and name the reading
+    in the sentence before, rather than dumping markers at the end.
+
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/Transcript.tsx;
+tests/test_r31e_discuss_deadend.py (23 tests in the module).
+
+Tests run: python 593 OK (was 591); tsc/eslint/build clean; edge parse clean.
+
+Remaining concerns: still not confirmed live — the inline path needs a real turn where the
+mentor actually emits a marker. That is the next thing to check once the deploy lands.

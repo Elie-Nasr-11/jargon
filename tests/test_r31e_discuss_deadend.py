@@ -194,7 +194,8 @@ class AskingForTheMaterialsHandsThemOver(unittest.TestCase):
         # Typo-proof backstop: however the ask is worded, the MENTOR decides to hand the
         # card over and the SERVER decides whether that is legal.
         self.assertIn("[[material:<id>]]", CHAT)
-        self.assertIn("give them the thing", CHAT)
+        # (the phrase wraps in the prompt source)
+        self.assertIn("give them\n  the thing", CHAT)
         self.assertIn(r"/\[\[material:([^\]\s]+)\]\]/g", CHAT)
 
     def test_materials_payload_carries_the_id(self):
@@ -212,9 +213,24 @@ class AskingForTheMaterialsHandsThemOver(unittest.TestCase):
         block = CHAT[CHAT.index("resolve [[material:id]] markers") :][:2400]
         self.assertIn("already.has(String(r.id))", block)
 
-    def test_the_marker_never_reaches_the_student(self):
-        # Stripped server-side AND client-side: the reply streams, so the raw marker
-        # would otherwise be visible until the envelope lands.
-        self.assertIn(r'.replace(/[ \t]*\[\[material:[^\]\s]+\]\][ \t]*\n?/g, "")', CHAT)
-        self.assertIn("MATERIAL_MARKER_RE", self.TRANSCRIPT)
-        self.assertIn("const text = stripMaterialMarkers(rawText);", self.TRANSCRIPT)
+    def test_the_card_renders_inline_where_the_mentor_put_it(self):
+        # Owner: "lets have the mentor give an inline resource when asked." A RESOLVED
+        # marker survives server-side so the client can render the card at that exact
+        # point in the reply — the same treatment figures get.
+        self.assertIn("handedIds.has(String(id)) ? whole : nl", CHAT)
+        self.assertIn("renders INLINE right there", CHAT)
+        self.assertIn("renderMaterial", self.TRANSCRIPT)
+        self.assertIn("MATERIAL_MARKER_RE.lastIndex = 0;", self.TRANSCRIPT)
+
+    def test_an_unresolved_marker_never_reaches_the_student(self):
+        # Only markers that resolved to a real card survive; the rest are stripped, and
+        # the client drops any id it cannot resolve (including MID-STREAM, before the
+        # envelope's resources have landed). A student never sees raw syntax.
+        self.assertIn("that resolved to nothing are stripped", CHAT)
+        self.assertIn("const card = renderMaterial?.(part);", self.TRANSCRIPT)
+        self.assertIn("return card ? <Fragment key={`mat-${i}`}>{card}</Fragment> : null;", self.TRANSCRIPT)
+
+    def test_an_inlined_card_is_not_repeated_in_the_tray_below(self):
+        self.assertIn("inlinedMaterials", self.TRANSCRIPT)
+        self.assertIn("const trayResources = (message.resources ?? []).filter(", self.TRANSCRIPT)
+        self.assertIn("{trayResources.map((resource) => (", self.TRANSCRIPT)
