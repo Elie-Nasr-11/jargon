@@ -1233,7 +1233,9 @@ export type TypedChatEnvelope = {
   continue_offer?: { label: string } | null;
   // Phase A (brain-first): mode hand-off pill — [Practice this idea] / [Talk it through]
   // rendered next to Continue; only the latest offer is live.
-  mode_offer?: { mode: "practice" | "discuss"; topic: string; label: string } | null;
+  // R31e: "lesson" joined the set — the pill that returns a student from Discuss or
+  // Practice to the lesson spine, which is the only register that can advance a step.
+  mode_offer?: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string } | null;
   turn_kind?: string;
   router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for this student. Live-turn only
@@ -1253,8 +1255,9 @@ export type TypedChatEnvelope = {
 export type TypedChatControl = {
   type: "continue" | "navigate" | "resume" | "artifact_ready" | "mode_offer";
   target_activity_id?: string;
-  // mode_offer accepts: which register and what topic the pill carried.
-  mode?: "practice" | "discuss";
+  // mode_offer accepts: which register and what topic the pill carried. "lesson" is the
+  // way back from a register that cannot advance a step.
+  mode?: "practice" | "discuss" | "lesson";
   topic?: string;
   // artifact_ready: the lesson_resources row artifact-live just created.
   resource_id?: string;

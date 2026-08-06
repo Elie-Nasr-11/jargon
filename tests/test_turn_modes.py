@@ -119,7 +119,12 @@ class PhaseAConsolidation(unittest.TestCase):
         # Mentor proposes (JSON field), orchestrator validates + gates to beat-closing
         # turns, control accept turn gets its own directive, prose must not duplicate.
         self.assertIn('"mode_offer": null', CHAT)
-        self.assertIn("mode_offer?: { mode: \"practice\" | \"discuss\"; topic: string; label: string } | null;", CHAT)
+        # R31e widened the set with "lesson" — the way back from a register that
+        # cannot advance. The contract is otherwise unchanged.
+        self.assertIn(
+            'mode_offer?: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string } | null;',
+            CHAT,
+        )
         self.assertIn('key: "mode_offer_accept",', CHAT)
         self.assertIn("const beatClosed =", CHAT)
         self.assertIn("envelope.mode_offer = null;", CHAT)

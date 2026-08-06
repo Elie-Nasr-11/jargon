@@ -9671,3 +9671,55 @@ Remaining concerns:
 
 Suggested next task: the deferred vocab work — terms extracted at PREP time and approved
 alongside objectives, and one must-dismiss card carrying SEVERAL terms instead of a stack.
+
+## Claude -> Codex / Human - 2026-08-06 16:05
+
+Status: Finished
+Task: Owner demo report — "I didn't see a single Continue button at all", plus a Discuss
+transcript where the student asked to move on FIVE times and the lesson never moved.
+
+ROOT CAUSE — one fault with two faces. R31b deleted the Continue button from the client
+but only SOME directives were purged; and applyModeCeiling lifts continue_signal ->
+question in Discuss/Practice (correct — those registers must never close a lesson gate),
+after which the request was indistinguishable from an ordinary question. A "question"
+turn returns from applyTurn WITHOUT stamping presented_at, so presentedBefore stayed
+false forever, re-firing the not-yet-presented directives — which were exactly the sites
+still saying "tap the Continue button". Hence: same step-1 summary every turn, each
+closing with a pointer to a button that is not on screen. The student had NO exit.
+
+FIXED:
+  1. Purged every remaining directive that INSTRUCTS the mentor to name the button
+     (question_answer x2, present_step x4). They now ask instead — the mentor's own
+     question is the advance verb. A test walks every surviving mention and fails unless
+     it is a comment or a prohibition.
+  2. The system prompt claimed "no button of any kind, anywhere", which contradicts the
+     hand-off pill the server really attaches — and directives OUTRANK the system prompt,
+     so the contradiction resolved the wrong way live. It now says: never name a button
+     unless the directive says one is attached.
+  3. advanceAskedButCeilinged carries the swallowed request to the directive builder. Its
+     own branch, placed AHEAD of the question branch that was looping, says plainly that
+     this register doesn't move the lesson — and is forbidden to re-teach the step.
+  4. A real [Back to the lesson] pill, attached server-side. mode_offer gained "lesson"
+     end to end (server type + validation + control parsing, client envelope + control +
+     accept). Deliberately emitted OUTSIDE the `if (advancing)` branch — inside it the
+     pill would be unreachable in exactly the case it exists for. Pinned.
+  5. The screenshot's duplicate [Talk it through] turns: the `sending` guard lost the race
+     with a fast second tap. The offer is now retired by message id on the first tap.
+
+Files changed: supabase/functions/chat/index.ts; frontend/src/lib/types.ts;
+frontend/src/features/student/chat/chatMessages.ts; frontend/src/student/useConversation.ts;
+frontend/src/student/StudentApp.tsx; tests/test_r31e_discuss_deadend.py (new, 15 tests);
+re-anchored 3 pins broken by the prompt reflow (test_flow_v3_router, test_transcript_smoothing,
+test_turn_modes) — re-anchored to the same guarantees, not weakened.
+
+Tests run: python 585 OK (was 570); tsc/eslint/build clean; edge parse clean.
+
+Remaining concerns:
+  - Discuss still cannot advance a lesson, by design. The fix makes that VISIBLE and gives
+    a one-tap way back; it does not change the gate. If the owner wants Discuss to advance,
+    that is a policy change to applyModeCeiling, not a bug fix.
+  - Not yet observed live. The directive layer is where the last fix of this kind failed
+    silently, so watch a real Discuss turn before calling it settled.
+
+Suggested next task: drive a live Discuss turn as a student, confirm the pill appears and
+returns to Lesson mode, then the deferred vocab work.

@@ -110,7 +110,9 @@ class FlowV3RouterInvariants(unittest.TestCase):
         self.assertNotIn('"Continue"', transcript)
         # And the mentor is told plainly that no button exists, so it cannot point at one.
         self.assertIn("THERE IS NO CONTINUE BUTTON", CHAT)
-        self.assertIn("The student\n  moves forward BY REPLYING TO YOU", CHAT)
+        # R31e reflowed this rule onto one line when the blanket "no button of any
+        # kind" claim was replaced (the hand-off pill IS a button). Same guarantee.
+        self.assertIn("The student moves forward BY REPLYING TO YOU.", CHAT)
 
     def test_revisit_frame_offers_the_return_chip(self):
         window = (REPO / "frontend" / "src" / "student" / "ChatWindow.tsx").read_text()

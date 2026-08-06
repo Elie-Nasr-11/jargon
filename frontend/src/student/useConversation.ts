@@ -946,7 +946,7 @@ export function useConversation() {
   // student prose beyond the pill's label as the echo); the caller flips the picker so
   // follow-up typed messages ride the new register.
   const sendModeOffer = useCallback(
-    (offer: { mode: "practice" | "discuss"; topic: string; label: string }) => {
+    (offer: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string }) => {
       void sendAnswer({ mode: "text", text: "", client_msg_id: uid() }, offer.mode, offer.label, {
         control: { type: "mode_offer", mode: offer.mode, topic: offer.topic },
       });

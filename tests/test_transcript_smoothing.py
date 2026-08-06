@@ -152,9 +152,10 @@ class PresentationIntegrityStaticTests(unittest.TestCase):
         )
 
     def test_continue_copy_honest_on_unpresented_steps(self):
-        self.assertIn(
-            "will bring up this step's material when they're ready", self.chat_fn
-        )
+        # R31e: the honest copy no longer names a button (there is none) — but it must
+        # still never imply that moving on SKIPS material that was never taught.
+        self.assertIn("This step's material has NOT been taught yet", self.chat_fn)
+        self.assertIn("never imply that moving on skips the material", self.chat_fn)
 
     def test_pending_articulation_never_writes_the_answers(self):
         # The live transcript showed one partial attempt earning the mentor's full

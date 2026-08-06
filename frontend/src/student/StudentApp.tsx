@@ -105,6 +105,8 @@ export function StudentApp({
   // TurnMode is conversation state, not navigation state — it belongs to the chat, not the URL.
   // It persists across turns until the student changes it (the convention every LLM chat uses).
   const [turnMode, setTurnMode] = useState<TurnMode>(DEFAULT_TURN_MODE);
+  // The mentor message whose mode-offer pill has already been accepted — see modeOfferRow.
+  const [acceptedOfferOn, setAcceptedOfferOn] = useState<string | null>(null);
   const conversation = useConversation();
   // The sidebar is a docked column at lg+ and a drawer below it. Without the drawer there is no
   // navigation at all on a phone, which is where a lot of students actually are.
@@ -422,14 +424,21 @@ export function StudentApp({
   const lastBotMessage = [...conversation.messages]
     .reverse()
     .find((m) => m.role === "bot" && !m.isError);
-  const liveModeOffer =
+  const offeredOn = lastBotMessage?.id;
+  const rawModeOffer =
     lastBotMessage && lastBotMessage.role === "bot" ? lastBotMessage.modeOffer : undefined;
+  // R31e (demo review): the `sending` guard alone lost a race — a quick second tap fired
+  // before the flag flipped, and the demo transcript carries two identical [Talk it
+  // through] turns back to back. Retiring the offer by message id on the first tap makes
+  // the pill single-use regardless of how fast it is clicked.
+  const liveModeOffer = offeredOn && acceptedOfferOn === offeredOn ? undefined : rawModeOffer;
   const modeOfferRow = liveModeOffer ? (
     <div className="mb-1.5 flex justify-center">
       <button
         type="button"
         disabled={conversation.sending || conversation.booting}
         onClick={() => {
+          if (offeredOn) setAcceptedOfferOn(offeredOn);
           setTurnMode(liveModeOffer.mode);
           conversation.sendModeOffer(liveModeOffer);
         }}

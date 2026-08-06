@@ -95,8 +95,10 @@ CONVERSATION CRAFT — every turn:
 - Shape on CONVERSATION turns (questions, tangents, discussion — the directive names these too): reply
   like a person, not a lesson plan. Multiple beats are fine; answer fully first; you do NOT need to end
   with a question or next action every time — the step's own task is still on screen.
-- THERE IS NO CONTINUE BUTTON, and no button of any kind, anywhere in the conversation. The student
-  moves forward BY REPLYING TO YOU. So every teaching turn must end with something worth replying to
+- THERE IS NO CONTINUE BUTTON. The student moves forward BY REPLYING TO YOU. Never point at a button
+  unless the turn directive tells you one is attached to this reply (a hand-off pill sometimes is);
+  if it doesn't say so, there is nothing on screen to tap.
+  So every teaching turn must end with something worth replying to
   — a question that checks what you just taught, asks for their example, or invites the next idea.
   Advancing is a conversational beat, not a click: make it engaging, never a bare "shall we move on?"
   attached to a wall of text. Never write "tap Continue", "click Continue", "press the button", or
@@ -395,7 +397,11 @@ type Envelope = {
   // Phase A (brain-first): a mode hand-off pill at a natural beat — [Practice this idea]
   // / [Talk it through] rendered as chrome next to Continue, replacing action sentences
   // buried in prose. Same tri-state contract as continue_offer; only the latest is live.
-  mode_offer?: { mode: "practice" | "discuss"; topic: string; label: string } | null;
+  // R31e: "lesson" joined the set so a student stranded in Discuss/Practice has a
+  // ONE-TAP way back to the spine. Discuss and Practice cannot advance a lesson by
+  // design (applyModeCeiling); without this pill the only exit was the mode picker,
+  // which the demo showed nobody finds.
+  mode_offer?: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string } | null;
   // Flow v3 backtracking: non-null while revisiting a completed step ("revisit") or on
   // the turn that returned to the frontier ("resume"); null on normal turns; ABSENT on
   // envelopes that never touched navigation (held/error) so the client keeps its state.
@@ -671,7 +677,7 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
       if (raw === null) return null;
       if (
         raw &&
-        (raw.mode === "practice" || raw.mode === "discuss") &&
+        (raw.mode === "practice" || raw.mode === "discuss" || raw.mode === "lesson") &&
         typeof raw.topic === "string" &&
         raw.topic.trim() &&
         typeof raw.label === "string" &&
@@ -3280,8 +3286,11 @@ function turnDirective(args: {
   // Phase A: the student's declared conversation register (3 modes). Practice owns its
   // own directive branch; the ceiling (not this) is what guards the gates.
   studentMode: StudentTurnMode | null;
+  // R31e: the student asked to move on, but their register can't advance a lesson. The
+  // gate correctly said no; this makes sure the REPLY doesn't pretend they said nothing.
+  advanceAskedButCeilinged: boolean;
   // Phase A: non-null when THIS turn is the student tapping a mode hand-off pill.
-  modeOfferAccept: { mode: "practice" | "discuss"; topic: string } | null;
+  modeOfferAccept: { mode: "practice" | "discuss" | "lesson"; topic: string } | null;
   // Phase C: the brain's precomputed teaching hints (code-derived, never model vibes).
   brainHints: {
     recallIdea: string | null;
@@ -3314,6 +3323,7 @@ function turnDirective(args: {
     navAction,
     preemptedNote,
     studentMode,
+    advanceAskedButCeilinged,
     modeOfferAccept,
     brainHints,
   } = args;
@@ -3437,17 +3447,32 @@ function turnDirective(args: {
     // this turn (the verdicts are masked in applyTurn), so the directive must match —
     // answer like a human tutor and leave the step's gate visibly open. Inquiry keeps
     // its own dedicated question branch below; a live quiz keeps quiz_active_chat.
+    // R31e (demo review): "let's move on" while in Discuss or Practice. The ceiling
+    // already refused to advance — correctly, those registers never close a lesson gate
+    // — but the student must not be left guessing why nothing happened. Answer the ask
+    // straight: this register doesn't move the lesson, here's the one tap that does.
+    // (The [Back to the lesson] pill is attached to this reply server-side.)
+    if (advanceAskedButCeilinged && !quizActive) {
+      return {
+        key: "advance_needs_lesson_mode",
+        text:
+          `The student just asked to move on, but they are in ${studentMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${studentMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. A [Back to the lesson] button is attached to your reply — point at THAT button (it is really there), and do not name any other button.`,
+      };
+    }
     if (routedKind === "question" && !quizActive && stepMode !== "inquiry") {
       return {
         key: "question_answer",
         text:
           "The student asked YOU a question. Answer it fully and directly FIRST — a real answer, not a redirect or a counter-question; this turn does not grade or advance anything. Then reconnect to the step in one line." +
+          // R31e (demo review): both branches used to point at the Continue BUTTON, which
+          // R31b deleted. On a not-yet-presented step this was the whole failure mode —
+          // every conversational turn re-fired this directive, so the mentor summarized
+          // the same step forever and told the student five times to tap a button that
+          // was not on screen. There is no button: ASKING is the only way forward.
           (requirements.acknowledge
             ? presentedBefore
-              ? " The Continue button on screen moves them on when they're ready."
-              : // Round 22i: the step's material hasn't been shown yet, so Continue
-                // PRESENTS it — never imply it skips ahead.
-                " The Continue button on screen will bring up this step's material when they're ready — this step hasn't been taught yet, so never imply Continue skips it."
+              ? " Close by asking whether they're ready to move on — their answer is what advances the lesson."
+              : " This step's material has NOT been taught yet. After answering, offer to start it — \"Shall we get into it?\" — and never imply that moving on skips the material; saying yes is what brings it up."
             : ""),
       };
     }
@@ -3707,17 +3732,17 @@ function turnDirective(args: {
       // the generic "don't give anything away" line directly contradicts direct teaching.
       const modePresent =
         stepMode === "explanation"
-          ? "This is a DIRECT-TEACHING step, not yet shown. Present the material in the step prompt fully and plainly at the student's grade level — for THIS step you should state the ideas outright (the student-produces-the-conclusion rule does not apply here). Invite their questions and thoughts, and tell them to tap the Continue button when they're ready to move on."
+          ? "This is a DIRECT-TEACHING step, not yet shown. Present the material in the step prompt fully and plainly at the student's grade level — for THIS step you should state the ideas outright (the student-produces-the-conclusion rule does not apply here). Invite their questions and thoughts, and close by ASKING whether to move on — their reply is what advances the lesson."
           : stepMode === "media"
             ? attachedResources.some((r) => r.resource_type === "artifact")
-              ? "This SOURCE-MATERIAL step is being shown for the first time. An interactive activity card is attached below your reply — tell the student to tap Run on the card and explore it, then ask them what they notice. They can ask anything here, and tap Continue when they're ready."
+              ? "This SOURCE-MATERIAL step is being shown for the first time. An interactive activity card is attached below your reply — tell the student to tap Run on the card and explore it, then ask them what they notice. They can ask anything here; when they say they're ready, that is what moves the lesson on."
               : attachedResources.length
-                ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, ask anything they like here, and tap Continue when they're ready."
-                : "This SOURCE-MATERIAL step is being shown for the first time, but NO resource card is attached to your reply (this step has no bound materials). Teach the material from the step prompt and any resource_chunks yourself — never claim a card is below your reply — and tell the student to tap Continue when they're ready."
+                ? "This SOURCE-MATERIAL step is being shown for the first time. The resource card(s) attached below your reply are the material: tell the student to tap Open and study them, ask anything they like here, and tell you when they're ready to move on."
+                : "This SOURCE-MATERIAL step is being shown for the first time, but NO resource card is attached to your reply (this step has no bound materials). Teach the material from the step prompt and any resource_chunks yourself — never claim a card is below your reply — and ask them to say when they're ready to move on."
             : stepMode === "inquiry"
-              ? "This OPEN-QUESTIONS step is being shown for the first time. Invite the student's questions about the topic — anything they're unsure or curious about — and make clear that when they have none (or none left), they can tap Continue to move on."
+              ? "This OPEN-QUESTIONS step is being shown for the first time. Invite the student's questions about the topic — anything they're unsure or curious about — and make clear that when they have none (or none left), they only need to say so and you'll move on."
               : stepMode === "assignment"
-                ? "This step hands off a TASK that lives in the work panel above the message box. Frame what the task is about in a sentence or two and point them to it; they tap Continue here once they've seen it."
+                ? "This step hands off a TASK that lives in the work panel above the message box. Frame what the task is about in a sentence or two and point them to it, then ask them to tell you once they've seen it."
                 : stepMode === "revision"
                   ? "This is a REVISION step — retrieval practice on skills the student has already studied (their per-skill tiers are in student.mastery). Ask ONE short recall question on this step's skills (or the lesson's key ideas if no skills are named), targeting any that show a weaker tier (favor \"emerging\" over \"developing\"), phrased plainly at their grade level. Do NOT re-teach or state the answer — prompt them to recall it. Reference skills by name only; never claim specifics about their past sessions."
                   : openEndedAssessment
@@ -6109,6 +6134,14 @@ async function handleTypedRequest(
       controlType || answer?.mode === "multiple_choice"
         ? routedKindRaw
         : applyModeCeiling(declaredMode, routedKindRaw);
+    // R31e (demo review): the ceiling is right to refuse to ADVANCE here — Discuss and
+    // Practice must never close a lesson gate — but it used to swallow the request
+    // silently. The student asked to move on five times in Discuss and the mentor just
+    // re-summarized the same step, because a lifted continue_signal is indistinguishable
+    // from an ordinary question downstream. Remember that it happened, so the directive
+    // can answer it honestly and offer the way back.
+    const advanceAskedButCeilinged =
+      routedKindRaw === "continue_signal" && routedKind !== "continue_signal";
     // Tuning telemetry: a router-question turn whose grader still said "demonstrated" is
     // the disagreement to watch before leaning harder on routing. It rides the envelope
     // (persisted whole in learning_turns.payload), so it's queryable with zero schema.
@@ -6305,12 +6338,15 @@ async function handleTypedRequest(
       navAction,
       preemptedNote,
       studentMode: declaredMode,
+      advanceAskedButCeilinged,
       brainHints,
       modeOfferAccept:
         controlType === "mode_offer" &&
-        (control?.mode === "practice" || control?.mode === "discuss")
+        (control?.mode === "practice" ||
+          control?.mode === "discuss" ||
+          control?.mode === "lesson")
           ? {
-              mode: control.mode as "practice" | "discuss",
+              mode: control.mode as "practice" | "discuss" | "lesson",
               topic: String(control.topic || "this idea").slice(0, 120),
             }
           : null,
@@ -7105,6 +7141,18 @@ async function handleTypedRequest(
       answersForbidden,
       expectedOutputFor(context.lesson, context.activity),
     );
+
+    // R31e (demo review): the way BACK, offered on a turn that by definition did NOT
+    // advance — so it must live OUTSIDE the `if (advancing)` branch below, which never
+    // runs in Discuss or Practice. It also outranks the brain's outward hand-offs: a
+    // student who just asked to move on should not be handed a third pill that doesn't.
+    if (advanceAskedButCeilinged && !inRevisit) {
+      envelope.mode_offer = {
+        mode: "lesson",
+        topic: "pick the lesson back up",
+        label: "Back to the lesson",
+      };
+    }
 
     if (advancing) {
       // Turn the completing turn into a "continue to the next part" transition so the
