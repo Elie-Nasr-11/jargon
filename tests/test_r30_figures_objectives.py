@@ -94,3 +94,20 @@ class PdfFallback(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ButtonFreeAdvancement(unittest.TestCase):
+    """R31d: with the Continue button gone the MENTOR is the only way onward."""
+
+    def test_content_step_directives_offer_a_way_forward(self):
+        # The live demo stalled at 16 turns on step 1 of 4: content_discuss said "do not
+        # push them onward" and content_nudge pointed at a button that no longer exists.
+        self.assertNotIn("point at the Continue button to move on", CHAT)
+        self.assertNotIn("The Continue button on screen advances when they're ready", CHAT)
+        self.assertNotIn("do not push them onward", CHAT)
+        # After a couple of exchanges the mentor must offer the exit itself.
+        self.assertIn("END by offering the way forward", CHAT)
+        self.assertIn("ASK them directly whether to move on", CHAT)
+
+    def test_no_directive_claims_a_button_is_on_screen(self):
+        self.assertNotIn("Continue button is still on screen", CHAT)

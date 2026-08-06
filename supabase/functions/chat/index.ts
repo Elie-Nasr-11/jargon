@@ -94,7 +94,7 @@ CONVERSATION CRAFT — every turn:
   do this step's work -> situate in the arc when it helps -> end with exactly ONE clear next action.
 - Shape on CONVERSATION turns (questions, tangents, discussion — the directive names these too): reply
   like a person, not a lesson plan. Multiple beats are fine; answer fully first; you do NOT need to end
-  with a question or next action every time — the step's gate or Continue button is still on screen.
+  with a question or next action every time — the step's own task is still on screen.
 - THERE IS NO CONTINUE BUTTON, and no button of any kind, anywhere in the conversation. The student
   moves forward BY REPLYING TO YOU. So every teaching turn must end with something worth replying to
   — a question that checks what you just taught, asks for their example, or invites the next idea.
@@ -3471,15 +3471,26 @@ function turnDirective(args: {
       !quizActive &&
       (routedKind === "answer_attempt" || routedKind === "tangent")
     ) {
+      // R31d (demo review): these two directives still pointed at the Continue BUTTON,
+      // which no longer exists, and content_discuss forbade nudging them forward — so
+      // on a content step the mentor deepened forever and NOTHING offered the way out.
+      // The live demo showed exactly that: 16 turns, still on step 1 of 4. With no button,
+      // the mentor IS the only exit, so it must offer one — gently at first, plainly once
+      // the thread has run. A "yes" to that invitation advances (CONTINUE_SIGNAL_RE).
       return draftState.attempts >= 4
         ? {
             key: "content_nudge",
-            text: "They've been in this content step's discussion for a while. Wrap the thread warmly in a line or two and point at the Continue button to move on — do not re-teach the step.",
+            text: "They've been in this content step's discussion for a while. Wrap the thread warmly in a line or two, then ASK them directly whether to move on — \"Shall we continue?\" or your own natural phrasing. Do not re-teach the step, and do not mention any button (there is none); their reply is what moves the lesson on.",
           }
-        : {
-            key: "content_discuss",
-            text: "They're discussing this content step — engage genuinely with what they said and go one level deeper where useful. The Continue button on screen advances when they're ready; do not push them onward.",
-          };
+        : draftState.attempts >= 2
+          ? {
+              key: "content_discuss",
+              text: "They're discussing this content step — engage genuinely with what they said and go one level deeper where useful. Then, because they have been on this step a couple of exchanges now, END by offering the way forward: answer them fully, then ask if they want to keep going or move on. There is no button — your question is the only way onward.",
+            }
+          : {
+              key: "content_discuss",
+              text: "They're discussing this content step — engage genuinely with what they said and go one level deeper where useful. Let them explore; you do not need to move them on yet. There is no Continue button — never point at one.",
+            };
     }
     // Revision: retrieval practice. One recall question at a time on the step's weakest skills,
     // and a retention affirmation on conclusion. Placed before the generic understanding branches

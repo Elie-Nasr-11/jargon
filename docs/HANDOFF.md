@@ -9545,3 +9545,37 @@ timer. With VOCAB_EVENTS_PER_TURN = 3 a term-dense reply can stack three cards i
 top-centre column plus one flash; bounded, but worth a look on a real lesson.
 Suggested next task: the deferred vocab work — prep-time extraction, teacher approval
 alongside the objectives, and several terms in ONE card rather than a stack.
+
+## Claude -> Codex / Human - 2026-08-05 (R31d: demo review — the step never ended)
+
+Status: Finished
+Reviewed the live demo: ONE session (elie, camp-bio-l1, 11:12-11:26 UTC, 16 turns).
+Quality of the exchange was genuinely good — the student identified stroma/thylakoids/
+grana off the figure, reasoned about surface area, admitted "i don't know" and got a
+straight explanation. The figure landed ("This is great… superb" in the feedback chat).
+THE FINDING: after 16 turns the session was STILL on step 1 of 4 (current_activity_id =
+camp-bio-l1-s1). Root cause found in the content-step directives:
+  - content_nudge told the mentor to "point at the Continue button to move on" — a
+    button that R31b deleted, so the instruction is now unfollowable.
+  - content_discuss said the button "advances when they're ready; do not push them
+    onward" — actively forbidding the mentor from offering the only remaining exit.
+With the button gone the MENTOR is the sole way forward, so the directives now tier by
+how long the thread has run: first exchanges let them explore freely; from 2 attempts
+the reply ends by offering the way forward; from 4 it wraps warmly and asks outright
+("Shall we continue?"). A yes hits CONTINUE_SIGNAL_RE and advances. Also removed a
+SYSTEM_PROMPT line still claiming "the step's gate or Continue button is still on
+screen".
+This was a REGRESSION I INTRODUCED in R31b by removing the button without auditing the
+directives that referenced it. The stall predates the fix in this transcript (the
+session ran before R31 deployed), but the directives would have made it permanent.
+Files changed: supabase/functions/chat/index.ts; tests/test_r30_figures_objectives.py
+(new ButtonFreeAdvancement class; suite 543 OK).
+Tests run: python 543 OK; edge parse clean.
+Also observed, not yet acted on: the mentor answered "is there an image of this
+process?" honestly ("the image I shared doesn't depict that") — correct, and there IS
+no figure for the proton-gradient step. Worth a figure later.
+Remaining concerns: the tiering thresholds (2 and 4 attempts) are a first guess; watch
+whether students feel hurried at 2. Nobody has run a lesson since ANY of the R31 fixes
+deployed — the next real session is the first test of all of them.
+Suggested next task: watch one full lesson end-to-end for step advancement, then the
+deferred vocab work.
