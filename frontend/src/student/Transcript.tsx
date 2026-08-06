@@ -438,8 +438,18 @@ function SourceFigure({ figure }: { figure: LessonFigure }) {
 // Split a reply on its figure markers so the image lands exactly where the mentor put it.
 const FIGURE_MARKER_RE = /\[\[figure:([^\]\s]+)\]\]/g;
 
+// R31f: [[material:id]] is an ATTACH instruction, not text — the server turns it into a
+// resource card rendered below the reply. Stripped here as well as server-side, because
+// the reply STREAMS: without this the raw marker is visible for the seconds between the
+// token arriving and the envelope landing.
+const MATERIAL_MARKER_RE = /[ \t]*\[\[material:[^\]\s]+\]\][ \t]*\n?/g;
+
+function stripMaterialMarkers(text: string): string {
+  return MATERIAL_MARKER_RE.test(text) ? text.replace(MATERIAL_MARKER_RE, "").trimEnd() : text;
+}
+
 function MessageBody({
-  text,
+  text: rawText,
   markdown,
   vocab,
   figures,
@@ -449,6 +459,7 @@ function MessageBody({
   vocab?: VocabPass;
   figures?: LessonFigure[];
 }) {
+  const text = stripMaterialMarkers(rawText);
   // Figures first: each marker becomes a real block, the prose around it renders as usual.
   if (figures?.length && FIGURE_MARKER_RE.test(text)) {
     FIGURE_MARKER_RE.lastIndex = 0;

@@ -9723,3 +9723,49 @@ Remaining concerns:
 
 Suggested next task: drive a live Discuss turn as a student, confirm the pill appears and
 returns to Lesson mode, then the deferred vocab work.
+
+## Claude -> Codex / Human - 2026-08-06 16:40
+
+Status: Finished
+Task: Second half of the same demo transcript — two more faults past the Continue loop.
+
+1. "where there any images or visuals in the resources that clarify this??" -> "the
+   resources provided for this lesson do not include images or visuals." CHECKED AGAINST
+   PROD: the mentor was telling the truth. Figures exist on biology (4), neuroanatomy (3)
+   and maths (2); HISTORY HAS ZERO. Not a bug — a content gap, logged below, not patched
+   by inventing figures for a prose prologue.
+
+2. "can you give me the rousouces here?" -> a PROSE LIST of the two readings plus "you
+   can access these from the lesson's resource panel". The cards existed and were never
+   attached. Cause: attachment is decided by RESOURCE_REQUEST_RE over the RAW message
+   BEFORE the model runs, and the typo missed it — as would "readings" and "materials",
+   which the pattern did not contain at all. Being asked for a thing and handed a
+   description of where to find it is the whole failure.
+
+FIXED — two layers, because a regex over free text will always have a next typo:
+  - Widened RESOURCE_REQUEST_RE with readings/materials/handout/article/chapter.
+  - Added [[material:id]], the same proven contract as [[figure:id]] one rung up: the
+    mentor hands a card over however the ask was worded, and the SERVER decides what is
+    legal (only this lesson's curated published resources resolve, max 2, invented ids
+    stripped, no duplicate of a card already attached). The materials payload now carries
+    `id` — without it the mentor could only ever TALK about a reading, which is exactly
+    what it did. The prompt forbids answering such a request with prose or a signpost.
+  - Markers are stripped server-side AND client-side (Transcript.stripMaterialMarkers):
+    the reply STREAMS, so without the client strip the raw marker is visible for the
+    seconds between the token arriving and the envelope landing.
+
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/Transcript.tsx;
+tests/test_r31e_discuss_deadend.py (+6 tests, 21 in the module).
+
+Tests run: python 591 OK (was 585); tsc/eslint/build clean; edge parse clean.
+
+Remaining concerns:
+  - HISTORY HAS NO FIGURES. The owner asked for illustrations pulled from the provided
+    content; the Broken Heart of America prologue is prose, so there may be nothing to
+    crop. Worth a look at the source PDFs (maps or photographs would carry this lesson)
+    before deciding it cannot have any.
+  - Neither fix is confirmed live yet. Same caveat as the last round: the directive and
+    marker layers are where a change can pass every static check and still not fire.
+
+Suggested next task: live Discuss turn — confirm [Back to the lesson] renders and returns
+to Lesson mode, and that asking for the readings attaches cards rather than describing them.

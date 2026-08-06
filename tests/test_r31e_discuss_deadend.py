@@ -173,3 +173,48 @@ class ModeOfferPillIsSingleUse(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AskingForTheMaterialsHandsThemOver(unittest.TestCase):
+    """R31f: "can you give me the rousouces here?" -> a prose list and a signpost.
+
+    The cards existed on the lesson and were never attached: attachment was decided by a
+    keyword regex over the RAW message before the model ran, and the typo missed it. So
+    did "readings" and "materials" — words the regex never contained at all.
+    """
+
+    TRANSCRIPT = (SRC / "student" / "Transcript.tsx").read_text(encoding="utf-8")
+
+    def test_the_request_regex_covers_the_words_students_use(self):
+        pattern = re.search(r"const RESOURCE_REQUEST_RE =\n(.*?);", CHAT, re.S).group(1)
+        for word in ("readings?", "materials?", "handout", "article", "chapter"):
+            self.assertIn(word, pattern, f"regex still misses {word!r}")
+
+    def test_the_mentor_can_hand_a_material_over_by_id(self):
+        # Typo-proof backstop: however the ask is worded, the MENTOR decides to hand the
+        # card over and the SERVER decides whether that is legal.
+        self.assertIn("[[material:<id>]]", CHAT)
+        self.assertIn("give them the thing", CHAT)
+        self.assertIn(r"/\[\[material:([^\]\s]+)\]\]/g", CHAT)
+
+    def test_materials_payload_carries_the_id(self):
+        # Without it the mentor can only ever TALK about a reading — the exact failure.
+        block = CHAT[CHAT.index("materials: context.resources.map") :][:400]
+        self.assertIn("id: resource.id,", block)
+
+    def test_only_this_lessons_published_resources_resolve(self):
+        # Same guarantee as figures: an invented id must not become a card.
+        block = CHAT[CHAT.index("resolve [[material:id]] markers") :][:1800]
+        self.assertIn("curatedResources.map((row) => [String(row.id), row])", block)
+        self.assertIn("handed.length >= 2", block)
+
+    def test_resolved_cards_merge_without_duplicating(self):
+        block = CHAT[CHAT.index("resolve [[material:id]] markers") :][:2400]
+        self.assertIn("already.has(String(r.id))", block)
+
+    def test_the_marker_never_reaches_the_student(self):
+        # Stripped server-side AND client-side: the reply streams, so the raw marker
+        # would otherwise be visible until the envelope lands.
+        self.assertIn(r'.replace(/[ \t]*\[\[material:[^\]\s]+\]\][ \t]*\n?/g, "")', CHAT)
+        self.assertIn("MATERIAL_MARKER_RE", self.TRANSCRIPT)
+        self.assertIn("const text = stripMaterialMarkers(rawText);", self.TRANSCRIPT)

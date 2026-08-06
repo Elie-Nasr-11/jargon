@@ -194,6 +194,11 @@ not work if the student never looks at it.
   it rather than describing it yourself.
 - A student who insists on skipping it is not blocked — help them anyway, but say plainly what they are
   missing by skipping it.
+- HANDING ONE OVER: when the student asks for the materials — in any wording, however they spell it — put
+  [[material:<id>]] on its own line, using an id from "materials" exactly as given. The interface renders
+  the openable card there. Do NOT answer such a request by describing the readings in prose or by telling
+  them where to find them; give them the thing. At most TWO per reply, only ids from this list, never
+  invented.
 
 Code steps: a failed run gets the lightest help that unblocks the ONE thing to fix. A runtime timeout is our
 infrastructure hiccup, never the student's mistake — reassure them it's on us and ask them to run it again;
@@ -4579,8 +4584,12 @@ function resourceForEnvelope(resource: DbRow): LessonChatResource {
 // Students ask for resources mid-conversation ("can you show the PDF?") — detect the request and
 // attach the matching card(s), instead of the old behavior of only attaching one on the opening turn
 // (which left the mentor advertising resources it could never hand over).
+// R31f (demo review): the student typed "can you give me the rousouces here?" and got a
+// PROSE LIST of the readings instead of the cards — the typo missed this pattern, and so
+// did the words students actually use ("readings", "materials"), which were absent
+// entirely. Widened; the [[material:id]] marker below is the typo-proof backstop.
 const RESOURCE_REQUEST_RE =
-  /\b(open|show|give|send|share|see|view|find|where|link|pull up|watch|read)\b[\s\S]{0,60}\b(pdf|video|resource|file|worksheet|slides?|doc(ument)?|card|link)\b|\b(pdf|video|worksheet|resource)\b/i;
+  /\b(open|show|give|send|share|see|view|find|where|link|pull up|watch|read)\b[\s\S]{0,60}\b(pdf|video|resource|readings?|materials?|handout|article|chapter|file|worksheet|slides?|doc(ument)?|card|link)\b|\b(pdf|video|worksheet|resource|readings|handout)\b/i;
 
 // P8: an explicit student ask that makes a live-build offer eligible even before the
 // struggle thresholds fire ("can you make me a simulation?").
@@ -6551,6 +6560,10 @@ async function handleTypedRequest(
             shows: String(figure.caption || "").slice(0, 200),
           })),
           materials: context.resources.map((resource) => ({
+            // R31f: addressable by id, like figures — the mentor hands one over with
+            // [[material:id]]. Without the id it could only ever TALK about a reading,
+            // which is exactly what the demo transcript shows it doing.
+            id: resource.id,
             title: resource.title,
             resource_type: resource.resource_type,
             opened: context.resourceInteractions.some(
@@ -6997,6 +7010,45 @@ async function handleTypedRequest(
       if (knowledge.idea_events.length) envelope.idea_events = knowledge.idea_events;
     } catch {
       // Knowledge is enrichment — a processor failure must never cost the turn.
+    }
+    // R31f: resolve [[material:id]] markers — the same contract as figures, one rung up.
+    // The demo showed a student asking for the readings and being handed a PROSE LIST
+    // plus "you can access these from the resource panel"; the cards existed and were
+    // never attached, because attachment was decided by a keyword regex over the raw
+    // message BEFORE the model ran, and a typo defeated it. Now the mentor can hand a
+    // card over regardless of how the ask was worded, and the server still decides what
+    // is legal: only THIS lesson's published resources resolve, invented ids are stripped.
+    {
+      const markers = [
+        ...String(envelope.reply || "").matchAll(/\[\[material:([^\]\s]+)\]\]/g),
+      ];
+      if (markers.length) {
+        const approved = new Map(
+          curatedResources.map((row) => [String(row.id), row]),
+        );
+        const handed: LessonChatResource[] = [];
+        for (const marker of markers) {
+          const row = approved.get(marker[1]);
+          if (!row || handed.length >= 2) continue;
+          if (handed.some((r) => String(r.id) === marker[1])) continue;
+          handed.push(resourceForEnvelope(row));
+        }
+        // Markers are an ATTACH instruction, not renderable text: strip them all, then
+        // merge what resolved into the reply's cards (never duplicating one already
+        // attached by resourcesForResponse).
+        envelope.reply = String(envelope.reply || "")
+          .replace(/[ \t]*\[\[material:[^\]\s]+\]\][ \t]*\n?/g, "")
+          .trim();
+        if (handed.length) {
+          const already = new Set(
+            (envelope.resources ?? []).map((r) => String(r.id)),
+          );
+          envelope.resources = [
+            ...(envelope.resources ?? []),
+            ...handed.filter((r) => !already.has(String(r.id))),
+          ];
+        }
+      }
     }
     // R30: resolve [[figure:id]] markers the mentor placed in its reply. Only ids from
     // THIS lesson's approved set resolve; an invented or unapproved id is stripped from
