@@ -9579,3 +9579,35 @@ whether students feel hurried at 2. Nobody has run a lesson since ANY of the R31
 deployed — the next real session is the first test of all of them.
 Suggested next task: watch one full lesson end-to-end for step advancement, then the
 deferred vocab work.
+
+## Claude -> Codex / Human - 2026-08-05 (R31e: math audit + science notation)
+
+Status: Finished
+Audited the four math surfaces the owner asked for rather than trusting the task list.
+PROVEN LIVE (production, real student JWT):
+  1. EQUATIONS — LaTeX renders. Seen twice: $\cos\theta$ / $(\cos\theta,\sin\theta)$ on
+     the unit-circle lesson, and $f(x)=a\,\mathrm{trig}(b(x-h))+k$ with $\frac{2\pi}{b}$
+     on the graphing lesson.
+  2. GRAPHS — NEWLY PROVEN this round (the one piece never tested end to end). Asked
+     "show me y=2sin(x) vs y=sin(x)" on camp-math-l5; the mentor emitted a valid
+     ```graph block (functions/xRange/yRange/xStep/points/title) alongside LaTeX.
+  3. GEOMETRY — proven in R29 (unit circle with points/segments/angles).
+  4. EQUATION PAD — EquationPad.tsx (170 lines) wired into the Chatbox plus menu as the
+     "equation" view, writing $...$ into the draft at the caret. Verified by code + it
+     is in the deployed bundle; NOT clicked in a browser (no browser reaches Supabase
+     from this sandbox). That is the one piece resting on code inspection.
+Math is split off BEFORE the markdown pass (renderInline -> renderWithMath), so `2*x*y`
+inside a formula is never eaten as italics, and it renders in the STREAMING path too.
+ADDED: SCIENCE NOTATION in the mentor contract. The owner said "chemistry and physics
+if necessary, but i think just equations cover those well" — they do, but nothing told
+the mentor to USE them there, so the biology lessons write flat "CO2" / "H2O". Formulas
+now typeset with real subscripts ($\mathrm{CO}_2$, the full photosynthesis equation),
+along with units ($9.8\,\mathrm{m/s^2}$) and charges ($\mathrm{H}^{+}$).
+Files changed: supabase/functions/chat/index.ts; tests/test_r30_figures_objectives.py
+(MathAndScienceNotation class; suite 546 OK).
+Tests run: python 546 OK; edge parse clean.
+Observed, not acted on: the graphing reply gave the whole five-step method as a
+numbered list AND carried a graph plus a figure — heavy for one turn, and in tension
+with the "one idea per reply, never number a long list" rule. The step's own content is
+a five-step method, so this may be correct; watch it on a real lesson before tightening.
+Suggested next task: watch a maths lesson for reply weight, then the deferred vocab work.

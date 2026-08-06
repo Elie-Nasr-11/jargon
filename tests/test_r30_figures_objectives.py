@@ -111,3 +111,32 @@ class ButtonFreeAdvancement(unittest.TestCase):
 
     def test_no_directive_claims_a_button_is_on_screen(self):
         self.assertNotIn("Continue button is still on screen", CHAT)
+
+
+class MathAndScienceNotation(unittest.TestCase):
+    """R31e: the four math surfaces, and science formulas typeset like maths."""
+
+    def test_equation_graph_and_geometry_contracts(self):
+        self.assertIn("EQUATIONS: wrap LaTeX in single dollars", CHAT)
+        self.assertIn("GRAPHS: a ", CHAT)
+        self.assertIn("GEOMETRY: a ", CHAT)
+        self.assertIn('"unitCircle":true', CHAT)
+
+    def test_chemistry_and_units_typeset(self):
+        # Owner: "chemistry and physics if necessary, but i think just equations cover
+        # those well" — so the same LaTeX path carries formulas, units and charges
+        # instead of flat ASCII ("CO2", "9.8 m/s2").
+        self.assertIn("SCIENCE NOTATION", CHAT)
+        self.assertIn("rather than flat ASCII", CHAT)
+
+    def test_client_renders_all_three(self):
+        root = ROOT / "frontend" / "src"
+        self.assertTrue((root / "lib" / "mathText.tsx").exists())
+        self.assertTrue((root / "student" / "GraphBlock.tsx").exists())
+        self.assertTrue((root / "student" / "GeometryBlock.tsx").exists())
+        self.assertTrue((root / "student" / "EquationPad.tsx").exists())
+        transcript = (root / "student" / "Transcript.tsx").read_text(encoding="utf-8")
+        self.assertIn("renderWithMath", transcript)
+        chatbox = (root / "student" / "Chatbox.tsx").read_text(encoding="utf-8")
+        self.assertIn("EquationPad", chatbox)
+        self.assertIn('"equation"', chatbox)

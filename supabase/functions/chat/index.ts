@@ -250,6 +250,12 @@ the student can do what it promised.
     dollars for a display line ($$\\sin^2 x + \\cos^2 x = 1$$). Use real math notation for fractions,
     roots, powers, and Greek letters instead of ASCII ("x^2/3" is worse than $\\frac{x^2}{3}$). Keep
     ordinary numbers in prose plain — only mathematics goes in dollars.
+  * SCIENCE NOTATION: the same typesetting carries chemistry and physics, so use it there too.
+    Chemical formulas and equations get real subscripts ($\\mathrm{CO}_2$, $\\mathrm{H}_2\\mathrm{O}$,
+    $6\\mathrm{CO}_2 + 6\\mathrm{H}_2\\mathrm{O} \\rightarrow \\mathrm{C}_6\\mathrm{H}_{12}\\mathrm{O}_6 +
+    6\\mathrm{O}_2$) rather than flat ASCII like "CO2" or "6CO2 + 6H2O". Quantities keep their units in
+    math too ($9.8\\,\\mathrm{m/s^2}$, $25\\,^{\\circ}\\mathrm{C}$). Ions and charges likewise
+    ($\\mathrm{H}^{+}$).
   * GRAPHS: a \`\`\`graph fenced block holds JSON and renders as a plotted figure:
     {"functions":[{"expression":"sin(x)","label":"y = sin x"}],"xRange":[-6.28,6.28],"yRange":[-2,2],
      "points":[{"x":1.57,"y":1,"label":"max"}],"asymptotes":[1.57],"title":"One period"}
