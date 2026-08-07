@@ -2533,37 +2533,6 @@ export async function fetchLessonResources(lessonId: string): Promise<LessonChat
   return ((data ?? []) as unknown as LessonResourceListRow[]).map(toChatResource);
 }
 
-// R30 (tester feedback #3): "What you'll learn" must come from the TEACHER-APPROVED
-// objectives, not from the mentor improvising — those objectives tie to curriculum
-// standards and to how the work is assessed. The milestone row is where a teacher
-// authors them (objective + expected_evidence.student_can), so the welcome card reads
-// exactly what the studio published. No new table, no new authoring surface.
-export type LessonObjectives = {
-  objective: string;
-  student_can: string[];
-};
-
-export async function fetchLessonObjectives(lessonId: string): Promise<LessonObjectives | null> {
-  if (!lessonId) return null;
-  const { data, error } = await supabase
-    .from("milestones")
-    .select("objective,expected_evidence")
-    .eq("lesson_id", lessonId)
-    .order("position", { ascending: true })
-    .limit(1);
-  if (error) throw error;
-  const row = (data ?? [])[0] as
-    | { objective?: string | null; expected_evidence?: { student_can?: unknown } | null }
-    | undefined;
-  if (!row) return null;
-  const canRaw = row.expected_evidence?.student_can;
-  const student_can = Array.isArray(canRaw)
-    ? canRaw.map((entry) => String(entry || "").trim()).filter(Boolean)
-    : [];
-  const objective = String(row.objective || "").trim();
-  return objective || student_can.length ? { objective, student_can } : null;
-}
-
 // The class detail's Resources section: everything published to this class, across its
 // lessons. Same select + RLS gate (can_view_lesson_resource) as the per-lesson read.
 export async function fetchClassResources(classId: string): Promise<LessonChatResource[]> {

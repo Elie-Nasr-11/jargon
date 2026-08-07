@@ -65,15 +65,46 @@ class FigureServing(unittest.TestCase):
 
 
 class TeacherObjectives(unittest.TestCase):
-    def test_objectives_come_from_the_milestone(self):
-        self.assertIn("export async function fetchLessonObjectives(", API)
-        self.assertIn('.from("milestones")', API)
-        self.assertIn('.select("objective,expected_evidence")', API)
+    """R32 (owner): "remove the lesson objectives from the start screen of a lesson".
 
-    def test_welcome_shows_what_youll_learn(self):
-        self.assertIn("What you", WELCOME)
-        self.assertIn("fetchLessonObjectives", WELCOME)
-        self.assertIn("student_can", WELCOME)
+    R30 built the "What you'll learn" panel from the teacher-approved milestone so the
+    promise could not drift from what is taught and assessed. The owner's call is that
+    showing it up front front-loads the answers to work the student has not done. The
+    objectives keep doing their job everywhere else; only the start screen stops
+    displaying them.
+    """
+
+    # The file's header comment explains WHY the panel went, so these pins read the code
+    # with comments stripped — otherwise the explanation trips its own assertion.
+    WELCOME_CODE = re.sub(r"//[^\n]*", "", WELCOME)
+
+    def test_the_start_screen_shows_no_objectives(self):
+        for gone in ("What you", "fetchLessonObjectives", "student_can", "Target"):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, self.WELCOME_CODE)
+
+    def test_the_dead_client_helper_went_with_it(self):
+        # It had no other caller. Left behind it would be a corpse that reads like a
+        # live contract to the next person.
+        self.assertNotIn("fetchLessonObjectives", API)
+        self.assertNotIn("export type LessonObjectives", API)
+
+    def test_the_start_screen_still_shows_identity_and_materials(self):
+        # What it removes is the objectives panel, not the surface.
+        self.assertIn("{lesson.title}", WELCOME)
+        self.assertIn("Start with the material", WELCOME)
+        self.assertIn("fetchLessonResources", WELCOME)
+
+    def test_the_milestone_objective_still_reaches_the_grader(self):
+        # This is a DISPLAY change: the objective a step is marked against is unchanged.
+        self.assertIn("milestone?.objective ? `Objective: ${String(milestone.objective)}`", CHAT)
+
+    def test_student_can_is_now_unread_at_runtime(self):
+        # Honest record, not an endorsement: this panel was expected_evidence.student_can's
+        # only consumer. Teachers still author it and nothing reads it. Flagged in the
+        # component and the handoff so it gets a job or gets retired, deliberately.
+        self.assertNotIn("expected_evidence", CHAT)
+        self.assertIn("ONLY ever read here", WELCOME)
 
 
 class ResourceGate(unittest.TestCase):

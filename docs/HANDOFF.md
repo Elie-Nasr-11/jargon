@@ -9904,3 +9904,44 @@ Remaining concerns:
 
 Suggested next task: confirm the deploy went green and the three unshipped fixes are live,
 THEN run the live checks that have been pending for three rounds.
+
+## Claude -> Codex / Human - 2026-08-07 11:45
+
+Status: Finished
+Task: Owner — "remove the lesson objectives from the start screen of a lesson."
+
+Removed the "What you'll learn" panel from LessonWelcome. R30 built it from the
+teacher-approved milestone objective so the promise could not drift from what is taught
+and assessed; the owner's call is that showing it before the lesson front-loads the
+answers to work the student has not done. The start screen keeps the lesson identity and
+the published materials.
+
+Two consequences worth stating rather than burying:
+  - fetchLessonObjectives + the LessonObjectives type are DELETED from lib/api.ts. This
+    panel was the only caller; leaving them would read like a live contract to whoever
+    found them next.
+  - expected_evidence.student_can is now UNREAD AT RUNTIME. It was only ever consumed by
+    this panel. Teachers still author it in the studio and nothing anywhere uses it. The
+    milestone OBJECTIVE is unaffected — the server still reads milestone.objective into
+    the grader's context, so what a step is marked against is unchanged. Flagged in the
+    component and pinned by a test so it gets a job or gets retired on purpose, rather
+    than rotting quietly. A DECISION IS NEEDED here.
+
+I also caught myself writing a comment claiming "the grader still marks against
+expected_evidence.student_can" — the test failed, and it was wrong: the chat function
+never reads that field. Corrected to what the code actually does.
+
+DEPLOY STATUS: chat is now VERSION 89 (updated 11:27 UTC) — the dispatched deploy went
+green, so the three rounds that had never shipped are finally live: the Discuss dead-end
+fix and [Back to the lesson] pill, the [[material:id]] inline-resource contract, and the
+purged Continue-button directives. The setup-failure instrumentation (f3b5d8a) and this
+change go out in the next deploy, pushed together as ONE push to avoid the concurrency
+cancellations that hid the problem for three rounds.
+
+Files changed: frontend/src/student/LessonWelcome.tsx; frontend/src/lib/api.ts;
+tests/test_r30_figures_objectives.py.
+
+Tests run: python 609 OK (was 606); tsc/eslint/build clean.
+
+Suggested next task: decide on expected_evidence.student_can, then the live checks —
+Discuss pill, inline materials, and the new knowledge card — all now actually deployable.
