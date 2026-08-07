@@ -9802,3 +9802,56 @@ Tests run: python 593 OK (was 591); tsc/eslint/build clean; edge parse clean.
 
 Remaining concerns: still not confirmed live — the inline path needs a real turn where the
 mentor actually emits a marker. That is the next thing to check once the deploy lands.
+
+## Claude -> Codex / Human - 2026-08-06 18:10
+
+Status: Finished
+Task: Four owner asks — popup redesign, plain streaming text, stale offer button, inline buttons.
+
+1. PLAIN STREAMING TEXT ("remove the blur stuff... just have words load like any normal AI").
+   R21/R22h focused reading by graying every sentence but the newest and blurring each
+   forming word in. That RECOLOURED the reply underneath a student still reading it. Gone:
+   every word now arrives in the normal foreground colour and stays there, with a 0.18s
+   opacity fade as it lands. .stream-past/.stream-done/.stream-tail/@keyframes
+   stream-whiten deleted from both the component and the stylesheet. The sentence split
+   survives only so a QUESTION sentence keeps its accent. A test asserts no "blur" appears
+   anywhere in the streaming CSS, so it cannot creep back under a new keyframe name.
+
+2. THE POPUPS, REDESIGNED ("not good at all"). There were THREE surfaces for one moment:
+   a full-screen SVG of two circles and a line drawing "against resistance", a vocab
+   banner dropping from the top centre, and growth toasts stacking top right. A turn that
+   taught three words put three cards on screen plus an animation carrying no information
+   its own caption didn't. Now ONE card (student/KnowledgeCard.tsx) holds the whole turn:
+   each entry is an eyebrow + the word/connection set at reading size + its DEFINITION as
+   the body, keyed by subject hue down a thin left rule. That also finally delivers the
+   owner's earlier ask — several vocab words in ONE pop-up instead of a stack.
+   GrowthFlash.tsx deleted; gflash-* and ktoast-* CSS removed. Kept: modal, Escape/backdrop
+   close, and NOTHING on a timer. A test pins that the entrance keyframe ENDS opaque — the
+   exact trap that once left an invisible full-screen click blocker.
+
+3 + 4. THE STALE OFFER, AND INLINE BUTTONS — one fix, because they are the same problem.
+   [Talk it through] was a floating row above the composer derived from the last MENTOR
+   message, so a student who typed something else left it hovering, still offering a
+   hand-off for a conversation that had moved on (and a fast second tap beat the `sending`
+   guard — the demo has two identical accept turns). It now renders INLINE in the message
+   that made it, gated by the same `isLatestBot` that already retires an older question's
+   MCQ buttons. Staleness is structural: anything following the message retires the offer.
+   It also reads better — the button sits with the sentence that offered it.
+
+Files changed: frontend/src/student/KnowledgeCard.tsx (new); KnowledgeToasts.tsx (rewritten);
+GrowthFlash.tsx (deleted); Transcript.tsx; StudentApp.tsx; styles.css;
+features/student/chat/chatMessages.ts (exported ModeOffer);
+tests/test_transcript_smoothing.py + tests/test_r31e_discuss_deadend.py (re-pinned to the
+new designs, not deleted).
+
+Tests run: python 602 OK (was 593); tsc/eslint/build clean.
+
+Remaining concerns:
+  - The card is unverified in a browser — no browser here reaches Supabase. Layout and
+    hue-keying are code-reviewed only. Worth one look at a turn that lands 3+ events.
+  - Inline offers are less prominent than a row above the composer. If testers miss them,
+    the fallback is a quieter duplicate above the composer for the LATEST message only —
+    but do not restore the old always-on row, which is what went stale.
+
+Suggested next task: the still-unverified live checks (Discuss pill, inline materials),
+then vocab extracted at PREP time and teacher-approved.

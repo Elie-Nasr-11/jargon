@@ -13,6 +13,7 @@ import { GeometryBlock, type GeometrySpec } from "@/student/GeometryBlock";
 import {
   CHECKPOINT_SPEC,
   modeAccentValue,
+  modeInkValue,
   renderModeSpec,
   turnModeSpec,
 } from "@/student/turnModes";
@@ -27,6 +28,7 @@ import {
   stepEyebrowLabel,
   type ChatCodeBlock,
   type ChatFigureBlock,
+  type ModeOffer,
   type Msg,
 } from "@/features/student/chat/chatMessages";
 
@@ -360,12 +362,16 @@ function renderProse(raw: string, vocab?: VocabPass, keyBase = "s"): ReactNode[]
 }
 
 // The live streaming body: fenced code renders as real code blocks AS IT ARRIVES.
-// Round 22h (owner): the reading FOCUS is the newest sentence — only the LATEST completed
-// sentence is white (.stream-done whitens it in); everything read before it steps back to
-// the sidebar's unselected gray (.stream-past). Forming words blur in ONE AT A TIME
-// (.stream-word). When the final message replaces this body, the whole reply goes white.
-// (Inline markdown on the forming tail applies per word, so multi-word bold/italic snaps
-// in when its sentence completes — which under sentence pacing is when it's read.)
+//
+// R32 (owner: "remove the blur stuff... just have words load like any normal AI does").
+// Text now arrives the plain way: every word in the normal foreground colour, each one
+// fading in over ~0.18s as it lands. The old sentence-focus pass (newest sentence white,
+// everything earlier grayed, forming words blurred in) is gone — it recoloured the reply
+// underneath a student who was still reading it, which is the opposite of smooth.
+//
+// Completed sentences and the forming tail now render identically; the split survives only
+// because a QUESTION sentence still earns its accent colour, and because animating whole
+// settled sentences again on every token would re-fire the fade across the whole reply.
 function StreamingBody({ text }: { text: string }) {
   const segments = parseFencedBlocks(text);
   return (
@@ -381,16 +387,12 @@ function StreamingBody({ text }: { text: string }) {
         return (
           <span key={i} className="whitespace-pre-wrap">
             {done.map((sentence, j) => (
-              <span
-                key={j}
-                className={`${j === done.length - 1 ? "stream-done" : "stream-past"}${isQuestionSentence(sentence) ? " prose-question" : ""}`}
-              >
+              <span key={j} className={isQuestionSentence(sentence) ? "prose-question" : undefined}>
                 {renderInline(sentence)}{" "}
               </span>
             ))}
-            {tail ? (
-              <span className="stream-tail">
-                {tail.split(/(\s+)/).map((part, k) =>
+            {tail
+              ? tail.split(/(\s+)/).map((part, k) =>
                   part.trim() ? (
                     <span key={k} className="stream-word">
                       {renderInline(part)}
@@ -398,9 +400,8 @@ function StreamingBody({ text }: { text: string }) {
                   ) : (
                     part
                   ),
-                )}
-              </span>
-            ) : null}
+                )
+              : null}
           </span>
         );
       })}
@@ -767,10 +768,19 @@ export type TranscriptProps = {
   // stay clickable once the conversation has moved on.
   onChoose?: (choiceId: string, label: string) => void;
   onRetry?: (answer: TypedChatAnswer) => void;
+  // R32: accepting an inline hand-off offer ([Talk it through], [Back to the lesson]).
+  // The shell owns it because accepting also moves the composer's mode picker.
+  onAcceptOffer?: (offer: ModeOffer) => void;
   disabled?: boolean;
 };
 
-export function Transcript({ messages, onChoose, onRetry, disabled }: TranscriptProps) {
+export function Transcript({
+  messages,
+  onChoose,
+  onRetry,
+  onAcceptOffer,
+  disabled,
+}: TranscriptProps) {
   // Live-conversation context the shell does not thread as props: the hold lock (which also
   // freezes live pills), the continue/retry control senders, and the read-aloud call context.
   const channel = useConversationChannel();
@@ -980,6 +990,33 @@ export function Transcript({ messages, onChoose, onRetry, disabled }: Transcript
                           sessionId={channel.sessionId}
                         />
                       ))}
+                    </div>
+                  ) : null}
+                  {/* R32 (owner): the hand-off offer is an INLINE button in the message
+                      that made it, not a floating row above the composer. Two reasons.
+                      It reads as part of what the mentor just said — "or we could talk it
+                      through" with the button right there — and it goes stale correctly
+                      for free: `isLatestBot` stops being true the moment the student
+                      replies with anything else, so the offer disappears as the next turn
+                      starts instead of hovering over a conversation that moved on. */}
+                  {isLatestBot && message.modeOffer && onAcceptOffer ? (
+                    <div className="flex flex-wrap gap-2 pl-1">
+                      <button
+                        type="button"
+                        disabled={inert}
+                        onClick={() => onAcceptOffer(message.modeOffer!)}
+                        className="ds-tag gap-1.5 rounded-pill px-3.5 py-1 text-meta font-bold transition-transform duration-(--dur-fast) hover:scale-[1.02] disabled:opacity-40"
+                        style={{
+                          ["--tag-bg" as string]: modeAccentValue(
+                            turnModeSpec(message.modeOffer.mode),
+                          ),
+                          ["--tag-ink" as string]: modeInkValue(
+                            turnModeSpec(message.modeOffer.mode),
+                          ),
+                        }}
+                      >
+                        {message.modeOffer.label}
+                      </button>
                     </div>
                   ) : null}
                   {liveChoices ? (

@@ -1,185 +1,30 @@
-import { useEffect, useRef, useState } from "react";
-import { GrowthFlash } from "@/student/GrowthFlash";
-import { BookOpen, Link2, Sparkles, X } from "lucide-react";
-import { prefersReducedMotion } from "@/lib/motion";
-import { useConversationChannel, type KnowledgeToast } from "@/student/useConversation";
+import { KnowledgeCard } from "@/student/KnowledgeCard";
+import { useConversationChannel } from "@/student/useConversation";
 
-// Learning framework (F2/F3) notification surfaces, mounted by ChatWindow:
-//   VOCAB — the definition dropdown, sliding from the TOP CENTER on a term's first
-//   encounter (and on tapping any highlighted term later).
-//   LINK / IDEA — the "your brain just grew" toasts, top right, with a spark and a
-//   "See it in your brain" jump to the Home map where the new arc/star lives.
-// All of these appear only after the streamed reply settles (owner decision — the
-// events ride the envelope, which resolves post-stream).
+// Learning framework (F2/F3) notification surface, mounted by ChatWindow.
 //
-// R31c (owner: "make the visual and overlay only go when next is clicked"): NOTHING here
-// dismisses itself any more. The centre flash holds behind its overlay until the student
-// clicks Next, and the cards stay until they close them. A new word or a new connection
-// is the point of the lesson — losing it to a 6-second timer while the student is still
-// reading was exactly backwards. Reduced motion skips the flash (the cards still carry
-// the information, and they now persist).
-
-function VocabBanner({
-  toast,
-  dismiss,
-}: {
-  toast: Extract<KnowledgeToast, { kind: "vocab" }>;
-  dismiss: (id: string) => void;
-}) {
-  return (
-    <div
-      role="status"
-      className={`pointer-events-auto flex max-w-md items-start gap-2.5 rounded-card border border-border bg-depth-card px-3.5 py-2.5 shadow-card ${
-        prefersReducedMotion() ? "" : "ktoast-drop"
-      }`}
-    >
-      <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-body font-semibold text-foreground">{toast.event.term}</span>
-          {toast.event.subject ? (
-            <span className="font-mono text-overline uppercase tracking-[0.12em] text-muted-foreground">
-              {toast.event.subject}
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-0.5 text-meta text-muted-foreground">{toast.event.definition}</p>
-      </div>
-      <button
-        type="button"
-        onClick={() => dismiss(toast.id)}
-        aria-label="Dismiss definition"
-        className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
-      >
-        <X className="h-3.5 w-3.5" strokeWidth={2} />
-      </button>
-    </div>
-  );
-}
-
-function GrowthToast({
-  toast,
-  dismiss,
-  onSeeBrain,
-}: {
-  toast: Extract<KnowledgeToast, { kind: "link" | "idea" }>;
-  dismiss: (id: string) => void;
-  onSeeBrain?: () => void;
-}) {
-  const isLink = toast.kind === "link";
-  const headline = isLink
-    ? `New link: ${toast.event.from_title} ↔ ${toast.event.to_title}`
-    : `New idea: ${toast.event.title}`;
-  const detail = isLink ? toast.event.note : toast.event.one_liner;
-  return (
-    <div
-      role="status"
-      className={`pointer-events-auto flex max-w-sm items-start gap-2.5 rounded-card border px-3.5 py-2.5 shadow-card ${
-        prefersReducedMotion() ? "" : "ktoast-pop"
-      }`}
-      style={{
-        borderColor: "color-mix(in oklab, var(--grad-1) 45%, transparent)",
-        background: "color-mix(in oklab, var(--grad-1) 10%, var(--depth-card))",
-      }}
-    >
-      {isLink ? (
-        <Link2
-          className="ktoast-spark mt-0.5 h-4 w-4 shrink-0"
-          strokeWidth={1.8}
-          style={{ color: "var(--grad-1)" }}
-        />
-      ) : (
-        <Sparkles
-          className="ktoast-spark mt-0.5 h-4 w-4 shrink-0"
-          strokeWidth={1.8}
-          style={{ color: "var(--grad-1)" }}
-        />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="text-body font-semibold text-foreground">{headline}</div>
-        {detail ? <p className="mt-0.5 text-meta text-muted-foreground">{detail}</p> : null}
-        {onSeeBrain ? (
-          <button
-            type="button"
-            onClick={() => {
-              dismiss(toast.id);
-              onSeeBrain();
-            }}
-            className="mt-1.5 rounded-pill border border-border px-2.5 py-0.5 text-meta font-semibold text-foreground transition-colors duration-(--dur-fast) hover:bg-muted"
-          >
-            See it in your brain
-          </button>
-        ) : null}
-      </div>
-      <button
-        type="button"
-        onClick={() => dismiss(toast.id)}
-        aria-label="Dismiss"
-        className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-muted hover:text-foreground"
-      >
-        <X className="h-3.5 w-3.5" strokeWidth={2} />
-      </button>
-    </div>
-  );
-}
+// R32 (owner: "much better design for the link and vocab popups"): there used to be THREE
+// surfaces — a full-screen SVG flash in the centre, vocab banners dropping from the top
+// centre, and growth toasts stacking top right — all firing for the same moment. A turn
+// that taught three words covered the screen in chrome. They are now ONE card (see
+// KnowledgeCard), which also delivers the owner's earlier ask that several vocab words
+// share a single pop-up instead of stacking.
+//
+// The dismissal contract is unchanged and deliberate: nothing here is on a timer. A new
+// word or a new connection is the point of the lesson, and losing it to a countdown while
+// the student is still reading was exactly backwards. Reduced motion only drops the
+// entrance animation — the card itself still shows, because it carries the information.
 
 export function KnowledgeToasts({ onSeeBrain }: { onSeeBrain?: () => void }) {
   const channel = useConversationChannel();
-  // Round 20: the center growth flash — one play per FRESH toast (links outrank vocab
-  // when both land on a turn), tracked by id so re-renders never replay it.
-  const flashedRef = useRef(new Set<string>());
-  const [flash, setFlash] = useState<KnowledgeToast | null>(null);
-  useEffect(() => {
-    if (prefersReducedMotion()) return;
-    const candidates = channel.knowledgeToasts.filter(
-      (toast) => toast.fresh && !flashedRef.current.has(toast.id),
-    );
-    if (!candidates.length) return;
-    const pick =
-      candidates.find((toast) => toast.kind === "link") ??
-      candidates.find((toast) => toast.kind === "idea") ??
-      candidates[0];
-    for (const toast of candidates) flashedRef.current.add(toast.id);
-    setFlash(pick);
-    // R31c: no timer — the flash is dismissed by the student, in handleNext below.
-  }, [channel.knowledgeToasts]);
-
-  // Next closes the moment AND the card it was announcing, so the student is not asked
-  // to dismiss the same news twice.
-  const handleNext = () => {
-    const current = flash;
-    setFlash(null);
-    if (current) channel.dismissToast(current.id);
-  };
-
-  if (!channel.knowledgeToasts.length && !flash) return null;
-  const vocab = channel.knowledgeToasts.filter((t) => t.kind === "vocab");
-  const growth = channel.knowledgeToasts.filter((t) => t.kind !== "vocab");
+  if (!channel.knowledgeToasts.length) return null;
   return (
-    <>
-      {/* Vocab: the dropdown from the top center. */}
-      <div className="pointer-events-none absolute inset-x-0 top-2 z-[var(--z-overlay)] flex flex-col items-center gap-2">
-        {vocab.map((toast) => (
-          <VocabBanner
-            key={toast.id}
-            toast={toast as Extract<KnowledgeToast, { kind: "vocab" }>}
-            dismiss={channel.dismissToast}
-          />
-        ))}
-      </div>
-      {/* Round 20: the owner-specced center-screen forming moment. */}
-      {flash ? <GrowthFlash key={flash.id} toast={flash} onNext={handleNext} /> : null}
-      {/* Growth: links + new ideas, top right. */}
-      <div className="pointer-events-none absolute right-3 top-2 z-[var(--z-overlay)] flex flex-col items-end gap-2">
-        {growth.map((toast) => (
-          <GrowthToast
-            key={toast.id}
-            toast={toast as Extract<KnowledgeToast, { kind: "link" | "idea" }>}
-            dismiss={channel.dismissToast}
-            onSeeBrain={onSeeBrain}
-          />
-        ))}
-      </div>
-    </>
+    <KnowledgeCard
+      toasts={channel.knowledgeToasts}
+      onSeeBrain={onSeeBrain}
+      onDismiss={() => {
+        for (const toast of channel.knowledgeToasts) channel.dismissToast(toast.id);
+      }}
+    />
   );
 }

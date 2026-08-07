@@ -34,6 +34,10 @@ export type RuntimeRunResult = RunResult & { raw?: JargonRunResponse };
 export type ChatCodeBlock = { language: ComposerLanguage; source: string };
 export type ChatChoice = { id?: string; label?: string; text?: string; value?: string };
 
+// R32: a hand-off offer the mentor attached to a reply. It renders as an INLINE button in
+// that message rather than as a floating row above the composer — see Transcript.
+export type ModeOffer = { mode: "practice" | "discuss" | "lesson"; topic: string; label: string };
+
 export type Msg =
   | {
       id: string;
@@ -66,7 +70,7 @@ export type Msg =
       // explicit continue). Only the latest bot message's offer renders live; since
       // chat-flow Phase 1 it IS restored from the persisted envelope on reload.
       continueOffer?: { label: string };
-      modeOffer?: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string };
+      modeOffer?: ModeOffer;
       // P8: this message offered a live mentor-built activity. Live-turn only —
       // deliberately NOT replayed from history (artifact-live enforces once-per-step).
       artifactOffer?: { label: string; kind: "html_sim" | "deck"; activity_id: string };

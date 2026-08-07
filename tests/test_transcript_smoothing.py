@@ -79,15 +79,21 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class GrowthMomentsStaticTests(unittest.TestCase):
-    """Round 20: think-invitations, the center growth flash, checkpoint markers."""
+class KnowledgeCardStaticTests(unittest.TestCase):
+    """R32 (owner: "much better design for the link and vocab popups — it's not good").
+
+    Was: THREE surfaces for one moment — a full-screen SVG of two circles and a line, a
+    vocab banner from the top centre, and growth toasts stacking top right. A turn that
+    taught three words put three cards on screen plus an animation carrying no information
+    its own caption didn't. Now: ONE card holding the whole turn, which also delivers the
+    owner's earlier ask that several vocab words share a single pop-up.
+    """
 
     @classmethod
     def setUpClass(cls):
         cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
-        cls.transcript = TRANSCRIPT.read_text(encoding="utf-8")
         cls.styles = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
-        cls.flash = (ROOT / "frontend" / "src" / "student" / "GrowthFlash.tsx").read_text(
+        cls.card = (ROOT / "frontend" / "src" / "student" / "KnowledgeCard.tsx").read_text(
             encoding="utf-8"
         )
         cls.toasts = (ROOT / "frontend" / "src" / "student" / "KnowledgeToasts.tsx").read_text(
@@ -99,36 +105,50 @@ class GrowthMomentsStaticTests(unittest.TestCase):
         self.assertIn("NEVER state the connection", self.chat_fn)
         self.assertIn("possible_links: (() => {", self.chat_fn)
 
-    def test_growth_flash_component_and_keyframes(self):
-        self.assertIn("export function GrowthFlash(", self.flash)
-        # Link = two circles + line; vocab = one line into one circle.
-        self.assertIn('const isLink = toast.kind === "link";', self.flash)
-        for keyframe in (
-            "gflash-line-draw",
-            "gflash-b-light",
-            "gflash-a-settle",
-            "gflash-glow-ping",
-            "gflash-fade",
-        ):
-            with self.subTest(keyframe=keyframe):
-                self.assertIn(keyframe, self.styles)
-        # Yellow is the discuss/memory hue; everything settles to gray (ink).
-        self.assertIn("stroke: var(--mode-discuss);", self.styles)
-        self.assertIn("fill: var(--ink-45);", self.styles)
+    def test_the_three_old_surfaces_are_gone(self):
+        self.assertFalse(
+            (ROOT / "frontend" / "src" / "student" / "GrowthFlash.tsx").exists(),
+            "the full-screen flash should be deleted, not merely unmounted",
+        )
+        for dead in ("gflash", "ktoast"):
+            with self.subTest(dead=dead):
+                self.assertNotIn(dead, self.styles)
+        for dead in ("VocabBanner", "GrowthToast", "GrowthFlash"):
+            with self.subTest(dead=dead):
+                self.assertNotIn(dead, self.toasts)
 
-    def test_flash_plays_once_per_fresh_event(self):
-        self.assertIn("toast.fresh && !flashedRef.current.has(toast.id)", self.toasts)
-        self.assertIn("<GrowthFlash key={flash.id} toast={flash} onNext={handleNext} />", self.toasts)
+    def test_one_card_carries_every_event_from_the_turn(self):
+        # The owner asked for this twice: "multiple vocab words in the pop-up".
+        self.assertIn("toasts={channel.knowledgeToasts}", self.toasts)
+        self.assertIn("{toasts.map((toast) => (", self.card)
+        self.assertIn("new word${words > 1", self.card)
 
-    def test_checkpoint_section_markers(self):
-        self.assertIn("const opensCheckpoint =", self.transcript)
-        self.assertIn('<ModeRule label="Checkpoint" />', self.transcript)
-        self.assertIn("checkpoint={section.checkpoint}", self.transcript)
+    def test_a_definition_is_the_body_of_the_entry(self):
+        # The old flash showed circles; the definition is what a student came for.
+        self.assertIn("toast.event.definition", self.card)
+        self.assertIn("toast.event.note", self.card)
+        self.assertIn("toast.event.one_liner", self.card)
 
+    def test_it_is_modal_and_must_be_dismissed(self):
+        self.assertIn('role="dialog"', self.card)
+        self.assertIn('aria-modal="true"', self.card)
+        self.assertIn("pointer-events-auto", self.card)
+        self.assertIn('event.key === "Escape"', self.card)
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_nothing_is_on_a_timer(self):
+        # R31c's guarantee, carried forward: a word lost to a countdown while the student
+        # is still reading is the opposite of the point.
+        for banned in ("setTimeout", "useAutoDismiss"):
+            with self.subTest(banned=banned):
+                self.assertNotIn(banned, self.card)
+                self.assertNotIn(banned, self.toasts)
 
+    def test_the_entrance_cannot_leave_an_invisible_blocker(self):
+        # The trap that shipped once: the container animated to opacity 0 with fill-mode
+        # both while staying mounted, leaving a full-screen click sink. The entrance must
+        # END opaque.
+        block = self.styles[self.styles.index("@keyframes kcard-in") :][:220]
+        self.assertIn("to {\n    opacity: 1;", block)
 
 class PresentationIntegrityStaticTests(unittest.TestCase):
     """Round 22i (Portability transcript): a step counts as presented only when the
@@ -171,51 +191,59 @@ class PresentationIntegrityStaticTests(unittest.TestCase):
 
 
 class StreamingProseStaticTests(unittest.TestCase):
-    """Round 21: blur-in gray streaming, sentence whiten, live formatting, richer prose."""
+    """R32 (owner): "remove the blur stuff... just have words load like any normal AI."
+
+    Rounds 21/22h focused reading by graying every sentence but the newest and blurring
+    each forming word in. It recoloured the reply UNDER a student who was still reading
+    it. Now text arrives the plain way and stays put.
+    """
 
     @classmethod
     def setUpClass(cls):
         cls.transcript = TRANSCRIPT.read_text(encoding="utf-8")
         cls.styles = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
 
-    def test_streaming_body_sentence_treatment(self):
+    def test_streaming_body_still_streams(self):
         for fragment in (
             "function StreamingBody(",
-            "import { splitSentences } from \"@/lib/sentences\";",
-            # Tail = blurred gray; completed sentences whiten; live inline markdown.
-            'className="stream-tail"',
-            "stream-done",
+            'import { splitSentences } from "@/lib/sentences";',
             "<StreamingBody text={message.text} />",
+            'className="stream-word"',
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.transcript)
-        self.assertIn("filter: blur(1.6px);", self.styles)
-        self.assertIn("@keyframes stream-whiten", self.styles)
-        # Reduced motion: no blur, no whiten.
-        self.assertIn(".stream-tail {\n    filter: none;", self.styles)
 
-    def test_focus_gray_past_sentences_and_word_blur_in(self):
-        # Owner (R22h): while streaming, only the LATEST sentence is white — earlier ones
-        # step back to the sidebar's unselected gray — and forming words blur in one at a
-        # time. The settled message renders all-white (MessageBody plain foreground).
+    def test_no_blur_anywhere_in_the_stream(self):
+        # The owner asked for this by name. A blur on arriving text is what "the blur
+        # stuff" meant, and it must not creep back under another keyframe name.
+        stream_css = self.styles[self.styles.index("@keyframes stream-word-in") :]
+        stream_css = stream_css[: stream_css.index("@media (prefers-reduced-motion")]
+        self.assertNotIn("blur", stream_css)
+
+    def test_settled_text_is_never_recoloured(self):
+        # No gray-past / whiten pass: every word arrives in the normal foreground colour
+        # and stays there. These classes are gone from BOTH files, not just unused.
+        for dead in ("stream-past", "stream-done", "stream-tail", "stream-whiten"):
+            with self.subTest(dead=dead):
+                self.assertNotIn(dead, self.transcript)
+                self.assertNotIn(dead, self.styles)
+
+    def test_the_only_motion_is_a_short_opacity_fade(self):
+        block = self.styles[self.styles.index("@keyframes stream-word-in") :][:220]
+        self.assertIn("opacity: 0;", block)
+        self.assertIn("opacity: 1;", block)
+        self.assertNotIn("filter:", block)
+        self.assertIn("animation: stream-word-in 0.18s", self.styles)
+
+    def test_reduced_motion_still_opts_out(self):
+        self.assertIn(".stream-word {\n    animation: none;", self.styles)
+
+    def test_a_question_sentence_keeps_its_accent(self):
+        # The one surviving reason StreamingBody splits sentences at all.
         self.assertIn(
-            'j === done.length - 1 ? "stream-done" : "stream-past"', self.transcript
+            'className={isQuestionSentence(sentence) ? "prose-question" : undefined}',
+            self.transcript,
         )
-        self.assertIn('className="stream-word"', self.transcript)
-        self.assertIn("tail.split(/(\\s+)/)", self.transcript)
-        self.assertIn(".stream-past {", self.styles)
-        self.assertIn("@keyframes stream-word-in", self.styles)
-
-    def test_prose_is_not_flat(self):
-        # Questions wear the accent, settled and live.
-        self.assertIn("function isQuestionSentence(", self.transcript)
-        self.assertIn("prose-question", self.transcript)
-        self.assertIn(".prose-question {", self.styles)
-        # Lists indent behind a divider rule; inline code carries its own hue.
-        self.assertIn("border-l-2 border-border pl-6", self.transcript)
-        self.assertIn("inline-code-hue", self.transcript)
-        self.assertIn(".inline-code-hue {", self.styles)
-
 
 class TransitionKinksStaticTests(unittest.TestCase):
     """Round 22 (demo-lesson transcript review): the advancing turn stops pointing at a
@@ -254,39 +282,17 @@ class TransitionKinksStaticTests(unittest.TestCase):
         self.assertIn('className="ml-4 list-none space-y-1.5 border-l-2 border-border pl-6"', self.transcript)
         self.assertNotIn("list-disc", self.transcript)
 
-    def test_growth_flash_owns_the_screen_with_a_note(self):
-        # Owner (R22g): dim+blur overlay behind the flash, resistance line draw, and a
-        # plain-language note ("New link between A and B" / "New word: x — definition").
-        flash = (ROOT / "frontend" / "src" / "student" / "GrowthFlash.tsx").read_text(
+    def test_the_learning_moment_still_steps_the_conversation_back(self):
+        # R32 replaced the full-screen flash with one card, but the moment must still
+        # OWN the screen while it is up: a dimmed backdrop, and no way past it except
+        # the student's own dismissal.
+        card = (ROOT / "frontend" / "src" / "student" / "KnowledgeCard.tsx").read_text(
             encoding="utf-8"
         )
-        styles = (ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
-        toasts = (ROOT / "frontend" / "src" / "student" / "KnowledgeToasts.tsx").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("gflash-overlay", flash)
-        self.assertIn("function noteFor(", flash)
-        self.assertIn("New link between ${toast.event.from_title}", flash)
-        self.assertIn("New word: ${toast.event.term}", flash)
-        self.assertIn(".gflash-overlay {", styles)
-        self.assertIn("backdrop-filter: blur(5px);", styles)
-        self.assertIn("@keyframes gflash-note-in", styles)
-        # Resistance draw: the offset grinds down in shrinking, stalling increments.
-        self.assertIn("stroke-dashoffset: 54;", styles)
-        self.assertIn("stroke-dashoffset: 29;", styles)
-        # R31c (owner): the visual and overlay hold until the student clicks Next —
-        # no timer dismisses them, and the cards no longer self-dismiss either.
-        self.assertNotIn("setFlash(null), 3_300", toasts)
-        self.assertNotIn("useAutoDismiss", toasts)
-        self.assertIn("const handleNext = () => {", toasts)
-        self.assertIn("onNext: () => void", flash)
-        self.assertIn('aria-modal="true"', flash)
-        self.assertIn("pointer-events-auto absolute inset-0", flash)
-        # The container must NOT animate itself to opacity 0 while it stays mounted —
-        # that would leave an invisible full-screen blocker over the conversation.
-        fade = styles[styles.index("@keyframes gflash-fade") : styles.index("@keyframes gflash-overlay-in")]
-        self.assertIn("8%,\n  100% {\n    opacity: 1;", fade)
-
+        self.assertIn("absolute inset-0", card)
+        self.assertIn("var(--background) 62%", card)
+        self.assertIn("Got it", card)
+        self.assertIn("See it in your brain", card)
     def test_no_step_count_boilerplate_divider_signifies_instead(self):
         # Owner (R22e): the appended "That completes step N of M… Send a message" line is
         # gone — the mentor closes naturally and the transcript divider marks the change.

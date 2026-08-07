@@ -850,54 +850,6 @@ select {
   --map-memory-halo: var(--mode-discuss);
 }
 
-/* --- Knowledge toasts (student/KnowledgeToasts.tsx) --------------------------------
-   The vocab definition DROPS from the top; link/idea growth toasts POP in from the
-   right with a one-beat spark. Reduced motion renders both static (classes withheld). */
-@keyframes ktoast-drop {
-  from {
-    opacity: 0;
-    transform: translateY(-14px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@keyframes ktoast-pop {
-  0% {
-    opacity: 0;
-    transform: translateX(16px) scale(0.96);
-  }
-  60% {
-    opacity: 1;
-    transform: translateX(-2px) scale(1.01);
-  }
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-@keyframes ktoast-spark {
-  0%,
-  100% {
-    transform: none;
-  }
-  30% {
-    transform: scale(1.35) rotate(-8deg);
-  }
-  60% {
-    transform: scale(1.1) rotate(6deg);
-  }
-}
-.ktoast-drop {
-  animation: ktoast-drop var(--dur-slow) ease both;
-}
-.ktoast-pop {
-  animation: ktoast-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
-}
-.ktoast-spark {
-  animation: ktoast-spark 0.9s ease 0.3s 2;
-}
 /* --- MATH (R29) ------------------------------------------------------------------
    KaTeX ships its own stylesheet (imported in main.tsx). These rules only bind it to
    the app's theme: KaTeX colors glyphs with `color: inherit` by default, so math picks
@@ -937,201 +889,46 @@ select {
   border-radius: 4px;
 }
 
-/* --- The growth flash (student/GrowthFlash.tsx) ------------------------------------
-   Owner-specced center-screen moment: yellow draws the new connection, the far node
-   lights and glows, then EVERYTHING settles to gray — known now, part of the record.
-   Round 22g: the moment owns the screen (dim + blur overlay behind it), the line draws
-   against RESISTANCE (fast burst, grinding middle, break-through), and a plain-language
-   note fades in underneath. One 3.2s pass; the container fades itself out; reduced
-   motion never mounts it. */
-/* R31c (owner): the moment no longer fades itself out — it HOLDS until the student
-   clicks Next. This is the entrance only; without it the container animated to
-   opacity 0 with fill-mode both and left an invisible full-screen blocker behind. */
-@keyframes gflash-fade {
-  0% {
+/* --- The knowledge card (student/KnowledgeCard.tsx) --------------------------------
+   R32: replaces the growth flash and its two toast surfaces. The old moment was a
+   full-screen SVG — a yellow line drawing "against resistance" between two circles —
+   plus separate vocab and growth cards; three things on screen saying one thing, and the
+   animation carried no information the note underneath didn't. One card now holds the
+   whole turn's learning, so the entrance is all the motion it needs: a short rise, no
+   blur, no full-screen takeover. Reduced motion skips it (the component omits the class);
+   the card is never on a timer either way. */
+@keyframes kcard-in {
+  from {
     opacity: 0;
+    transform: translateY(8px) scale(0.985);
   }
-  8%,
-  100% {
+  to {
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
-@keyframes gflash-overlay-in {
-  0% {
-    opacity: 0;
-  }
-  10%,
-  100% {
-    opacity: 1;
-  }
-}
-/* Resistance: quick bite at the start, then the offset grinds down in shrinking,
-   stalling increments — effort — before breaking through to the far node. */
-@keyframes gflash-line-draw {
-  0%,
-  8% {
-    stroke-dashoffset: 100;
-    stroke: var(--mode-discuss);
-  }
-  20% {
-    stroke-dashoffset: 60;
-  }
-  30% {
-    stroke-dashoffset: 54;
-  }
-  42% {
-    stroke-dashoffset: 32;
-  }
-  50% {
-    stroke-dashoffset: 29;
-  }
-  60% {
-    stroke-dashoffset: 10;
-  }
-  66% {
-    stroke-dashoffset: 7;
-  }
-  72% {
-    stroke-dashoffset: 0;
-    stroke: var(--mode-discuss);
-  }
-  88% {
-    stroke: var(--mode-discuss);
-  }
-  100% {
-    stroke-dashoffset: 0;
-    stroke: var(--ink-45);
-  }
-}
-@keyframes gflash-a-settle {
-  0%,
-  88% {
-    fill: var(--mode-discuss);
-  }
-  100% {
-    fill: var(--ink-45);
-  }
-}
-@keyframes gflash-b-light {
-  0%,
-  68% {
-    fill: var(--ink-30);
-  }
-  76% {
-    fill: var(--mode-discuss);
-  }
-  88% {
-    fill: var(--mode-discuss);
-  }
-  100% {
-    fill: var(--ink-45);
-  }
-}
-@keyframes gflash-glow-ping {
-  0%,
-  70% {
-    opacity: 0;
-    transform: scale(0.6);
-    stroke: var(--mode-discuss);
-  }
-  78% {
-    opacity: 0.8;
-    transform: scale(1);
-  }
-  94% {
-    opacity: 0;
-    transform: scale(1.8);
-  }
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes gflash-note-in {
-  0%,
-  14% {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  30%,
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.gflash {
-  animation: gflash-fade 3.2s ease both;
-}
-/* The rest of the screen steps back while the moment plays. */
-.gflash-overlay {
-  background: color-mix(in oklab, var(--background) 55%, transparent);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  animation: gflash-overlay-in 3.2s ease both;
-}
-.gflash-line {
-  stroke-dasharray: 100;
-  animation: gflash-line-draw 3.2s ease both;
-}
-.gflash-a {
-  animation: gflash-a-settle 3.2s ease both;
-}
-.gflash-b {
-  animation: gflash-b-light 3.2s ease both;
-}
-.gflash-glow {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: gflash-glow-ping 3.2s ease both;
-}
-.gflash-note {
-  animation: gflash-note-in 3.2s ease both;
+.kcard-in {
+  animation: kcard-in 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
 
-/* --- Round 21/22h: streaming prose (student/Transcript.tsx StreamingBody) ----------
-   The reading focus is the NEWEST sentence: only the latest completed sentence is white
-   (it whitens in); every sentence read before it steps back to the sidebar's unselected
-   gray. Forming words blur in one at a time. When the final message settles, the whole
-   reply goes white (MessageBody renders plain foreground).
-   Reduced motion: no blur, no whiten — text just appears settled. */
-.stream-tail {
-  color: var(--muted-foreground);
-  opacity: 0.9;
-}
-/* Each forming word blurs in individually as it arrives. */
+/* --- Streaming prose (student/Transcript.tsx StreamingBody) -----------------------
+   R32 (owner): "remove the blur stuff and just have words load like any normal AI does."
+   Rounds 21/22h focused reading by graying every sentence but the newest and blurring
+   each forming word in. It read as a special effect rather than as text arriving, and it
+   meant the reply CHANGED COLOR under the student while they were still reading it.
+   Now: every word arrives in the normal foreground colour and stays there. The only
+   motion is a short opacity fade as each word lands, so text appears rather than pops.
+   Nothing recolours, nothing blurs, nothing shifts after it has been read. */
 @keyframes stream-word-in {
   from {
     opacity: 0;
-    filter: blur(6px);
   }
   to {
     opacity: 1;
-    filter: blur(0);
   }
 }
 .stream-word {
-  display: inline-block;
-  animation: stream-word-in 0.3s ease-out both;
-}
-@keyframes stream-whiten {
-  from {
-    color: var(--muted-foreground);
-    filter: blur(1.6px);
-    opacity: 0.85;
-  }
-  to {
-    color: var(--foreground);
-    filter: blur(0);
-    opacity: 1;
-  }
-}
-/* The latest completed sentence: white, freshly sharpened — this is the one being read. */
-.stream-done {
-  animation: stream-whiten 0.45s ease both;
-}
-/* Sentences already read: the sidebar's unselected gray (same muted token), eased back. */
-.stream-past {
-  color: var(--muted-foreground);
-  transition: color 0.4s ease;
+  animation: stream-word-in 0.18s ease-out both;
 }
 .prose-question {
   color: var(--accent-text);
@@ -1142,17 +939,7 @@ select {
   color: color-mix(in oklab, var(--mode-practice) 65%, var(--foreground));
 }
 @media (prefers-reduced-motion: reduce) {
-  .stream-tail {
-    filter: none;
-    opacity: 1;
-  }
   .stream-word {
     animation: none;
-  }
-  .stream-done {
-    animation: none;
-  }
-  .stream-past {
-    transition: none;
   }
 }

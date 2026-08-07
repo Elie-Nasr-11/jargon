@@ -40,14 +40,9 @@ import { LessonWelcome } from "@/student/LessonWelcome";
 import { SuggestionRows, buildReentrySuggestions } from "@/student/suggestions";
 import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
+import type { ModeOffer } from "@/features/student/chat/chatMessages";
 import { useConversation } from "@/student/useConversation";
-import {
-  DEFAULT_TURN_MODE,
-  modeAccentValue,
-  modeInkValue,
-  turnModeSpec,
-  type TurnMode,
-} from "@/student/turnModes";
+import { DEFAULT_TURN_MODE, type TurnMode } from "@/student/turnModes";
 import {
   DESTINATIONS,
   type StudentDestination,
@@ -105,8 +100,6 @@ export function StudentApp({
   // TurnMode is conversation state, not navigation state — it belongs to the chat, not the URL.
   // It persists across turns until the student changes it (the convention every LLM chat uses).
   const [turnMode, setTurnMode] = useState<TurnMode>(DEFAULT_TURN_MODE);
-  // The mentor message whose mode-offer pill has already been accepted — see modeOfferRow.
-  const [acceptedOfferOn, setAcceptedOfferOn] = useState<string | null>(null);
   const conversation = useConversation();
   // The sidebar is a docked column at lg+ and a drawer below it. Without the drawer there is no
   // navigation at all on a phone, which is where a lot of students actually are.
@@ -418,40 +411,17 @@ export function StudentApp({
       ? conversation.lesson
       : null;
 
-  // Phase A: the live mode hand-off pill — [Practice this idea] / [Talk it through] — rides
-  // the LATEST mentor message only (like the Continue pill) and renders above the composer.
-  // Tapping it flips the picker to that register and sends the deterministic accept control.
-  const lastBotMessage = [...conversation.messages]
-    .reverse()
-    .find((m) => m.role === "bot" && !m.isError);
-  const offeredOn = lastBotMessage?.id;
-  const rawModeOffer =
-    lastBotMessage && lastBotMessage.role === "bot" ? lastBotMessage.modeOffer : undefined;
-  // R31e (demo review): the `sending` guard alone lost a race — a quick second tap fired
-  // before the flag flipped, and the demo transcript carries two identical [Talk it
-  // through] turns back to back. Retiring the offer by message id on the first tap makes
-  // the pill single-use regardless of how fast it is clicked.
-  const liveModeOffer = offeredOn && acceptedOfferOn === offeredOn ? undefined : rawModeOffer;
-  const modeOfferRow = liveModeOffer ? (
-    <div className="mb-1.5 flex justify-center">
-      <button
-        type="button"
-        disabled={conversation.sending || conversation.booting}
-        onClick={() => {
-          if (offeredOn) setAcceptedOfferOn(offeredOn);
-          setTurnMode(liveModeOffer.mode);
-          conversation.sendModeOffer(liveModeOffer);
-        }}
-        className="ds-tag gap-1.5 rounded-pill px-4 py-1.5 text-body font-bold shadow-card transition-transform duration-(--dur-fast) hover:scale-[1.02] disabled:opacity-40"
-        style={{
-          ["--tag-bg" as string]: modeAccentValue(turnModeSpec(liveModeOffer.mode)),
-          ["--tag-ink" as string]: modeInkValue(turnModeSpec(liveModeOffer.mode)),
-        }}
-      >
-        {liveModeOffer.label}
-      </button>
-    </div>
-  ) : null;
+  // R32 (owner: "when the talk it through popup button comes on, make sure it is removed
+  // before the mentor begins responding if the response is not to click it"). The offer
+  // used to be a floating row above the composer, derived from the last MENTOR message —
+  // so a student who typed something else instead left it hovering there, still offering
+  // a hand-off for a conversation that had moved on. It now renders INLINE in the message
+  // that made it (see Transcript), where `isLatestBot` retires it the moment anything
+  // follows. Accepting still lives here, because it also moves the composer's picker.
+  const acceptModeOffer = (offer: ModeOffer) => {
+    setTurnMode(offer.mode);
+    conversation.sendModeOffer(offer);
+  };
 
   // Chat-flow Phase 1: the checkpoint DOCK — the panel above the message box the server's
   // prompt has been promising ("your checkpoint work is docked above the message box").
@@ -561,10 +531,9 @@ export function StudentApp({
       onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
       sessionResources={conversation.resources}
       composerLead={
-        completionRow || checkpointDock || modeOfferRow || freshLesson || staleReturn ? (
+        completionRow || checkpointDock || freshLesson || staleReturn ? (
           <>
             {completionRow}
-            {modeOfferRow}
             {checkpointDock}
             {freshLesson || staleReturn ? (
               // The tapped suggestion becomes the (first or returning) turn and sets its TurnMode.
@@ -598,6 +567,7 @@ export function StudentApp({
           messages={conversation.messages}
           disabled={conversation.sending}
           onRetry={(answer) => void conversation.retry(answer, turnMode)}
+          onAcceptOffer={acceptModeOffer}
           onChoose={(choiceId, label) => {
             // Phase A: an MCQ tap is a LESSON act (the options are the lesson's own quiz
             // step) — the server also exempts choice taps from the mode ceiling, so the

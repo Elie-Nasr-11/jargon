@@ -154,22 +154,48 @@ class TheWayBackIsARealButton(unittest.TestCase):
         self.assertIn('(offer: { mode: "practice" | "discuss" | "lesson";', CONVO)
 
 
-class ModeOfferPillIsSingleUse(unittest.TestCase):
-    """The demo transcript shows two identical [Talk it through] turns back to back."""
+class ModeOfferIsAnInlineButtonThatGoesStale(unittest.TestCase):
+    """R32 (owner): "when the talk it through popup button comes on, make sure it is
+    removed before the mentor begins responding if the response is not to click it."
 
-    def test_accepting_retires_the_offer_by_message_id(self):
-        # The `sending` flag alone lost the race against a fast second tap.
-        self.assertIn("acceptedOfferOn", APP)
-        self.assertIn("if (offeredOn) setAcceptedOfferOn(offeredOn);", APP)
-        self.assertIn(
-            "const liveModeOffer = offeredOn && acceptedOfferOn === offeredOn ? undefined : rawModeOffer;",
-            APP,
-        )
+    It used to be a floating row above the composer derived from the last MENTOR message,
+    so typing something else instead left it hovering there — still offering a hand-off
+    for a conversation that had moved on. The demo transcript also carries two identical
+    [Talk it through] turns, because a fast second tap beat the `sending` flag.
 
-    def test_the_sending_guard_is_kept_as_well(self):
-        # Belt and braces: the id check stops double-taps, this stops taps mid-stream.
-        self.assertIn("disabled={conversation.sending || conversation.booting}", APP)
+    Rendering it INSIDE the message that made it fixes both structurally: `isLatestBot`
+    stops being true the moment anything follows, so the offer retires itself.
+    """
 
+    TRANSCRIPT = (SRC / "student" / "Transcript.tsx").read_text(encoding="utf-8")
+
+    def test_the_floating_row_above_the_composer_is_gone(self):
+        for dead in ("modeOfferRow", "liveModeOffer", "acceptedOfferOn"):
+            with self.subTest(dead=dead):
+                self.assertNotIn(dead, APP)
+
+    def test_the_offer_renders_inside_its_own_message(self):
+        self.assertIn("isLatestBot && message.modeOffer && onAcceptOffer", self.TRANSCRIPT)
+        self.assertIn("onAcceptOffer(message.modeOffer!)", self.TRANSCRIPT)
+
+    def test_it_is_live_only_on_the_latest_mentor_message(self):
+        # The whole staleness guarantee rides on this gate — the same one that already
+        # retires an older question's MCQ buttons.
+        self.assertIn("const isLatestBot = message.id === lastBotId;", self.TRANSCRIPT)
+
+    def test_accepting_still_moves_the_composer_picker(self):
+        self.assertIn("const acceptModeOffer = (offer: ModeOffer) => {", APP)
+        self.assertIn("setTurnMode(offer.mode);", APP)
+        self.assertIn("conversation.sendModeOffer(offer);", APP)
+        self.assertIn("onAcceptOffer={acceptModeOffer}", APP)
+
+    def test_it_is_inert_while_a_turn_is_in_flight(self):
+        # `inert` is the transcript's existing hold/sending lock — the same one the MCQ
+        # choices use, so a tap mid-stream cannot double-send.
+        block = self.TRANSCRIPT[
+            self.TRANSCRIPT.index("isLatestBot && message.modeOffer") :
+        ][:900]
+        self.assertIn("disabled={inert}", block)
 
 if __name__ == "__main__":
     unittest.main()
