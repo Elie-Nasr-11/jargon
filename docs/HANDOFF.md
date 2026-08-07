@@ -9945,3 +9945,59 @@ Tests run: python 609 OK (was 606); tsc/eslint/build clean.
 
 Suggested next task: decide on expected_evidence.student_can, then the live checks —
 Discuss pill, inline materials, and the new knowledge card — all now actually deployable.
+
+## Claude -> Codex / Human - 2026-08-07 12:15
+
+Status: Finished (code) / FLOW PROBLEM FOUND, not yet fixed
+Task: Owner ran the anatomy lesson. Review the flow; make actions absolutely inline;
+colour action text by mode.
+
+FLOW REVIEW (session d1e625bf, camp-cn-l1, 21 turns, 11:36-11:46).
+  WORKING — and this is the first live proof of it: the Discuss fix fired correctly. At
+  11:39 the student asked to move on from Discuss; the mentor answered "In Discuss mode
+  we're here to explore ideas... you'll need to switch back to Lesson mode", carried the
+  [Back to the lesson] offer, the student took it, and 11:40 opens "Welcome back to the
+  lesson". No "tap Continue" anywhere in 21 turns. Replies are short, one idea, ending in
+  a question.
+  BROKEN — 21 TURNS, STILL STEP 1 OF 4. Every single turn carries lesson_arc.step = 1.
+  Worse, the last five turns are a flashcard grind: "Is the optic nerve sensory, motor or
+  both?" -> oculomotor -> trigeminal -> facial -> next nerve, each one a correct answer
+  affirmed and immediately followed by another of the same. That is the R31d failure in a
+  new costume: the step never closes, so the mentor fills the space by generating more
+  drill. It is not a Continue-button problem this time and it is NOT fixed by this round —
+  the step-close gate on an inquiry/discussion step needs its own look. Flagged, not
+  papered over.
+
+SHIPPED THIS ROUND.
+  1. ACTIONS ARE NOW TEXT, NOT BUTTONS. R32 put the hand-off inside the message; the owner
+     is right that it was still a button sitting beside the prose. The mentor now writes
+     [[action:lesson|back to Lesson mode]] INTO its sentence and it renders as clickable
+     text there. MessageBody splits on the marker and recurses, so the prose either side
+     keeps flowing on the same line. Live only on the latest mentor turn; everywhere else
+     (and on any invalid marker) the label degrades to plain words, so scrolling back never
+     leaves half a sentence missing. The chip survives ONLY as a fallback for a turn where
+     the server attached an offer the mentor did not word inline — without it a server-set
+     hand-off would have no way to be taken.
+     Server-side: unknown register, a second action in one reply, or an empty label is
+     stripped back to prose; the first valid action seeds envelope.mode_offer, which is
+     what authorizes the control turn.
+  2. ACTION TEXT WEARS THE MODE'S HUE. .prose-question now reads --mode-accent, already set
+     per section wrapper — blue in Lesson, green in Practice, yellow in Discuss. An inline
+     action instead wears the hue of the mode it POINTS AT (--action-accent), so clicking
+     Practice looks like Practice before it happens. Both mix 60/62% toward ink using the
+     same recipe .mode-eyebrow already uses, because raw --mode-discuss yellow as text is
+     near-invisible on the light ladder.
+
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/Transcript.tsx;
+frontend/src/styles.css; tests/test_r31e_discuss_deadend.py (38 tests in the module).
+
+Tests run: python 617 OK (was 609); tsc/eslint/build clean; edge parse clean.
+
+Remaining concerns:
+  - THE STEP NEVER CLOSES. See the flow review. Highest-value next task by a distance:
+    four steps authored, twenty-one turns spent on the first, and the mentor's fallback
+    behaviour is an endless quiz. A student cannot finish this lesson.
+  - Inline actions are unproven live — the mentor has to actually choose to write the
+    marker. Same caveat as every prompt-layer change here.
+
+Suggested next task: the step-close gate on discussion/inquiry steps.

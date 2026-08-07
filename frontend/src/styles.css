@@ -930,9 +930,39 @@ select {
 .stream-word {
   animation: stream-word-in 0.18s ease-out both;
 }
+/* R32 (owner): action text wears the MODE's hue — blue in Lesson, green in Practice,
+   yellow in Discuss — so the colour of what the mentor is asking you to do always matches
+   the register you are in. Mixed 60% toward ink using the same recipe as .mode-eyebrow,
+   which exists precisely so the yellow stays readable on the light ladder too; raw
+   --mode-discuss as text would be near-invisible on white. Falls back to the old accent
+   when no mode wrapper is in scope (an unlabelled historical section). */
 .prose-question {
-  color: var(--accent-text);
+  color: color-mix(in oklab, var(--mode-accent, var(--accent-text)) 60%, var(--foreground));
   font-weight: 500;
+}
+
+/* An inline action: text the student can click that switches register. Coloured by the
+   mode it points AT, not the one they are in — clicking "Practice" should look like
+   Practice before it happens. Reads as a link in the sentence, not a button beside it. */
+.prose-action {
+  color: color-mix(in oklab, var(--action-accent, var(--accent-text)) 62%, var(--foreground));
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in oklab, var(--action-accent, var(--accent-text)) 45%, transparent);
+  border-radius: 3px;
+  transition:
+    text-decoration-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+.prose-action:hover:not(:disabled) {
+  text-decoration-color: currentColor;
+  background-color: color-mix(in oklab, var(--action-accent, var(--accent-text)) 10%, transparent);
+}
+.prose-action:disabled {
+  opacity: 0.45;
+  text-decoration-style: dotted;
 }
 /* Inline code carries its own hue — code should read as code at a glance. */
 .inline-code-hue {

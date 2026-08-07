@@ -447,19 +447,60 @@ const FIGURE_MARKER_RE = /\[\[figure:([^\]\s]+)\]\]/g;
 // marker never reaches a student.
 const MATERIAL_MARKER_RE = /\[\[material:([^\]\s]+)\]\]/g;
 
+// R32 (owner: "make it absolutely inline, like part of the text"). A hand-off used to be a
+// button UNDER the reply; now the mentor writes it INTO the sentence — "we can
+// [[action:practice|drill these until they stick]]" — and it renders as clickable text
+// right there, coloured by the mode it points AT (see .prose-action). Split so the label
+// may contain spaces; the mode is validated against the picker before anything renders,
+// so an invented register is dropped rather than shown as a dead link.
+const ACTION_MARKER_RE = /\[\[action:(lesson|practice|discuss)\|([^\]]{1,60})\]\]/g;
+
 function MessageBody({
   text,
   markdown,
   vocab,
   figures,
   renderMaterial,
+  renderAction,
 }: {
   text: string;
   markdown?: boolean;
   vocab?: VocabPass;
   figures?: LessonFigure[];
   renderMaterial?: (id: string) => ReactNode;
+  renderAction?: (mode: string, label: string) => ReactNode;
 }) {
+  // Actions split FIRST and recurse: an action lives mid-sentence, so the text either
+  // side must keep flowing as prose (same paragraph, same line) rather than becoming
+  // blocks. Anything renderAction declines — an older message, a disabled turn — falls
+  // back to the plain label, so the sentence still reads as a sentence.
+  if (ACTION_MARKER_RE.test(text)) {
+    ACTION_MARKER_RE.lastIndex = 0;
+    const parts = text.split(ACTION_MARKER_RE);
+    return (
+      <>
+        {parts.map((part, i) => {
+          // split() with two capture groups yields [prose, mode, label, prose, ...].
+          const slot = i % 3;
+          if (slot === 1) return null; // the mode, consumed with its label below
+          if (slot === 2) {
+            const mode = parts[i - 1];
+            return <Fragment key={`act-${i}`}>{renderAction?.(mode, part) ?? part}</Fragment>;
+          }
+          return part ? (
+            <MessageBody
+              key={`txt-${i}`}
+              text={part}
+              markdown={markdown}
+              vocab={vocab}
+              figures={figures}
+              renderMaterial={renderMaterial}
+            />
+          ) : null;
+        })}
+      </>
+    );
+  }
   // Materials first: they are the coarsest split, and a handed-over reading is its own
   // beat in the reply. The prose on either side recurses through the normal path.
   if (MATERIAL_MARKER_RE.test(text)) {
@@ -931,6 +972,34 @@ export function Transcript({
             const trayResources = (message.resources ?? []).filter(
               (resource) => !inlinedMaterials.has(String(resource.id)),
             );
+            // An inline action is live only on the LATEST mentor turn, like every other
+            // control here; on older messages the label still reads as plain prose so the
+            // sentence keeps its meaning when scrolled back to.
+            const hasInlineAction = ACTION_MARKER_RE.test(message.text);
+            ACTION_MARKER_RE.lastIndex = 0;
+            const renderAction =
+              isLatestBot && onAcceptOffer
+                ? (mode: string, label: string) => {
+                    const spec = turnModeSpec(mode as ModeOffer["mode"]);
+                    return (
+                      <button
+                        type="button"
+                        disabled={inert}
+                        onClick={() =>
+                          onAcceptOffer({
+                            mode: mode as ModeOffer["mode"],
+                            topic: message.modeOffer?.topic ?? label,
+                            label,
+                          })
+                        }
+                        className="prose-action"
+                        style={{ ["--action-accent" as string]: modeAccentValue(spec) }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  }
+                : undefined;
             return (
               <MentorRise key={message.id} animate={isNew}>
                 <div className="hvp flex flex-col gap-2">
@@ -940,6 +1009,7 @@ export function Transcript({
                       markdown={!message.isError}
                       figures={message.figures}
                       renderMaterial={renderMaterial}
+                      renderAction={renderAction}
                       vocab={
                         vocabMatcher && !message.isError
                           ? { ...vocabMatcher, seen: new Set<string>() }
@@ -992,14 +1062,16 @@ export function Transcript({
                       ))}
                     </div>
                   ) : null}
-                  {/* R32 (owner): the hand-off offer is an INLINE button in the message
-                      that made it, not a floating row above the composer. Two reasons.
-                      It reads as part of what the mentor just said — "or we could talk it
-                      through" with the button right there — and it goes stale correctly
-                      for free: `isLatestBot` stops being true the moment the student
-                      replies with anything else, so the offer disappears as the next turn
-                      starts instead of hovering over a conversation that moved on. */}
-                  {isLatestBot && message.modeOffer && onAcceptOffer ? (
+                  {/* R32b (owner: "the inline buttons didn't work — make it absolutely
+                      inline, like part of the text"). The hand-off is no longer a control
+                      BESIDE the reply at all: the mentor writes it into its own sentence
+                      as [[action:mode|label]] and it renders as clickable text right
+                      there, in the hue of the mode it points at. The fallback chip below
+                      covers a turn where the server attached an offer but the mentor did
+                      not word it inline — without it, a server-set hand-off would have no
+                      way to be taken. Both retire the moment anything follows this
+                      message, since `isLatestBot` gates them. */}
+                  {isLatestBot && message.modeOffer && onAcceptOffer && !hasInlineAction ? (
                     <div className="flex flex-wrap gap-2 pl-1">
                       <button
                         type="button"

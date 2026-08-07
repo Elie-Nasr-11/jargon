@@ -321,6 +321,13 @@ pattern showing up across subjects). Set "new_idea" to { "title": "...", "one_li
 "related_idea_keys": ["<key>"] } ONLY when the student themselves pushed into a real concept beyond every
 listed idea — their thinking growing the map, not you teaching ahead. Both stay null on most turns; never
 invent keys not listed in knowledge.
+INLINE ACTIONS: when you offer to switch register, write it INTO your sentence as
+[[action:<lesson|practice|discuss>|<the words the student clicks>]] — "we could
+[[action:practice|drill these until they stick]]" or "switch [[action:lesson|back to the lesson]]
+when you're ready". It renders as clickable text right there, in that mode's colour. Rules: at most
+ONE per reply; the label is the natural continuation of your sentence, never a button name shouted
+mid-prose ("[[action:practice|Practice This Idea]]" is wrong); and never claim a control exists that
+you have not written this way.
 Set "mode_offer" to { "mode": "practice" | "discuss", "topic": "<what to work on>", "label": "<pill text,
 2-4 words like 'Practice this idea'>" } ONLY when a content beat just wrapped and one more rep (practice)
 or an open conversation (discuss) would genuinely serve THIS student on THIS topic. When you set it, the
@@ -3462,7 +3469,7 @@ function turnDirective(args: {
       return {
         key: "advance_needs_lesson_mode",
         text:
-          `The student just asked to move on, but they are in ${studentMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${studentMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. A [Back to the lesson] button is attached to your reply — point at THAT button (it is really there), and do not name any other button.`,
+          `The student just asked to move on, but they are in ${studentMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${studentMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. Offer the way back INLINE, in your own sentence, as [[action:lesson|back to Lesson mode]] (or your own natural wording inside those brackets) — it renders as clickable text. Do not name any other control.`,
       };
     }
     if (routedKind === "question" && !quizActive && stepMode !== "inquiry") {
@@ -7043,6 +7050,39 @@ async function handleTypedRequest(
       if (knowledge.idea_events.length) envelope.idea_events = knowledge.idea_events;
     } catch {
       // Knowledge is enrichment — a processor failure must never cost the turn.
+    }
+    // R32b: an [[action:mode|label]] the mentor wrote inline. The client renders it as
+    // clickable text, so the SERVER decides what is legal here: an unknown register, a
+    // second action in one reply, or an empty label is stripped back to plain prose
+    // rather than shown as a dead link. Accepting one also needs a mode_offer on the
+    // envelope — that is what authorizes the control turn — so the first valid action
+    // seeds one when the model did not set it itself.
+    {
+      const ACTION_RE = /\[\[action:([a-z]+)\|([^\]]*)\]\]/g;
+      const markers = [...String(envelope.reply || "").matchAll(ACTION_RE)];
+      if (markers.length) {
+        let kept: { mode: string; label: string } | null = null;
+        envelope.reply = String(envelope.reply || "").replace(
+          ACTION_RE,
+          (_whole, mode: string, label: string) => {
+            const clean = String(label || "").trim();
+            const legal =
+              (mode === "lesson" || mode === "practice" || mode === "discuss") &&
+              clean.length > 0 &&
+              clean.length <= 60;
+            if (!legal || kept) return clean; // keep the words, drop the control
+            kept = { mode, label: clean };
+            return `[[action:${mode}|${clean}]]`;
+          },
+        );
+        if (kept && !envelope.mode_offer) {
+          envelope.mode_offer = {
+            mode: kept.mode as "practice" | "discuss" | "lesson",
+            topic: kept.label,
+            label: kept.label,
+          };
+        }
+      }
     }
     // R31f: resolve [[material:id]] markers — the same contract as figures, one rung up.
     // The demo showed a student asking for the readings and being handed a PROSE LIST

@@ -301,3 +301,70 @@ class SetupFailuresAreRecorded(unittest.TestCase):
         # showing a stack trace to a fourteen-year-old.
         self.assertIn("STUDENT_SAFE_ERROR", CHAT)
         self.assertIn("isStudentFacingMessage(message)", CHAT)
+
+
+class InlineActionsAreTextNotButtons(unittest.TestCase):
+    """R32b (owner): "the inline buttons didn't work. Make it absolutely inline, like part
+    of the text" — plus mode-coloured action text.
+
+    R32 moved the hand-off from a floating row into the message. The owner's point is that
+    it was still a BUTTON sitting beside the prose. Now the mentor writes it into its own
+    sentence and it renders as clickable text there, in the hue of the mode it points at.
+    """
+
+    TRANSCRIPT = (SRC / "student" / "Transcript.tsx").read_text(encoding="utf-8")
+    STYLES = (SRC / "styles.css").read_text(encoding="utf-8")
+
+    def test_the_mentor_writes_the_action_into_its_sentence(self):
+        self.assertIn("INLINE ACTIONS", CHAT)
+        self.assertIn("[[action:<lesson|practice|discuss>|<the words the student clicks>]]", CHAT)
+        # The label must continue the sentence, not shout a button name mid-prose.
+        self.assertIn("never a button name shouted", CHAT)
+
+    def test_the_server_decides_which_actions_are_legal(self):
+        block = CHAT[CHAT.index("R32b: an [[action:mode|label]]") :][:2000]
+        # Unknown register, a second action, or an empty label degrade to PLAIN PROSE —
+        # the words survive, the control does not.
+        self.assertIn('mode === "lesson" || mode === "practice" || mode === "discuss"', block)
+        self.assertIn("if (!legal || kept) return clean;", block)
+        # Accepting needs a mode_offer to authorize the control turn.
+        self.assertIn("if (kept && !envelope.mode_offer)", block)
+
+    def test_the_client_renders_it_inline_and_recurses_around_it(self):
+        # An action lives mid-sentence: the prose either side must keep flowing, which is
+        # why MessageBody recurses rather than emitting blocks.
+        self.assertIn("const ACTION_MARKER_RE =", self.TRANSCRIPT)
+        self.assertIn("if (ACTION_MARKER_RE.test(text)) {", self.TRANSCRIPT)
+        self.assertIn('className="prose-action"', self.TRANSCRIPT)
+        self.assertIn("renderAction?.(mode, part) ?? part", self.TRANSCRIPT)
+
+    def test_an_older_or_invalid_action_still_reads_as_a_sentence(self):
+        # Live only on the latest mentor turn; everywhere else the label is plain words,
+        # so scrolling back does not leave half a sentence missing.
+        self.assertIn("const hasInlineAction = ACTION_MARKER_RE.test(message.text);", self.TRANSCRIPT)
+        self.assertIn("isLatestBot && onAcceptOffer", self.TRANSCRIPT)
+
+    def test_the_chip_only_covers_a_turn_with_no_inline_wording(self):
+        # Without this fallback a server-set hand-off the mentor did not word inline
+        # would have no way to be taken at all.
+        self.assertIn("&& !hasInlineAction ?", self.TRANSCRIPT)
+
+    def test_action_text_wears_the_current_modes_hue(self):
+        # Blue in Lesson, green in Practice, yellow in Discuss — --mode-accent is already
+        # set per section wrapper, so the question/action prose just reads it.
+        self.assertIn(
+            "color: color-mix(in oklab, var(--mode-accent, var(--accent-text)) 60%, var(--foreground));",
+            self.STYLES,
+        )
+
+    def test_an_action_wears_the_hue_of_the_mode_it_points_at(self):
+        # "clicking Practice should look like Practice before it happens".
+        self.assertIn("--action-accent", self.STYLES)
+        self.assertIn('["--action-accent" as string]: modeAccentValue(spec)', self.TRANSCRIPT)
+
+    def test_yellow_stays_readable_on_the_light_ladder(self):
+        # Raw --mode-discuss as text is near-invisible on white; both rules use the same
+        # 60/62% mix toward ink that .mode-eyebrow already relies on for exactly this.
+        block = self.STYLES[self.STYLES.index(".prose-action {") :][:400]
+        self.assertIn("color-mix(in oklab, var(--action-accent", block)
+        self.assertIn("var(--foreground)", block)
