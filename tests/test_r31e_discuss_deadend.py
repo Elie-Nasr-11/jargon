@@ -368,3 +368,18 @@ class InlineActionsAreTextNotButtons(unittest.TestCase):
         block = self.STYLES[self.STYLES.index(".prose-action {") :][:400]
         self.assertIn("color-mix(in oklab, var(--action-accent", block)
         self.assertIn("var(--foreground)", block)
+
+
+class BoldReadsAsEmphasis(unittest.TestCase):
+    """R32b (owner): "make bold text bolder"."""
+
+    TRANSCRIPT = (SRC / "student" / "Transcript.tsx").read_text(encoding="utf-8")
+    STYLES = (SRC / "styles.css").read_text(encoding="utf-8")
+
+    def test_inline_bold_is_a_full_step_above_body(self):
+        # Body rests at 500 by design ("never 400-thin"), so semibold 600 was one step up
+        # and barely registered. 700 restores a real 200-point contrast.
+        self.assertIn("font-weight: 500; /* the system's resting weight", self.STYLES)
+        block = self.TRANSCRIPT[self.TRANSCRIPT.index("const bold = part.match(") :][:600]
+        self.assertIn('<b key={i} className="font-bold">', block)
+        self.assertNotIn('className="font-semibold"', block)

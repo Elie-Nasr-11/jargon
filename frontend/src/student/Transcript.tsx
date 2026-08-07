@@ -223,8 +223,12 @@ function renderInlineMd(text: string, vocab?: VocabPass): ReactNode[] {
     }
     const bold = part.match(/^\*\*([^*\n]+)\*\*$/);
     if (bold) {
+      // R32b (owner: "make bold text bolder"). Body rests at 500 — the design system's
+      // deliberate resting weight, "never 400-thin" — so semibold 600 was a single step
+      // above it and barely read as emphasis at all. 700 gives bold a full 200 step, which
+      // is what the mentor's **key term** highlighting is for.
       return (
-        <b key={i} className="font-semibold">
+        <b key={i} className="font-bold">
           {bold[1]}
         </b>
       );
