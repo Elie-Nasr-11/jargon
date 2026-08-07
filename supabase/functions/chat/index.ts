@@ -95,6 +95,14 @@ CONVERSATION CRAFT — every turn:
 - Shape on CONVERSATION turns (questions, tangents, discussion — the directive names these too): reply
   like a person, not a lesson plan. Multiple beats are fine; answer fully first; you do NOT need to end
   with a question or next action every time — the step's own task is still on screen.
+- NEVER OPEN WITH PRAISE YOU HAVE NOT CHECKED. Decide whether the answer is right BEFORE you write
+  the first word, and let the opener carry that verdict. A live transcript has the student answer
+  "both" for the vestibulocochlear nerve — which is purely sensory — and the reply opens "Exactly
+  right!" and then states "is indeed sensory": praise and correction contradicting each other inside
+  one sentence, which teaches the student nothing and quietly tells them a wrong answer was right.
+  If they are WRONG, say so first and plainly ("Not quite — it's sensory only"), then give the
+  correction. If they are RIGHT, affirm and add. Never use a correcting word ("actually", "in fact")
+  on an answer that was correct — the same transcript does that on the very next turn.
 - THERE IS NO CONTINUE BUTTON. The student moves forward BY REPLYING TO YOU. Never point at a button
   unless the turn directive tells you one is attached to this reply (a hand-off pill sometimes is);
   if it doesn't say so, there is nothing on screen to tap.
@@ -3302,6 +3310,9 @@ function turnDirective(args: {
   // R31e: the student asked to move on, but their register can't advance a lesson. The
   // gate correctly said no; this makes sure the REPLY doesn't pretend they said nothing.
   advanceAskedButCeilinged: boolean;
+  // R32c: the student ATTEMPTED the work, in a register that cannot grade it. Same shape:
+  // the gate is right to refuse, the reply must not misread what they did.
+  attemptCeilinged: boolean;
   // Phase A: non-null when THIS turn is the student tapping a mode hand-off pill.
   modeOfferAccept: { mode: "practice" | "discuss" | "lesson"; topic: string } | null;
   // Phase C: the brain's precomputed teaching hints (code-derived, never model vibes).
@@ -3337,6 +3348,7 @@ function turnDirective(args: {
     preemptedNote,
     studentMode,
     advanceAskedButCeilinged,
+    attemptCeilinged,
     modeOfferAccept,
     brainHints,
   } = args;
@@ -3470,6 +3482,16 @@ function turnDirective(args: {
         key: "advance_needs_lesson_mode",
         text:
           `The student just asked to move on, but they are in ${studentMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${studentMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. Offer the way back INLINE, in your own sentence, as [[action:lesson|back to Lesson mode]] (or your own natural wording inside those brackets) — it renders as clickable text. Do not name any other control.`,
+      };
+    }
+    // R32c: they answered; this register just cannot mark it. Respond to the ANSWER.
+    // Without this the question_answer branch below claimed they had asked something,
+    // which is how five correct drill answers turned into five more drill questions.
+    if (attemptCeilinged && !quizActive) {
+      return {
+        key: "attempt_not_graded_here",
+        text:
+          `The student ANSWERED — they did not ask you anything. Respond to what they actually said: confirm it or correct it plainly, then say the one thing worth adding. They are in ${studentMode === "practice" ? "Practice" : "Discuss"} mode, so this turn does not grade and does not move the lesson step; never imply you have marked it. Do NOT chain into another question of the same shape — if they have now answered several in a row, say what the run shows about what they know and ask what they want next.`,
       };
     }
     if (routedKind === "question" && !quizActive && stepMode !== "inquiry") {
@@ -6191,6 +6213,13 @@ async function handleTypedRequest(
     // can answer it honestly and offer the way back.
     const advanceAskedButCeilinged =
       routedKindRaw === "continue_signal" && routedKind !== "continue_signal";
+    // R32c (anatomy session): the same swallowing, one kind over. In Practice the student
+    // answered five drill questions and every one was lifted answer_attempt -> question,
+    // so the directive below told the mentor "the student asked YOU a question — answer
+    // it fully". It answered, asked another, and the drill ran until the student left the
+    // mode. Their ANSWER was being read back to them as a QUESTION.
+    const attemptCeilinged =
+      routedKindRaw === "answer_attempt" && routedKind !== "answer_attempt";
     // Tuning telemetry: a router-question turn whose grader still said "demonstrated" is
     // the disagreement to watch before leaning harder on routing. It rides the envelope
     // (persisted whole in learning_turns.payload), so it's queryable with zero schema.
@@ -6388,6 +6417,7 @@ async function handleTypedRequest(
       preemptedNote,
       studentMode: declaredMode,
       advanceAskedButCeilinged,
+      attemptCeilinged,
       brainHints,
       modeOfferAccept:
         controlType === "mode_offer" &&

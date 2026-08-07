@@ -10001,3 +10001,52 @@ Remaining concerns:
     marker. Same caveat as every prompt-layer change here.
 
 Suggested next task: the step-close gate on discussion/inquiry steps.
+
+## Claude -> Codex / Human - 2026-08-07 13:05
+
+Status: Finished (2 of the 3 queued items; the third still needs an owner decision)
+Task: "go for it" on the queue from the anatomy review.
+
+1. WHY THE DRILL NEVER ENDED — found, and it is the same fault as R31e one kind over.
+   In Practice the ceiling lifts answer_attempt -> question. Downstream, the question_answer
+   directive then told the mentor "The student asked YOU a question. Answer it fully and
+   directly FIRST". The student's ANSWER was being read back to them as a QUESTION, so the
+   mentor answered it and asked another — five correct drill answers producing five more
+   drill questions, until the student left the mode. R31e fixed exactly this for
+   continue_signal and I did not check the neighbouring kind.
+   FIXED: attemptCeilinged mirrors advanceAskedButCeilinged, with its own directive placed
+   AHEAD of question_answer: respond to the ANSWER, confirm or correct it plainly, say this
+   register does not grade, and explicitly "Do NOT chain into another question of the same
+   shape — if they have now answered several in a row, say what the run shows and ask what
+   they want next." The CEILING IS UNCHANGED: Practice still cannot close a gate. This
+   changes the reply, not the gate.
+
+2. PRAISE THAT CONTRADICTED ITSELF. Same session, 12:05, Lesson mode, a GRADED turn: the
+   student answered "both" for the vestibulocochlear nerve (purely sensory) and the reply
+   opened "Exactly right!" then stated "is indeed sensory" — affirmation and correction
+   inside one sentence, quietly telling a student a wrong answer was right. The very next
+   turn did the inverse: a CORRECT "both" for glossopharyngeal got "actually both...", a
+   correcting word on a right answer.
+   FIXED in the system prompt: decide the verdict BEFORE the first word and let the opener
+   carry it; wrong gets "Not quite —" and the correction; right gets affirmation and an
+   addition; never "actually"/"in fact" on a correct answer. The rule cites the real
+   transcript so it is not abstract.
+
+3. STILL OPEN — PRACTICE GRADES NOTHING. Unchanged and deliberately so: student_idea_mastery
+   has zero rows for any cranial-nerve idea despite ~8 correct answers. Grading and
+   advancing are two gates that applyModeCeiling collapses into one. Splitting them (grade +
+   write mastery, still never advance) is the right shape, but it changes a deliberate
+   contract and is the owner's call. Fix 1 above makes Practice BEHAVE correctly meanwhile;
+   it does not make it count.
+
+Files changed: supabase/functions/chat/index.ts; tests/test_r31e_discuss_deadend.py.
+Tests run: python 626 OK (was 618); edge parse clean.
+
+Remaining concerns:
+  - Both fixes are prompt/directive-layer, which is where a change can pass every static
+    check and still not fire. Unproven until a real Practice run.
+  - Step 1 took 21 turns but DID close (step_state now on camp-cn-l1-s2). The gate works;
+    what was broken was the mentor never asking for the readiness signal, because the
+    misread directive kept it drilling. Fix 1 should also address that — watch it.
+
+Suggested next task: a live Practice run to confirm both, then the Practice grading decision.

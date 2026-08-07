@@ -383,3 +383,60 @@ class BoldReadsAsEmphasis(unittest.TestCase):
         block = self.TRANSCRIPT[self.TRANSCRIPT.index("const bold = part.match(") :][:600]
         self.assertIn('<b key={i} className="font-bold">', block)
         self.assertNotIn('className="font-semibold"', block)
+
+
+class AnAttemptIsNotAQuestion(unittest.TestCase):
+    """R32c (anatomy session): five correct drill answers produced five more drill questions.
+
+    In Practice the ceiling lifts answer_attempt -> question, and the question_answer
+    directive then told the mentor "the student asked YOU a question — answer it fully".
+    Their ANSWER was read back to them as a QUESTION, so the mentor answered and asked
+    another, and the drill ran until the student left the mode. Same swallowing as the
+    continue_signal case, one routed kind over.
+    """
+
+    def test_the_relabelled_attempt_is_remembered(self):
+        self.assertIn("const attemptCeilinged =", CHAT)
+        self.assertIn(
+            'routedKindRaw === "answer_attempt" && routedKind !== "answer_attempt"', CHAT
+        )
+
+    def test_it_reaches_the_directive_builder(self):
+        # Declared, destructured, passed — all three, or it type-checks and does nothing.
+        self.assertIn("  attemptCeilinged: boolean;", CHAT)
+        self.assertEqual(CHAT.count("attemptCeilinged"), 5)
+
+    def test_it_wins_before_the_branch_that_misread_it(self):
+        attempt = CHAT.index("if (attemptCeilinged && !quizActive)")
+        question = CHAT.index('if (routedKind === "question" && !quizActive')
+        self.assertLess(attempt, question)
+        self.assertIn("attempt_not_graded_here", CHAT)
+
+    def test_the_directive_answers_the_answer_and_breaks_the_chain(self):
+        block = CHAT[CHAT.index("attempt_not_graded_here") :][:900]
+        self.assertIn("they did not ask you anything", block)
+        self.assertIn("does not grade", block)
+        # The loop itself: one more question of the same shape, forever.
+        self.assertIn("Do NOT chain into another question of the same shape", block)
+
+    def test_the_ceiling_is_still_not_weakened(self):
+        # Practice/Discuss still cannot close a gate. This changes the REPLY, not the gate.
+        self.assertIn(
+            'if (kind === null || kind === "answer_attempt" || kind === "continue_signal") {',
+            CHAT,
+        )
+
+
+class PraiseMatchesTheAnswer(unittest.TestCase):
+    """The same session: "Exactly right!" to a wrong answer, corrected in that sentence."""
+
+    def test_the_prompt_forbids_unchecked_praise(self):
+        self.assertIn("NEVER OPEN WITH PRAISE YOU HAVE NOT CHECKED", CHAT)
+        self.assertIn("Not quite", CHAT)
+
+    def test_it_cites_the_real_failure_so_the_rule_is_not_abstract(self):
+        self.assertIn("vestibulocochlear", CHAT)
+
+    def test_a_correct_answer_is_not_corrected(self):
+        # The very next turn: a right answer got "actually", which reads as a correction.
+        self.assertIn('Never use a correcting word ("actually", "in fact")', CHAT)
