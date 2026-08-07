@@ -195,7 +195,21 @@ export function MediaStageViewer({
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-code-background">
+      {/* R32d: an EMBED manages its own scrolling — a PDF viewer and a YouTube player both
+          do — so wrapping them in a scroll container gives two nested scrollers fighting
+          over the same wheel events, which is most of what "the PDF side tab is a bit
+          buggy" feels like. Embeds and plain media get a fixed frame; only the artifact /
+          fallback content, which is real page flow, keeps the scroller. h-full on the
+          iframe also resolves more reliably against a non-scrolling definite-height box. */}
+      <div
+        className={`min-h-0 flex-1 bg-code-background ${
+          ["pdf", "youtube", "video", "audio", "image"].includes(resource.resource_type) &&
+          !failed &&
+          url
+            ? "overflow-hidden"
+            : "overflow-y-auto"
+        }`}
+      >
         {resource.resource_type === "artifact" ? (
           <div className="mx-auto w-full max-w-4xl p-4">
             {artifact?.kind === "html_sim" ? (

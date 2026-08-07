@@ -2825,6 +2825,47 @@ function isQuestionShaped(text: string): boolean {
   );
 }
 
+// R31g (demo review): the one-ask rule shipped as prompt + directive text only, and the
+// first live run broke it — a content-step wrap closed with "Does that make sense? Are you
+// ready to move on ...?". The filler check is the damaging half: the student now has two
+// things to answer, and the "yes" that comes back could mean either "I follow" or "move
+// on" — which is exactly the readiness signal CONTINUE_SIGNAL_RE reads to advance the
+// lesson. So the server strips a filler check when a REAL question also stands in the
+// reply. A reply whose only question IS the check keeps it untouched: then it is the ask.
+const FILLER_ASK_PATTERNS: RegExp[] = [
+  // "Does that make sense?", "Do these all sound good?", "Would that work for you?"
+  /(?:(?<=^)|(?<=[.!?\n]))[ \t]*(?:and |so |but )?(?:does|do|did|would|will)\s+(?:that|this|it|these|those|they)\s+(?:all\s+)?(?:make sense|sound good|seem clear|look right|work for you|help)\s*\?/gi,
+  // Bare tags: "Make sense?", "Got it?", "Any questions?", "All good?"
+  /(?:(?<=^)|(?<=[.!?\n]))[ \t]*(?:and |so |but )?(?:make sense|makes sense|sound good|got it|any questions|all good|clear so far|okay|ok)\s*\?/gi,
+  // "Are you with me?", "Are you following so far?"
+  /(?:(?<=^)|(?<=[.!?\n]))[ \t]*(?:and |so |but )?are you\s+(?:with me|following|clear)(?:\s+so far)?\s*\?/gi,
+  // "Is that clear?", "Is this making sense so far?"
+  /(?:(?<=^)|(?<=[.!?\n]))[ \t]*(?:and |so |but )?is\s+(?:that|this)\s+(?:clear|making sense)(?:\s+so far)?\s*\?/gi,
+];
+
+function countQuestions(text: string): number {
+  return (String(text || "").match(/\?/g) || []).length;
+}
+
+// Strip filler comprehension checks, but NEVER the reply's last remaining question — a
+// guard that empties the ask would leave the student with no way onward, which is the
+// dead end R31e set out to fix in the first place.
+function stripFillerAsks(reply: string): string {
+  let out = String(reply || "");
+  if (countQuestions(out) < 2) return out;
+  for (const pattern of FILLER_ASK_PATTERNS) {
+    if (countQuestions(out) < 2) break;
+    const next = out.replace(pattern, "");
+    if (countQuestions(next) >= 1) out = next;
+  }
+  // Tidy the seam the removal left: doubled spaces mid-line, and space before punctuation.
+  return out
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+([.,!?;:])/g, "$1")
+    .replace(/[ \t]+$/gm, "")
+    .trim();
+}
+
 type StepRequirements = {
   code: boolean;
   quiz: boolean;
@@ -7193,6 +7234,9 @@ async function handleTypedRequest(
         if (shown.length) envelope.figures = shown;
       }
     }
+    // R31g: last word on the reply's prose — enforce EXACTLY ONE ASK. Runs after the
+    // marker guards so it reasons about the text the student will actually read.
+    envelope.reply = stripFillerAsks(String(envelope.reply || ""));
     // Phase B: a GRADED turn writes idea-level mastery evidence (background,
     // best-effort). pass/fail from whichever grader ran; an echo-rejected answer is
     // neutral (counts the attempt, moves no score); ungraded conversation writes nothing.

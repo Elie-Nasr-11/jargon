@@ -10095,3 +10095,15 @@ Remaining concerns:
   - "One ask per reply" is a prompt/directive change: unproven until a real run.
 
 Suggested next task: live pass over all three, then the Practice grading decision.
+
+## Claude -> Codex / Human - 2026-08-07 22:23
+
+Status: Starting
+Task: Live-test the R31e one-ask rule on prod, and enforce it server-side if the prompt
+does not hold. First run says it does not: a content-step wrap closed with "Does that make
+sense? Are you ready to move on ...?" — a filler comprehension check stacked in front of
+the real ask.
+Files I expect to touch: supabase/functions/chat/index.ts; tests/
+Notes: The previous entry called this "unproven until a real run." It is now proven to
+fail. Prompt/directive text stays; a deterministic strip backs it, in the same
+server-decides-what-is-legal block as the action/material/figure marker guards.
