@@ -10050,3 +10050,48 @@ Remaining concerns:
     misread directive kept it drilling. Fix 1 should also address that — watch it.
 
 Suggested next task: a live Practice run to confirm both, then the Practice grading decision.
+
+## Claude -> Codex / Human - 2026-08-07 13:35
+
+Status: Finished
+Task: PDF side tab buggy; clicking an image opens a new tab; remove double prompts.
+
+1. THE PDF PANEL. Root cause found: an <iframe> does NOT fire onError when a browser or
+   extension refuses to frame a PDF — it simply renders nothing. So the R30 "it didn't open
+   inside the app, here's a direct link" fallback was effectively UNREACHABLE, and the panel
+   sat blank with no explanation and no way out. That is the bugginess. Added a load
+   watchdog: onLoad sets `loaded`, and 12s of silence flips `failed` and shows the existing
+   fallback. Guarded to embeds only (pdf/youtube) — video/audio/image do fire onError, so a
+   timeout there would be a false alarm. 12s is deliberately generous: a large scanned PDF
+   on a slow connection is not a failure, and a premature "it didn't open" is worse than
+   waiting.
+
+2. IMAGES OPENED A NEW TAB. SourceFigure wrapped the image in <a target="_blank">, so
+   clicking a picture the lesson was ABOUT threw the student out of the lesson. It now opens
+   in the media panel beside the conversation. The stage already rendered "image" — the
+   panel was there the whole time and the figure just never used it; a figure is adapted to
+   a LessonChatResource at the call site. Still degrades to the plain link when no stage is
+   in scope (the teacher studio renders this component outside the student shell).
+
+3. DOUBLE PROMPTS. Two layers, because the prompt alone would not have held:
+   - SYSTEM_PROMPT gains "EXACTLY ONE ASK PER REPLY" — not two questions, not a question
+     plus an offer, not an "or" hiding a second question. It names the two cases so the
+     model knows WHICH to keep: teaching -> ask the content question and stop; wrapping ->
+     ask only whether to move on. An [[action:...]] offer counts as the ask.
+   - The DIRECTIVES were stacking asks independently of the prompt: the figure line said
+     "then ask what they notice" while the brevity close said "close by asking for something
+     specific" — two asks from two directives in one reply. Both now say the ask they add IS
+     the reply's only one. content_discuss likewise.
+
+Files changed: frontend/src/student/Transcript.tsx; frontend/src/student/MediaStage.tsx;
+supabase/functions/chat/index.ts; tests/test_r31e_discuss_deadend.py.
+
+Tests run: python 634 OK (was 626); tsc/eslint/build clean; edge parse clean.
+
+Remaining concerns:
+  - The PDF watchdog is reasoned from how iframes behave, not observed in a browser here.
+    If the panel is still blank after 12s with no fallback, the failure is upstream in
+    resolveResourceUrl instead — check that next rather than raising the timeout.
+  - "One ask per reply" is a prompt/directive change: unproven until a real run.
+
+Suggested next task: live pass over all three, then the Practice grading decision.

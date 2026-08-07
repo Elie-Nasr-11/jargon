@@ -89,6 +89,11 @@ export function MediaStageViewer({
   const { resource, mode } = stage;
   const [url, setUrl] = useState("");
   const [failed, setFailed] = useState(false);
+  // R32d (owner: "the PDF side tab is a bit buggy"). An <iframe> does NOT fire onError when
+  // a browser or extension refuses to frame a PDF — it just renders nothing. So the R30
+  // fallback below was effectively unreachable and the panel sat blank with no explanation
+  // and no way out. We now watch for onLoad and treat silence past a deadline as failure.
+  const [loaded, setLoaded] = useState(false);
   const channel = useConversationChannel();
   const voice = store.getVoice();
 
@@ -115,6 +120,7 @@ export function MediaStageViewer({
     let cancelled = false;
     setUrl("");
     setFailed(false);
+    setLoaded(false);
     trackRef.current("opened");
     if (resource.resource_type === "artifact") return;
     void resolveResourceUrl(resource)
@@ -128,6 +134,19 @@ export function MediaStageViewer({
       cancelled = true;
     };
   }, [resource]);
+
+  // The framing watchdog. Only embeds can silently fail this way, so video/audio/image —
+  // which DO fire onError — are left alone. Generous window: a large scanned PDF over a
+  // slow connection is not a failure, and a false "it didn't open" is worse than waiting.
+  useEffect(() => {
+    if (!url || loaded || failed) return;
+    const framed = resource.resource_type === "pdf" || resource.resource_type === "youtube";
+    if (!framed) return;
+    // The effect re-runs (and clears this) the moment onLoad flips `loaded`, so reaching
+    // the deadline genuinely means nothing ever framed.
+    const timer = window.setTimeout(() => setFailed(true), 12000);
+    return () => window.clearTimeout(timer);
+  }, [url, loaded, failed, resource.resource_type]);
 
   // ESC closes the stage — the fastest way back to the conversation.
   useEffect(() => {
@@ -244,6 +263,7 @@ export function MediaStageViewer({
             title={resource.title}
             src={url}
             className="h-full w-full"
+            onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen

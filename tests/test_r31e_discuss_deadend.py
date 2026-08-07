@@ -440,3 +440,67 @@ class PraiseMatchesTheAnswer(unittest.TestCase):
     def test_a_correct_answer_is_not_corrected(self):
         # The very next turn: a right answer got "actually", which reads as a correction.
         self.assertIn('Never use a correcting word ("actually", "in fact")', CHAT)
+
+
+class OneAskPerReply(unittest.TestCase):
+    """R32d (owner): "remove double prompts... one prompt per reply of the agent".
+
+    Live: "What can you tell me about apples?" immediately followed by "Would you like to
+    move on?" — the student has to pick which to answer, and mostly answers neither. The
+    anatomy transcript does it too ("Would you like to explore more..., or is there
+    anything specific you'd like to revisit before we move on?").
+    """
+
+    def test_the_prompt_allows_exactly_one_ask(self):
+        self.assertIn("EXACTLY ONE ASK PER REPLY", CHAT)
+        self.assertIn("not a question plus an offer", CHAT)
+        # The owner's own example, so the rule is concrete rather than abstract.
+        self.assertIn("apples", CHAT)
+
+    def test_teaching_and_wrapping_are_named_as_the_two_choices(self):
+        # The rule only works if the model knows WHICH ask to keep.
+        self.assertIn("ask the content question and STOP", CHAT)
+        self.assertIn("ask only whether to move on", CHAT)
+
+    def test_an_inline_action_counts_as_the_ask(self):
+        # Otherwise the hand-off just becomes the second prompt.
+        self.assertIn("counts as the ask, so do not put a question beside it", CHAT)
+
+    def test_directives_do_not_stack_a_second_ask(self):
+        # The prompt rule is not enough on its own: a directive that says "ask what they
+        # notice" on top of one that says "close by asking for something" produces two.
+        self.assertIn("let that BE the reply's one ask", CHAT)
+        self.assertIn("make THAT the reply's only question", CHAT)
+
+
+class MediaOpensInTheApp(unittest.TestCase):
+    """R32d: "when I click to open an image, it sends me to a new tab" + a buggy PDF panel."""
+
+    TRANSCRIPT = (SRC / "student" / "Transcript.tsx").read_text(encoding="utf-8")
+    STAGE = (SRC / "student" / "MediaStage.tsx").read_text(encoding="utf-8")
+
+    def test_a_figure_opens_in_the_media_panel(self):
+        # The stage already rendered "image" — the figure just never used it, so clicking
+        # a picture the lesson was about threw the student out of the lesson.
+        block = self.TRANSCRIPT[self.TRANSCRIPT.index("function SourceFigure(") :][:1600]
+        self.assertIn("const stage = useMediaStage();", block)
+        self.assertIn('stage.open(asResource, "side")', block)
+
+    def test_it_still_degrades_outside_the_student_shell(self):
+        # The teacher studio renders this component with no stage in scope.
+        block = self.TRANSCRIPT[self.TRANSCRIPT.index("function SourceFigure(") :][:1600]
+        self.assertIn("stage ? (", block)
+        self.assertIn('target="_blank"', block)
+
+    def test_the_pdf_panel_notices_a_frame_that_never_loads(self):
+        # THE bug: an iframe does not fire onError when a PDF is refused, so the R30
+        # fallback was unreachable and the panel sat blank forever.
+        self.assertIn("onLoad={() => setLoaded(true)}", self.STAGE)
+        self.assertIn("const [loaded, setLoaded] = useState(false);", self.STAGE)
+        self.assertIn("setTimeout(() => setFailed(true), 12000)", self.STAGE)
+
+    def test_the_watchdog_only_guards_embeds(self):
+        # video/audio/image DO fire onError; a timeout there would be a false alarm.
+        block = self.STAGE[self.STAGE.index("The framing watchdog") :][:700]
+        self.assertIn('resource.resource_type === "pdf" || resource.resource_type === "youtube"', block)
+        self.assertIn("if (!framed) return;", block)

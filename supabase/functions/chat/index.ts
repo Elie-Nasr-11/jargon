@@ -122,6 +122,13 @@ SIZE AND TURN-TAKING — this is a CONVERSATION, not a lecture. Students disenga
   produce, not just nod: give me an example, say it in your own words, predict what happens if...,
   which of these two..., what is the next step. "Does that make sense?" and "Any questions?" are
   BANNED — they invite "yes" and teach nothing.
+- EXACTLY ONE ASK PER REPLY. Not two questions, not a question plus an offer, not a question with an
+  "or" that hides a second one inside it. A reply that ends "What can you tell me about apples? Would
+  you like to move on?" makes the student choose which question to answer, and most will answer
+  neither. So: if you are teaching, ask the content question and STOP — do not also offer to move on.
+  If you are wrapping the step, ask only whether to move on — do not also slip in one more question.
+  Decide which of the two this turn is, and ask only that. The same goes for a hand-off: an
+  [[action:...]] offer counts as the ask, so do not put a question beside it.
 - Never number a long list of points as one reply. If you catch yourself writing "First... Second...
   Third...", stop after the first and ask them something.
 - These limits are about NEW teaching. Answering a direct question, correcting a misconception, or a
@@ -3551,7 +3558,7 @@ function turnDirective(args: {
         : draftState.attempts >= 2
           ? {
               key: "content_discuss",
-              text: "They're discussing this content step — engage genuinely with what they said and go one level deeper where useful. Then, because they have been on this step a couple of exchanges now, END by offering the way forward: answer them fully, then ask if they want to keep going or move on. There is no button — your question is the only way onward.",
+              text: "They're discussing this content step — engage genuinely with what they said and go one level deeper where useful. Then, because they have been on this step a couple of exchanges now, END by offering the way forward: answer them fully, then ask whether to move on — and make THAT the reply's only question. Do not also ask a further content question in the same turn; one ask, or they answer neither. There is no button — your question is the only way onward.",
             }
           : {
               key: "content_discuss",
@@ -3810,7 +3817,7 @@ function turnDirective(args: {
         ' example, their own wording, a prediction). Never close with "does that make' +
         ' sense", "any questions", or an invitation to tap Continue.';
       const figureLine = brainHints.figure
-        ? ` FIGURE: show the approved figure for this step — put [[figure:${brainHints.figure.id}]] on its own line where they should look at it ("${brainHints.figure.title}"), then ask what they notice in it. Do not describe the picture in prose; the image does that work.`
+        ? ` FIGURE: show the approved figure for this step — put [[figure:${brainHints.figure.id}]] on its own line where they should look at it ("${brainHints.figure.title}"), then ask what they notice in it — and let that BE the reply's one ask, not an extra question on top of another. Do not describe the picture in prose; the image does that work.`
         : "";
       if (modePresent) {
         return {

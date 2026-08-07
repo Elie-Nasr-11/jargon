@@ -8,6 +8,7 @@ import { store } from "@/lib/jargon-store";
 import { renderWithMath } from "@/lib/mathText";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ResourceCard } from "@/student/ResourceCard";
+import { useMediaStage } from "@/student/MediaStage";
 import { GraphBlock, type GraphSpec } from "@/student/GraphBlock";
 import { GeometryBlock, type GeometrySpec } from "@/student/GeometryBlock";
 import {
@@ -18,7 +19,14 @@ import {
   turnModeSpec,
 } from "@/student/turnModes";
 import { useConversationChannel } from "@/student/useConversation";
-import type { LessonArc, LessonFigure, TypedChatAnswer, VocabEvent, VocabTerm } from "@/lib/types";
+import type {
+  LessonArc,
+  LessonChatResource,
+  LessonFigure,
+  TypedChatAnswer,
+  VocabEvent,
+  VocabTerm,
+} from "@/lib/types";
 import {
   choiceLabel,
   choiceValue,
@@ -416,19 +424,53 @@ function StreamingBody({ text }: { text: string }) {
 // R30 (tester feedback #4): a figure lifted from the teacher's own material, shown at the
 // point in the reply where the mentor placed its [[figure:id]] marker. Only figures the
 // server resolved from the lesson's APPROVED set arrive here, so an unreviewed crop can
-// never render. Clicking opens the full-size image in a new tab.
+// never render.
+//
+// R32d (owner: "when I click to open an image, it sends me to a new tab"): it opens in the
+// MEDIA PANEL now, beside the conversation, like every other material. A new tab threw the
+// student out of the lesson to look at a picture the lesson was about — and the stage
+// already renders "image", so the panel was there the whole time; the figure just never
+// used it. Falls back to the plain link when no stage is in scope (the teacher studio
+// renders this component outside the student shell).
 function SourceFigure({ figure }: { figure: LessonFigure }) {
+  const stage = useMediaStage();
+  // The stage speaks LessonChatResource; a figure is one in all but name. Built here
+  // rather than server-side so an approved figure stays a figure everywhere else.
+  const asResource: LessonChatResource = {
+    id: `figure-${figure.id}`,
+    title: figure.title || "Figure",
+    description: figure.caption || undefined,
+    resource_type: "image",
+    display_mode: "inline",
+    source_type: "external_url",
+    external_url: figure.image_url,
+    student_instructions: figure.alt_text || undefined,
+  };
+  const image = (
+    <img
+      src={figure.image_url}
+      alt={figure.alt_text || figure.title}
+      loading="lazy"
+      // The scans are grayscale line art: a white plate keeps them legible in dark mode.
+      className="max-h-[420px] w-full bg-white object-contain"
+    />
+  );
   return (
     <figure className="my-3 overflow-hidden rounded-card border border-border bg-depth-sub">
-      <a href={figure.image_url} target="_blank" rel="noopener noreferrer" title="Open full size">
-        <img
-          src={figure.image_url}
-          alt={figure.alt_text || figure.title}
-          loading="lazy"
-          // The scans are grayscale line art: a white plate keeps them legible in dark mode.
-          className="max-h-[420px] w-full bg-white object-contain"
-        />
-      </a>
+      {stage ? (
+        <button
+          type="button"
+          onClick={() => stage.open(asResource, "side")}
+          title="Open beside the conversation"
+          className="block w-full cursor-zoom-in"
+        >
+          {image}
+        </button>
+      ) : (
+        <a href={figure.image_url} target="_blank" rel="noopener noreferrer" title="Open full size">
+          {image}
+        </a>
+      )}
       {figure.title || figure.caption ? (
         <figcaption className="border-t border-border px-3 py-2 text-meta text-muted-foreground">
           {figure.title ? <span className="text-foreground">{figure.title}</span> : null}
