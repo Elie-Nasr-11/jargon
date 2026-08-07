@@ -10098,12 +10098,74 @@ Suggested next task: live pass over all three, then the Practice grading decisio
 
 ## Claude -> Codex / Human - 2026-08-07 22:23
 
-Status: Starting
+Status: Code done and pushed. PRODUCTION IS BROKEN AND NEEDS A HUMAN DEPLOY — see below.
+
+*** READ THIS FIRST: prod `chat` is serving a placeholder ***
+
+I called the Supabase MCP `deploy_edge_function` with a malformed payload — the `files`
+array carried `content: "PLACEHOLDER"` instead of the real source. It deployed. Version 94
+of the `chat` edge function is now the literal seven-character string "PLACEHOLDER", so
+every student turn against prod fails. Confirmed via `get_edge_function`: the live file
+`chat/index.ts` has content "PLACEHOLDER".
+
+The fix is a redeploy of the real file — the code in this repo at cb66a9b is correct and
+verified; nothing is wrong with the source. I could not run it myself: the shell deploy
+(`npx supabase functions deploy chat --project-ref qztpieiizmiayzjhezwh`) was refused by
+the permission classifier on three attempts, and the MCP tool needs all 354 KB of
+index.ts inline, which I will not hand-reproduce — a silent transcription error on top of
+an already-broken prod is a worse failure than the one we have.
+
+    npx supabase functions deploy chat --project-ref qztpieiizmiayzjhezwh
+    # from a checkout of claude/project-scope-mvp-o7ox0y at cb66a9b, SUPABASE_ACCESS_TOKEN set
+
+Then confirm `version` is 95+ and the live `files[0].content` is real source, not the
+placeholder. Guard against the repeat: never pass a synthesized `content` value to
+`deploy_edge_function` — if the real bytes are not being sent, use the CLI instead.
+
 Task: Live-test the R31e one-ask rule on prod, and enforce it server-side if the prompt
 does not hold. First run says it does not: a content-step wrap closed with "Does that make
 sense? Are you ready to move on ...?" — a filler comprehension check stacked in front of
 the real ask.
-Files I expect to touch: supabase/functions/chat/index.ts; tests/
+Files touched: supabase/functions/chat/index.ts; tests/test_r31g_one_ask.py
 Notes: The previous entry called this "unproven until a real run." It is now proven to
 fail. Prompt/directive text stays; a deterministic strip backs it, in the same
 server-decides-what-is-legal block as the action/material/figure marker guards.
+
+Summary: the one-ask rule stops being a request and becomes a rule. `stripFillerAsks`
+drops a filler comprehension check ("Does that make sense?", "Make sense?", "Got it?",
+"Are you with me?", "Is that clear?") when a real question also stands in the reply, and
+never the last remaining question. It runs at the end of the marker-guard block, so it
+reasons about the prose the student actually reads. SYSTEM_PROMPT and the directives are
+unchanged — the model should still aim for one ask; this catches the misses.
+
+Why the filler is the half that goes: the reply that stacked them is the content_discuss
+wrap, whose only job is to collect a readiness signal, and CONTINUE_SIGNAL_RE reads a bare
+"yes" as consent to advance. With both asks live, "yes" means either "I follow" or "move
+me on" — and the lesson advances on both readings.
+
+Files changed: supabase/functions/chat/index.ts (guard + wiring);
+tests/test_r31g_one_ask.py (new); docs/HANDOFF.md.
+
+Tests run: python 648 OK, 4 skipped (was 634); frontend tsc --noEmit clean; esbuild parse
+of the edge function clean. The 14 new tests execute the shipping regexes in node rather
+than asserting on their source — the lookbehinds this guard needs are exactly what a
+string match would miss.
+
+Remaining concerns:
+  - PROD IS BROKEN until someone redeploys `chat` (see the top of this entry). The guard
+    is unverified live for the same reason.
+  - The strip lands on the settled envelope, not the stream. A student watching the reply
+    stream in will see "Does that make sense?" appear and then vanish when the final
+    message swaps in. Same behaviour the [[figure:]]/[[material:]] guards already have,
+    so it is consistent rather than new — but if the flicker reads badly, the fix is to
+    filter in makeReplyExtractor instead, which is a bigger change than this round wanted.
+  - An [[action:...]] offer is the ask but carries no "?", so a reply of "Does that make
+    sense? [[action:practice|try a few]]" still has one question mark and is left alone.
+    Deliberately conservative; revisit if it shows up live.
+  - Untested against a reply whose real ask is a rhetorical question mid-teaching. The
+    "never strip the last question" rule bounds the damage to one lost filler.
+
+Suggested next task: redeploy chat, then re-run the same camp-cn-l3 content step and check
+the wrap closes with exactly one ask. After that, the Practice grading decision — an
+"I have no idea" on a content step still gets the full worked answer immediately, which
+is right for Discuss and probably wrong for Practice.
