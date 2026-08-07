@@ -9855,3 +9855,52 @@ Remaining concerns:
 
 Suggested next task: the still-unverified live checks (Discuss pill, inline materials),
 then vocab extracted at PREP time and teacher-approved.
+
+## Claude -> Codex / Human - 2026-08-07 11:35
+
+Status: Finished
+Task: Owner reported a live "Something went wrong on our side" on camp-hist-l2. Diagnose.
+
+TWO FINDINGS, the second worse than the first.
+
+1. THE ERROR ITSELF WAS TRANSIENT — and I cannot name its cause, which is the real problem.
+   Evidence gathered: two 500s at 11:14 UTC, both ~1.7s (successful turns take 4-15s); NO
+   learning_sessions row for camp-hist-l2; NO model_usage_events row; NO runtime_events
+   row; and the IDENTICAL request replayed through pg_net with elie's real JWT returned
+   200 with a correct reply and created the session. So: not the lesson's data, not the
+   model (it was never called), and gone on retry. It failed inside the auth/session/
+   context SETUP block — the one un-instrumented path in the handler. That block returned
+   a bare typedError and recorded NOTHING, while the student-safe error text deliberately
+   hides the cause from the reply. Between them, a setup failure was undiagnosable after
+   the fact. That gap is mine: I added the sanitizer without adding the server-side record.
+   FIXED: the setup catch now writes a chat_failure runtime_event carrying the real message
+   AND a `phase` naming which of the four steps threw (config/auth/session/context), so the
+   next occurrence is answerable from the table alone. Best-effort and non-blocking — a
+   telemetry fault must never turn one error into two — and the student still sees only the
+   safe line.
+
+2. NOTHING I FIXED IN THE LAST THREE ROUNDS WAS EVER DEPLOYED.
+   The deployed chat function is version 88, updated 2026-08-06 14:29 UTC = commit 32c0235
+   (Neuroanatomy). Every backend deploy since then — cffbfb4, 93ffc6c, 033fd95 — ended
+   CANCELLED, not failed: three pushes inside 35 minutes against a `concurrency: deploy-backend`
+   group, each queued run superseded before it could finish applying 44 migrations and 8
+   edge functions. So the Discuss dead-end fix, the [Back to the lesson] pill, the
+   [[material:id]] contract and the inline resource are all still sitting in main, unshipped.
+   I reported those rounds as "pushed" and flagged them as unverified live, but I did not
+   check that their DEPLOY went green — only that the push landed. That is the process
+   error to not repeat: push != deployed.
+   ACTION: re-ran deploy-backend on main via workflow_dispatch.
+
+Files changed: supabase/functions/chat/index.ts (setup instrumentation);
+tests/test_r31e_discuss_deadend.py (+4 tests, 30 in the module).
+
+Tests run: python 606 OK (was 602); edge parse clean.
+
+Remaining concerns:
+  - Rapid successive pushes will keep cancelling each other. Either batch backend changes
+    into one push, or wait for the deploy to go green before pushing again.
+  - The transient cause is still unknown. The instrumentation only pays off on the NEXT
+    occurrence; if it recurs, read runtime_events for reason='setup_failed' and its phase.
+
+Suggested next task: confirm the deploy went green and the three unshipped fixes are live,
+THEN run the live checks that have been pending for three rounds.

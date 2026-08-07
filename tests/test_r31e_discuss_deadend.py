@@ -260,3 +260,44 @@ class AskingForTheMaterialsHandsThemOver(unittest.TestCase):
         self.assertIn("inlinedMaterials", self.TRANSCRIPT)
         self.assertIn("const trayResources = (message.resources ?? []).filter(", self.TRANSCRIPT)
         self.assertIn("{trayResources.map((resource) => (", self.TRANSCRIPT)
+
+
+class SetupFailuresAreRecorded(unittest.TestCase):
+    """R32: a live 500 that left no trace anywhere.
+
+    A student hit "Something went wrong on our side" on a fresh lesson. The evidence
+    afterwards: 1.7s latency, no session row, no model_usage_events row, no runtime_events
+    row — and the identical request succeeded on replay. The cause was unknowable, because
+    the auth/session/context setup block returned a bare typedError and recorded nothing,
+    while the student-safe message deliberately hides the reason from the reply.
+    """
+
+    def test_the_setup_block_records_before_returning(self):
+        block = CHAT[CHAT.index("let setupPhase:") :][:2200]
+        self.assertIn('eventType: "chat_failure"', block)
+        self.assertIn('reason: "setup_failed"', block)
+        self.assertIn("phase: setupPhase", block)
+        self.assertIn("message", block)
+
+    def test_the_phase_narrows_it_to_one_step(self):
+        # "It failed in setup" is not an answer; which of the four steps is.
+        self.assertIn(
+            'let setupPhase: "config" | "auth" | "session" | "context" = "config";', CHAT
+        )
+        for phase in ('setupPhase = "auth";', 'setupPhase = "session";', 'setupPhase = "context";'):
+            with self.subTest(phase=phase):
+                self.assertIn(phase, CHAT)
+
+    def test_recording_can_never_mask_the_real_error(self):
+        block = CHAT[CHAT.index("let setupPhase:") :][:2200]
+        # Background + try//catch: a telemetry fault must not become the student's error.
+        self.assertIn("scheduleBackground(", block)
+        self.assertIn("Never mask the real error", block)
+        # The original message is still what the caller gets back.
+        self.assertIn("return typedError(message, typedAuthStatus(message), {", block)
+
+    def test_the_student_still_sees_the_safe_line(self):
+        # The sanitizer stays: this fix is about the SERVER remembering, not about
+        # showing a stack trace to a fourteen-year-old.
+        self.assertIn("STUDENT_SAFE_ERROR", CHAT)
+        self.assertIn("isStudentFacingMessage(message)", CHAT)

@@ -5417,18 +5417,50 @@ async function handleTypedRequest(
   let session: DbRow;
   let context: Awaited<ReturnType<typeof loadContext>>;
 
+  // R32: which of the four setup steps failed, recorded BEFORE returning. This block was
+  // the one un-instrumented path in the whole handler: the outer catch below writes a
+  // chat_failure event, but a throw HERE returned a bare typedError and left no trace at
+  // all. Combined with the student-safe error text (which deliberately hides the cause
+  // from the student), a setup failure became undiagnosable after the fact — a live 500
+  // was reported with a 1.7s latency, no session row, no usage event and no runtime
+  // event, and nothing anywhere recorded why. `phase` names the step so the next one is
+  // answerable from the table alone.
+  let setupPhase: "config" | "auth" | "session" | "context" = "config";
   try {
     config = restConfig(req);
+    setupPhase = "auth";
     user = await fetchCurrentUser(config);
+    setupPhase = "session";
     session = await loadOrCreateSession(
       config,
       String(user.id),
       lessonId,
       body.session_id,
     );
+    setupPhase = "context";
     context = await loadContext(config, String(user.id), lessonId, session);
   } catch (err) {
     const message = errorMessage(err);
+    // Best-effort and non-blocking: recording a failure must never turn one error into
+    // two. config is unset only when restConfig itself threw, which is a env/config fault
+    // the deploy would surface anyway.
+    if (setupPhase !== "config") {
+      try {
+        scheduleBackground(
+          recordRuntimeEvent(config!, {
+            userId: null,
+            sessionId: null,
+            lessonId,
+            eventType: "chat_failure",
+            status: "error",
+            latencyMs: Date.now() - requestStartedAt,
+            payload: { reason: "setup_failed", phase: setupPhase, message },
+          }),
+        );
+      } catch {
+        // Never mask the real error with a telemetry problem.
+      }
+    }
     return typedError(message, typedAuthStatus(message), {
       lesson_id: lessonId,
     });
