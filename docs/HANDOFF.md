@@ -6,6 +6,45 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-12 evening (My Jargon + publish-time knowledge drafting)
+
+Status: Finished
+Summary: Executed the remaining Wael-feedback map. (1) MY JARGON — new Home section
+(StudentHome MyJargonCard) listing the student's collected words: fetchMyJargon() reads
+student_vocab with the vocab_terms FK embed (own rows only), flattens to MyJargonWord
+(term/definition/subject/traveled), 45s surface cache invalidated by vocab_events in
+applyEnvelope. Empty state teaches what will grow there; >12 words folds behind "Show
+all". (2) AUTHORING AUTO-DRAFT — curriculum-admin's publish_lesson route now schedules
+autoExtractKnowledgeAfterPublish in the background (scheduleBackground/waitUntil, same
+pattern as the chat fn): if the lesson has NO knowledge rows, extract_knowledge drafts
+objectives + vocab + links + practice from the material. All existing hard rules hold
+(drafts only, Knowledge-tab review gates students, skip-existing idempotence); a failed
+extraction never fails the publish. NOTE the helper lives INSIDE the Deno.serve closure
+with extractKnowledge/selectMany — they are closure-scoped despite zero indentation, so
+top-level code cannot call them (learned the hard way; typecheck before assuming).
+(3) VERIFIED, NOT CHANGED — Wael's vocab-binding complaint was already fixed by R31
+(mentor-text-only sighting, pinned in test_learning_framework); his multi-word popup ask
+shipped earlier as VOCAB_EVENTS_PER_TURN=3 + the stacking KnowledgeCard. (4) WAEL LOOP
+CLOSED — posted the catch-up reply on his Jargon thread in the chapters-co-workspace app
+as the Claude agent actor (comment on his artifact thread, agent_request_id per the
+validate_activity_author trigger; note macOS screenshot filenames carry U+202F before
+AM/PM — resolve artifacts by id, never by name equality).
+Files changed: frontend/src/lib/{api,types}.ts, frontend/src/student/
+{StudentHome,useConversation}.ts(x), supabase/functions/curriculum-admin/index.ts,
+tests/test_my_jargon_authoring.py (new), docs/{DECISIONS,OPEN_QUESTIONS,HANDOFF}.md.
+Tests run: python3 -m unittest discover (671 OK, 4 skipped); npx tsc --noEmit (0);
+eslint touched files (0 errors); npm run build (green); deno check curriculum-admin
+(0 errors, parity with main) + chat fn (pre-existing 8 only).
+Remaining concerns: (a) publish-time extraction costs one model call per first-publish —
+fine at pilot scale, meter via model_usage_events if bulk imports start re-publishing;
+(b) My Jargon caps at 120 words fetched/12 shown — revisit when a student actually
+outgrows it; (c) the deploy trial still needs ANTHROPIC_API_KEY set in Supabase secrets
++ a merge to main (deploy workflow tracks main) — after that, run
+tools/e2e_chat_script.py and Wael's open-budget trial task can be marked done.
+Suggested next task: project-assist path (Discuss sub-flow driving the deck-artifact
+pipeline: "build a presentation from this lesson together" → deck artifact → the new
+Download), then de-prescription pass 2 behind transcript A/B.
+
 ## Claude -> Codex / Human - 2026-08-12 late (Wael feedback: artifact export + north star)
 
 Status: Finished

@@ -2,36 +2,29 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
-## Wael's workspace feedback — the pieces that need decisions (2026-08-12)
+## Wael's workspace feedback — remaining open pieces (2026-08-12, updated same day)
 
-From wael.nasr's comments in the chapters-co-workspace app (Jul 18–Aug 9; see the
-2026-08-12 DECISIONS entries for what was already acted on):
+Most of the 2026-08-12 morning list RESOLVED the same day (see DECISIONS 2026-08-12
+entries): vocab extraction was already mentor-bound (R31 — verified, pinned), vocab +
+objectives now auto-draft on lesson publish (teacher-gated in the Knowledge tab),
+"My Jargon" shipped as a Home section over student_vocab, and the Claude workspace
+actor replied on Wael's thread in chapters-co-workspace. Still genuinely open:
 
-- **Vocab extraction binding.** Wael saw a word from HIS OWN PROMPT get captured as a
-  vocab event ("only extracted from the lesson (it extracted from my prompt)"). Open:
-  where exactly should vocab candidature bind — the published curriculum vocab set only,
-  or lesson text + curriculum set? Needs a trace of the current extraction path
-  (vocab_events guardrail + published-terms matcher) before changing it; the fix likely
-  belongs in whichever server layer stamps vocab_events, not the highlighter.
-- **Vocab + objectives at authoring time.** He wants both auto-generated when a teacher
-  uploads content, then teacher-editable/approvable ("approved by teacher along with the
-  learning objectives"). Open: which pipeline (resource-processing on upload vs a studio
-  action), and whether approval gates the mentor's use of them.
-- **"My Jargon" — the student vocab surface.** His task asks the vocab list to be NAMED
-  "My Jargon". There is currently no student-facing collected-words surface (words exist
-  as highlights + pop-up cards + brain map ideas). Open: is "My Jargon" a new panel
-  (collected vocab_events, reviewable), or a rename of the brain-map words section once
-  one exists? Small, but it needs a surface decision first.
 - **Project-assist path.** His "4 paths" comment includes one the product lacks: "assist
   with a project based on the lesson such as a presentation or essay". Open: is this a
-  fourth TurnMode, a Discuss sub-flow, or an artifact-producing flow (the deck export
-  shipped today makes "build a presentation together, then download it" plausible)?
-- **Answering Wael in the workspace.** His Aug 9 question ("Is there a way I can
-  download the outline artifact?") is now answered by the product (deck/sim Download
-  shipped 2026-08-12) — but nobody has REPLIED to him in the workspace feed. Open:
-  who closes the loop there (human, or the Claude agent actor that already posts
-  status updates), and should comment-threads there get a routine sweep so feedback
-  stops going unseen?
+  fourth TurnMode, a Discuss sub-flow, or an artifact-producing flow? The deck export
+  makes "build a presentation together, then download it" the natural shape — likely a
+  Discuss sub-flow that drives the existing deck-artifact pipeline before it earns a
+  mode of its own.
+- **Workspace feedback sweep.** Wael's comments sat unseen for three weeks. Open:
+  should the chapters-co-workspace feed get a routine sweep (a scheduled check that
+  surfaces unanswered human comments), and who owns it — a human ritual or the Claude
+  workspace actor?
+- **De-prescription pass 2.** The NORTH STAR preamble shipped; the prohibition clusters
+  below it are still tuned for a weaker instruction-follower. Open per-cluster: which
+  "never"s are load-bearing scar tissue vs. which can become positive direction — each
+  conversion gated on a transcript A/B via tools/e2e_chat_script.py once the Claude
+  provider is live in staging.
 
 ## v4.0 "The Platform" — the live unknowns after the completion pass (2026-07-05)
 

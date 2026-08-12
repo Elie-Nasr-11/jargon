@@ -1737,6 +1737,16 @@ export type VocabTerm = {
   idea_keys: string[];
   lesson_id: string | null;
 };
+// "My Jargon" (Wael's name for it): one word the student has collected — their
+// student_vocab row flattened with its term. `traveled` = met in 2+ subjects, the
+// bridge-word signal the brain already tracks.
+export type MyJargonWord = {
+  term: string;
+  definition: string;
+  subject: string;
+  first_seen_at: string;
+  traveled: boolean;
+};
 export type IdeaNode = {
   id: string;
   key: string;

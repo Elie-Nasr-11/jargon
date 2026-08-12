@@ -2,6 +2,28 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-08-12 (evening): My Jargon, publish-time knowledge drafting, Wael loop closed
+
+Executing the rest of the Wael-feedback map (owner: "plan it all out, go for it"):
+
+- **"My Jargon" is the student vocab surface** — Wael's name, adopted verbatim. A Home
+  section listing every word the student has collected (student_vocab x vocab_terms:
+  term, child-readable definition, home subject), with a "bridges subjects" marker once
+  a word has traveled into a second subject. Cache-invalidated by vocab_events so a
+  word met mid-lesson appears on the next Home visit.
+- **Publishing a lesson auto-drafts its knowledge.** publish_lesson now schedules
+  extract_knowledge in the background for lessons with no knowledge rows yet — Wael's
+  "objectives and vocab happen automatically with uploading content". The existing hard
+  rules hold unchanged: drafts only, teacher review in the studio Knowledge tab gates
+  everything, re-publish never duplicates, a failed extraction never fails the publish.
+- **Vocab extraction binding was already correct** (R31 bound sighting to the MENTOR's
+  teaching text — Wael's exact complaint, fixed before his comment surfaced) — verified
+  and left alone; the gap was telling him.
+- **The Claude workspace actor replies on feedback threads.** Posted the catch-up reply
+  on Wael's Jargon thread in chapters-co-workspace (same agent_request_id shape as its
+  existing status updates). Whether the feed gets a ROUTINE sweep stays open
+  (OPEN_QUESTIONS).
+
 ## 2026-08-12 (later): North-star prompt philosophy; artifacts are downloadable
 
 Prompted by wael.nasr's workspace feedback ("guardrails need to be minimal with primary

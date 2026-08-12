@@ -376,6 +376,8 @@ export function useConversation() {
         invalidateSurface("ideas");
         invalidateSurface("student_links");
       }
+      // A collected word must show up in Home's "My Jargon" on the next visit.
+      if (envelope.vocab_events?.length) invalidateSurface("my_jargon");
       const toasts: KnowledgeToast[] = [
         ...(envelope.idea_events ?? []).map(
           (event): KnowledgeToast => ({ id: uid(), kind: "idea", event, fresh: true }),
