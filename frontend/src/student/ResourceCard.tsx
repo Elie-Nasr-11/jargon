@@ -325,6 +325,7 @@ export function ResourceCard({
             onVoiceEvent={channel.voiceEvent}
             readAloud={canReadDeckAloud}
             onCompleted={() => track("completed", { progress_percent: 100 })}
+            onDownload={() => track("downloaded")}
           />
         </div>
       ) : isArtifact ? (

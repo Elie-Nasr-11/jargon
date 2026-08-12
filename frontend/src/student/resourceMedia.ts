@@ -5,7 +5,16 @@ import type { LessonChatResource } from "@/lib/types";
 // MediaStage): URL resolution, the nocookie rewrite, and telemetry helpers. One module so
 // the invariants (lazy signing, nocookie-only embeds) cannot drift between them.
 
-export type ResourceEventType = "shown" | "opened" | "played" | "paused" | "completed";
+// Mirrors the resource_interactions event_type CHECK constraint (0009), which has
+// carried "downloaded" since the foundation — the client union just never used it
+// until artifact export shipped.
+export type ResourceEventType =
+  | "shown"
+  | "opened"
+  | "played"
+  | "paused"
+  | "completed"
+  | "downloaded";
 export type ResourceProgress = { progress_seconds?: number; progress_percent?: number };
 
 // The nocookie rewrite: any recognizable YouTube URL becomes a youtube-nocookie.com embed.

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Play, RotateCcw, ShieldAlert, Square } from "lucide-react";
+import { Download, Maximize2, Play, RotateCcw, ShieldAlert, Square } from "lucide-react";
 import { ModalCard } from "@/components/ModalCard";
+import { downloadTextFile, exportFilename } from "@/lib/artifact-export";
 import { lintArtifactHtml } from "@/lib/artifact-lint";
 import { prefersReducedMotion } from "@/lib/motion";
 import type { ArtifactConfig } from "@/lib/artifact-schema";
@@ -81,7 +82,7 @@ export function ArtifactFrame({
   artifact: ArtifactConfig;
   // The caller signs the URL and fetches the document text (keeps storage concerns out).
   fetchHtml: () => Promise<string>;
-  onTelemetry: (event: "played" | "paused") => void;
+  onTelemetry: (event: "played" | "paused" | "downloaded") => void;
   // true only for the modal instance, where the user's Expand click was the gesture.
   autoRun?: boolean;
   fill?: boolean;
@@ -135,6 +136,27 @@ export function ArtifactFrame({
     onTelemetry("paused");
   }, [onTelemetry]);
 
+  // Download the sim as a plain .html file — SAME gate as running it: a document the
+  // sandbox refuses to run is a document we refuse to hand out (a downloaded file opens
+  // with no sandbox at all). Failures land in the frame's normal failed/blocked states.
+  const download = useCallback(async () => {
+    let html = "";
+    try {
+      html = await fetchHtml();
+    } catch {
+      setStatus("failed");
+      return;
+    }
+    const lint = lintArtifactHtml(html);
+    if (!lint.ok) {
+      console.warn("Artifact download blocked by safety lint:", lint.violations);
+      setStatus("blocked");
+      return;
+    }
+    downloadTextFile(exportFilename(title, "html"), "text/html", html);
+    onTelemetry("downloaded");
+  }, [fetchHtml, onTelemetry, title]);
+
   // Auto-run once for the modal instance (the Expand click was the user gesture).
   const autoRanRef = useRef(false);
   useEffect(() => {
@@ -178,6 +200,15 @@ export function ArtifactFrame({
         Interactive activity
       </span>
       <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={() => void download()}
+          aria-label="Download this activity"
+          title="Download"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
+        </button>
         {!fill ? (
           <button
             type="button"
@@ -234,6 +265,14 @@ export function ArtifactFrame({
             >
               <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.8} />
               Expand
+            </button>
+            <button
+              type="button"
+              onClick={() => void download()}
+              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Download
             </button>
           </div>
         </div>

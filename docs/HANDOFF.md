@@ -6,6 +6,40 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-12 late (Wael feedback: artifact export + north star)
+
+Status: Finished
+Summary: Response slice to wael.nasr's chapters-co-workspace comments (surfaced today;
+see OPEN_QUESTIONS 2026-08-12 for the map of what still needs decisions).
+(1) ARTIFACT EXPORT — new frontend/src/lib/artifact-export.ts: decks export as ONE
+self-contained print-ready HTML handout (all slides + speaker notes, escaped
+defense-in-depth, print CSS → browser PDF), sims download as their .html gated by the
+SAME lintArtifactHtml check that gates running them (a downloaded file opens with no
+sandbox, so the lint is load-bearing — pinned by test). Download buttons: DeckRenderer
+bottom bar; ArtifactFrame poster row + running toolbar. Telemetry: the DB's existing
+'downloaded' resource_interactions event (the client ResourceEventType union just never
+included it); wired in ResourceCard + MediaStage; DeckRenderer's onDownload is optional
+so the studio preview keeps working unwired.
+(2) NORTH STAR — additive preamble atop SYSTEM_PROMPT reframing the mentor around the
+destination (objectives genuinely reached, said in the student's own words; material is
+the path never a cage; integrity rails restated as what they protect). No existing rule
+text touched this pass — de-prescription continues cluster-by-cluster behind transcript
+A/B (see DECISIONS).
+Files changed: frontend/src/lib/artifact-export.ts (new), frontend/src/components/
+{DeckRenderer,ArtifactFrame}.tsx, frontend/src/student/{ResourceCard,MediaStage,
+resourceMedia}.ts(x), supabase/functions/chat/index.ts (preamble only),
+tests/test_artifact_export_north_star.py (new), docs/{DECISIONS,OPEN_QUESTIONS,
+HANDOFF}.md.
+Tests run: python3 -m unittest discover (665 OK, 4 skipped); npx tsc --noEmit (0);
+eslint on touched files (0 errors); npm run build (green); deno check parity with main.
+Remaining concerns: (a) deck export is HTML→print-PDF, not native .pptx/.pdf — fine for
+handouts, revisit if teachers ask for editable decks; (b) Wael's workspace question is
+answered by the FEATURE but nobody has replied to him in the feed — needs a human (or
+the Claude workspace actor) to close the loop; (c) the vocab-extraction binding bug he
+reported is diagnosed-not-fixed (OPEN_QUESTIONS).
+Suggested next task: vocab pipeline slice (extraction binding fix + authoring-time
+vocab/objectives + "My Jargon" surface decision), then the project-assist path.
+
 ## Claude -> Codex / Human - 2026-08-12 (Claude provider + conversation-flow R33)
 
 Status: Finished

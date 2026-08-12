@@ -2,6 +2,32 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-08-12 (later): North-star prompt philosophy; artifacts are downloadable
+
+Prompted by wael.nasr's workspace feedback ("guardrails need to be minimal with primary
+restriction to the lesson's learning objectives... achieve learning objectives by any
+means necessary") and the owner's framing ("an AI north star — skiing a path rather
+than avoiding trees"):
+
+- **The mentor prompt LEADS with a destination, not prohibitions.** A NORTH STAR
+  preamble now opens SYSTEM_PROMPT: carry this student to the lesson's objectives by
+  whatever honest teaching serves — examples from anywhere, bridges to other subjects —
+  with the integrity rails (no handed-over answers, no unearned credit, teacher policy)
+  restated inside the preamble as what the rails protect. Existing rules are unchanged
+  this pass (they are the tuned edges of the run); subsequent passes convert prohibition
+  clusters into positive direction one at a time, each validated against live
+  transcripts via the e2e script. The reframe is additive first so teaching-quality
+  regressions can never hide inside a big rewrite.
+- **Artifacts are downloadable.** Decks export as a self-contained print-ready HTML
+  handout (client-built from the validated DeckSpec, everything escaped, print CSS for
+  PDF); html_sims download as their .html behind the SAME safety lint that gates
+  running them — a document the sandbox refuses to run is a document we refuse to hand
+  out. Telemetry rides the existing `downloaded` resource-interaction event. This
+  answers Wael's Aug 9 workspace question directly.
+- Remaining Wael items (vocab extraction binding, authoring-time vocab/objectives,
+  "My Jargon" surface, project-assist path, workspace reply loop) are recorded in
+  OPEN_QUESTIONS (2026-08-12) pending decisions.
+
 ## 2026-08-12: Claude is the tutor's default provider; conversation-flow R33 pass
 
 Owner asked for the switch to the Claude API and a model ramp-up for higher-quality
