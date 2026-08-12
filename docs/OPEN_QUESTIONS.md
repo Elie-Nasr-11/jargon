@@ -2,6 +2,30 @@
 
 Add new questions at the top. Close resolved questions by moving them to `docs/DECISIONS.md` if they become durable choices.
 
+## Wael's workspace feedback — remaining open pieces (2026-08-12, updated same day)
+
+Most of the 2026-08-12 morning list RESOLVED the same day (see DECISIONS 2026-08-12
+entries): vocab extraction was already mentor-bound (R31 — verified, pinned), vocab +
+objectives now auto-draft on lesson publish (teacher-gated in the Knowledge tab),
+"My Jargon" shipped as a Home section over student_vocab, and the Claude workspace
+actor replied on Wael's thread in chapters-co-workspace. Still genuinely open:
+
+- **Project-assist path.** His "4 paths" comment includes one the product lacks: "assist
+  with a project based on the lesson such as a presentation or essay". Open: is this a
+  fourth TurnMode, a Discuss sub-flow, or an artifact-producing flow? The deck export
+  makes "build a presentation together, then download it" the natural shape — likely a
+  Discuss sub-flow that drives the existing deck-artifact pipeline before it earns a
+  mode of its own.
+- **Workspace feedback sweep.** Wael's comments sat unseen for three weeks. Open:
+  should the chapters-co-workspace feed get a routine sweep (a scheduled check that
+  surfaces unanswered human comments), and who owns it — a human ritual or the Claude
+  workspace actor?
+- **De-prescription pass 2.** The NORTH STAR preamble shipped; the prohibition clusters
+  below it are still tuned for a weaker instruction-follower. Open per-cluster: which
+  "never"s are load-bearing scar tissue vs. which can become positive direction — each
+  conversion gated on a transcript A/B via tools/e2e_chat_script.py once the Claude
+  provider is live in staging.
+
 ## v4.0 "The Platform" — the live unknowns after the completion pass (2026-07-05)
 
 v4.0 is shipped and live (see `docs/ROADMAP.md`), but four items were deferred WITH CAUSE and remain

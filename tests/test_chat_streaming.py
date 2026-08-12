@@ -49,8 +49,12 @@ class ChatStreamingStaticTests(unittest.TestCase):
             "async function callOpenAIStream(",
             "async function callAnthropicStream(",
             "stream_options: { include_usage: true }",
-            # The streaming call is mentor-turn-only, gated on the delta callback.
-            "? await callModelStream(messages, \"default\", makeReplyExtractor(onReplyDelta))",
+            # The streaming call is mentor-turn-only, gated on the delta callback. The
+            # extractor callback also accumulates the reply so a malformed final JSON
+            # can be salvaged from the prose the student already watched arrive.
+            "? await callModelStream(",
+            "makeReplyExtractor((text) => {",
+            "streamedReply += text;",
             ": await callModel(messages, true, \"default\")",
         ):
             with self.subTest(fragment=fragment):
@@ -87,11 +91,12 @@ class ChatStreamingStaticTests(unittest.TestCase):
 
     def test_client_paints_deltas_into_thinking_placeholder(self):
         # Round 22g: deltas release SENTENCE BY SENTENCE — each completed sentence is held
-        # ~0.2s/word (clamped) before the next lands, so students read one at a time.
+        # ~0.15s/word (clamped) before the next lands, so students read one at a time.
+        # R33 retuned the pacing (200ms/4s ceiling read as dead air between sentences).
         self.assertIn("const onDelta = (text: string) => {", self.convo)
-        self.assertIn("const WORD_MS = 200;", self.convo)
-        self.assertIn("const HOLD_MIN_MS = 400;", self.convo)
-        self.assertIn("const HOLD_MAX_MS = 4_000;", self.convo)
+        self.assertIn("const WORD_MS = 150;", self.convo)
+        self.assertIn("const HOLD_MIN_MS = 350;", self.convo)
+        self.assertIn("const HOLD_MAX_MS = 2_500;", self.convo)
         self.assertIn("Math.min(HOLD_MAX_MS, Math.max(HOLD_MIN_MS, words * WORD_MS))", self.convo)
         # The settle never jumps ahead of the reading: a mid-pace envelope waits its turn.
         self.assertIn("pendingSettle = settle;", self.convo)

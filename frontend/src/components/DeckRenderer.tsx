@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Download } from "lucide-react";
 import {
   Carousel,
   CarouselContent,
@@ -8,6 +9,7 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
+import { deckToStandaloneHtml, downloadTextFile, exportFilename } from "@/lib/artifact-export";
 import { deckSlideText, type DeckSpec, type DeckSlide } from "@/lib/artifact-schema";
 import type { VoiceSettings } from "@/lib/jargon-store";
 import type { VoiceInteractionEvent } from "@/lib/types";
@@ -111,6 +113,7 @@ export function DeckRenderer({
   onVoiceEvent,
   onCompleted,
   readAloud = true,
+  onDownload,
 }: {
   deck: DeckSpec;
   title: string;
@@ -123,6 +126,9 @@ export function DeckRenderer({
   onCompleted?: () => void;
   // P7: the studio preview has no student session — hide read-aloud there (default on).
   readAloud?: boolean;
+  // Telemetry hook for the export ("downloaded" resource interaction); the download
+  // itself is client-built and works without it.
+  onDownload?: () => void;
 }) {
   const [api, setApi] = useState<CarouselApi>();
   const [index, setIndex] = useState(0);
@@ -181,6 +187,25 @@ export function DeckRenderer({
                 onVoiceEvent={onVoiceEvent}
               />
             ) : null}
+            {/* Wael (workspace, Aug 9): "Is there a way I can download the outline
+                artifact?" — yes: the whole deck as a self-contained handout (print it
+                for a PDF). Built entirely client-side from the same validated spec. */}
+            <button
+              type="button"
+              onClick={() => {
+                downloadTextFile(
+                  exportFilename(deck.title || title, "html"),
+                  "text/html",
+                  deckToStandaloneHtml(deck, title),
+                );
+                onDownload?.();
+              }}
+              aria-label="Download this deck"
+              title="Download"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
+            </button>
             <span className="text-meta tabular-nums text-muted-foreground">
               {index + 1} / {total}
             </span>

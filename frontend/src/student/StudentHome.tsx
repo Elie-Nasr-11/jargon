@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
-import { ArrowRight, Brain, GraduationCap, Loader2, Play } from "lucide-react";
+import { ArrowRight, BookOpen, Brain, GraduationCap, Loader2, Play } from "lucide-react";
 import { BrainMap } from "@/student/BrainMap";
 import {
   fetchIdeaMastery,
   fetchCurriculumLinks,
   fetchIdeas,
   fetchMostRecentLearningSession,
+  fetchMyJargon,
   fetchStudentLinks,
   fetchProfile,
   fetchSessionSummaries,
@@ -24,6 +25,7 @@ import type {
   CurriculumLinkRow,
   IdeaNode,
   Lesson,
+  MyJargonWord,
   StudentLinkRow,
   SessionSummary,
   StudentAssessmentBundle,
@@ -81,6 +83,82 @@ function Chips({ label, values }: { label: string; values: string[] }) {
         ))}
       </div>
     </div>
+  );
+}
+
+// "My Jargon" — Wael's name for the student's collected vocabulary (workspace task,
+// Aug 9). Every word the mentor has introduced (student_vocab) in one place: the term,
+// its child-readable definition, its home subject, and a bridge marker once the word
+// has traveled into a second subject. Self-fetching like MemoryCard; an empty state
+// that tells a new student what will grow here.
+function MyJargonCard() {
+  const [words, setWords] = useState<MyJargonWord[] | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMyJargon()
+      .catch(() => [] as MyJargonWord[])
+      .then((rows) => {
+        if (!cancelled) setWords(rows);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visible = words ? (showAll ? words : words.slice(0, 12)) : [];
+  return (
+    <section className="rounded-card border border-border bg-depth-card p-4 shadow-card">
+      <h3 className="mb-2 flex items-center gap-2 text-body font-semibold text-foreground">
+        <BookOpen className="h-[15px] w-[15px] text-muted-foreground" strokeWidth={1.6} />
+        My Jargon
+        {words?.length ? (
+          <span className="font-mono text-overline uppercase tracking-[0.1em] text-muted-foreground">
+            {words.length} word{words.length === 1 ? "" : "s"}
+          </span>
+        ) : null}
+      </h3>
+      {words === null ? (
+        <p className="flex items-center gap-2 text-meta text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+        </p>
+      ) : words.length ? (
+        <>
+          <ul className="flex flex-col">
+            {visible.map((word) => (
+              <li
+                key={word.term}
+                className="hvp flex items-baseline gap-3 border-b border-border py-1.5 last:border-0"
+              >
+                <span className="shrink-0 text-body font-semibold text-foreground">
+                  {word.term}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                  {word.definition}
+                </span>
+                <span className="hvr shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                  {word.traveled ? "bridges subjects" : word.subject}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {words.length > 12 ? (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="mt-2 text-meta text-muted-foreground transition-colors duration-(--dur-fast) hover:text-foreground"
+            >
+              {showAll ? "Show fewer" : `Show all ${words.length}`}
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-body text-muted-foreground">
+          Every new word your mentor teaches you collects here — your own jargon, one lesson at a
+          time.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -507,6 +585,11 @@ export function StudentHome({
               />
             )}
           />
+        </div>
+
+        {/* ---- 4. My Jargon — the words this student has collected ---------------------- */}
+        <div className="mb-7">
+          <MyJargonCard />
         </div>
 
         {/* Classes live in the Home SIDEBAR now — each one opens its own summary page. */}

@@ -227,6 +227,7 @@ export function MediaStageViewer({
                 onVoiceEvent={channel.voiceEvent}
                 readAloud={canReadDeckAloud}
                 onCompleted={() => track("completed", { progress_percent: 100 })}
+                onDownload={() => track("downloaded")}
               />
             ) : (
               <p className="p-4 text-body text-muted-foreground">

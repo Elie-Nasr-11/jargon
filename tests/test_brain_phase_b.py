@@ -42,7 +42,10 @@ class BrainReadModel(unittest.TestCase):
 
     def test_brain_rides_the_payload_and_prompt(self):
         self.assertIn("brain:\n            brain.weak.length ||", CHAT)
-        self.assertIn("- BRAIN: turn.brain (when present)", CHAT)
+        # The payload puts `brain` at TOP level (a sibling of `turn`), so the prompt
+        # must point there — the old "turn.brain" path pointed at a key that never
+        # existed, which silently disabled the whole BRAIN block.
+        self.assertIn('- BRAIN: "brain" (when present)', CHAT)
 
     def test_evidence_writer_wired_to_grading(self):
         self.assertIn("async function recordIdeaEvidence(", CHAT)

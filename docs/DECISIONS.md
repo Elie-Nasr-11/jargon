@@ -2,6 +2,89 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-08-12 (evening): My Jargon, publish-time knowledge drafting, Wael loop closed
+
+Executing the rest of the Wael-feedback map (owner: "plan it all out, go for it"):
+
+- **"My Jargon" is the student vocab surface** — Wael's name, adopted verbatim. A Home
+  section listing every word the student has collected (student_vocab x vocab_terms:
+  term, child-readable definition, home subject), with a "bridges subjects" marker once
+  a word has traveled into a second subject. Cache-invalidated by vocab_events so a
+  word met mid-lesson appears on the next Home visit.
+- **Publishing a lesson auto-drafts its knowledge.** publish_lesson now schedules
+  extract_knowledge in the background for lessons with no knowledge rows yet — Wael's
+  "objectives and vocab happen automatically with uploading content". The existing hard
+  rules hold unchanged: drafts only, teacher review in the studio Knowledge tab gates
+  everything, re-publish never duplicates, a failed extraction never fails the publish.
+- **Vocab extraction binding was already correct** (R31 bound sighting to the MENTOR's
+  teaching text — Wael's exact complaint, fixed before his comment surfaced) — verified
+  and left alone; the gap was telling him.
+- **The Claude workspace actor replies on feedback threads.** Posted the catch-up reply
+  on Wael's Jargon thread in chapters-co-workspace (same agent_request_id shape as its
+  existing status updates). Whether the feed gets a ROUTINE sweep stays open
+  (OPEN_QUESTIONS).
+
+## 2026-08-12 (later): North-star prompt philosophy; artifacts are downloadable
+
+Prompted by wael.nasr's workspace feedback ("guardrails need to be minimal with primary
+restriction to the lesson's learning objectives... achieve learning objectives by any
+means necessary") and the owner's framing ("an AI north star — skiing a path rather
+than avoiding trees"):
+
+- **The mentor prompt LEADS with a destination, not prohibitions.** A NORTH STAR
+  preamble now opens SYSTEM_PROMPT: carry this student to the lesson's objectives by
+  whatever honest teaching serves — examples from anywhere, bridges to other subjects —
+  with the integrity rails (no handed-over answers, no unearned credit, teacher policy)
+  restated inside the preamble as what the rails protect. Existing rules are unchanged
+  this pass (they are the tuned edges of the run); subsequent passes convert prohibition
+  clusters into positive direction one at a time, each validated against live
+  transcripts via the e2e script. The reframe is additive first so teaching-quality
+  regressions can never hide inside a big rewrite.
+- **Artifacts are downloadable.** Decks export as a self-contained print-ready HTML
+  handout (client-built from the validated DeckSpec, everything escaped, print CSS for
+  PDF); html_sims download as their .html behind the SAME safety lint that gates
+  running them — a document the sandbox refuses to run is a document we refuse to hand
+  out. Telemetry rides the existing `downloaded` resource-interaction event. This
+  answers Wael's Aug 9 workspace question directly.
+- Remaining Wael items (vocab extraction binding, authoring-time vocab/objectives,
+  "My Jargon" surface, project-assist path, workspace reply loop) are recorded in
+  OPEN_QUESTIONS (2026-08-12) pending decisions.
+
+## 2026-08-12: Claude is the tutor's default provider; conversation-flow R33 pass
+
+Owner asked for the switch to the Claude API and a model ramp-up for higher-quality
+teaching with a simpler, less breakable runtime:
+
+- **`TUTOR_PROVIDER` defaults to `anthropic`.** The mentor conversation runs on
+  `claude-opus-5` (the current Opus tier: strongest sustained-conversation quality at
+  $5/$25 per MTok); the understanding/grading route stays pinned cheap on
+  `claude-haiku-4-5`, preserving the strong-conversation/cheap-grader split.
+  `claude-fable-5` was considered and deliberately NOT defaulted: it is 2x the price,
+  requires 30-day data retention, and its edge is deepest long-horizon agentic work —
+  not per-turn tutoring. It remains one env var away (`TUTOR_MODEL_CONVERSATION`).
+- **The OpenAI path is kept, not removed** — `TUTOR_PROVIDER=openai` runs it unchanged,
+  and a missing-key deploy falls back to whichever provider has a key instead of
+  failing every turn.
+- **Claude effort defaults: conversation `medium`, graders `low`** — interactive
+  tutoring is latency-sensitive and Claude Opus 5 stays strong at medium; env-tunable.
+- **Prompt caching is part of the contract now**: the static system prompt and the
+  step-stable half of the mentor payload ride `cache_control` breakpoints (the payload
+  is partitioned into a stable block + a live block — same key paths, two JSON parts).
+  Cache-hostile keys (recent_questions, materials.opened, mastery) live in the live block.
+- **Variety comes from data, not temperature** (Claude models reject sampling params):
+  the mentor now sees its own recent openers (`student.recent_openers`) and a widened
+  window of its recent questions, making the anti-repetition rules checkable instead of
+  aspirational.
+- **R33 conversation-flow pass** (client): the send lock holds until the paced reply
+  settles; raw `[[material/figure/action]]` markers never stream as visible text; the
+  settle swap no longer re-animates the reply; stream failures keep the partial prose
+  with Retry (in the original register); the composer stays typeable while a reply paces
+  out (busy gates Send/Run only); autoscroll stops fighting the stream and a Jump-to-
+  latest pill returns a scrolled-up student; the Resources pill reports the accumulated
+  tray and survives reloads. Server: malformed mentor JSON degrades to the streamed
+  prose instead of erroring the turn; refusal/truncation surface as calm student-safe
+  errors; transient 429/5xx get bounded retries.
+
 ## 2026-07-30 (late): Trunk unification — v6 /learn wins, main becomes the single trunk
 
 Owner decisions after discovering the parallel v6 rebuild on claude/happy-johnson-wseex8:

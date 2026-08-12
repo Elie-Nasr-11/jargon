@@ -82,6 +82,13 @@ export type Msg =
       // the error bubble's Retry can re-send it faithfully.
       retryAnswer?: TypedChatAnswer;
       retryControl?: TypedChatControl;
+      // The TurnMode the failed turn was sent in — Retry re-sends in THIS register, not
+      // whatever the picker happens to show by the time the student taps it. Plain string
+      // for the same decoupling reason as turnMode above.
+      retryMode?: string;
+      // True when this reply replaced a thinking placeholder the student already watched
+      // stream in — the transcript skips the entrance animation on the settle swap.
+      streamed?: boolean;
       // The choice the student picked on this (quiz) message — kept so history shows WHICH
       // option was selected after the live buttons retire.
       chosen?: string;

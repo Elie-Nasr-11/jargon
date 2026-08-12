@@ -100,9 +100,12 @@ class SessionHoldStaticTests(unittest.TestCase):
         # The send path refuses to run while held — the composer lock alone is not enough
         # (voice callbacks and stale closures can race a pause).
         self.assertIn("if (heldRef.current) {", self.hook)
-        # The window shows the paused banner and locks the composer while held.
+        # The window shows the paused banner and locks the composer while held. (R33 split
+        # the lock: `disabled` is the hold's hard lock, `busy` only gates Send/Run so the
+        # student can keep typing while a reply paces out.)
         self.assertIn("Your teacher paused the session — hang tight", self.window)
-        self.assertIn("disabled={sending || held}", self.window)
+        self.assertIn("disabled={held}", self.window)
+        self.assertIn("busy={sending}", self.window)
 
     def test_hold_kills_live_voice(self):
         # A pause must not leave the mic hot: the voice panel unmounts (full WebRTC/mic

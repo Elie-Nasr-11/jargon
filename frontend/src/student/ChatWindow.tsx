@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Eye, PauseCircle, Undo2 } from "lucide-react";
+import { ArrowDown, Eye, PauseCircle, Undo2 } from "lucide-react";
 import { store } from "@/lib/jargon-store";
 import { prefersReducedMotion } from "@/lib/motion";
 import { Chatbox } from "@/student/Chatbox";
@@ -65,18 +65,38 @@ export function ChatWindow({
   // never yanks a student who scrolled up more than ~200px to reread.
   const scrollRef = useRef<HTMLDivElement>(null);
   const sawFirstKeyRef = useRef(false);
+  const lastKeyIdRef = useRef("");
+  // True while the student has scrolled up past the autoscroll guard — drives the
+  // "Jump to latest" pill so rereading never strands them away from the live reply.
+  const [scrolledUp, setScrolledUp] = useState(false);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !scrollKey) return;
     const first = !sawFirstKeyRef.current;
     sawFirstKeyRef.current = true;
+    // Streaming repaints keep the same message id while its text grows. Restarting a
+    // smooth scroll animation ~12x/second makes the view crawl behind the text — jump
+    // instantly for those, and animate only when a NEW message opens.
+    const keyId = scrollKey.split(":")[0];
+    const sameMessage = keyId === lastKeyIdRef.current;
+    lastKeyIdRef.current = keyId;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
     if (!first && !nearBottom) return;
     el.scrollTo({
       top: el.scrollHeight,
-      behavior: first || prefersReducedMotion() ? "auto" : "smooth",
+      behavior: first || sameMessage || prefersReducedMotion() ? "auto" : "smooth",
     });
   }, [scrollKey]);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      setScrolledUp(el.scrollHeight - el.scrollTop - el.clientHeight >= 200);
+    };
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
   // Live voice is window-owned state: opening the panel is a conversation-surface act, and the
   // panel must unmount (full WebRTC/mic teardown) whenever this window goes away.
   const [voiceOpen, setVoiceOpen] = useState(false);
@@ -144,11 +164,28 @@ export function ChatWindow({
             while each section keeps its MESSAGES in a centered, width-capped reading column
             (full-bleed text across a 1440px window is unreadable). The composer sits on that
             same centered axis so the conversation reads as one column. */}
-        <div
-          ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4 pt-2"
-        >
-          {children}
+        <div className="relative min-h-0 flex-1">
+          <div ref={scrollRef} className="h-full overflow-y-auto overscroll-contain pb-4 pt-2">
+            {children}
+          </div>
+          {/* One tap back to the live conversation for a student who scrolled up to
+              reread — autoscroll silently disengages past the guard, and without this
+              there was no way back except manual scrolling. */}
+          {scrolledUp ? (
+            <button
+              type="button"
+              onClick={() =>
+                scrollRef.current?.scrollTo({
+                  top: scrollRef.current.scrollHeight,
+                  behavior: prefersReducedMotion() ? "auto" : "smooth",
+                })
+              }
+              className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-pill border border-border bg-background/95 px-3 py-1.5 text-meta text-muted-foreground shadow-md backdrop-blur transition-colors duration-(--dur-fast) hover:text-foreground"
+            >
+              <ArrowDown className="h-3.5 w-3.5" strokeWidth={2} />
+              Jump to latest
+            </button>
+          ) : null}
         </div>
 
         <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3">
@@ -166,8 +203,11 @@ export function ChatWindow({
             sessionResources={sessionResources}
             onVoiceEvent={channel.voiceEvent}
             // The hold locks the composer as well as the send path — a typeable box whose
-            // Send silently fails would read as broken, not paused.
-            disabled={sending || held}
+            // Send silently fails would read as broken, not paused. An in-flight turn is
+            // different: the student keeps TYPING their next thought (busy only gates
+            // Send/Run), so a reply that paces out for ten seconds never blocks thinking.
+            disabled={held}
+            busy={sending}
           />
           {voiceOpen && canVoice ? (
             <VoicePanel

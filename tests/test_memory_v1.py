@@ -75,7 +75,7 @@ class MemoryWriteIsBackgroundOnly(unittest.TestCase):
         # student.memory rides with the stable student keys, before the per-turn
         # recent_questions (the stable -> volatile prompt-cache discipline).
         memory_key = CHAT.index("memory: memoryForPrompt(context.memory, context.recentSummaries)")
-        self.assertLess(memory_key, CHAT.index("recent_questions: recentQuestions.slice(0, 4)"))
+        self.assertLess(memory_key, CHAT.index("recent_questions: recentQuestions.slice(0, 8)"))
 
     def test_system_prompt_memory_rule_replaced(self):
         self.assertIn("STUDENT MEMORY:", CHAT)

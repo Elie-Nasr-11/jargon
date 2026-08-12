@@ -77,6 +77,7 @@ import type {
   CurriculumLinkRow,
   IdeaNode,
   VocabTerm,
+  MyJargonWord,
   SessionSummary,
   StudentProfileStats,
   ReviewDueSkill,
@@ -3417,6 +3418,38 @@ async function fetchIdeasUncached(): Promise<IdeaNode[]> {
   return (data || []) as IdeaNode[];
 }
 
+// "My Jargon": the words THIS student has collected (student_vocab), flattened with
+// their terms via the FK embed. Newest first; `traveled` marks words met in 2+ subjects.
+async function fetchMyJargonUncached(): Promise<MyJargonWord[]> {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const { data, error } = await supabase
+    .from("student_vocab")
+    .select("first_seen_at,subjects_seen,vocab_terms(term,definition,subject)")
+    .eq("user_id", session.user.id)
+    .order("first_seen_at", { ascending: false })
+    .limit(120);
+  if (error) throw error;
+  return (data || [])
+    .map((row) => {
+      const raw = row as {
+        first_seen_at?: string;
+        subjects_seen?: string[];
+        vocab_terms?: { term?: string; definition?: string; subject?: string } | null;
+      };
+      const term = raw.vocab_terms;
+      if (!term?.term) return null;
+      return {
+        term: String(term.term),
+        definition: String(term.definition || ""),
+        subject: String(term.subject || ""),
+        first_seen_at: String(raw.first_seen_at || ""),
+        traveled: Array.isArray(raw.subjects_seen) && raw.subjects_seen.length >= 2,
+      };
+    })
+    .filter((word): word is MyJargonWord => word !== null);
+}
+
 async function fetchStudentLinksUncached(): Promise<StudentLinkRow[]> {
   const session = await getSession();
   if (!session?.user?.id) return [];
@@ -3483,6 +3516,10 @@ export async function fetchStudentAssessments(): Promise<StudentAssessmentBundle
 
 export async function fetchVocabTerms(): Promise<VocabTerm[]> {
   return cached("vocab_terms", 300_000, fetchVocabTermsUncached);
+}
+
+export async function fetchMyJargon(): Promise<MyJargonWord[]> {
+  return cached("my_jargon", 45_000, fetchMyJargonUncached);
 }
 
 export async function fetchIdeas(): Promise<IdeaNode[]> {

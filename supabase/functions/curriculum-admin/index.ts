@@ -618,6 +618,20 @@ async function courseScopeForLesson(config: Config, lessonId: string): Promise<{
   };
 }
 
+// Best-effort background work runs OFF the critical path (same pattern as the chat fn):
+// on the Supabase edge runtime, waitUntil keeps the isolate alive past the response.
+// Callers must pass self-catching promises.
+function scheduleBackground(task: Promise<unknown>): void {
+  const runtime = (
+    globalThis as {
+      EdgeRuntime?: { waitUntil?: (task: Promise<unknown>) => void };
+    }
+  ).EdgeRuntime;
+  if (runtime && typeof runtime.waitUntil === "function") {
+    runtime.waitUntil(task);
+  }
+}
+
 async function publishLesson(config: Config, actorId: string, body: DbRow): Promise<Response> {
   const lessonId = cleanText(body.lesson_id);
   const classId = cleanText(body.class_id);
@@ -2353,7 +2367,17 @@ Deno.serve(async (req: Request) => {
     const action = cleanText(record.action);
     const actorId = String(actor.id);
     if (action === "save_lesson_blueprint") return await saveLessonBlueprint(config, actorId, record);
-    if (action === "publish_lesson") return await publishLesson(config, actorId, record);
+    if (action === "publish_lesson") {
+      const response = await publishLesson(config, actorId, record);
+      // First publish of a knowledge-less lesson auto-drafts its objectives + vocab
+      // (see autoExtractKnowledgeAfterPublish) — off the critical path, teacher-gated.
+      scheduleBackground(
+        autoExtractKnowledgeAfterPublish(config, actorId, record).catch((err) => {
+          console.warn("auto extract_knowledge on publish failed:", errorMessage(err));
+        }),
+      );
+      return response;
+    }
     if (action === "archive_lesson") return await archiveLesson(config, actorId, record);
     if (action === "create_subject") return await createSubject(config, actorId, record);
     if (action === "create_course") return await createCourse(config, actorId, record);
@@ -2381,6 +2405,31 @@ Deno.serve(async (req: Request) => {
 // only improves evidence attribution); published rows are never mutated; re-running
 // skips anything that already exists. Teachers review in studio-lite's Knowledge tab
 // (list_knowledge / review_knowledge below) — nothing reaches students unreviewed.
+
+// Wael (workspace, Aug 9): "Creating the learning objectives and vocab list happens
+// automatically with uploading content... teachers can edit." Publishing is the moment
+// content becomes real — if the lesson has NO knowledge rows yet, draft them in the
+// background (drafts only; the studio Knowledge tab review still gates what students
+// see). Idempotent twice over: this emptiness check, plus extractKnowledge's own
+// skip-existing rules. Best-effort by contract — a failed extraction never fails the
+// publish that scheduled it.
+async function autoExtractKnowledgeAfterPublish(
+  config: Config,
+  actorId: string,
+  body: DbRow,
+): Promise<void> {
+  const lessonId = cleanText(body.lesson_id);
+  if (!lessonId) return;
+  const [ideaRows, vocabRows] = await Promise.all([
+    selectMany(config, `ideas?lesson_id=eq.${enc(lessonId)}&user_id=is.null&select=key&limit=1`),
+    selectMany(config, `vocab_terms?lesson_id=eq.${enc(lessonId)}&select=id&limit=1`),
+  ]);
+  if (ideaRows.length || vocabRows.length) return;
+  await extractKnowledge(config, actorId, {
+    lesson_id: lessonId,
+    class_id: cleanText(body.class_id),
+  });
+}
 
 async function selectMany(config: Config, path: string): Promise<DbRow[]> {
   const data = await serviceFetch(config, `/rest/v1/${path}`);
