@@ -1125,7 +1125,8 @@ export function useConversation() {
         {
           id: uid(),
           role: "user",
-          text: "Yes — build me an activity",
+          // The echo names what was actually requested — slides and sims are different asks.
+          text: offer.kind === "deck" ? "Yes — build the slides" : "Yes — build me an activity",
           turnMode: "lesson",
           createdAt: new Date().toISOString(),
         },

@@ -167,8 +167,10 @@ class ChatLiveArtifactWire(unittest.TestCase):
         self.assertIn("partial.artifact_offer === null", CHAT)
 
     def test_offer_gates(self):
+        # Project assist widened the trigger rung: the block now ends on the
+        # PROJECT_DECK_REQUEST_RE alternative (same gates, one more way in).
         block = re.search(
-            r"const artifactOfferEligible =.*?ARTIFACT_REQUEST_RE\.test\(content\)\);",
+            r"const artifactOfferEligible =.*?PROJECT_DECK_REQUEST_RE\.test\(content\)\);",
             CHAT,
             re.S,
         )
