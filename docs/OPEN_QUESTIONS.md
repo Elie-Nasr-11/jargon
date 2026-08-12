@@ -10,12 +10,14 @@ objectives now auto-draft on lesson publish (teacher-gated in the Knowledge tab)
 "My Jargon" shipped as a Home section over student_vocab, and the Claude workspace
 actor replied on Wael's thread in chapters-co-workspace. Still genuinely open:
 
-- **Project-assist path.** His "4 paths" comment includes one the product lacks: "assist
-  with a project based on the lesson such as a presentation or essay". Open: is this a
-  fourth TurnMode, a Discuss sub-flow, or an artifact-producing flow? The deck export
-  makes "build a presentation together, then download it" the natural shape — likely a
-  Discuss sub-flow that drives the existing deck-artifact pipeline before it earns a
-  mode of its own.
+- **Project-assist path — v1 SHIPPED 2026-08-12** (PROJECT ASSIST prompt block: co-build
+  posture, student supplies the claims; a presentation ask flips the P8 consent-first
+  offer to a DECK build → the new Download). Still open for v2: (a) the deck builds from
+  the step's curriculum fields (artifact-live's never-raw-student-text rail) — should a
+  project deck instead take the MENTOR-authored settled outline as its brief (mentor
+  text, not student text, so the rail's spirit holds)? (b) `allow_live_artifacts` is
+  false across Book F — teachers own the flag; decide whether project decks warrant a
+  separate, defaulted-on flag since decks are plain-text safe by construction.
 - **Workspace feedback sweep.** Wael's comments sat unseen for three weeks. Open:
   should the chapters-co-workspace feed get a routine sweep (a scheduled check that
   surfaces unanswered human comments), and who owns it — a human ritual or the Claude

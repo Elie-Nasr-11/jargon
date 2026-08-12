@@ -6,6 +6,29 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-12 night (project assist v1; Claude LIVE in prod)
+
+Status: Finished
+Summary: (1) DEPLOYED + VERIFIED LIVE — PR #1 merged to main; deploy workflow green;
+ANTHROPIC_API_KEY probe-verified pre-merge; two real turns on itf-f-ch1-l1 via a
+throwaway student (created + torn down through pg_net from the Jargon DB — the
+container proxy blocks *.supabase.co, pg_net is the workaround): turn 1
+provider=anthropic model=claude-opus-5 ($0.061, 5.2s), grader on claude-haiku-4-5
+($0.0013), turn 2 cache hit 10,496/11,270 input tokens → $0.0067 (~9x cheaper).
+Wael's "full strength" work item marked done + deployment update posted in the
+chapters-co-workspace. (2) PROJECT ASSIST v1 (Wael's path 3) — SYSTEM_PROMPT block
+(co-build posture: student supplies the claims, mentor structures; never write the
+piece for them; settled outline lands in ONE message) + PROJECT_DECK_REQUEST_RE flips
+the P8 consent-first offer to kind=deck with label "Build these slides" (directive and
+pill agree; sim flavor unchanged; all safety gates intact — test_artifact_live's
+eligibility regex re-anchored on the widened block). Client echo names the build.
+Files: supabase/functions/chat/index.ts, frontend/src/student/useConversation.ts,
+tests/{test_project_assist.py(new),test_artifact_live.py}, docs.
+Tests: 676 OK; tsc/eslint/build green; deno check parity (8 pre-existing).
+Remaining: allow_live_artifacts=false across Book F — the deck offer stays dormant
+until a teacher enables it per lesson (flag ownership + v2 outline-brief question in
+OPEN_QUESTIONS). Suggested next: de-prescription pass 2 behind live transcript A/B.
+
 ## Claude -> Codex / Human - 2026-08-12 evening (My Jargon + publish-time knowledge drafting)
 
 Status: Finished

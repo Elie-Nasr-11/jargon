@@ -175,6 +175,15 @@ when the directive says so) you evaluate without teaching: no hints, no scaffold
 brief feedback only. This no-teaching rule is ONLY for open-ended assessment; multiple-choice quiz steps are
 unaffected — keep giving brief targeted feedback on why a wrong choice fails, exactly as the quiz rules say.
 
+PROJECT ASSIST: when the student wants to PREPARE something from the lesson — a presentation, an
+essay, a speech, a poster — help them build it without doing it for them. First ask what they're
+making and who it's for. Then build it TOGETHER, one part at a time: THEY say what each part should
+claim, in their own words; you structure, sharpen, and keep it accurate to the lesson. Never write
+the whole piece yourself — an outline they assembled beats a draft they copied. When the shape is
+settled, lay the full outline out plainly in ONE message so they can keep it; if the directive says
+a build button is attached to your reply, that button turns the outline into slides they can
+download — point at it naturally, never before the thinking is theirs.
+
 Revision steps are RETRIEVAL PRACTICE on material the student has already studied: ask ONE short recall
 question at a time on the step's skills, targeting the ones they are weakest at (their per-skill tiers are in
 student.mastery — favor "emerging" over "developing" over "secure"). Let them retrieve the answer from memory
@@ -4855,6 +4864,12 @@ const RESOURCE_REQUEST_RE =
 // struggle thresholds fire ("can you make me a simulation?").
 const ARTIFACT_REQUEST_RE =
   /\b(make|build|create|show)\b[\s\S]{0,40}\b(sim(ulation)?|interactive|activity|visual(ization)?|demo|game)\b/i;
+// Project assist (Wael's path 3: "assist with a project based on the lesson such as a
+// presentation"): a slides/presentation ask flips the SAME consent-first offer to a
+// DECK build — the conversation co-builds the content, the pill materializes a deck the
+// student downloads. Essays/speeches stay conversation-only (an outline, never a deck).
+const PROJECT_DECK_REQUEST_RE =
+  /\b(make|build|create|prepare|help)\b[\s\S]{0,60}\b(presentation|slide ?deck|slides?|powerpoint)\b|\b(presentation|slide ?deck|powerpoint)\b[\s\S]{0,40}\b(about|on|for|from)\b/i;
 // P8: re-attach the last mentor-built card ("show me that activity again").
 const ARTIFACT_AGAIN_RE =
   /\b(activity|sim(ulation)?|game|demo)\b[\s\S]{0,30}\b(again|back|once more)\b|\b(again|back)\b[\s\S]{0,30}\b(activity|sim(ulation)?|game|demo)\b/i;
@@ -6727,7 +6742,9 @@ async function handleTypedRequest(
       !inRevisit &&
       // One passive offer per step — but an EXPLICIT ask re-opens it (review fold:
       // a student who typed "yes please" instead of tapping was dead-ended).
-      (!stepStateBefore.artifact_offer_at || ARTIFACT_REQUEST_RE.test(content)) &&
+      (!stepStateBefore.artifact_offer_at ||
+        ARTIFACT_REQUEST_RE.test(content) ||
+        PROJECT_DECK_REQUEST_RE.test(content)) &&
       stepStateBefore.artifact_generated < 1 &&
       typeof context.activity?.id === "string" &&
       // Prose/pill agreement in the completion corner: a turn whose deterministic
@@ -6735,12 +6752,22 @@ async function handleTypedRequest(
       !stepDone(draftState, requirements) &&
       (draftState.graded_fails >= 2 ||
         hintRung >= 3 ||
-        ARTIFACT_REQUEST_RE.test(content));
+        ARTIFACT_REQUEST_RE.test(content) ||
+        PROJECT_DECK_REQUEST_RE.test(content));
+    // Project flavor: a presentation/slides ask makes the offered build a DECK — the
+    // pill and the mentor's prose must agree on what gets built (see the emission).
+    const projectDeckAsk = artifactOfferEligible && PROJECT_DECK_REQUEST_RE.test(content);
     if (artifactOfferEligible) {
-      directive.text +=
-        " They've been struggling here. Offer in ONE natural line to build them a quick" +
-        " interactive activity for this idea — a button appears under your reply; if" +
-        " they ignore or decline it, drop the subject.";
+      directive.text += projectDeckAsk
+        ? " They want to make a presentation from this material. Co-build it RIGHT HERE," +
+          " per your PROJECT ASSIST rules: ask what it's for, and have THEM say what each" +
+          " part should claim while you structure and sharpen it. A [Build these slides]" +
+          " button is attached under your reply — mention in one natural line that it" +
+          " builds a deck they can download whenever they're ready; if they ignore or" +
+          " decline it, keep co-building in conversation."
+        : " They've been struggling here. Offer in ONE natural line to build them a quick" +
+          " interactive activity for this idea — a button appears under your reply; if" +
+          " they ignore or decline it, drop the subject.";
     }
     // Media steps: record that the material was shown (the presentation turn attaches the
     // card). Best-effort telemetry — interactions never gate and never block the turn.
@@ -7541,11 +7568,19 @@ async function handleTypedRequest(
     // re-checked so a pill never renders under a step that just finished.
     envelope.artifact_offer =
       artifactOfferEligible && !advancing && !finalStepDone
-        ? {
-            label: "Build me a quick activity",
-            kind: "html_sim",
-            activity_id: String(context.activity?.id || ""),
-          }
+        ? projectDeckAsk
+          ? {
+              // Wael's path 3: the presentation ask builds a DECK (downloadable via
+              // the deck card's Download), not an interactive sim.
+              label: "Build these slides",
+              kind: "deck",
+              activity_id: String(context.activity?.id || ""),
+            }
+          : {
+              label: "Build me a quick activity",
+              kind: "html_sim",
+              activity_id: String(context.activity?.id || ""),
+            }
         : null;
     if (envelope.artifact_offer) {
       finalState.artifact_offer_at = turnStartedIso;
