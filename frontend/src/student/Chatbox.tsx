@@ -146,7 +146,11 @@ export type ChatboxProps = {
   voiceActive?: boolean;
   // Voice telemetry sink (dictation started/transcribed/submitted).
   onVoiceEvent?: (event: VoiceInteractionEvent) => void;
+  // Hard lock (teacher hold): the whole composer goes inert.
   disabled?: boolean;
+  // Turn in flight: only Send/Run are gated — the student keeps typing their next
+  // thought while the mentor's reply paces out.
+  busy?: boolean;
   placeholder?: string;
   // Context for the plus menu's "Reference a resource" picker: without a lesson there is
   // nothing to reference, so the row hides. sessionResources = what the mentor has already
@@ -166,6 +170,7 @@ export function Chatbox({
   voiceActive,
   onVoiceEvent,
   disabled,
+  busy,
   placeholder,
   lessonId,
   sessionResources,
@@ -191,7 +196,8 @@ export function Chatbox({
   const dictationAvailable = speechRecognitionConstructor() !== null;
   // An attachment alone is a legitimate message ("here, look at this"), so text is not required —
   // but an upload still in flight is, or the tutor would receive a reference to nothing.
-  const canSend = (text.trim().length > 0 || attachments.length > 0) && !disabled && !uploading;
+  const canSend =
+    (text.trim().length > 0 || attachments.length > 0) && !disabled && !busy && !uploading;
   // The send-slot swap: an empty draft offers speech; any typed text (or attachment) swaps
   // in the send circle.
   const draftEmpty = text.trim().length === 0 && attachments.length === 0 && !uploading;
@@ -200,7 +206,7 @@ export function Chatbox({
   // Picker data, fetched lazily when its view opens; null = loading.
   const [uploads, setUploads] = useState<StudentUpload[] | null>(null);
   const [refResources, setRefResources] = useState<LessonChatResource[] | null>(null);
-  const canRun = code.trim().length > 0 && !disabled;
+  const canRun = code.trim().length > 0 && !disabled && !busy;
 
   // The input grows with the draft until 5 lines are visible, then scrolls inside the box.
   // Runs on every text change — typed, dictated, or cleared on send — so the height always

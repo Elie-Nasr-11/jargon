@@ -42,7 +42,7 @@ import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import type { ModeOffer } from "@/features/student/chat/chatMessages";
 import { useConversation } from "@/student/useConversation";
-import { DEFAULT_TURN_MODE, type TurnMode } from "@/student/turnModes";
+import { DEFAULT_TURN_MODE, isTurnMode, type TurnMode } from "@/student/turnModes";
 import {
   DESTINATIONS,
   type StudentDestination,
@@ -566,7 +566,11 @@ export function StudentApp({
         <Transcript
           messages={conversation.messages}
           disabled={conversation.sending}
-          onRetry={(answer) => void conversation.retry(answer, turnMode)}
+          // Retry re-sends in the register the failed turn was SENT in; the live picker
+          // is only the fallback for errors persisted before retryMode existed.
+          onRetry={(answer, mode) =>
+            void conversation.retry(answer, isTurnMode(mode) ? mode : turnMode)
+          }
           onAcceptOffer={acceptModeOffer}
           onChoose={(choiceId, label) => {
             // Phase A: an MCQ tap is a LESSON act (the options are the lesson's own quiz

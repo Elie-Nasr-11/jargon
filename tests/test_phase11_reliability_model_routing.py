@@ -39,6 +39,8 @@ class Phase11ReliabilityModelRoutingTests(unittest.TestCase):
         # cheap understanding grader); the old grading/rescue/resource_context routes + modelRouteFor
         # were removed. The mentor conversation resolves TUTOR_MODEL_CONVERSATION -> TUTOR_MODEL_DEFAULT
         # -> OPENAI_MODEL_DEFAULT, and every call records its route in the usage payload.
+        # Claude-default era: modelFor is provider-aware so a model pinned for one
+        # provider can never ride the other provider's API.
         for fragment in (
             'type ModelRoute = "default" | "understanding"',
             'type ModelUsageTaskType = "mentor_turn" | "grading"',
@@ -46,8 +48,32 @@ class Phase11ReliabilityModelRoutingTests(unittest.TestCase):
             '"TUTOR_MODEL_UNDERSTANDING"',
             '"TUTOR_MODEL_DEFAULT"',
             '"OPENAI_MODEL_DEFAULT"',
-            "function modelFor(route: ModelRoute)",
+            'function modelFor(route: ModelRoute, provider: "anthropic" | "openai")',
             "payload: { route: usage.route }",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.chat)
+
+    def test_chat_defaults_to_anthropic_with_hardened_adapter(self):
+        # Claude is the default tutor provider. The adapter must keep: the missing-key
+        # fallback (a deploy is never one unset secret away from a dead tutor), Claude
+        # model defaults per route, prompt caching on the stable system block, refusal
+        # + truncation surfacing, bounded retries on transient statuses, and Claude
+        # rows in the price table so cost telemetry stays honest.
+        for fragment in (
+            'envText("TUTOR_PROVIDER", "anthropic")',
+            'default: "claude-opus-5"',
+            'understanding: "claude-haiku-4-5"',
+            "function resolveProvider()",
+            "falling back to",
+            'cache_control: { type: "ephemeral" }',
+            "cache_creation_input_tokens",
+            'stopReason === "refusal"',
+            "function anthropicFetch",
+            "429, 500, 502, 503, 529",
+            '"claude-fable"',
+            "function effortFor",
+            "TUTOR_MAX_OUTPUT_TOKENS",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.chat)

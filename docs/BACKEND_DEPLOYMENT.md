@@ -49,7 +49,27 @@ Required Render environment variables: none.
 - Apply `supabase/migrations/0002_lesson_spine.sql` next to add `module`, `level`, `expected_output`, and the 10-lesson starter spine.
 - Future schema changes must continue as new migrations.
 - Required secret for `run`: `JARGON_ENGINE_URL`, pointing to the Render engine `/run` endpoint.
-- Required secret for `chat`: `OPENAI_API_KEY`.
+- Required secret for `chat`: `ANTHROPIC_API_KEY` (Claude is the default tutor provider).
+  `OPENAI_API_KEY` still powers the legacy path and the fallback: if the resolved
+  provider's key is missing but the other's exists, the gateway falls back rather than
+  failing every turn — so a deploy before the Anthropic key is set keeps running on OpenAI.
+- Optional `chat` environment variables (defaults in parentheses):
+  - `TUTOR_PROVIDER` (`anthropic`) — set `openai` to run the legacy OpenAI path.
+  - `TUTOR_MODEL_CONVERSATION` (`claude-opus-5` on Anthropic, `gpt-4o` on OpenAI) — the
+    student-facing mentor model. A model pinned for the wrong provider's family is
+    ignored in favor of the provider default, so a stale pin can never 404 every turn.
+  - `TUTOR_MODEL_UNDERSTANDING` (`claude-haiku-4-5` / `gpt-4o-mini`) — the cheap
+    grader/summarizer route.
+  - `TUTOR_EFFORT_CONVERSATION` (`medium`) and `TUTOR_EFFORT_UNDERSTANDING` (`low`) —
+    Claude effort levels (`low`–`max`); tutoring wants snappy turns, and Claude Opus 5
+    stays strong at medium. Ignored on models without the effort parameter.
+  - `TUTOR_MAX_OUTPUT_TOKENS` (`8192`) — Claude output cap (reply JSON + adaptive
+    thinking headroom).
+  - `TUTOR_TEMPERATURE_DEFAULT` (`0.6`) — OpenAI path only; current Claude models
+    reject sampling parameters.
+- The mentor's static system prompt and the step-stable half of the turn payload carry
+  Anthropic `cache_control` breakpoints: turns after a step's first read them from cache
+  (~0.1x input price, faster first token). No configuration required.
 - The `run` edge function should continue forwarding `{ code, answers }` and passing the engine result through unchanged.
 - The expected engine response includes `output`, `memory`, `errors`, `ask`, `ask_var`, `status`, `truncated`, `limits_hit`, and the compatibility alias `result`.
 - If `JARGON_ENGINE_URL` is missing, `run` should fail loudly with a canonical error-shaped JSON response rather than using any fallback engine.

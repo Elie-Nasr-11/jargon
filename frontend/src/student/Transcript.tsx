@@ -385,7 +385,17 @@ function renderProse(raw: string, vocab?: VocabPass, keyBase = "s"): ReactNode[]
 // because a QUESTION sentence still earns its accent colour, and because animating whole
 // settled sentences again on every token would re-fire the fade across the whole reply.
 function StreamingBody({ text }: { text: string }) {
-  const segments = parseFencedBlocks(text);
+  // Inline markers are resolved only at settle (MessageBody). Mid-stream the raw
+  // [[material:…]] / [[figure:…]] syntax must never be shown to a student — strip the
+  // completed markers (actions keep their clickable label as plain prose) and hold back
+  // a still-forming marker at the stream's edge until it either completes or proves to
+  // be ordinary text.
+  const cleaned = text
+    .replace(MATERIAL_MARKER_RE, "")
+    .replace(FIGURE_MARKER_RE, "")
+    .replace(ACTION_MARKER_RE, (_all, _mode, label: string) => label)
+    .replace(/\[\[[a-z]*(?::[^\]]*)?$/i, "");
+  const segments = parseFencedBlocks(cleaned);
   return (
     <>
       {segments.map((segment, i) => {
@@ -854,7 +864,9 @@ export type TranscriptProps = {
   // Choices are live only on the LATEST mentor message — an older question's buttons must not
   // stay clickable once the conversation has moved on.
   onChoose?: (choiceId: string, label: string) => void;
-  onRetry?: (answer: TypedChatAnswer) => void;
+  // `mode` is the register the failed turn was originally sent in (absent on older
+  // persisted errors) — the caller falls back to the live picker when it is missing.
+  onRetry?: (answer: TypedChatAnswer, mode?: string) => void;
   // R32: accepting an inline hand-off offer ([Talk it through], [Back to the lesson]).
   // The shell owns it because accepting also moves the composer's mode picker.
   onAcceptOffer?: (offer: ModeOffer) => void;
@@ -928,7 +940,7 @@ export function Transcript({
                   {message.text ? (
                     <StreamingBody text={message.text} />
                   ) : (
-                    <span className="text-muted-foreground">Thinking…</span>
+                    <span className="thinking-pulse text-muted-foreground">Thinking…</span>
                   )}
                 </Bubble>
               );
@@ -1047,7 +1059,9 @@ export function Transcript({
                   }
                 : undefined;
             return (
-              <MentorRise key={message.id} animate={isNew}>
+              // A reply the student already watched stream in must not fade/rise again on
+              // the settle swap — that re-animates text they are mid-way through reading.
+              <MentorRise key={message.id} animate={isNew && !message.streamed}>
                 <div className="hvp flex flex-col gap-2">
                   <Bubble align="start" tone={message.isError ? "error" : "mentor"}>
                     <MessageBody
@@ -1073,7 +1087,7 @@ export function Transcript({
                         onClick={() =>
                           message.retryControl
                             ? channel.retryControlTurn(message.retryAnswer!, message.retryControl)
-                            : onRetry?.(message.retryAnswer!)
+                            : onRetry?.(message.retryAnswer!, message.retryMode)
                         }
                         className="mt-2 flex items-center gap-1.5 rounded-control border border-danger/40 px-2 py-1 text-meta text-danger transition-colors duration-(--dur-fast) hover:bg-danger/10 disabled:opacity-40"
                       >

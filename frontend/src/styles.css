@@ -968,8 +968,25 @@ select {
 .inline-code-hue {
   color: color-mix(in oklab, var(--mode-practice) 65%, var(--foreground));
 }
+/* The pre-first-token "Thinking…" line breathes instead of sitting frozen — a static
+   string over a 5-15s wait reads as a hang, not as work happening. */
+@keyframes thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.thinking-pulse {
+  animation: thinking-pulse 1.4s ease-in-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   .stream-word {
+    animation: none;
+  }
+  .thinking-pulse {
     animation: none;
   }
 }

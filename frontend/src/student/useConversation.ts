@@ -302,7 +302,14 @@ export function useConversation() {
   const switchTokenRef = useRef(0);
   // The promise of the turn currently in flight, so a caller told "busy" can wait the turn
   // out and retry instead of dropping its send (the artifact build's ready post needs this).
+  // Resolves when the SEND LOCK releases (after the paced reply settles), not when the
+  // network call returns — retrying before settle would just hit "busy" again.
   const inFlightTurnRef = useRef<Promise<TypedChatEnvelope | null> | null>(null);
+  // Tears down the active turn's sentence pacer (timers + deferred settle + send lock).
+  // Registered per send; called on lesson switch and unmount so a paced reply can never
+  // leak into a different lesson's transcript or leave the lock stuck.
+  const pacerCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => pacerCleanupRef.current?.(), []);
   // True while a live artifact build is running (30-90s, outside the turn loop).
   const buildingArtifactRef = useRef(false);
 
@@ -330,7 +337,13 @@ export function useConversation() {
           activities_complete: envelope.session.activities_complete === true,
         });
       }
-      setOffers(offersFromEnvelope(envelope));
+      // The resources offer is sticky-true: the pill opens the ACCUMULATED tray, so once
+      // anything has been attached this session the pill must survive turns that attach
+      // nothing (the server's per-turn `available.resources` only reports THIS turn).
+      setOffers((current) => {
+        const next = offersFromEnvelope(envelope);
+        return { ...next, resources: next.resources || current.resources };
+      });
       // Accumulate: a later turn attaching nothing must not clear what was already shown.
       if (envelope.resources?.length) {
         setResources((current) => {
@@ -389,6 +402,8 @@ export function useConversation() {
   // the first finished) without writing state that no longer belongs to the visible lesson.
   const loadLesson = useCallback(
     async (target: Lesson, isStale: () => boolean) => {
+      // A paced reply from the previous lesson must die here, not settle into this one.
+      pacerCleanupRef.current?.();
       lessonRef.current = target;
       setLesson(target);
       setMessages([]);
@@ -443,14 +458,30 @@ export function useConversation() {
           fetchTeacherLiveComments(existing.id).catch(() => [] as TeacherLiveComment[]),
         ]);
         if (isStale()) return;
+        const restored = turns.map(turnToMessage).filter(Boolean) as Msg[];
         setMessages(
           withRestoredQuizChoices(
-            sortTimedMessages([
-              ...(turns.map(turnToMessage).filter(Boolean) as Msg[]),
-              ...comments.map(liveCommentToMessage),
-            ]),
+            sortTimedMessages([...restored, ...comments.map(liveCommentToMessage)]),
           ),
         );
+        // Re-seed the session's materials tray (and its pill) from the restored turns —
+        // a resumed session with attached readings used to reload with no Resources pill
+        // at all, because the accumulator only ever saw live envelopes.
+        const restoredResources: LessonChatResource[] = [];
+        const seenResourceIds = new Set<string>();
+        for (const message of restored) {
+          if (message.role !== "bot") continue;
+          for (const resource of message.resources ?? []) {
+            const id = String(resource.id);
+            if (seenResourceIds.has(id)) continue;
+            seenResourceIds.add(id);
+            restoredResources.push(resource);
+          }
+        }
+        if (restoredResources.length) {
+          setResources(restoredResources);
+          setOffers((current) => ({ ...current, resources: true }));
+        }
       } else {
         // No session yet: stay BLANK — no auto-generated opening turn (no pretext). The
         // welcome surface (LessonWelcome) shows the lesson's materials + suggested prompts;
@@ -667,25 +698,34 @@ export function useConversation() {
       setError("");
 
       const thinkingId = uid();
-      setMessages((current) => [
-        // Drop any trailing error bubble: the turn it reported is being attempted again, and
-        // leaving it would show a failure above its own successful retry.
-        ...current.filter((m) => !(m.role === "bot" && m.isError)),
-        ...(echo === undefined
-          ? []
-          : [
-              {
-                id: uid(),
-                role: "user" as const,
-                text: echo,
-                turnMode: mode,
-                inputModality: options?.echoMeta?.inputModality,
-                transcriptConfidence: options?.echoMeta?.transcriptConfidence ?? null,
-                createdAt: new Date().toISOString(),
-              },
-            ]),
-        { id: thinkingId, role: "thinking" as const },
-      ]);
+      setMessages((current) => {
+        // Drop only the TRAILING error bubble(s): the turn they reported is being attempted
+        // again, and leaving one would show a failure above its own successful retry. Errors
+        // deeper in the scrollback are history — they stay.
+        const trimmed = [...current];
+        for (;;) {
+          const last = trimmed[trimmed.length - 1];
+          if (!last || last.role !== "bot" || !last.isError) break;
+          trimmed.pop();
+        }
+        return [
+          ...trimmed,
+          ...(echo === undefined
+            ? []
+            : [
+                {
+                  id: uid(),
+                  role: "user" as const,
+                  text: echo,
+                  turnMode: mode,
+                  inputModality: options?.echoMeta?.inputModality,
+                  transcriptConfidence: options?.echoMeta?.transcriptConfidence ?? null,
+                  createdAt: new Date().toISOString(),
+                },
+              ]),
+          { id: thinkingId, role: "thinking" as const },
+        ];
+      });
 
       // Chat-flow Phase 2 + Round 22g (owner): stream the mentor's reply into the thinking
       // placeholder SENTENCE BY SENTENCE. The raw deltas accumulate off-screen; a completed
@@ -694,9 +734,12 @@ export function useConversation() {
       // time instead of racing a token firehose. While the pacer is caught up with the
       // model, the live forming tail streams through (the blurred R21 tail); when it's
       // behind, the extra text simply waits its turn. Tail repaints stay ~12fps.
-      const WORD_MS = 200;
-      const HOLD_MIN_MS = 400;
-      const HOLD_MAX_MS = 4_000;
+      // Tuned R33 (smoothness pass): 200ms/word with a 4s ceiling produced long dead-air
+      // holds between sentences; 150ms with a 2.5s ceiling keeps the sentence-at-a-time
+      // reading rhythm without the stalls.
+      const WORD_MS = 150;
+      const HOLD_MIN_MS = 350;
+      const HOLD_MAX_MS = 2_500;
       let streamedText = "";
       let revealedCount = 0; // complete sentences released to the transcript
       let releaseTimer = 0;
@@ -708,14 +751,13 @@ export function useConversation() {
       const paint = () => {
         const b = breaks();
         // Caught up → show everything incl. the forming tail; behind → cut at the last
-        // released boundary (keeping its whitespace so released sentences render settled).
+        // released boundary EXCLUDING its whitespace, so the sentence just released is
+        // still the renderer's "tail" and lands with the word-by-word fade (cutting after
+        // the whitespace made every paced sentence pop in as a settled block).
         const snapshot =
           revealedCount >= b.length
             ? streamedText
-            : streamedText.slice(
-                0,
-                b[revealedCount - 1] ? b[revealedCount - 1].at + b[revealedCount - 1].len : 0,
-              );
+            : streamedText.slice(0, b[revealedCount - 1] ? b[revealedCount - 1].at : 0);
         setMessages((current) =>
           current.map((m) =>
             m.id === thinkingId && m.role === "thinking" ? { ...m, text: snapshot } : m,
@@ -755,6 +797,36 @@ export function useConversation() {
         }
       };
 
+      // R33 (smoothness pass): the send lock holds until the paced reply SETTLES, not
+      // merely until the network call returns. Releasing it mid-pacing let a second send
+      // scramble the transcript order, re-enable retired quiz choices, and — on a first
+      // turn whose session pointer had not landed yet — fork a duplicate learning session.
+      let lockOwned = true;
+      let turnCancelled = false;
+      let lockReleased: () => void = () => {};
+      const lockDone = new Promise<void>((resolve) => {
+        lockReleased = resolve;
+      });
+      let cleanupFn: (() => void) | null = null;
+      const releaseSendLock = () => {
+        if (!lockOwned) return; // a lesson switch/unmount already released this turn's lock
+        lockOwned = false;
+        if (pacerCleanupRef.current === cleanupFn) pacerCleanupRef.current = null;
+        sendingRef.current = false;
+        setSending(false);
+        lockReleased();
+      };
+      cleanupFn = () => {
+        turnCancelled = true;
+        window.clearTimeout(releaseTimer);
+        window.clearTimeout(tailTimer);
+        releaseTimer = 0;
+        tailTimer = 0;
+        pendingSettle = null;
+        releaseSendLock();
+      };
+      pacerCleanupRef.current = cleanupFn;
+
       const work = (async (): Promise<TypedChatEnvelope | null> => {
         try {
           const session = await getSession();
@@ -770,12 +842,19 @@ export function useConversation() {
             mode,
             onDelta,
           });
+          // The session pointer must not wait for the pacer: everything visual lands at
+          // settle, but a first turn's session id has to be readable the moment it exists.
+          if (!turnCancelled && envelope.session_id) setSession(envelope.session_id);
           const settle = () => {
+            if (turnCancelled) return;
             applyEnvelope(envelope);
             setMessages((current) => [
               ...current.filter((m) => m.id !== thinkingId),
-              envelopeMessage(envelope, mode),
+              // `streamed` marks a reply the student already watched arrive, so the
+              // transcript's entrance animation is skipped on the settle swap.
+              { ...envelopeMessage(envelope, mode), streamed: streamedText.length > 0 },
             ]);
+            releaseSendLock();
           };
           // Round 22g: if sentences are still being paced out, the pump settles once the
           // last one lands (so the final swap never jumps ahead of the reading). Otherwise
@@ -789,21 +868,28 @@ export function useConversation() {
           return envelope;
         } catch (err) {
           const message = friendlyError(err, "That didn't send.");
-          // The error bubble carries the failed answer (and control) so Retry can re-send it
-          // faithfully — a failed navigate/resume must retry as navigation, not degrade into a
-          // bare text turn — and is flagged isError so it never becomes the "latest mentor
-          // message" (which would strip live quiz choices off the real question with no way back).
-          setMessages((current) => [
-            ...current.filter((m) => m.id !== thinkingId),
-            {
-              id: uid(),
-              role: "bot",
-              text: message,
-              isError: true,
-              retryAnswer: answer,
-              retryControl: options?.control,
-            },
-          ]);
+          // The error bubble carries the failed answer (and control + mode) so Retry can
+          // re-send it faithfully — a failed navigate/resume must retry as navigation, and a
+          // turn sent in Practice must retry in Practice — and is flagged isError so it never
+          // becomes the "latest mentor message" (which would strip live quiz choices off the
+          // real question with no way back). Prose that already streamed stays in the bubble:
+          // the student was reading it, and yanking it away reads as the app eating the reply.
+          if (!turnCancelled) {
+            const partial = streamedText.trim();
+            setMessages((current) => [
+              ...current.filter((m) => m.id !== thinkingId),
+              {
+                id: uid(),
+                role: "bot",
+                text: partial ? `${partial}\n\n${message}` : message,
+                isError: true,
+                retryAnswer: answer,
+                retryControl: options?.control,
+                retryMode: mode,
+              },
+            ]);
+            setError(message);
+          }
           // Kill the pacer outright — the thinking bubble it painted into is gone, and a
           // queued settle must never fire over an error bubble.
           window.clearTimeout(releaseTimer);
@@ -811,15 +897,14 @@ export function useConversation() {
           releaseTimer = 0;
           tailTimer = 0;
           pendingSettle = null;
-          setError(message);
+          releaseSendLock();
           return null;
-        } finally {
-          sendingRef.current = false;
-          setSending(false);
         }
       })();
-      // Registered so a "busy" caller (the artifact build's ready post) can await the turn out.
-      inFlightTurnRef.current = work;
+      // Registered so a "busy" caller (the artifact build's ready post) can wait the turn
+      // out — resolving only when the send lock releases, so an immediate retry can never
+      // land on "busy" again while the reply is still pacing out.
+      inFlightTurnRef.current = work.then((envelope) => lockDone.then(() => envelope));
       return work;
     },
     [applyEnvelope],

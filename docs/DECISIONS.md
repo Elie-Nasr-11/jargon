@@ -2,6 +2,41 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-08-12: Claude is the tutor's default provider; conversation-flow R33 pass
+
+Owner asked for the switch to the Claude API and a model ramp-up for higher-quality
+teaching with a simpler, less breakable runtime:
+
+- **`TUTOR_PROVIDER` defaults to `anthropic`.** The mentor conversation runs on
+  `claude-opus-5` (the current Opus tier: strongest sustained-conversation quality at
+  $5/$25 per MTok); the understanding/grading route stays pinned cheap on
+  `claude-haiku-4-5`, preserving the strong-conversation/cheap-grader split.
+  `claude-fable-5` was considered and deliberately NOT defaulted: it is 2x the price,
+  requires 30-day data retention, and its edge is deepest long-horizon agentic work —
+  not per-turn tutoring. It remains one env var away (`TUTOR_MODEL_CONVERSATION`).
+- **The OpenAI path is kept, not removed** — `TUTOR_PROVIDER=openai` runs it unchanged,
+  and a missing-key deploy falls back to whichever provider has a key instead of
+  failing every turn.
+- **Claude effort defaults: conversation `medium`, graders `low`** — interactive
+  tutoring is latency-sensitive and Claude Opus 5 stays strong at medium; env-tunable.
+- **Prompt caching is part of the contract now**: the static system prompt and the
+  step-stable half of the mentor payload ride `cache_control` breakpoints (the payload
+  is partitioned into a stable block + a live block — same key paths, two JSON parts).
+  Cache-hostile keys (recent_questions, materials.opened, mastery) live in the live block.
+- **Variety comes from data, not temperature** (Claude models reject sampling params):
+  the mentor now sees its own recent openers (`student.recent_openers`) and a widened
+  window of its recent questions, making the anti-repetition rules checkable instead of
+  aspirational.
+- **R33 conversation-flow pass** (client): the send lock holds until the paced reply
+  settles; raw `[[material/figure/action]]` markers never stream as visible text; the
+  settle swap no longer re-animates the reply; stream failures keep the partial prose
+  with Retry (in the original register); the composer stays typeable while a reply paces
+  out (busy gates Send/Run only); autoscroll stops fighting the stream and a Jump-to-
+  latest pill returns a scrolled-up student; the Resources pill reports the accumulated
+  tray and survives reloads. Server: malformed mentor JSON degrades to the streamed
+  prose instead of erroring the turn; refusal/truncation surface as calm student-safe
+  errors; transient 429/5xx get bounded retries.
+
 ## 2026-07-30 (late): Trunk unification — v6 /learn wins, main becomes the single trunk
 
 Owner decisions after discovering the parallel v6 rebuild on claude/happy-johnson-wseex8:

@@ -6,6 +6,83 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-12 (Claude provider + conversation-flow R33)
+
+Status: Finished
+Summary: (1) PROVIDER SWITCH — Claude is now the default tutor provider.
+resolveProvider() defaults TUTOR_PROVIDER to anthropic with a missing-key
+fallback to the other provider (a deploy before the ANTHROPIC_API_KEY secret is
+set keeps running on OpenAI, logged once); modelFor() is provider-aware
+(defaults claude-opus-5 conversation / claude-haiku-4-5 understanding; a model
+pinned for the wrong provider's family can never 404 every turn). The Anthropic
+adapter gained: prompt caching (cache_control on the static system prompt AND on
+a step-stable payload block — mentorUserContent partitions the payload into
+stable+live JSON parts, same key paths; sanitizeForOpenAI strips the marker on
+the legacy path; attachments now append to the block array), refusal +
+max_tokens surfacing via throwOnAnthropicStop, bounded retries on 429/5xx/529
+(anthropicFetch — stream-safe, retries only before any byte is consumed), effort
+(conversation medium / graders low, env-tunable, skipped on models without the
+param), TUTOR_MAX_OUTPUT_TOKENS (8192 default, up from 4096), cache-creation
+tokens counted into inputTokens, and a claude-fable price row. The attachment
+provider arg now follows the same resolution (it read the raw env with an
+"openai" default — post-flip that would have built OpenAI-shaped image blocks
+for Anthropic turns).
+(2) MENTOR PROMPT/TURN FIXES — "brain" payload path corrected (the prompt said
+turn.brain; the key is top-level — the whole BRAIN personalization block was
+pointing at nothing); "reply must be first key" is now stated in the OUTPUT
+contract (the streaming extractor hard-depends on it); malformed mentor JSON
+now salvages the streamed prose into a normal turn instead of erroring
+(telemetry: controlled_error/mentor_json_salvaged_from_stream); the SSE catch
+uses the student-safe error line (it leaked raw internals); CONCLUDE_HANDOFF
+rewritten to vary its closing wording (kept the pinned "Shall we continue?"
+anchor + no-button/no-mechanics guarantees); explanation_pending escalates from
+attempt 2 instead of repeating byte-identical coaching; the grader now sees the
+mentor's last message in full (its NAMED-CRITERION rule keyed off a 200-char
+truncation); mentorQuestionsFromTurns widened (all questions per turn, 6 turns,
+cap 8) and the mentor now receives student.recent_openers — the vary-your-
+openers rule has data now, replacing the temperature the Claude path can't use;
+fallbackReply lines rewritten in the mentor's voice.
+(3) CLIENT R33 SMOOTHNESS — the send lock holds until the paced reply SETTLES
+(was released at envelope arrival: second sends scrambled transcript order,
+re-enabled retired quiz buttons, and could fork a duplicate session on turn 1;
+inFlightTurnRef now resolves at lock release so busy-waiters retry correctly;
+pacerCleanupRef kills the pacer on lesson switch/unmount; session pointer lands
+at envelope arrival); StreamingBody strips [[material/figure/action]] markers
+(raw ids were streaming as visible text, then popping into cards at settle);
+the settle swap no longer re-animates (streamed flag on the envelope message);
+pacer retuned (150ms/word, 0.35-2.5s holds, snapshot cut before the boundary
+whitespace so paced sentences keep the word-fade instead of popping in as
+blocks); stream failures keep the partial prose in the error bubble and Retry
+re-sends in the ORIGINAL TurnMode (retryMode on Msg); only trailing error
+bubbles are dropped on resend; the composer stays typeable during a turn (new
+busy prop gates Send/Run only; hold keeps the hard lock); autoscroll jumps
+instantly during streaming repaints and animates only on new messages, with a
+"Jump to latest" pill when scrolled up; "Thinking…" breathes (thinking-pulse);
+the Resources pill is sticky over the accumulated tray and reloads re-seed it
+from the restored transcript.
+Files changed: supabase/functions/chat/index.ts; frontend/src/student/
+{useConversation.ts,Transcript.tsx,ChatWindow.tsx,Chatbox.tsx,StudentApp.tsx},
+frontend/src/features/student/chat/chatMessages.ts, frontend/src/styles.css;
+tests/{test_conversation_smoothness_r33.py(new),test_phase11_reliability_model_
+routing,test_chat_streaming,test_session_hold,test_brain_phase_b,test_memory_v1}
+.py; docs/{BACKEND_DEPLOYMENT,DECISIONS,HANDOFF}.md.
+Tests run: python3 -m unittest discover -s tests -q (659 OK, 4 skipped — 24 new
+pins); npx tsc --noEmit (0); npx eslint src/student src/features/student
+(0 errors, 8 pre-existing warnings); npm run build (green); deno check on the
+chat fn (same 8 pre-existing errors as main, none in touched code).
+Remaining concerns: (a) voice-session (OpenAI realtime) and resource-processing
+(whisper/summaries) still run on OpenAI — deliberate: Anthropic has no realtime
+speech API; revisit voice separately. (b) The system prompt + directives remain
+prohibition-heavy (59 "never"s) — Claude follows instructions more literally, so
+a future de-prescription pass (A/B against transcripts) could lift quality
+further; I only rewrote the two worst double-binds. (c) envelope.continue_offer
+is still emitted for a pill no client renders (kept for replay compat — R31b
+owner decision stands). (d) The cache pays off only if ANTHROPIC_API_KEY +
+secrets are set before the deploy workflow ships this; set them first.
+Suggested next task: set the Supabase secrets + flip a staging deploy and run
+tools/e2e_chat_script.py against a live lesson to validate Claude turn quality;
+then a prompt de-prescription A/B pass.
+
 ## Claude -> Codex / Human - 2026-07-30 21:20
 
 Status: Finished (B1 slice)
