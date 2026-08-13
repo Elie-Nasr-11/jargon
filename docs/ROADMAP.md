@@ -4,6 +4,20 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 
 ## Current State
 
+(Refreshed 2026-08-12.) **The tutor runs on Claude and is live in production.** The mentor
+conversation is `claude-opus-5`; the router/graders/summarizer stay pinned cheap on
+`claude-haiku-4-5`; prompt caching makes every turn after a step's first ~9x cheaper (measured
+live: ~93% of input served from cache). The OpenAI path survives behind `TUTOR_PROVIDER=openai`
+plus an automatic missing-key fallback. Shipped in the same pass: the north-star mentor prompt
+(destination-first, integrity rails restated as what they protect), the R33 conversation-flow
+contract (send lock held until the reply settles, no raw markers mid-stream, no re-animation on
+settle, partial replies preserved with Retry, typeable composer, jump-to-latest), downloadable
+artifacts (deck handouts + lint-gated sims), the "My Jargon" vocabulary surface, publish-time
+auto-drafting of objectives and vocab (teacher-reviewed), and project assist (co-build a
+presentation → "Build these slides" deck). Canonical detail: `docs/PLATFORM.md` §11. Verified live
+on the non-streaming, streaming, and deck-offer paths. Voice and media transcription remain on
+OpenAI (no Anthropic realtime speech API).
+
 (Refreshed 2026-07-05.) **v4.0 "The Platform" is shipped and live** — all six phases (P0-P5) plus a
 four-tier polish/completion pass are on `main` (branch `claude/happy-johnson-wseex8` == `origin/main`,
 zero divergence). See the "v4.0 — The Platform" section below for the phase-by-phase status and the

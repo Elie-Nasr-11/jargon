@@ -275,3 +275,125 @@ Rebuild the authored eight. The two axes serve different purposes, and remapping
 (Book F alone is 106 activities) buys nothing the turn-level axis doesn't already deliver. Whether
 the eight still fit is an open question to revisit after the selector has been used — see
 OPEN_QUESTIONS.
+
+---
+
+## 11. v6 addendum — the Claude engine, the north star, and the conversation contract
+
+Status: canonical as of 2026-08-12 (live in production). §2's eight modes and §10's turn-mode
+axis are UNCHANGED by this section. Everything here is engine, prompt posture, and surface
+contract — the deterministic spine of §1 is untouched and remains the reason any of it is safe.
+
+### 11.1 The engine is Claude, and it is swappable
+
+`TUTOR_PROVIDER` defaults to `anthropic`. Two routes, unchanged in shape from v2.0:
+
+- **Conversation** (`claude-opus-5`) — writes every word a student reads.
+- **Understanding** (`claude-haiku-4-5`) — the router, the understanding grader, the code-objective
+  judge, the running summarizer, the session-memory writer. Pinned cheap on purpose: flipping the
+  conversation model must never silently make the high-volume graders expensive.
+
+Operational properties, all env-tunable (see BACKEND_DEPLOYMENT):
+
+- **Missing-key fallback.** If the resolved provider has no API key but the other does, the gateway
+  falls back and logs once. A deploy is never one unset secret away from a dead tutor.
+- **Provider-aware model resolution.** A model pinned for one provider's family can never ride the
+  other's API; it falls back to that provider's route default instead of 404-ing every turn.
+- **Prompt caching.** The static system prompt and the step-stable half of the turn payload carry
+  cache breakpoints. The mentor payload therefore ships as TWO text blocks — stable context first
+  (lesson/activity/milestone/arc/resources/figures/quiz/chunks/knowledge), live turn state second
+  (student/history/turn/directive) — same key paths, partitioned serialization. Measured live: after
+  a step's first turn, ~93% of input reads from cache, ~9x cheaper per turn.
+- **No sampling parameters.** Current Claude models reject them, so conversational variety comes
+  from DATA the model can check — `student.recent_openers` and a widened `student.recent_questions`
+  window — not from temperature. Rules the model cannot verify are aspirations; rules with data
+  attached are constraints.
+- **Bounded retries** on 429/5xx/529, **refusal and truncation** surfaced as ordinary faults (the
+  student sees the calm line, operators get the real cause), and a **malformed-JSON salvage**: if the
+  envelope fails to parse but prose already streamed, that prose IS the turn rather than an error.
+
+The invariant this preserves: **Jargon's value lives in the governance layer, not in a model.** Any
+provider swap must leave gates, evidence, and mastery untouched — as this one did.
+
+### 11.2 The north star replaces guardrail-first prompting
+
+`SYSTEM_PROMPT` opens with a destination, not a fence: carry THIS student to the lesson's learning
+objectives, genuinely reached and said in their own words, by whatever honest teaching serves —
+examples from the student's own world, bridges to other subjects, analogies from outside the lesson.
+The material is the path, never a cage.
+
+The integrity rails are restated INSIDE that preamble as *what the destination requires*: work the
+student must produce is never handed over, what they didn't show is never credited, the teacher's
+help policy always holds. Reframing direction must never read as loosening grading.
+
+Deliberately additive: the rule text below the preamble is unchanged in this pass. Prohibition
+clusters convert to positive direction one at a time, each A/B-ed against real transcripts, so a
+teaching regression can never hide inside a large rewrite.
+
+### 11.3 The conversation contract (student surface)
+
+Smoothness is a contract, not a polish pass. The turn loop guarantees:
+
+- **The send lock holds until the reply SETTLES**, not until the network returns. A reply paces out
+  over seconds; releasing early let a second send scramble transcript order, revive retired quiz
+  choices, and fork a duplicate session on a lesson's first turn. The session pointer, by contrast,
+  lands the instant the envelope arrives.
+- **Nothing raw reaches a student.** Inline markers (`[[material:…]]`, `[[figure:…]]`,
+  `[[action:…]]`) are stripped from streamed text, including a partially-formed marker at the
+  stream's edge; they resolve to cards at settle.
+- **Text already read never re-animates.** A settled reply that replaced streamed text skips the
+  entrance animation.
+- **A failed stream keeps what was written.** Partial prose stays in the bubble with Retry, and
+  Retry re-sends in the register the turn was originally sent in.
+- **The composer stays typeable during a turn** — only Send/Run are gated. A teacher hold is the
+  one hard lock.
+- **Scrolling never fights the stream**: instant during streaming repaints, animated only for new
+  messages, with a "Jump to latest" affordance whenever the student has scrolled up.
+
+Pacing constants live in `useConversation` (sentence release ~150ms/word, holds clamped 0.35–2.5s)
+and exist to make a reply readable, never to simulate typing.
+
+### 11.4 Artifacts are keepable
+
+Every generated artifact is a file the student can take away. Decks export as one self-contained,
+print-ready HTML handout (print → PDF), speaker notes included. Interactive sims download as their
+own document behind the SAME safety lint that gates running them — a document the sandbox refuses to
+run is a document the platform refuses to hand out, since a downloaded file opens with no sandbox.
+Both record the existing `downloaded` resource-interaction event.
+
+### 11.5 My Jargon
+
+The student's collected vocabulary, on Home: every term the MENTOR has introduced (a word counts as
+met when it is taught, never when the student happens to type it), its child-readable definition, its
+home subject, and a bridge marker once the word has traveled into a second subject. Fed by
+`student_vocab`; refreshed whenever a turn teaches a new word.
+
+### 11.6 Knowledge drafts itself at publish
+
+Publishing a lesson with no knowledge rows schedules `extract_knowledge` in the background: learning
+objectives, vocabulary, curriculum links, and practice items drafted from the lesson's own material.
+Unchanged hard rules — **drafts only**, teacher review in the studio Knowledge tab gates everything a
+student sees, re-publishing never duplicates, and a failed extraction never fails the publish.
+
+### 11.7 Project assist
+
+When a student wants to PREPARE something from the lesson — a presentation, essay, speech, poster —
+the mentor co-builds it: the student says what each part should claim, the mentor structures,
+sharpens, and keeps it lesson-accurate, and the settled outline lands in one keepable message. An
+outline they assembled beats a draft they copied.
+
+A presentation/slides ask additionally flips the consent-first build offer (§P8) from an interactive
+sim to a **deck** ("Build these slides"), which the student downloads via 11.4. Offer eligibility,
+caps, and the `allow_live_artifacts` teacher flag are unchanged — the co-build conversation works
+everywhere; the one-tap build waits on the flag.
+
+### What v6 deliberately does NOT do
+
+- **Move grading to the model.** Deterministic gates still own progression; an LLM verdict
+  unverified by execution still caps below the secure mastery tier.
+- **Move voice to Anthropic.** Realtime speech and media transcription stay on OpenAI — there is no
+  Anthropic realtime speech API. `voice-session` and `resource-processing` are untouched.
+- **Rewrite the authored eight** (§2) or the turn-mode axis (§10).
+- **Auto-enable live artifact builds.** `allow_live_artifacts` remains teacher-owned and defaults
+  off; whether project decks deserve their own defaulted-on flag is an OPEN_QUESTION.
+- **Remove the OpenAI path.** `TUTOR_PROVIDER=openai` still runs it unchanged.
