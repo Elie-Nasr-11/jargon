@@ -82,6 +82,10 @@ across students → most of each turn bills at ~0.1×.
 1. **Pivot now** to the conversational lesson-runner; split-view becomes a legacy stepping stone.
 2. **Flow = hybrid:** authored objectives/checkpoints per lesson + AI conversation, orchestrator-enforced.
 3. **Mentor LLM = decide by spike:** Claude tiers + caching vs gpt-4o, measured on real lessons.
+   → **RESOLVED 2026-08-12: Claude won and is live.** Mentor on `claude-opus-5`, graders pinned to
+   `claude-haiku-4-5`, prompt caching active (~93% cache reads after a step's first turn, ~9x
+   cheaper per turn). Measured on the real Book F "Purpose" lesson in production. See
+   `docs/PLATFORM.md` §11.
 4. **Audience = school students;** the Level 0–3 ladder is the adaptivity axis.
 
 ## First steps
