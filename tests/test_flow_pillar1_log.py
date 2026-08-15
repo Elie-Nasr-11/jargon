@@ -118,5 +118,81 @@ class ClientRendersTheRecord(unittest.TestCase):
         self.assertIn("`Revisit · ${stepEyebrowLabel(arc) ?? spec.label}`", TRANSCRIPT)
 
 
+def _js_regex(name: str) -> "re.Pattern[str]":
+    """Compile a /.../i regex literal out of the chat fn source (JS and Python share
+    the constructs these patterns use), so the cases below test BEHAVIOR, not just
+    the pattern's existence."""
+    import re as _re
+
+    start = CHAT_FN.index(f"const {name} =")
+    open_slash = CHAT_FN.index("/^", start)
+    close = CHAT_FN.index("/i;", open_slash)
+    return _re.compile(CHAT_FN[open_slash + 1 : close], _re.IGNORECASE)
+
+
+class TypedReadinessOutranksTheRouter(unittest.TestCase):
+    """Live probe 2026-08-15 (session f36e0072…): the mentor asked "Shall we continue?",
+    the student typed "Yes — let's head there!", and the router called it an
+    answer_attempt — acknowledged_at stayed null while the mentor's NEXT reply said
+    "Great — step two it is" with the cursor still on step one. Voice ran ahead of the
+    record because the promised advance verb was model-judged, not deterministic."""
+
+    def test_the_phrase_recognizer_accepts_readiness_and_nothing_else(self):
+        pattern = _js_regex("CONTINUE_PHRASE_RE")
+        for text in (
+            "Yes — let's head there!",
+            "ok, keep going",
+            "sure — move on!",
+            "let's do it",
+            "next part",
+            "yeah, continue",
+            "take me to the next step",
+        ):
+            with self.subTest(advances=text):
+                self.assertIsNotNone(pattern.match(text))
+        for text in (
+            "yes, I think the answer is 4",
+            "continue the story about mars",
+            "let's go over my mistake",
+            "go",
+            "ready for a challenge",
+            "ok so photosynthesis converts light",
+        ):
+            with self.subTest(stays_open=text):
+                self.assertIsNone(pattern.match(text))
+
+    def test_the_bare_affirmative_recognizer_is_unchanged(self):
+        # CONTINUE_SIGNAL_RE is shared with the router-outage heuristic since Flow v3 —
+        # the widening lives in its own pattern so this one stays byte-identical.
+        pattern = _js_regex("CONTINUE_SIGNAL_RE")
+        self.assertIsNotNone(pattern.match("Yes!"))
+        self.assertIsNone(pattern.match("Yes — let's head there!"))
+
+    def test_readiness_overrides_only_an_open_acknowledge_gate(self):
+        for fragment in (
+            "const typedReadiness =",
+            "requirements.acknowledge &&",
+            "!stepStateBefore.acknowledged_at &&",
+            "!controlType &&",
+            "!isQuestionShaped(content) &&",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, CHAT_FN)
+
+    def test_the_mode_ceiling_still_outranks_the_recognizer(self):
+        # The override feeds routedKindRaw — UPSTREAM of applyModeCeiling — so a Discuss
+        # or Practice "yes, continue" is capped exactly like a router-issued
+        # continue_signal (and the way-back pill still fires).
+        site = CHAT_FN[CHAT_FN.index("const routedKindRaw: RoutedKind | null =") :][:900]
+        self.assertIn("typedReadiness", site)
+        self.assertIn("applyModeCeiling(declaredMode, routedKindRaw)", CHAT_FN)
+
+    def test_the_outage_heuristic_recognizes_the_phrase_shape_too(self):
+        self.assertIn(
+            "(CONTINUE_SIGNAL_RE.test(trimmed) || CONTINUE_PHRASE_RE.test(trimmed))",
+            CHAT_FN,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2515,6 +2515,15 @@ const ROUTED_KINDS = new Set<string>([
 const CONTINUE_SIGNAL_RE =
   /^(ok(ay)?|yes|yep|yeah|sure|got it|ready|next|continue|let'?s (go|move on|continue)|i'?m (ready|done|good)|done|move on)\b[\s!.]*$/i;
 
+// R34 (flow rebuild, live probe 2026-08-15): "Yes — let's head there!" — an optional
+// affirmative lead joined to ONE forward-motion phrase and nothing else. Kept separate
+// from CONTINUE_SIGNAL_RE so the bare-affirmative recognizer (shared with the
+// router-outage heuristic since Flow v3) stays byte-identical. Anchored both ends: any
+// content payload after the motion phrase ("continue the story about mars") falls
+// through to the router untouched.
+const CONTINUE_PHRASE_RE =
+  /^(ok(ay)?|yes|yep|yeah|sure|got it|ready|alright|i'?m ready)?[\s,!.…—–-]*(please\s+)?(next( part| step| one| section)?|continue|move (on|forward)|keep going|go (on|ahead)|onward|let'?s (go|continue|move on|keep going|do it|head (there|over|on))|(head|take me) (there|over|to the next( part| step| one)?)|on to the next( part| step| one)?)[\s!.…]*$/i;
+
 // "Take me back to the loops step" — a navigation WISH, not a movement command: the
 // mentor points at the clickable stepper (movement stays on explicit control turns).
 // Deliberately narrow ("get back"/"be back" are idioms, not navigation) — this is only
@@ -2526,7 +2535,10 @@ const NAVIGATE_BACK_RE =
 // its classifications intentionally mirror what the old code paths keyed on.
 function heuristicKind(text: string): RouterVerdict {
   const trimmed = (text || "").trim();
-  if (trimmed.length <= 48 && CONTINUE_SIGNAL_RE.test(trimmed)) {
+  if (
+    trimmed.length <= 48 &&
+    (CONTINUE_SIGNAL_RE.test(trimmed) || CONTINUE_PHRASE_RE.test(trimmed))
+  ) {
     return { kind: "continue_signal", confidence: 0.4 };
   }
   if (trimmed.length <= 120 && NAVIGATE_BACK_RE.test(trimmed)) {
@@ -6492,9 +6504,30 @@ async function handleTypedRequest(
           }
         : gradedUnderstanding;
 
+    // R34 (flow rebuild, live probe 2026-08-15): the mentor asked "Shall we continue?",
+    // the student typed "Yes — let's head there!", and the router called it an
+    // answer_attempt — the acknowledge gate never closed while the mentor's prose moved
+    // on to the next idea, so the step read as stuck and the voice ran ahead of the
+    // record. Typed readiness against an OPEN acknowledge gate is a closed deterministic
+    // class the prompt already promises will advance (CONCLUDE_HANDOFF: "a typed
+    // yes/ok/sure/next already advances"), so the anchored recognizers outrank the
+    // router's kind for exactly this case. Everything downstream is unchanged:
+    // applyModeCeiling still caps it in Discuss/Practice (the ceilinged-advance flag
+    // fires, the way-back pill renders), and question-shaped or content-bearing text
+    // never matches the anchors.
+    const typedReadiness =
+      requirements.acknowledge &&
+      !stepStateBefore.acknowledged_at &&
+      !controlType &&
+      answer?.mode === "text" &&
+      Boolean(content) &&
+      !isQuestionShaped(content) &&
+      (CONTINUE_SIGNAL_RE.test(content.trim()) ||
+        CONTINUE_PHRASE_RE.test(content.trim()));
     // Routed kind resolution: explicit control wins; code/MCQ are attempts by
-    // construction; router verdict next; heuristic fallback keeps legacy behavior for
-    // text turns when the router errored. null = fully legacy (e.g. file answers).
+    // construction; typed readiness next (see above); router verdict after that;
+    // heuristic fallback keeps legacy behavior for text turns when the router errored.
+    // null = fully legacy (e.g. file answers).
     const routedKindRaw: RoutedKind | null =
       controlType === "continue"
         ? "continue_signal"
@@ -6509,9 +6542,11 @@ async function handleTypedRequest(
             "meta"
           : answer?.mode === "code" || answer?.mode === "multiple_choice"
             ? "answer_attempt"
-            : routerEligible
-              ? (routerResult?.kind ?? heuristicKind(content).kind)
-              : null;
+            : typedReadiness
+              ? "continue_signal"
+              : routerEligible
+                ? (routerResult?.kind ?? heuristicKind(content).kind)
+                : null;
     // v5.0: the student's declared mode caps what this turn may discharge. Explicit
     // CONTROL turns are exempt on purpose — Continue and the navigation controls are
     // deliberate button presses, not conversation, so a student in Discuss can still
