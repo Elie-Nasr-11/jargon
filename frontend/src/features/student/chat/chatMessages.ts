@@ -191,6 +191,11 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       text: turn.content,
       choices,
       resources,
+      // R33b: figures MUST be restored, not just resources. The persisted reply keeps its
+      // [[figure:id]] marker (the server only strips markers that resolved to nothing), so
+      // a reloaded transcript without figures fell through to the prose renderer and
+      // printed the raw marker at the student — seen live 2026-08-13.
+      figures: Array.isArray(payload.figures) ? (payload.figures as LessonFigure[]) : undefined,
       turnMode: typeof payload.turn_mode === "string" ? payload.turn_mode : undefined,
       // Chat-flow Phase 1: restore the Continue offer from the persisted envelope. The
       // transcript renders it only on the LATEST bot message, so an offer that was already

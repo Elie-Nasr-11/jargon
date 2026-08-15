@@ -42,6 +42,7 @@ import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
 import type { ModeOffer } from "@/features/student/chat/chatMessages";
 import { useConversation } from "@/student/useConversation";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DEFAULT_TURN_MODE, isTurnMode, type TurnMode } from "@/student/turnModes";
 import {
   DESTINATIONS,
@@ -315,6 +316,19 @@ export function StudentApp({
   // panel, full = media with the chat docked). Any ResourceCard below raises it via context.
   const mediaStage = useMediaStageController();
   const stageOpen = mediaStage.stage !== null;
+  // R33b (tester, live): "I was previously in math with this pdf open... I switched to
+  // biology and the math pdf automatically opened." The stage is SHELL state, so it
+  // outlives the lesson that raised it — a resource from the previous lesson stayed on
+  // screen (and its signed URL belongs to a lesson the student is no longer in). The
+  // stage belongs to the lesson it was opened from: close it whenever the lesson changes.
+  const stageLessonRef = useRef<string | null>(null);
+  const stageClose = mediaStage.close;
+  useEffect(() => {
+    if (stageLessonRef.current !== null && stageLessonRef.current !== liveLessonId) {
+      stageClose();
+    }
+    stageLessonRef.current = liveLessonId;
+  }, [liveLessonId, stageClose]);
   // The stage renders in the Learn layout; raising it from Home or a destination panel jumps
   // there so the expansion is visible instead of happening behind the current surface.
   useEffect(() => {
@@ -563,22 +577,31 @@ export function StudentApp({
       ) : !conversation.messages.length && conversation.lesson ? (
         <LessonWelcome lesson={conversation.lesson} />
       ) : (
-        <Transcript
-          messages={conversation.messages}
-          disabled={conversation.sending}
-          // Retry re-sends in the register the failed turn was SENT in; the live picker
-          // is only the fallback for errors persisted before retryMode existed.
-          onRetry={(answer, mode) =>
-            void conversation.retry(answer, isTurnMode(mode) ? mode : turnMode)
-          }
-          onAcceptOffer={acceptModeOffer}
-          onChoose={(choiceId, label) => {
-            // Phase A: an MCQ tap is a LESSON act (the options are the lesson's own quiz
-            // step) — the server also exempts choice taps from the mode ceiling, so the
-            // picker stays wherever the student left it.
-            void conversation.sendChoice(choiceId, label, "lesson");
-          }}
-        />
+        // R33b: a render crash inside one message used to take the WHOLE page down via the
+        // router's root boundary ("the 'something went wrong' keeps getting in the way").
+        // Contained here: the sidebar, composer, and session survive, the real error is
+        // shown, and it reports to runtime_events so we can actually fix the cause.
+        <ErrorBoundary
+          label="student_transcript"
+          fallbackTitle="This part of the conversation didn't render."
+        >
+          <Transcript
+            messages={conversation.messages}
+            disabled={conversation.sending}
+            // Retry re-sends in the register the failed turn was SENT in; the live picker
+            // is only the fallback for errors persisted before retryMode existed.
+            onRetry={(answer, mode) =>
+              void conversation.retry(answer, isTurnMode(mode) ? mode : turnMode)
+            }
+            onAcceptOffer={acceptModeOffer}
+            onChoose={(choiceId, label) => {
+              // Phase A: an MCQ tap is a LESSON act (the options are the lesson's own quiz
+              // step) — the server also exempts choice taps from the mode ceiling, so the
+              // picker stays wherever the student left it.
+              void conversation.sendChoice(choiceId, label, "lesson");
+            }}
+          />
+        </ErrorBoundary>
       )}
     </ChatWindow>
   );

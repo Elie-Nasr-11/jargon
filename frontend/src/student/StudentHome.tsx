@@ -107,6 +107,16 @@ function MyJargonCard() {
   }, []);
 
   const visible = words ? (showAll ? words : words.slice(0, 12)) : [];
+  // Grouped by subject (tester: "maybe it should be split by topic"). Subjects appear in
+  // the order their newest word does, so the topic you just studied sits at the top; a
+  // word whose subject is blank collects under "Other" rather than a nameless heading.
+  const groups: { subject: string; words: MyJargonWord[] }[] = [];
+  for (const word of visible) {
+    const subject = word.subject || "Other";
+    const group = groups.find((entry) => entry.subject === subject);
+    if (group) group.words.push(word);
+    else groups.push({ subject, words: [word] });
+  }
   return (
     <section className="rounded-card border border-border bg-depth-card p-4 shadow-card">
       <h3 className="mb-2 flex items-center gap-2 text-body font-semibold text-foreground">
@@ -124,24 +134,33 @@ function MyJargonCard() {
         </p>
       ) : words.length ? (
         <>
-          <ul className="flex flex-col">
-            {visible.map((word) => (
-              <li
-                key={word.term}
-                className="hvp flex items-baseline gap-3 border-b border-border py-1.5 last:border-0"
-              >
-                <span className="shrink-0 text-body font-semibold text-foreground">
-                  {word.term}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                  {word.definition}
-                </span>
-                <span className="hvr shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
-                  {word.traveled ? "bridges subjects" : word.subject}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {groups.map((group) => (
+            <div key={group.subject} className="mb-2.5 last:mb-0">
+              <div className="mb-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                {group.subject}
+              </div>
+              <ul className="flex flex-col">
+                {group.words.map((word) => (
+                  <li
+                    key={word.term}
+                    className="hvp flex items-baseline gap-3 border-b border-border py-1.5 last:border-0"
+                  >
+                    <span className="shrink-0 text-body font-semibold text-foreground">
+                      {word.term}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                      {word.definition}
+                    </span>
+                    {word.traveled ? (
+                      <span className="hvr shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                        bridges subjects
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
           {words.length > 12 ? (
             <button
               type="button"

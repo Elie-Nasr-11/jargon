@@ -438,17 +438,28 @@ export function BrainMap({
     // Phase C blend: the strength halo — a solid idea wears a firm practice-green ring,
     // a fading one a warm dashed discuss-yellow ring asking for a refresh.
     const strength = mastery?.get(world.idea.key);
+    // R33b (tester, live): "the brain is cool but nothing happens when i click on a node."
+    // Only lesson dots were clickable; the IDEA nodes — the actual concepts, the thing a
+    // student wants to act on — were inert tooltips. An authored idea knows the lesson
+    // that teaches it, so clicking one opens that lesson, exactly like its lesson dot.
+    // Emergent ideas (the student's own, no lesson) stay non-interactive rather than
+    // offering a click that goes nowhere.
+    const ideaLessonId =
+      typeof world.idea.lesson_id === "string" && world.idea.lesson_id
+        ? world.idea.lesson_id
+        : null;
     renderNodes.push({
       depth: p.depth,
       node: (
         <g
           key={`idea-${world.idea.key}`}
-          className="bmap-node"
+          className={`bmap-node${ideaLessonId ? " cursor-pointer" : ""}`}
+          onClick={ideaLessonId ? () => onOpenLesson(ideaLessonId) : undefined}
           style={pop()}
           opacity={depthOpacity(p.depth)}
         >
           <title>
-            {`${emergent ? "Your idea: " : "Idea: "}${world.idea.title}${world.idea.one_liner ? ` — ${world.idea.one_liner}` : ""}${typeof strength === "number" ? ` — strength ${Math.round(strength * 100)}%` : ""}`}
+            {`${emergent ? "Your idea: " : "Idea: "}${world.idea.title}${world.idea.one_liner ? ` — ${world.idea.one_liner}` : ""}${typeof strength === "number" ? ` — strength ${Math.round(strength * 100)}%` : ""}${ideaLessonId ? " — click to open its lesson" : ""}`}
           </title>
           {typeof strength === "number" ? (
             <circle

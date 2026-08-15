@@ -3522,6 +3522,41 @@ export async function fetchMyJargon(): Promise<MyJargonWord[]> {
   return cached("my_jargon", 45_000, fetchMyJargonUncached);
 }
 
+// Client crash telemetry. Until now a render crash reported ONLY to
+// window.__lovableEvents — which does not exist on the production build — so every
+// "something went wrong" a student hit was invisible to us and unreproducible.
+// runtime_events accepts an authenticated insert for the caller's own user_id, so
+// the crash lands in the same table the server writes to. Best-effort by contract:
+// telemetry must never turn one error into two.
+export async function recordClientError(
+  error: unknown,
+  context: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    const session = await getSession();
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const err = error instanceof Error ? error : null;
+    await supabase.from("runtime_events").insert({
+      user_id: userId,
+      event_type: "controlled_error",
+      status: "error",
+      payload: {
+        source: "client",
+        message: String(err?.message ?? error ?? "").slice(0, 600),
+        stack: String(err?.stack ?? "").slice(0, 2000),
+        route:
+          typeof window === "undefined"
+            ? ""
+            : `${window.location.pathname}${window.location.search}`,
+        ...context,
+      },
+    });
+  } catch {
+    // Swallowed on purpose.
+  }
+}
+
 export async function fetchIdeas(): Promise<IdeaNode[]> {
   return cached("ideas", 300_000, fetchIdeasUncached);
 }
