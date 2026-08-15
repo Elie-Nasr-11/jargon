@@ -102,3 +102,35 @@ class MyJargonGroupsBySubject(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BoldSurvivesMath(unittest.TestCase):
+    """Live: "**What is $d$?**" printed its asterisks. Math split the string BEFORE the
+    markdown pass, so neither "**What is " nor "?**" could match the bold pattern."""
+
+    def test_markdown_is_the_outer_pass(self):
+        self.assertIn("function renderRunWithMath(", TRANSCRIPT)
+        # renderInline no longer wraps everything in renderWithMath first.
+        self.assertIn("function renderInline(text: string, vocab?: VocabPass): ReactNode[] {\n  return renderInlineMd(text, vocab);", TRANSCRIPT)
+        # Emphasis renders its inner content through math, so bold spanning a formula works.
+        self.assertIn('renderRunWithMath(bold[1], undefined, `b${i}`)', TRANSCRIPT)
+        self.assertIn('renderRunWithMath(italic[1], undefined, `i${i}`)', TRANSCRIPT)
+
+
+class SectionsStopChurning(unittest.TestCase):
+    """Live: LESSON / PRACTICE / CHECKPOINT flip-flopped on every exchange, and a practice
+    drill was announced as a CHECKPOINT."""
+
+    def test_only_a_lesson_spine_quiz_is_a_checkpoint(self):
+        self.assertIn('(message.turnMode ?? "lesson") === "lesson" &&', TRANSCRIPT)
+
+    def test_mcq_tap_keeps_the_students_register(self):
+        self.assertIn("void conversation.sendChoice(choiceId, label, turnMode);", STUDENT_APP)
+
+
+class PickedOptionIsVerdictNeutral(unittest.TestCase):
+    """Live: a check mark sat on an option the next reply called "Not quite"."""
+
+    def test_no_checkmark_on_the_retired_pick(self):
+        self.assertIn("your pick", TRANSCRIPT)
+        self.assertNotIn("<Check ", TRANSCRIPT)
