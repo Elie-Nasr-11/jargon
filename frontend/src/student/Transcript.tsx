@@ -774,6 +774,9 @@ type Section = {
   arc: LessonArc | null;
   checkpoint?: boolean;
   soft?: boolean;
+  // Pillar 1: this section opened on a server-recorded revisit — its divider says so
+  // instead of silently jumping the step eyebrow backwards.
+  revisit?: boolean;
 };
 
 function groupIntoSections(messages: Msg[]): Section[] {
@@ -788,27 +791,38 @@ function groupIntoSections(messages: Msg[]): Section[] {
     const current = sections[sections.length - 1];
     // Non-opening messages (thinking, output, teacher) always continue the open section so a
     // reply and its "Thinking…" placeholder never get split across two boxes.
+    const messageArc = message.role === "bot" ? (message.lessonArc ?? null) : null;
+    // Pillar 1 (flow rebuild): a turn that carries the server-written flow log renders its
+    // boundaries from the RECORD. The arc-diff and choices-shape inferences below apply
+    // only to turns persisted before the log existed — on logged turns a bare arc diff
+    // can never open a section, which is what stopped the section churn.
+    const flow = message.role === "bot" && Array.isArray(message.flow) ? message.flow : null;
+    const revisitBreak = flow
+      ? flow.some((e) => e.kind === "revisit_opened" || e.kind === "revisit_resumed")
+      : false;
     // Transcript smoothing (round 19): a lesson-mode run that spans several steps must
     // not wear one step label — a mentor reply arriving with a DIFFERENT arc step starts
     // a fresh section, so each stretch is labelled with the step it actually happened on.
     // Round 22: EXCEPT the advancing turn itself (arc.transition) — its arc already
     // points at the next step but its content wraps the one that just finished.
-    const messageArc = message.role === "bot" ? (message.lessonArc ?? null) : null;
     const arcStep = messageArc ? messageArc.step : null;
-    const stepChanged =
-      arcStep !== null &&
-      current?.arc != null &&
-      current.arc.step !== arcStep &&
-      !messageArc?.transition;
+    const stepChanged = flow
+      ? // A logged step boundary arrives as step_advanced (via the transition arc into
+        // pendingArc below) or as a revisit boundary — never as a bare arc diff.
+        revisitBreak
+      : arcStep !== null &&
+        current?.arc != null &&
+        current.arc.step !== arcStep &&
+        !messageArc?.transition;
     // Round 20: a CHECKPOINT gets its own section marker — but only a LESSON-spine quiz is
-    // a checkpoint. R33c (live: "why the 'checkpoint'?"): this fired on ANY reply carrying
-    // options, so a mentor-improvised drill in Practice mode was announced as a CHECKPOINT
-    // — alarming, and wrong: practice never gates the lesson. A question asked inside
-    // Practice/Discuss now simply stays in that section.
+    // a checkpoint (R33c: a mentor-improvised drill in Practice must never announce one).
+    // Logged turns say so outright (checkpoint_opened, which the server only emits for a
+    // lesson-register quiz attach); legacy turns keep the choices-shape inference.
     const opensCheckpoint =
       message.role === "bot" &&
-      !!message.choices?.length &&
-      (message.turnMode ?? "lesson") === "lesson" &&
+      (flow
+        ? flow.some((e) => e.kind === "checkpoint_opened")
+        : (message.turnMode ?? "lesson") === "lesson" && !!message.choices?.length) &&
       !current?.checkpoint;
     const startsNextStep = opensSection && pendingArc != null;
     if (
@@ -829,6 +843,7 @@ function groupIntoSections(messages: Msg[]): Section[] {
         checkpoint: opensCheckpoint || undefined,
         // Step-to-step inside the same mode block: dimmed divider, not a full rule.
         soft: ((startsNextStep || stepChanged) && sameMode && !opensCheckpoint) || undefined,
+        revisit: (flow?.some((e) => e.kind === "revisit_opened") && !opensCheckpoint) || undefined,
       });
     }
     if (opensSection) pendingArc = null;
@@ -890,12 +905,14 @@ function ModeSection({
   arc,
   checkpoint,
   soft,
+  revisit,
   children,
 }: {
   mode?: string;
   arc: LessonArc | null;
   checkpoint?: boolean;
   soft?: boolean;
+  revisit?: boolean;
   children: ReactNode;
 }) {
   // Round 20: checkpoints wear their own marker regardless of the surrounding mode —
@@ -922,8 +939,12 @@ function ModeSection({
         {children}
       </div>
     );
-  // Lesson sections carry the step eyebrow; every other mode labels itself.
-  const eyebrow = (mode === "lesson" && stepEyebrowLabel(arc)) || spec.label;
+  // Lesson sections carry the step eyebrow; every other mode labels itself. A section the
+  // server recorded as a revisit names the jump (Pillar 1) — before the log, the eyebrow
+  // silently pointed backwards and the transcript read as the flow "hopping around".
+  const eyebrow = revisit
+    ? `Revisit · ${stepEyebrowLabel(arc) ?? spec.label}`
+    : (mode === "lesson" && stepEyebrowLabel(arc)) || spec.label;
   return (
     <section
       aria-label={`${spec.label} section`}
@@ -1009,6 +1030,7 @@ export function Transcript({
           arc={section.arc}
           checkpoint={section.checkpoint}
           soft={section.soft}
+          revisit={section.revisit}
         >
           {section.items.map((message) => {
             if (message.role === "thinking") {

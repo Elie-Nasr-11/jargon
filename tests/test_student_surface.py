@@ -118,7 +118,11 @@ class ModeSections(unittest.TestCase):
         # the sections would vanish on refresh. Both roles are stamped so a reply groups with the
         # student turn it answers instead of opening a new unlabelled section.
         self.assertIn("{ ...answer, turn_mode: declaredMode } : answer", CHAT_FN)
-        self.assertIn("{ ...envelope, turn_mode: declaredMode } : envelope", CHAT_FN)
+        # Pillar 1: the mentor stamp is CONDITIONAL — a declared mode whose student turn
+        # never persisted stamps the register the transcript is actually in, so a replay
+        # can never open a section no visible action started (the phantom-Discuss bug).
+        self.assertIn("turn_mode: studentTurnPersisted", CHAT_FN)
+        self.assertIn("? declaredMode\n              : (previousStudentMode ?? \"lesson\")", CHAT_FN)
 
     def test_the_client_reads_the_persisted_mode_back(self):
         self.assertIn("turn_mode", MODEL)

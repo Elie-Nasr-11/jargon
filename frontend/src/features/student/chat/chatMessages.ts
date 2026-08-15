@@ -16,6 +16,7 @@ import type { MentorConfig } from "@/lib/jargon-store";
 import type {
   ChatAttachment,
   ChatInputModality,
+  FlowEvent,
   LessonFigure,
   JargonRunResponse,
   LearningTurn,
@@ -98,6 +99,10 @@ export type Msg =
       // reloaded transcript can label each lesson section with the REAL step it happened on
       // (Step N/M · title) instead of guessing from the live cursor.
       lessonArc?: LessonArc | null;
+      // Pillar 1 (flow rebuild): the server-written flow log for this turn. When present,
+      // the transcript renders this message's section boundaries from the record instead
+      // of inferring them (arc diffs, choices shape). Absent on pre-log turns.
+      flow?: FlowEvent[];
     }
   | { id: string; role: "teacher"; text: string; createdAt?: string }
   | { id: string; role: "output"; ok: boolean; output: string; lang: ComposerLanguage }
@@ -213,6 +218,9 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
         payload.lesson_arc && typeof payload.lesson_arc === "object"
           ? (payload.lesson_arc as LessonArc)
           : undefined,
+      // Pillar 1: restore the flow log so a reloaded transcript draws the SAME section
+      // boundaries the live turn did — the record, not a re-derivation.
+      flow: Array.isArray(payload.flow) ? (payload.flow as FlowEvent[]) : undefined,
       createdAt: turn.created_at,
     };
   }
@@ -273,6 +281,9 @@ export function envelopeMessage(envelope: TypedChatEnvelope, turnMode?: string):
     artifactOffer: envelope.artifact_offer ?? undefined,
     turnMode,
     lessonArc: envelope.lesson_arc ?? undefined,
+    // Pillar 1: the live message carries the same flow log the persisted turn keeps,
+    // so live and reloaded transcripts draw identical section boundaries.
+    flow: envelope.flow?.length ? envelope.flow : undefined,
     createdAt: new Date().toISOString(),
   };
 }

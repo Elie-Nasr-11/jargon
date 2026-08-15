@@ -4,6 +4,16 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 
 ## Current State
 
+(Refreshed 2026-08-15.) **The flow rebuild is underway — flow is now a recorded object.**
+Pillar 1 of five: every mentor turn writes a `flow` event log (register shifts with their
+causing action, revisit open/close, checkpoint attach, step advance) into the envelope and
+the persisted payload; the transcript renders section boundaries from the record instead of
+re-deriving them, with inference kept only for pre-log turns. The mentor's turn_mode stamp
+now obeys the register-shift invariant (no persisted student action → no recorded register
+change), closing the phantom-section class at the root. Spec: `docs/PLATFORM.md` §12;
+decision + queued pillars (register reducer, directive decision table, property tests,
+dead-contract retirement): `docs/DECISIONS.md` 2026-08-15.
+
 (Refreshed 2026-08-12.) **The tutor runs on Claude and is live in production.** The mentor
 conversation is `claude-opus-5`; the router/graders/summarizer stay pinned cheap on
 `claude-haiku-4-5`; prompt caching makes every turn after a step's first ~9x cheaper (measured
