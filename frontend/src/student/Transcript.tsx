@@ -583,6 +583,26 @@ function MessageBody({
       </>
     );
   }
+  // Last line of defense: a marker that reaches here resolves to nothing (no figures on
+  // this message, an unknown id, an old persisted turn) and must NEVER print as raw text.
+  // The specific bug this closes: a reloaded transcript printed
+  // "[[figure:d5d82171-…]]" mid-sentence.
+  if (!figures?.length && FIGURE_MARKER_RE.test(text)) {
+    FIGURE_MARKER_RE.lastIndex = 0;
+    const stripped = text
+      .replace(FIGURE_MARKER_RE, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return stripped ? (
+      <MessageBody
+        text={stripped}
+        markdown={markdown}
+        vocab={vocab}
+        renderMaterial={renderMaterial}
+        renderAction={renderAction}
+      />
+    ) : null;
+  }
   // Figures next: each marker becomes a real block, the prose around it renders as usual.
   if (figures?.length && FIGURE_MARKER_RE.test(text)) {
     FIGURE_MARKER_RE.lastIndex = 0;

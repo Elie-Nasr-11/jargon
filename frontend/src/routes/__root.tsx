@@ -3,7 +3,7 @@ import { Outlet, Link, createRootRouteWithContext, useRouter } from "@tanstack/r
 import { useEffect } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { onAuthStateChange } from "../lib/api";
+import { onAuthStateChange, recordClientError } from "../lib/api";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -33,6 +33,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    // reportLovableError only reaches the Lovable preview sink; production crashes were
+    // landing nowhere. Record to runtime_events so a tester's "something went wrong" is
+    // diagnosable after the fact.
+    void recordClientError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
   return (
@@ -44,6 +48,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+        {/* The real message, small but present: a screenshot of the generic line alone
+            told us nothing, and this page is where testers land. */}
+        {error?.message ? (
+          <p className="mt-2 break-words text-xs text-muted-foreground/80">{error.message}</p>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
