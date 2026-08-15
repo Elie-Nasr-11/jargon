@@ -6,6 +6,31 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-15 later (R34: typed readiness outranks the router)
+
+Status: Finished
+Summary: The Pillar-1 live probe caught a real flow defect on production: the mentor
+asked "Shall we continue?", the probe answered "Yes — let's head there!", and the
+ROUTER classified it answer_attempt — acknowledged_at stayed null while the mentor's
+next reply said "Great — step two it is" with the cursor still on step 1 (voice ahead
+of the record; the flow log made the divergence visible in one row). Two gaps: the
+deterministic recognizer only ran when the router was DOWN, and its anchored pattern
+only matched bare affirmatives. Fix: (1) CONTINUE_PHRASE_RE — optional affirmative
+lead + ONE forward-motion phrase, anchored both ends (content payloads fall through);
+(2) typedReadiness — when the acknowledge gate is OPEN on a non-control text turn that
+is not question-shaped, the recognizers set routedKindRaw=continue_signal UPSTREAM of
+applyModeCeiling, so Discuss/Practice still cap it and the way-back pill still fires;
+(3) the outage heuristic recognizes the phrase shape too. CONTINUE_SIGNAL_RE itself is
+byte-identical. Tests compile both regex literals out of the source and assert
+match/non-match behavior (not just existence).
+Files changed: supabase/functions/chat/index.ts, tests/test_flow_pillar1_log.py.
+Tests run: 704 OK; deno check parity (8 pre-existing).
+Remaining concerns: the router misrouting "question" for an explanation containing a
+quoted question (probe T4) is tuning, not gating — it cost nothing once readiness went
+deterministic, but it feeds Pillar 3's decision-table case list.
+Suggested next task: Pillar 2 (register reducer), then re-run the probe through a full
+step to watch step_advanced + checkpoint_opened land in one session.
+
 ## Claude -> Codex / Human - 2026-08-15 (flow rebuild Pillar 1: the flow event log)
 
 Status: Finished
