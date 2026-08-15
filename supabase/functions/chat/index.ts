@@ -6317,6 +6317,12 @@ async function handleTypedRequest(
     // Only true text answers carry the student's words; a "file" answer's content is a
     // placeholder, so grading it would judge garbage — leave those to the mentor path.
     const isTextExplanation =
+      // R33d: a CONTROL turn is a button press, never an explanation. This was masked
+      // while controls carried empty text (assessTurn early-returns on ""), but the
+      // moment a control carries its label ("Talk it through") the grader would have
+      // marked a failed attempt against a click. Controls route deterministically —
+      // the router already excludes them (routerEligible); the grader must too.
+      !controlType &&
       answer?.mode === "text" &&
       activityMode === "text" &&
       requirements.understanding &&

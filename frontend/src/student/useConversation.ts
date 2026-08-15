@@ -1034,9 +1034,18 @@ export function useConversation() {
   // follow-up typed messages ride the new register.
   const sendModeOffer = useCallback(
     (offer: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string }) => {
-      void sendAnswer({ mode: "text", text: "", client_msg_id: uid() }, offer.mode, offer.label, {
-        control: { type: "mode_offer", mode: offer.mode, topic: offer.topic },
-      });
+      // R33d: the label rides as the turn's TEXT, not just as a client-side echo. With an
+      // empty body the server persisted NO student turn (`answer && content`), so the only
+      // record of a mode hand-off was a mentor turn stamped with the new mode — and a
+      // reloaded transcript showed Discuss opening out of nowhere with nothing that caused
+      // it ("the flow hops around through modes"). Grading is unaffected: control turns are
+      // excluded from the router AND, since R33d, from the understanding grader.
+      void sendAnswer(
+        { mode: "text", text: offer.label, client_msg_id: uid() },
+        offer.mode,
+        offer.label,
+        { control: { type: "mode_offer", mode: offer.mode, topic: offer.topic } },
+      );
     },
     [sendAnswer],
   );

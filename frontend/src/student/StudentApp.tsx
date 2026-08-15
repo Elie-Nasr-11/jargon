@@ -303,6 +303,42 @@ export function StudentApp({
     };
   }, [scopeClassId]);
 
+  // R33d (live: "the sidebar menu sometimes shows a class other than the selected
+  // lesson"). scopeClassId falls back to classes[0] when the URL names no class, so a
+  // lesson opened from Home, the brain map, or a resume could sit in one class while the
+  // sidebar tree showed another. The scope FOLLOWS the open lesson: when the live lesson
+  // is missing from the scoped class's list, find the class that actually contains it and
+  // select that. Reads are cached per class (fetchClassScopedLessons), so this costs
+  // nothing on the common path — and if no class claims the lesson, the scope is left
+  // alone rather than guessing.
+  const syncedLessonRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!liveLessonId || !classes?.length || !classLessons) return;
+    if (classLessons.some((lesson) => lesson.id === liveLessonId)) {
+      syncedLessonRef.current = liveLessonId;
+      return;
+    }
+    if (syncedLessonRef.current === liveLessonId) return;
+    let cancelled = false;
+    void (async () => {
+      for (const candidate of classes) {
+        if (candidate.id === scopeClassId) continue;
+        const rows = await fetchClassScopedLessons(candidate.id).catch(() => [] as Lesson[]);
+        if (cancelled) return;
+        if (rows.some((lesson) => lesson.id === liveLessonId)) {
+          syncedLessonRef.current = liveLessonId;
+          onSelectClass(candidate.id);
+          return;
+        }
+      }
+      // Nothing claims it (an unscoped catalog lesson): stop retrying this lesson.
+      if (!cancelled) syncedLessonRef.current = liveLessonId;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [liveLessonId, classes, classLessons, scopeClassId, onSelectClass]);
+
   // Per-class work rows: due tags in the sidebar list + each summary's work section.
   const rowsByClass = assessments ? checkpointRowsByClass(assessments) : new Map<string, never[]>();
   const dueByClass = new Map<string, number>();

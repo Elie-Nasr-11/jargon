@@ -134,3 +134,40 @@ class PickedOptionIsVerdictNeutral(unittest.TestCase):
     def test_no_checkmark_on_the_retired_pick(self):
         self.assertIn("your pick", TRANSCRIPT)
         self.assertNotIn("<Check ", TRANSCRIPT)
+
+
+CHAT_FN = F("supabase", "functions", "chat", "index.ts")
+CONVO = F("frontend", "src", "student", "useConversation.ts")
+
+
+class ModeHandoffsLeaveARecord(unittest.TestCase):
+    """Live (Elie's session, DB): a mentor turn stamped "discuss" sat in the transcript
+    with NO student turn before it — tapping a mode pill sent an EMPTY body, and the
+    server only persists a student turn when there is content. On reload a Discuss
+    section opened out of nowhere: "the flow hops around through modes"."""
+
+    def test_the_pill_label_rides_as_the_turn_text(self):
+        self.assertIn("{ mode: \"text\", text: offer.label, client_msg_id: uid() },", CONVO)
+
+    def test_control_turns_are_never_graded(self):
+        # Making the label visible is only safe because a control turn is excluded from
+        # the understanding grader as well as the router.
+        block = CHAT_FN[CHAT_FN.index("const isTextExplanation =") :][:900]
+        self.assertIn("!controlType &&", block)
+        # The router already excluded controls; the grader now does too.
+        self.assertIn("!controlType && answer?.mode === \"text\" && Boolean(content)", CHAT_FN)
+
+
+class SidebarFollowsTheOpenLesson(unittest.TestCase):
+    """Live: "the sidebar menu sometimes shows a class other than the selected lesson."
+    scopeClassId fell back to classes[0], so a lesson opened from Home or the brain map
+    could belong to a different class than the tree on screen."""
+
+    def test_scope_switches_to_the_class_that_owns_the_lesson(self):
+        for fragment in (
+            "const syncedLessonRef = useRef<string | null>(null);",
+            "if (classLessons.some((lesson) => lesson.id === liveLessonId))",
+            "onSelectClass(candidate.id);",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, STUDENT_APP)
