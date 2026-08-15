@@ -397,3 +397,53 @@ everywhere; the one-tap build waits on the flag.
 - **Auto-enable live artifact builds.** `allow_live_artifacts` remains teacher-owned and defaults
   off; whether project decks deserve their own defaulted-on flag is an OPEN_QUESTION.
 - **Remove the OpenAI path.** `TUTOR_PROVIDER=openai` still runs it unchanged.
+
+## 12. Flow rebuild addendum — the flow event log (Pillar 1)
+
+Status: canonical as of 2026-08-15. First slice of the five-pillar flow rebuild (see
+DECISIONS 2026-08-15). §10's turn-mode axis and §2's modes are unchanged; this section is
+about how flow is RECORDED and RENDERED.
+
+### 12.1 The server writes the flow log
+
+Flow is now a first-class object. Every mentor turn's envelope (and persisted payload)
+carries `flow: FlowEvent[]` — one entry per flow fact the turn established, written by the
+chat fn at the moment each fact is decided, in the order the student experienced it:
+
+- `mode_changed {from, to, cause}` — the register shifted. Emitted ONLY when a persisted
+  student turn declared the new register; `cause` names the student action (`"pill"` for a
+  mode_offer control, `"picker"` for the composer).
+- `revisit_opened {target_activity_id, target_title}` / `revisit_resumed
+  {frontier_activity_id}` — the navigate/resume controls.
+- `checkpoint_opened` — a lesson-register quiz FIRST attached (same moment
+  `quiz_presented_at` stamps). Practice/discuss drills never emit it (R33c held server-side).
+- `step_advanced {to_activity_id, to_title, step, total}` — the session cursor moved.
+
+Absent `flow` = the turn established no fact, or predates the log. `makeEnvelope` passes
+stored logs through on dedup replays (unknown kinds dropped, never invented).
+
+### 12.2 The client renders the record
+
+`groupIntoSections` draws section boundaries from the log on flow-bearing turns: checkpoints
+come from `checkpoint_opened`, revisit boundaries from the revisit events (the divider now
+says "Revisit · Step N/M · title" instead of silently pointing the eyebrow backwards), and a
+bare arc diff can never open a section — which is what stopped the section churn. Turns from
+before the log keep today's inference unchanged, so old transcripts render exactly as before.
+
+### 12.3 The register-shift invariant
+
+The mentor turn's `turn_mode` stamp may differ from the previous student register ONLY when
+a persisted student turn declared the new one. A declared mode whose turn persisted no
+student row (empty body) stamps the register the transcript is actually in — so a replayed
+transcript can never open a section that no visible student action started (the
+phantom-Discuss bug, root-caused from a live session's DB).
+
+### What Pillar 1 deliberately does NOT do
+
+- **Emit `session_resumed`.** In the approved plan, but it has no renderer yet — shipping it
+  would be a dead contract (what Pillar 5 exists to remove). It joins the log when the
+  time-gap divider that consumes it does.
+- **Change the live-turn register ownership.** The client still stamps the live bot message
+  with the mode it sent; unifying the five register writers behind one reducer is Pillar 2.
+- **Touch gates.** `applyTurn`/`applyModeCeiling` semantics are byte-identical; the log
+  records decisions, it does not make them.

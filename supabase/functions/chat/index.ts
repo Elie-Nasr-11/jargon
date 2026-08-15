@@ -389,6 +389,24 @@ type NextAction =
   | "continue"
   | "complete";
 
+// Pillar 1 (flow rebuild): one entry per flow FACT this turn established — the register
+// shifted, a revisit opened or closed, a checkpoint quiz attached, the step advanced.
+// Written by the server at the moment each fact is decided, so the transcript renders
+// section boundaries from the RECORD instead of re-inferring them from per-turn stamps,
+// and "why did a Discuss section open here?" is answerable by reading the turn row.
+type FlowEvent =
+  | { kind: "mode_changed"; from: string; to: string; cause: "picker" | "pill" }
+  | { kind: "revisit_opened"; target_activity_id: string; target_title: string }
+  | { kind: "revisit_resumed"; frontier_activity_id: string }
+  | { kind: "checkpoint_opened" }
+  | {
+      kind: "step_advanced";
+      to_activity_id: string;
+      to_title: string;
+      step: number;
+      total: number;
+    };
+
 type Envelope = {
   status: "ok" | "error";
   reply: string;
@@ -461,6 +479,10 @@ type Envelope = {
     target_activity_id: string;
     frontier_activity_id: string;
   } | null;
+  // Pillar 1 (flow rebuild): the turn's flow log — see FlowEvent. Absent when the turn
+  // established no flow fact (and on every envelope stored before the log existed);
+  // the client falls back to inference for those.
+  flow?: FlowEvent[];
 };
 
 type EnvelopeSession = {
@@ -659,6 +681,49 @@ function nextAction(
   return NEXT_ACTIONS.has(candidate) ? (candidate as NextAction) : fallback;
 }
 
+// Pillar 1: shape-tolerant passthrough of the flow log, so a dedup REPLAY of a stored
+// envelope keeps its record. Unknown kinds are dropped, never invented; an empty or
+// absent log stays absent (old envelopes replay byte-compatible).
+function flowEventsFrom(value: unknown): FlowEvent[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const kept: FlowEvent[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") continue;
+    const entry = raw as DbRow;
+    if (entry.kind === "mode_changed") {
+      if (typeof entry.to !== "string" || !entry.to) continue;
+      kept.push({
+        kind: "mode_changed",
+        from: typeof entry.from === "string" ? entry.from : "",
+        to: entry.to,
+        cause: entry.cause === "pill" ? "pill" : "picker",
+      });
+    } else if (entry.kind === "revisit_opened") {
+      kept.push({
+        kind: "revisit_opened",
+        target_activity_id: String(entry.target_activity_id || ""),
+        target_title: String(entry.target_title || ""),
+      });
+    } else if (entry.kind === "revisit_resumed") {
+      kept.push({
+        kind: "revisit_resumed",
+        frontier_activity_id: String(entry.frontier_activity_id || ""),
+      });
+    } else if (entry.kind === "checkpoint_opened") {
+      kept.push({ kind: "checkpoint_opened" });
+    } else if (entry.kind === "step_advanced") {
+      kept.push({
+        kind: "step_advanced",
+        to_activity_id: String(entry.to_activity_id || ""),
+        to_title: String(entry.to_title || ""),
+        step: Number(entry.step) || 0,
+        total: Number(entry.total) || 0,
+      });
+    }
+  }
+  return kept.length ? kept : undefined;
+}
+
 function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
   return {
     status: partial.status === "error" ? "error" : "ok",
@@ -763,6 +828,7 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
         : partial.navigation === null
           ? null
           : undefined,
+    flow: flowEventsFrom(partial.flow),
   };
 }
 
@@ -7311,8 +7377,11 @@ async function handleTypedRequest(
       ? revisitFlow
       : deriveTurn(finalState, requirements, presentedBefore, activityMode);
     // First attach of an eligible quiz: remember it so later prompts can say the options
-    // are already on screen (the mentor points at them instead of re-reading them).
-    if (finalFlow.nextAction === "choose" && !finalState.quiz_presented_at) {
+    // are already on screen (the mentor points at them instead of re-reading them). The
+    // flow log below records the same moment as checkpoint_opened.
+    const quizFirstAttach =
+      finalFlow.nextAction === "choose" && !finalState.quiz_presented_at;
+    if (quizFirstAttach) {
       finalState.quiz_presented_at = turnStartedIso;
     }
     // P8 bookkeeping on the presenting turn (finalState is what persists — applyTurn
@@ -7772,6 +7841,70 @@ async function handleTypedRequest(
                 ? "needs_retry"
                 : "active";
 
+    // Pillar 1 (flow rebuild): the turn's flow log — every flow fact this turn
+    // established, recorded by the code that decided it, in the order the student
+    // experienced it (their action first, this reply's effects after). The transcript
+    // renders section boundaries from THIS record; turns stored before the log fall
+    // back to client inference. Diagnosis changes with it too: a mode/section dispute
+    // is answered by reading the turn row, not by re-deriving the whole session.
+    const flowLog: FlowEvent[] = [];
+    // A student action exists in the record only when the student-turn insert ran
+    // (answer && content — its own condition above). A declared mode that left no
+    // student row must not shift the register: that was the phantom-Discuss bug.
+    const studentTurnPersisted = Boolean(answer && content);
+    if (
+      studentTurnPersisted &&
+      declaredMode &&
+      declaredMode !== (previousStudentMode ?? "lesson")
+    ) {
+      flowLog.push({
+        kind: "mode_changed",
+        from: previousStudentMode ?? "lesson",
+        to: declaredMode,
+        // The only two student actions that change a register: tapping a hand-off
+        // pill (a mode_offer control) or picking a mode in the composer.
+        cause: controlType === "mode_offer" ? "pill" : "picker",
+      });
+    }
+    if (navAction === "revisit") {
+      flowLog.push({
+        kind: "revisit_opened",
+        target_activity_id:
+          typeof context.activity?.id === "string" ? context.activity.id : "",
+        target_title: String(context.activity?.title || ""),
+      });
+    } else if (navAction === "resume") {
+      flowLog.push({
+        kind: "revisit_resumed",
+        frontier_activity_id:
+          typeof context.activity?.id === "string" ? context.activity.id : "",
+      });
+    }
+    // The register this exchange is actually in: the declared mode when the student
+    // turn persisted, else the newest persisted student register, else the default.
+    const turnRegister =
+      (studentTurnPersisted ? declaredMode : null) ?? previousStudentMode ?? "lesson";
+    // Only a LESSON-register quiz is a checkpoint (R33c): practice/discuss drills
+    // never gate the lesson, so they never announce one.
+    if (quizFirstAttach && turnRegister === "lesson") {
+      flowLog.push({ kind: "checkpoint_opened" });
+    }
+    if (advancing && advanceToActivityId) {
+      // context.activities is the full position-ordered step list (see the advance
+      // block above), so index+1 IS the human step number the arc reports.
+      const nextIndex = context.activities.findIndex(
+        (row) => String(row.id) === advanceToActivityId,
+      );
+      flowLog.push({
+        kind: "step_advanced",
+        to_activity_id: advanceToActivityId,
+        to_title: String(context.activities[nextIndex]?.title || ""),
+        step: nextIndex + 1,
+        total: context.activities.length,
+      });
+    }
+    if (flowLog.length) envelope.flow = flowLog;
+
     // Authoritative session snapshot on the wire, so the client can track status/cursor/
     // completion without refetching. Assigned before the mentor-turn insert so the stored
     // payload (used by the dedup replay and the teacher transcript) carries it too.
@@ -7797,8 +7930,20 @@ async function handleTypedRequest(
       response_mode: envelope.response_mode,
       content: envelope.reply,
       // Stamped with the same TurnMode as the student turn it answers, so a reply groups into
-      // its own mode section on replay rather than starting a new unlabelled one.
-      payload: declaredMode ? { ...envelope, turn_mode: declaredMode } : envelope,
+      // its own mode section on replay rather than starting a new unlabelled one. Pillar 1
+      // invariant: the stamp may DIFFER from the previous student register only when a
+      // persisted student turn declared the new one — a declared mode that left no student
+      // row stamps the register the transcript is actually in, so a replay can never open
+      // a section no visible action started (the phantom-Discuss bug, root-caused from
+      // Elie's session: a pill tap sent an empty body, the reply still stamped "discuss").
+      payload: declaredMode
+        ? {
+            ...envelope,
+            turn_mode: studentTurnPersisted
+              ? declaredMode
+              : (previousStudentMode ?? "lesson"),
+          }
+        : envelope,
     });
 
     // Rolling independence signal (only updated on real graded-eligible attempts —

@@ -2,6 +2,31 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-08-15: Flow is a first-class object — the five-pillar rebuild begins
+
+Owner asked how to make the flow logic bulletproof after live testing showed mode
+hopping, phantom sections, and mislabelled checkpoints. Diagnosis (agreed): flow was
+never an object — the client re-derived it every render from per-turn stamps, the
+register had five independent writers, and the directive ladder is an unenumerable
+if-chain. The rebuild lands in five slices; each ships alone.
+
+- **Pillar 1 (this slice): the server-written flow event log.** Every mentor turn's
+  envelope + persisted payload carries `flow: FlowEvent[]` — mode_changed / revisit_opened
+  / revisit_resumed / checkpoint_opened / step_advanced — written where each fact is
+  decided. The transcript renders section boundaries from the record; inference remains
+  only as the fallback for pre-log turns. Spec: PLATFORM §12.
+- **The register-shift invariant** (server-enforced from now on): the mentor stamp may
+  differ from the previous student register only when a persisted student turn declared
+  the new one. An empty-body turn can never shift the recorded register again.
+- **`session_resumed` deferred deliberately.** It was in the plan, but with no renderer
+  it would be a dead contract — the exact disease Pillar 5 removes. It ships with the
+  divider that consumes it.
+- **Revisit dividers say so.** "Revisit · Step N/M · title" on the recorded jump —
+  before, the step eyebrow silently pointed backwards, which read as "hopping around".
+- Pillars 2–5 queued: one client register reducer (invariant: no register change
+  without a student-visible action), the directive decision table + completeness test,
+  property/simulation tests over the turn machine, and dead-contract retirement.
+
 ## 2026-08-12 (evening): My Jargon, publish-time knowledge drafting, Wael loop closed
 
 Executing the rest of the Wael-feedback map (owner: "plan it all out, go for it"):

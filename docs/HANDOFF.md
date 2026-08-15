@@ -6,6 +6,35 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-15 (flow rebuild Pillar 1: the flow event log)
+
+Status: Finished
+Summary: Flow is now a first-class, server-written object. (1) The chat fn assembles a
+`flow: FlowEvent[]` log per mentor turn — mode_changed {from,to,cause: pill|picker} (only
+when a PERSISTED student turn declared the shift), revisit_opened/revisit_resumed (from
+navAction), checkpoint_opened (lesson-register quiz first-attach, R33c held server-side),
+step_advanced {to_activity_id,to_title,step,total} — placed on the envelope + persisted
+payload before the mentor-turn insert; makeEnvelope passes stored logs through on dedup
+replays (flowEventsFrom: unknown kinds dropped). (2) The mentor turn_mode stamp obeys the
+register-shift invariant: a declared mode whose student turn never persisted stamps the
+register the transcript is actually in (previousStudentMode ?? lesson) — the phantom
+-Discuss class is closed at the root, not just at the pill that triggered it. (3) The
+transcript renders boundaries from the record on flow-bearing turns (checkpoint from the
+event; bare arc diffs can never open a section; recorded revisits get a "Revisit · Step
+N/M · title" divider); pre-log turns keep the old inference verbatim. session_resumed
+deliberately NOT emitted (no renderer yet — would be a dead contract; see DECISIONS).
+Files changed: supabase/functions/chat/index.ts, frontend/src/lib/types.ts,
+frontend/src/features/student/chat/chatMessages.ts, frontend/src/student/Transcript.tsx,
+tests/test_flow_pillar1_log.py (new), tests/test_student_surface.py (mentor-stamp pin
+re-pinned on the invariant), docs/{PLATFORM.md §12,DECISIONS.md,ROADMAP.md,HANDOFF.md}.
+Tests run: 699 unittest OK (4 skips, unchanged); tsc clean; eslint clean (2 pre-existing
+warnings); vite build green; deno check scratch parity at the 8 pre-existing errors.
+Remaining concerns: live-turn register still stamped client-side from the sent mode
+(divergence possible until Pillar 2's single reducer); revisit divider copy ("Revisit ·")
+is my call — flag if the design wants different wording.
+Suggested next task: Pillar 2 — one setRegister(mode, cause) seam in useConversation with
+the same invariant the server now enforces.
+
 ## Claude -> Codex / Human - 2026-08-12 night (project assist v1; Claude LIVE in prod)
 
 Status: Finished

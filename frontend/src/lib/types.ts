@@ -1248,7 +1248,26 @@ export type TypedChatEnvelope = {
     target_activity_id: string;
     frontier_activity_id: string;
   } | null;
+  // Pillar 1 (flow rebuild): the server-written flow log — one entry per flow fact this
+  // turn established. The transcript renders section boundaries from this record; turns
+  // stored before the log fall back to client-side inference. Absent = no facts / old turn.
+  flow?: FlowEvent[];
 };
+
+// Pillar 1 (flow rebuild): mirrors the chat fn's FlowEvent. The server is the only
+// writer; the client only renders what was recorded.
+export type FlowEvent =
+  | { kind: "mode_changed"; from: string; to: string; cause: "picker" | "pill" }
+  | { kind: "revisit_opened"; target_activity_id: string; target_title: string }
+  | { kind: "revisit_resumed"; frontier_activity_id: string }
+  | { kind: "checkpoint_opened" }
+  | {
+      kind: "step_advanced";
+      to_activity_id: string;
+      to_title: string;
+      step: number;
+      total: number;
+    };
 
 // Flow v3 structured client affordances: the Continue button (and, later, stepper
 // navigation) post a control turn instead of synthetic text.
