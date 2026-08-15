@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
-import { Check, Paperclip, RotateCcw, Sparkles } from "lucide-react";
+import { Paperclip, RotateCcw, Sparkles } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
 import { splitSentences } from "@/lib/sentences";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
 import { store } from "@/lib/jargon-store";
-import { renderWithMath } from "@/lib/mathText";
+import { mathSpans, renderWithMath } from "@/lib/mathText";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ResourceCard } from "@/student/ResourceCard";
 import { useMediaStage } from "@/student/MediaStage";
@@ -210,14 +210,67 @@ function highlightRun(part: string, vocab: VocabPass, keyBase: string): ReactNod
 // inside a formula would be read as italics and `_` as emphasis. renderInline is now the
 // math-aware entry point; renderInlineMd is the original markdown pass, unchanged, applied
 // only to the prose between formulas.
+// R33c (live: "**What is $d$?**" printed its asterisks). Math used to split the string
+// FIRST, which cut that sentence into "**What is ", math, "?**" — neither fragment could
+// match the bold pattern, so the student read the markup. Emphasis is the OUTER structure
+// now; math renders inside each run the markdown pass produces, so bold/italic spanning a
+// formula works.
 function renderInline(text: string, vocab?: VocabPass): ReactNode[] {
-  return renderWithMath(text, (part, key) => (
-    <Fragment key={key}>{renderInlineMd(part, vocab)}</Fragment>
-  ));
+  return renderInlineMd(text, vocab);
+}
+
+// Math (and vocab highlighting, when a pass is supplied) inside one plain run.
+function renderRunWithMath(
+  text: string,
+  vocab: VocabPass | undefined,
+  keyBase: string,
+): ReactNode[] {
+  return renderWithMath(
+    text,
+    (part, key) => <Fragment key={key}>{vocab ? highlightRun(part, vocab, key) : part}</Fragment>,
+    keyBase,
+  );
 }
 
 function renderInlineMd(text: string, vocab?: VocabPass): ReactNode[] {
-  return text.split(INLINE_MD_RE).map((part, i) => {
+  // Index-aware walk rather than a plain split, because markdown and math interleave in
+  // BOTH directions. A markdown match is honoured only when it is disjoint from every
+  // formula or CONTAINS it whole: "**What is $d$?**" wraps its formula (bold applies),
+  // while the "*x*" inside "$2*x*y$" lies within a formula and stays verbatim.
+  const spans = mathSpans(text);
+  const allowed = (start: number, end: number) =>
+    spans.every((s) => end <= s.start || start >= s.end || (start <= s.start && end >= s.end));
+  const nodes: ReactNode[] = [];
+  const re = new RegExp(INLINE_MD_RE.source, "g");
+  let last = 0;
+  let token = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (!allowed(start, end)) continue;
+    if (start > last) {
+      const lead = text.slice(last, start);
+      nodes.push(
+        <Fragment key={`p${token}`}>{renderRunWithMath(lead, vocab, `p${token}`)}</Fragment>,
+      );
+    }
+    nodes.push(renderMdToken(match[0], token, vocab));
+    last = end;
+    token += 1;
+  }
+  if (last < text.length) {
+    const tail = text.slice(last);
+    nodes.push(
+      <Fragment key={`p${token}`}>{renderRunWithMath(tail, vocab, `p${token}`)}</Fragment>,
+    );
+  }
+  return nodes;
+}
+
+// One markdown token (already matched, already cleared by the math-overlap rule).
+function renderMdToken(part: string, i: number, vocab?: VocabPass): ReactNode {
+  {
     const code = part.match(/^`([^`\n]+)`$/);
     if (code) {
       return (
@@ -237,13 +290,13 @@ function renderInlineMd(text: string, vocab?: VocabPass): ReactNode[] {
       // is what the mentor's **key term** highlighting is for.
       return (
         <b key={i} className="font-bold">
-          {bold[1]}
+          {renderRunWithMath(bold[1], undefined, `b${i}`)}
         </b>
       );
     }
     const italic = part.match(/^\*([^\s*][^*\n]*)\*$/);
     if (italic) {
-      return <i key={i}>{italic[1]}</i>;
+      return <i key={i}>{renderRunWithMath(italic[1], undefined, `i${i}`)}</i>;
     }
     const link = part.match(/^\[([^\]\n]+)\]\((https:\/\/[^\s)]+)\)$/);
     if (link) {
@@ -259,8 +312,8 @@ function renderInlineMd(text: string, vocab?: VocabPass): ReactNode[] {
         </a>
       );
     }
-    return <Fragment key={i}>{vocab ? highlightRun(part, vocab, String(i)) : part}</Fragment>;
-  });
+    return <Fragment key={i}>{renderRunWithMath(part, vocab, String(i))}</Fragment>;
+  }
 }
 
 // Structured replies only: a cheap block-syntax test gates the block renderer so plain replies
@@ -747,10 +800,16 @@ function groupIntoSections(messages: Msg[]): Section[] {
       current?.arc != null &&
       current.arc.step !== arcStep &&
       !messageArc?.transition;
-    // Round 20: every CHECKPOINT gets its own section marker — a mentor message that
-    // presents quiz choices opens a fresh, checkpoint-flagged section even mid-mode.
+    // Round 20: a CHECKPOINT gets its own section marker — but only a LESSON-spine quiz is
+    // a checkpoint. R33c (live: "why the 'checkpoint'?"): this fired on ANY reply carrying
+    // options, so a mentor-improvised drill in Practice mode was announced as a CHECKPOINT
+    // — alarming, and wrong: practice never gates the lesson. A question asked inside
+    // Practice/Discuss now simply stays in that section.
     const opensCheckpoint =
-      message.role === "bot" && !!message.choices?.length && !current?.checkpoint;
+      message.role === "bot" &&
+      !!message.choices?.length &&
+      (message.turnMode ?? "lesson") === "lesson" &&
+      !current?.checkpoint;
     const startsNextStep = opensSection && pendingArc != null;
     if (
       current &&
@@ -1205,7 +1264,16 @@ export function Transcript({
                                 : "border-border/60 text-muted-foreground opacity-70"
                             }`}
                           >
-                            {picked ? <Check className="h-3.5 w-3.5" strokeWidth={2.2} /> : null}
+                            {/* R33c: a CHECK MARK on the retired pick read as "correct" —
+                                a live transcript shows a ✓ on an option the very next
+                                reply calls "Not quite". This marker only means "this is
+                                the one you chose", so it says exactly that and stays
+                                verdict-neutral; the mentor's reply carries the verdict. */}
+                            {picked ? (
+                              <span className="text-overline uppercase tracking-[0.08em] opacity-70">
+                                your pick
+                              </span>
+                            ) : null}
                             {choiceLabel(choice)}
                           </span>
                         );

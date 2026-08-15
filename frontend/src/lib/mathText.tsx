@@ -47,6 +47,19 @@ export function hasMath(text: string): boolean {
   return MATH_RE.test(text);
 }
 
+// The character range of every formula in a string. The transcript's inline-markdown pass
+// runs OVER math (so **bold spanning $d$** works) and needs to know which of its own
+// matches fall inside a formula — `$2*x*y$` must stay verbatim, never italicised.
+export function mathSpans(text: string): { start: number; end: number }[] {
+  const spans: { start: number; end: number }[] = [];
+  MATH_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = MATH_RE.exec(text))) {
+    spans.push({ start: match.index, end: match.index + match[0].length });
+  }
+  return spans;
+}
+
 // The ONE injection seam in the math path. The html is always KaTeX's own output for the
 // given source: renderToString with throwOnError:false returns a styled error node for bad
 // input rather than raising, and trust:false disables \href/\htmlClass/\includegraphics —

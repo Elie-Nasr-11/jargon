@@ -595,10 +595,13 @@ export function StudentApp({
             }
             onAcceptOffer={acceptModeOffer}
             onChoose={(choiceId, label) => {
-              // Phase A: an MCQ tap is a LESSON act (the options are the lesson's own quiz
-              // step) — the server also exempts choice taps from the mode ceiling, so the
-              // picker stays wherever the student left it.
-              void conversation.sendChoice(choiceId, label, "lesson");
+              // R33c: the tap carries the register the student is actually in. Forcing
+              // "lesson" stamped the answer as a LESSON message, so tapping an option
+              // during Practice opened a new LESSON section between the question and its
+              // feedback — the transcript flip-flopped LESSON/PRACTICE/CHECKPOINT on every
+              // exchange. Grading is unaffected: the server exempts MCQ taps from the mode
+              // ceiling regardless of declared mode (see applyModeCeiling).
+              void conversation.sendChoice(choiceId, label, turnMode);
             }}
           />
         </ErrorBoundary>

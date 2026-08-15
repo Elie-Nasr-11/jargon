@@ -30,10 +30,22 @@ class EquationRendering(unittest.TestCase):
         self.assertIn("throwOnError: false", MATH)
         self.assertIn("trust: false", MATH)
 
-    def test_math_splits_before_markdown(self):
-        # Math is verbatim: `2*x*y` inside a formula must not become italics.
+    def test_markdown_and_math_interleave_both_ways(self):
+        # R33c: markdown is the OUTER pass now (splitting on math first cut
+        # "**What is $d$?**" into fragments that could not match bold, so a student read
+        # the asterisks). The original invariant still holds in the other direction:
+        # `2*x*y` inside a formula must not become italics. The overlap rule is what
+        # keeps both true — a markdown match counts only when it is disjoint from every
+        # formula or contains one whole.
         self.assertIn("function renderInlineMd(", TRANSCRIPT)
-        self.assertIn("renderWithMath(text, (part, key)", TRANSCRIPT)
+        self.assertIn("const spans = mathSpans(text);", TRANSCRIPT)
+        self.assertIn(
+            "end <= s.start || start >= s.end || (start <= s.start && end >= s.end)",
+            TRANSCRIPT,
+        )
+        self.assertIn("if (!allowed(start, end)) continue;", TRANSCRIPT)
+        # The span helper is exported from the one math seam, not re-derived here.
+        self.assertIn("export function mathSpans(", MATH)
 
     def test_dollar_syntax_does_not_eat_prices(self):
         # "it cost $5 and $8 total" must stay prose: no leading/trailing space in the
