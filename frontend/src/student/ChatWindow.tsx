@@ -117,9 +117,12 @@ export function ChatWindow({
     Boolean(navigator.mediaDevices?.getUserMedia) &&
     Boolean(channel.accessToken && channel.lessonId);
 
+  // min-w-0 on both flex columns: without it, `min-width:auto` lets any long
+  // unbreakable content (a step-title divider eyebrow on a phone) set the column's
+  // minimum width and shove the whole conversation past the right edge.
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-4">
-      <section aria-label="Conversation" className="relative flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col px-4 pb-4 pt-4">
+      <section aria-label="Conversation" className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Learning framework: vocab definition dropdown (top center) + growth toasts
             (top right). Fed by the channel's toast queue — filled only after a turn's
             stream settles. */}

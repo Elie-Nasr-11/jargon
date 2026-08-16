@@ -891,8 +891,11 @@ function ModeRule({ label, soft }: { label: string; soft?: boolean }) {
     >
       <span className="mode-rule mode-rule-l" />
       {/* The board's divider label: mono micro-label in the section's hue, sitting directly
-          on the rule — no pill box. */}
-      <span className="mode-eyebrow mode-pill max-w-[70%] shrink-0 truncate px-1 text-overline font-semibold uppercase tracking-[0.16em]">
+          on the rule — no pill box. min-w-0 (not shrink-0): the label must SHRINK and
+          truncate on narrow screens — as a non-shrinking nowrap item its full text width
+          became the flex column's minimum width, which is exactly how a long step title
+          pushed the whole phone transcript off the right edge. */}
+      <span className="mode-eyebrow mode-pill min-w-0 max-w-[70%] truncate px-1 text-overline font-semibold uppercase tracking-[0.16em]">
         {label}
       </span>
       <span className="mode-rule mode-rule-r" />
