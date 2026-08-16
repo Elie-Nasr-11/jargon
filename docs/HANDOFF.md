@@ -6,7 +6,6 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
-<<<<<<< HEAD
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5.2: the hierarchy pass)
 
 Status: Finished
@@ -30,9 +29,6 @@ if a school's brand accent lands near red, rotated hues may collide with the suc
 green; revisit with a fixed categorical ramp if that ever ships.
 
 
-=======
->>>>>>> origin/main
-<<<<<<< HEAD
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5.1: theme-native graph + the label density fix)
 
 Status: Finished
@@ -60,8 +56,6 @@ Remaining concerns: none blocking. A hub label can still cross an unrelated node
 circle (label-vs-node, not label-vs-label) — cosmetic, Obsidian shares it.
 
 
-=======
->>>>>>> origin/main
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5: the Obsidian-style knowledge graph)
 
 Status: Finished
