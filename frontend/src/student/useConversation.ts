@@ -110,9 +110,11 @@ export type ConversationChannel = {
   lessonId: string | null;
   sessionId: string | null;
   sending: boolean;
-  // Actions. Control turns are lesson-spine acts, so they are stamped mode "lesson" (the server
-  // lets control turns bypass the mode ceiling regardless — see applyModeCeiling).
-  sendContinue: () => void;
+  // Actions. Pillar 5: control turns ride the LIVE register (they bypass the mode
+  // ceiling server-side regardless — see applyModeCeiling) so the live message stamp
+  // matches what a replay reconstructs, and a stepper click can never read as a
+  // register switch. sendContinue is GONE: its button left in R31b and typed readiness
+  // is the advance verb; the server still parses the continue control for old tabs.
   sendResume: () => void;
   sendNavigate: (targetActivityId: string) => void;
   retryControlTurn: (answer: TypedChatAnswer, control: TypedChatControl) => void;
@@ -152,7 +154,6 @@ const EMPTY_CHANNEL: ConversationChannel = {
   lessonId: null,
   sessionId: null,
   sending: false,
-  sendContinue: () => {},
   sendResume: () => {},
   sendNavigate: () => {},
   retryControlTurn: () => {},
@@ -1065,15 +1066,6 @@ export function useConversation() {
     [sendAnswer],
   );
 
-  // Flow v3: the Continue pill on a content step. Posts a structured control turn (no answer
-  // text) — the server acknowledges the step deterministically and advances. Control turns are
-  // lesson-spine acts, hence the fixed "lesson" mode stamp.
-  const sendContinue = useCallback(() => {
-    void sendAnswer({ mode: "text", text: "", client_msg_id: uid() }, "lesson", "Continue", {
-      control: { type: "continue" },
-    });
-  }, [sendAnswer]);
-
   // Phase A: accepting a mode hand-off pill. A deterministic CONTROL turn (no synthesized
   // student prose beyond the pill's label as the echo). Pillar 2: accepting MOVES the
   // register at this same seam — the composer picker renders conversation.register, so
@@ -1099,11 +1091,14 @@ export function useConversation() {
   );
 
   // Return from a revisit to exactly where the lesson left off (the server restores the paused
-  // step state and clears the frame).
+  // step state and clears the frame). Pillar 5: controls ride the LIVE register — the
+  // old hardcoded "lesson" made the server's REGISTER SHIFT voice nod fire on a stepper
+  // click and stamped the live message differently from its replay; the conversation
+  // register does not change because a control was pressed.
   const sendResume = useCallback(() => {
     void sendAnswer(
       { mode: "text", text: "", client_msg_id: uid() },
-      "lesson",
+      registerRef.current,
       "Return to where I was",
       { control: { type: "resume" } },
     );
@@ -1120,7 +1115,7 @@ export function useConversation() {
         : undefined;
       void sendAnswer(
         { mode: "text", text: "", client_msg_id: uid() },
-        "lesson",
+        registerRef.current,
         `Revisit: ${title || "an earlier step"}`,
         { control: { type: "navigate", target_activity_id: targetActivityId } },
       );
@@ -1140,10 +1135,10 @@ export function useConversation() {
 
   // A failed CONTROL turn retried with its control intact (a failed navigate must retry as
   // navigation). Reached through the channel because the shell's onRetry prop forwards only the
-  // answer.
+  // answer. Rides the live register like every control (Pillar 5).
   const retryControlTurn = useCallback(
     (answer: TypedChatAnswer, control: TypedChatControl) => {
-      void sendAnswer(answer, "lesson", undefined, { control });
+      void sendAnswer(answer, registerRef.current, undefined, { control });
     },
     [sendAnswer],
   );
@@ -1311,7 +1306,6 @@ export function useConversation() {
       lessonId: lesson?.id ?? null,
       sessionId,
       sending,
-      sendContinue,
       sendResume,
       sendNavigate,
       retryControlTurn,
@@ -1332,7 +1326,6 @@ export function useConversation() {
     lesson,
     sessionId,
     sending,
-    sendContinue,
     sendResume,
     sendNavigate,
     retryControlTurn,
@@ -1371,7 +1364,6 @@ export function useConversation() {
     sendText,
     sendCode,
     sendChoice,
-    sendContinue,
     sendModeOffer,
     sendResume,
     sendNavigate,

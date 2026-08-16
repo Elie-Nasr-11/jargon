@@ -56,9 +56,13 @@ class FlowV3RouterInvariants(unittest.TestCase):
         # Masking: routed non-attempts never set understanding.
         self.assertIn('routedKind === null || routedKind === "answer_attempt"', CHAT)
 
-    def test_continue_offer_in_envelope(self):
-        self.assertIn("continue_offer?:", CHAT)
-        self.assertIn("envelope.continue_offer", CHAT)
+    def test_continue_offer_left_the_wire(self):
+        # Pillar 5: R31b removed the Continue button; the offer field spent two rounds
+        # as a wire contract nothing rendered, so it is retired end-to-end. The
+        # `continue` CONTROL is still parsed (old open tabs) — pinned separately below.
+        self.assertNotIn("continue_offer?:", CHAT)
+        self.assertNotIn("envelope.continue_offer =", CHAT)
+        self.assertNotIn("partial.continue_offer", CHAT)
         self.assertIn("turn_kind", CHAT)
 
     def test_control_turn_parsed(self):
@@ -79,19 +83,21 @@ class FlowV3RouterInvariants(unittest.TestCase):
         self.assertIsNotNone(batch)
         self.assertIn("routerEligible || isTextExplanation", CHAT)
 
-    def test_client_model_carries_the_continue_offer(self):
-        # The shared transcript model (consumed by the v6 surface) maps
-        # envelope.continue_offer, so the rendering surface gets the data path for free.
-        self.assertIn("continueOffer", CHAT_MESSAGES)
-        self.assertIn("continue_offer", CHAT_MESSAGES)
+    def test_client_model_no_longer_carries_the_continue_offer(self):
+        # Pillar 5: the transcript model dropped the field with the wire contract — a
+        # data path with no renderer is not "free", it is drift waiting to mislead.
+        self.assertNotIn("continueOffer?:", CHAT_MESSAGES)
+        self.assertNotIn("continue_offer &&", CHAT_MESSAGES)
 
     def test_v6_surface_sends_control_turns(self):
-        # Re-anchored (B1): the v6 hook posts the three structured controls the server
-        # parses — continue (content-step acknowledge), navigate (revisit a completed
-        # step), resume (return to the frontier).
+        # Re-anchored (B1, then Pillar 5): the v6 hook posts the structured controls the
+        # server parses — navigate (revisit a completed step) and resume (return to the
+        # frontier). The continue control lost its last sender with the R31b button
+        # (typed readiness is the advance verb); the SERVER still parses it for any tab
+        # open since before R31b — see test_control_turn_parsed.
         hook = (REPO / "frontend" / "src" / "student" / "useConversation.ts").read_text()
+        self.assertNotIn('control: { type: "continue" }', hook)
         for fragment in (
-            'control: { type: "continue" }',
             'control: { type: "navigate", target_activity_id: targetActivityId }',
             'control: { type: "resume" }',
         ):

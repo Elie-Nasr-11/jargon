@@ -6,6 +6,35 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (flow rebuild Pillar 5: dead contracts retired)
+
+Status: Finished
+Summary: (1) continue_offer left the platform end-to-end — server emission, Envelope
+field, makeEnvelope replay passthrough, TypedChatEnvelope field, Msg.continueOffer,
+the turnToMessage restore, and the caller-less sendContinue (channel type +
+EMPTY_CHANNEL + publish/deps/return). It had no renderer since R31b removed the
+button; typed readiness (R34) is the advance verb. The `continue` CONTROL is still
+parsed server-side for tabs open since before R31b. e2e: continue_gate.json now
+advances via "Yes — let's head there!" expecting turn_kind continue_signal (the R34
+fix is now e2e-encoded), backtrack.json dropped its continue_offer key, and the
+runner lost the dead expectation handler. (2) Control turns ride the LIVE register —
+sendResume/sendNavigate/retryControlTurn declare registerRef.current instead of
+"lesson", so a stepper click can't fire the REGISTER SHIFT voice nod and the live
+stamp matches the Pillar-1 replay stamp; sendModeOffer alone declares offer.mode (it
+IS the register change).
+Files changed: supabase/functions/chat/index.ts, frontend/src/lib/types.ts,
+frontend/src/features/student/chat/chatMessages.ts, frontend/src/student/
+{useConversation.ts,Transcript.tsx}, tests/{test_flow_pillar5_dead_contracts.py(new),
+test_flow_v3_router.py,test_flow_pillar2_register.py}, tools/e2e_chat_script.py,
+tests/e2e_scenarios/{continue_gate,backtrack}.json, docs (PLATFORM §12.6, DECISIONS,
+ROADMAP).
+Tests run: 720 OK (incl. the executable flow-core properties); tsc clean; eslint
+clean (2 pre-existing warnings); vite build green; deno check parity (8 pre-existing).
+Remaining concerns: of the five pillars only Pillar 3's physical ladder rewrite
+remains, deliberately parked (DECISIONS) — revisit if directive drift actually bites.
+Suggested next task: run tools/e2e_chat_script.py against prod from a network that
+reaches *.supabase.co (CI or dev machine) to exercise the updated scenarios.
+
 ## Claude -> Codex / Human - 2026-08-16 (flow rebuild Pillar 4: the spine runs under test)
 
 Status: Finished

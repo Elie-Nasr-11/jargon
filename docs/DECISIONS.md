@@ -27,6 +27,24 @@ if-chain. The rebuild lands in five slices; each ships alone.
   without a student-visible action), the directive decision table + completeness test,
   property/simulation tests over the turn machine, and dead-contract retirement.
 
+## 2026-08-16 (evening): Pillar 5 — dead flow contracts retired
+
+- **continue_offer left the platform end-to-end** (emission, envelope field, replay
+  passthrough, client model + restore, the caller-less sendContinue). It had no
+  renderer since R31b removed the button; typed readiness (CONTINUE_SIGNAL_RE /
+  CONTINUE_PHRASE_RE, R34) is the advance verb. The `continue` CONTROL is still
+  parsed server-side for tabs open since before R31b. e2e fixtures now assert the
+  gate (advanced true/false + turn_kind), not the dead pill.
+- **Control turns ride the live register.** The hardcoded "lesson" on resume/
+  navigate/control-retry made the server's REGISTER SHIFT nod fire on a stepper
+  click and stamped the live message differently from its replay; controls now
+  declare the current register (the ceiling exemption is untouched — controls are
+  deliberate button presses either way). sendModeOffer alone declares offer.mode:
+  it IS the register change.
+- Remaining from the original five-pillar plan: only Pillar 3's ladder-to-table
+  rewrite, deliberately parked (see the Pillar-4 entry) — the executable witnesses
+  already provide the enumerability it was for.
+
 ## 2026-08-16 (later): Pillar 4 lands BEFORE Pillar 3 — the flow core runs under test
 
 Re-sequenced deliberately. Mapping turnDirective for the planned table conversion
