@@ -203,6 +203,24 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       // advance verb now, so a reload cannot soft-lock. (Old payloads keep the key at
       // rest; it simply maps to nothing.) artifact_offer stays live-turn-only by
       // design (artifact-live enforces once-per-step).
+      // R35 (visual pass): a pending mode hand-off pill MUST survive a reload. The
+      // mentor's text points at it ("the pill carries that action" — R31e's one-tap
+      // way out of Discuss), so losing it on refresh re-opened the exact dead-end the
+      // pill was built to close. The transcript renders offers only on the latest
+      // mentor message, so accepted/stale offers stay retired.
+      modeOffer:
+        payload.mode_offer &&
+        typeof payload.mode_offer === "object" &&
+        ["practice", "discuss", "lesson"].includes(
+          String((payload.mode_offer as { mode?: unknown }).mode),
+        ) &&
+        typeof (payload.mode_offer as { label?: unknown }).label === "string"
+          ? {
+              mode: (payload.mode_offer as ModeOffer).mode,
+              topic: String((payload.mode_offer as { topic?: unknown }).topic || ""),
+              label: (payload.mode_offer as ModeOffer).label,
+            }
+          : undefined,
       // Persisted envelope payloads carry the arc; older turns simply don't have one.
       lessonArc:
         payload.lesson_arc && typeof payload.lesson_arc === "object"

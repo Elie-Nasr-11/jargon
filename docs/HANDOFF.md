@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (R35: screenshot-driven visual pass)
+
+Status: Finished
+Summary: Built an offline visual harness (scratchpad-only, not committed): a stdlib
+Python mock of the Supabase surface (auth + PostgREST + chat fn) with a fixture
+transcript exercising every flow-rebuild visual, a local Vite build pointed at it,
+and Playwright driving the real app at desktop + phone widths. The rendered result
+confirmed the Pillar-1 section system works as designed (mode dividers in their hues,
+"STEP N/M · title" eyebrows, "REVISIT · STEP 1/6 · …" naming the jump, live sends
+joining their recorded section) and caught two real defects:
+(1) PHONE OVERFLOW — a long step-title eyebrow (shrink-0 + nowrap) set the flex
+column's intrinsic min-width and pushed the whole conversation to 508px on a 390px
+viewport (measured, then re-measured 390 after the fix). Fixed with min-w-0 on the
+ChatWindow flex columns + a shrinkable truncating eyebrow. This would have hit any
+phone student as soon as Pillar 1's titled dividers shipped.
+(2) MODE-OFFER RELOAD LOSS — turnToMessage never restored payload.mode_offer, so a
+pending hand-off pill vanished on refresh while the mentor's text still pointed at it
+(the R31e Discuss dead-end, reopened by reload). Restored with shape validation; the
+latest-mentor-only rule keeps stale offers retired.
+Files changed: frontend/src/student/{ChatWindow.tsx,Transcript.tsx},
+frontend/src/features/student/chat/chatMessages.ts, tests/test_r35_visual_polish.py
+(new).
+Tests run: 724 OK; tsc clean; vite build green. Server untouched.
+Remaining concerns: none blocking. Non-defect observations for later taste passes:
+generous vertical rhythm between exchanges (consistent, reads airy), Home vs Learn
+landing behavior after login, My Jargon lives outside the account menu.
+
 ## Claude -> Codex / Human - 2026-08-16 (flow rebuild Pillar 5: dead contracts retired)
 
 Status: Finished
