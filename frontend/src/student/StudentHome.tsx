@@ -187,15 +187,7 @@ function MyJargonCard({
   );
 }
 
-function MemoryCard({
-  onAfterReset,
-  map,
-}: {
-  onAfterReset?: () => void;
-  // The brain map constellation, supplied by StudentHome (it owns lessons/progress) as a
-  // render prop so the card can hand it the loaded memory profile (the satellites).
-  map?: (profile: StudentMemoryProfile | null) => ReactNode;
-}) {
+function MemoryCard({ onAfterReset }: { onAfterReset?: () => void }) {
   const [memory, setMemory] = useState<StudentMemory | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Reset ladder: idle → confirm (inline, no modal) → busy → back to the empty state.
@@ -312,11 +304,6 @@ function MemoryCard({
           <Chips label="Steering around" values={profile?.avoid ?? []} />
         </>
       )}
-      {/* The brain map rides below whatever the memory says — it has value from the very
-          first lesson (progress colors) even before any memory exists. */}
-      {map ? (
-        <div className="mt-3 border-t border-border pt-2.5">{map(profile ?? null)}</div>
-      ) : null}
     </section>
   );
 }
@@ -600,41 +587,47 @@ export function StudentHome({
           </section>
         </div>
 
-        {/* ---- 3. What your mentor remembers (full width, with the brain map) ---------- */}
+        {/* ---- 3. The knowledge map — the hero, with ONE slim header row (R37:
+             "too much information over the constellation window"). Mastery stats ride
+             the label line; everything narrative moved below the map. ---------------- */}
         <div className="mb-7">
           {(() => {
-            // Phase C blend: what you KNOW (mastery bands), next to what you've DONE.
             const bands = masteryBands(ideaMastery);
             const total = bands.solid + bands.growing + bands.refresh;
-            return total > 0 ? (
-              <div className="mb-2 flex items-center gap-3 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
-                <span>What you know</span>
-                <span style={{ color: "var(--mode-practice)" }}>{bands.solid} solid</span>
-                <span>{bands.growing} growing</span>
-                <span style={{ color: "var(--mode-discuss)" }}>{bands.refresh} to refresh</span>
+            return (
+              <div className="mb-2 flex items-baseline gap-3">
+                <SectionLabel>Your brain</SectionLabel>
+                <span className="flex-1" />
+                {total > 0 ? (
+                  <span className="flex items-center gap-3 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
+                    <span style={{ color: "var(--mode-practice)" }}>{bands.solid} solid</span>
+                    <span>{bands.growing} growing</span>
+                    <span style={{ color: "var(--mode-discuss)" }}>{bands.refresh} to refresh</span>
+                  </span>
+                ) : null}
               </div>
-            ) : null;
+            );
           })()}
-          <MemoryCard
-            onAfterReset={() => setRecaps([])}
-            map={() => (
-              <BrainGraph
-                lessons={lessons}
-                words={jargonWords ?? []}
-                vocabTerms={vocabTerms}
-                ideas={ideas}
-                studentLinks={studentLinks}
-                progress={progress}
-                currentLessonId={currentLessonId}
-                mastery={masteryBands(ideaMastery).byKey}
-                onOpenLesson={onOpenLesson}
-                onOpenWord={openWord}
-              />
-            )}
+          <BrainGraph
+            lessons={lessons}
+            words={jargonWords ?? []}
+            vocabTerms={vocabTerms}
+            ideas={ideas}
+            studentLinks={studentLinks}
+            progress={progress}
+            currentLessonId={currentLessonId}
+            mastery={masteryBands(ideaMastery).byKey}
+            onOpenLesson={onOpenLesson}
+            onOpenWord={openWord}
           />
         </div>
 
-        {/* ---- 4. My Jargon — the words this student has collected ---------------------- */}
+        {/* ---- 4. What your mentor remembers — compact, below the map ---------------- */}
+        <div className="mb-7">
+          <MemoryCard onAfterReset={() => setRecaps([])} />
+        </div>
+
+        {/* ---- 5. My Jargon — the words this student has collected ---------------------- */}
         <div className="mb-7 scroll-mt-4" ref={jargonAnchorRef}>
           <MyJargonCard words={jargonWords} highlightTerm={highlightTerm} />
         </div>

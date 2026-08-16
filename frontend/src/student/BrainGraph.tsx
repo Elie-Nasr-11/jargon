@@ -370,11 +370,14 @@ export function BrainGraph({
     let height = 0;
     const reduced = prefersReducedMotion();
     const { nodes, edges } = graphRef.current;
+    const textWidths = new Map<string, number>();
+    dirty.current = true;
 
     let pal = readPalette(wrap);
     // Theme flips re-read the cascade — the graph follows the app instantly.
     const themeWatch = new MutationObserver(() => {
       pal = readPalette(wrap);
+      dirty.current = true;
     });
     themeWatch.observe(document.documentElement, {
       attributes: true,
@@ -389,12 +392,14 @@ export function BrainGraph({
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      dirty.current = true;
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
     const io = new IntersectionObserver((entries) => {
       visible = entries.some((e) => e.isIntersecting);
+      if (visible) dirty.current = true;
     });
     io.observe(wrap);
 
@@ -438,12 +443,14 @@ export function BrainGraph({
         b.vx -= fx;
         b.vy -= fy;
       }
-      for (const n of nodes) {
+      const dragging = dragNode.current?.index ?? -1;
+      for (let i = 0; i < nodes.length; i += 1) {
+        const n = nodes[i];
         n.vx -= n.x * CENTER_PULL * alpha;
         n.vy -= n.y * CENTER_PULL * alpha;
         n.vx *= DAMPING;
         n.vy *= DAMPING;
-        if (dragNode.current?.index !== nodes.indexOf(n)) {
+        if (i !== dragging) {
           n.x += n.vx;
           n.y += n.vy;
         }
@@ -474,10 +481,18 @@ export function BrainGraph({
       y: (n.y - cam.current.y) * cam.current.zoom + height / 2,
     });
 
-    const frame = () => {
+    const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       if (!running || !visible || document.hidden) return;
-      if (!reduced) tick(0.06);
+      // Physics only while a node is being tugged (plus a 1.2s cooldown to let the
+      // neighborhood re-settle) — an idle graph is perfectly still and costs ~zero.
+      const active = dragNode.current != null || now < physicsUntil.current;
+      if (!reduced && active) {
+        tick(0.08);
+        dirty.current = true;
+      }
+      if (!dirty.current) return;
+      dirty.current = false;
 
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = pal.bg;
@@ -678,7 +693,12 @@ export function BrainGraph({
       for (const job of jobs) {
         const text = job.mono ? job.text.toUpperCase() : job.text;
         ctx.font = `${job.weight} ${job.size}px ${job.mono ? pal.fontMono : pal.fontSans}`;
-        const w = ctx.measureText(text).width;
+        const measureKey = `${text}|${ctx.font}`;
+        let w = textWidths.get(measureKey);
+        if (w == null) {
+          w = ctx.measureText(text).width;
+          textWidths.set(measureKey, w);
+        }
         const rect = {
           x1: job.x - w / 2 - 4,
           y1: job.y - job.size - 2,
@@ -754,6 +774,7 @@ export function BrainGraph({
         hoverRef.current = index;
         setHover(index >= 0 ? toHover(index) : null);
         canvas.style.cursor = index >= 0 ? "pointer" : "grab";
+        dirty.current = true;
       }
     };
     canvas.addEventListener("pointermove", onMove);
@@ -774,6 +795,7 @@ export function BrainGraph({
       );
       cam.current.x = before.x - (mx - width / 2) / cam.current.zoom;
       cam.current.y = before.y - (my - height / 2) / cam.current.zoom;
+      dirty.current = true;
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
@@ -781,6 +803,7 @@ export function BrainGraph({
       cam.current.x = home.x;
       cam.current.y = home.y;
       cam.current.zoom = home.zoom;
+      dirty.current = true;
     };
 
     return () => {
@@ -795,7 +818,7 @@ export function BrainGraph({
     // Physics state and camera live in refs; the scene rebinds when the graph changes.
   }, [graph, adjacency, lessons]);
 
-  const dragNode = useRef<{ index: number; moved: number } | null>(null);
+  const dragNode = useRef<{ index: number; moved: number; at: number } | null>(null);
   const panState = useRef<{ px: number; py: number; cx: number; cy: number; moved: number } | null>(
     null,
   );
@@ -805,12 +828,16 @@ export function BrainGraph({
     y: 0,
   }));
   const resetRef = useRef<() => void>(() => {});
+  // Render-on-demand flags: the rAF loop paints only when dirty, and physics only
+  // runs while a tug (or its cooldown) is live.
+  const dirty = useRef(true);
+  const physicsUntil = useRef(0);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     (event.target as HTMLCanvasElement).setPointerCapture(event.pointerId);
     const index = pickRef.current(event.clientX, event.clientY);
     if (index >= 0) {
-      dragNode.current = { index, moved: 0 };
+      dragNode.current = { index, moved: 0, at: performance.now() };
     } else {
       panState.current = {
         px: event.clientX,
@@ -832,6 +859,7 @@ export function BrainGraph({
       node.y = w.y;
       node.vx = 0;
       node.vy = 0;
+      dirty.current = true;
       if (drag.moved > 3) setHintSeen(true);
     } else if (pan) {
       const dx = event.clientX - pan.px;
@@ -840,13 +868,23 @@ export function BrainGraph({
       if (pan.moved > 3) setHintSeen(true);
       cam.current.x = pan.cx - dx / cam.current.zoom;
       cam.current.y = pan.cy - dy / cam.current.zoom;
+      dirty.current = true;
     }
   };
-  const onPointerUp = () => {
+  const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragNode.current;
     dragNode.current = null;
     panState.current = null;
-    if (!drag || drag.moved > 5) return;
+    // Physics gets a short cooldown to re-settle whatever was tugged.
+    if (drag && drag.moved > 3) physicsUntil.current = performance.now() + 1200;
+    if (!drag) return;
+    // A CLICK is deliberate: quick (under 400ms), still (under 4px of drift), and
+    // released over the node it started on. Anything else was a grab or a hesitation
+    // — navigating on those was the reported "it clicks in when I just hover".
+    const quick = performance.now() - drag.at < 400;
+    const still = drag.moved <= 4;
+    const sameNode = pickRef.current(event.clientX, event.clientY) === drag.index;
+    if (!quick || !still || !sameNode) return;
     const node = graphRef.current.nodes[drag.index];
     if (!node) return;
     if (node.kind === "lesson" && node.lesson) onOpenLesson(node.lesson.id);
