@@ -79,7 +79,8 @@ class DeclaredTurnMode(unittest.TestCase):
         apply_start = CHAT.index("function applyTurn(")
         apply_end = CHAT.index("\n}", CHAT.index("return after;", apply_start))
         load_start = CHAT.index("async function loadStepState(")
-        load_end = CHAT.index("\nfunction stepDone(", load_start)
+        # Pillar 4 exported the pure core, so the next declaration reads "export function".
+        load_end = CHAT.index("function stepDone(", load_start)
         for pos in assignments:
             in_apply = apply_start < pos < apply_end
             in_load = load_start < pos < load_end

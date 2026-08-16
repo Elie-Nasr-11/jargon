@@ -6,6 +6,39 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (flow rebuild Pillar 4: the spine runs under test)
+
+Status: Finished
+Summary: Re-sequenced Pillar 4 ahead of Pillar 3 on purpose (see DECISIONS): the
+ladder-to-table rewrite is the most regression-prone change in the codebase, so the
+executable harness lands first. (1) index.ts is importable under test — Deno.serve
+guarded behind !Deno.env.get("JARGON_FLOW_TEST") (never set in the edge runtime;
+production byte-identical) with the handler as a named const; the pure core
+(applyTurn, deriveTurn, applyModeCeiling, stepDone, requirementsFor, turnDirective,
+CONTINUE_SIGNAL_RE/CONTINUE_PHRASE_RE, emptyStepState, studentTurnMode, heuristicKind)
+is exported. (2) tests/flow_core.test.ts RUNS the spine: gate monotonicity + attempt
+monotonicity over random sequences, acknowledge discharges only via continue_signal or
+legacy-null readiness text, conversation kinds never stamp presentation nor close
+understanding, deriveTurn complete-iff-done and choose-only-while-open, the ceiling's
+mapping enumerated, one reachability WITNESS per directive rung (each rung provably
+selectable, keyed as documented), 2500-vector precedence/purity fuzz, recognizer
+closure. (3) tests/test_flow_pillar4_properties.py drives it from the Python harness
+(jsr-stripped scratch copy; skips with a visible reason when deno is absent; asserts
+the full Deno.test count ran). First unconstrained fuzz run immediately caught a real
+fact: `${stepMode}_concluded` can mint colliding keys (practice_concluded;
+assessment_concluded collides with the hand-written one) for states only
+requirementsFor's coupling keeps unreachable — fuzz now derives requirements through
+the real requirementsFor, and the collision is noted for the Pillar 3/5 cleanup.
+Files changed: supabase/functions/chat/index.ts (export keywords + serve guard ONLY —
+no behavior), tests/{flow_core.test.ts,test_flow_pillar4_properties.py} (new),
+tests/test_turn_modes.py (one anchor now matches "export function"), docs.
+Tests run: 714 OK (including the live deno property run); deno check parity (8
+pre-existing); frontend untouched.
+Remaining concerns: post-merge, verify the deployed fn still serves (the guard reads
+env at module top — standard in this file, but confirm with a probe).
+Suggested next task: decide Pillar 3's final scope with the harness in hand, or go
+straight to Pillar 5 (dead continue_offer emission + control-turn stamp parity).
+
 ## Claude -> Codex / Human - 2026-08-16 (flow rebuild Pillar 2: one register owner)
 
 Status: Finished

@@ -27,6 +27,33 @@ if-chain. The rebuild lands in five slices; each ships alone.
   without a student-visible action), the directive decision table + completeness test,
   property/simulation tests over the turn machine, and dead-contract retirement.
 
+## 2026-08-16 (later): Pillar 4 lands BEFORE Pillar 3 — the flow core runs under test
+
+Re-sequenced deliberately. Mapping turnDirective for the planned table conversion
+showed a ~30-rung ladder over ~15 predicates — forcing that into a (phase, register,
+kind, gate) matrix would be a fake table or an explosion, and it is the single most
+regression-prone rewrite in the codebase. So the harness came first:
+
+- **The chat fn is importable under test.** `Deno.serve` sits behind
+  `!Deno.env.get("JARGON_FLOW_TEST")` (never set in the edge runtime → production
+  byte-identical), and the pure core (applyTurn, deriveTurn, applyModeCeiling,
+  stepDone, requirementsFor, turnDirective, the readiness regexes) is exported.
+- **tests/flow_core.test.ts executes the spine** — gate monotonicity over random
+  sequences, the acknowledge doors, complete-iff-done, the ceiling's full mapping,
+  per-rung reachability witnesses for the ladder, precedence + purity fuzz, and
+  recognizer closure — driven from the Python harness via a jsr-stripped scratch copy
+  (skips cleanly when deno is absent).
+- **Fuzz respects reality**: requirement vectors derive through the real
+  requirementsFor coupling. The first unconstrained run minted phantom
+  `practice_concluded`-style keys — unreachable in production precisely because of
+  that coupling — which also surfaced a latent key ambiguity: the
+  `${stepMode}_concluded` template can collide with the hand-written
+  assessment_concluded / revision_concluded keys if those modes ever gain an
+  acknowledge gate. Noted for the Pillar 3/5 cleanup.
+- **Pillar 3's scope question is now honest**: with every rung reachable, keyed, and
+  precedence-fuzzed, the physical rules-array rewrite buys less than planned. Decide
+  after living with the harness; the witnesses already ARE the completeness test.
+
 ## 2026-08-16: Pillar 2 — the client register has one owner
 
 The register moved from a bare useState in StudentApp (four scattered writers; every
