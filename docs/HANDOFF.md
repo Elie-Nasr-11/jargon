@@ -6,6 +6,46 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (R36: send resilience, sidebar truth, warm tabs, the night sky)
+
+Status: Finished
+Summary: Four-part slice from the owner's afternoon brief.
+(1) SELF-HEALING SEND. Production logs pinned the recurring "something went wrong on
+our side" line to transient faults outside our handler: an edge-runtime worker-churn
+500 at 14:19 with no function log and no telemetry row (four worker boots in as many
+seconds), plus watchdog aborts racing a server that finished and persisted anyway.
+invokeTypedChat now retries transient shapes (network failures, 5xx, non-envelope
+bodies, watchdog aborts) up to 3 attempts with 800ms/2.5s backoff, reusing the same
+client_msg_id so B4 dedup replays the stored envelope instead of re-running the turn.
+4xx refusals surface immediately; once streamed text is on screen there is no silent
+re-send (the manual retry affordance remains).
+(2) SIDEBAR TRUTH. The Learn tree fell back to the FULL catalog while a class's
+scoped list was in flight — the live "lessons that shouldn't be there, then they
+disappear" report. A skeleton now holds until the scoped list (or a resolved
+no-classes answer) arrives; the completion hand-off obeys the same scope rule.
+(3) WARM TABS. warmStudentSurfaces() warms every other tab's cached() keys at shell
+idle (requestIdleCallback) and re-warms on class change; the most recent lesson's
+steps/session/turns prefetch through the existing prefetchLesson. First tab switches
+paint from cache.
+(4) THE NIGHT SKY (BrainMap v4 retired -> BrainSky). Canvas 2D, zero deps: collected
+words + ideas as stars on a single plane (uncollected vocab faint, emergent ideas in
+aurora violet, mastery rings, earned links as lines), each lesson a 3D constellation
+above the plane (deterministic per-lesson star pattern, stars lit gold by progress,
+complete = fully lit, current breathes), courses as sky sectors/altitude bands, idle
+orbit + drag orbit + wheel zoom + reset, hover card pinned top-right, and every click
+opens something real: constellation/lesson-idea -> the lesson, word -> Home scrolls to
+My Jargon with the chip flashing. prefers-reduced-motion freezes motion; offscreen or
+hidden tabs pause the loop. Verified by screenshot through the offline mock harness.
+Files changed: frontend/src/lib/api.ts, frontend/src/student/{StudentApp,StudentHome,
+BrainSky}.tsx (BrainMap.tsx deleted), tests/test_r36_home_learn_polish.py (new),
+tests/{test_learning_framework,test_r33b_tester_fixes,test_my_jargon_authoring,
+test_student_surface}.py (pins migrated to the new renderer/shapes).
+Tests run: 735 OK; tsc clean; eslint clean; vite build green. Server untouched.
+Remaining concerns: the night sky's constellation labels can overlap in dense
+sectors (acceptable at current catalog sizes); curriculum links are not yet drawn in
+the sky (student-earned links are) — add as faint plane lines if wanted.
+
+
 ## Claude -> Codex / Human - 2026-08-16 (R35: screenshot-driven visual pass)
 
 Status: Finished

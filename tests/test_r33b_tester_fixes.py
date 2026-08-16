@@ -8,7 +8,7 @@ F = lambda *p: (ROOT.joinpath(*p)).read_text(encoding="utf-8")  # noqa: E731
 MESSAGES = F("frontend", "src", "features", "student", "chat", "chatMessages.ts")
 TRANSCRIPT = F("frontend", "src", "student", "Transcript.tsx")
 STUDENT_APP = F("frontend", "src", "student", "StudentApp.tsx")
-BRAIN = F("frontend", "src", "student", "BrainMap.tsx")
+BRAIN = F("frontend", "src", "student", "BrainSky.tsx")
 HOME = F("frontend", "src", "student", "StudentHome.tsx")
 API = F("frontend", "src", "lib", "api.ts")
 ROOT_ROUTE = F("frontend", "src", "routes", "__root.tsx")
@@ -77,11 +77,12 @@ class BrainIdeaNodesAreClickable(unittest.TestCase):
     dots had a click; the idea nodes were inert tooltips."""
 
     def test_authored_ideas_open_their_lesson(self):
+        # Night-sky renderer: the click router sends any idea that belongs to a lesson
+        # to that lesson; a lesson-less idea falls through (hover card only, no dead
+        # click pretending to navigate).
         for fragment in (
-            "const ideaLessonId =",
-            "onClick={ideaLessonId ? () => onOpenLesson(ideaLessonId) : undefined}",
-            # Emergent ideas have no lesson: no pointer, no dead click.
-            'className={`bmap-node${ideaLessonId ? " cursor-pointer" : ""}`}',
+            'else if (node.kind === "idea" && node.idea.lesson_id) onOpenLesson(node.idea.lesson_id);',
+            'if (node.kind === "lesson") onOpenLesson(node.lesson.id);',
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, BRAIN)

@@ -9,6 +9,7 @@ import {
   fetchStudentLessonProgress,
   fetchStudentSettings,
   upsertStudentSettings,
+  warmStudentSurfaces,
 } from "@/lib/api";
 import {
   DEFAULT_MENTOR,
@@ -305,6 +306,27 @@ export function StudentApp({
     };
   }, [scopeClassId]);
 
+  // R36: the tree may show the unscoped catalog ONLY once we know the student has no
+  // classes. While the class list or the selected class's lessons are still in flight,
+  // rendering the catalog flashes lessons the student shouldn't see (live report).
+  const scopedLessonsPending = classes === null || (scopeClassId != null && classLessons == null);
+
+  // R36 (tab-switch speed): warm every other tab's surfaces once the shell is idle,
+  // and re-warm when the class scope changes. cached() de-dupes, so this never
+  // duplicates a read the current tab already started.
+  useEffect(() => {
+    const idle =
+      typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback
+        : (fn: () => void) => window.setTimeout(fn, 350);
+    const cancel =
+      typeof window.cancelIdleCallback === "function"
+        ? window.cancelIdleCallback
+        : window.clearTimeout;
+    const handle = idle(() => warmStudentSurfaces(scopeClassId));
+    return () => cancel(handle as number);
+  }, [scopeClassId]);
+
   // R33d (live: "the sidebar menu sometimes shows a class other than the selected
   // lesson"). scopeClassId falls back to classes[0] when the URL names no class, so a
   // lesson opened from Home, the brain map, or a resume could sit in one class while the
@@ -410,13 +432,29 @@ export function StudentApp({
             onSelectClass(next);
           }}
         />
-        <LessonTree
-          lessons={classLessons ?? conversation.lessons}
-          currentLessonId={conversation.lesson?.id ?? null}
-          progress={progress}
-          onOpenLesson={openLesson}
-          disabled={conversation.sending || conversation.booting}
-        />
+        {scopedLessonsPending ? (
+          // R36 (live: "I see lessons that shouldn't be there and then they
+          // disappear"): while the selected class's scoped list is in flight the
+          // tree used to fall back to the FULL catalog, flash the wrong lessons,
+          // then snap. A brief skeleton is honest; the wrong list never is.
+          <div aria-hidden className="flex flex-col gap-1.5 px-2 py-1">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-8 animate-pulse rounded-control bg-muted/70"
+                style={{ animationDelay: `${i * 120}ms` }}
+              />
+            ))}
+          </div>
+        ) : (
+          <LessonTree
+            lessons={scopeClassId ? (classLessons ?? []) : conversation.lessons}
+            currentLessonId={conversation.lesson?.id ?? null}
+            progress={progress}
+            onOpenLesson={openLesson}
+            disabled={conversation.sending || conversation.booting}
+          />
+        )}
       </>
     );
   const sidebar = (
@@ -517,7 +555,10 @@ export function StudentApp({
   // finished lesson is still a place to ask questions.
   const lessonComplete =
     conversation.sessionSnapshot?.status === "complete" && conversation.messages.length > 0;
-  const handoffList = classLessons ?? conversation.lessons;
+  // Same scope rule as the tree (R36): never offer a next lesson from the unscoped
+  // catalog while the class's own list is loading — a hand-off into another class's
+  // lesson is worse than a hand-off that appears a beat later.
+  const handoffList = scopeClassId ? (classLessons ?? []) : conversation.lessons;
   const nextLesson = (() => {
     if (!lessonComplete || !conversation.lesson) return null;
     const index = handoffList.findIndex((l) => l.id === conversation.lesson?.id);

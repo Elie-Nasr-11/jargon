@@ -30,7 +30,9 @@ MODEL = (FRONT / "features" / "student" / "chat" / "chatMessages.ts").read_text(
 
 class StudentSurfaceWire(unittest.TestCase):
     def test_turn_mode_reaches_the_request_body(self):
-        fn = API[API.index("export async function invokeTypedChat(") :][:4000]
+        # R36 split the send into a retry wrapper + attempt body; the declared mode
+        # still rides the shared input type into the request body.
+        fn = API[API.index("type TypedChatInput = {") :][:8000]
         self.assertIn("mode?: string", fn)
         self.assertIn("mode: input.mode", fn)
 

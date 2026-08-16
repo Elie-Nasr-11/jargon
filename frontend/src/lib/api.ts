@@ -3137,7 +3137,7 @@ export async function getSubmissionFileSignedUrl(file: AssignmentSubmissionFile)
   return data.signedUrl;
 }
 
-export async function invokeTypedChat(input: {
+type TypedChatInput = {
   accessToken: string;
   lessonId: string;
   sessionId?: string | null;
@@ -3154,7 +3154,45 @@ export async function invokeTypedChat(input: {
   // the JSON path's. Deterministic turns (controls, replays, refusals) still answer as
   // plain JSON even when streaming was requested — both shapes are handled below.
   onDelta?: (text: string) => void;
-}) {
+};
+
+// R36: transient faults are tagged so the retry loop can tell them from deliberate
+// refusals (validation, auth, rate limit — those surface immediately).
+function retriable(message: string): Error {
+  return Object.assign(new Error(message), { retriable: true });
+}
+
+// R36: the send is self-healing. Production showed two transient shapes that reached
+// students as the "something went wrong on our side" line: (1) edge-runtime worker
+// churn answering a bare 500 before the handler even runs (observed live 2026-08-16
+// 14:19 — four worker boots in as many seconds, no function log, no telemetry row),
+// and (2) the client watchdog aborting while the server finished and persisted the
+// turn anyway. Both are what B4 turn idempotency exists for: a resend with the SAME
+// client_msg_id replays the stored envelope instead of re-running the turn — so a
+// quiet retry is safe, and on shape (2) the replay answers almost instantly.
+export async function invokeTypedChat(input: TypedChatInput) {
+  const MAX_ATTEMPTS = 3;
+  const BACKOFF_MS = [800, 2500];
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    let deltasSeen = false;
+    try {
+      return await invokeTypedChatAttempt(input, () => {
+        deltasSeen = true;
+      });
+    } catch (error) {
+      lastError = error;
+      const canRetry = (error as { retriable?: boolean })?.retriable === true;
+      // Once reply text has streamed into the UI a silent re-send would restart the
+      // message mid-read — fall through to the visible retry affordance instead.
+      if (!canRetry || deltasSeen || attempt === MAX_ATTEMPTS - 1) break;
+      await new Promise((resolve) => window.setTimeout(resolve, BACKOFF_MS[attempt]));
+    }
+  }
+  throw lastError;
+}
+
+async function invokeTypedChatAttempt(input: TypedChatInput, onDeltaSeen: () => void) {
   // Streaming has no fixed deadline — a healthy stream keeps bytes flowing, so the guard
   // is INACTIVITY (no bytes for 60s), not total duration. The JSON path gets a flat
   // budget sized for a 3-model-call turn instead of the old generic 30s (which aborted
@@ -3167,26 +3205,46 @@ export async function invokeTypedChat(input: {
   };
   armWatchdog(input.onDelta ? 60_000 : 120_000);
   try {
-    const response = await fetch(functionUrl("chat"), {
-      method: "POST",
-      headers: authHeaders(await freshAccessToken(input.accessToken)),
-      signal: controller.signal,
-      body: JSON.stringify({
-        lesson_id: input.lessonId,
-        session_id: input.sessionId || undefined,
-        answer: input.answer,
-        control: input.control,
-        mentor_preferences: input.mentorPreferences,
-        mode: input.mode,
-        stream: input.onDelta ? true : undefined,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(functionUrl("chat"), {
+        method: "POST",
+        headers: authHeaders(await freshAccessToken(input.accessToken)),
+        signal: controller.signal,
+        body: JSON.stringify({
+          lesson_id: input.lessonId,
+          session_id: input.sessionId || undefined,
+          answer: input.answer,
+          control: input.control,
+          mentor_preferences: input.mentorPreferences,
+          mode: input.mode,
+          stream: input.onDelta ? true : undefined,
+        }),
+      });
+    } catch (error) {
+      // Network-layer failure (offline blip, DNS, connection reset): nothing reached
+      // the server — always safe to retry. Aborts are re-thrown for the watchdog case
+      // below.
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      throw retriable("We couldn't reach the mentor just then. Retrying…");
+    }
 
     const isSse = (response.headers.get("Content-Type") || "").includes("text/event-stream");
     if (!isSse || !response.body) {
-      const data = (await response.json()) as TypedChatEnvelope;
+      let data: TypedChatEnvelope;
+      try {
+        data = (await response.json()) as TypedChatEnvelope;
+      } catch {
+        // A body that isn't the typed envelope means the edge RUNTIME answered, not
+        // our function (worker churn's bare 500) — transient by nature.
+        throw retriable("The mentor's reply didn't arrive intact. Retrying…");
+      }
       if (!response.ok || data.status === "error") {
-        throw new Error(data.reply || "Chat request failed.");
+        const message = data.reply || "Chat request failed.";
+        // 5xx = our function (or its runtime) faulted mid-turn; B4 dedup makes the
+        // resend replay the stored envelope if the turn actually completed. 4xx are
+        // deliberate refusals (validation, auth, rate limit) and surface at once.
+        throw response.status >= 500 ? retriable(message) : new Error(message);
       }
       return data;
     }
@@ -3214,7 +3272,12 @@ export async function invokeTypedChat(input: {
           if (eventName === "delta") {
             try {
               const parsed = JSON.parse(payload) as { text?: string };
-              if (parsed.text) input.onDelta?.(parsed.text);
+              if (parsed.text) {
+                // Once any text is on screen the retry loop must not silently
+                // re-send — the guard flips before the caller renders.
+                onDeltaSeen();
+                input.onDelta?.(parsed.text);
+              }
             } catch {
               // A torn delta line is cosmetic — the envelope is authoritative.
             }
@@ -3228,14 +3291,18 @@ export async function invokeTypedChat(input: {
         }
       }
     }
-    if (!final) throw new Error("The mentor's reply stream ended unexpectedly. Try again.");
+    if (!final) throw retriable("The mentor's reply stream ended unexpectedly. Try again.");
     if (final.status >= 400 || final.envelope.status === "error") {
-      throw new Error(final.envelope.reply || "Chat request failed.");
+      const message = final.envelope.reply || "Chat request failed.";
+      throw final.status >= 500 ? retriable(message) : new Error(message);
     }
     return final.envelope;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("The mentor took too long to answer. Try again in a moment.");
+      // Watchdog fired. The server may well have finished and persisted the turn
+      // after we hung up — the retry's dedup replay then returns the stored envelope
+      // almost instantly, which is why this is retriable rather than terminal.
+      throw retriable("The mentor took too long to answer. Try again in a moment.");
     }
     throw error;
   } finally {
@@ -3602,4 +3669,32 @@ async function fetchIdeaMasteryUncached(): Promise<
 
 export async function fetchIdeaMastery() {
   return cached("idea_mastery", 60_000, fetchIdeaMasteryUncached);
+}
+
+// R36 (tab-switch speed): one boot-time warm of every surface the OTHER tabs read, so
+// the FIRST switch paints from cache instead of a spinner. All fire-and-forget through
+// the same cached() keys the real reads use — a failed warm just means that surface
+// pays its normal fetch. Called post-auth from the shell inside requestIdleCallback,
+// so it never competes with the current tab's first paint; safe to call repeatedly
+// (in-flight and fresh keys are no-ops).
+export function warmStudentSurfaces(classId?: string | null): void {
+  // Learn: the catalog, the class scope, and the most recent conversation.
+  warm("catalog:", 120_000, () => fetchStudentCatalogUncached(null));
+  warm("classes", 120_000, fetchStudentClassesUncached);
+  if (classId)
+    warm(`class_lessons:${classId}`, 120_000, () => fetchClassScopedLessonsUncached(classId));
+  warm("progress", 45_000, fetchStudentLessonProgressUncached);
+  void fetchMostRecentLearningSession()
+    .then((session) => {
+      if (session?.lesson_id) prefetchLesson(session.lesson_id);
+    })
+    .catch(() => {});
+  // Home + brain: nodes, links, mastery, collected words.
+  warm("ideas", 300_000, fetchIdeasUncached);
+  warm("student_links", 60_000, fetchStudentLinksUncached);
+  warm("idea_mastery", 60_000, fetchIdeaMasteryUncached);
+  warm("vocab_terms", 300_000, fetchVocabTermsUncached);
+  warm("my_jargon", 45_000, fetchMyJargonUncached);
+  // Work: checkpoints/grades feed the sidebar due-tags and the assessments panel.
+  warm("assessments", 60_000, fetchStudentAssessmentsUncached);
 }
