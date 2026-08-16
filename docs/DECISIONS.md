@@ -27,6 +27,21 @@ if-chain. The rebuild lands in five slices; each ships alone.
   without a student-visible action), the directive decision table + completeness test,
   property/simulation tests over the turn machine, and dead-contract retirement.
 
+## 2026-08-16: Pillar 2 — the client register has one owner
+
+The register moved from a bare useState in StudentApp (four scattered writers; every
+send call site threading turnMode by hand) into `useConversation` behind ONE
+`setRegister(mode, cause)` seam. Causes are the closed set of student-visible actions:
+picker | offer | suggestion | lesson_open. Sends take no mode parameter — they read
+the register at the owner — so the R33c wrong-mode class is structurally unwritable.
+Retry keeps a one-shot override (re-send in the failed turn's register) and never
+moves the sticky register. Accepting a hand-off pill flips the register inside
+sendModeOffer itself, so the picker move and the control send cannot come apart.
+Deliberately unchanged: control turns (Continue/resume/navigate) still declare
+"lesson" on the wire — the server's Pillar-1 stamp rule makes the declared mode inert
+for the record when no student row persists; aligning the live-message stamp with the
+replay stamp is queued for Pillar 5. Spec: PLATFORM §12.4.
+
 ## 2026-08-12 (evening): My Jargon, publish-time knowledge drafting, Wael loop closed
 
 Executing the rest of the Wael-feedback map (owner: "plan it all out, go for it"):

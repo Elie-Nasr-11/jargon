@@ -184,8 +184,13 @@ class ModeOfferIsAnInlineButtonThatGoesStale(unittest.TestCase):
         self.assertIn("const isLatestBot = message.id === lastBotId;", self.TRANSCRIPT)
 
     def test_accepting_still_moves_the_composer_picker(self):
-        self.assertIn("const acceptModeOffer = (offer: ModeOffer) => {", APP)
-        self.assertIn("setTurnMode(offer.mode);", APP)
+        # Pillar 2: the flip lives INSIDE sendModeOffer (the register's one owner), so
+        # the picker move and the control send can no longer come apart. The picker
+        # renders conversation.register, so this is the same visible behavior.
+        HOOK = (ROOT / "frontend" / "src" / "student" / "useConversation.ts").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('setRegister(offer.mode, "offer");', HOOK)
         self.assertIn("conversation.sendModeOffer(offer);", APP)
         self.assertIn("onAcceptOffer={acceptModeOffer}", APP)
 

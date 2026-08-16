@@ -6,6 +6,34 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (flow rebuild Pillar 2: one register owner)
+
+Status: Finished
+Summary: The conversation register moved into useConversation behind ONE
+setRegister(mode, cause) seam — a useReducer whose action carries the causing
+student-visible gesture (picker | offer | suggestion | lesson_open; closed union,
+call sites pinned) plus a synchronously-updated registerRef so a gesture that sets
+the register and sends in the same tick goes out in the register it just chose.
+Sends (sendText/sendCode/sendChoice/sendVoiceTurn) DROPPED their mode parameter and
+read the register at the owner, so the R33c wrong-mode class is unwritable at call
+sites. sendModeOffer now flips the register itself (the picker renders
+conversation.register, so accept-and-flip cannot come apart); openLesson owns the
+back-to-the-spine reset; retry takes an optional one-shot override and never moves
+the sticky register. StudentApp holds no register state; ChatWindow's voice panel no
+longer threads a mode.
+Files changed: frontend/src/student/{useConversation.ts,StudentApp.tsx,ChatWindow.tsx},
+tests/test_flow_pillar2_register.py (new), tests/{test_r33b_tester_fixes.py,
+test_r31e_discuss_deadend.py} (re-pinned on the owner seam), docs/{PLATFORM.md §12.4,
+DECISIONS.md,ROADMAP.md,HANDOFF.md}.
+Tests run: 713 OK (4 pre-existing skips); tsc clean; eslint clean; vite build green.
+Server untouched (no deno check needed).
+Remaining concerns: control turns still declare "lesson" on the wire and stamp the
+LIVE bot message with it while the replay stamp follows the server's Pillar-1 rule —
+a live-vs-replay stamp divergence on controls, queued for Pillar 5 alongside the
+dead continue_offer emission.
+Suggested next task: Pillar 3 — turnDirective's if-chain as a decision table keyed on
+(phase, register, routed_kind, open_gate) with a completeness test.
+
 ## Claude -> Codex / Human - 2026-08-15 later (R34: typed readiness outranks the router)
 
 Status: Finished

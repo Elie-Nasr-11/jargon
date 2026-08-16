@@ -438,6 +438,22 @@ student row (empty body) stamps the register the transcript is actually in — s
 transcript can never open a section that no visible student action started (the
 phantom-Discuss bug, root-caused from a live session's DB).
 
+### 12.4 The register has one owner (client) — Pillar 2
+
+The conversation register (`TurnMode`) lives in `useConversation` behind a single
+`setRegister(mode, cause)` seam. The causes are the enumerated student-visible actions —
+`picker` (the composer), `offer` (a hand-off pill; the flip happens inside
+`sendModeOffer`, so the picker move and the control send cannot come apart),
+`suggestion` (welcome/re-entry rows), `lesson_open` (reset to the spine, folded into
+`openLesson` so no caller can forget it). Nothing else may move it: not an envelope
+arriving, not a retry (one-shot override of the send, register untouched), not a
+component holding its own copy.
+
+Sends read the register at the owner (`sendText`/`sendCode`/`sendChoice`/`sendVoiceTurn`
+take no mode parameter), so the R33c class — a call site threading the wrong mode — is
+unwritable. A synchronously-updated ref backs the state so a gesture that sets the
+register and sends in the same tick goes out in the register it just chose.
+
 ### What Pillar 1 deliberately does NOT do
 
 - **Emit `session_resumed`.** In the approved plan, but it has no renderer yet — shipping it

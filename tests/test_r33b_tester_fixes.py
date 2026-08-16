@@ -125,7 +125,10 @@ class SectionsStopChurning(unittest.TestCase):
         self.assertIn('(message.turnMode ?? "lesson") === "lesson" &&', TRANSCRIPT)
 
     def test_mcq_tap_keeps_the_students_register(self):
-        self.assertIn("void conversation.sendChoice(choiceId, label, turnMode);", STUDENT_APP)
+        # Pillar 2 made R33c structural: sendChoice reads the register at its one owner
+        # (useConversation) instead of trusting the call site to thread it.
+        self.assertIn("void conversation.sendChoice(choiceId, label);", STUDENT_APP)
+        self.assertIn('{ mode: "multiple_choice", choice_id: choiceId, client_msg_id: uid() },\n        registerRef.current,', CONVO)
 
 
 class PickedOptionIsVerdictNeutral(unittest.TestCase):
