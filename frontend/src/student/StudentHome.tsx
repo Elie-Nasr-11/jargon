@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { ArrowRight, BookOpen, Brain, GraduationCap, Loader2, Play } from "lucide-react";
-import { BrainMap } from "@/student/BrainMap";
+import { BrainSky } from "@/student/BrainSky";
 import {
   fetchIdeaMastery,
   fetchCurriculumLinks,
@@ -13,6 +13,7 @@ import {
   fetchSessionSummaries,
   fetchStudentGrades,
   fetchStudentMemory,
+  fetchVocabTerms,
   getSession,
   resetStudentMemory,
 } from "@/lib/api";
@@ -30,6 +31,7 @@ import type {
   SessionSummary,
   StudentAssessmentBundle,
   StudentGradeRow,
+  VocabTerm,
   StudentMemory,
   StudentMemoryProfile,
 } from "@/lib/types";
@@ -91,20 +93,22 @@ function Chips({ label, values }: { label: string; values: string[] }) {
 // its child-readable definition, its home subject, and a bridge marker once the word
 // has traveled into a second subject. Self-fetching like MemoryCard; an empty state
 // that tells a new student what will grow here.
-function MyJargonCard() {
-  const [words, setWords] = useState<MyJargonWord[] | null>(null);
+function MyJargonCard({
+  words,
+  highlightTerm,
+}: {
+  // R36: Home owns the fetch now (the night sky reads the same rows), and a clicked
+  // word star scrolls here with its term flashing so the jump lands somewhere obvious.
+  words: MyJargonWord[] | null;
+  highlightTerm?: string | null;
+}) {
   const [showAll, setShowAll] = useState(false);
+  // A highlighted word must be visible even if it sits past the fold of the trimmed list.
   useEffect(() => {
-    let cancelled = false;
-    void fetchMyJargon()
-      .catch(() => [] as MyJargonWord[])
-      .then((rows) => {
-        if (!cancelled) setWords(rows);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!highlightTerm || !words) return;
+    const index = words.findIndex((w) => w.term === highlightTerm);
+    if (index >= 12) setShowAll(true);
+  }, [highlightTerm, words]);
 
   const visible = words ? (showAll ? words : words.slice(0, 12)) : [];
   // Grouped by subject (tester: "maybe it should be split by topic"). Subjects appear in
@@ -143,7 +147,9 @@ function MyJargonCard() {
                 {group.words.map((word) => (
                   <li
                     key={word.term}
-                    className="hvp flex items-baseline gap-3 border-b border-border py-1.5 last:border-0"
+                    className={`hvp flex items-baseline gap-3 border-b border-border py-1.5 transition-colors duration-500 last:border-0 ${
+                      highlightTerm === word.term ? "rounded-control bg-accent/15 px-2" : ""
+                    }`}
                   >
                     <span className="shrink-0 text-body font-semibold text-foreground">
                       {word.term}
@@ -334,6 +340,11 @@ export function StudentHome({
   const [ideaMastery, setIdeaMastery] = useState<IdeaMasteryRow[]>([]);
   const [studentLinks, setStudentLinks] = useState<StudentLinkRow[]>([]);
   const [curriculumLinks, setCurriculumLinks] = useState<CurriculumLinkRow[]>([]);
+  // R36 (night sky): the word plane needs the student's collected words plus the
+  // published vocabulary they haven't met yet — Home now owns both and hands them to
+  // the sky AND to My Jargon, so one fetch feeds both surfaces.
+  const [jargonWords, setJargonWords] = useState<MyJargonWord[] | null>(null);
+  const [vocabTerms, setVocabTerms] = useState<VocabTerm[]>([]);
   useEffect(() => {
     let cancelled = false;
     void fetchIdeas()
@@ -348,10 +359,27 @@ export function StudentHome({
     void fetchCurriculumLinks()
       .then((rows) => !cancelled && setCurriculumLinks(rows))
       .catch(() => {});
+    void fetchMyJargon()
+      .then((rows) => !cancelled && setJargonWords(rows))
+      .catch(() => !cancelled && setJargonWords([]));
+    void fetchVocabTerms()
+      .then((rows) => !cancelled && setVocabTerms(rows))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
+  // Word-star click → scroll My Jargon into view with that chip flashing.
+  const jargonAnchorRef = useRef<HTMLDivElement>(null);
+  const [highlightTerm, setHighlightTerm] = useState<string | null>(null);
+  const openWord = (term: string) => {
+    setHighlightTerm(term);
+    jargonAnchorRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+      block: "start",
+    });
+    window.setTimeout(() => setHighlightTerm(null), 2600);
+  };
   const [recaps, setRecaps] = useState<SessionSummary[]>([]);
 
   useEffect(() => {
@@ -589,26 +617,26 @@ export function StudentHome({
           })()}
           <MemoryCard
             onAfterReset={() => setRecaps([])}
-            map={(memoryProfile) => (
-              <BrainMap
+            map={() => (
+              <BrainSky
                 lessons={lessons}
-                progress={progress}
-                currentLessonId={currentLessonId}
-                memoryLessonIds={memoryLessonIds}
-                memoryProfile={memoryProfile}
+                words={jargonWords ?? []}
+                vocabTermsNotCollected={vocabTerms.map((t) => t.term)}
                 ideas={ideas}
                 studentLinks={studentLinks}
-                curriculumLinks={curriculumLinks}
+                progress={progress}
+                currentLessonId={currentLessonId}
                 mastery={masteryBands(ideaMastery).byKey}
                 onOpenLesson={onOpenLesson}
+                onOpenWord={openWord}
               />
             )}
           />
         </div>
 
         {/* ---- 4. My Jargon — the words this student has collected ---------------------- */}
-        <div className="mb-7">
-          <MyJargonCard />
+        <div className="mb-7 scroll-mt-4" ref={jargonAnchorRef}>
+          <MyJargonCard words={jargonWords} highlightTerm={highlightTerm} />
         </div>
 
         {/* Classes live in the Home SIDEBAR now — each one opens its own summary page. */}

@@ -16,7 +16,7 @@ API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 CONVO = ROOT / "frontend" / "src" / "student" / "useConversation.ts"
 TRANSCRIPT = ROOT / "frontend" / "src" / "student" / "Transcript.tsx"
 TOASTS = ROOT / "frontend" / "src" / "student" / "KnowledgeToasts.tsx"
-BRAIN = ROOT / "frontend" / "src" / "student" / "BrainMap.tsx"
+BRAIN = ROOT / "frontend" / "src" / "student" / "BrainSky.tsx"
 HOME = ROOT / "frontend" / "src" / "student" / "StudentHome.tsx"
 CHATWINDOW = ROOT / "frontend" / "src" / "student" / "ChatWindow.tsx"
 
@@ -120,20 +120,21 @@ class LearningFrameworkStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.transcript)
 
-    def test_brain_map_v4(self):
+    def test_brain_sky_keeps_the_knowledge_layer(self):
+        # v4 -> v5 (night sky): same contract, new renderer. Ideas are stars on the
+        # word plane, the student's earned links draw between them, emergent ideas
+        # wear their own hue and say so on the hover card.
         for fragment in (
-            "knowledge.arcs.map",
-            "const knowledge = useMemo",
-            "strokeOpacity={arc.earned ? 0.85 : 0.22}",
-            'className={arc.fresh ? "bmap-thread" : undefined}',
-            '"Your idea: "',
+            "sky.ideaIndex.get(link.from_key)",
+            "const STAR_EMERGENT",
+            '"Your idea" : "Idea"',
+            "ctx.moveTo(a.x, a.y)",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.brain)
         self.assertNotIn("topicLinks", self.brain)
         home = HOME.read_text(encoding="utf-8")
         self.assertIn("studentLinks={studentLinks}", home)
-        self.assertIn("curriculumLinks={curriculumLinks}", home)
 
 
 if __name__ == "__main__":

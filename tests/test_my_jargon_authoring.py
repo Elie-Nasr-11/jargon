@@ -34,12 +34,12 @@ class MyJargonSurface(unittest.TestCase):
 
     def test_home_renders_the_card(self):
         for fragment in (
-            "function MyJargonCard()",
+            "function MyJargonCard({",
             "My Jargon",
             "bridges subjects",
             # Empty state teaches what the surface is, instead of rendering blank.
             "Every new word your mentor teaches you collects here",
-            "<MyJargonCard />",
+            "<MyJargonCard words={jargonWords} highlightTerm={highlightTerm} />",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.home)
