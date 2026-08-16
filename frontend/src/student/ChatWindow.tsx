@@ -218,9 +218,7 @@ export function ChatWindow({
               autoStart
               onClose={() => setVoiceOpen(false)}
               onVoiceEvent={channel.voiceEvent}
-              onSubmitVoiceTurn={(text, confidence) =>
-                channel.sendVoiceTurn(text, mode, confidence)
-              }
+              onSubmitVoiceTurn={(text, confidence) => channel.sendVoiceTurn(text, confidence)}
             />
           ) : null}
         </div>

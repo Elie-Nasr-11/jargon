@@ -4,6 +4,11 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 
 ## Current State
 
+(Updated 2026-08-16.) Pillar 2 shipped: the client register has ONE owner —
+`setRegister(mode, cause)` in useConversation, causes limited to student-visible
+actions; sends read the register at the owner instead of taking a mode parameter
+(`docs/PLATFORM.md` §12.4). Pillars 3–5 queued.
+
 (Refreshed 2026-08-15.) **The flow rebuild is underway — flow is now a recorded object.**
 Pillar 1 of five: every mentor turn writes a `flow` event log (register shifts with their
 causing action, revisit open/close, checkpoint attach, step advance) into the envelope and

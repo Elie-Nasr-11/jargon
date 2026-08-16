@@ -43,7 +43,7 @@ import { Transcript } from "@/student/Transcript";
 import type { ModeOffer } from "@/features/student/chat/chatMessages";
 import { useConversation } from "@/student/useConversation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { DEFAULT_TURN_MODE, isTurnMode, type TurnMode } from "@/student/turnModes";
+import { isTurnMode } from "@/student/turnModes";
 import {
   DESTINATIONS,
   type StudentDestination,
@@ -100,8 +100,10 @@ export function StudentApp({
 }: StudentAppProps) {
   // TurnMode is conversation state, not navigation state — it belongs to the chat, not the URL.
   // It persists across turns until the student changes it (the convention every LLM chat uses).
-  const [turnMode, setTurnMode] = useState<TurnMode>(DEFAULT_TURN_MODE);
+  // Pillar 2: the register LIVES in useConversation now (one owner, every change names its
+  // cause); this component only renders it and forwards picker gestures.
   const conversation = useConversation();
+  const turnMode = conversation.register;
   // The sidebar is a docked column at lg+ and a drawer below it. Without the drawer there is no
   // navigation at all on a phone, which is where a lot of students actually are.
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -379,13 +381,10 @@ export function StudentApp({
   const closeDrawer = () => setDrawerOpen(false);
   const openLesson = (lessonId: string) => {
     // Opening a lesson is a Learn act — jump back to the conversation so the switch is
-    // visible rather than happening behind whatever panel is open.
+    // visible rather than happening behind whatever panel is open. The register reset
+    // (each lesson starts back on the spine) lives inside conversation.openLesson.
     closeDrawer();
     onSelectSection("learn");
-    // Chat-flow Phase 1: each lesson starts back on the spine — a Discuss detour in the
-    // previous lesson must not silently carry its register (and its gates-off ceiling)
-    // into the next one.
-    setTurnMode(DEFAULT_TURN_MODE);
     void conversation.openLesson(lessonId);
   };
   // The section menus: Home = Overview + class list, Learn = the selected class's units and
@@ -467,9 +466,9 @@ export function StudentApp({
   // so a student who typed something else instead left it hovering there, still offering
   // a hand-off for a conversation that had moved on. It now renders INLINE in the message
   // that made it (see Transcript), where `isLatestBot` retires it the moment anything
-  // follows. Accepting still lives here, because it also moves the composer's picker.
+  // follows. Pillar 2: accepting moves the composer's picker INSIDE sendModeOffer (the
+  // register's one owner) — this is a plain forward.
   const acceptModeOffer = (offer: ModeOffer) => {
-    setTurnMode(offer.mode);
     conversation.sendModeOffer(offer);
   };
 
@@ -562,7 +561,7 @@ export function StudentApp({
   const chatSurface = (
     <ChatWindow
       mode={turnMode}
-      onModeChange={setTurnMode}
+      onModeChange={(mode) => conversation.setRegister(mode, "picker")}
       // "See it in your brain": the growth toasts jump to Home, where the brain map
       // (with the fresh arc/star) lives at the bottom.
       onSeeBrain={() => onSelectSection("home")}
@@ -577,8 +576,8 @@ export function StudentApp({
       // Resources is not a conversation mode — it opens the materials destination.
       onOpenResources={() => onSelectDestination("resources")}
       sending={conversation.sending || conversation.booting}
-      onSend={(text, attachments) => conversation.sendText(text, turnMode, attachments)}
-      onSendCode={(code, language) => void conversation.sendCode(code, language, turnMode)}
+      onSend={(text, attachments) => conversation.sendText(text, attachments)}
+      onSendCode={(code, language) => void conversation.sendCode(code, language)}
       sessionResources={conversation.resources}
       composerLead={
         completionRow || checkpointDock || freshLesson || staleReturn ? (
@@ -595,8 +594,10 @@ export function StudentApp({
                 }
                 disabled={conversation.sending}
                 onSuggest={(prompt, mode) => {
-                  setTurnMode(mode);
-                  conversation.sendText(prompt, mode);
+                  // The suggestion declares its register, then the send reads it — the
+                  // ref inside setRegister makes the same-tick order safe.
+                  conversation.setRegister(mode, "suggestion");
+                  void conversation.sendText(prompt);
                 }}
               />
             ) : null}
@@ -627,17 +628,15 @@ export function StudentApp({
             // Retry re-sends in the register the failed turn was SENT in; the live picker
             // is only the fallback for errors persisted before retryMode existed.
             onRetry={(answer, mode) =>
-              void conversation.retry(answer, isTurnMode(mode) ? mode : turnMode)
+              // A persisted retryMode is a one-shot override; otherwise the hook sends
+              // in the live register. Either way the sticky register does not move.
+              void conversation.retry(answer, isTurnMode(mode) ? mode : undefined)
             }
             onAcceptOffer={acceptModeOffer}
             onChoose={(choiceId, label) => {
-              // R33c: the tap carries the register the student is actually in. Forcing
-              // "lesson" stamped the answer as a LESSON message, so tapping an option
-              // during Practice opened a new LESSON section between the question and its
-              // feedback — the transcript flip-flopped LESSON/PRACTICE/CHECKPOINT on every
-              // exchange. Grading is unaffected: the server exempts MCQ taps from the mode
-              // ceiling regardless of declared mode (see applyModeCeiling).
-              void conversation.sendChoice(choiceId, label, turnMode);
+              // R33c lives in the hook now: sendChoice reads the register at the one
+              // owner, so a call site can never stamp a Practice tap as LESSON again.
+              void conversation.sendChoice(choiceId, label);
             }}
           />
         </ErrorBoundary>

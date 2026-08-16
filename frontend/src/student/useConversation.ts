@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   fetchLatestLearningSession,
   fetchVocabTerms,
@@ -51,7 +59,18 @@ import {
   uid,
   type Msg,
 } from "@/features/student/chat/chatMessages";
-import { NO_OFFERS, type LessonOffers, type TurnMode } from "@/student/turnModes";
+import {
+  DEFAULT_TURN_MODE,
+  NO_OFFERS,
+  type LessonOffers,
+  type TurnMode,
+} from "@/student/turnModes";
+
+// Pillar 2 (flow rebuild): the enumerated student-visible actions that may move the
+// conversation register — the client half of PLATFORM §12.3's invariant. Anything not
+// on this list (an envelope arriving, a retry, a lesson reload mid-session) must NOT
+// change the register; retry sends in its one-shot override without touching it.
+export type RegisterCause = "picker" | "offer" | "suggestion" | "lesson_open";
 
 // The turn loop for the v6 student surface: resolve a lesson, resume (or create) its session,
 // load the transcript, and send turns carrying the student's declared TurnMode.
@@ -97,9 +116,10 @@ export type ConversationChannel = {
   sendResume: () => void;
   sendNavigate: (targetActivityId: string) => void;
   retryControlTurn: (answer: TypedChatAnswer, control: TypedChatControl) => void;
+  // Pillar 2: voice turns go out in the conversation register the hook owns — the
+  // panel no longer threads a mode through.
   sendVoiceTurn: (
     text: string,
-    mode: TurnMode,
     confidence?: number | null,
   ) => Promise<TypedChatEnvelope | null | "busy">;
   voiceEvent: (event: VoiceInteractionEvent) => void;
@@ -228,6 +248,22 @@ function offersFromEnvelope(envelope: TypedChatEnvelope): LessonOffers {
 }
 
 export function useConversation() {
+  // Pillar 2 (flow rebuild): the conversation register has ONE owner — this reducer.
+  // Every change carries the student-visible action that caused it (RegisterCause), so
+  // the register can never drift without a gesture, and the wrong-mode class of bug
+  // (R33c: a call site threading "lesson" into a Practice tap) is unwritable — sends
+  // read the register here instead of taking it as a parameter. registerRef mirrors the
+  // state synchronously so a gesture that sets the register and sends in the same tick
+  // (a suggestion row, an offer pill) goes out in the register it just chose.
+  const [register, dispatchRegister] = useReducer(
+    (_current: TurnMode, action: { mode: TurnMode; cause: RegisterCause }) => action.mode,
+    DEFAULT_TURN_MODE,
+  );
+  const registerRef = useRef<TurnMode>(DEFAULT_TURN_MODE);
+  const setRegister = useCallback((mode: TurnMode, cause: RegisterCause) => {
+    registerRef.current = mode;
+    dispatchRegister({ mode, cause });
+  }, []);
   const [offers, setOffers] = useState<LessonOffers>(NO_OFFERS);
   // The materials the mentor has attached this session — what the Resources pill opens.
   const [resources, setResources] = useState<LessonChatResource[]>([]);
@@ -642,6 +678,11 @@ export function useConversation() {
       if (!target || target.id === lessonRef.current?.id) return;
 
       setBooting(true);
+      // Chat-flow Phase 1, owned here since Pillar 2: each lesson starts back on the
+      // spine — a Discuss detour in the previous lesson must not carry its register
+      // (and its gates-off ceiling) into the next one. Folded into the hook so no
+      // caller can open a lesson and forget the reset.
+      setRegister(DEFAULT_TURN_MODE, "lesson_open");
       // Each switch owns a token; a later switch invalidates an earlier in-flight one so a slow
       // first load can't overwrite the lesson the student actually landed on.
       const token = ++switchTokenRef.current;
@@ -653,7 +694,7 @@ export function useConversation() {
         if (token === switchTokenRef.current) setBooting(false);
       }
     },
-    [loadLesson],
+    [loadLesson, setRegister],
   );
 
   // `echo` is the student's own message to show immediately. It is OPTIONAL because a retry
@@ -921,7 +962,7 @@ export function useConversation() {
   // through as run_result untouched. JavaScript and Python run sandboxed in the browser and only
   // produce {ok, output}.
   const sendCode = useCallback(
-    async (code: string, language: ComposerLanguage, mode: TurnMode) => {
+    async (code: string, language: ComposerLanguage) => {
       const trimmed = code.trim();
       if (!trimmed || sendingRef.current) return;
 
@@ -966,7 +1007,7 @@ export function useConversation() {
 
       await sendAnswer(
         { mode: "code", code: trimmed, run_result: runResult, client_msg_id: uid() },
-        mode,
+        registerRef.current,
         trimmed,
       );
     },
@@ -974,7 +1015,7 @@ export function useConversation() {
   );
 
   const sendText = useCallback(
-    (text: string, mode: TurnMode, attachments?: ChatAttachment[]) => {
+    (text: string, attachments?: ChatAttachment[]) => {
       // Dictation metadata staged by the Chatbox in this same call stack (see stageInputMeta).
       const meta = takeStagedInputMeta();
       return sendAnswer(
@@ -987,7 +1028,7 @@ export function useConversation() {
           attachments: attachments?.length ? attachments : undefined,
           client_msg_id: uid(),
         },
-        mode,
+        registerRef.current,
         text,
         meta
           ? {
@@ -1003,7 +1044,7 @@ export function useConversation() {
   );
 
   const sendChoice = useCallback(
-    (choiceId: string, label: string, mode: TurnMode) => {
+    (choiceId: string, label: string) => {
       // Stamp the pick on the quiz message BEFORE sending, so when the live buttons retire the
       // history keeps showing WHICH option was chosen (check-marked in the transcript).
       setMessages((current) => {
@@ -1011,9 +1052,13 @@ export function useConversation() {
         if (!lastBot || lastBot.role !== "bot" || !lastBot.choices?.length) return current;
         return current.map((m) => (m.id === lastBot.id ? { ...m, chosen: choiceId } : m));
       });
+      // R33c, now structural (Pillar 2): the tap rides the register the student is
+      // actually in — read HERE, not threaded by the caller, so a call site can never
+      // stamp a Practice tap as a LESSON message again. Grading is unaffected: the
+      // server exempts MCQ taps from the mode ceiling regardless (applyModeCeiling).
       return sendAnswer(
         { mode: "multiple_choice", choice_id: choiceId, client_msg_id: uid() },
-        mode,
+        registerRef.current,
         label,
       );
     },
@@ -1030,10 +1075,13 @@ export function useConversation() {
   }, [sendAnswer]);
 
   // Phase A: accepting a mode hand-off pill. A deterministic CONTROL turn (no synthesized
-  // student prose beyond the pill's label as the echo); the caller flips the picker so
-  // follow-up typed messages ride the new register.
+  // student prose beyond the pill's label as the echo). Pillar 2: accepting MOVES the
+  // register at this same seam — the composer picker renders conversation.register, so
+  // the flip and the send can no longer come apart, and follow-up typed messages ride
+  // the new register with no caller cooperation needed.
   const sendModeOffer = useCallback(
     (offer: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string }) => {
+      setRegister(offer.mode, "offer");
       // R33d: the label rides as the turn's TEXT, not just as a client-side echo. With an
       // empty body the server persisted NO student turn (`answer && content`), so the only
       // record of a mode hand-off was a mentor turn stamped with the new mode — and a
@@ -1047,7 +1095,7 @@ export function useConversation() {
         { control: { type: "mode_offer", mode: offer.mode, topic: offer.topic } },
       );
     },
-    [sendAnswer],
+    [sendAnswer, setRegister],
   );
 
   // Return from a revisit to exactly where the lesson left off (the server restores the paused
@@ -1082,8 +1130,11 @@ export function useConversation() {
 
   // Re-send a failed turn. The Msg union already carries retryAnswer for exactly this, so the
   // original answer goes back verbatim rather than being reconstructed from the rendered text.
+  // The optional mode is the failed turn's persisted retryMode — a ONE-SHOT override: the turn
+  // re-sends in the register it was originally sent in, and the sticky register is untouched
+  // (a retry is not a student choosing a mode).
   const retry = useCallback(
-    (answer: TypedChatAnswer, mode: TurnMode) => sendAnswer(answer, mode),
+    (answer: TypedChatAnswer, mode?: TurnMode) => sendAnswer(answer, mode ?? registerRef.current),
     [sendAnswer],
   );
 
@@ -1210,7 +1261,7 @@ export function useConversation() {
   // A spoken answer from the live-voice panel. The transcript is the record; raw audio is never
   // stored (see OPEN_QUESTIONS voice policy).
   const sendVoiceTurn = useCallback(
-    (text: string, mode: TurnMode, confidence?: number | null) =>
+    (text: string, confidence?: number | null) =>
       sendAnswer(
         {
           mode: "text",
@@ -1219,7 +1270,7 @@ export function useConversation() {
           transcript_confidence: confidence ?? null,
           client_msg_id: uid(),
         },
-        mode,
+        registerRef.current,
         text,
         {
           echoMeta: { inputModality: "audio_session", transcriptConfidence: confidence ?? null },
@@ -1312,6 +1363,11 @@ export function useConversation() {
     lessonArc,
     revisitFrontier,
     sessionSnapshot,
+    // Pillar 2: the conversation register and its one mutation seam. The composer's
+    // picker renders `register` and calls setRegister(mode, "picker"); nothing else in
+    // the app holds register state.
+    register,
+    setRegister,
     sendText,
     sendCode,
     sendChoice,
