@@ -575,7 +575,7 @@ type Understanding = {
 type PreemptedHit = { step: number; note: string };
 type GradedUnderstanding = Understanding & { preempted?: PreemptedHit[] };
 
-type FlowDecision = {
+export type FlowDecision = {
   stage: Stage;
   responseMode: ResponseMode;
   nextAction: NextAction;
@@ -2442,7 +2442,7 @@ async function checkCodeObjective(
 // adds zero serial latency. Any router error degrades to heuristicKind(), which
 // reproduces the pre-router behavior exactly: an outage can never brick a lesson.
 
-type RoutedKind =
+export type RoutedKind =
   | "answer_attempt"
   | "question"
   | "continue_signal"
@@ -2474,7 +2474,7 @@ const STUDENT_TURN_MODES = new Set<string>(["lesson", "practice", "discuss"]);
 
 // null = absent or unrecognized → today's behavior exactly, matching the defensive
 // posture of `routedKind === null` (an old client, or a typo, can never brick a lesson).
-function studentTurnMode(value: unknown): StudentTurnMode | null {
+export function studentTurnMode(value: unknown): StudentTurnMode | null {
   if (typeof value !== "string") return null;
   if (STUDENT_TURN_MODES.has(value)) return value as StudentTurnMode;
   if (value === "open") return "discuss";
@@ -2486,7 +2486,7 @@ function studentTurnMode(value: unknown): StudentTurnMode | null {
 // applyTurn (which would create a second place gates can be reasoned about), we hand it a
 // routedKind it ALREADY refuses to grade — the Flow v3 masking at applyTurn's
 // understanding/acknowledge branches does the rest. One choke point, unchanged.
-function applyModeCeiling(
+export function applyModeCeiling(
   mode: StudentTurnMode | null,
   kind: RoutedKind | null,
 ): RoutedKind | null {
@@ -2512,7 +2512,7 @@ const ROUTED_KINDS = new Set<string>([
   "meta",
 ]);
 
-const CONTINUE_SIGNAL_RE =
+export const CONTINUE_SIGNAL_RE =
   /^(ok(ay)?|yes|yep|yeah|sure|got it|ready|next|continue|let'?s (go|move on|continue)|i'?m (ready|done|good)|done|move on)\b[\s!.]*$/i;
 
 // R34 (flow rebuild, live probe 2026-08-15): "Yes — let's head there!" — an optional
@@ -2521,7 +2521,7 @@ const CONTINUE_SIGNAL_RE =
 // router-outage heuristic since Flow v3) stays byte-identical. Anchored both ends: any
 // content payload after the motion phrase ("continue the story about mars") falls
 // through to the router untouched.
-const CONTINUE_PHRASE_RE =
+export const CONTINUE_PHRASE_RE =
   /^(ok(ay)?|yes|yep|yeah|sure|got it|ready|alright|i'?m ready)?[\s,!.…—–-]*(please\s+)?(next( part| step| one| section)?|continue|move (on|forward)|keep going|go (on|ahead)|onward|let'?s (go|continue|move on|keep going|do it|head (there|over|on))|(head|take me) (there|over|to the next( part| step| one)?)|on to the next( part| step| one)?)[\s!.…]*$/i;
 
 // "Take me back to the loops step" — a navigation WISH, not a movement command: the
@@ -2533,7 +2533,7 @@ const NAVIGATE_BACK_RE =
 
 // The pre-router heuristics, composed. Used when the router call fails or is skipped —
 // its classifications intentionally mirror what the old code paths keyed on.
-function heuristicKind(text: string): RouterVerdict {
+export function heuristicKind(text: string): RouterVerdict {
   const trimmed = (text || "").trim();
   if (
     trimmed.length <= 48 &&
@@ -3122,7 +3122,7 @@ function isQuestionShaped(text: string): boolean {
   );
 }
 
-type StepRequirements = {
+export type StepRequirements = {
   code: boolean;
   quiz: boolean;
   understanding: boolean;
@@ -3138,7 +3138,7 @@ type StepRequirements = {
 // step (its choices live on the activity itself; the mentor's assessment grades it).
 // When the step has a v4 mode, the mode decides; a bound quiz row stays an orthogonal
 // gate in every mode (matching the legacy behavior for code steps with quizzes).
-function requirementsFor(
+export function requirementsFor(
   activity: DbRow | null,
   quiz: DbRow | null,
 ): StepRequirements {
@@ -3224,7 +3224,7 @@ function requirementsFor(
 // Persisted per-step progress (learning_sessions.step_state jsonb). The stage column is
 // now a display label for the teacher transcript; CONTROL lives here. Pass timestamps are
 // monotonic — once a gate is passed it stays passed for the life of the step.
-type StepState = {
+export type StepState = {
   activity_id: string | null;
   presented_at: string | null;
   code_passed_at: string | null;
@@ -3249,7 +3249,7 @@ type StepState = {
   artifact_last_resource_id: string | null;
 };
 
-function emptyStepState(activityId: string | null): StepState {
+export function emptyStepState(activityId: string | null): StepState {
   return {
     activity_id: activityId,
     presented_at: null,
@@ -3378,7 +3378,7 @@ async function loadStepState(
   return { state: seeded, seedFailed: false };
 }
 
-function stepDone(state: StepState, req: StepRequirements): boolean {
+export function stepDone(state: StepState, req: StepRequirements): boolean {
   return (
     (!req.code || Boolean(state.code_passed_at)) &&
     (!req.quiz || Boolean(state.quiz_passed_at)) &&
@@ -3402,7 +3402,7 @@ function quizEligible(state: StepState, req: StepRequirements): boolean {
 // Fold one turn into the step's persisted progress. A presentation turn (the step hasn't
 // been shown yet) only records the presentation — it NEVER grades, so an answer sent
 // before the step appears can't score against it (this replaces stage "intro" as control).
-function applyTurn(
+export function applyTurn(
   before: StepState,
   req: StepRequirements,
   answer: DbRow | null,
@@ -3510,7 +3510,7 @@ function applyTurn(
 // Derive the turn's flow from persisted progress. Choices are attached on EVERY turn
 // while the quiz is eligible (the prompt tells the mentor they're already on screen), so
 // the quiz can't be dismissed by a side conversation and never re-attaches after passing.
-function deriveTurn(
+export function deriveTurn(
   state: StepState,
   req: StepRequirements,
   presentedBefore: boolean,
@@ -3582,13 +3582,13 @@ function fallbackReply(
   );
 }
 
-type TurnDirective = { key: string; text: string };
+export type TurnDirective = { key: string; text: string };
 
 // ONE composed per-turn instruction replacing the old teaching-move selector, pedagogy
 // prompt block, and six ad-hoc directive strings. Priority ladder: first match wins; the
 // resource clause is appended whenever card(s) ride along with this reply. The key doubles
 // as the learning_evidence.teaching_move label.
-function turnDirective(args: {
+export function turnDirective(args: {
   currentStage: Stage;
   answer: DbRow | null;
   presentedBefore: boolean;
@@ -8338,7 +8338,11 @@ async function handleTypedRequest(
 // and wrote review_sessions rows nothing read. The table and its RLS stay applied but
 // inert; the full implementation is archived on main.
 
-Deno.serve(async (req: Request) => {
+// Pillar 4 (flow rebuild): the handler is a named const so the serve call below can be
+// skipped when the flow test harness imports this module to execute the exported pure
+// core (applyTurn / deriveTurn / applyModeCeiling / turnDirective) directly. The edge
+// runtime never sets JARGON_FLOW_TEST, so production behavior is byte-identical.
+const chatRequestHandler = async (req: Request) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: corsHeaders });
 
@@ -8353,4 +8357,6 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     return typedError(errorMessage(err), 500);
   }
-});
+};
+
+if (!Deno.env.get("JARGON_FLOW_TEST")) Deno.serve(chatRequestHandler);

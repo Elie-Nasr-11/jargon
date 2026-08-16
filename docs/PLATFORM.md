@@ -463,3 +463,29 @@ register and sends in the same tick goes out in the register it just chose.
   with the mode it sent; unifying the five register writers behind one reducer is Pillar 2.
 - **Touch gates.** `applyTurn`/`applyModeCeiling` semantics are byte-identical; the log
   records decisions, it does not make them.
+
+### 12.5 The flow core is executable under test — Pillar 4
+
+`applyTurn`, `deriveTurn`, `applyModeCeiling`, `stepDone`, `requirementsFor`, and
+`turnDirective` are exported, and `Deno.serve` is guarded behind
+`!Deno.env.get("JARGON_FLOW_TEST")` — so the test harness imports the chat fn itself
+and RUNS the spine instead of only pinning its source. `tests/flow_core.test.ts`
+(driven from the Python harness by `tests/test_flow_pillar4_properties.py`, skipped
+when deno is absent) asserts the invariants the spine promises:
+
+- gates are monotonic and attempts never decrease over random turn sequences;
+- only `continue_signal` (or the legacy-null readiness text) discharges the
+  acknowledge gate; conversation kinds never stamp presentation or close understanding;
+- `deriveTurn` completes iff presented and every required gate is closed; `choose`
+  only while the quiz gate is genuinely open;
+- the ceiling's mapping, enumerated over every (register, kind) pair;
+- every rung of the directive ladder is REACHABLE via a witness vector and keyed as
+  documented, fuzzed vectors never leave the known key set, navigation precedence
+  holds, and `turnDirective` is pure;
+- the readiness recognizers stay a closed class.
+
+Fuzz vectors derive requirements through the real `requirementsFor` coupling — states
+the runtime cannot reach are not tested. Pillar 4 was deliberately landed BEFORE
+Pillar 3: the ladder-to-table conversion (if still warranted) now happens under a
+harness that executes every branch, and the reachability witnesses double as the
+"completeness test" that pillar wanted.

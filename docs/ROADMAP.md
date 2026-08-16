@@ -7,7 +7,12 @@ Status: current roadmap summary. See `docs/COMPLETE_ROADMAP.md` for the full det
 (Updated 2026-08-16.) Pillar 2 shipped: the client register has ONE owner —
 `setRegister(mode, cause)` in useConversation, causes limited to student-visible
 actions; sends read the register at the owner instead of taking a mode parameter
-(`docs/PLATFORM.md` §12.4). Pillars 3–5 queued.
+(`docs/PLATFORM.md` §12.4). Pillar 4 shipped next (deliberately before Pillar 3): the
+flow core is exported and RUNS under test — gate monotonicity, acknowledge doors,
+complete-iff-done, the ceiling mapping, per-rung directive reachability witnesses,
+precedence/purity fuzz (`docs/PLATFORM.md` §12.5, `tests/flow_core.test.ts`).
+Pillars 3 and 5 queued; 3's rewrite scope is re-decided now that the ladder is
+executable (DECISIONS 2026-08-16 later).
 
 (Refreshed 2026-08-15.) **The flow rebuild is underway — flow is now a recorded object.**
 Pillar 1 of five: every mentor turn writes a `flow` event log (register shifts with their
