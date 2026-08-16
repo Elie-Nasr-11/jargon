@@ -16,7 +16,7 @@ API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 CONVO = ROOT / "frontend" / "src" / "student" / "useConversation.ts"
 TRANSCRIPT = ROOT / "frontend" / "src" / "student" / "Transcript.tsx"
 TOASTS = ROOT / "frontend" / "src" / "student" / "KnowledgeToasts.tsx"
-BRAIN = ROOT / "frontend" / "src" / "student" / "BrainSky.tsx"
+BRAIN = ROOT / "frontend" / "src" / "student" / "BrainGraph.tsx"
 HOME = ROOT / "frontend" / "src" / "student" / "StudentHome.tsx"
 CHATWINDOW = ROOT / "frontend" / "src" / "student" / "ChatWindow.tsx"
 
@@ -120,12 +120,12 @@ class LearningFrameworkStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.transcript)
 
-    def test_brain_sky_keeps_the_knowledge_layer(self):
-        # v4 -> v5 (night sky): same contract, new renderer. Ideas are stars on the
-        # word plane, the student's earned links draw between them, emergent ideas
-        # wear their own hue and say so on the hover card.
+    def test_brain_graph_keeps_the_knowledge_layer(self):
+        # v5 (Obsidian-style graph): same contract, new renderer. Ideas are nodes,
+        # the student's earned links are edges between them, emergent ideas wear
+        # their own hue and say so on the hover card.
         for fragment in (
-            "sky.ideaIndex.get(link.from_key)",
+            "ideaIndex.get(link.from_key)",
             "const STAR_EMERGENT",
             '"Your idea" : "Idea"',
             "ctx.moveTo(a.x, a.y)",

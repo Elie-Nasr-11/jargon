@@ -22,7 +22,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
 APP = (ROOT / "frontend" / "src" / "student" / "StudentApp.tsx").read_text(encoding="utf-8")
-SKY = (ROOT / "frontend" / "src" / "student" / "BrainSky.tsx").read_text(encoding="utf-8")
+GRAPH = (ROOT / "frontend" / "src" / "student" / "BrainGraph.tsx").read_text(encoding="utf-8")
 HOME = (ROOT / "frontend" / "src" / "student" / "StudentHome.tsx").read_text(encoding="utf-8")
 
 
@@ -84,42 +84,56 @@ class TabsWarmAtIdle(unittest.TestCase):
         self.assertIn("requestIdleCallback", APP)
 
 
-class TheNightSky(unittest.TestCase):
-    def test_words_and_ideas_lie_on_the_plane_lessons_rise_above(self):
-        self.assertIn("function planeSpot(", SKY)
-        self.assertIn("function constellationFor(", SKY)
-        self.assertIn("CONSTELLATION_ALT_BASE", SKY)
-        # Layout is deterministic — a sky that rearranges per visit is noise.
-        self.assertIn("function hash01(", SKY)
-        self.assertNotIn("Math.random", SKY)
+class TheKnowledgeGraph(unittest.TestCase):
+    """v5 (owner pick after the night-sky metaphor was rejected): an Obsidian-style
+    force-directed graph — nodes for lessons/ideas/words/course hubs, edges for the
+    student's REAL relations, hover lights the neighborhood while the rest dims."""
 
-    def test_progress_lights_the_constellation_and_current_breathes(self):
-        self.assertIn("const litCount = Math.round(node.lit * node.stars.length);", SKY)
-        self.assertIn("node.current && !reduced", SKY)
+    def test_layout_is_physics_but_deterministic(self):
+        self.assertIn("const REPULSION", GRAPH)
+        self.assertIn("const SPRING", GRAPH)
+        self.assertIn("function hash01(", GRAPH)
+        self.assertNotIn("Math.random", GRAPH)
+        # The graph settles BEFORE first paint — it never opens mid-explosion.
+        self.assertIn("for (let i = 0; i < SETTLE_TICKS; i += 1)", GRAPH)
 
-    def test_hover_card_sits_top_right_and_every_click_opens_something(self):
-        self.assertIn('className="pointer-events-none absolute right-2.5 top-2.5', SKY)
-        self.assertIn('if (node.kind === "lesson") onOpenLesson(node.lesson.id);', SKY)
+    def test_edges_are_real_relations(self):
+        for fragment in (
+            '"word-lesson"',
+            '"idea-lesson"',
+            '"idea-idea"',
+            '"lesson-course"',
+            "ideaIndex.get(link.from_key)",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, GRAPH)
+
+    def test_hover_dims_everything_but_the_neighborhood(self):
+        self.assertIn("const neighbors = hovered >= 0 ? adjacency[hovered] : null;", GRAPH)
+        self.assertIn("const DIM", GRAPH)
+        self.assertIn('className="pointer-events-none absolute right-2.5 top-2.5', GRAPH)
+
+    def test_every_click_opens_something(self):
+        self.assertIn('if (node.kind === "lesson" && node.lesson) onOpenLesson(node.lesson.id);', GRAPH)
         self.assertIn(
-            'else if (node.kind === "idea" && node.idea.lesson_id) onOpenLesson(node.idea.lesson_id);',
-            SKY,
+            'else if (node.kind === "idea" && node.idea?.lesson_id) onOpenLesson(node.idea.lesson_id);',
+            GRAPH,
         )
-        self.assertIn(
-            'else if (node.kind === "word" && node.collected) onOpenWord(node.word.term);', SKY
-        )
+        self.assertIn('else if (node.kind === "word" && node.word) onOpenWord(node.word.term);', GRAPH)
 
     def test_reduced_motion_and_offscreen_are_respected(self):
-        self.assertIn("prefersReducedMotion()", SKY)
-        self.assertIn("IntersectionObserver", SKY)
-        self.assertIn("document.hidden", SKY)
+        self.assertIn("prefersReducedMotion()", GRAPH)
+        self.assertIn("IntersectionObserver", GRAPH)
+        self.assertIn("document.hidden", GRAPH)
 
-    def test_home_feeds_the_sky_and_word_clicks_land_in_my_jargon(self):
-        self.assertIn("<BrainSky", HOME)
+    def test_home_feeds_the_graph_and_word_clicks_land_in_my_jargon(self):
+        self.assertIn("<BrainGraph", HOME)
         self.assertIn("words={jargonWords ?? []}", HOME)
+        self.assertIn("vocabTerms={vocabTerms}", HOME)
         self.assertIn("onOpenWord={openWord}", HOME)
         self.assertIn("jargonAnchorRef.current?.scrollIntoView", HOME)
-        self.assertIn("highlightTerm={highlightTerm}", HOME)
-        # The old SVG map is retired.
+        # The sky renderers are fully retired.
+        self.assertFalse((ROOT / "frontend" / "src" / "student" / "BrainSky.tsx").exists())
         self.assertFalse((ROOT / "frontend" / "src" / "student" / "BrainMap.tsx").exists())
 
 
