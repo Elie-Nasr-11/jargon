@@ -15,54 +15,187 @@ import type { IdeaNode, Lesson, MyJargonWord, StudentLinkRow } from "@/lib/types
 // and ideas — lies as background stars on a single plane, a galactic floor. The
 // lessons hang ABOVE that plane as 3D constellations: each lesson is a small star
 // pattern (deterministic per lesson id), its stars lighting up gold as the student
-// progresses, fully lit and glowing when the lesson is done, the current lesson's
-// constellation breathing. Courses set the sky sector and altitude band, so one
-// subject's constellations hang together like a season's sky.
+// progresses, fully lit when the lesson is done, the current lesson's constellation
+// breathing. Courses set the sky sector and altitude band, so one subject's
+// constellations hang together like a season's sky.
 //
-// Rendering is canvas 2D with a hand-rolled camera (yaw orbit + pitch, perspective
-// divide) — no three.js: a few hundred stars is trivial for 2D canvas, and glow is
-// cached radial-gradient sprites. The scene idles in a slow orbit; dragging orbits,
-// the wheel zooms, the chip resets. prefers-reduced-motion freezes the orbit AND the
-// twinkle (a static sky is still a sky). The canvas pauses entirely while offscreen
-// or the tab is hidden.
+// v4.1 (owner feedback: "not very clear visually … orbiting not intuitive"):
+// - CLARITY. A hard size/brightness hierarchy (constellations >> ideas > words),
+//   constellation labels always on and plated for contrast, a ground mist + optional
+//   plane grid separating the floor from the sky, and bloom concentrated on lessons.
+// - ONE-AXIS ORBIT. Dragging spins the sky like a globe — yaw only, fixed pitch, so
+//   there is no way to end up looking at the scene edge-on or upside down. Wheel
+//   still zooms; reset restores home; a first-run hint names both gestures.
+// - SKINS. The scene's whole look is a token table (SKY_SKINS) so restyling is a
+//   data change. The pick persists in localStorage ("jargon.sky-skin").
 //
-// Interaction contract (owner brief): hovering ANY meaningful star raises an info
-// card pinned to the map's top-right; clicking always opens something real — a
-// constellation (or an idea that belongs to a lesson) opens that lesson, a word
-// star hands the term to the shell, which scrolls My Jargon to it.
+// Interaction contract: hovering any meaningful star raises an info card pinned to
+// the map's top-right; clicking always opens something real — a constellation (or an
+// idea that belongs to a lesson) opens that lesson, a word star hands the term to
+// the shell, which scrolls My Jargon to it.
 
 const PLANE_RADIUS = 175;
 const IDEA_RADIUS_MIN = 55;
-const CONSTELLATION_ALT_BASE = 62;
-const CONSTELLATION_ALT_BAND = 26;
-const CONSTELLATION_SPREAD = 13;
+const CONSTELLATION_ALT_BASE = 84;
+const CONSTELLATION_ALT_BAND = 30;
+const CONSTELLATION_SPREAD = 16;
 const FOCAL = 480;
-const CAMERA_BACK = 335;
-const PITCH_DEFAULT = 0.62;
-const PITCH_MIN = 0.22;
-const PITCH_MAX = 1.15;
+const CAMERA_BACK = 345;
+const PITCH_FIXED = 0.58;
 const ZOOM_MIN = 0.75;
 const ZOOM_MAX = 2.6;
-const IDLE_YAW_PER_SEC = 0.045;
-const PICK_RADIUS_PX = 15;
-const BACKDROP_COUNT = 150;
+const IDLE_YAW_PER_SEC = 0.04;
+const PICK_RADIUS_PX = 16;
+const BACKDROP_COUNT = 130;
 
-// Fixed palette: the sky is deliberately a window into space in BOTH themes — the
-// panel commits to one look rather than re-skinning per theme. Accents stay in the
-// app's language (gold = progress, aurora = emergent thought).
-const SKY_TOP = "#070b1c";
-const SKY_BOTTOM = "#0d1330";
-const NEBULA_A = "rgba(88, 101, 242, 0.10)";
-const NEBULA_B = "rgba(190, 120, 255, 0.07)";
-const STAR_WORD = "#e8ecff";
-const STAR_WORD_FAINT = "rgba(190, 200, 235, 0.38)";
-const STAR_IDEA = "#9fd4ff";
+// Kept as a named export of the palette contract: emergent ideas always wear their
+// own hue, whatever the skin (tests + the hover card key off it).
 const STAR_EMERGENT = "#c9a2ff";
-const STAR_LIT = "#ffd88a";
-const STAR_UNLIT = "rgba(160, 175, 215, 0.5)";
-const LINK_EARNED = "rgba(159, 212, 255, 0.34)";
-const LINE_CONSTELLATION = "rgba(214, 224, 255, 0.28)";
-const LABEL_COLOR = "rgba(214, 222, 250, 0.82)";
+
+export type SkySkinId = "minimal" | "observatory" | "neon" | "storybook";
+
+type SkySkin = {
+  title: string;
+  sky: [string, string];
+  nebulae: { x: number; y: number; r: number; color: string }[];
+  ground: string;
+  grid: "rings" | "synth" | "horizon" | "none";
+  gridColor: string;
+  starWord: string;
+  starWordFaint: string;
+  starIdea: string;
+  lit: string;
+  unlit: string;
+  link: string;
+  line: { color: string; width: number; dash: number[] | null; glow: string | null };
+  label: {
+    color: string;
+    currentColor: string;
+    plate: string | null;
+    font: string;
+    uppercase: boolean;
+  };
+  bloom: number;
+};
+
+// Three deliberate directions (style references for the owner to choose from):
+// observatory = planetarium star atlas; neon = synthwave arcade; storybook = a
+// child's paper star chart. One is the shipping default; the others stay one
+// localStorage flip away.
+export const SKY_SKINS: Record<SkySkinId, SkySkin> = {
+  // The shipping default (owner pick, 2026-08-16): the original deep-space look,
+  // refined rather than decorated — no plates, no grids, hairline constellations;
+  // readability comes from type, spacing, contrast, and label de-collision.
+  minimal: {
+    title: "Minimal",
+    sky: ["#070b1c", "#0d1330"],
+    nebulae: [
+      { x: 0.24, y: 0.3, r: 0.4, color: "rgba(88, 101, 242, 0.09)" },
+      { x: 0.78, y: 0.62, r: 0.36, color: "rgba(190, 120, 255, 0.06)" },
+    ],
+    ground: "rgba(120, 140, 200, 0.045)",
+    grid: "horizon",
+    gridColor: "rgba(159, 212, 255, 0.16)",
+    starWord: "#eef1ff",
+    starWordFaint: "rgba(196, 205, 238, 0.36)",
+    starIdea: "#9fd4ff",
+    lit: "#ffd88a",
+    unlit: "rgba(186, 198, 232, 0.62)",
+    link: "rgba(159, 212, 255, 0.36)",
+    line: { color: "rgba(222, 230, 255, 0.42)", width: 1.1, dash: null, glow: null },
+    label: {
+      color: "rgba(226, 232, 252, 0.92)",
+      currentColor: "#ffd88a",
+      plate: null,
+      font: "600 11.5px ui-sans-serif, system-ui, sans-serif",
+      uppercase: false,
+    },
+    bloom: 1,
+  },
+  observatory: {
+    title: "Observatory",
+    sky: ["#04060e", "#0a0f22"],
+    nebulae: [{ x: 0.3, y: 0.32, r: 0.42, color: "rgba(88, 110, 220, 0.09)" }],
+    ground: "rgba(130, 150, 210, 0.06)",
+    grid: "rings",
+    gridColor: "rgba(232, 220, 190, 0.12)",
+    starWord: "#f2f4ff",
+    starWordFaint: "rgba(196, 205, 238, 0.4)",
+    starIdea: "#a8d8ff",
+    lit: "#ffd88a",
+    unlit: "rgba(190, 202, 235, 0.65)",
+    link: "rgba(168, 216, 255, 0.4)",
+    line: { color: "rgba(240, 222, 170, 0.62)", width: 1.3, dash: null, glow: null },
+    label: {
+      color: "#eadfc4",
+      currentColor: "#ffd88a",
+      plate: "rgba(6, 9, 20, 0.62)",
+      font: "600 12px Georgia, 'Times New Roman', serif",
+      uppercase: true,
+    },
+    bloom: 1.05,
+  },
+  neon: {
+    title: "Neon arcade",
+    sky: ["#0c0121", "#241257"],
+    nebulae: [
+      { x: 0.22, y: 0.3, r: 0.4, color: "rgba(255, 60, 190, 0.16)" },
+      { x: 0.8, y: 0.55, r: 0.38, color: "rgba(53, 224, 255, 0.13)" },
+    ],
+    ground: "rgba(255, 60, 190, 0.09)",
+    grid: "synth",
+    gridColor: "rgba(255, 60, 190, 0.3)",
+    starWord: "#ffffff",
+    starWordFaint: "rgba(210, 190, 255, 0.42)",
+    starIdea: "#35e0ff",
+    lit: "#ffe066",
+    unlit: "rgba(190, 190, 255, 0.65)",
+    link: "rgba(53, 224, 255, 0.45)",
+    line: { color: "#35e0ff", width: 2, dash: null, glow: "rgba(53, 224, 255, 0.55)" },
+    label: {
+      color: "#ffffff",
+      currentColor: "#ff5ad1",
+      plate: "rgba(22, 5, 48, 0.75)",
+      font: "800 12px ui-sans-serif, system-ui, sans-serif",
+      uppercase: true,
+    },
+    bloom: 1.7,
+  },
+  storybook: {
+    title: "Storybook",
+    sky: ["#0d2330", "#1e4152"],
+    nebulae: [{ x: 0.7, y: 0.3, r: 0.45, color: "rgba(255, 214, 140, 0.08)" }],
+    ground: "rgba(255, 240, 205, 0.06)",
+    grid: "none",
+    gridColor: "transparent",
+    starWord: "#fff6dc",
+    starWordFaint: "rgba(255, 244, 214, 0.38)",
+    starIdea: "#9fe3d0",
+    lit: "#ffd88a",
+    unlit: "rgba(230, 235, 220, 0.6)",
+    link: "rgba(159, 227, 208, 0.5)",
+    line: { color: "rgba(255, 240, 205, 0.65)", width: 1.7, dash: [5, 4], glow: null },
+    label: {
+      color: "#fff3d6",
+      currentColor: "#ffd88a",
+      plate: "rgba(8, 26, 34, 0.7)",
+      font: "700 12.5px ui-rounded, 'Segoe UI', system-ui, sans-serif",
+      uppercase: false,
+    },
+    bloom: 1.3,
+  },
+};
+
+export function readSkySkin(): SkySkinId {
+  try {
+    const raw = localStorage.getItem("jargon.sky-skin");
+    if (raw === "minimal" || raw === "observatory" || raw === "neon" || raw === "storybook")
+      return raw;
+  } catch {
+    // Storage unavailable — fall through to the default.
+  }
+  return "minimal";
+}
 
 type Vec3 = { x: number; y: number; z: number };
 type SkyNode =
@@ -115,10 +248,10 @@ function constellationFor(
   const stars: Vec3[] = [];
   for (let i = 0; i < n; i += 1) {
     const a = hash01(`${lesson.id}:a${i}`) * Math.PI * 2;
-    const r = CONSTELLATION_SPREAD * (0.45 + hash01(`${lesson.id}:r${i}`) * 0.9);
+    const r = CONSTELLATION_SPREAD * (0.5 + hash01(`${lesson.id}:r${i}`) * 0.95);
     stars.push({
       x: anchor.x + Math.cos(a) * r,
-      y: anchor.y + (hash01(`${lesson.id}:y${i}`) - 0.5) * 14,
+      y: anchor.y + (hash01(`${lesson.id}:y${i}`) - 0.5) * 16,
       z: anchor.z + Math.sin(a) * r,
     });
   }
@@ -151,7 +284,7 @@ function buildSky(input: {
       idea,
       mastery: input.mastery?.get(idea.key) ?? 0,
       pos: planeSpot(i, ideas.length, idea.key, IDEA_RADIUS_MIN, PLANE_RADIUS * 0.62),
-      size: idea.origin === "emergent" ? 2.6 : 2.2,
+      size: idea.origin === "emergent" ? 3 : 2.6,
     });
   });
 
@@ -162,7 +295,7 @@ function buildSky(input: {
       word,
       collected: true,
       pos: planeSpot(i, words.length, word.term, PLANE_RADIUS * 0.55, PLANE_RADIUS),
-      size: word.traveled ? 2.4 : 1.9,
+      size: word.traveled ? 2.5 : 2.1,
     });
   });
   // Words the curriculum will teach but the student hasn't met: the sky hints at how
@@ -183,7 +316,7 @@ function buildSky(input: {
         PLANE_RADIUS * 0.7,
         PLANE_RADIUS * 1.08,
       ),
-      size: 1.3,
+      size: 1.4,
     });
   });
 
@@ -204,10 +337,10 @@ function buildSky(input: {
       CONSTELLATION_ALT_BASE + (courseRank % 3) * CONSTELLATION_ALT_BAND + hash01(courseKey) * 10;
     courseLessons.forEach((lesson, i) => {
       const angle = sectorStart + span * ((i + 0.5) / courseLessons.length);
-      const radius = 78 + (i % 2) * 34 + hash01(lesson.id) * 22;
+      const radius = 82 + (i % 2) * 36 + hash01(lesson.id) * 22;
       const anchor: Vec3 = {
         x: Math.cos(angle) * radius,
-        y: altitude + (hash01(`${lesson.id}:alt`) - 0.5) * 16,
+        y: altitude + (hash01(`${lesson.id}:alt`) - 0.5) * 18,
         z: Math.sin(angle) * radius,
       };
       const { stars, edges } = constellationFor(lesson, anchor);
@@ -219,7 +352,7 @@ function buildSky(input: {
         edges,
         lit: Math.max(0, Math.min(1, input.progress[lesson.id] ?? 0)),
         current: lesson.id === input.currentLessonId,
-        size: 3,
+        size: 3.6,
       });
     });
     sectorStart += span;
@@ -262,6 +395,7 @@ export function BrainSky({
   mastery,
   onOpenLesson,
   onOpenWord,
+  skin: skinId,
 }: {
   lessons: Lesson[];
   words: MyJargonWord[];
@@ -273,11 +407,15 @@ export function BrainSky({
   mastery?: Map<string, number>;
   onOpenLesson: (lessonId: string) => void;
   onOpenWord: (term: string) => void;
+  // Style direction override; defaults to the stored pick (localStorage).
+  skin?: SkySkinId;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<SkyHover | null>(null);
+  const [hintSeen, setHintSeen] = useState(false);
   const hoverRef = useRef<{ nodeIndex: number } | null>(null);
+  const skin = SKY_SKINS[skinId ?? readSkySkin()];
 
   const sky = useMemo(
     () =>
@@ -315,8 +453,9 @@ export function BrainSky({
   );
 
   // Camera state lives in refs — the render loop reads it directly; React re-renders
-  // only for hover-card content.
-  const cam = useRef({ yaw: 0.5, pitch: PITCH_DEFAULT, zoom: 1, idle: true });
+  // only for hover-card content. v4.1: yaw + zoom only. Pitch is FIXED — the one-axis
+  // globe spin is what makes the orbit predictable.
+  const cam = useRef({ yaw: 0.5, zoom: 1, idle: true });
   const lessonsRef = useRef(sky);
   lessonsRef.current = sky;
 
@@ -351,19 +490,33 @@ export function BrainSky({
     });
     io.observe(wrap);
 
+    const cp = Math.cos(PITCH_FIXED);
+    const sp = Math.sin(PITCH_FIXED);
     const project = (p: Vec3): Projected => {
-      const { yaw, pitch, zoom } = cam.current;
+      const { yaw, zoom } = cam.current;
       const cy = Math.cos(yaw);
       const sy = Math.sin(yaw);
       const x1 = p.x * cy - p.z * sy;
       const z1 = p.x * sy + p.z * cy;
-      const cp = Math.cos(pitch);
-      const sp = Math.sin(pitch);
       const y2 = p.y * cp - z1 * sp;
       const z2 = p.y * sp + z1 * cp;
       const depth = z2 + CAMERA_BACK;
       const f = (FOCAL / Math.max(60, depth)) * zoom;
-      return { x: width / 2 + x1 * f, y: height / 2 + 26 - y2 * f, scale: f, depth };
+      return { x: width / 2 + x1 * f, y: height / 2 + 34 - y2 * f, scale: f, depth };
+    };
+
+    const planeCircle = (radius: number) => {
+      ctx.beginPath();
+      for (let a = 0; a <= 64; a += 1) {
+        const p = project({
+          x: Math.cos((a / 64) * Math.PI * 2) * radius,
+          y: 0,
+          z: Math.sin((a / 64) * Math.PI * 2) * radius,
+        });
+        if (a === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
     };
 
     const projected: Projected[] = new Array(sky.nodes.length);
@@ -382,37 +535,26 @@ export function BrainSky({
       const nodes = lessonsRef.current.nodes;
       ctx.clearRect(0, 0, width, height);
 
-      // Sky wash + two soft nebulae, anchored to the viewport (they're atmosphere,
-      // not world objects).
+      // Sky wash + skin nebulae (viewport-anchored atmosphere).
       const wash = ctx.createLinearGradient(0, 0, 0, height);
-      wash.addColorStop(0, SKY_TOP);
-      wash.addColorStop(1, SKY_BOTTOM);
+      wash.addColorStop(0, skin.sky[0]);
+      wash.addColorStop(1, skin.sky[1]);
       ctx.fillStyle = wash;
       ctx.fillRect(0, 0, width, height);
-      const neb1 = ctx.createRadialGradient(
-        width * 0.24,
-        height * 0.3,
-        0,
-        width * 0.24,
-        height * 0.3,
-        width * 0.4,
-      );
-      neb1.addColorStop(0, NEBULA_A);
-      neb1.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = neb1;
-      ctx.fillRect(0, 0, width, height);
-      const neb2 = ctx.createRadialGradient(
-        width * 0.78,
-        height * 0.62,
-        0,
-        width * 0.78,
-        height * 0.62,
-        width * 0.36,
-      );
-      neb2.addColorStop(0, NEBULA_B);
-      neb2.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = neb2;
-      ctx.fillRect(0, 0, width, height);
+      for (const neb of skin.nebulae) {
+        const grad = ctx.createRadialGradient(
+          width * neb.x,
+          height * neb.y,
+          0,
+          width * neb.x,
+          height * neb.y,
+          width * neb.r,
+        );
+        grad.addColorStop(0, neb.color);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+      }
 
       // Backdrop stars: infinitely-far dust that only yaw moves, twinkling gently.
       const t = now / 1000;
@@ -422,37 +564,67 @@ export function BrainSky({
         const y = height * 0.5 + star.y * height * 0.5 - Math.sin(a) * 8;
         if (x < -8 || x > width + 8 || y < -8 || y > height + 8) continue;
         const tw = reduced ? 0.55 : 0.38 + 0.34 * (0.5 + 0.5 * Math.sin(t * 1.7 + star.tw));
-        ctx.globalAlpha = tw * 0.5;
-        ctx.fillStyle = STAR_WORD;
+        ctx.globalAlpha = tw * 0.45;
+        ctx.fillStyle = skin.starWord;
         ctx.fillRect(x, y, star.s, star.s);
       }
       ctx.globalAlpha = 1;
 
+      // The floor, before anything that sits on it: ground mist, then the skin's grid.
+      const center = project({ x: 0, y: 0, z: 0 });
+      const mist = ctx.createRadialGradient(
+        center.x,
+        center.y,
+        0,
+        center.x,
+        center.y,
+        PLANE_RADIUS * center.scale * 1.15,
+      );
+      mist.addColorStop(0, skin.ground);
+      mist.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = mist;
+      planeCircle(PLANE_RADIUS * 1.12);
+      ctx.fill();
+
+      if (skin.grid === "horizon") {
+        ctx.strokeStyle = skin.gridColor;
+        ctx.lineWidth = 1;
+        planeCircle(PLANE_RADIUS);
+        ctx.stroke();
+      } else if (skin.grid === "rings") {
+        ctx.strokeStyle = skin.gridColor;
+        ctx.lineWidth = 1;
+        for (const r of [66, 120, PLANE_RADIUS]) {
+          planeCircle(r);
+          ctx.stroke();
+        }
+      } else if (skin.grid === "synth") {
+        ctx.strokeStyle = skin.gridColor;
+        ctx.lineWidth = 1;
+        for (const r of [55, 95, 135, PLANE_RADIUS]) {
+          planeCircle(r);
+          ctx.stroke();
+        }
+        for (let s = 0; s < 12; s += 1) {
+          const a = (s / 12) * Math.PI * 2;
+          const inner = project({ x: Math.cos(a) * 40, y: 0, z: Math.sin(a) * 40 });
+          const outer = project({
+            x: Math.cos(a) * PLANE_RADIUS,
+            y: 0,
+            z: Math.sin(a) * PLANE_RADIUS,
+          });
+          ctx.beginPath();
+          ctx.moveTo(inner.x, inner.y);
+          ctx.lineTo(outer.x, outer.y);
+          ctx.stroke();
+        }
+      }
+
       for (let i = 0; i < nodes.length; i += 1) projected[i] = project(nodes[i].pos);
 
-      // The horizon hint: a faint ellipse where the word plane lies, drawn FIRST so
-      // stars sit on top of it, never under it.
-      ctx.globalAlpha = 0.14;
-      ctx.strokeStyle = STAR_IDEA;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      const e1 = project({ x: PLANE_RADIUS, y: 0, z: 0 });
-      for (let a = 0; a <= 64; a += 1) {
-        const p = project({
-          x: Math.cos((a / 64) * Math.PI * 2) * PLANE_RADIUS,
-          y: 0,
-          z: Math.sin((a / 64) * Math.PI * 2) * PLANE_RADIUS,
-        });
-        if (a === 0) ctx.moveTo(e1.x, e1.y);
-        else ctx.lineTo(p.x, p.y);
-      }
-      ctx.closePath();
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-
       // Earned links: lines lying on the word/idea plane.
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = LINK_EARNED;
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = skin.link;
       for (const link of links) {
         const a = projected[link.a];
         const b = projected[link.b];
@@ -466,78 +638,164 @@ export function BrainSky({
       const order = nodes.map((_, i) => i).sort((a, b) => projected[b].depth - projected[a].depth);
 
       const hovered = hoverRef.current?.nodeIndex ?? -1;
+      type LabelJob = {
+        text: string;
+        x: number;
+        y: number;
+        size: number;
+        current: boolean;
+        hover: boolean;
+      };
+      const labels: LabelJob[] = [];
+
       for (const i of order) {
         const node = nodes[i];
         const p = projected[i];
         if (p.depth < 70) continue;
         const isHover = i === hovered;
         if (node.kind === "lesson") {
-          // Constellation strokes first, then member stars.
           const pts = node.stars.map(project);
-          ctx.lineWidth = isHover ? 1.4 : 0.9;
-          ctx.strokeStyle = LINE_CONSTELLATION;
+          // A soft halo patch behind the current (or hovered) constellation pulls the
+          // eye before any label is read.
+          if (node.current || isHover) {
+            const halo = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 46 * p.scale);
+            halo.addColorStop(
+              0,
+              node.current ? "rgba(255, 216, 138, 0.14)" : "rgba(255,255,255,0.08)",
+            );
+            halo.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = halo;
+            ctx.fillRect(p.x - 50 * p.scale, p.y - 50 * p.scale, 100 * p.scale, 100 * p.scale);
+          }
+          // Constellation strokes (skin-styled, optional glow pass), then member stars.
+          if (skin.line.dash) ctx.setLineDash(skin.line.dash);
+          if (skin.line.glow) {
+            ctx.strokeStyle = skin.line.glow;
+            ctx.lineWidth = skin.line.width + 2.5;
+            for (const [a, b] of node.edges) {
+              ctx.beginPath();
+              ctx.moveTo(pts[a].x, pts[a].y);
+              ctx.lineTo(pts[b].x, pts[b].y);
+              ctx.stroke();
+            }
+          }
+          ctx.strokeStyle = skin.line.color;
+          ctx.lineWidth = isHover ? skin.line.width + 0.7 : skin.line.width;
           for (const [a, b] of node.edges) {
             ctx.beginPath();
             ctx.moveTo(pts[a].x, pts[a].y);
             ctx.lineTo(pts[b].x, pts[b].y);
             ctx.stroke();
           }
+          ctx.setLineDash([]);
           const litCount = Math.round(node.lit * node.stars.length);
-          const pulse = node.current && !reduced ? 1 + 0.18 * Math.sin(t * 2.1) : 1;
-          pts.forEach((sp, s) => {
+          const pulse = node.current && !reduced ? 1 + 0.16 * Math.sin(t * 2.1) : 1;
+          pts.forEach((sp2, s) => {
             const lit = s < litCount || node.lit >= 1;
-            const r = (lit ? 2.6 : 2.0) * sp.scale * 2.4 * pulse;
-            const sprite = glowSprite(lit ? STAR_LIT : STAR_UNLIT, 3);
-            ctx.globalAlpha = lit ? 0.95 : 0.6;
-            ctx.drawImage(sprite, sp.x - r, sp.y - r, r * 2, r * 2);
+            const r = (lit ? 3.4 : 2.7) * sp2.scale * 2.3 * pulse * skin.bloom;
+            const sprite = glowSprite(lit ? skin.lit : skin.unlit, 3);
+            ctx.globalAlpha = lit ? 1 : 0.72;
+            ctx.drawImage(sprite, sp2.x - r, sp2.y - r, r * 2, r * 2);
           });
           ctx.globalAlpha = 1;
-          // Label near constellations that are close, current, or hovered.
-          if (isHover || node.current || p.scale > 1.35) {
-            ctx.font = `600 ${Math.min(12, 8 + p.scale * 2)}px ui-sans-serif, system-ui`;
-            ctx.textAlign = "center";
-            ctx.fillStyle = isHover || node.current ? "#fff" : LABEL_COLOR;
-            ctx.globalAlpha = isHover || node.current ? 0.95 : 0.65;
-            ctx.fillText(node.lesson.title, p.x, p.y + 26 * Math.min(1.4, p.scale));
-            ctx.globalAlpha = 1;
-          }
+          // Every constellation is labeled (catalogs are small) — queued so text
+          // always paints over stars.
+          labels.push({
+            text: node.lesson.title,
+            x: p.x,
+            y: p.y + 30 * Math.min(1.5, p.scale),
+            size: Math.min(13, 9.5 + p.scale * 2),
+            current: node.current,
+            hover: isHover,
+          });
         } else {
           const color =
             node.kind === "idea"
               ? node.idea.origin === "emergent"
                 ? STAR_EMERGENT
-                : STAR_IDEA
+                : skin.starIdea
               : node.collected
-                ? STAR_WORD
-                : STAR_WORD_FAINT;
+                ? skin.starWord
+                : skin.starWordFaint;
           const tw =
             reduced || node.kind === "idea"
               ? 1
-              : 0.82 + 0.18 * Math.sin(t * 1.3 + hash01(node.word.term) * 6.28);
-          const r = node.size * p.scale * 2.2 * tw;
+              : 0.84 + 0.16 * Math.sin(t * 1.3 + hash01(node.word.term) * 6.28);
+          const r = node.size * p.scale * 2.1 * tw * (isHover ? 1.35 : 1);
           const sprite = glowSprite(color, 3);
-          ctx.globalAlpha = node.kind === "word" && !node.collected ? 0.5 : 0.9;
+          ctx.globalAlpha = node.kind === "word" && !node.collected ? 0.5 : 0.95;
           ctx.drawImage(sprite, p.x - r, p.y - r, r * 2, r * 2);
           // Mastery halo: a thin ring around ideas the student has evidence for.
           if (node.kind === "idea" && node.mastery > 0) {
-            ctx.globalAlpha = 0.5;
-            ctx.strokeStyle = STAR_LIT;
-            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.55;
+            ctx.strokeStyle = skin.lit;
+            ctx.lineWidth = 1.2;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, r + 2.5, -Math.PI / 2, -Math.PI / 2 + node.mastery * Math.PI * 2);
+            ctx.arc(p.x, p.y, r + 3, -Math.PI / 2, -Math.PI / 2 + node.mastery * Math.PI * 2);
             ctx.stroke();
           }
           ctx.globalAlpha = 1;
         }
         if (isHover) {
           ctx.strokeStyle = "#ffffff";
-          ctx.globalAlpha = 0.85;
-          ctx.lineWidth = 1.2;
+          ctx.globalAlpha = 0.9;
+          ctx.lineWidth = 1.4;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, Math.max(7, node.size * p.scale * 2.6), 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, Math.max(9, node.size * p.scale * 2.8), 0, Math.PI * 2);
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
+      }
+
+      // Label pass: drawn last so no star ever sits on the text. Overlapping labels
+      // are nudged apart first (greedy, top-down) — colliding titles were the single
+      // worst readability problem in v4.0.
+      labels.sort((a, b) => a.y - b.y);
+      for (let i = 1; i < labels.length; i += 1) {
+        const prev = labels[i - 1];
+        const cur = labels[i];
+        ctx.font = skin.label.font.replace(/\b\d+(\.\d+)?px\b/, `${cur.size}px`);
+        const halfW =
+          (ctx.measureText(skin.label.uppercase ? cur.text.toUpperCase() : cur.text).width + 14) /
+          2;
+        ctx.font = skin.label.font.replace(/\b\d+(\.\d+)?px\b/, `${prev.size}px`);
+        const prevHalfW =
+          (ctx.measureText(skin.label.uppercase ? prev.text.toUpperCase() : prev.text).width + 14) /
+          2;
+        const overlapX = Math.abs(cur.x - prev.x) < halfW + prevHalfW;
+        const minGap = prev.size + 7;
+        if (overlapX && cur.y - prev.y < minGap) cur.y = prev.y + minGap;
+      }
+      for (const job of labels) {
+        const text = skin.label.uppercase ? job.text.toUpperCase() : job.text;
+        ctx.font = skin.label.font.replace(/\b\d+(\.\d+)?px\b/, `${job.size}px`);
+        ctx.textAlign = "center";
+        const w = ctx.measureText(text).width;
+        if (skin.label.plate) {
+          ctx.fillStyle = skin.label.plate;
+          const padX = 7;
+          const padY = 4.5;
+          const bx = job.x - w / 2 - padX;
+          const by = job.y - job.size + 1 - padY;
+          const bw = w + padX * 2;
+          const bh = job.size + padY * 2;
+          ctx.beginPath();
+          ctx.roundRect(bx, by, bw, bh, 6);
+          ctx.fill();
+        }
+        ctx.fillStyle = job.current ? skin.label.currentColor : skin.label.color;
+        ctx.globalAlpha = job.current || job.hover ? 1 : 0.85;
+        if (!skin.label.plate) {
+          // No plate: a tight dark halo keeps text readable over any star field
+          // without drawing a box.
+          ctx.shadowColor = "rgba(4, 6, 16, 0.9)";
+          ctx.shadowBlur = 4;
+          ctx.fillText(text, job.x, job.y);
+          ctx.shadowBlur = 0;
+          ctx.shadowColor = "transparent";
+        }
+        ctx.fillText(text, job.x, job.y);
+        ctx.globalAlpha = 1;
       }
     };
     raf = requestAnimationFrame(frame);
@@ -555,7 +813,7 @@ export function BrainSky({
         if (p.depth < 70) return;
         const d = Math.hypot(p.x - mx, p.y - my);
         // Lessons get a friendlier halo — a constellation is a bigger target.
-        const slack = node.kind === "lesson" ? 10 : 0;
+        const slack = node.kind === "lesson" ? 12 : 0;
         if (d < bestDist + slack && d - slack < bestDist) {
           best = i;
           bestDist = Math.max(1, d - slack);
@@ -575,9 +833,6 @@ export function BrainSky({
           : null;
         return { kind: "idea", idea: node.idea, mastery: node.mastery, lessonTitle };
       }
-      if (!node.collected && !node.word.definition) {
-        return { kind: "word", word: node.word, collected: false };
-      }
       return { kind: "word", word: node.word, collected: node.collected };
     };
 
@@ -596,6 +851,7 @@ export function BrainSky({
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       cam.current.idle = false;
+      setHintSeen(true);
       cam.current.zoom = Math.min(
         ZOOM_MAX,
         Math.max(ZOOM_MIN, cam.current.zoom * (event.deltaY > 0 ? 0.92 : 1.09)),
@@ -611,16 +867,15 @@ export function BrainSky({
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("wheel", onWheel);
     };
-    // The scene rebinds when the sky's node list changes; camera/hover live in refs.
-  }, [sky, links, backdrop, lessons]);
+    // The scene rebinds when the sky's node list or skin changes; camera/hover live in refs.
+  }, [sky, links, backdrop, lessons, skin]);
 
-  // Drag-to-orbit + click routing share pointer handlers: a press that MOVES orbits,
-  // a press that stays put is a click on whatever was picked at pointerdown.
+  // Drag-to-spin + click routing share pointer handlers: a press that MOVES spins the
+  // sky (yaw only — the globe gesture), a press that stays put is a click on whatever
+  // was picked at pointerdown.
   const dragState = useRef<{
     px: number;
-    py: number;
     yaw: number;
-    pitch: number;
     moved: number;
     downIndex: number;
   } | null>(null);
@@ -629,9 +884,7 @@ export function BrainSky({
     (event.target as HTMLCanvasElement).setPointerCapture(event.pointerId);
     dragState.current = {
       px: event.clientX,
-      py: event.clientY,
       yaw: cam.current.yaw,
-      pitch: cam.current.pitch,
       moved: 0,
       downIndex: hoverRef.current?.nodeIndex ?? -1,
     };
@@ -640,12 +893,11 @@ export function BrainSky({
     const drag = dragState.current;
     if (!drag) return;
     const dx = event.clientX - drag.px;
-    const dy = event.clientY - drag.py;
-    drag.moved = Math.max(drag.moved, Math.abs(dx) + Math.abs(dy));
+    drag.moved = Math.max(drag.moved, Math.abs(dx));
     if (drag.moved > 3) {
       cam.current.idle = false;
+      setHintSeen(true);
       cam.current.yaw = drag.yaw + dx * 0.006;
-      cam.current.pitch = Math.min(PITCH_MAX, Math.max(PITCH_MIN, drag.pitch + dy * 0.005));
     }
   };
   const onPointerUp = () => {
@@ -661,7 +913,6 @@ export function BrainSky({
 
   const reset = () => {
     cam.current.yaw = 0.5;
-    cam.current.pitch = PITCH_DEFAULT;
     cam.current.zoom = 1;
     cam.current.idle = true;
   };
@@ -686,15 +937,22 @@ export function BrainSky({
       {/* Legend, bottom-left: three words that teach the whole scene. */}
       <div className="pointer-events-none absolute bottom-2.5 left-3 flex items-center gap-3 font-mono text-overline uppercase tracking-[0.14em] text-white/45">
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: STAR_WORD }} /> words
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: skin.starWord }} /> words
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: STAR_IDEA }} /> ideas
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: skin.starIdea }} /> ideas
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: STAR_LIT }} /> lessons
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: skin.lit }} /> lessons
         </span>
       </div>
+
+      {/* First-run gesture hint, centered low; retires on the first spin or zoom. */}
+      {!hintSeen ? (
+        <div className="pointer-events-none absolute bottom-9 left-1/2 -translate-x-1/2 rounded-pill border border-white/12 bg-black/30 px-3 py-1 font-mono text-overline uppercase tracking-[0.14em] text-white/60 backdrop-blur-sm">
+          drag to spin · scroll to zoom
+        </div>
+      ) : null}
 
       <button
         type="button"
@@ -738,7 +996,9 @@ export function BrainSky({
             <>
               <div
                 className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em]"
-                style={{ color: hover.idea.origin === "emergent" ? STAR_EMERGENT : STAR_IDEA }}
+                style={{
+                  color: hover.idea.origin === "emergent" ? STAR_EMERGENT : "#9fd4ff",
+                }}
               >
                 {hover.idea.origin === "emergent" ? "Your idea" : "Idea"}
               </div>
