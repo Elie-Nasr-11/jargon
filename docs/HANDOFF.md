@@ -6,6 +6,29 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (Brain v5.2: the hierarchy pass)
+
+Status: Finished
+Summary: Owner: "readable and clean, but i dont see hierarchy. its too flat." Fixed
+in 2D (judgment call: no 3D needed). Four moves:
+(1) SIZE LADDER - courses r15 >> lessons r8 >> ideas ~4.4 > words ~2.9, with
+per-kind degree caps so a busy word can never outgrow a lesson.
+(2) HEAVY ANCHORS - course hubs flipped from thin donuts (which read LIGHTER than
+their lessons - inverted hierarchy) to filled ink-92 anchors ringed in a subject
+hue, labels ink-92 at 12.5px mono: unmistakably the apex tier.
+(3) SUBJECT TERRITORIES - one whisper-alpha radial wash per course (accent hue
+rotated 67 deg per course rank, hsla ~0.06/0.085 light/dark), sized to reach the
+course's lessons, drawn under everything. Subjects now read as regions at a glance.
+(4) TIER CUES EVERYWHERE - lesson-course trunk edges heavier than leaf twigs,
+lessons wear a background keyline (coins vs word dust), untouched lessons lifted to
+ink-45 so they never share the words' gray, words at 0.75 alpha.
+Validated at real density in both themes. Files: frontend/src/student/BrainGraph.tsx.
+Tests run: 735 OK; tsc, eslint, build clean. Server untouched.
+Remaining concerns: none blocking. Subject ring hues come from accent-hue rotation -
+if a school's brand accent lands near red, rotated hues may collide with the success
+green; revisit with a fixed categorical ramp if that ever ships.
+
+
 <<<<<<< HEAD
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5.1: theme-native graph + the label density fix)
 
