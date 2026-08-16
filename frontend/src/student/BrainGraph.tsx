@@ -9,29 +9,32 @@ import { RotateCcw } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
 import type { IdeaNode, Lesson, MyJargonWord, StudentLinkRow, VocabTerm } from "@/lib/types";
 
-// THE BRAIN, v5 — an Obsidian-style knowledge graph (owner pick, 2026-08-16, after
-// the night-sky metaphor was rejected: "use the obsidian-style one").
+// THE BRAIN, v5 — an Obsidian-style knowledge graph, native to the app's design
+// system (owner, 2026-08-16: "whatever style fits the ui of the platform properly.
+// take full control").
 //
-// A flat force-directed network on near-black, exactly the graph-view language:
-// nodes float and settle under spring/charge physics, edges are hairlines, labels
-// sit under their nodes and fade with zoom, and HOVER lights a node's neighborhood
-// while the rest of the graph dims away. Canvas 2D, zero dependencies.
+// A flat force-directed network rendered with the APP'S OWN TOKENS — the palette is
+// read from the CSS custom properties at mount and re-read when the theme flips, so
+// the graph is a light graph in light mode and a dark graph in dark mode, never a
+// hard-coded black window. Node colors speak the platform's existing progress
+// language (the lesson tree's ProgressGlyph): accent = current, success = done,
+// ink = in progress, faint ink = untouched. Canvas 2D, zero dependencies.
 //
 // The nodes are the student's real knowledge objects, the edges their real
-// relations:
-//   word — lesson       the lesson that taught the word (vocab_terms.lesson_id)
-//   idea — lesson       the lesson the idea belongs to
-//   idea — idea         links the STUDENT earned (bright); curriculum's possible
-//                       links are omitted — this graph shows what is真, not syllabus
-//   lesson — course     course hubs give each subject its own cluster, so two
-//                       subjects read as two galaxies bridged by traveled words
+// relations: word—lesson (the lesson that taught the word), idea—lesson, the
+// student's earned idea—idea links, lesson—course hubs.
 //
-// Interaction contract (unchanged from v4): hovering raises an info card pinned
-// top-right; clicking always opens something real — a lesson node opens the lesson,
-// an idea with a home lesson opens that lesson, a word opens My Jargon scrolled to
-// the term. New, from Obsidian: drag empty space to pan, scroll to zoom toward the
-// cursor, drag a NODE to tug it around (physics resumes on release), reset restores
-// the fitted view.
+// LABELS (v5.1 — the density fix, after real-catalog testing produced label soup):
+// a label is never nudged and never collides. Every candidate gets a PRIORITY
+// (hovered > neighborhood > current > course > lesson-by-degree > idea > word) and
+// a zoom gate; candidates claim screen rectangles in priority order and any label
+// whose rectangle would overlap an already-claimed one simply does not draw at this
+// zoom. Zooming in frees space and more names appear — Obsidian's exact feel.
+//
+// Interaction: hover lights the node's neighborhood while the rest dims; the info
+// card is pinned top-right; drag space pans, scroll zooms toward the cursor,
+// dragging a node tugs it (physics resumes on release), a still-click always opens
+// something real; reset refits.
 
 const REPULSION = 2600;
 const SPRING = 0.045;
@@ -39,44 +42,78 @@ const REST_LEN: Record<string, number> = {
   "word-lesson": 64,
   "idea-lesson": 78,
   "idea-idea": 112,
-  "lesson-course": 122,
+  "lesson-course": 126,
 };
 const CENTER_PULL = 0.008;
 const DAMPING = 0.86;
-const SETTLE_TICKS = 240;
-const ZOOM_MIN = 0.45;
+const SETTLE_TICKS = 260;
+const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 3;
 const PICK_RADIUS_PX = 14;
+const DIM = 0.15;
 
-// Palette: Obsidian's graph on our indigo-black, one hue per node kind. Emergent
-// ideas keep their aurora violet in every rendering of the brain.
-const BG_TOP = "#090b13";
-const BG_BOTTOM = "#0b0e1a";
-const EDGE = "rgba(150, 163, 200, 0.14)";
-const EDGE_LIT = "rgba(159, 212, 255, 0.55)";
-const EDGE_EARNED = "rgba(159, 212, 255, 0.26)";
-const NODE_WORD = "#9aa3c4";
-const NODE_WORD_TRAVELED = "#c6cdea";
-const NODE_IDEA = "#9fd4ff";
-const STAR_EMERGENT = "#c9a2ff";
-const NODE_LESSON = "#e8ecff";
-const NODE_LESSON_DONE = "#ffd88a";
-const NODE_COURSE = "#69719b";
-const NODE_CURRENT = "#ffd88a";
-const LABEL = "rgba(214, 222, 248, 0.92)";
-const DIM = 0.13;
+// Emergent ideas wear the aurora in every rendering of the brain — one violet per
+// theme, chosen for contrast against both backgrounds.
+const STAR_EMERGENT = "#9b7bf5";
+const STAR_EMERGENT_DARK = "#b49df8";
+
+type Palette = {
+  dark: boolean;
+  bg: string;
+  edge: string;
+  edgeEarned: string;
+  edgeLit: string;
+  ink92: string;
+  ink62: string;
+  ink45: string;
+  ink30: string;
+  accent: string;
+  success: string;
+  emergent: string;
+  fontSans: string;
+  fontMono: string;
+};
+
+// The graph reads the live theme from the cascade — the same custom properties every
+// other surface uses — so it can never drift from the platform's look.
+function readPalette(el: HTMLElement): Palette {
+  const cs = getComputedStyle(el);
+  const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
+  const bg = v("--background", "#ffffff");
+  // Perceived luminance of the background decides which emergent violet reads best.
+  const hex = bg.startsWith("#") ? bg : "#ffffff";
+  const n = parseInt(hex.slice(1, 7).padEnd(6, "f"), 16);
+  const lum = (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 255000;
+  const dark = lum < 0.5;
+  const accent = v("--accent-text", dark ? "#7d8ffd" : "#4f6bfd");
+  return {
+    dark,
+    bg,
+    edge: v("--ink-16", dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"),
+    edgeEarned: accent,
+    edgeLit: accent,
+    ink92: v("--ink-92", dark ? "#e6e6e6" : "#2f2f33"),
+    ink62: v("--ink-62", dark ? "#b3b3b3" : "#55555b"),
+    ink45: v("--ink-45", dark ? "#8a8a8a" : "#7c7c83"),
+    ink30: v("--ink-30", dark ? "#7c7c82" : "#a6a6ad"),
+    accent,
+    success: v("--success", "#2fbf71"),
+    emergent: dark ? STAR_EMERGENT_DARK : STAR_EMERGENT,
+    fontSans: v("--font-sans", "ui-sans-serif, system-ui, sans-serif"),
+    fontMono: v("--font-mono", "ui-monospace, monospace"),
+  };
+}
 
 type GraphNode = {
   id: string;
   kind: "word" | "idea" | "lesson" | "course";
   label: string;
-  // Physics state (world units).
   x: number;
   y: number;
   vx: number;
   vy: number;
   r: number;
-  // Payloads by kind (exactly one set).
+  degree: number;
   word?: MyJargonWord;
   idea?: IdeaNode;
   mastery?: number;
@@ -119,25 +156,31 @@ function buildGraph(input: {
   const ideaIndex = new Map<string, number>();
 
   const place = (node: GraphNode) => {
-    // Seeded scatter in a disc; physics does the real layout from here.
     const a = hash01(`${node.id}:a`) * Math.PI * 2;
-    const d = 40 + hash01(`${node.id}:d`) * 190;
+    const d = 40 + hash01(`${node.id}:d`) * 220;
     node.x = Math.cos(a) * d;
     node.y = Math.sin(a) * d;
     index.set(node.id, nodes.length);
     nodes.push(node);
   };
 
-  // Course hubs first (one per distinct course among the lessons).
   const courseTitles = new Map<string, string>();
   for (const lesson of input.lessons) {
     const key = lesson.course_id || lesson.course_title || "course";
     if (!courseTitles.has(key)) courseTitles.set(key, lesson.course_title || "Course");
   }
-  const courseCount = new Map<string, number>();
   for (const [key, title] of courseTitles) {
-    place({ id: `course:${key}`, kind: "course", label: title, x: 0, y: 0, vx: 0, vy: 0, r: 10 });
-    courseCount.set(key, 0);
+    place({
+      id: `course:${key}`,
+      kind: "course",
+      label: title,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      r: 9,
+      degree: 0,
+    });
   }
 
   for (const lesson of input.lessons) {
@@ -150,17 +193,16 @@ function buildGraph(input: {
       y: 0,
       vx: 0,
       vy: 0,
-      r: 7,
+      r: 6.5,
+      degree: 0,
       lesson,
       progress,
       current: lesson.id === input.currentLessonId,
     });
     const courseKey = lesson.course_id || lesson.course_title || "course";
     const hub = index.get(`course:${courseKey}`);
-    if (hub != null) {
+    if (hub != null)
       edges.push({ a: hub, b: index.get(`lesson:${lesson.id}`)!, kind: "lesson-course" });
-      courseCount.set(courseKey, (courseCount.get(courseKey) ?? 0) + 1);
-    }
   }
 
   for (const idea of input.ideas.slice(0, 90)) {
@@ -172,7 +214,8 @@ function buildGraph(input: {
       y: 0,
       vx: 0,
       vy: 0,
-      r: idea.origin === "emergent" ? 5.5 : 5,
+      r: idea.origin === "emergent" ? 5 : 4.5,
+      degree: 0,
       idea,
       mastery: input.mastery?.get(idea.key) ?? 0,
     });
@@ -184,7 +227,6 @@ function buildGraph(input: {
     }
   }
 
-  // Words connect to the lesson that taught them (via the published term's lesson_id).
   const termLesson = new Map<string, string>();
   for (const term of input.vocabTerms) {
     if (term.lesson_id) termLesson.set(term.term.toLowerCase(), term.lesson_id);
@@ -198,7 +240,8 @@ function buildGraph(input: {
       y: 0,
       vx: 0,
       vy: 0,
-      r: word.traveled ? 4 : 3.2,
+      r: word.traveled ? 3.6 : 3,
+      degree: 0,
       word,
     });
     const home = termLesson.get(word.term.toLowerCase());
@@ -207,22 +250,17 @@ function buildGraph(input: {
       edges.push({ a: index.get(`word:${word.term}`)!, b: homeIndex, kind: "word-lesson" });
   }
 
-  // The student's earned idea links — the bridges between clusters.
   for (const link of input.studentLinks) {
     const a = ideaIndex.get(link.from_key);
     const b = ideaIndex.get(link.to_key);
     if (a != null && b != null) edges.push({ a, b, kind: "idea-idea", earned: true });
   }
 
-  // Node size grows gently with degree, Obsidian-style.
-  const degree = new Array(nodes.length).fill(0);
   for (const e of edges) {
-    degree[e.a] += 1;
-    degree[e.b] += 1;
+    nodes[e.a].degree += 1;
+    nodes[e.b].degree += 1;
   }
-  nodes.forEach((n, i) => {
-    n.r += Math.min(5, Math.sqrt(degree[i]) * 1.15);
-  });
+  for (const n of nodes) n.r += Math.min(4.5, Math.sqrt(n.degree) * 1.05);
 
   return { nodes, edges, ideaIndex };
 }
@@ -270,7 +308,6 @@ export function BrainGraph({
       }),
     [lessons, words, vocabTerms, ideas, studentLinks, progress, currentLessonId, mastery],
   );
-  // Adjacency for the hover neighborhood (node -> neighbor node indices).
   const adjacency = useMemo(() => {
     const adj: Set<number>[] = graph.nodes.map(() => new Set<number>());
     for (const e of graph.edges) {
@@ -280,7 +317,6 @@ export function BrainGraph({
     return adj;
   }, [graph]);
 
-  // Camera (world -> screen): screen = (world - cam) * zoom + viewport center.
   const cam = useRef({ x: 0, y: 0, zoom: 1 });
   const graphRef = useRef(graph);
   graphRef.current = graph;
@@ -300,6 +336,16 @@ export function BrainGraph({
     const reduced = prefersReducedMotion();
     const { nodes, edges } = graphRef.current;
 
+    let pal = readPalette(wrap);
+    // Theme flips re-read the cascade — the graph follows the app instantly.
+    const themeWatch = new MutationObserver(() => {
+      pal = readPalette(wrap);
+    });
+    themeWatch.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme"],
+    });
+
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
       width = Math.max(1, rect.width);
@@ -317,7 +363,8 @@ export function BrainGraph({
     });
     io.observe(wrap);
 
-    // One physics tick: charge repulsion + edge springs + weak centering.
+    // One physics tick. Charge scales with node size so hubs shoulder their
+    // clusters apart instead of piling into one blob.
     const tick = (alpha: number) => {
       for (let i = 0; i < nodes.length; i += 1) {
         const a = nodes[i];
@@ -327,12 +374,12 @@ export function BrainGraph({
           let dy = a.y - b.y;
           let d2 = dx * dx + dy * dy;
           if (d2 < 1) {
-            // Coincident nodes: nudge apart deterministically.
             dx = hash01(`${a.id}:${b.id}`) - 0.5;
             dy = 0.5 - hash01(`${b.id}:${a.id}`);
             d2 = 1;
           }
-          const f = (REPULSION * alpha) / d2;
+          const charge = (a.r / 6.5) * (b.r / 6.5);
+          const f = (REPULSION * charge * alpha) / d2;
           const d = Math.sqrt(d2);
           const fx = (dx / d) * f;
           const fy = (dy / d) * f;
@@ -367,12 +414,8 @@ export function BrainGraph({
         }
       }
     };
-
-    // Settle the layout up front so the graph never opens mid-explosion; reduced
-    // motion gets the fully settled state with no visible simulation at all.
     for (let i = 0; i < SETTLE_TICKS; i += 1) tick(1 - (i / SETTLE_TICKS) * 0.6);
 
-    // Fit the settled graph into view once.
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
@@ -387,7 +430,7 @@ export function BrainGraph({
     cam.current.y = (minY + maxY) / 2;
     cam.current.zoom = Math.max(
       ZOOM_MIN,
-      Math.min(1.5, Math.min(width / (maxX - minX + 200), height / (maxY - minY + 260))),
+      Math.min(1.4, Math.min(width / (maxX - minX + 220), height / (maxY - minY + 240))),
     );
     const home = { ...cam.current };
 
@@ -399,15 +442,10 @@ export function BrainGraph({
     const frame = () => {
       raf = requestAnimationFrame(frame);
       if (!running || !visible || document.hidden) return;
-      // The live graph keeps a gentle simmer (alpha small) so tugging a node feels
-      // alive; reduced motion freezes physics after the pre-settle.
       if (!reduced) tick(0.06);
 
       ctx.clearRect(0, 0, width, height);
-      const wash = ctx.createLinearGradient(0, 0, 0, height);
-      wash.addColorStop(0, BG_TOP);
-      wash.addColorStop(1, BG_BOTTOM);
-      ctx.fillStyle = wash;
+      ctx.fillStyle = pal.bg;
       ctx.fillRect(0, 0, width, height);
 
       const zoom = cam.current.zoom;
@@ -415,14 +453,20 @@ export function BrainGraph({
       const neighbors = hovered >= 0 ? adjacency[hovered] : null;
       const focusOn = hovered >= 0;
 
-      // Edges first. On hover, only the neighborhood keeps its light.
+      // Edges. On hover, only the neighborhood keeps its light.
       for (const e of edges) {
         const a = toScreen(nodes[e.a]);
         const b = toScreen(nodes[e.b]);
         const inFocus = focusOn && (e.a === hovered || e.b === hovered);
-        ctx.strokeStyle = inFocus ? EDGE_LIT : e.earned ? EDGE_EARNED : EDGE;
-        ctx.globalAlpha = focusOn && !inFocus ? DIM : 1;
-        ctx.lineWidth = inFocus ? 1.4 : 1;
+        if (inFocus) {
+          ctx.strokeStyle = pal.edgeLit;
+          ctx.globalAlpha = 0.75;
+          ctx.lineWidth = 1.4;
+        } else {
+          ctx.strokeStyle = e.earned ? pal.edgeEarned : pal.edge;
+          ctx.globalAlpha = focusOn ? DIM : e.earned ? 0.45 : 1;
+          ctx.lineWidth = 1;
+        }
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
@@ -430,91 +474,141 @@ export function BrainGraph({
       }
       ctx.globalAlpha = 1;
 
-      // Nodes.
+      // Nodes, in the platform's progress language: accent = current, success =
+      // done, ink = touched, faint ink = untouched. Course hubs are donuts.
       for (let i = 0; i < nodes.length; i += 1) {
         const n = nodes[i];
         const p = toScreen(n);
         if (p.x < -40 || p.x > width + 40 || p.y < -40 || p.y > height + 40) continue;
         const inFocus = !focusOn || i === hovered || (neighbors?.has(i) ?? false);
-        const r = n.r * Math.sqrt(zoom) * (i === hovered ? 1.25 : 1);
-        const fill =
-          n.kind === "course"
-            ? NODE_COURSE
-            : n.kind === "lesson"
+        const r = n.r * Math.sqrt(zoom) * (i === hovered ? 1.22 : 1);
+        ctx.globalAlpha = inFocus ? 1 : DIM;
+        if (n.kind === "course") {
+          ctx.strokeStyle = pal.ink45;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          const fill =
+            n.kind === "lesson"
               ? n.current
-                ? NODE_CURRENT
+                ? pal.accent
                 : (n.progress ?? 0) >= 1
-                  ? NODE_LESSON_DONE
-                  : NODE_LESSON
+                  ? pal.success
+                  : (n.progress ?? 0) > 0
+                    ? pal.ink62
+                    : pal.ink30
               : n.kind === "idea"
                 ? n.idea?.origin === "emergent"
-                  ? STAR_EMERGENT
-                  : NODE_IDEA
-                : n.word?.traveled
-                  ? NODE_WORD_TRAVELED
-                  : NODE_WORD;
-        ctx.globalAlpha = inFocus ? 1 : DIM;
-        ctx.fillStyle = fill;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fill();
-        // The current lesson wears a quiet ring, always.
-        if (n.kind === "lesson" && n.current) {
-          ctx.strokeStyle = NODE_CURRENT;
-          ctx.lineWidth = 1.4;
+                  ? pal.emergent
+                  : pal.accent
+                : pal.ink30;
+          ctx.fillStyle = fill;
+          if (n.kind === "idea" && n.idea?.origin !== "emergent") ctx.globalAlpha *= 0.8;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, r + 3.5, 0, Math.PI * 2);
-          ctx.stroke();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = inFocus ? 1 : DIM;
+          if (n.kind === "lesson" && n.current) {
+            ctx.strokeStyle = pal.accent;
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r + 3.5, 0, Math.PI * 2);
+            ctx.stroke();
+          }
         }
         ctx.globalAlpha = 1;
       }
 
-      // Labels: under the node, alpha by zoom + kind (lessons/courses first to
-      // arrive, words need a closer zoom) — the Obsidian fade. The always-on labels
-      // (lessons/courses) get a greedy vertical nudge so titles never overlap.
-      const anchorY = new Map<number, number>();
-      const placed: { x: number; y: number; halfW: number; size: number }[] = [];
+      // LABELS — priority + occupancy grid. Candidates claim screen rectangles in
+      // priority order; a label that would overlap an already-claimed rectangle
+      // does not draw at this zoom. No nudging, no soup.
+      type Job = {
+        text: string;
+        x: number;
+        y: number;
+        size: number;
+        weight: number;
+        mono: boolean;
+        color: string;
+        priority: number;
+        alpha: number;
+      };
+      const jobs: Job[] = [];
       for (let i = 0; i < nodes.length; i += 1) {
         const n = nodes[i];
-        if (n.kind !== "lesson" && n.kind !== "course") continue;
         const p = toScreen(n);
-        let y = p.y + n.r * Math.sqrt(zoom) + 13;
-        ctx.font = `500 11.5px ui-sans-serif, system-ui, sans-serif`;
-        const halfW = ctx.measureText(n.label).width / 2 + 6;
-        for (const other of placed) {
-          const overlapX = Math.abs(p.x - other.x) < halfW + other.halfW;
-          if (overlapX && Math.abs(y - other.y) < other.size + 6) y = other.y + other.size + 7;
-        }
-        placed.push({ x: p.x, y, halfW, size: 12 });
-        anchorY.set(i, y);
+        if (p.x < -80 || p.x > width + 80 || p.y < -40 || p.y > height + 40) continue;
+        const isHover = i === hovered;
+        const isNeighbor = focusOn && (neighbors?.has(i) ?? false);
+        // A dimmed graph shows only the neighborhood's names.
+        if (focusOn && !isHover && !isNeighbor) continue;
+        // Zoom gates by kind — course hubs and the current lesson always qualify.
+        const gate =
+          n.kind === "course" || (n.kind === "lesson" && n.current)
+            ? 1
+            : n.kind === "lesson"
+              ? Math.min(1, Math.max(0, (zoom - 0.7) * 2.4))
+              : n.kind === "idea"
+                ? Math.min(1, Math.max(0, (zoom - 1.05) * 2.2))
+                : Math.min(1, Math.max(0, (zoom - 1.4) * 2.2));
+        if (!isHover && !isNeighbor && gate <= 0.05) continue;
+        const priority = isHover
+          ? 6
+          : isNeighbor
+            ? 5
+            : n.kind === "lesson" && n.current
+              ? 4
+              : n.kind === "course"
+                ? 3
+                : n.kind === "lesson"
+                  ? 2 + Math.min(0.9, n.degree / 40)
+                  : n.kind === "idea"
+                    ? 1
+                    : 0.5;
+        jobs.push({
+          text: n.label,
+          x: p.x,
+          y: p.y + n.r * Math.sqrt(zoom) + 12.5,
+          size: n.kind === "lesson" ? 11.5 : 10.5,
+          weight: n.kind === "lesson" && (n.current || isHover) ? 600 : 500,
+          mono: n.kind === "course",
+          color:
+            n.kind === "course"
+              ? pal.ink45
+              : n.kind === "lesson"
+                ? n.current
+                  ? pal.accent
+                  : pal.ink62
+                : pal.ink45,
+          priority,
+          alpha: isHover || isNeighbor ? 1 : Math.min(0.95, gate),
+        });
       }
-      for (let i = 0; i < nodes.length; i += 1) {
-        const n = nodes[i];
-        const p = toScreen(n);
-        if (p.x < -60 || p.x > width + 60 || p.y < -40 || p.y > height + 40) continue;
-        const base =
-          n.kind === "course" || n.kind === "lesson"
-            ? Math.min(1, zoom * 1.2)
-            : n.kind === "idea"
-              ? Math.max(0, zoom - 0.95) * 1.7
-              : Math.max(0, zoom - 1.25) * 1.7;
-        const isHover = i === hoverRef.current;
-        const inFocus = !focusOn || isHover || (neighbors?.has(i) ?? false);
-        const neighborBoost = focusOn && inFocus ? Math.max(base, 0.85) : base;
-        const alpha = isHover ? 1 : Math.min(inFocus ? 0.92 : DIM, neighborBoost);
-        if (alpha <= 0.02) continue;
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = LABEL;
-        ctx.font = `${n.kind === "course" ? 600 : 500} ${
-          n.kind === "course" ? 12 : n.kind === "lesson" ? 11.5 : 10.5
-        }px ui-sans-serif, system-ui, sans-serif`;
+      jobs.sort((a, b) => b.priority - a.priority);
+      const claimed: { x1: number; y1: number; x2: number; y2: number }[] = [];
+      for (const job of jobs) {
+        const text = job.mono ? job.text.toUpperCase() : job.text;
+        ctx.font = `${job.weight} ${job.size}px ${job.mono ? pal.fontMono : pal.fontSans}`;
+        const w = ctx.measureText(text).width;
+        const rect = {
+          x1: job.x - w / 2 - 4,
+          y1: job.y - job.size - 2,
+          x2: job.x + w / 2 + 4,
+          y2: job.y + 4,
+        };
+        if (
+          claimed.some((c) => rect.x1 < c.x2 && rect.x2 > c.x1 && rect.y1 < c.y2 && rect.y2 > c.y1)
+        )
+          continue;
+        claimed.push(rect);
         ctx.textAlign = "center";
-        ctx.shadowColor = "rgba(5, 7, 14, 0.95)";
-        ctx.shadowBlur = 3;
-        ctx.fillText(n.label, p.x, anchorY.get(i) ?? p.y + n.r * Math.sqrt(zoom) + 13);
-        ctx.shadowBlur = 0;
+        ctx.globalAlpha = job.alpha;
+        ctx.fillStyle = job.color;
+        ctx.fillText(text, job.x, job.y);
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = 1;
     };
     raf = requestAnimationFrame(frame);
 
@@ -565,7 +659,6 @@ export function BrainGraph({
         return { kind: "course", title: n.label, lessonCount: adjacency[index].size };
       return null;
     };
-    hoverFor.current = toHover;
 
     const onMove = (event: PointerEvent) => {
       if (dragNode.current || panState.current) return;
@@ -592,7 +685,6 @@ export function BrainGraph({
         ZOOM_MAX,
         Math.max(ZOOM_MIN, cam.current.zoom * (event.deltaY > 0 ? 0.9 : 1.11)),
       );
-      // Keep the point under the cursor fixed — zoom toward the pointer.
       cam.current.x = before.x - (mx - width / 2) / cam.current.zoom;
       cam.current.y = before.y - (my - height / 2) / cam.current.zoom;
     };
@@ -607,6 +699,7 @@ export function BrainGraph({
     return () => {
       running = false;
       cancelAnimationFrame(raf);
+      themeWatch.disconnect();
       ro.disconnect();
       io.disconnect();
       canvas.removeEventListener("pointermove", onMove);
@@ -615,7 +708,6 @@ export function BrainGraph({
     // Physics state and camera live in refs; the scene rebinds when the graph changes.
   }, [graph, adjacency, lessons]);
 
-  // Pointer gestures: drag a node to tug it, drag space to pan, still-click to open.
   const dragNode = useRef<{ index: number; moved: number } | null>(null);
   const panState = useRef<{ px: number; py: number; cx: number; cy: number; moved: number } | null>(
     null,
@@ -625,7 +717,6 @@ export function BrainGraph({
     x: 0,
     y: 0,
   }));
-  const hoverFor = useRef<(index: number) => GraphHover | null>(() => null);
   const resetRef = useRef<() => void>(() => {});
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -679,7 +770,7 @@ export function BrainGraph({
   return (
     <div
       ref={wrapRef}
-      className="relative h-[420px] w-full overflow-hidden rounded-card"
+      className="relative h-[420px] w-full overflow-hidden rounded-card border border-border bg-background"
       data-testid="brain-graph"
     >
       <canvas
@@ -696,60 +787,67 @@ export function BrainGraph({
         }}
       />
 
-      {/* Legend, bottom-left — the node hues. */}
-      <div className="pointer-events-none absolute bottom-2.5 left-3 flex items-center gap-3 font-mono text-overline uppercase tracking-[0.14em] text-white/45">
+      {/* Legend, bottom-left — the platform's progress language, in its own tokens. */}
+      <div className="pointer-events-none absolute bottom-2.5 left-3 flex items-center gap-3 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: NODE_WORD_TRAVELED }} />{" "}
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--ink-30)" }} />{" "}
           words
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: NODE_IDEA }} /> ideas
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--accent-text)" }} />{" "}
+          ideas
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: NODE_LESSON_DONE }} />{" "}
-          lessons
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--success)" }} />{" "}
+          done
         </span>
       </div>
 
       {!hintSeen ? (
-        <div className="pointer-events-none absolute bottom-9 left-1/2 -translate-x-1/2 rounded-pill border border-white/12 bg-black/30 px-3 py-1 font-mono text-overline uppercase tracking-[0.14em] text-white/60 backdrop-blur-sm">
-          drag to pan · scroll to zoom · grab a node
+        <div className="pointer-events-none absolute bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-pill border border-border bg-depth-card/85 px-3 py-1 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground backdrop-blur-sm">
+          drag · scroll · grab a node
         </div>
       ) : null}
 
       <button
         type="button"
         onClick={() => resetRef.current()}
-        className="absolute bottom-2 right-2.5 flex items-center gap-1.5 rounded-pill border border-white/15 bg-white/10 px-2.5 py-1 font-mono text-overline uppercase tracking-[0.12em] text-white/70 backdrop-blur transition-colors hover:bg-white/20 hover:text-white"
+        className="absolute bottom-2 right-2.5 flex items-center gap-1.5 rounded-pill border border-border bg-depth-card/85 px-2.5 py-1 font-mono text-overline uppercase tracking-[0.12em] text-muted-foreground backdrop-blur transition-colors hover:text-foreground"
         aria-label="Reset the graph view"
       >
         <RotateCcw className="h-3 w-3" strokeWidth={1.8} /> reset
       </button>
 
-      {/* The info card: pinned top-right, content swaps per hovered node. */}
+      {/* The info card: pinned top-right, themed like every other card in the app. */}
       {hover ? (
         <div
-          className="pointer-events-none absolute right-2.5 top-2.5 w-[240px] rounded-card border border-white/15 bg-[#0b1026]/92 p-3 shadow-card backdrop-blur-sm"
+          className="pointer-events-none absolute right-2.5 top-2.5 w-[240px] rounded-card border border-border bg-depth-card/95 p-3 shadow-card backdrop-blur-sm"
           role="status"
         >
           {hover.kind === "lesson" ? (
             <>
-              <div className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em] text-[#ffd88a]">
+              <div
+                className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em]"
+                style={{ color: "var(--accent-text)" }}
+              >
                 {hover.current ? "Current lesson" : "Lesson"}
               </div>
-              <div className="text-body font-semibold text-white">{hover.lesson.title}</div>
+              <div className="text-body font-semibold text-foreground">{hover.lesson.title}</div>
               {hover.lesson.unit_title || hover.lesson.course_title ? (
-                <div className="mt-0.5 text-meta text-white/60">
+                <div className="mt-0.5 text-meta text-muted-foreground">
                   {[hover.lesson.unit_title, hover.lesson.course_title].filter(Boolean).join(" · ")}
                 </div>
               ) : null}
-              <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/12">
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full"
-                  style={{ width: `${Math.round(hover.progress * 100)}%`, background: "#ffd88a" }}
+                  style={{
+                    width: `${Math.round(hover.progress * 100)}%`,
+                    background: hover.progress >= 1 ? "var(--success)" : "var(--accent-text)",
+                  }}
                 />
               </div>
-              <div className="mt-1.5 text-meta text-white/70">
+              <div className="mt-1.5 text-meta text-muted-foreground">
                 {hover.progress >= 1
                   ? "Complete."
                   : `${Math.round(hover.progress * 100)}% done · click to open`}
@@ -759,17 +857,19 @@ export function BrainGraph({
             <>
               <div
                 className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em]"
-                style={{ color: hover.idea.origin === "emergent" ? STAR_EMERGENT : NODE_IDEA }}
+                style={{
+                  color: hover.idea.origin === "emergent" ? STAR_EMERGENT : "var(--accent-text)",
+                }}
               >
                 {hover.idea.origin === "emergent" ? "Your idea" : "Idea"}
               </div>
-              <div className="text-body font-semibold text-white">{hover.idea.title}</div>
+              <div className="text-body font-semibold text-foreground">{hover.idea.title}</div>
               {hover.idea.one_liner ? (
-                <div className="mt-0.5 text-meta leading-snug text-white/70">
+                <div className="mt-0.5 text-meta leading-snug text-muted-foreground">
                   {hover.idea.one_liner}
                 </div>
               ) : null}
-              <div className="mt-1.5 text-meta text-white/60">
+              <div className="mt-1.5 text-meta text-muted-foreground">
                 {hover.mastery > 0
                   ? `Mastery ${Math.round(hover.mastery * 100)}%`
                   : "Not practiced yet"}
@@ -778,16 +878,16 @@ export function BrainGraph({
             </>
           ) : hover.kind === "word" ? (
             <>
-              <div className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em] text-white/60">
+              <div className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
                 Collected word
               </div>
-              <div className="text-body font-semibold text-white">{hover.word.term}</div>
+              <div className="text-body font-semibold text-foreground">{hover.word.term}</div>
               {hover.word.definition ? (
-                <div className="mt-0.5 text-meta leading-snug text-white/70">
+                <div className="mt-0.5 text-meta leading-snug text-muted-foreground">
                   {hover.word.definition}
                 </div>
               ) : null}
-              <div className="mt-1.5 text-meta text-white/60">
+              <div className="mt-1.5 text-meta text-muted-foreground">
                 {hover.word.subject || "—"}
                 {hover.word.traveled ? " · seen in 2+ subjects" : ""} · click to find it in My
                 Jargon
@@ -795,11 +895,11 @@ export function BrainGraph({
             </>
           ) : (
             <>
-              <div className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em] text-white/60">
+              <div className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
                 Course
               </div>
-              <div className="text-body font-semibold text-white">{hover.title}</div>
-              <div className="mt-0.5 text-meta text-white/60">
+              <div className="text-body font-semibold text-foreground">{hover.title}</div>
+              <div className="mt-0.5 text-meta text-muted-foreground">
                 {hover.lessonCount} connection{hover.lessonCount === 1 ? "" : "s"}
               </div>
             </>

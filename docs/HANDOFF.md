@@ -6,6 +6,36 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+<<<<<<< HEAD
+## Claude -> Codex / Human - 2026-08-16 (Brain v5.1: theme-native graph + the label density fix)
+
+Status: Finished
+Summary: Owner review of v5 against the REAL catalog exposed two failures: label soup
+(every lesson labeled at rest -> overlapping walls of text at ~20 lessons) and a
+hard-coded near-black panel that ignored the design system. v5.1 fixes both.
+THEME-NATIVE: the palette is read from the live CSS custom properties (--background,
+--ink-*, --accent-text, --success, --font-sans/mono) at mount and re-read on theme
+flips (MutationObserver on documentElement), so the graph is a light graph in light
+mode and a dark graph in dark mode. Node colors now speak the lesson tree's existing
+ProgressGlyph language: accent = current, success = done, ink = in progress, faint
+ink = untouched; course hubs are ink donuts with mono-overline labels; DOM overlays
+(hover card, legend, hint, reset) use themed classes.
+LABEL PLACEMENT: a label is never nudged and never collides. Candidates carry a
+priority (hovered > neighborhood > current > course > lesson-by-degree > idea >
+word) and a zoom gate (hubs + current always; lessons from ~0.7x; ideas ~1.05x;
+words ~1.4x); they claim screen rectangles in priority order and any label whose
+rect would overlap simply does not draw at that zoom. Hover shows only the
+neighborhood's names. Physics: charge now scales with node size so course hubs
+shoulder their clusters apart. Validated at real density (21 lessons / 4 courses /
+~45 words / ~25 ideas in the harness) in BOTH themes, rest + zoom + hover.
+Files changed: frontend/src/student/BrainGraph.tsx.
+Tests run: 735 OK; tsc, eslint, build clean. Server untouched.
+Remaining concerns: none blocking. A hub label can still cross an unrelated node's
+circle (label-vs-node, not label-vs-label) — cosmetic, Obsidian shares it.
+
+
+=======
+>>>>>>> origin/main
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5: the Obsidian-style knowledge graph)
 
 Status: Finished
