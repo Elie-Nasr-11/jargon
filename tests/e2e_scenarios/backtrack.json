@@ -1,5 +1,5 @@
 {
-  "comment": "Flow v3 P3: navigate back to a completed step (revisit — nothing grades or advances there), then resume to the frontier. Assumes a fresh session on itf-f-ch1-l1 (step 1 is explanation-mode; step ids follow the Book F slug scheme).",
+  "comment": "Flow v3 P3 + Pillar 5 live validation (2026-08-16): navigate back to a completed step (revisit — nothing grades or advances there), then resume to the frontier. The two leading continue controls exercise the LEGACY continue path (the current client no longer sends it; the server keeps parsing it for old tabs) and carry NO advance expectations on purpose: under R22i a continue on an unpresented step PRESENTS it instead of advancing, and whether 'hi!' stamps presentation depends on the router's verdict — but after two continues step 1 is completed on every branch, which is all the navigate below needs. Deterministic advance mechanics are asserted in continue_gate.json instead.",
   "lesson_id": "itf-f-ch1-l1",
   "steps": [
     {
@@ -14,9 +14,13 @@
       "send": {
         "control": "continue"
       },
-      "expect": {
-        "advanced": true
-      }
+      "expect": {}
+    },
+    {
+      "send": {
+        "control": "continue"
+      },
+      "expect": {}
     },
     {
       "send": {
