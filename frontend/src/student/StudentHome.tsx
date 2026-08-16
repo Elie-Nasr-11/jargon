@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { ArrowRight, BookOpen, Brain, GraduationCap, Loader2, Play } from "lucide-react";
-import { BrainSky } from "@/student/BrainSky";
+import { BrainGraph } from "@/student/BrainGraph";
 import {
   fetchIdeaMastery,
   fetchCurriculumLinks,
@@ -618,10 +618,10 @@ export function StudentHome({
           <MemoryCard
             onAfterReset={() => setRecaps([])}
             map={() => (
-              <BrainSky
+              <BrainGraph
                 lessons={lessons}
                 words={jargonWords ?? []}
-                vocabTermsNotCollected={vocabTerms.map((t) => t.term)}
+                vocabTerms={vocabTerms}
                 ideas={ideas}
                 studentLinks={studentLinks}
                 progress={progress}

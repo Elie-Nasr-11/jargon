@@ -6,6 +6,33 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (Brain v5: the Obsidian-style knowledge graph)
+
+Status: Finished
+Summary: The night-sky metaphor is retired (owner: "not nearly what i had in mind …
+use the obsidian-style one"). The brain is now BrainGraph.tsx — a flat force-directed
+knowledge graph in Obsidian's graph-view language: canvas 2D, zero deps, charge +
+spring + centering physics (deterministic seeded scatter, pre-settled 240 ticks so it
+never opens mid-explosion, gentle simmer after; reduced motion freezes physics).
+Nodes = course hubs, lessons (gold ring on current, gold fill when complete), ideas
+(aurora violet when emergent, sized up by degree), collected words. Edges = REAL
+relations only: word-lesson (vocab_terms.lesson_id), idea-lesson, earned idea-idea
+student links, lesson-course. Hover lights the node's neighborhood (neighbors keep
+their labels regardless of zoom) while the rest dims to 0.13 — the signature Obsidian
+effect — with the info card pinned top-right as before. Labels: lessons/courses
+always on with greedy de-collision; ideas then words fade in with zoom. Gestures:
+drag space pans, scroll zooms toward the cursor, dragging a NODE tugs it (physics
+resumes on release), still-click opens (lesson / idea's lesson / My Jargon scroll),
+reset restores the fitted view; first-run hint chip names the gestures.
+BrainSky.tsx (and its three style-reference skins) deleted; test pins migrated.
+Files changed: frontend/src/student/BrainGraph.tsx (new), BrainSky.tsx (deleted),
+StudentHome.tsx (rewired, passes vocabTerms for word-lesson edges),
+tests/{test_r36_home_learn_polish,test_learning_framework,test_r33b_tester_fixes}.py.
+Tests run: 735 OK; tsc, eslint, build clean. Server untouched.
+Remaining concerns: none blocking. Ideas for later: curriculum links as faint dashed
+edges behind earned ones; degree-weighted label priority at far zoom.
+
+
 ## Claude -> Codex / Human - 2026-08-16 (R36: send resilience, sidebar truth, warm tabs, the night sky)
 
 Status: Finished
