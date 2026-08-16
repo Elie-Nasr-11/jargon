@@ -11,8 +11,11 @@ actions; sends read the register at the owner instead of taking a mode parameter
 flow core is exported and RUNS under test — gate monotonicity, acknowledge doors,
 complete-iff-done, the ceiling mapping, per-rung directive reachability witnesses,
 precedence/purity fuzz (`docs/PLATFORM.md` §12.5, `tests/flow_core.test.ts`).
-Pillars 3 and 5 queued; 3's rewrite scope is re-decided now that the ladder is
-executable (DECISIONS 2026-08-16 later).
+Pillar 5 shipped the same day: continue_offer retired end-to-end (no renderer
+since R31b; typed readiness is the advance verb) and control turns ride the live
+register (`docs/PLATFORM.md` §12.6). Of the five pillars only 3's physical
+ladder-to-table rewrite remains, deliberately parked — the executable witnesses
+already provide its enumerability (DECISIONS 2026-08-16 later).
 
 (Refreshed 2026-08-15.) **The flow rebuild is underway — flow is now a recorded object.**
 Pillar 1 of five: every mentor turn writes a `flow` event log (register shifts with their

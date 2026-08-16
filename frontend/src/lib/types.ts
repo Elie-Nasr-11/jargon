@@ -1228,18 +1228,18 @@ export type TypedChatEnvelope = {
   // R30: figures this reply referenced with [[figure:id]], resolved server-side from the
   // lesson's teacher-approved set. Rendered inline where the marker sits.
   figures?: LessonFigure[];
-  // Flow v3 (all optional — old stored envelopes replay fine): the Continue pill offer for
-  // unacknowledged content steps, and the turn router's verdict (telemetry/hinting).
-  continue_offer?: { label: string } | null;
-  // Phase A (brain-first): mode hand-off pill — [Practice this idea] / [Talk it through]
-  // rendered next to Continue; only the latest offer is live.
+  // Flow v3 (all optional — old stored envelopes replay fine): the turn router's
+  // verdict (telemetry/hinting). Pillar 5: continue_offer left the wire — the button
+  // went in R31b and nothing rendered the offer since.
+  // Phase A (brain-first): mode hand-off pill — [Practice this idea] / [Talk it through];
+  // only the latest offer is live.
   // R31e: "lesson" joined the set — the pill that returns a student from Discuss or
   // Practice to the lesson spine, which is the only register that can advance a step.
   mode_offer?: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string } | null;
   turn_kind?: string;
   router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for this student. Live-turn only
-  // (never replayed on reload, like continue_offer).
+  // (never replayed on reload).
   artifact_offer?: { label: string; kind: "html_sim" | "deck"; activity_id: string } | null;
   // Flow v3 backtracking: non-null while revisiting a completed step ("revisit") or on
   // the turn that returned to the frontier ("resume"); null on normal turns.

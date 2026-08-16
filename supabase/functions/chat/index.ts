@@ -451,9 +451,12 @@ type Envelope = {
   }[];
   idea_events?: { key: string; title: string; one_liner: string; subject: string }[];
   // Flow v3 (all optional — old clients ignore them, old stored payloads replay fine):
-  // the Continue pill offer for unacknowledged content steps, the router's verdict for
-  // this turn, and the router-vs-grader disagreement flag (tuning telemetry).
-  continue_offer?: { label: string } | null;
+  // the router's verdict for this turn and the router-vs-grader disagreement flag
+  // (tuning telemetry). Pillar 5: continue_offer left the wire — R31b removed the
+  // Continue button, the surface never rendered the offer again, and a contract with
+  // no consumer is exactly what this rebuild retires. Old stored payloads keep the
+  // key at rest; makeEnvelope simply no longer copies it. The `continue` CONTROL is
+  // still parsed (an already-open tab from before R31b may send one).
   // v6: what this lesson currently offers, for the student chatbox's inline pills. Computed from
   // what the turn already knows — no extra queries. Optional so stored envelopes from before v6
   // replay unchanged; the client hides a pill it has no signal for rather than guessing.
@@ -461,11 +464,11 @@ type Envelope = {
   turn_kind?: string;
   router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for THIS student (never
-  // auto-build). Same tri-state contract as continue_offer.
+  // auto-build). Tri-state: a value offers, null clears, absent leaves client state.
   artifact_offer?: { label: string; kind: "html_sim" | "deck"; activity_id: string } | null;
   // Phase A (brain-first): a mode hand-off pill at a natural beat — [Practice this idea]
-  // / [Talk it through] rendered as chrome next to Continue, replacing action sentences
-  // buried in prose. Same tri-state contract as continue_offer; only the latest is live.
+  // / [Talk it through] rendered as chrome, replacing action sentences buried in
+  // prose. Same tri-state contract as artifact_offer; only the latest is live.
   // R31e: "lesson" joined the set so a student stranded in Discuss/Practice has a
   // ONE-TAP way back to the spine. Discuss and Practice cannot advance a lesson by
   // design (applyModeCeiling); without this pill the only exit was the mode picker,
@@ -763,15 +766,10 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     link_events: Array.isArray(partial.link_events) ? partial.link_events : undefined,
     idea_events: Array.isArray(partial.idea_events) ? partial.idea_events : undefined,
     // Flow v3 passthrough (shape-tolerant), so a dedup REPLAY of a stored envelope keeps
-    // its Continue offer and navigation frame. Tri-state matters: absent stays absent —
-    // a held/error envelope must not read as "navigation cleared" on the client.
-    continue_offer:
-      partial.continue_offer &&
-      typeof (partial.continue_offer as { label?: unknown }).label === "string"
-        ? { label: (partial.continue_offer as { label: string }).label }
-        : partial.continue_offer === null
-          ? null
-          : undefined,
+    // its navigation frame. Tri-state matters: absent stays absent — a held/error
+    // envelope must not read as "navigation cleared" on the client. (Pillar 5:
+    // continue_offer is no longer copied — stored payloads keep the key at rest, the
+    // wire and the client dropped it with the button.)
     turn_kind:
       typeof partial.turn_kind === "string" ? partial.turn_kind : undefined,
     router_disagreement:
@@ -7646,17 +7644,11 @@ async function handleTypedRequest(
       resources: attachedResources.length > 0,
     };
 
-    // Flow v3: the Continue pill renders whenever a content step is presented but not yet
-    // acknowledged — the deterministic escape hatch that replaces "any message advances".
-    // Suppressed during a revisit (the Resume chip is the exit there).
-    envelope.continue_offer =
-      requirements.acknowledge &&
-      !finalState.acknowledged_at &&
-      Boolean(finalState.presented_at) &&
-      !advancing &&
-      !inRevisit
-        ? { label: "Continue" }
-        : null;
+    // Pillar 5: continue_offer is no longer emitted. R31b removed the Continue button
+    // and advancing became a conversational beat (typed readiness — CONTINUE_SIGNAL_RE
+    // / CONTINUE_PHRASE_RE — presses the invisible button); the offer field spent two
+    // rounds as a wire contract nothing rendered. The `continue` CONTROL below is still
+    // parsed for any tab open since before R31b.
     envelope.turn_kind = routedKind ?? undefined;
     if (routerDisagreement) envelope.router_disagreement = true;
     // Phase A: the mode hand-off pill rides only a turn that CLOSED a beat — an advancing

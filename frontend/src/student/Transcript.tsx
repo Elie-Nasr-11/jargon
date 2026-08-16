@@ -1304,12 +1304,12 @@ export function Transcript({
                   ) : null}
                   {/* R31b (owner): the Continue BUTTON IS GONE. Advancing is always a
                       conversational beat now — the mentor ends a step by asking something
-                      worth answering, and the student's reply moves the lesson on (a typed
-                      yes/ok/sure/next is recognised server-side by CONTINUE_SIGNAL_RE, and a
-                      real answer satisfies the step's gate). envelope.continue_offer is still
-                      sent and still persisted, so nothing in the turn loop changed shape and
-                      an older transcript replays fine; the surface simply never renders a
-                      button for it. */}
+                      worth answering, and the student's reply moves the lesson on (typed
+                      readiness is recognised server-side by CONTINUE_SIGNAL_RE /
+                      CONTINUE_PHRASE_RE, and a real answer satisfies the step's gate).
+                      Pillar 5 finished the retirement: continue_offer left the wire and
+                      the transcript model entirely — a contract nothing renders is a
+                      contract we don't keep. */}
                   {/* P8: the consent-first live-artifact offer rides the message that made it,
                       live only while that message is the latest (like the Continue pill). The
                       tap starts a 30-90s build OUTSIDE the turn loop — see buildArtifact. */}

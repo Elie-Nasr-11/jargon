@@ -67,10 +67,6 @@ export type Msg =
       resources?: LessonChatResource[];
       // R30: figures this reply showed, resolved from the lesson's approved set.
       figures?: LessonFigure[];
-      // Flow v3: this message offered the Continue pill (content step awaiting an
-      // explicit continue). Only the latest bot message's offer renders live; since
-      // chat-flow Phase 1 it IS restored from the persisted envelope on reload.
-      continueOffer?: { label: string };
       modeOffer?: ModeOffer;
       // P8: this message offered a live mentor-built activity. Live-turn only —
       // deliberately NOT replayed from history (artifact-live enforces once-per-step).
@@ -202,17 +198,11 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       // printed the raw marker at the student — seen live 2026-08-13.
       figures: Array.isArray(payload.figures) ? (payload.figures as LessonFigure[]) : undefined,
       turnMode: typeof payload.turn_mode === "string" ? payload.turn_mode : undefined,
-      // Chat-flow Phase 1: restore the Continue offer from the persisted envelope. The
-      // transcript renders it only on the LATEST bot message, so an offer that was already
-      // accepted (a later turn exists) stays retired — but a student who reloads mid-content
-      // step gets their button back instead of a soft-lock (the prompt forbids "type next").
-      // artifact_offer stays live-turn-only by design (artifact-live enforces once-per-step).
-      continueOffer:
-        payload.continue_offer &&
-        typeof payload.continue_offer === "object" &&
-        typeof (payload.continue_offer as { label?: unknown }).label === "string"
-          ? { label: (payload.continue_offer as { label: string }).label }
-          : undefined,
+      // Pillar 5: continueOffer is no longer restored — the Continue button left in
+      // R31b and the surface never rendered the offer again; typed readiness is the
+      // advance verb now, so a reload cannot soft-lock. (Old payloads keep the key at
+      // rest; it simply maps to nothing.) artifact_offer stays live-turn-only by
+      // design (artifact-live enforces once-per-step).
       // Persisted envelope payloads carry the arc; older turns simply don't have one.
       lessonArc:
         payload.lesson_arc && typeof payload.lesson_arc === "object"
@@ -274,9 +264,6 @@ export function envelopeMessage(envelope: TypedChatEnvelope, turnMode?: string):
     resources: envelope.resources?.length ? envelope.resources : undefined,
     // R30: figures this reply showed, rendered inline where its [[figure:id]] marker sits.
     figures: envelope.figures?.length ? envelope.figures : undefined,
-    // Flow v3: the Continue pill rides the message that offered it, so (like retired
-    // quiz choices) it stays anchored to its turn and only the LATEST offer is live.
-    continueOffer: envelope.continue_offer ?? undefined,
     modeOffer: envelope.mode_offer ?? undefined,
     artifactOffer: envelope.artifact_offer ?? undefined,
     turnMode,

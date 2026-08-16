@@ -2,7 +2,7 @@
 """Scripted conversational E2E for the chat edge function (Flow v3+).
 
 Drives POST /functions/v1/chat through YAML-ish JSON scenarios and asserts ONLY
-deterministic envelope surfaces (current_activity_id, continue_offer, turn_kind,
+deterministic envelope surfaces (current_activity_id, turn_kind,
 navigation) — never reply prose, which is nondeterministic at conversation temp.
 
 Usage:
@@ -16,8 +16,8 @@ Scenario file shape (JSON; kept trivially hand-editable):
       "lesson_id": "itf-f-ch1-l1",
       "steps": [
         {"send": {"text": "hello there"},
-         "expect": {"advanced": false, "continue_offer": true}},
-        {"send": {"control": "continue"},
+         "expect": {"advanced": false}},
+        {"send": {"text": "yes, let's keep going"},
          "expect": {"advanced": true}},
         {"send": {"text": "why is that true?"},
          "expect": {"advanced": false, "turn_kind": "question"}}
@@ -25,7 +25,7 @@ Scenario file shape (JSON; kept trivially hand-editable):
     }
 
 Each step's `expect` supports: advanced (bool — did current_activity_id change from the
-previous turn), continue_offer (bool — pill offered), turn_kind (exact string),
+previous turn), turn_kind (exact string),
 navigation_mode ("revisit" | "resume" | null — the envelope's navigation frame), and
 completed (bool — session complete). Paced to respect the 30-turns/60s session limit.
 
@@ -111,11 +111,6 @@ def main() -> int:
         if "advanced" in expect:
             moved = previous_activity is not None and current != previous_activity
             checks.append((f"advanced={expect['advanced']}", moved == expect["advanced"]))
-        if "continue_offer" in expect:
-            offered = bool(envelope.get("continue_offer"))
-            checks.append(
-                (f"continue_offer={expect['continue_offer']}", offered == expect["continue_offer"])
-            )
         if "turn_kind" in expect:
             checks.append(
                 (f"turn_kind={expect['turn_kind']}", envelope.get("turn_kind") == expect["turn_kind"])

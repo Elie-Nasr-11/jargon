@@ -86,9 +86,10 @@ class SendsReadTheRegisterAtTheOwner(unittest.TestCase):
         ):
             with self.subTest(signature=signature.splitlines()[1].strip()):
                 self.assertIn(signature, HOOK)
-        # Each of the four reads the ref (the mode-offer control passes offer.mode — it
-        # IS the register change).
-        self.assertEqual(HOOK.count("registerRef.current,"), 4)
+        # The four sends read the ref, and (Pillar 5) the three control senders ride the
+        # live register too — resume, navigate, control-retry. The mode-offer control
+        # alone passes offer.mode: it IS the register change.
+        self.assertEqual(HOOK.count("registerRef.current,"), 7)
 
     def test_retry_is_a_one_shot_override(self):
         # A retry re-sends in the register the failed turn was SENT in; the sticky

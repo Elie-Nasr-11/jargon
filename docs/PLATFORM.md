@@ -489,3 +489,18 @@ the runtime cannot reach are not tested. Pillar 4 was deliberately landed BEFORE
 Pillar 3: the ladder-to-table conversion (if still warranted) now happens under a
 harness that executes every branch, and the reachability witnesses double as the
 "completeness test" that pillar wanted.
+
+### 12.6 Dead contracts are retired — Pillar 5
+
+`continue_offer` is gone end-to-end. R31b removed the Continue button and made typed
+readiness the advance verb; the offer field spent two rounds as a wire + transcript-model
+contract nothing rendered. Pillar 5 removed the emission, the envelope field, the replay
+passthrough, the client model field and restore, and the caller-less `sendContinue`. Old
+stored payloads keep the key at rest; it maps to nothing. The `continue` CONTROL is still
+parsed server-side — a tab open since before R31b can still send one.
+
+Control turns (resume / navigate / control-retry) now ride the LIVE register instead of a
+hardcoded `"lesson"`: the conversation register does not change because a control was
+pressed, so the server's REGISTER SHIFT voice nod can no longer fire on a stepper click,
+and the live message stamp agrees with what a replay reconstructs under §12.3's rule.
+(`sendModeOffer` still declares `offer.mode` — it IS the register change.)
