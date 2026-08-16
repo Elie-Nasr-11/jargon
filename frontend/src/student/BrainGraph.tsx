@@ -57,6 +57,29 @@ const DIM = 0.15;
 const STAR_EMERGENT = "#9b7bf5";
 const STAR_EMERGENT_DARK = "#b49df8";
 
+// Subject territories: the accent hue rotated per course, painted as a whisper-alpha
+// wash behind each course's cluster. Hue does the grouping; alpha keeps it quiet.
+function subjectHue(accent: string, rank: number): number {
+  const hex = accent.startsWith("#") ? accent : "#4f6bfd";
+  const n = parseInt(hex.slice(1, 7).padEnd(6, "0"), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  if (max !== min) {
+    const d = max - min;
+    h =
+      max === r
+        ? ((g - b) / d + (g < b ? 6 : 0)) / 6
+        : max === g
+          ? ((b - r) / d + 2) / 6
+          : ((r - g) / d + 4) / 6;
+  }
+  return Math.round((h * 360 + rank * 67) % 360);
+}
+
 type Palette = {
   dark: boolean;
   bg: string;
@@ -114,6 +137,8 @@ type GraphNode = {
   vy: number;
   r: number;
   degree: number;
+  // Course rank for the subject tint; lessons inherit their course's.
+  tint?: number;
   word?: MyJargonWord;
   idea?: IdeaNode;
   mastery?: number;
@@ -169,6 +194,7 @@ function buildGraph(input: {
     const key = lesson.course_id || lesson.course_title || "course";
     if (!courseTitles.has(key)) courseTitles.set(key, lesson.course_title || "Course");
   }
+  let courseRank = 0;
   for (const [key, title] of courseTitles) {
     place({
       id: `course:${key}`,
@@ -178,9 +204,11 @@ function buildGraph(input: {
       y: 0,
       vx: 0,
       vy: 0,
-      r: 9,
+      r: 15,
       degree: 0,
+      tint: courseRank,
     });
+    courseRank += 1;
   }
 
   for (const lesson of input.lessons) {
@@ -193,7 +221,7 @@ function buildGraph(input: {
       y: 0,
       vx: 0,
       vy: 0,
-      r: 6.5,
+      r: 8,
       degree: 0,
       lesson,
       progress,
@@ -201,8 +229,10 @@ function buildGraph(input: {
     });
     const courseKey = lesson.course_id || lesson.course_title || "course";
     const hub = index.get(`course:${courseKey}`);
-    if (hub != null)
+    if (hub != null) {
       edges.push({ a: hub, b: index.get(`lesson:${lesson.id}`)!, kind: "lesson-course" });
+      nodes[index.get(`lesson:${lesson.id}`)!].tint = nodes[hub].tint;
+    }
   }
 
   for (const idea of input.ideas.slice(0, 90)) {
@@ -214,7 +244,7 @@ function buildGraph(input: {
       y: 0,
       vx: 0,
       vy: 0,
-      r: idea.origin === "emergent" ? 5 : 4.5,
+      r: idea.origin === "emergent" ? 4.6 : 4.2,
       degree: 0,
       idea,
       mastery: input.mastery?.get(idea.key) ?? 0,
@@ -240,7 +270,7 @@ function buildGraph(input: {
       y: 0,
       vx: 0,
       vy: 0,
-      r: word.traveled ? 3.6 : 3,
+      r: word.traveled ? 3.2 : 2.7,
       degree: 0,
       word,
     });
@@ -260,7 +290,12 @@ function buildGraph(input: {
     nodes[e.a].degree += 1;
     nodes[e.b].degree += 1;
   }
-  for (const n of nodes) n.r += Math.min(4.5, Math.sqrt(n.degree) * 1.05);
+  // Degree still grows a node, but the KIND ladder stays unmistakable: a busy word
+  // may never outgrow a quiet lesson, nor a lesson its course.
+  for (const n of nodes) {
+    const cap = n.kind === "course" ? 5 : n.kind === "lesson" ? 2.5 : 1;
+    n.r += Math.min(cap, Math.sqrt(n.degree) * (n.kind === "course" ? 1.1 : 0.7));
+  }
 
   return { nodes, edges, ideaIndex };
 }
@@ -453,7 +488,41 @@ export function BrainGraph({
       const neighbors = hovered >= 0 ? adjacency[hovered] : null;
       const focusOn = hovered >= 0;
 
-      // Edges. On hover, only the neighborhood keeps its light.
+      // SUBJECT TERRITORIES first, under everything: one soft hue-rotated wash per
+      // course, sized to reach its lessons. This is what makes subjects legible at a
+      // glance without any 3D — each cluster owns a region.
+      for (let i = 0; i < nodes.length; i += 1) {
+        const hub = nodes[i];
+        if (hub.kind !== "course") continue;
+        const hp = toScreen(hub);
+        let reach = 60;
+        for (const other of adjacency[i]) {
+          const n = nodes[other];
+          reach = Math.max(reach, Math.hypot(n.x - hub.x, n.y - hub.y) + 42);
+        }
+        const rr = reach * zoom;
+        if (hp.x < -rr || hp.x > width + rr || hp.y < -rr || hp.y > height + rr) continue;
+        const hue = subjectHue(pal.accent, hub.tint ?? 0);
+        const wash = ctx.createRadialGradient(hp.x, hp.y, 0, hp.x, hp.y, rr);
+        wash.addColorStop(
+          0,
+          `hsla(${hue}, 70%, ${pal.dark ? 62 : 48}%, ${pal.dark ? 0.085 : 0.06})`,
+        );
+        wash.addColorStop(
+          0.75,
+          `hsla(${hue}, 70%, ${pal.dark ? 62 : 48}%, ${pal.dark ? 0.04 : 0.028})`,
+        );
+        wash.addColorStop(1, "hsla(0, 0%, 0%, 0)");
+        ctx.globalAlpha = focusOn ? 0.4 : 1;
+        ctx.fillStyle = wash;
+        ctx.beginPath();
+        ctx.arc(hp.x, hp.y, rr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Edges. Structural trunk (lesson—course) draws heavier than leaf twigs; on
+      // hover, only the neighborhood keeps its light.
       for (const e of edges) {
         const a = toScreen(nodes[e.a]);
         const b = toScreen(nodes[e.b]);
@@ -464,8 +533,9 @@ export function BrainGraph({
           ctx.lineWidth = 1.4;
         } else {
           ctx.strokeStyle = e.earned ? pal.edgeEarned : pal.edge;
-          ctx.globalAlpha = focusOn ? DIM : e.earned ? 0.45 : 1;
-          ctx.lineWidth = 1;
+          const trunk = e.kind === "lesson-course";
+          ctx.globalAlpha = focusOn ? DIM : e.earned ? 0.45 : trunk ? 1 : 0.62;
+          ctx.lineWidth = trunk ? 1.6 : 1;
         }
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
@@ -484,10 +554,17 @@ export function BrainGraph({
         const r = n.r * Math.sqrt(zoom) * (i === hovered ? 1.22 : 1);
         ctx.globalAlpha = inFocus ? 1 : DIM;
         if (n.kind === "course") {
-          ctx.strokeStyle = pal.ink45;
-          ctx.lineWidth = 2;
+          // The apex tier: a heavy filled anchor in the strongest ink, ringed in its
+          // subject hue — unmistakably not a lesson.
+          const hue = subjectHue(pal.accent, n.tint ?? 0);
+          ctx.fillStyle = pal.ink92;
           ctx.beginPath();
           ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = `hsla(${hue}, 60%, ${pal.dark ? 68 : 50}%, 0.72)`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
           ctx.stroke();
         } else {
           const fill =
@@ -498,7 +575,7 @@ export function BrainGraph({
                   ? pal.success
                   : (n.progress ?? 0) > 0
                     ? pal.ink62
-                    : pal.ink30
+                    : pal.ink45
               : n.kind === "idea"
                 ? n.idea?.origin === "emergent"
                   ? pal.emergent
@@ -506,10 +583,20 @@ export function BrainGraph({
                 : pal.ink30;
           ctx.fillStyle = fill;
           if (n.kind === "idea" && n.idea?.origin !== "emergent") ctx.globalAlpha *= 0.8;
+          if (n.kind === "word") ctx.globalAlpha *= 0.75;
           ctx.beginPath();
           ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = inFocus ? 1 : DIM;
+          // Lessons wear a background keyline — coins on the table, while words stay
+          // dust. Reads as a middle tier even in a monochrome squint test.
+          if (n.kind === "lesson") {
+            ctx.strokeStyle = pal.bg;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+          }
           if (n.kind === "lesson" && n.current) {
             ctx.strokeStyle = pal.accent;
             ctx.lineWidth = 1.4;
@@ -571,12 +658,12 @@ export function BrainGraph({
           text: n.label,
           x: p.x,
           y: p.y + n.r * Math.sqrt(zoom) + 12.5,
-          size: n.kind === "lesson" ? 11.5 : 10.5,
+          size: n.kind === "course" ? 12.5 : n.kind === "lesson" ? 11.5 : 10.5,
           weight: n.kind === "lesson" && (n.current || isHover) ? 600 : 500,
           mono: n.kind === "course",
           color:
             n.kind === "course"
-              ? pal.ink45
+              ? pal.ink92
               : n.kind === "lesson"
                 ? n.current
                   ? pal.accent
