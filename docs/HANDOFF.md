@@ -6,6 +6,30 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (Brain v5.3: perf, click semantics, Overview consolidation)
+
+Status: Finished
+Summary: Owner: hover sometimes "clicks in", the graph is "laggy and snappy", and
+there's too much information above the map on Overview. Three fixes:
+(1) PERF - the integration loop ran nodes.indexOf(n) per node per frame (O(n^2)
+every frame just to check the dragged node) - replaced with an index loop. Physics
+now SLEEPS: after the pre-settle it runs only while a node is being tugged plus a
+1.2s cooldown. The canvas repaints only when dirty (camera, hover, drag, theme,
+resize, visibility) - an idle graph costs ~zero and the simmer jitter is gone.
+measureText is memoized per (text|font).
+(2) CLICK SEMANTICS - a click now requires quick (<400ms), still (<=4px), and
+released over the SAME node it started on. Tugs, hesitations, and drift no longer
+navigate (the phantom "hover clicked in"). Verified in-browser: 40px node-drag does
+not navigate, 650ms long-press does not navigate, a genuine quick click does.
+(3) OVERVIEW CONSOLIDATION - the map is now the standalone hero under one slim
+"YOUR BRAIN" SectionLabel row with the mastery stats right-aligned on the same
+line; the MemoryCard (narrative + chips + reset) moved BELOW the map as its own
+compact block and no longer wraps the graph (map render-prop removed).
+Files changed: frontend/src/student/{BrainGraph,StudentHome}.tsx.
+Tests run: 735 OK; tsc, eslint, build clean. Server untouched.
+Remaining concerns: none blocking.
+
+
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5.2: the hierarchy pass)
 
 Status: Finished
