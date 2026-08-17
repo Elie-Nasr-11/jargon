@@ -789,10 +789,11 @@ export function BrainGraph({
           w = ctx.measureText(text).width;
           textWidths.set(measureKey, w);
         }
+        const clampedX = Math.min(width - w / 2 - 6, Math.max(w / 2 + 6, job.x));
         const rect = {
-          x1: job.x - w / 2 - 4,
+          x1: clampedX - w / 2 - 4,
           y1: job.y - job.size - 2,
-          x2: job.x + w / 2 + 4,
+          x2: clampedX + w / 2 + 4,
           y2: job.y + 4,
         };
         if (
@@ -803,7 +804,8 @@ export function BrainGraph({
         ctx.textAlign = "center";
         ctx.globalAlpha = job.alpha;
         ctx.fillStyle = job.color;
-        ctx.fillText(text, job.x, job.y);
+        // Clamp into the canvas so an edge node's name is never sliced off.
+        ctx.fillText(text, clampedX, job.y);
         ctx.globalAlpha = 1;
       }
     };
@@ -1025,6 +1027,15 @@ export function BrainGraph({
         }}
       />
 
+      {graph.nodes.length === 0 ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8">
+          <p className="max-w-sm text-center text-body text-muted-foreground">
+            Your brain map grows as you learn — lessons, ideas, and the words you collect will
+            appear here after your first conversation.
+          </p>
+        </div>
+      ) : null}
+
       {/* Legend, bottom-left — the platform's progress language, in its own tokens. */}
       <div className="pointer-events-none absolute bottom-2.5 left-3 flex items-center gap-3 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
         <span className="flex items-center gap-1.5">
@@ -1041,7 +1052,7 @@ export function BrainGraph({
         </span>
       </div>
 
-      {!hintSeen ? (
+      {!hintSeen && graph.nodes.length > 0 ? (
         <div className="pointer-events-none absolute bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-pill border border-border bg-depth-card/85 px-3 py-1 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground backdrop-blur-sm">
           drag · scroll · click a node
         </div>
