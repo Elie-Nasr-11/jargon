@@ -333,20 +333,40 @@ export function BrainGraph({
   const hoverRef = useRef<number>(-1);
   const selectedRef = useRef<number>(-1);
 
-  const graph = useMemo(
-    () =>
-      buildGraph({
-        lessons,
-        words,
-        vocabTerms,
-        ideas,
-        studentLinks,
-        progress,
-        currentLessonId,
-        mastery,
-      }),
-    [lessons, words, vocabTerms, ideas, studentLinks, progress, currentLessonId, mastery],
-  );
+  // R40 belt-and-braces: the scene rebuilds only when the CONTENT changes, never
+  // because a parent handed down fresh-but-identical object identities. The key is
+  // cheap (string join over ids + the values that alter geometry or color).
+  const graphKey = useMemo(() => {
+    const parts: string[] = [currentLessonId ?? ""];
+    for (const l of lessons) parts.push(l.id, String(progress[l.id] ?? 0));
+    for (const i of ideas) parts.push(i.key, String(mastery?.get(i.key) ?? 0));
+    for (const w of words) parts.push(w.term);
+    for (const t of vocabTerms) parts.push(t.term, t.lesson_id ?? "");
+    for (const link of studentLinks) parts.push(link.from_key, link.to_key);
+    return parts.join("\u0000");
+  }, [lessons, words, vocabTerms, ideas, studentLinks, progress, currentLessonId, mastery]);
+  const graphInputs = useRef({
+    lessons,
+    words,
+    vocabTerms,
+    ideas,
+    studentLinks,
+    progress,
+    currentLessonId,
+    mastery,
+  });
+  graphInputs.current = {
+    lessons,
+    words,
+    vocabTerms,
+    ideas,
+    studentLinks,
+    progress,
+    currentLessonId,
+    mastery,
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const graph = useMemo(() => buildGraph(graphInputs.current), [graphKey]);
   const adjacency = useMemo(() => {
     const adj: Set<number>[] = graph.nodes.map(() => new Set<number>());
     for (const e of graph.edges) {
@@ -376,9 +396,10 @@ export function BrainGraph({
     const { nodes, edges } = graphRef.current;
     const textWidths = new Map<string, number>();
     dirty.current = true;
-    // A selection from a previous data shape must not survive a rebuild.
+    // Re-resolve the selection by node ID: a data refresh that keeps the node keeps
+    // the selection; a refresh that drops it clears cleanly.
+    const previousSelectedId = selectedIdRef.current;
     selectedRef.current = -1;
-    setSelected(null);
 
     let pal = readPalette(wrap);
     // Theme flips re-read the cascade — the graph follows the app instantly.
@@ -485,13 +506,28 @@ export function BrainGraph({
       minY = Math.min(minY, n.y);
       maxY = Math.max(maxY, n.y);
     }
-    cam.current.x = (minX + maxX) / 2;
-    cam.current.y = (minY + maxY) / 2;
-    cam.current.zoom = Math.max(
-      ZOOM_MIN,
-      Math.min(1.4, Math.min(width / (maxX - minX + 220), height / (maxY - minY + 240))),
-    );
-    const home = { ...cam.current };
+    const home = {
+      x: (minX + maxX) / 2,
+      y: (minY + maxY) / 2,
+      zoom: Math.max(
+        ZOOM_MIN,
+        Math.min(1.4, Math.min(width / (maxX - minX + 220), height / (maxY - minY + 240))),
+      ),
+    };
+    // Only the FIRST bind fits the camera; a rebind (data refresh) keeps whatever
+    // view the student had — the "camera resets by itself" fix.
+    if (!cameraLive.current) {
+      cam.current = { ...home };
+      cameraLive.current = true;
+    }
+    if (previousSelectedId) {
+      const keep = nodes.findIndex((n) => n.id === previousSelectedId);
+      if (keep >= 0) selectedRef.current = keep;
+      else {
+        selectedIdRef.current = null;
+        setSelected(null);
+      }
+    }
 
     const toScreen = (n: { x: number; y: number }) => ({
       x: (n.x - cam.current.x) * cam.current.zoom + width / 2,
@@ -834,6 +870,7 @@ export function BrainGraph({
     selectApi.current = {
       select: (index: number) => {
         selectedRef.current = index;
+        selectedIdRef.current = nodes[index]?.id ?? null;
         selectedAt.current = performance.now();
         const node = nodes[index];
         if (node) {
@@ -848,6 +885,7 @@ export function BrainGraph({
       },
       clear: (zoomHome: boolean) => {
         selectedRef.current = -1;
+        selectedIdRef.current = null;
         setSelected(null);
         if (zoomHome) camTarget.current = { ...home };
         dirty.current = true;
@@ -876,6 +914,7 @@ export function BrainGraph({
 
     resetRef.current = () => {
       selectedRef.current = -1;
+      selectedIdRef.current = null;
       setSelected(null);
       camTarget.current = { ...home };
       dirty.current = true;
@@ -920,6 +959,10 @@ export function BrainGraph({
   // Card arming: ignore action presses for the first beat after the card appears —
   // a double-click's second press must never land on a button that just showed up.
   const selectedAt = useRef(0);
+  // Selection survives data-refresh rebinds via the node ID; the camera fits only
+  // on the very first bind.
+  const selectedIdRef = useRef<string | null>(null);
+  const cameraLive = useRef(false);
   const armed = () => performance.now() - selectedAt.current > 400;
   const posMemory = useRef(new Map<string, { x: number; y: number }>());
 

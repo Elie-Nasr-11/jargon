@@ -131,6 +131,18 @@ class TheKnowledgeGraph(unittest.TestCase):
         self.assertIn("onClick={() => armed() && onOpenWord(selected.word.term)}", GRAPH)
         # R39: node dragging is gone — press-drag anywhere pans.
         self.assertNotIn("dragNode", GRAPH)
+
+    def test_rebuilds_are_content_keyed_and_non_destructive(self):
+        # R40 (whole-page jank + "camera resets by itself"): Home hands down STABLE
+        # identities, the graph rebuilds only when content changes, and a legitimate
+        # rebuild keeps the student's camera and selection.
+        self.assertIn(
+            "const bands = useMemo(() => masteryBands(ideaMastery), [ideaMastery]);", HOME
+        )
+        self.assertIn("mastery={bands.byKey}", HOME)
+        self.assertIn("const graph = useMemo(() => buildGraph(graphInputs.current), [graphKey]);", GRAPH)
+        self.assertIn("if (!cameraLive.current) {", GRAPH)
+        self.assertIn("const previousSelectedId = selectedIdRef.current;", GRAPH)
         # The selection zoom glide and its release.
         self.assertIn("camTarget.current = {", GRAPH)
         self.assertIn("if (zoomHome) camTarget.current = { ...home };", GRAPH)

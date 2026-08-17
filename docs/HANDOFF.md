@@ -6,6 +6,31 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (Brain v5.6 / R40: the rebuild-churn root cause)
+
+Status: Finished
+Summary: Owner still saw "very snappy and laggy"; a diagnostic Q&A pinned the
+symptoms (camera resets by itself, whole Home page janky, random even when idle) to
+ONE defect: StudentHome passed mastery as masteryBands(ideaMastery).byKey - a FRESH
+Map on every render - so ANY Home re-render (background fetch landing, conversation
+shell update, the jargon-highlight timer) invalidated the graph memo, tore the scene
+down, re-ran the synchronous O(n^2) physics settle on the main thread (the page-wide
+jank), re-fit the camera (the resets), and cleared the selection.
+Fixes, both ends:
+- Home memoizes the bands once per ideaMastery change and passes stable identities.
+- BrainGraph rebuilds only when a cheap CONTENT key changes (ids + progress +
+  mastery + link pairs joined), regardless of prop identity churn; and a legitimate
+  rebuild is now NON-DESTRUCTIVE - the camera fits only on the first bind, and the
+  selection re-resolves by node id (kept if the node survives, cleared cleanly if
+  not).
+Verified in-browser: with the camera moved and a word selected, forcing multiple
+Home re-renders (the highlight timer's two state flips) leaves the selection card up
+and the camera untouched - previously both were destroyed.
+Files changed: frontend/src/student/{BrainGraph,StudentHome}.tsx; pins added.
+Tests run: 736 OK; tsc, eslint, build clean. Server untouched.
+Remaining concerns: none blocking.
+
+
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5.5: armed card, no node dragging, real jargon highlight)
 
 Status: Finished
