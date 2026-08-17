@@ -332,26 +332,22 @@ export function StudentHome({
   // the sky AND to My Jargon, so one fetch feeds both surfaces.
   const [jargonWords, setJargonWords] = useState<MyJargonWord[] | null>(null);
   const [vocabTerms, setVocabTerms] = useState<VocabTerm[]>([]);
+  // R38: the graph waits for its WHOLE data bundle. Mounting it per-fetch made the
+  // layout re-settle on every arrival — the reported load-time snapping.
+  const [brainReady, setBrainReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    void fetchIdeas()
-      .then((rows) => !cancelled && setIdeas(rows))
-      .catch(() => {});
-    void fetchIdeaMastery()
-      .then((rows) => !cancelled && setIdeaMastery(rows))
-      .catch(() => {});
-    void fetchStudentLinks()
-      .then((rows) => !cancelled && setStudentLinks(rows))
-      .catch(() => {});
-    void fetchCurriculumLinks()
-      .then((rows) => !cancelled && setCurriculumLinks(rows))
-      .catch(() => {});
-    void fetchMyJargon()
-      .then((rows) => !cancelled && setJargonWords(rows))
-      .catch(() => !cancelled && setJargonWords([]));
-    void fetchVocabTerms()
-      .then((rows) => !cancelled && setVocabTerms(rows))
-      .catch(() => {});
+    const settle = Promise.allSettled([
+      fetchIdeas().then((rows) => !cancelled && setIdeas(rows)),
+      fetchIdeaMastery().then((rows) => !cancelled && setIdeaMastery(rows)),
+      fetchStudentLinks().then((rows) => !cancelled && setStudentLinks(rows)),
+      fetchCurriculumLinks().then((rows) => !cancelled && setCurriculumLinks(rows)),
+      fetchMyJargon()
+        .then((rows) => !cancelled && setJargonWords(rows))
+        .catch(() => !cancelled && setJargonWords([])),
+      fetchVocabTerms().then((rows) => !cancelled && setVocabTerms(rows)),
+    ]);
+    void settle.then(() => !cancelled && setBrainReady(true));
     return () => {
       cancelled = true;
     };
@@ -608,18 +604,25 @@ export function StudentHome({
               </div>
             );
           })()}
-          <BrainGraph
-            lessons={lessons}
-            words={jargonWords ?? []}
-            vocabTerms={vocabTerms}
-            ideas={ideas}
-            studentLinks={studentLinks}
-            progress={progress}
-            currentLessonId={currentLessonId}
-            mastery={masteryBands(ideaMastery).byKey}
-            onOpenLesson={onOpenLesson}
-            onOpenWord={openWord}
-          />
+          {brainReady ? (
+            <BrainGraph
+              lessons={lessons}
+              words={jargonWords ?? []}
+              vocabTerms={vocabTerms}
+              ideas={ideas}
+              studentLinks={studentLinks}
+              progress={progress}
+              currentLessonId={currentLessonId}
+              mastery={masteryBands(ideaMastery).byKey}
+              onOpenLesson={onOpenLesson}
+              onOpenWord={openWord}
+            />
+          ) : (
+            <div
+              aria-hidden
+              className="h-[420px] w-full animate-pulse rounded-card border border-border bg-muted/40"
+            />
+          )}
         </div>
 
         {/* ---- 4. What your mentor remembers — compact, below the map ---------------- */}

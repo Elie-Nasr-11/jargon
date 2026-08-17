@@ -94,8 +94,10 @@ class TheKnowledgeGraph(unittest.TestCase):
         self.assertIn("const SPRING", GRAPH)
         self.assertIn("function hash01(", GRAPH)
         self.assertNotIn("Math.random", GRAPH)
-        # The graph settles BEFORE first paint — it never opens mid-explosion.
-        self.assertIn("for (let i = 0; i < SETTLE_TICKS; i += 1)", GRAPH)
+        # The graph settles BEFORE first paint — it never opens mid-explosion — and
+        # remembered positions keep rebuilds calm (R38 load-time snapping fix).
+        self.assertIn("for (let i = 0; i < settleTicks; i += 1)", GRAPH)
+        self.assertIn("posMemory.current.set(n.id, { x: n.x, y: n.y });", GRAPH)
 
     def test_edges_are_real_relations(self):
         for fragment in (
@@ -108,18 +110,25 @@ class TheKnowledgeGraph(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, GRAPH)
 
-    def test_hover_dims_everything_but_the_neighborhood(self):
-        self.assertIn("const neighbors = hovered >= 0 ? adjacency[hovered] : null;", GRAPH)
+    def test_selection_dims_everything_but_the_neighborhood(self):
+        # R38: focus follows the SELECTION (click), never hover — sweeping the pointer
+        # across the graph must not flip through cards or dim states.
+        self.assertIn("const neighbors = picked >= 0 ? adjacency[picked] : null;", GRAPH)
         self.assertIn("const DIM", GRAPH)
-        self.assertIn('className="pointer-events-none absolute right-2.5 top-2.5', GRAPH)
+        self.assertNotIn("setHover", GRAPH)
 
-    def test_every_click_opens_something(self):
-        self.assertIn('if (node.kind === "lesson" && node.lesson) onOpenLesson(node.lesson.id);', GRAPH)
-        self.assertIn(
-            'else if (node.kind === "idea" && node.idea?.lesson_id) onOpenLesson(node.idea.lesson_id);',
-            GRAPH,
-        )
-        self.assertIn('else if (node.kind === "word" && node.word) onOpenWord(node.word.term);', GRAPH)
+    def test_clicks_select_and_only_the_card_button_navigates(self):
+        # R38 (owner: "let's not have false clicks"): a node click SELECTS (camera
+        # glides in, card appears); empty-space click clears and glides home. The
+        # card's explicit button is the only navigation.
+        self.assertIn("if (still && sameNode) selectApi.current?.select(drag.index);", GRAPH)
+        self.assertIn("if (pan && pan.moved <= 4) selectApi.current?.clear(true);", GRAPH)
+        self.assertIn("onClick={() => onOpenLesson(selected.lesson.id)}", GRAPH)
+        self.assertIn("onClick={() => onOpenLesson(selected.idea.lesson_id!)}", GRAPH)
+        self.assertIn("onClick={() => onOpenWord(selected.word.term)}", GRAPH)
+        # The selection zoom glide and its release.
+        self.assertIn("camTarget.current = {", GRAPH)
+        self.assertIn("if (zoomHome) camTarget.current = { ...home };", GRAPH)
 
     def test_reduced_motion_and_offscreen_are_respected(self):
         self.assertIn("prefersReducedMotion()", GRAPH)
