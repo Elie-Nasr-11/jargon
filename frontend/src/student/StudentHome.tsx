@@ -103,11 +103,22 @@ function MyJargonCard({
   highlightTerm?: string | null;
 }) {
   const [showAll, setShowAll] = useState(false);
-  // A highlighted word must be visible even if it sits past the fold of the trimmed list.
+  // A highlighted word must be visible even if it sits past the fold of the trimmed
+  // list — expand first, then scroll ITS ROW to center (R39: the anchor scroll alone
+  // left the word below the fold, so "nothing highlighted").
   useEffect(() => {
     if (!highlightTerm || !words) return;
     const index = words.findIndex((w) => w.term === highlightTerm);
     if (index >= 12) setShowAll(true);
+    const timer = window.setTimeout(() => {
+      document
+        .querySelector(`[data-jargon-term=${JSON.stringify(highlightTerm)}]`)
+        ?.scrollIntoView({
+          behavior: prefersReducedMotion() ? "auto" : "smooth",
+          block: "center",
+        });
+    }, 120);
+    return () => window.clearTimeout(timer);
   }, [highlightTerm, words]);
 
   const visible = words ? (showAll ? words : words.slice(0, 12)) : [];
@@ -147,9 +158,19 @@ function MyJargonCard({
                 {group.words.map((word) => (
                   <li
                     key={word.term}
-                    className={`hvp flex items-baseline gap-3 border-b border-border py-1.5 transition-colors duration-500 last:border-0 ${
-                      highlightTerm === word.term ? "rounded-control bg-accent/15 px-2" : ""
+                    data-jargon-term={word.term}
+                    className={`hvp flex items-baseline gap-3 border-b border-border py-1.5 transition-all duration-500 last:border-0 ${
+                      highlightTerm === word.term ? "rounded-control px-2 ring-1 ring-inset" : ""
                     }`}
+                    style={
+                      highlightTerm === word.term
+                        ? {
+                            background: "color-mix(in oklab, var(--accent-text) 14%, transparent)",
+                            ["--tw-ring-color" as string]:
+                              "color-mix(in oklab, var(--accent-text) 45%, transparent)",
+                          }
+                        : undefined
+                    }
                   >
                     <span className="shrink-0 text-body font-semibold text-foreground">
                       {word.term}

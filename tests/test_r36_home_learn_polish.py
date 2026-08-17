@@ -121,11 +121,16 @@ class TheKnowledgeGraph(unittest.TestCase):
         # R38 (owner: "let's not have false clicks"): a node click SELECTS (camera
         # glides in, card appears); empty-space click clears and glides home. The
         # card's explicit button is the only navigation.
-        self.assertIn("if (still && sameNode) selectApi.current?.select(drag.index);", GRAPH)
-        self.assertIn("if (pan && pan.moved <= 4) selectApi.current?.clear(true);", GRAPH)
-        self.assertIn("onClick={() => onOpenLesson(selected.lesson.id)}", GRAPH)
-        self.assertIn("onClick={() => onOpenLesson(selected.idea.lesson_id!)}", GRAPH)
-        self.assertIn("onClick={() => onOpenWord(selected.word.term)}", GRAPH)
+        self.assertIn("selectApi.current?.select(pan.downIndex);", GRAPH)
+        self.assertIn("selectApi.current?.clear(true);", GRAPH)
+        # R39: the card ARMS 400ms after appearing, so a double-click's second press
+        # can never land on a button that just materialized under the cursor.
+        self.assertIn("const armed = () => performance.now() - selectedAt.current > 400;", GRAPH)
+        self.assertIn("onClick={() => armed() && onOpenLesson(selected.lesson.id)}", GRAPH)
+        self.assertIn("onClick={() => armed() && onOpenLesson(selected.idea.lesson_id!)}", GRAPH)
+        self.assertIn("onClick={() => armed() && onOpenWord(selected.word.term)}", GRAPH)
+        # R39: node dragging is gone — press-drag anywhere pans.
+        self.assertNotIn("dragNode", GRAPH)
         # The selection zoom glide and its release.
         self.assertIn("camTarget.current = {", GRAPH)
         self.assertIn("if (zoomHome) camTarget.current = { ...home };", GRAPH)
