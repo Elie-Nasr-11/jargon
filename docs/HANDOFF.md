@@ -6,6 +6,31 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (R41: student platform sweep — welcome, graph edges, empty state)
+
+Status: Finished
+Summary: Full harness sweep of the student surface (desktop + phone: login, Home
+top-to-bottom, Learn, fresh-lesson welcome, profile, customize, drawer, graph
+selection on touch). The sweep's mock now honors PostgREST eq filters (it used to
+return every row for every query, which had been masking wrong-lesson resumes and
+inventing fake bugs) and its fixtures carry publication_status/user_id. Verified
+clean: phone drawer, phone graph selection + card, profile, customize, transcript.
+Three real fixes shipped:
+(1) FRESH-LESSON WELCOME had a page-tall void between the title (top) and the
+suggestion rows (bottom): the block declared justify-center but never received
+height. h-full centers it now, plus a "Pick a first move below — or just say hi"
+eyebrow that points at the suggestions.
+(2) GRAPH LABELS clipped at the canvas edge (screenshot: "HOTOSYNTHESIS") — labels
+now clamp into the canvas, and the collision rects use the clamped position so the
+de-collision math matches the draw.
+(3) GRAPH EMPTY STATE: a brand-new account saw a meaningless blob of dots; with no
+nodes the panel now explains itself ("Your brain map grows as you learn…") and the
+gesture hint stays hidden.
+Files changed: frontend/src/student/{LessonWelcome,BrainGraph}.tsx.
+Tests run: 736 OK; tsc, eslint, build clean. Server untouched.
+Remaining concerns: none blocking. Next: the teacher platform (owner directive).
+
+
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5.6 / R40: the rebuild-churn root cause)
 
 Status: Finished

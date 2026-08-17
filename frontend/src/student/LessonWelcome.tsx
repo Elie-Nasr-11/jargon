@@ -43,7 +43,9 @@ export function LessonWelcome({ lesson }: LessonWelcomeProps) {
   }, [lesson.id]);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col justify-center gap-6 px-4 py-10">
+    // h-full so justify-center actually centers in the transcript area — without it
+    // the header hugged the top with a page-tall void to the suggestion rows (R41).
+    <div className="mx-auto flex h-full w-full max-w-2xl flex-col justify-center gap-6 px-4 py-10">
       <header className="text-center">
         {lesson.unit_title ? (
           <div className="mb-2 font-mono text-overline uppercase tracking-[0.16em] text-muted-foreground">
@@ -56,6 +58,9 @@ export function LessonWelcome({ lesson }: LessonWelcomeProps) {
         >
           {lesson.title}
         </h1>
+        <p className="mt-4 font-mono text-overline uppercase tracking-[0.16em] text-muted-foreground">
+          Pick a first move below — or just say hi
+        </p>
       </header>
 
       {resources.length ? (
