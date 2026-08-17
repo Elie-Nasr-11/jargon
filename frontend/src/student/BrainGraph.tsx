@@ -325,9 +325,13 @@ export function BrainGraph({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<GraphHover | null>(null);
+  // R38: the card belongs to SELECTION (click), never hover — sweeping the pointer
+  // across the graph must not flip through cards. Hover only changes the cursor and
+  // draws a quiet ring on the node under the pointer.
+  const [selected, setSelected] = useState<GraphHover | null>(null);
   const [hintSeen, setHintSeen] = useState(false);
   const hoverRef = useRef<number>(-1);
+  const selectedRef = useRef<number>(-1);
 
   const graph = useMemo(
     () =>
@@ -372,6 +376,9 @@ export function BrainGraph({
     const { nodes, edges } = graphRef.current;
     const textWidths = new Map<string, number>();
     dirty.current = true;
+    // A selection from a previous data shape must not survive a rebuild.
+    selectedRef.current = -1;
+    setSelected(null);
 
     let pal = readPalette(wrap);
     // Theme flips re-read the cascade — the graph follows the app instantly.
@@ -402,6 +409,19 @@ export function BrainGraph({
       if (visible) dirty.current = true;
     });
     io.observe(wrap);
+
+    // Warm start: nodes seen before resume their remembered positions; a mostly
+    // warm graph needs only a short settle instead of a fresh explosion.
+    let warm = 0;
+    for (const n of nodes) {
+      const remembered = posMemory.current.get(n.id);
+      if (remembered) {
+        n.x = remembered.x;
+        n.y = remembered.y;
+        warm += 1;
+      }
+    }
+    const settleTicks = warm > nodes.length * 0.5 ? 80 : SETTLE_TICKS;
 
     // One physics tick. Charge scales with node size so hubs shoulder their
     // clusters apart instead of piling into one blob.
@@ -456,7 +476,7 @@ export function BrainGraph({
         }
       }
     };
-    for (let i = 0; i < SETTLE_TICKS; i += 1) tick(1 - (i / SETTLE_TICKS) * 0.6);
+    for (let i = 0; i < settleTicks; i += 1) tick(1 - (i / settleTicks) * 0.6);
 
     let minX = Infinity;
     let maxX = -Infinity;
@@ -491,6 +511,33 @@ export function BrainGraph({
         tick(0.08);
         dirty.current = true;
       }
+      // Camera glide: ease toward the tween target (selection zoom-in, click-away
+      // zoom-out). Reduced motion jumps instantly.
+      const target = camTarget.current;
+      if (target) {
+        if (reduced) {
+          cam.current.x = target.x;
+          cam.current.y = target.y;
+          cam.current.zoom = target.zoom;
+          camTarget.current = null;
+        } else {
+          const k = 0.16;
+          cam.current.x += (target.x - cam.current.x) * k;
+          cam.current.y += (target.y - cam.current.y) * k;
+          cam.current.zoom += (target.zoom - cam.current.zoom) * k;
+          if (
+            Math.abs(target.x - cam.current.x) < 0.4 &&
+            Math.abs(target.y - cam.current.y) < 0.4 &&
+            Math.abs(target.zoom - cam.current.zoom) < 0.004
+          ) {
+            cam.current.x = target.x;
+            cam.current.y = target.y;
+            cam.current.zoom = target.zoom;
+            camTarget.current = null;
+          }
+        }
+        dirty.current = true;
+      }
       if (!dirty.current) return;
       dirty.current = false;
 
@@ -500,8 +547,9 @@ export function BrainGraph({
 
       const zoom = cam.current.zoom;
       const hovered = hoverRef.current;
-      const neighbors = hovered >= 0 ? adjacency[hovered] : null;
-      const focusOn = hovered >= 0;
+      const picked = selectedRef.current;
+      const neighbors = picked >= 0 ? adjacency[picked] : null;
+      const focusOn = picked >= 0;
 
       // SUBJECT TERRITORIES first, under everything: one soft hue-rotated wash per
       // course, sized to reach its lessons. This is what makes subjects legible at a
@@ -541,7 +589,7 @@ export function BrainGraph({
       for (const e of edges) {
         const a = toScreen(nodes[e.a]);
         const b = toScreen(nodes[e.b]);
-        const inFocus = focusOn && (e.a === hovered || e.b === hovered);
+        const inFocus = focusOn && (e.a === picked || e.b === picked);
         if (inFocus) {
           ctx.strokeStyle = pal.edgeLit;
           ctx.globalAlpha = 0.75;
@@ -565,8 +613,8 @@ export function BrainGraph({
         const n = nodes[i];
         const p = toScreen(n);
         if (p.x < -40 || p.x > width + 40 || p.y < -40 || p.y > height + 40) continue;
-        const inFocus = !focusOn || i === hovered || (neighbors?.has(i) ?? false);
-        const r = n.r * Math.sqrt(zoom) * (i === hovered ? 1.22 : 1);
+        const inFocus = !focusOn || i === picked || (neighbors?.has(i) ?? false);
+        const r = n.r * Math.sqrt(zoom) * (i === picked ? 1.22 : 1);
         ctx.globalAlpha = inFocus ? 1 : DIM;
         if (n.kind === "course") {
           // The apex tier: a heavy filled anchor in the strongest ink, ringed in its
@@ -620,6 +668,20 @@ export function BrainGraph({
             ctx.stroke();
           }
         }
+        if (i === picked) {
+          ctx.strokeStyle = pal.accent;
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r + 5, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (i === hovered && !focusOn) {
+          ctx.strokeStyle = pal.ink45;
+          ctx.globalAlpha = 0.6;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         ctx.globalAlpha = 1;
       }
 
@@ -642,9 +704,9 @@ export function BrainGraph({
         const n = nodes[i];
         const p = toScreen(n);
         if (p.x < -80 || p.x > width + 80 || p.y < -40 || p.y > height + 40) continue;
-        const isHover = i === hovered;
+        const isHover = i === picked;
         const isNeighbor = focusOn && (neighbors?.has(i) ?? false);
-        // A dimmed graph shows only the neighborhood's names.
+        // A dimmed graph shows only the selection's names.
         if (focusOn && !isHover && !isNeighbor) continue;
         // Zoom gates by kind — course hubs and the current lesson always qualify.
         const gate =
@@ -772,12 +834,32 @@ export function BrainGraph({
       const index = pick(event.clientX, event.clientY);
       if (index !== hoverRef.current) {
         hoverRef.current = index;
-        setHover(index >= 0 ? toHover(index) : null);
         canvas.style.cursor = index >= 0 ? "pointer" : "grab";
         dirty.current = true;
       }
     };
     canvas.addEventListener("pointermove", onMove);
+    selectApi.current = {
+      select: (index: number) => {
+        selectedRef.current = index;
+        const node = nodes[index];
+        if (node) {
+          setSelected(toHover(index));
+          camTarget.current = {
+            x: node.x,
+            y: node.y,
+            zoom: Math.min(2.2, Math.max(cam.current.zoom, home.zoom * 1.55)),
+          };
+        }
+        dirty.current = true;
+      },
+      clear: (zoomHome: boolean) => {
+        selectedRef.current = -1;
+        setSelected(null);
+        if (zoomHome) camTarget.current = { ...home };
+        dirty.current = true;
+      },
+    };
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
@@ -800,14 +882,15 @@ export function BrainGraph({
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
     resetRef.current = () => {
-      cam.current.x = home.x;
-      cam.current.y = home.y;
-      cam.current.zoom = home.zoom;
+      selectedRef.current = -1;
+      setSelected(null);
+      camTarget.current = { ...home };
       dirty.current = true;
     };
 
     return () => {
       running = false;
+      for (const n of nodes) posMemory.current.set(n.id, { x: n.x, y: n.y });
       cancelAnimationFrame(raf);
       themeWatch.disconnect();
       ro.disconnect();
@@ -828,10 +911,17 @@ export function BrainGraph({
     y: 0,
   }));
   const resetRef = useRef<() => void>(() => {});
+  const selectApi = useRef<{
+    select: (index: number) => void;
+    clear: (zoomHome: boolean) => void;
+  } | null>(null);
   // Render-on-demand flags: the rAF loop paints only when dirty, and physics only
-  // runs while a tug (or its cooldown) is live.
+  // runs while a tug (or its cooldown) is live. camTarget drives the selection
+  // zoom glide; posMemory keeps layouts stable across data arrivals and revisits.
   const dirty = useRef(true);
   const physicsUntil = useRef(0);
+  const camTarget = useRef<{ x: number; y: number; zoom: number } | null>(null);
+  const posMemory = useRef(new Map<string, { x: number; y: number }>());
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     (event.target as HTMLCanvasElement).setPointerCapture(event.pointerId);
@@ -873,23 +963,22 @@ export function BrainGraph({
   };
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragNode.current;
+    const pan = panState.current;
     dragNode.current = null;
     panState.current = null;
     // Physics gets a short cooldown to re-settle whatever was tugged.
     if (drag && drag.moved > 3) physicsUntil.current = performance.now() + 1200;
-    if (!drag) return;
-    // A CLICK is deliberate: quick (under 400ms), still (under 4px of drift), and
-    // released over the node it started on. Anything else was a grab or a hesitation
-    // — navigating on those was the reported "it clicks in when I just hover".
-    const quick = performance.now() - drag.at < 400;
-    const still = drag.moved <= 4;
-    const sameNode = pickRef.current(event.clientX, event.clientY) === drag.index;
-    if (!quick || !still || !sameNode) return;
-    const node = graphRef.current.nodes[drag.index];
-    if (!node) return;
-    if (node.kind === "lesson" && node.lesson) onOpenLesson(node.lesson.id);
-    else if (node.kind === "idea" && node.idea?.lesson_id) onOpenLesson(node.idea.lesson_id);
-    else if (node.kind === "word" && node.word) onOpenWord(node.word.term);
+    // R38: a click NEVER navigates. A still click on a node SELECTS it (camera
+    // glides in, the card with its explicit action button appears top-right); a
+    // still click on empty space clears the selection and glides home. The card's
+    // button is the only way into a lesson — false clicks are structurally gone.
+    if (drag) {
+      const still = drag.moved <= 4;
+      const sameNode = pickRef.current(event.clientX, event.clientY) === drag.index;
+      if (still && sameNode) selectApi.current?.select(drag.index);
+      return;
+    }
+    if (pan && pan.moved <= 4) selectApi.current?.clear(true);
   };
 
   return (
@@ -943,89 +1032,125 @@ export function BrainGraph({
         <RotateCcw className="h-3 w-3" strokeWidth={1.8} /> reset
       </button>
 
-      {/* The info card: pinned top-right, themed like every other card in the app. */}
-      {hover ? (
+      {/* R38: the SELECTION card — interactive, pinned top-right. Its button is the
+          ONLY way to open anything from the graph; clicking a node just selects. */}
+      {selected ? (
         <div
-          className="pointer-events-none absolute right-2.5 top-2.5 w-[240px] rounded-card border border-border bg-depth-card/95 p-3 shadow-card backdrop-blur-sm"
-          role="status"
+          className="absolute right-2.5 top-2.5 w-[248px] rounded-card border border-border bg-depth-card/95 p-3 shadow-card backdrop-blur-sm"
+          role="dialog"
+          aria-label="Selected node"
         >
-          {hover.kind === "lesson" ? (
+          <button
+            type="button"
+            onClick={() => selectApi.current?.clear(true)}
+            className="absolute right-2 top-2 rounded-control px-1.5 py-0.5 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Close and zoom out"
+          >
+            ✕
+          </button>
+          {selected.kind === "lesson" ? (
             <>
               <div
-                className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em]"
+                className="mb-0.5 pr-6 font-mono text-overline uppercase tracking-[0.14em]"
                 style={{ color: "var(--accent-text)" }}
               >
-                {hover.current ? "Current lesson" : "Lesson"}
+                {selected.current ? "Current lesson" : "Lesson"}
               </div>
-              <div className="text-body font-semibold text-foreground">{hover.lesson.title}</div>
-              {hover.lesson.unit_title || hover.lesson.course_title ? (
+              <div className="pr-4 text-body font-semibold text-foreground">
+                {selected.lesson.title}
+              </div>
+              {selected.lesson.unit_title || selected.lesson.course_title ? (
                 <div className="mt-0.5 text-meta text-muted-foreground">
-                  {[hover.lesson.unit_title, hover.lesson.course_title].filter(Boolean).join(" · ")}
+                  {[selected.lesson.unit_title, selected.lesson.course_title]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </div>
               ) : null}
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full"
                   style={{
-                    width: `${Math.round(hover.progress * 100)}%`,
-                    background: hover.progress >= 1 ? "var(--success)" : "var(--accent-text)",
+                    width: `${Math.round(selected.progress * 100)}%`,
+                    background: selected.progress >= 1 ? "var(--success)" : "var(--accent-text)",
                   }}
                 />
               </div>
-              <div className="mt-1.5 text-meta text-muted-foreground">
-                {hover.progress >= 1
-                  ? "Complete."
-                  : `${Math.round(hover.progress * 100)}% done · click to open`}
-              </div>
+              <button
+                type="button"
+                onClick={() => onOpenLesson(selected.lesson.id)}
+                className="mt-2.5 w-full rounded-control px-3 py-1.5 text-meta font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: "var(--accent-text)" }}
+              >
+                {selected.progress >= 1 ? "Revisit lesson" : "Open lesson"}
+              </button>
             </>
-          ) : hover.kind === "idea" ? (
+          ) : selected.kind === "idea" ? (
             <>
               <div
-                className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em]"
+                className="mb-0.5 pr-6 font-mono text-overline uppercase tracking-[0.14em]"
                 style={{
-                  color: hover.idea.origin === "emergent" ? STAR_EMERGENT : "var(--accent-text)",
+                  color: selected.idea.origin === "emergent" ? STAR_EMERGENT : "var(--accent-text)",
                 }}
               >
-                {hover.idea.origin === "emergent" ? "Your idea" : "Idea"}
+                {selected.idea.origin === "emergent" ? "Your idea" : "Idea"}
               </div>
-              <div className="text-body font-semibold text-foreground">{hover.idea.title}</div>
-              {hover.idea.one_liner ? (
+              <div className="pr-4 text-body font-semibold text-foreground">
+                {selected.idea.title}
+              </div>
+              {selected.idea.one_liner ? (
                 <div className="mt-0.5 text-meta leading-snug text-muted-foreground">
-                  {hover.idea.one_liner}
+                  {selected.idea.one_liner}
                 </div>
               ) : null}
               <div className="mt-1.5 text-meta text-muted-foreground">
-                {hover.mastery > 0
-                  ? `Mastery ${Math.round(hover.mastery * 100)}%`
+                {selected.mastery > 0
+                  ? `Mastery ${Math.round(selected.mastery * 100)}%`
                   : "Not practiced yet"}
-                {hover.lessonTitle ? ` · from “${hover.lessonTitle}” — click to open` : ""}
               </div>
+              {selected.idea.lesson_id ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenLesson(selected.idea.lesson_id!)}
+                  className="mt-2.5 w-full rounded-control px-3 py-1.5 text-meta font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ background: "var(--accent-text)" }}
+                >
+                  Open “{selected.lessonTitle ?? "its lesson"}”
+                </button>
+              ) : null}
             </>
-          ) : hover.kind === "word" ? (
+          ) : selected.kind === "word" ? (
             <>
-              <div className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
+              <div className="mb-0.5 pr-6 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
                 Collected word
               </div>
-              <div className="text-body font-semibold text-foreground">{hover.word.term}</div>
-              {hover.word.definition ? (
+              <div className="pr-4 text-body font-semibold text-foreground">
+                {selected.word.term}
+              </div>
+              {selected.word.definition ? (
                 <div className="mt-0.5 text-meta leading-snug text-muted-foreground">
-                  {hover.word.definition}
+                  {selected.word.definition}
                 </div>
               ) : null}
               <div className="mt-1.5 text-meta text-muted-foreground">
-                {hover.word.subject || "—"}
-                {hover.word.traveled ? " · seen in 2+ subjects" : ""} · click to find it in My
-                Jargon
+                {selected.word.subject || "—"}
+                {selected.word.traveled ? " · seen in 2+ subjects" : ""}
               </div>
+              <button
+                type="button"
+                onClick={() => onOpenWord(selected.word.term)}
+                className="mt-2.5 w-full rounded-control border border-border px-3 py-1.5 text-meta font-semibold text-foreground transition-colors hover:bg-muted"
+              >
+                Find in My Jargon
+              </button>
             </>
           ) : (
             <>
-              <div className="mb-0.5 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
+              <div className="mb-0.5 pr-6 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground">
                 Course
               </div>
-              <div className="text-body font-semibold text-foreground">{hover.title}</div>
+              <div className="pr-4 text-body font-semibold text-foreground">{selected.title}</div>
               <div className="mt-0.5 text-meta text-muted-foreground">
-                {hover.lessonCount} connection{hover.lessonCount === 1 ? "" : "s"}
+                {selected.lessonCount} connection{selected.lessonCount === 1 ? "" : "s"}
               </div>
             </>
           )}

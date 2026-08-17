@@ -77,12 +77,11 @@ class BrainIdeaNodesAreClickable(unittest.TestCase):
     dots had a click; the idea nodes were inert tooltips."""
 
     def test_authored_ideas_open_their_lesson(self):
-        # Night-sky renderer: the click router sends any idea that belongs to a lesson
-        # to that lesson; a lesson-less idea falls through (hover card only, no dead
-        # click pretending to navigate).
+        # R38 selection model: an idea that belongs to a lesson offers that lesson on
+        # its selection card; a lesson-less idea gets no button (no dead affordance).
         for fragment in (
-            'else if (node.kind === "idea" && node.idea?.lesson_id) onOpenLesson(node.idea.lesson_id);',
-            'if (node.kind === "lesson" && node.lesson) onOpenLesson(node.lesson.id);',
+            "onClick={() => onOpenLesson(selected.idea.lesson_id!)}",
+            "{selected.idea.lesson_id ? (",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, BRAIN)

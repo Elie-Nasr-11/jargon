@@ -6,6 +6,35 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (Brain v5.4: selection model - no false clicks, no hover flicker)
+
+Status: Finished
+Summary: Owner: the graph still navigated on its own sometimes, and hover flipping
+through "20 different cards" looked glitchy. The interaction model is now
+SELECTION-BASED, per the owner's design:
+- Hover does nothing but change the cursor and draw a quiet ring. No card, no dim,
+  no label changes on hover - the flicker source is gone.
+- A still click on a node SELECTS it: the camera glides in (~1.55x of the fitted
+  zoom, eased in the rAF loop, instant under reduced motion), the neighborhood
+  lights while the rest dims, and an INTERACTIVE card appears top-right with the
+  explicit action ("Open lesson" / "Open <its lesson>" / "Find in My Jargon") plus
+  a close button. The card button is the ONLY navigation - false clicks are
+  structurally impossible.
+- A still click on empty space (or the card's X, or reset) clears the selection
+  and glides the camera home. Clicking another node moves the selection there.
+- Load-time snapping fixed twice over: StudentHome now mounts the graph only after
+  the WHOLE data bundle (ideas, mastery, links, jargon, vocab) settles - it used to
+  re-settle on every fetch arrival - and BrainGraph remembers node positions across
+  rebuilds (warm graphs get an 80-tick settle instead of a fresh explosion).
+Verified in-browser via the harness: a full hover sweep produces zero cards; a node
+click selects without navigating; empty click clears; only the card button opens
+the lesson.
+Files changed: frontend/src/student/{BrainGraph,StudentHome}.tsx; pins migrated in
+tests/{test_r36_home_learn_polish,test_r33b_tester_fixes}.py.
+Tests run: 735 OK; tsc, eslint, build clean. Server untouched.
+Remaining concerns: none blocking.
+
+
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5.3: perf, click semantics, Overview consolidation)
 
 Status: Finished
