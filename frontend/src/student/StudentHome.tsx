@@ -373,6 +373,11 @@ export function StudentHome({
       cancelled = true;
     };
   }, []);
+  // R40 (whole-page jank + "camera resets by itself"): masteryBands() built a FRESH
+  // Map on every Home render, so any unrelated update invalidated the graph's memo —
+  // tearing the scene down, re-running the synchronous physics settle on the main
+  // thread, and re-fitting the camera. One memo kills the whole class of churn.
+  const bands = useMemo(() => masteryBands(ideaMastery), [ideaMastery]);
   // Word-star click → scroll My Jargon into view with that chip flashing.
   const jargonAnchorRef = useRef<HTMLDivElement>(null);
   const [highlightTerm, setHighlightTerm] = useState<string | null>(null);
@@ -609,7 +614,6 @@ export function StudentHome({
              the label line; everything narrative moved below the map. ---------------- */}
         <div className="mb-7">
           {(() => {
-            const bands = masteryBands(ideaMastery);
             const total = bands.solid + bands.growing + bands.refresh;
             return (
               <div className="mb-2 flex items-baseline gap-3">
@@ -634,7 +638,7 @@ export function StudentHome({
               studentLinks={studentLinks}
               progress={progress}
               currentLessonId={currentLessonId}
-              mastery={masteryBands(ideaMastery).byKey}
+              mastery={bands.byKey}
               onOpenLesson={onOpenLesson}
               onOpenWord={openWord}
             />
