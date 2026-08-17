@@ -6,6 +6,30 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-16 (Brain v5.5: armed card, no node dragging, real jargon highlight)
+
+Status: Finished
+Summary: Three owner reports.
+(1) MISS-CLICK EXPLAINED AND FIXED - selecting a node materializes the card at
+top-right, sometimes under the cursor; a double-click's second press landed on the
+fresh "Open lesson" button. The card now ARMS 400ms after appearing (button presses
+before that are ignored). In-browser: an instant press does not navigate; the same
+press 700ms later does.
+(2) NODE DRAGGING REMOVED (owner call) - a press-drag anywhere pans the view, and a
+still release selects (on a node) or clears (on space). With no dragging, physics
+never runs after the initial settle: the graph is a still picture only the camera
+moves - integration loop, cooldowns, and tug plumbing deleted.
+(3) FIND IN MY JARGON now genuinely lands: the card button scrolls the word's OWN
+ROW to viewport center (data-jargon-term lookup, after auto-expanding past-the-fold
+lists) and the row flashes an unmistakable accent-tinted background with an inset
+keyline (the old bg-accent/15 was invisible). In-browser: row present, centered,
+tinted.
+Files changed: frontend/src/student/{BrainGraph,StudentHome}.tsx; pins updated in
+tests/{test_r36_home_learn_polish,test_r33b_tester_fixes}.py.
+Tests run: 735 OK; tsc, eslint, build clean. Server untouched.
+Remaining concerns: none blocking.
+
+
 ## Claude -> Codex / Human - 2026-08-16 (Brain v5.4: selection model - no false clicks, no hover flicker)
 
 Status: Finished

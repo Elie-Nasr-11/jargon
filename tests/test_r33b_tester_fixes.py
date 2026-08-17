@@ -80,7 +80,7 @@ class BrainIdeaNodesAreClickable(unittest.TestCase):
         # R38 selection model: an idea that belongs to a lesson offers that lesson on
         # its selection card; a lesson-less idea gets no button (no dead affordance).
         for fragment in (
-            "onClick={() => onOpenLesson(selected.idea.lesson_id!)}",
+            "onClick={() => armed() && onOpenLesson(selected.idea.lesson_id!)}",
             "{selected.idea.lesson_id ? (",
         ):
             with self.subTest(fragment=fragment):

@@ -463,17 +463,14 @@ export function BrainGraph({
         b.vx -= fx;
         b.vy -= fy;
       }
-      const dragging = dragNode.current?.index ?? -1;
       for (let i = 0; i < nodes.length; i += 1) {
         const n = nodes[i];
         n.vx -= n.x * CENTER_PULL * alpha;
         n.vy -= n.y * CENTER_PULL * alpha;
         n.vx *= DAMPING;
         n.vy *= DAMPING;
-        if (i !== dragging) {
-          n.x += n.vx;
-          n.y += n.vy;
-        }
+        n.x += n.vx;
+        n.y += n.vy;
       }
     };
     for (let i = 0; i < settleTicks; i += 1) tick(1 - (i / settleTicks) * 0.6);
@@ -504,13 +501,8 @@ export function BrainGraph({
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       if (!running || !visible || document.hidden) return;
-      // Physics only while a node is being tugged (plus a 1.2s cooldown to let the
-      // neighborhood re-settle) — an idle graph is perfectly still and costs ~zero.
-      const active = dragNode.current != null || now < physicsUntil.current;
-      if (!reduced && active) {
-        tick(0.08);
-        dirty.current = true;
-      }
+      // R39: no dragging means no post-settle physics at all — the graph is a
+      // still picture that only the camera moves.
       // Camera glide: ease toward the tween target (selection zoom-in, click-away
       // zoom-out). Reduced motion jumps instantly.
       const target = camTarget.current;
@@ -830,7 +822,7 @@ export function BrainGraph({
     };
 
     const onMove = (event: PointerEvent) => {
-      if (dragNode.current || panState.current) return;
+      if (panState.current) return;
       const index = pick(event.clientX, event.clientY);
       if (index !== hoverRef.current) {
         hoverRef.current = index;
@@ -842,6 +834,7 @@ export function BrainGraph({
     selectApi.current = {
       select: (index: number) => {
         selectedRef.current = index;
+        selectedAt.current = performance.now();
         const node = nodes[index];
         if (node) {
           setSelected(toHover(index));
@@ -901,10 +894,14 @@ export function BrainGraph({
     // Physics state and camera live in refs; the scene rebinds when the graph changes.
   }, [graph, adjacency, lessons]);
 
-  const dragNode = useRef<{ index: number; moved: number; at: number } | null>(null);
-  const panState = useRef<{ px: number; py: number; cx: number; cy: number; moved: number } | null>(
-    null,
-  );
+  const panState = useRef<{
+    px: number;
+    py: number;
+    cx: number;
+    cy: number;
+    moved: number;
+    downIndex: number;
+  } | null>(null);
   const pickRef = useRef<(x: number, y: number) => number>(() => -1);
   const worldRef = useRef<(x: number, y: number) => { x: number; y: number }>(() => ({
     x: 0,
@@ -915,70 +912,55 @@ export function BrainGraph({
     select: (index: number) => void;
     clear: (zoomHome: boolean) => void;
   } | null>(null);
-  // Render-on-demand flags: the rAF loop paints only when dirty, and physics only
-  // runs while a tug (or its cooldown) is live. camTarget drives the selection
-  // zoom glide; posMemory keeps layouts stable across data arrivals and revisits.
+  // Render-on-demand flags: the rAF loop paints only when dirty. camTarget drives
+  // the selection zoom glide; posMemory keeps layouts stable across data arrivals
+  // and revisits.
   const dirty = useRef(true);
-  const physicsUntil = useRef(0);
   const camTarget = useRef<{ x: number; y: number; zoom: number } | null>(null);
+  // Card arming: ignore action presses for the first beat after the card appears —
+  // a double-click's second press must never land on a button that just showed up.
+  const selectedAt = useRef(0);
+  const armed = () => performance.now() - selectedAt.current > 400;
   const posMemory = useRef(new Map<string, { x: number; y: number }>());
 
+  // R39: node dragging is gone (owner call) — a press-drag anywhere pans the view,
+  // which also means physics never needs to run after the initial settle. A still
+  // release picks: on the node it started over, SELECT; on empty space, CLEAR.
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     (event.target as HTMLCanvasElement).setPointerCapture(event.pointerId);
-    const index = pickRef.current(event.clientX, event.clientY);
-    if (index >= 0) {
-      dragNode.current = { index, moved: 0, at: performance.now() };
-    } else {
-      panState.current = {
-        px: event.clientX,
-        py: event.clientY,
-        cx: cam.current.x,
-        cy: cam.current.y,
-        moved: 0,
-      };
-    }
+    panState.current = {
+      px: event.clientX,
+      py: event.clientY,
+      cx: cam.current.x,
+      cy: cam.current.y,
+      moved: 0,
+      downIndex: pickRef.current(event.clientX, event.clientY),
+    };
   };
   const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    const drag = dragNode.current;
     const pan = panState.current;
-    if (drag) {
-      const w = worldRef.current(event.clientX, event.clientY);
-      const node = graphRef.current.nodes[drag.index];
-      drag.moved = Math.max(drag.moved, Math.hypot(node.x - w.x, node.y - w.y) * cam.current.zoom);
-      node.x = w.x;
-      node.y = w.y;
-      node.vx = 0;
-      node.vy = 0;
-      dirty.current = true;
-      if (drag.moved > 3) setHintSeen(true);
-    } else if (pan) {
-      const dx = event.clientX - pan.px;
-      const dy = event.clientY - pan.py;
-      pan.moved = Math.max(pan.moved, Math.abs(dx) + Math.abs(dy));
-      if (pan.moved > 3) setHintSeen(true);
-      cam.current.x = pan.cx - dx / cam.current.zoom;
-      cam.current.y = pan.cy - dy / cam.current.zoom;
-      dirty.current = true;
-    }
+    if (!pan) return;
+    const dx = event.clientX - pan.px;
+    const dy = event.clientY - pan.py;
+    pan.moved = Math.max(pan.moved, Math.abs(dx) + Math.abs(dy));
+    if (pan.moved > 3) setHintSeen(true);
+    cam.current.x = pan.cx - dx / cam.current.zoom;
+    cam.current.y = pan.cy - dy / cam.current.zoom;
+    dirty.current = true;
   };
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    const drag = dragNode.current;
     const pan = panState.current;
-    dragNode.current = null;
     panState.current = null;
-    // Physics gets a short cooldown to re-settle whatever was tugged.
-    if (drag && drag.moved > 3) physicsUntil.current = performance.now() + 1200;
-    // R38: a click NEVER navigates. A still click on a node SELECTS it (camera
-    // glides in, the card with its explicit action button appears top-right); a
-    // still click on empty space clears the selection and glides home. The card's
-    // button is the only way into a lesson — false clicks are structurally gone.
-    if (drag) {
-      const still = drag.moved <= 4;
-      const sameNode = pickRef.current(event.clientX, event.clientY) === drag.index;
-      if (still && sameNode) selectApi.current?.select(drag.index);
-      return;
+    if (!pan || pan.moved > 4) return;
+    // Still click. On a node (same one the press started over): SELECT — the camera
+    // glides in and the card with its explicit button appears top-right. On empty
+    // space: clear the selection and glide home. Navigation lives ONLY on the card.
+    const upIndex = pickRef.current(event.clientX, event.clientY);
+    if (pan.downIndex >= 0 && upIndex === pan.downIndex) {
+      selectApi.current?.select(pan.downIndex);
+    } else if (pan.downIndex < 0 && upIndex < 0) {
+      selectApi.current?.clear(true);
     }
-    if (pan && pan.moved <= 4) selectApi.current?.clear(true);
   };
 
   return (
@@ -996,7 +978,6 @@ export function BrainGraph({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={() => {
-          dragNode.current = null;
           panState.current = null;
         }}
       />
@@ -1019,7 +1000,7 @@ export function BrainGraph({
 
       {!hintSeen ? (
         <div className="pointer-events-none absolute bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-pill border border-border bg-depth-card/85 px-3 py-1 font-mono text-overline uppercase tracking-[0.14em] text-muted-foreground backdrop-blur-sm">
-          drag · scroll · grab a node
+          drag · scroll · click a node
         </div>
       ) : null}
 
@@ -1077,7 +1058,7 @@ export function BrainGraph({
               </div>
               <button
                 type="button"
-                onClick={() => onOpenLesson(selected.lesson.id)}
+                onClick={() => armed() && onOpenLesson(selected.lesson.id)}
                 className="mt-2.5 w-full rounded-control px-3 py-1.5 text-meta font-semibold text-white transition-opacity hover:opacity-90"
                 style={{ background: "var(--accent-text)" }}
               >
@@ -1110,7 +1091,7 @@ export function BrainGraph({
               {selected.idea.lesson_id ? (
                 <button
                   type="button"
-                  onClick={() => onOpenLesson(selected.idea.lesson_id!)}
+                  onClick={() => armed() && onOpenLesson(selected.idea.lesson_id!)}
                   className="mt-2.5 w-full rounded-control px-3 py-1.5 text-meta font-semibold text-white transition-opacity hover:opacity-90"
                   style={{ background: "var(--accent-text)" }}
                 >
@@ -1137,7 +1118,7 @@ export function BrainGraph({
               </div>
               <button
                 type="button"
-                onClick={() => onOpenWord(selected.word.term)}
+                onClick={() => armed() && onOpenWord(selected.word.term)}
                 className="mt-2.5 w-full rounded-control border border-border px-3 py-1.5 text-meta font-semibold text-foreground transition-colors hover:bg-muted"
               >
                 Find in My Jargon
