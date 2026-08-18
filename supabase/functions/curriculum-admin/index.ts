@@ -205,6 +205,17 @@ async function upsertByConflict(config: Config, table: string, conflict: string,
   return data[0] as DbRow;
 }
 
+// Bulk insert (single POST, no representation) — used by duplicate_course, where a course
+// can carry dozens of lessons and per-row inserts would blow the function's time budget.
+async function bulkInsert(config: Config, table: string, rows: DbRow[]): Promise<void> {
+  if (!rows.length) return;
+  await serviceFetch(config, `/rest/v1/${table}`, {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify(rows),
+  });
+}
+
 async function insertRow(config: Config, table: string, row: DbRow): Promise<DbRow> {
   const data = await serviceFetch(config, `/rest/v1/${table}`, {
     method: "POST",
@@ -2030,6 +2041,255 @@ async function setClassCourses(config: Config, actorId: string, body: DbRow): Pr
   return json({ status: "ok", class_id: classId, course_ids: courseIds });
 }
 
+// R44 fork-on-demand (owner decision, docs/DECISIONS.md 2026-08-18): duplicate a shared
+// course for ONE class. Copies the course, its current version, units, lessons, and each
+// lesson's full teaching content — milestones, steps, quiz items, completion rules,
+// resource placements (same underlying files), authored vocab and ideas. Ideas and vocab
+// keep their keys/terms so mastery-by-key and key-based links stay continuous on the
+// copy. The class is then relinked to the copy; every other class keeps the original
+// untouched. Student HISTORY (sessions, collected words) stays attached to the original
+// lessons — the fork is a go-forward split, not a rewrite of the past.
+async function duplicateCourse(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const classId = cleanText(body.class_id);
+  const courseId = cleanText(body.course_id);
+  if (!classId) throw new Error("class_id is required.");
+  if (!courseId) throw new Error("course_id is required.");
+
+  const classRow = await selectFirst(
+    config,
+    `classes?id=eq.${enc(classId)}&select=id,name,organization_id&limit=1`,
+  );
+  if (!classRow) throw new Error("Class was not found.");
+  const classOrgId = String(classRow.organization_id);
+  await assertCanAuthor(config, actorId, classOrgId, classId);
+
+  const course = await selectFirst(config, `courses?id=eq.${enc(courseId)}&select=*&limit=1`);
+  if (!course) throw new Error("Course was not found.");
+  if (course.organization_id && String(course.organization_id) !== classOrgId) {
+    throw new Error("Course organization does not match this class's organization.");
+  }
+  const link = await selectFirst(
+    config,
+    `class_courses?class_id=eq.${enc(classId)}&course_id=eq.${enc(courseId)}&select=class_id&limit=1`,
+  );
+  if (!link) throw new Error("This class does not link that course.");
+
+  const version =
+    (await selectFirst(
+      config,
+      `course_versions?course_id=eq.${enc(courseId)}&is_current=eq.true&select=*&limit=1`,
+    )) ??
+    (await selectFirst(
+      config,
+      `course_versions?course_id=eq.${enc(courseId)}&select=*&order=updated_at.desc&limit=1`,
+    ));
+  if (!version) throw new Error("Course has no version to duplicate.");
+
+  // One shared suffix per fork: source ids are unique, so source-id + tag stays unique
+  // across every text-id table without per-row collision queries.
+  const forkTag = crypto.randomUUID().slice(0, 6);
+  const fork = (id: unknown) => `${cleanText(id)}-${forkTag}`.slice(0, 180);
+  const omitId = (row: DbRow): DbRow => {
+    const { id: _omit, ...rest } = row;
+    return rest;
+  };
+  const now = new Date().toISOString();
+  const newCourseId = fork(course.id);
+  const newVersionId = fork(version.id);
+  const title =
+    cleanText(body.title) ||
+    `${cleanText(course.title) || "Course"} (${cleanText(classRow.name) || "class copy"})`;
+
+  const units = await selectAll(config, `units?course_version_id=eq.${enc(String(version.id))}&select=*`);
+  const unitIds = units.map((row) => cleanText(row.id)).filter(Boolean);
+  const lessons = unitIds.length
+    ? await selectAll(config, `lessons?unit_id=in.(${unitIds.map(enc).join(",")})&select=*`)
+    : [];
+  const lessonIds = lessons.map((row) => cleanText(row.id)).filter(Boolean);
+  const inLessons = lessonIds.length
+    ? `lesson_id=in.(${lessonIds.map(enc).join(",")})`
+    : null;
+  const [milestones, activities, quizzes, rules, placements, vocab, ideas] = inLessons
+    ? await Promise.all([
+        selectAll(config, `milestones?${inLessons}&select=*`),
+        selectAll(config, `lesson_activities?${inLessons}&select=*`),
+        selectAll(config, `quiz_items?${inLessons}&select=*`),
+        selectAll(config, `lesson_completion_rules?${inLessons}&select=*`),
+        selectAll(config, `lesson_resource_placements?${inLessons}&select=*`),
+        selectAll(config, `vocab_terms?${inLessons}&select=*`),
+        selectAll(config, `ideas?${inLessons}&select=*`),
+      ])
+    : [[], [], [], [], [], [], []];
+
+  const mapId = (map: Map<string, string>, value: unknown) => {
+    const key = cleanText(value);
+    return key ? (map.get(key) ?? null) : null;
+  };
+  const lessonIdMap = new Map(lessons.map((row) => [cleanText(row.id), fork(row.id)]));
+  const milestoneIdMap = new Map(milestones.map((row) => [cleanText(row.id), fork(row.id)]));
+  const activityIdMap = new Map(activities.map((row) => [cleanText(row.id), fork(row.id)]));
+
+  // Parents first (FKs). The fork is ORG-OWNED even when the source is global (null-org)
+  // shared content — a per-class copy must never surface in other organizations' studios.
+  await insertRow(config, "courses", {
+    ...course,
+    id: newCourseId,
+    title,
+    organization_id: classOrgId,
+    created_by: actorId,
+    created_at: now,
+    updated_at: now,
+  });
+  await insertRow(config, "course_versions", {
+    ...version,
+    id: newVersionId,
+    course_id: newCourseId,
+    created_at: now,
+    updated_at: now,
+  });
+  await bulkInsert(
+    config,
+    "units",
+    units.map((row) => ({ ...row, id: fork(row.id), course_version_id: newVersionId, updated_at: now })),
+  );
+
+  // Lessons before milestones (milestones_lesson_id_fkey), milestone_id patched after
+  // (lessons_milestone_id_fkey) — same two-phase as create_lesson_stub.
+  await bulkInsert(
+    config,
+    "lessons",
+    lessons.map((row) => {
+      const metadata =
+        row.curriculum_metadata && typeof row.curriculum_metadata === "object"
+          ? { ...(row.curriculum_metadata as DbRow) }
+          : {};
+      metadata.course_id = newCourseId;
+      metadata.course_version_id = newVersionId;
+      metadata.class_id = classId;
+      metadata.forked_from_course = cleanText(course.id);
+      metadata.forked_from_lesson = cleanText(row.id);
+      return {
+        ...row,
+        id: lessonIdMap.get(cleanText(row.id)),
+        unit_id: fork(row.unit_id),
+        milestone_id: null,
+        curriculum_metadata: metadata,
+      };
+    }),
+  );
+  await bulkInsert(
+    config,
+    "milestones",
+    milestones.map((row) => ({
+      ...row,
+      id: milestoneIdMap.get(cleanText(row.id)),
+      lesson_id: mapId(lessonIdMap, row.lesson_id),
+      updated_at: now,
+    })),
+  );
+  for (const row of lessons) {
+    const newMilestoneId = mapId(milestoneIdMap, row.milestone_id);
+    if (!newMilestoneId) continue;
+    await patchRows(config, `lessons?id=eq.${enc(String(lessonIdMap.get(cleanText(row.id))))}`, {
+      milestone_id: newMilestoneId,
+    });
+  }
+  await bulkInsert(
+    config,
+    "lesson_activities",
+    activities.map((row) => ({
+      ...row,
+      id: activityIdMap.get(cleanText(row.id)),
+      lesson_id: mapId(lessonIdMap, row.lesson_id),
+      updated_at: now,
+    })),
+  );
+  await bulkInsert(
+    config,
+    "quiz_items",
+    quizzes.map((row) => ({
+      ...row,
+      id: fork(row.id),
+      lesson_id: mapId(lessonIdMap, row.lesson_id),
+      milestone_id: mapId(milestoneIdMap, row.milestone_id),
+      activity_id: mapId(activityIdMap, row.activity_id),
+      updated_at: now,
+    })),
+  );
+  await bulkInsert(
+    config,
+    "lesson_completion_rules",
+    rules.map((row) => ({
+      ...omitId(row),
+      lesson_id: mapId(lessonIdMap, row.lesson_id),
+      milestone_id: mapId(milestoneIdMap, row.milestone_id),
+      created_by: actorId,
+      created_at: now,
+      updated_at: now,
+    })),
+  );
+  // Placements point the SAME resource files at the copied structure (the fork shares
+  // uploads with the original; deleting a shared resource affects both).
+  await bulkInsert(
+    config,
+    "lesson_resource_placements",
+    placements.map((row) => ({
+      ...omitId(row),
+      course_id: newCourseId,
+      course_version_id: newVersionId,
+      unit_id: row.unit_id ? fork(row.unit_id) : null,
+      lesson_id: mapId(lessonIdMap, row.lesson_id),
+      milestone_id: mapId(milestoneIdMap, row.milestone_id),
+      activity_id: mapId(activityIdMap, row.activity_id),
+      created_at: now,
+    })),
+  );
+  await bulkInsert(
+    config,
+    "vocab_terms",
+    vocab.map((row) => ({
+      ...omitId(row),
+      lesson_id: mapId(lessonIdMap, row.lesson_id),
+      created_at: now,
+    })),
+  );
+  await bulkInsert(
+    config,
+    "ideas",
+    ideas.map((row) => ({
+      ...omitId(row),
+      lesson_id: mapId(lessonIdMap, row.lesson_id),
+      created_at: now,
+    })),
+  );
+
+  // Relink insert-first (fail-open, mirroring set_class_courses): a failure between the
+  // two calls leaves the class linking BOTH courses, never neither.
+  await serviceFetch(config, "/rest/v1/class_courses?on_conflict=class_id,course_id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([
+      { class_id: classId, course_id: newCourseId, created_by: actorId, created_at: now },
+    ]),
+  });
+  await serviceFetch(
+    config,
+    `/rest/v1/class_courses?class_id=eq.${enc(classId)}&course_id=eq.${enc(courseId)}`,
+    { method: "DELETE" },
+  );
+
+  return json({
+    status: "ok",
+    node_type: "course",
+    id: newCourseId,
+    course_id: newCourseId,
+    course_version_id: newVersionId,
+    source_course_id: courseId,
+    lessons: lessons.length,
+    title,
+  });
+}
+
 async function instantiateTemplate(config: Config, actorId: string, body: DbRow): Promise<Response> {
   const templateId = cleanText(body.template_id);
   const unitId = cleanText(body.unit_id);
@@ -2397,6 +2657,7 @@ Deno.serve(async (req: Request) => {
     if (action === "instantiate_template") return await instantiateTemplate(config, actorId, record);
     if (action === "archive_template") return await archiveTemplate(config, actorId, record);
     if (action === "set_class_courses") return await setClassCourses(config, actorId, record);
+    if (action === "duplicate_course") return await duplicateCourse(config, actorId, record);
 
 // --- Brain-first Phase D: the content-agnostic knowledge intake -----------------------
 // extract_knowledge drafts the brain graph (ideas / vocab / curriculum links / practice
