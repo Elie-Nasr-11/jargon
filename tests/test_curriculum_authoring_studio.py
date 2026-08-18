@@ -18,8 +18,10 @@ ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx"
 ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
 LESSON_GROUPS = ROOT / "frontend" / "src" / "features" / "student" / "lessonGroups.ts"
 LESSON_TREE = ROOT / "frontend" / "src" / "student" / "LessonTree.tsx"
-# The teacher shell sidebar owns the navigation into the authoring studio now.
+# R42: the studio is reached through a class's Curriculum section (teacherNav), not a
+# sidebar destination of its own.
 TEACHER_SIDEBAR = ROOT / "frontend" / "src" / "features" / "teacher" / "shell" / "TeacherSidebar.tsx"
+TEACHER_NAV = ROOT / "frontend" / "src" / "features" / "teacher" / "shell" / "teacherNav.ts"
 
 
 class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
@@ -82,15 +84,16 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         self.assertIn("invokeCurriculumAdmin", self.api)
         self.assertIn("fetchCurriculumAuthoringData", self.api)
         self.assertIn('createFileRoute("/teacher/curriculum")', self.route)
-        # The authoring studio now links back to the teacher console via a breadcrumb
-        # crumb (was a "Teacher dashboard" back-link label).
-        self.assertIn(
-            '{ label: "Teacher", onClick: () => navigate({ to: "/teacher" }) }', self.route
-        )
+        # R42 class-first: the studio mounts inside a class workspace; its breadcrumb is
+        # rooted at the class's Curriculum section (clearing the selection), not at a
+        # standalone studio page.
+        self.assertIn('{ label: "Curriculum", onClick: goRoot }', self.route)
         self.assertIn("/teacher/curriculum", self.route_tree)
-        # The teacher shell sidebar navigates to the studio via router
-        # `navigate({ to: ... })` rather than a JSX `to="..."` link attribute.
-        self.assertIn('navigate({ to: "/teacher/curriculum" })', self.teacher_sidebar)
+        # R42 class-first: the sidebar has no global Curriculum destination anymore — the
+        # studio is reached through a class's Curriculum section row. The legacy route
+        # stays only as a redirect for old bookmarks.
+        self.assertNotIn('navigate({ to: "/teacher/curriculum" })', self.teacher_sidebar)
+        self.assertIn('{ value: "curriculum", label: "Curriculum" }', TEACHER_NAV.read_text(encoding="utf-8"))
 
     def test_authoring_types_cover_blueprint_contract(self):
         for fragment in (

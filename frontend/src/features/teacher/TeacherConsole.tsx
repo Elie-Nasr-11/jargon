@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -29,7 +38,14 @@ import {
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
 import { AssessmentGrading } from "@/features/teacher/AssessmentGrading";
-import { ClassStructurePanel } from "@/features/teacher/ClassStructurePanel";
+import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
+
+// R42: the authoring studio lives inside each class's Curriculum section now. Its code
+// stays in the (heavy) route module and loads on demand the first time the section opens,
+// so the Students landing stays as light as before.
+const CurriculumStudio = lazy(() =>
+  import("@/routes/teacher.curriculum").then((module) => ({ default: module.CurriculumStudio })),
+);
 import {
   lessonStatusClass,
   requiredCheckpointStatus,
@@ -263,16 +279,11 @@ export function TeacherConsole() {
           search: { tab: "overview" },
         });
       } else if (item.classId) {
-        // Grading now lives in the class's Students + performance section.
+        // Every class-level attention item is people-shaped — land on Students.
         navigate({
           to: "/teacher/class/$classId",
           params: { classId: item.classId },
-          search: {
-            tab:
-              item.kind === "submission_to_grade" || item.kind === "assessment_to_review"
-                ? "students"
-                : "overview",
-          },
+          search: { tab: "students" },
         });
       }
     },
@@ -940,13 +951,6 @@ export function TeacherConsole() {
                         })
                       }
                       section={normalizeClassSection(search.tab)}
-                      onSectionChange={(value) =>
-                        navigate({
-                          to: "/teacher/class/$classId",
-                          params: { classId: selectedClass.id },
-                          search: { tab: value },
-                        })
-                      }
                       savingResource={savingResource}
                       savingAssignment={savingAssignment}
                       savingAssessment={savingAssessment}
@@ -1121,7 +1125,6 @@ function ClassDetail({
   onReturnAssessment,
   onUpdateResource,
   section,
-  onSectionChange,
 }: {
   item: TeacherClassSummary;
   stats: ClassSummary;
@@ -1168,285 +1171,273 @@ function ClassDetail({
   onReturnAssessment: (input: { attemptId: string; feedback: string }) => Promise<void>;
   onUpdateResource: (resource: LessonResource) => void;
   section: ClassSection;
-  onSectionChange: (value: ClassSection) => void;
 }) {
   const navigate = useNavigate();
-  // Structure's three authoring benches, folded by default (state is per-visit; Collapsible
-  // keeps the children mounted either way).
+  // The Curriculum section's three authoring benches, folded by default (state is
+  // per-visit; Collapsible keeps the children mounted either way).
   const [openBuilders, setOpenBuilders] = useState<Record<string, boolean>>({});
   const toggleBuilder = (key: string) =>
     setOpenBuilders((current) => ({ ...current, [key]: !current[key] }));
-  // "Gradebook" from the structure tree lands mid-section — scroll the gradebook into view
-  // once the Students section is on screen, instead of stranding the teacher at the top.
-  const gradebookRef = useRef<HTMLDivElement>(null);
-  const pendingGradebookScrollRef = useRef(false);
-  useEffect(() => {
-    if (section === "students" && pendingGradebookScrollRef.current) {
-      pendingGradebookScrollRef.current = false;
-      gradebookRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [section]);
   return (
-    <section className="rounded-card border border-border bg-depth-card shadow-card">
-      <div className="p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-              {organizationName(item)} · {item.status}
+    <>
+      <section className="rounded-card border border-border bg-depth-card shadow-card">
+        <div className="p-4 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                {organizationName(item)} · {item.status}
+              </div>
+              <h2 className="mt-1 font-serif text-display text-foreground">{item.name}</h2>
+              <p className="mt-1 text-body text-muted-foreground">
+                {stats.students} students, {stats.teachers} teacher, {stats.sessions} learning
+                sessions.
+              </p>
             </div>
-            <h2 className="mt-1 font-serif text-display text-foreground">{item.name}</h2>
-            <p className="mt-1 text-body text-muted-foreground">
-              {stats.students} students, {stats.teachers} teacher, {stats.sessions} learning
-              sessions.
-            </p>
+            <div className="flex flex-col items-stretch gap-2 lg:items-end">
+              <div className="grid grid-cols-3 gap-2 text-center text-meta">
+                <MiniMetric label="Attempts" value={String(stats.attempts)} />
+                <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
+                <MiniMetric label="Evidence" value={String(stats.evidence)} />
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col items-stretch gap-2 lg:items-end">
-            <div className="grid grid-cols-3 gap-2 text-center text-meta">
-              <MiniMetric label="Attempts" value={String(stats.attempts)} />
-              <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
-              <MiniMetric label="Evidence" value={String(stats.evidence)} />
+
+          {/* One section at a time — the sidebar's sub-rows under the active class are the
+            switcher. R42 class-first: Students is the landing face (who's live, what needs
+            grading, the roster) and Curriculum is the class's backend (rendered below,
+            outside this card, so the studio gets the full page width). */}
+          {section === "students" ? (
+            <div className="panel-fade mt-4">
+              <h3 className="sr-only">Students &amp; activity</h3>
+              {/* The at-a-glance strips lead: who's in a live session right now + the work
+                counters (absorbed from the retired Overview section). */}
+              <ClassOverviewStrips
+                classId={item.id}
+                dashboard={dashboard}
+                studentIds={studentIds}
+                assignments={assignments}
+                assessments={assessments}
+                profilesById={profilesById}
+                lessonTitle={(lessonId) =>
+                  (lessonId && lessonsById.get(lessonId)?.title) || "a lesson"
+                }
+                onWatch={(studentId, sessionId) =>
+                  navigate({
+                    to: "/teacher/class/$classId/student/$studentId",
+                    params: { classId: item.id, studentId },
+                    search: { tab: "overview", session: sessionId },
+                  })
+                }
+              />
+              <div className="mt-4 grid gap-4">
+                <AssignmentGrading
+                  key={item.id}
+                  assignments={assignments}
+                  recipients={assignmentRecipients}
+                  submissions={assignmentSubmissions}
+                  files={assignmentSubmissionFiles}
+                  profilesById={profilesById}
+                  lessons={lessons}
+                  onReviewSubmission={onReviewSubmission}
+                />
+                <AssessmentGrading
+                  key={`${item.id}:assessments`}
+                  assessments={assessments}
+                  assessmentItems={assessmentItems}
+                  assessmentRecipients={assessmentRecipients}
+                  assessmentAttempts={assessmentAttempts}
+                  assessmentItemAttempts={assessmentItemAttempts}
+                  quizItems={quizItems}
+                  profilesById={profilesById}
+                  lessons={lessons}
+                  onReviewAssessmentItem={onReviewAssessmentItem}
+                  onReturnAssessment={onReturnAssessment}
+                />
+              </div>
+
+              <div className="scroll-mt-4">
+                <GradebookTable
+                  lessons={lessons}
+                  lessonsById={lessonsById}
+                  studentIds={studentIds}
+                  dashboard={dashboard}
+                  profilesById={profilesById}
+                  selectedLessonId={selectedLessonId}
+                  selectedStudentId={selectedStudentId}
+                  onSelectLesson={onSelectLesson}
+                  onSelectStudent={onSelectStudent}
+                />
+              </div>
+
+              <div className="mt-5 grid gap-3">
+                {studentIds.length ? (
+                  studentIds.map((studentId) => {
+                    const profile = profilesById.get(studentId) || null;
+                    const latest = latestSessionFor(dashboard.sessions, studentId);
+                    const completedLessons = completedLessonNamesFor(
+                      dashboard.sessions,
+                      studentId,
+                      lessonsById,
+                    );
+                    const masteryCount = dashboard.mastery.filter(
+                      (item) => item.user_id === studentId,
+                    ).length;
+                    return (
+                      <button
+                        type="button"
+                        key={studentId}
+                        onClick={() => onSelectStudent(studentId)}
+                        className={`rounded-card border p-4 text-left transition-colors ${
+                          selectedStudentId === studentId
+                            ? "border-foreground/25 bg-depth-card"
+                            : "border-border bg-depth-sub hover:bg-muted"
+                        }`}
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="text-body font-medium text-foreground">
+                              {displayName(profile, studentId)}
+                            </div>
+                            <div className="mt-1 text-meta text-muted-foreground">
+                              {profile?.grade || "Grade not set"} - {masteryCount} mastery skills
+                            </div>
+                            <div className="mt-2 text-meta text-muted-foreground">
+                              {completedLessons.length
+                                ? `Completed: ${completedLessons.join(", ")}`
+                                : "No completed lessons yet"}
+                            </div>
+                          </div>
+                          <div className="text-left text-meta text-muted-foreground sm:text-right">
+                            <div>{latest ? statusLabel(latest) : "No session yet"}</div>
+                            <div className="mt-1">
+                              {latest
+                                ? lessonName(lessonsById, latest.lesson_id)
+                                : "Waiting for first lesson"}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
+                    No active students are assigned to this class yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {/* R42: the Curriculum section renders OUTSIDE the class card so the studio's
+          two-column workspace gets the full page width. Order: the studio (build lessons),
+          which courses this class runs, then the class's own builders. */}
+      {section === "curriculum" ? (
+        <div className="panel-fade flex flex-col gap-4">
+          <h3 className="sr-only">Curriculum</h3>
+          <Suspense
+            fallback={
+              <section className="rounded-card border border-border bg-depth-card shadow-card">
+                <div className="p-6 text-body text-muted-foreground">Loading curriculum...</div>
+              </section>
+            }
+          >
+            <CurriculumStudio classId={item.id} />
+          </Suspense>
+
+          <LinkedCoursesPanel classId={item.id} lessons={lessons} />
+
+          {/* The authoring benches, folded by default so the section reads as one screen.
+              Collapsible keeps children mounted (height-0 + inert), so builder drafts and
+              chunk-QA state survive folding. */}
+          <div className="rounded-card border border-border bg-depth-card p-4">
+            <div className="mb-2">
+              <h3 className="text-title font-medium text-foreground">Build for this class</h3>
+              <p className="text-meta text-muted-foreground">
+                Resources, assignments, and quizzes you author for these lessons. Submitted work is
+                graded under Students &amp; performance.
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <Collapsible
+                open={!!openBuilders.resources}
+                onToggle={() => toggleBuilder("resources")}
+                title={<span className="text-body font-medium text-foreground">Resources</span>}
+                meta={
+                  <span className="shrink-0 text-meta text-muted-foreground">
+                    {resources.length}
+                  </span>
+                }
+                headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+                bodyClassName="pb-2"
+              >
+                <ResourceManager
+                  classSummary={item}
+                  lessons={lessons}
+                  resources={resources}
+                  saving={savingResource}
+                  onSaveResource={onSaveResource}
+                  onUpdateResource={onUpdateResource}
+                />
+              </Collapsible>
+              <Collapsible
+                open={!!openBuilders.assignments}
+                onToggle={() => toggleBuilder("assignments")}
+                title={<span className="text-body font-medium text-foreground">Assignments</span>}
+                meta={
+                  <span className="shrink-0 text-meta text-muted-foreground">
+                    {assignments.length}
+                  </span>
+                }
+                headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+                bodyClassName="pb-2"
+              >
+                <AssignmentManager
+                  classSummary={item}
+                  lessons={lessons}
+                  resources={resources}
+                  assignments={assignments}
+                  recipients={assignmentRecipients}
+                  submissions={assignmentSubmissions}
+                  studentIds={studentIds}
+                  profilesById={profilesById}
+                  saving={savingAssignment}
+                  onSaveAssignment={onSaveAssignment}
+                  onSetAssignmentStatus={onSetAssignmentStatus}
+                />
+              </Collapsible>
+              <Collapsible
+                open={!!openBuilders.assessments}
+                onToggle={() => toggleBuilder("assessments")}
+                title={<span className="text-body font-medium text-foreground">Quizzes</span>}
+                meta={
+                  <span className="shrink-0 text-meta text-muted-foreground">
+                    {assessments.length}
+                  </span>
+                }
+                headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+                bodyClassName="pb-2"
+              >
+                <AssessmentManager
+                  classSummary={item}
+                  lessons={lessons}
+                  quizItems={quizItems}
+                  assessments={assessments}
+                  assessmentItems={assessmentItems}
+                  assessmentRecipients={assessmentRecipients}
+                  studentIds={studentIds}
+                  profilesById={profilesById}
+                  saving={savingAssessment}
+                  onSaveAssessment={onSaveAssessment}
+                  onSetAssessmentStatus={onSetAssessmentStatus}
+                />
+              </Collapsible>
             </div>
           </div>
         </div>
-
-        {/* One section at a time — the sidebar's sub-rows under the active class are the
-            switcher (the old 7-tab strip is gone). Sections unmount on switch; the builders
-            live together with their consumers in Structure, so in-progress drafts only reset
-            on an explicit cross-section move. */}
-        {section === "overview" ? (
-          <div className="panel-fade mt-4">
-            <h3 className="sr-only">Overview</h3>
-            <ClassOverviewStrips
-              classId={item.id}
-              dashboard={dashboard}
-              studentIds={studentIds}
-              assignments={assignments}
-              assessments={assessments}
-              profilesById={profilesById}
-              lessonTitle={(lessonId) =>
-                (lessonId && lessonsById.get(lessonId)?.title) || "a lesson"
-              }
-              onWatch={(studentId, sessionId) =>
-                navigate({
-                  to: "/teacher/class/$classId/student/$studentId",
-                  params: { classId: item.id, studentId },
-                  search: { tab: "overview", session: sessionId },
-                })
-              }
-            />
-          </div>
-        ) : null}
-
-        {/* Grading queues lead — they're what the bell and hotlist deep-link to. */}
-        {section === "students" ? (
-          <div className="panel-fade mt-4">
-            <h3 className="sr-only">Students &amp; performance</h3>
-            <div className="grid gap-4">
-              <AssignmentGrading
-                key={item.id}
-                assignments={assignments}
-                recipients={assignmentRecipients}
-                submissions={assignmentSubmissions}
-                files={assignmentSubmissionFiles}
-                profilesById={profilesById}
-                lessons={lessons}
-                onReviewSubmission={onReviewSubmission}
-              />
-              <AssessmentGrading
-                key={`${item.id}:assessments`}
-                assessments={assessments}
-                assessmentItems={assessmentItems}
-                assessmentRecipients={assessmentRecipients}
-                assessmentAttempts={assessmentAttempts}
-                assessmentItemAttempts={assessmentItemAttempts}
-                quizItems={quizItems}
-                profilesById={profilesById}
-                lessons={lessons}
-                onReviewAssessmentItem={onReviewAssessmentItem}
-                onReturnAssessment={onReturnAssessment}
-              />
-            </div>
-
-            <div ref={gradebookRef} className="scroll-mt-4">
-              <GradebookTable
-                lessons={lessons}
-                lessonsById={lessonsById}
-                studentIds={studentIds}
-                dashboard={dashboard}
-                profilesById={profilesById}
-                selectedLessonId={selectedLessonId}
-                selectedStudentId={selectedStudentId}
-                onSelectLesson={onSelectLesson}
-                onSelectStudent={onSelectStudent}
-              />
-            </div>
-
-            <div className="mt-5 grid gap-3">
-              {studentIds.length ? (
-                studentIds.map((studentId) => {
-                  const profile = profilesById.get(studentId) || null;
-                  const latest = latestSessionFor(dashboard.sessions, studentId);
-                  const completedLessons = completedLessonNamesFor(
-                    dashboard.sessions,
-                    studentId,
-                    lessonsById,
-                  );
-                  const masteryCount = dashboard.mastery.filter(
-                    (item) => item.user_id === studentId,
-                  ).length;
-                  return (
-                    <button
-                      type="button"
-                      key={studentId}
-                      onClick={() => onSelectStudent(studentId)}
-                      className={`rounded-card border p-4 text-left transition-colors ${
-                        selectedStudentId === studentId
-                          ? "border-foreground/25 bg-depth-card"
-                          : "border-border bg-depth-sub hover:bg-muted"
-                      }`}
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="text-body font-medium text-foreground">
-                            {displayName(profile, studentId)}
-                          </div>
-                          <div className="mt-1 text-meta text-muted-foreground">
-                            {profile?.grade || "Grade not set"} - {masteryCount} mastery skills
-                          </div>
-                          <div className="mt-2 text-meta text-muted-foreground">
-                            {completedLessons.length
-                              ? `Completed: ${completedLessons.join(", ")}`
-                              : "No completed lessons yet"}
-                          </div>
-                        </div>
-                        <div className="text-left text-meta text-muted-foreground sm:text-right">
-                          <div>{latest ? statusLabel(latest) : "No session yet"}</div>
-                          <div className="mt-1">
-                            {latest
-                              ? lessonName(lessonsById, latest.lesson_id)
-                              : "Waiting for first lesson"}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
-                  No active students are assigned to this class yet.
-                </div>
-              )}
-            </div>
-          </div>
-        ) : null}
-
-        {section === "structure" ? (
-          <div className="panel-fade mt-4">
-            <h3 className="sr-only">Structure &amp; curriculum</h3>
-            <ClassStructurePanel
-              classId={item.id}
-              lessons={lessons}
-              dashboard={dashboard}
-              studentIds={studentIds}
-              onOpenGradebook={(lessonId) => {
-                onSelectLesson(lessonId);
-                pendingGradebookScrollRef.current = true;
-                onSectionChange("students");
-              }}
-            />
-
-            {/* The authoring benches, folded by default so the section reads as one screen:
-                structure tree → course scoping → three compact builder rows. Collapsible keeps
-                children mounted (height-0 + inert), so builder drafts and chunk-QA state
-                survive folding. */}
-            <div className="mt-4 rounded-card border border-border bg-depth-card p-4">
-              <div className="mb-2">
-                <h3 className="text-title font-medium text-foreground">Build for this class</h3>
-                <p className="text-meta text-muted-foreground">
-                  Resources, assignments, and quizzes you author for these lessons. Submitted work
-                  is graded under Students &amp; performance.
-                </p>
-              </div>
-              <div className="grid gap-1">
-                <Collapsible
-                  open={!!openBuilders.resources}
-                  onToggle={() => toggleBuilder("resources")}
-                  title={<span className="text-body font-medium text-foreground">Resources</span>}
-                  meta={
-                    <span className="shrink-0 text-meta text-muted-foreground">
-                      {resources.length}
-                    </span>
-                  }
-                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                  bodyClassName="pb-2"
-                >
-                  <ResourceManager
-                    classSummary={item}
-                    lessons={lessons}
-                    resources={resources}
-                    saving={savingResource}
-                    onSaveResource={onSaveResource}
-                    onUpdateResource={onUpdateResource}
-                  />
-                </Collapsible>
-                <Collapsible
-                  open={!!openBuilders.assignments}
-                  onToggle={() => toggleBuilder("assignments")}
-                  title={<span className="text-body font-medium text-foreground">Assignments</span>}
-                  meta={
-                    <span className="shrink-0 text-meta text-muted-foreground">
-                      {assignments.length}
-                    </span>
-                  }
-                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                  bodyClassName="pb-2"
-                >
-                  <AssignmentManager
-                    classSummary={item}
-                    lessons={lessons}
-                    resources={resources}
-                    assignments={assignments}
-                    recipients={assignmentRecipients}
-                    submissions={assignmentSubmissions}
-                    studentIds={studentIds}
-                    profilesById={profilesById}
-                    saving={savingAssignment}
-                    onSaveAssignment={onSaveAssignment}
-                    onSetAssignmentStatus={onSetAssignmentStatus}
-                  />
-                </Collapsible>
-                <Collapsible
-                  open={!!openBuilders.assessments}
-                  onToggle={() => toggleBuilder("assessments")}
-                  title={<span className="text-body font-medium text-foreground">Quizzes</span>}
-                  meta={
-                    <span className="shrink-0 text-meta text-muted-foreground">
-                      {assessments.length}
-                    </span>
-                  }
-                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                  bodyClassName="pb-2"
-                >
-                  <AssessmentManager
-                    classSummary={item}
-                    lessons={lessons}
-                    quizItems={quizItems}
-                    assessments={assessments}
-                    assessmentItems={assessmentItems}
-                    assessmentRecipients={assessmentRecipients}
-                    studentIds={studentIds}
-                    profilesById={profilesById}
-                    saving={savingAssessment}
-                    onSaveAssessment={onSaveAssessment}
-                    onSetAssessmentStatus={onSetAssessmentStatus}
-                  />
-                </Collapsible>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </section>
+      ) : null}
+    </>
   );
 }
 

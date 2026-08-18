@@ -145,7 +145,7 @@ export function NotificationsMenu() {
       navigate({
         to: "/teacher/class/$classId",
         params: { classId: n.class_id },
-        search: { tab: "overview" },
+        search: { tab: "students" },
       });
     }
   };

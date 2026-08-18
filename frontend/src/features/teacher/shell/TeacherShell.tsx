@@ -22,7 +22,7 @@ export function TeacherShell({
 }: {
   email: string;
   classes: TeacherClassSummary[];
-  activeView: "home" | "class" | "curriculum";
+  activeView: "home" | "class";
   activeClassId?: string | null;
   activeSection?: ClassSection | null;
   children: ReactNode;

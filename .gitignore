@@ -9,3 +9,6 @@ frontend/dist/
 __pycache__/
 *.pyc
 *.tsbuildinfo
+
+# Local visual-harness build (compiled against the mock backend; never ship)
+frontend/dist-visual/

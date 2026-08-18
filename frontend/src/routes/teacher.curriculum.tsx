@@ -21,8 +21,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { PageShell } from "@/components/PageShell";
-import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { RouteLoader } from "@/components/RouteLoader";
 import { ArtifactFrame } from "@/components/ArtifactFrame";
@@ -41,7 +39,7 @@ import {
   deleteCurriculumNode,
   deleteCurriculumStep,
   fetchCurriculumAuthoringData,
-  fetchPrimaryRole,
+  fetchTeacherClasses,
   generateCurriculumDraft,
   getSession,
   invokeCurriculumAdmin,
@@ -49,7 +47,6 @@ import {
   renameCurriculumNode,
   reorderCurriculumNodes,
   reorderCurriculumSteps,
-  roleHome,
   saveCurriculumLessonMeta,
   updateLessonResource,
   upsertCurriculumStep,
@@ -122,9 +119,10 @@ type CurriculumSearch = {
 };
 
 export const Route = createFileRoute("/teacher/curriculum")({
-  // The selected node lives on the URL spine so the studio is deep-linkable and
-  // back/forward works. Exactly one of subject/course/unit/lesson is set at a time
-  // (the selected node); ancestors are resolved from data for the outline + breadcrumb.
+  // R42: the studio has no standalone page anymore — building happens inside a class
+  // (/teacher/class/$classId?tab=curriculum). This route survives only to catch old
+  // bookmarks and stale deep links, forwarding the selection params into the teacher's
+  // first class. The selection params keep the same names on the class route.
   validateSearch: (search: Record<string, unknown>): CurriculumSearch => ({
     subject: typeof search.subject === "string" ? search.subject : undefined,
     course: typeof search.course === "string" ? search.course : undefined,
@@ -146,16 +144,56 @@ export const Route = createFileRoute("/teacher/curriculum")({
 function CurriculumPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as CurriculumSearch;
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const session = await getSession();
+        if (!alive) return;
+        if (!session) {
+          navigate({ to: "/login", replace: true });
+          return;
+        }
+        const classes = await fetchTeacherClasses(session.user.id);
+        if (!alive) return;
+        const first = classes[0];
+        if (first) {
+          navigate({
+            to: "/teacher/class/$classId",
+            params: { classId: first.id },
+            search: { tab: "curriculum", ...search },
+            replace: true,
+          });
+        } else {
+          navigate({ to: "/teacher", replace: true });
+        }
+      } catch {
+        if (alive) navigate({ to: "/teacher", replace: true });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // Runs once on mount — `search` is only forwarded, never re-read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate]);
+  return <RouteLoader label="Loading…" />;
+}
+
+// The authoring studio, mounted inside a class workspace's Curriculum section. All content
+// operations run with this class as the authorization scope (curriculum-admin re-checks
+// teacher membership server-side); the host (TeacherConsole) has already verified the
+// teacher role, so there is no role gate here.
+export function CurriculumStudio({ classId }: { classId: string }) {
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as CurriculumSearch;
   const [booting, setBooting] = useState(true);
-  const [email, setEmail] = useState("");
   const [data, setData] = useState<CurriculumAuthoringData | null>(null);
-  const [selectedClassId, setSelectedClassId] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   // Outline nodes are collapsed by default; this set holds the EXPANDED ids.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [outlineOpen, setOutlineOpen] = useState(true);
-  const [roleOk, setRoleOk] = useState(false);
   const undoable = useUndoable();
   // Deferred-undo ops (delete/publish) hold their optimistic change here so a
   // background refetch (from a create/AI-apply) doesn't resurrect a row that's
@@ -186,16 +224,8 @@ function CurriculumPage() {
         navigate({ to: "/login", replace: true });
         return;
       }
-      const role = await fetchPrimaryRole(session.access_token, session.user.id);
-      if (role !== "teacher") {
-        navigate({ to: roleHome(role), replace: true });
-        return;
-      }
-      setRoleOk(true);
       const curriculum = await fetchCurriculumAuthoringData(session.user.id);
-      setEmail(session.user.email || "");
       setData(curriculum);
-      setSelectedClassId((current) => current || curriculum.classes[0]?.id || "");
     } catch (error) {
       setMessage((error as Error).message || "Could not load curriculum studio.");
     } finally {
@@ -208,8 +238,8 @@ function CurriculumPage() {
   }, [loadData]);
 
   const selectedClass = useMemo(
-    () => data?.classes.find((item) => item.id === selectedClassId) || null,
-    [data, selectedClassId],
+    () => data?.classes.find((item) => item.id === classId) || null,
+    [data, classId],
   );
 
   const lessonsById = useMemo(() => {
@@ -276,16 +306,26 @@ function CurriculumPage() {
     return rows;
   }, [orgSubjects, coursesForSubject, unitsForCourse]);
 
+  // Selection rides the class route's URL (?tab=curriculum&lesson=… etc.) so lesson
+  // editing stays deep-linkable inside the class and back/forward keeps working.
   const selectNode = useCallback(
     (type: CurriculumNodeType, id: string) => {
-      navigate({ to: "/teacher/curriculum", search: { [type]: id } as CurriculumSearch });
+      navigate({
+        to: "/teacher/class/$classId",
+        params: { classId },
+        search: { tab: "curriculum", [type]: id },
+      });
     },
-    [navigate],
+    [navigate, classId],
   );
 
   const clearSelection = useCallback(() => {
-    navigate({ to: "/teacher/curriculum", search: {} });
-  }, [navigate]);
+    navigate({
+      to: "/teacher/class/$classId",
+      params: { classId },
+      search: { tab: "curriculum" },
+    });
+  }, [navigate, classId]);
 
   const toggleExpanded = (id: string) =>
     setExpanded((current) => {
@@ -843,165 +883,130 @@ function CurriculumPage() {
     });
   };
 
-  if (!roleOk) {
-    return <RouteLoader label="Loading…" />;
-  }
-
-  const crumbs = buildBreadcrumb({ selection, data, navigate });
+  const crumbs = buildBreadcrumb({ selection, data, goRoot: clearSelection, goNode: selectNode });
 
   return (
-    <TeacherShell email={email} classes={data?.classes ?? []} activeView="curriculum">
-      <PageShell widthClass="max-w-[1440px]" ariaLabel="Curriculum studio">
-        <div className="flex flex-col gap-5">
-          {/* The Breadcrumb here is CONTENT nav (it encodes the subject→lesson selection), not chrome. */}
-          <Breadcrumb segments={crumbs} />
-
-          <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="text-overline uppercase tracking-[0.1em] text-muted-foreground">
-                Curriculum studio
-              </div>
-              <h1 className="font-serif mt-2 text-display text-foreground">
-                Build the lesson path.
-              </h1>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              {data?.classes.length ? (
-                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  Class scope
-                  <select
-                    value={selectedClassId}
-                    onChange={(event) => setSelectedClassId(event.target.value)}
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
-                  >
-                    {data.classes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              {data?.classes.length ? (
-                <button
-                  type="button"
-                  onClick={() => setOutlineOpen((value) => !value)}
-                  className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
-                >
-                  {outlineOpen ? (
-                    <PanelLeftClose className="h-4 w-4" strokeWidth={1.7} />
-                  ) : (
-                    <PanelLeft className="h-4 w-4" strokeWidth={1.7} />
-                  )}
-                  {outlineOpen ? "Hide outline" : "Show outline"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void loadData()}
-                className="rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
-              >
-                Refresh
-              </button>
-            </div>
-          </section>
-
-          {message ? (
-            <section className="rounded-card border border-border bg-depth-card shadow-card">
-              <div className="flex items-center justify-between gap-3 p-4 text-body text-muted-foreground">
-                <span>{message}</span>
-                <button
-                  type="button"
-                  onClick={() => setMessage("")}
-                  className="text-meta text-muted-foreground/70 hover:text-foreground"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </section>
-          ) : null}
-
-          {booting ? (
-            <section className="rounded-card border border-border bg-depth-card shadow-card">
-              <div className="p-6 text-body text-muted-foreground">Loading curriculum...</div>
-            </section>
-          ) : !data?.classes.length ? (
-            <section className="rounded-card border border-border bg-depth-card shadow-card">
-              <div className="p-6 text-body text-muted-foreground">
-                Teacher curriculum access requires an assigned class.
-              </div>
-            </section>
-          ) : data && selectedClass ? (
-            <div
-              className={`grid gap-4 ${outlineOpen ? "lg:grid-cols-[330px_minmax(0,1fr)]" : ""}`}
-            >
-              {/* Sticky offsets are relative to the PageShell scroller (no sticky header anymore):
-              a small top inset, capped so the outline never outgrows the viewport. */}
-              {outlineOpen ? (
-                <aside className="min-w-0 lg:sticky lg:top-2 lg:max-h-[calc(100dvh-4rem)] lg:overflow-x-hidden lg:overflow-y-auto">
-                  <Outline
-                    subjects={orgSubjects}
-                    coursesForSubject={coursesForSubject}
-                    unitsForCourse={unitsForCourse}
-                    lessonsForUnit={lessonsForUnit}
-                    selection={selection}
-                    expanded={expanded}
-                    busy={busy}
-                    onToggle={toggleExpanded}
-                    onSelect={selectNode}
-                    onReorder={reorder}
-                    onAddSubject={addSubject}
-                    onAddCourse={addCourse}
-                    onAddUnit={addUnit}
-                    onAddLesson={addLesson}
-                    onCollapse={() => setOutlineOpen(false)}
-                  />
-                </aside>
-              ) : null}
-
-              <div className="min-w-0">
-                <DetailPane
-                  key={selection ? `${selection.type}:${selection.id}` : "empty"}
-                  selection={selection}
-                  data={data}
-                  lessonsById={lessonsById}
-                  orgUnits={orgUnits}
-                  resources={data.resources}
-                  busy={busy}
-                  onAddSubject={addSubject}
-                  onRename={renameNode}
-                  onArchive={archiveNode}
-                  onDelete={deleteNode}
-                  onAddCourse={addCourse}
-                  onAddUnit={addUnit}
-                  onAddLesson={addLesson}
-                  onMoveLesson={moveLesson}
-                  onSaveLessonMeta={saveLessonMeta}
-                  onUpsertStep={upsertStep}
-                  onReorderSteps={reorderSteps}
-                  onDeleteStep={deleteStep}
-                  onBindResource={bindResource}
-                  onShareResource={shareArtifact}
-                  onGenerateArtifact={generateArtifact}
-                  onApproveArtifact={approveArtifact}
-                  onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
-                  onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
-                  onGenerateOutline={generateOutline}
-                  onApplyOutline={applyOutline}
-                  onGenerateSteps={generateSteps}
-                  onApplySteps={applyStepDrafts}
-                  counts={{
-                    coursesForSubject: (id) => coursesForSubject(id).length,
-                    unitsForCourse: (id) => unitsForCourse(id).length,
-                    lessonsForUnit: (id) => lessonsForUnit(id).length,
-                  }}
-                />
-              </div>
-            </div>
-          ) : null}
+    <div className="flex flex-col gap-4">
+      {/* Slim toolbar — the class page above already carries the class name and section
+          switcher, so the studio only needs its content breadcrumb (the subject→lesson
+          selection) and its own controls. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Breadcrumb segments={crumbs} />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOutlineOpen((value) => !value)}
+            className="inline-flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+          >
+            {outlineOpen ? (
+              <PanelLeftClose className="h-3.5 w-3.5" strokeWidth={1.7} />
+            ) : (
+              <PanelLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
+            )}
+            {outlineOpen ? "Hide outline" : "Show outline"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+          >
+            Refresh
+          </button>
         </div>
-      </PageShell>
-    </TeacherShell>
+      </div>
+
+      {message ? (
+        <section className="rounded-card border border-border bg-depth-card shadow-card">
+          <div className="flex items-center justify-between gap-3 p-4 text-body text-muted-foreground">
+            <span>{message}</span>
+            <button
+              type="button"
+              onClick={() => setMessage("")}
+              className="text-meta text-muted-foreground/70 hover:text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {booting ? (
+        <section className="rounded-card border border-border bg-depth-card shadow-card">
+          <div className="p-6 text-body text-muted-foreground">Loading curriculum...</div>
+        </section>
+      ) : !selectedClass ? (
+        <section className="rounded-card border border-border bg-depth-card shadow-card">
+          <div className="p-6 text-body text-muted-foreground">
+            Teacher curriculum access requires an assigned class.
+          </div>
+        </section>
+      ) : data ? (
+        <div className={`grid gap-4 ${outlineOpen ? "lg:grid-cols-[330px_minmax(0,1fr)]" : ""}`}>
+          {/* Sticky offsets are relative to the class page's PageShell scroller: a small top
+              inset, capped so the outline never outgrows the viewport. */}
+          {outlineOpen ? (
+            <aside className="min-w-0 lg:sticky lg:top-2 lg:max-h-[calc(100dvh-4rem)] lg:overflow-x-hidden lg:overflow-y-auto">
+              <Outline
+                subjects={orgSubjects}
+                coursesForSubject={coursesForSubject}
+                unitsForCourse={unitsForCourse}
+                lessonsForUnit={lessonsForUnit}
+                selection={selection}
+                expanded={expanded}
+                busy={busy}
+                onToggle={toggleExpanded}
+                onSelect={selectNode}
+                onReorder={reorder}
+                onAddSubject={addSubject}
+                onAddCourse={addCourse}
+                onAddUnit={addUnit}
+                onAddLesson={addLesson}
+                onCollapse={() => setOutlineOpen(false)}
+              />
+            </aside>
+          ) : null}
+
+          <div className="min-w-0">
+            <DetailPane
+              key={selection ? `${selection.type}:${selection.id}` : "empty"}
+              selection={selection}
+              data={data}
+              lessonsById={lessonsById}
+              orgUnits={orgUnits}
+              resources={data.resources}
+              busy={busy}
+              onAddSubject={addSubject}
+              onRename={renameNode}
+              onArchive={archiveNode}
+              onDelete={deleteNode}
+              onAddCourse={addCourse}
+              onAddUnit={addUnit}
+              onAddLesson={addLesson}
+              onMoveLesson={moveLesson}
+              onSaveLessonMeta={saveLessonMeta}
+              onUpsertStep={upsertStep}
+              onReorderSteps={reorderSteps}
+              onDeleteStep={deleteStep}
+              onBindResource={bindResource}
+              onShareResource={shareArtifact}
+              onGenerateArtifact={generateArtifact}
+              onApproveArtifact={approveArtifact}
+              onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
+              onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
+              onGenerateOutline={generateOutline}
+              onApplyOutline={applyOutline}
+              onGenerateSteps={generateSteps}
+              onApplySteps={applyStepDrafts}
+              counts={{
+                coursesForSubject: (id) => coursesForSubject(id).length,
+                unitsForCourse: (id) => unitsForCourse(id).length,
+                lessonsForUnit: (id) => lessonsForUnit(id).length,
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -4141,21 +4146,23 @@ function parseLessonKind(value: unknown): LessonKind | null {
 function buildBreadcrumb({
   selection,
   data,
-  navigate,
+  goRoot,
+  goNode,
 }: {
   selection: Selection;
   data: CurriculumAuthoringData | null;
-  navigate: ReturnType<typeof useNavigate>;
+  goRoot: () => void;
+  goNode: (type: CurriculumNodeType, id: string) => void;
 }) {
+  // Rooted at the class's Curriculum section — the studio has no page of its own anymore,
+  // so the crumb encodes only the content path (subject → … → lesson) within this class.
   const segments: Array<{ label: string; onClick?: () => void }> = [
-    { label: "Teacher", onClick: () => navigate({ to: "/teacher" }) },
-    { label: "Curriculum", onClick: () => navigate({ to: "/teacher/curriculum", search: {} }) },
+    { label: "Curriculum", onClick: goRoot },
   ];
   if (!selection || !data) return segments;
 
   const path = nodePath(selection, data);
-  const go = (type: CurriculumNodeType, id: string) =>
-    navigate({ to: "/teacher/curriculum", search: { [type]: id } as CurriculumSearch });
+  const go = goNode;
 
   if (path.subject)
     segments.push({ label: path.subject.title, onClick: () => go("subject", path.subject!.id) });

@@ -1017,3 +1017,31 @@ Built in one pass per owner direction ("build the whole thing"):
   links are RETIRED — the map now shows real, earned structure.
 - Progress spine note: mastery-by-idea rides the existing skill_key bridge (idea.key
   adopts that vocabulary); step-based fractions remain the lesson-level display.
+
+## 2026-08-18 - R42: Teacher IA is class-first — one single hierarchy (owner decision)
+
+Owner's directive, verbatim intent: "I want things separated by classes Only there
+should be one single hierarchy for the whole thing … classes, you enter, then you can
+see the list of students in their activity, and then per lesson, you'll be able to
+build the curriculum within each class. I don't think there should be a single builder
+space for everything." Sections mean sibling classes (7A/7B); the preview button IS the
+teacher's testing affordance (owner correction — do not describe testing as missing).
+
+- **Hierarchy**: Teacher home = classes, nothing else. A class opens on **Students**
+  (roster + live activity + grading; absorbed the old Overview strips) with
+  **Curriculum** as its backend section (the authoring studio scoped to the class,
+  Linked courses, and the class builders). The old Overview/Structure sections and the
+  sidebar's global Curriculum destination are retired; `/teacher/curriculum` remains
+  only as a redirect into the first class (selection params forwarded).
+- **Mechanics**: the studio component (still living in routes/teacher.curriculum.tsx —
+  six pin suites read that path) exports `CurriculumStudio({ classId })`, mounted
+  lazily by TeacherConsole; its subject/course/unit/lesson selection rides the class
+  route URL (`?tab=curriculum&lesson=…`), so lesson editing is deep-linkable per class.
+  Curriculum-admin writes already carried class_id as the authorization scope — the UI
+  now matches the server model.
+- **Agreed follow-ups** (owner choices, next slices): (1) courses shared across classes
+  stay shared with visible "also used by" badges and **fork-on-demand** ("duplicate for
+  this class") — no always-fork; (2) the empty-scope default flips to "students see
+  exactly the class's linked courses", behavior-preservingly (backfill links for
+  currently-unscoped classes first); (3) class-scoped outline with "add existing
+  course" + auto-link on create.

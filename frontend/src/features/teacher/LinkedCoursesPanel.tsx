@@ -103,7 +103,7 @@ export function LinkedCoursesPanel({
   };
 
   return (
-    <div className="mt-5 rounded-card border border-border bg-depth-sub p-4">
+    <div className="rounded-card border border-border bg-depth-card p-4 shadow-card">
       <div className="mb-1 flex items-center gap-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
         <BookMarked className="h-3.5 w-3.5" strokeWidth={1.8} />
         Linked courses
