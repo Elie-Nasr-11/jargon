@@ -10774,3 +10774,40 @@ needs a curriculum-admin action; the studio outline shows publish state but not 
 class progress (candidate: fold the old structure-tree progress chips into the outline).
 Suggested next task: R44 slice 3 — fork-on-demand for shared courses (curriculum-admin
 duplicate_course action + "Duplicate for this class" on shared courses).
+
+## Claude -> Codex / Human - 2026-08-18 22:20
+
+Status: Finished
+Summary: R44 slice 3 — fork-on-demand for shared courses, completing the owner's three
+class-first decisions. New curriculum-admin action `duplicate_course`: class-authorized
+(assertCanAuthor on the class's org), refuses foreign-org sources and unlinked courses,
+deep-copies the course + current version + units + lessons + milestones + steps + quiz
+items + completion rules + resource placements (same underlying files) + authored vocab
+and ideas. Ideas/vocab keep their keys/terms so mastery-by-key and key-based links stay
+continuous on the copy. Text-id tables fork as `${sourceId}-${6charTag}` (one tag per
+fork); uuid tables regenerate. The fork is ORG-OWNED even when the source is global
+(null-org), so a per-class copy never surfaces in other orgs' studios — and the studio
+now org-filters courses (own org + global) to match. Relink is insert-first/fail-open
+(both linked on a mid-failure, never neither). Client: duplicateCourseForClass (60s
+timeout). UI: the shared-course strip gains "Duplicate for this class"; success message
+states the split ("Past student work stays with the original lessons"); selection lands
+on the fork and the scoped outline swaps to it (links refreshed in the same pass).
+Files changed: supabase/functions/curriculum-admin/index.ts (+bulkInsert helper),
+frontend/src/lib/api.ts, frontend/src/routes/teacher.curriculum.tsx,
+tests/test_r44_fork_on_demand.py (new), docs/HANDOFF.md.
+Tests run: pin suite 770 OK; deno check clean (offline shim — jsr.io blocked in the
+container); tsc + eslint clean; offline harness 7/7 (fork button on shared strip,
+success copy, selection lands on fork, outline swap, fork not marked shared, panel state,
+7B keeps the original checked + no fork in its outline). Edge function deploys via the
+existing deploy-backend.yml on merge (path-triggered); after merge, verify the Actions
+run succeeded, curriculum-admin version bumps past 27, then do a live fork on Demo Class
+and CLEAN IT UP (restore original link, delete `-<tag>` rows) — record the result here.
+Remaining concerns: student HISTORY stays on original lessons by design (in-flight
+sessions keep working via the pinned-lesson rule but their lessons leave the class
+catalog once relinked); a student who collected a word from the original and re-collects
+it from the fork could see the term twice in My Jargon (cosmetic, rare); forked
+placements share resource files with the original (deleting a shared upload affects
+both); "also used by" still only sees the signed-in teacher's own classes.
+Suggested next task: surface fork provenance in the course DetailPane (forked_from_course
+is already in curriculum_metadata) and consider outline progress chips (old structure
+tree's per-lesson N/M complete).

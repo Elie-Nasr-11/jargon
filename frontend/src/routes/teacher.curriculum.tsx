@@ -38,6 +38,7 @@ import {
   createCurriculumUnit,
   deleteCurriculumNode,
   deleteCurriculumStep,
+  duplicateCourseForClass,
   fetchClassCourseLinks,
   fetchCurriculumAuthoringData,
   fetchTeacherClasses,
@@ -280,12 +281,19 @@ export function CurriculumStudio({ classId }: { classId: string }) {
       .sort(byPositionThenTitle);
   }, [data, selectedClass]);
 
+  // Courses of a subject that this ORG may see: its own plus global (null-org) shared
+  // content. Org-owned courses of other orgs — e.g. another org's fork of a global
+  // course — never surface here (set_class_courses would reject linking them anyway).
   const coursesForSubject = useCallback(
     (subjectId: string) =>
       (data?.courses || [])
-        .filter((course) => course.subject_id === subjectId)
+        .filter(
+          (course) =>
+            course.subject_id === subjectId &&
+            (!course.organization_id || course.organization_id === selectedClass?.organization_id),
+        )
         .sort(byPositionThenTitle),
-    [data],
+    [data, selectedClass],
   );
 
   const currentVersionForCourse = useCallback(
@@ -994,15 +1002,40 @@ export function CurriculumStudio({ classId }: { classId: string }) {
   };
 
   // The selected node's course, when other classes also link it → the honesty strip
-  // above the editor ("changes here also reach …").
+  // above the editor ("changes here also reach …") with the fork-on-demand action.
   const sharedNotice = useMemo(() => {
     if (!selection || !data) return null;
     const course = nodePath(selection, data).course;
     if (!course) return null;
     const peers = peerClassNames(course.id);
-    return peers.length ? peers.join(", ") : null;
+    return peers.length ? { courseId: course.id, names: peers.join(", ") } : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection?.type, selection?.id, data, peerClassNames]);
+
+  // R44 fork-on-demand: copy the shared course for THIS class and swap the class's link
+  // to the copy. The link refresh happens inside the run so the scoped outline flips to
+  // the fork in the same pass; selection lands on the new course.
+  const duplicateSharedCourse = (courseId: string) =>
+    reloading(
+      async (accessToken, targetClassId) => {
+        const result = await duplicateCourseForClass({
+          accessToken,
+          classId: targetClassId,
+          courseId,
+        });
+        try {
+          setClassLinks(await fetchClassCourseLinks((data?.classes ?? []).map((item) => item.id)));
+        } catch {
+          setClassLinks(null); // unknown links degrade to the unscoped tree
+        }
+        return result;
+      },
+      {
+        select: selectFromId("course"),
+        successMessage:
+          "This class now edits its own copy — other classes keep the original. Past student work stays with the original lessons.",
+      },
+    );
 
   const crumbs = buildBreadcrumb({ selection, data, goRoot: clearSelection, goNode: selectNode });
 
@@ -1094,12 +1127,20 @@ export function CurriculumStudio({ classId }: { classId: string }) {
 
           <div className="min-w-0">
             {sharedNotice ? (
-              <div className="mb-3 flex items-center gap-2 rounded-card border border-border bg-depth-sub px-3.5 py-2.5 text-meta text-muted-foreground">
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-border bg-depth-sub px-3.5 py-2.5 text-meta text-muted-foreground">
                 <BookOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   This course is shared — changes here also reach{" "}
-                  <span className="text-foreground">{sharedNotice}</span>.
+                  <span className="text-foreground">{sharedNotice.names}</span>.
                 </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => duplicateSharedCourse(sharedNotice.courseId)}
+                  className="shrink-0 rounded-full border border-border px-3 py-1 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  Duplicate for this class
+                </button>
               </div>
             ) : null}
             <DetailPane

@@ -1570,6 +1570,26 @@ export function setClassCourses(input: {
   });
 }
 
+// R44 fork-on-demand: deep-copy a shared course for one class (course, current version,
+// units, lessons, and every lesson's teaching content) and relink the class to the copy.
+// Other classes keep the original; student history stays on the original lessons. The
+// copy can span dozens of lessons, so this gets a longer leash than the default timeout.
+export function duplicateCourseForClass(input: {
+  accessToken: string;
+  classId: string;
+  courseId: string;
+}) {
+  return callCurriculumAdmin(
+    input.accessToken,
+    {
+      action: "duplicate_course",
+      class_id: input.classId,
+      course_id: input.courseId,
+    },
+    60000,
+  );
+}
+
 // v4.0 Phase 5: the signed-in teacher's/admin's persistent notifications (RLS owner-read).
 export async function fetchNotifications(limit = 50): Promise<Notification[]> {
   const { data, error } = await supabase
