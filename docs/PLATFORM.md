@@ -146,15 +146,21 @@ Item shape: `{kind, title, ts, href, classId}` (+ `read_at` once persisted).
 
 ## 6. Class scoping (student catalog rule)
 
-New `class_courses` link table (class ↔ course, unique pair; students read own-class rows,
-teachers/org admins manage). The catalog rule, with the no-break fallback:
+`class_courses` link table (class ↔ course, unique pair; students read own-class rows,
+teachers/org admins manage). The catalog rule — **strict class-first since R43**
+(owner decision, docs/DECISIONS.md 2026-08-18):
 
-> If the student has ≥ 1 active class membership AND those classes have ≥ 1 `class_courses`
-> row → published lessons filtered to those courses. **Otherwise: exactly today's global
-> published list.**
+> If the student has ≥ 1 active class membership → published lessons filtered to the
+> UNION of their classes' `class_courses` links (an unlinked class contributes nothing —
+> the class curriculum IS the catalog). No memberships (self-serve accounts) or any read
+> error → the full global published list. The student's currently-open lesson is always
+> retained even if scoped out.
 
-Scoping is UX, not a security boundary (the `lessons` read policy stays open in v4.0;
-tightening is deferred so the live student can never be cut off by a policy change).
+The pre-R43 inversion ("an unlinked class imposes no scoping") is retired; classes that
+existed unlinked were backfilled with links to every published course in their org at the
+flip, so no live student's list changed. Scoping is UX, not a security boundary (the
+`lessons` read policy stays open in v4.0; tightening is deferred so the live student can
+never be cut off by a policy change).
 
 ---
 

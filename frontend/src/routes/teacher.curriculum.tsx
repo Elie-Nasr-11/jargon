@@ -38,6 +38,7 @@ import {
   createCurriculumUnit,
   deleteCurriculumNode,
   deleteCurriculumStep,
+  fetchClassCourseLinks,
   fetchCurriculumAuthoringData,
   fetchTeacherClasses,
   generateCurriculumDraft,
@@ -48,6 +49,7 @@ import {
   reorderCurriculumNodes,
   reorderCurriculumSteps,
   saveCurriculumLessonMeta,
+  setClassCourses,
   updateLessonResource,
   upsertCurriculumStep,
 } from "@/lib/api";
@@ -72,6 +74,7 @@ import type {
   LessonResource,
 } from "@/lib/types";
 import { KnowledgeCard } from "@/features/teacher/KnowledgeCard";
+import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
 import { extractPdfTextChunksFromUrl } from "@/lib/pdf-extract";
 import { notifyErr } from "@/lib/feedback";
 import { useUndoable } from "@/hooks/useUndoable";
@@ -189,6 +192,15 @@ export function CurriculumStudio({ classId }: { classId: string }) {
   const search = useSearch({ strict: false }) as CurriculumSearch;
   const [booting, setBooting] = useState(true);
   const [data, setData] = useState<CurriculumAuthoringData | null>(null);
+  // R43: class↔course links across ALL the teacher's classes — this class's rows scope the
+  // outline; other classes' rows power the "also used by" peer badges. null = links unknown
+  // (load failed) → degrade to the unscoped org tree rather than hiding everything.
+  const [classLinks, setClassLinks] = useState<Array<{
+    class_id: string;
+    course_id: string;
+  }> | null>(null);
+  const classLinksRef = useRef<Array<{ class_id: string; course_id: string }> | null>(null);
+  classLinksRef.current = classLinks;
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   // Outline nodes are collapsed by default; this set holds the EXPANDED ids.
@@ -226,6 +238,11 @@ export function CurriculumStudio({ classId }: { classId: string }) {
       }
       const curriculum = await fetchCurriculumAuthoringData(session.user.id);
       setData(curriculum);
+      try {
+        setClassLinks(await fetchClassCourseLinks(curriculum.classes.map((item) => item.id)));
+      } catch {
+        setClassLinks(null); // unknown links → unscoped fallback, never a hidden catalog
+      }
     } catch (error) {
       setMessage((error as Error).message || "Could not load curriculum studio.");
     } finally {
@@ -248,11 +265,18 @@ export function CurriculumStudio({ classId }: { classId: string }) {
     return map;
   }, [data]);
 
-  // Org-scoped structure tree, ordered by the Phase 1 position columns.
+  // The org's structure tree, ordered by the Phase 1 position columns. Subjects with a
+  // NULL organization_id are GLOBAL shared content (all of prod's published courses live
+  // under them) — they must be visible here, or the courses panel would omit links that
+  // students actually see and a Save could silently wipe them.
   const orgSubjects = useMemo(() => {
     if (!data || !selectedClass) return [];
     return data.subjects
-      .filter((subject) => subject.organization_id === selectedClass.organization_id)
+      .filter(
+        (subject) =>
+          subject.organization_id === selectedClass.organization_id ||
+          subject.organization_id === null,
+      )
       .sort(byPositionThenTitle);
   }, [data, selectedClass]);
 
@@ -293,18 +317,80 @@ export function CurriculumStudio({ classId }: { classId: string }) {
     [data],
   );
 
-  // All units in the org (with their course title) — powers "move lesson to unit".
+  // R43 class scoping: this class's linked course ids. null = links unknown (read failed)
+  // → the outline degrades to the whole org tree instead of hiding content.
+  const linkedCourseIds = useMemo(() => {
+    if (!classLinks) return null;
+    return new Set(
+      classLinks.filter((row) => row.class_id === classId).map((row) => row.course_id),
+    );
+  }, [classLinks, classId]);
+
+  // Names of the teacher's OTHER classes that link a course — the honesty badge: editing a
+  // shared course reaches those classes too. (RLS limits visibility to the teacher's own
+  // classes; org-wide usage beyond them is not shown.)
+  const peerClassNames = useCallback(
+    (courseId: string): string[] => {
+      if (!classLinks || !data) return [];
+      const names: string[] = [];
+      for (const row of classLinks) {
+        if (row.course_id !== courseId || row.class_id === classId) continue;
+        const cls = data.classes.find((item) => item.id === row.class_id);
+        if (cls && !names.includes(cls.name)) names.push(cls.name);
+      }
+      return names;
+    },
+    [classLinks, data, classId],
+  );
+
+  // The class outline shows only linked courses…
+  const classCoursesForSubject = useCallback(
+    (subjectId: string) =>
+      coursesForSubject(subjectId).filter(
+        (course) => !linkedCourseIds || linkedCourseIds.has(course.id),
+      ),
+    [coursesForSubject, linkedCourseIds],
+  );
+
+  // …and only the subjects contributing one — plus subjects with no courses anywhere, so a
+  // freshly created subject stays visible to build under (its first course auto-links here).
+  const classSubjects = useMemo(
+    () =>
+      orgSubjects.filter(
+        (subject) =>
+          classCoursesForSubject(subject.id).length > 0 ||
+          coursesForSubject(subject.id).length === 0,
+      ),
+    [orgSubjects, classCoursesForSubject, coursesForSubject],
+  );
+
+  // Units of the class's courses (with their course title) — powers "move lesson to unit".
+  // Scoped like the outline: moving a lesson somewhere this class can't see would vanish it.
   const orgUnits = useMemo(() => {
     const rows: Array<{ unit: CurriculumUnit; courseTitle: string }> = [];
-    for (const subject of orgSubjects) {
-      for (const course of coursesForSubject(subject.id)) {
+    for (const subject of classSubjects) {
+      for (const course of classCoursesForSubject(subject.id)) {
         for (const unit of unitsForCourse(course.id)) {
           rows.push({ unit, courseTitle: course.title });
         }
       }
     }
     return rows;
-  }, [orgSubjects, coursesForSubject, unitsForCourse]);
+  }, [classSubjects, classCoursesForSubject, unitsForCourse]);
+
+  // Every org course (with its subject for context) — the options list for the
+  // "Courses in this class" panel below the workspace.
+  const orgCourseOptions = useMemo(
+    () =>
+      orgSubjects.flatMap((subject) =>
+        coursesForSubject(subject.id).map((course) => ({
+          id: course.id,
+          title: course.title,
+          subjectTitle: subject.title,
+        })),
+      ),
+    [orgSubjects, coursesForSubject],
+  );
 
   // Selection rides the class route's URL (?tab=curriculum&lesson=… etc.) so lesson
   // editing stays deep-linkable inside the class and back/forward keeps working.
@@ -454,8 +540,32 @@ export function CurriculumStudio({ classId }: { classId: string }) {
 
   const addCourse = (subjectId: string) =>
     reloading(
-      (accessToken, classId) =>
-        createCurriculumCourse({ accessToken, classId, subjectId, title: "New course" }),
+      async (accessToken, targetClassId) => {
+        const created = await createCurriculumCourse({
+          accessToken,
+          classId: targetClassId,
+          subjectId,
+          title: "New course",
+        });
+        // R43: a course born inside a class belongs to it — link it immediately so the
+        // scoped outline (and this class's students, once published) can see it. Only
+        // when the current link set is known: set_class_courses REPLACES the whole set,
+        // so writing from an unknown baseline could wipe existing links.
+        const createdId = (created as { id?: string } | null)?.id;
+        const links = classLinksRef.current;
+        if (createdId && links) {
+          const mine = links
+            .filter((row) => row.class_id === targetClassId)
+            .map((row) => row.course_id);
+          await setClassCourses({
+            accessToken,
+            classId: targetClassId,
+            courseIds: Array.from(new Set([...mine, createdId])),
+          });
+          setClassLinks([...links, { class_id: targetClassId, course_id: createdId }]);
+        }
+        return created;
+      },
       { select: selectFromId("course") },
     );
 
@@ -883,6 +993,17 @@ export function CurriculumStudio({ classId }: { classId: string }) {
     });
   };
 
+  // The selected node's course, when other classes also link it → the honesty strip
+  // above the editor ("changes here also reach …").
+  const sharedNotice = useMemo(() => {
+    if (!selection || !data) return null;
+    const course = nodePath(selection, data).course;
+    if (!course) return null;
+    const peers = peerClassNames(course.id);
+    return peers.length ? peers.join(", ") : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection?.type, selection?.id, data, peerClassNames]);
+
   const crumbs = buildBreadcrumb({ selection, data, goRoot: clearSelection, goNode: selectNode });
 
   return (
@@ -947,8 +1068,13 @@ export function CurriculumStudio({ classId }: { classId: string }) {
           {outlineOpen ? (
             <aside className="min-w-0 lg:sticky lg:top-2 lg:max-h-[calc(100dvh-4rem)] lg:overflow-x-hidden lg:overflow-y-auto">
               <Outline
-                subjects={orgSubjects}
-                coursesForSubject={coursesForSubject}
+                subjects={classSubjects}
+                coursesForSubject={classCoursesForSubject}
+                courseAnnotation={(courseId) => {
+                  const peers = peerClassNames(courseId);
+                  return peers.length ? `also in ${peers.join(", ")}` : null;
+                }}
+                emptyHint="No courses in this class yet — tick one under “Courses in this class” below, or create a subject to start fresh."
                 unitsForCourse={unitsForCourse}
                 lessonsForUnit={lessonsForUnit}
                 selection={selection}
@@ -967,6 +1093,15 @@ export function CurriculumStudio({ classId }: { classId: string }) {
           ) : null}
 
           <div className="min-w-0">
+            {sharedNotice ? (
+              <div className="mb-3 flex items-center gap-2 rounded-card border border-border bg-depth-sub px-3.5 py-2.5 text-meta text-muted-foreground">
+                <BookOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
+                <span className="min-w-0">
+                  This course is shared — changes here also reach{" "}
+                  <span className="text-foreground">{sharedNotice}</span>.
+                </span>
+              </div>
+            ) : null}
             <DetailPane
               key={selection ? `${selection.type}:${selection.id}` : "empty"}
               selection={selection}
@@ -998,13 +1133,30 @@ export function CurriculumStudio({ classId }: { classId: string }) {
               onGenerateSteps={generateSteps}
               onApplySteps={applyStepDrafts}
               counts={{
-                coursesForSubject: (id) => coursesForSubject(id).length,
+                coursesForSubject: (id) => classCoursesForSubject(id).length,
                 unitsForCourse: (id) => unitsForCourse(id).length,
                 lessonsForUnit: (id) => lessonsForUnit(id).length,
               }}
             />
           </div>
         </div>
+      ) : null}
+
+      {/* Which of the org's courses this class runs — the single management surface for the
+          class↔course links the outline (and the students' catalog) are scoped by. */}
+      {!booting && data && selectedClass ? (
+        <LinkedCoursesPanel
+          classId={classId}
+          courses={orgCourseOptions}
+          linked={linkedCourseIds}
+          peerNames={peerClassNames}
+          onSaved={(courseIds) =>
+            setClassLinks((current) => [
+              ...(current ?? []).filter((row) => row.class_id !== classId),
+              ...courseIds.map((courseId) => ({ class_id: classId, course_id: courseId })),
+            ])
+          }
+        />
       ) : null}
     </div>
   );
@@ -1018,6 +1170,8 @@ export function CurriculumStudio({ classId }: { classId: string }) {
 function Outline({
   subjects,
   coursesForSubject,
+  courseAnnotation,
+  emptyHint,
   unitsForCourse,
   lessonsForUnit,
   selection,
@@ -1034,6 +1188,10 @@ function Outline({
 }: {
   subjects: CurriculumSubject[];
   coursesForSubject: (subjectId: string) => CurriculumCourse[];
+  // R43: extra note on a course row (e.g. "also in 7B" when other classes share it).
+  courseAnnotation?: (courseId: string) => string | null;
+  // Copy for the no-subjects state — the class-scoped studio explains linking.
+  emptyHint?: string;
   unitsForCourse: (courseId: string) => CurriculumUnit[];
   lessonsForUnit: (unitId: string) => Lesson[];
   selection: Selection;
@@ -1082,7 +1240,7 @@ function Outline({
 
         {subjects.length === 0 ? (
           <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
-            No subjects yet. Create one to start building.
+            {emptyHint ?? "No subjects yet. Create one to start building."}
           </div>
         ) : (
           <div className="grid min-w-0 gap-1">
@@ -1124,7 +1282,9 @@ function Outline({
                                 <OutlineRow
                                   depth={1}
                                   label={course.title}
-                                  meta={course.status}
+                                  meta={[course.status, courseAnnotation?.(course.id)]
+                                    .filter(Boolean)
+                                    .join(" · ")}
                                   hasChildren
                                   open={courseOpen}
                                   selected={isSelected("course", course.id)}
