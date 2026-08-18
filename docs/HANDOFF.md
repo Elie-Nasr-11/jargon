@@ -10739,3 +10739,38 @@ path constants — consider a file move + test repoint when the megafile gets sp
 Suggested next task: R42 slice 2 — class-scoped curriculum (outline = linked courses
 only, add-existing-course picker, auto-link on create, strict student scope + backfill,
 "also used by" badges).
+
+## Claude -> Codex / Human - 2026-08-18 21:15
+
+Status: Finished
+Summary: R43 slice 2 — the class curriculum is now really the class's. The studio outline
+shows only the class's linked courses (subjects derived from them; brand-new empty
+subjects stay visible to build under); a course created inside a class auto-links to it;
+courses shared by several classes wear "also in …" on their outline row and in the panel,
+and a shared-course selection puts an honesty strip above the editor ("changes here also
+reach …"). LinkedCoursesPanel became the controlled "Courses in this class" surface
+(studio owns the link data; grouped by subject; strict copy; refuses to save from an
+unknown baseline; fixed a bug where the resync effect wiped the success status). Subjects
+with organization_id=NULL are treated as GLOBAL shared content — all of prod's published
+courses live under them, and hiding them would have let a panel Save silently wipe links
+students rely on. Student catalog flipped to strict class-first in api.ts
+(fetchStudentCatalogUncached): a classed student sees exactly the union of their classes'
+links; no-class accounts and read errors keep the full list; open lesson always retained.
+BEFORE the flip shipped, prod was backfilled behavior-preservingly: 18 classes (16
+unlinked + 2 whose only links pointed at unpublished courses) x 9 published courses = 162
+new class_courses rows; verification query shows 0 strandable classes of 25 (173 link
+rows total).
+Files changed: frontend/src/lib/api.ts, routes/teacher.curriculum.tsx,
+features/teacher/{LinkedCoursesPanel.tsx,TeacherConsole.tsx}, docs/{PLATFORM.md,
+DECISIONS.md via R42 entry,HANDOFF.md}, tests/{test_r43_class_scoped_curriculum.py (new),
+test_r42_class_first_teacher.py}.
+Tests run: pin suite 762 OK; tsc + eslint clean; offline harness 11/11 (scoped outline,
+hidden unlinked subjects, peer badges both surfaces, shared-notice strip, live link->
+outline growth via panel save through the mock curriculum-admin, 7B's mirror view,
+class-less student keeps full catalog). Prod backfill verified by SQL counts.
+Remaining concerns: "also used by" only sees the signed-in teacher's own classes (RLS) —
+org-wide usage is invisible; fork-on-demand ("duplicate for this class") is slice 3 and
+needs a curriculum-admin action; the studio outline shows publish state but not per-lesson
+class progress (candidate: fold the old structure-tree progress chips into the outline).
+Suggested next task: R44 slice 3 — fork-on-demand for shared courses (curriculum-admin
+duplicate_course action + "Duplicate for this class" on shared courses).

@@ -87,7 +87,10 @@ class ConsoleTests(unittest.TestCase):
             (FRONTEND / "features" / "teacher" / "ClassStructurePanel.tsx").exists(),
             "ClassStructurePanel.tsx should be deleted (redundant with the studio outline)",
         )
-        self.assertIn("<LinkedCoursesPanel classId={item.id} lessons={lessons} />", CONSOLE)
+        # R43: the courses panel lives INSIDE the studio (it scopes the outline), so the
+        # console no longer mounts it directly.
+        self.assertIn("<LinkedCoursesPanel", STUDIO)
+        self.assertNotIn("LinkedCoursesPanel", CONSOLE)
 
     def test_class_level_deep_links_land_on_students(self):
         self.assertIn('search: { tab: "students" }', CONSOLE)

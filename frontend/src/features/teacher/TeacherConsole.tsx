@@ -38,8 +38,6 @@ import {
 import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
 import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
 import { AssessmentGrading } from "@/features/teacher/AssessmentGrading";
-import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
-
 // R42: the authoring studio lives inside each class's Curriculum section now. Its code
 // stays in the (heavy) route module and loads on demand the first time the section opens,
 // so the Students landing stays as light as before.
@@ -1331,8 +1329,9 @@ function ClassDetail({
       </section>
 
       {/* R42: the Curriculum section renders OUTSIDE the class card so the studio's
-          two-column workspace gets the full page width. Order: the studio (build lessons),
-          which courses this class runs, then the class's own builders. */}
+          two-column workspace gets the full page width. The studio owns the whole
+          curriculum surface (outline + editor + the class's course links); the class's
+          own builders follow. */}
       {section === "curriculum" ? (
         <div className="panel-fade flex flex-col gap-4">
           <h3 className="sr-only">Curriculum</h3>
@@ -1345,8 +1344,6 @@ function ClassDetail({
           >
             <CurriculumStudio classId={item.id} />
           </Suspense>
-
-          <LinkedCoursesPanel classId={item.id} lessons={lessons} />
 
           {/* The authoring benches, folded by default so the section reads as one screen.
               Collapsible keeps children mounted (height-0 + inert), so builder drafts and

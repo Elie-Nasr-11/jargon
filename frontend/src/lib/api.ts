@@ -529,15 +529,15 @@ export async function fetchLessons(options: { includeDrafts?: boolean } = {}) {
   });
 }
 
-// v4.0 Phase 3: the student's class-scoped lesson catalog. Semantics (per docs/PLATFORM.md):
-// each active class the student is in contributes either its linked courses (if it has ≥1 link)
-// or — when it has NO links — the FULL catalog (an unlinked class imposes no scoping). The visible
-// catalog is the UNION of those contributions, so a student is only narrowed when EVERY one of
-// their active classes is scoped; being in any unlinked class shows the full list. With no session,
-// no memberships, no links anywhere, an empty scoped result, or any read error, it returns the full
-// fetchLessons() output — so the live student sees an identical list until a teacher links courses.
-// `pinnedLessonId` (the student's currently-open lesson) is always retained even if scoped out, so
-// scoping can never strand a student mid-lesson with no way back to their in-progress work.
+// R43 class-first scoping (owner decision, docs/DECISIONS.md 2026-08-18): a classed student's
+// catalog is exactly the union of their active classes' linked courses — the class curriculum
+// IS the catalog. The old inversion (an unlinked class contributed the FULL catalog) is gone;
+// existing unlinked classes were backfilled with links to every published course in their org
+// before this shipped, so no live student's list changed at the flip. Students with no active
+// class memberships (self-serve accounts) keep the full published catalog, and any read error
+// degrades to the full list rather than an empty screen. `pinnedLessonId` (the student's
+// currently-open lesson) is always retained even if scoped out, so scoping can never strand a
+// student mid-lesson with no way back to their in-progress work.
 async function fetchStudentCatalogUncached(pinnedLessonId?: string | null): Promise<Lesson[]> {
   const all = await fetchLessons();
   try {
@@ -557,32 +557,34 @@ async function fetchStudentCatalogUncached(pinnedLessonId?: string | null): Prom
     );
     if (!classIds.length) return all;
 
-    const { data: linkRows, error: linkError } = await supabase
-      .from("class_courses")
-      .select("class_id,course_id")
-      .in("class_id", classIds);
-    if (linkError) throw linkError;
-    const rows = (linkRows || []) as Array<{ class_id: string | null; course_id: string | null }>;
-
-    // A class with NO link rows means "no scoping" → it contributes the full catalog, so the whole
-    // catalog is shown. Only when every active class is scoped do we narrow to the union of links.
-    const classesWithLinks = new Set(rows.map((row) => row.class_id).filter(Boolean));
-    if (classIds.some((id) => !classesWithLinks.has(id))) return all;
-
+    const rows = await fetchClassCourseLinks(classIds);
     const linkedCourseIds = new Set(uniqueStrings(rows.map((row) => row.course_id)));
-    if (!linkedCourseIds.size) return all;
 
-    const scoped = all.filter(
+    return all.filter(
       (lesson) =>
         (lesson.course_id && linkedCourseIds.has(lesson.course_id)) ||
         (pinnedLessonId != null && lesson.id === pinnedLessonId),
     );
-    // Never strand the student on an empty catalog (e.g. links point at courses with no published
-    // lessons yet) — fall back to the full list rather than showing nothing.
-    return scoped.length ? scoped : all;
   } catch {
     return all;
   }
+}
+
+// R43: all class↔course link rows for a set of classes in one read (RLS: class members +
+// org admins). Shared by the student catalog scope above and the teacher studio, which
+// derives both its class-scoped outline and the "also used by" peer badges from it.
+export async function fetchClassCourseLinks(
+  classIds: string[],
+): Promise<Array<{ class_id: string; course_id: string }>> {
+  if (!classIds.length) return [];
+  const { data, error } = await supabase
+    .from("class_courses")
+    .select("class_id,course_id")
+    .in("class_id", classIds);
+  if (error) throw error;
+  return ((data || []) as Array<{ class_id: string | null; course_id: string | null }>).filter(
+    (row): row is { class_id: string; course_id: string } => Boolean(row.class_id && row.course_id),
+  );
 }
 
 // --- v4.0 Phase 3a: student self-read stats for the profile popup --------------------------

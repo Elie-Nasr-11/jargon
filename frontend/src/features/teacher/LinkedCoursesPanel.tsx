@@ -1,73 +1,69 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookMarked } from "lucide-react";
-import { fetchClassCourses, getSession, setClassCourses } from "@/lib/api";
-import type { Lesson } from "@/lib/types";
+import { getSession, setClassCourses } from "@/lib/api";
 
-// v4.0 Phase 3 — teacher control to scope a class to a set of courses (docs/PLATFORM.md
-// class-scoping rule). Students in a class with ≥1 linked course see only those courses' lessons;
-// an empty link set means no scoping (the full published catalog). Available courses are derived
-// from the lessons already in the teacher's dashboard scope — no extra fetch. The write goes
-// through curriculum-admin `set_class_courses` (auditable, re-checks author access server-side).
+// R43 "Courses in this class" — the single management surface for a class's course links,
+// now CONTROLLED by the curriculum studio (which owns the link data and scopes its outline
+// by it). Semantics are strict class-first: students in the class see exactly the linked
+// courses' published lessons; nothing is implied by an empty set except "nothing yet".
+// The write goes through curriculum-admin `set_class_courses` (auditable, re-checks author
+// access server-side) and REPLACES the class's whole link set.
 export function LinkedCoursesPanel({
   classId,
-  lessons,
+  courses,
+  linked,
+  peerNames,
   onSaved,
 }: {
   classId: string;
-  lessons: Lesson[];
-  onSaved?: (courseIds: string[]) => void;
+  courses: Array<{ id: string; title: string; subjectTitle: string }>;
+  // The saved link set. null = links could not be loaded — editing is disabled, because a
+  // save from an unknown baseline would silently wipe links.
+  linked: Set<string> | null;
+  peerNames: (courseId: string) => string[];
+  onSaved: (courseIds: string[]) => void;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [initial, setInitial] = useState<Set<string>>(new Set());
-
-  // Course titles are derived from the lessons in dashboard scope. The render list is the union of
-  // those courses AND any already-linked course id (so a course whose lessons aren't in scope — or
-  // were deleted — still shows a checkbox and can be unchecked/removed; otherwise it would be stuck
-  // linked and invisible, and "uncheck all" could never truly clear the scope).
-  const availableCourses = useMemo(() => {
-    const titleById = new Map<string, string>();
-    for (const lesson of lessons) {
-      if (lesson.course_id && !titleById.has(lesson.course_id)) {
-        titleById.set(lesson.course_id, lesson.course_title || lesson.course_id);
-      }
-    }
-    const ids = new Set<string>([...titleById.keys(), ...initial]);
-    return Array.from(ids, (id) => ({ id, title: titleById.get(id) || id })).sort((a, b) =>
-      a.title.localeCompare(b.title),
-    );
-  }, [lessons, initial]);
-  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(linked ?? []));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
+  // Class switch → full reset. Kept separate from the linked-set resync below: a save
+  // updates `linked` through onSaved, and clearing status there would wipe the success
+  // message the moment it appeared.
   useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError(null);
     setStatus(null);
-    fetchClassCourses(classId)
-      .then((ids) => {
-        if (!alive) return;
-        setSelected(new Set(ids));
-        setInitial(new Set(ids));
-      })
-      .catch((e) => {
-        if (alive) setError((e as Error).message || "Could not load linked courses.");
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
+    setError(null);
   }, [classId]);
 
+  // Resync the draft whenever the saved set changes (a panel save, or the studio
+  // auto-linking a course it just created).
+  useEffect(() => {
+    setSelected(new Set(linked ?? []));
+  }, [classId, linked]);
+
+  // Group by subject so long org catalogs stay scannable.
+  const groups = useMemo(() => {
+    const bySubject = new Map<string, Array<{ id: string; title: string }>>();
+    for (const course of courses) {
+      const list = bySubject.get(course.subjectTitle) ?? [];
+      list.push({ id: course.id, title: course.title });
+      bySubject.set(course.subjectTitle, list);
+    }
+    return Array.from(bySubject.entries())
+      .map(([subject, list]) => ({
+        subject,
+        courses: list.sort((a, b) => a.title.localeCompare(b.title)),
+      }))
+      .sort((a, b) => a.subject.localeCompare(b.subject));
+  }, [courses]);
+
   const dirty = useMemo(() => {
-    if (selected.size !== initial.size) return true;
-    for (const id of selected) if (!initial.has(id)) return true;
+    if (!linked) return false;
+    if (selected.size !== linked.size) return true;
+    for (const id of selected) if (!linked.has(id)) return true;
     return false;
-  }, [selected, initial]);
+  }, [selected, linked]);
 
   const toggle = (id: string) => {
     setStatus(null);
@@ -88,15 +84,14 @@ export function LinkedCoursesPanel({
       if (!session) throw new Error("Your session expired — sign in again.");
       const courseIds = Array.from(selected);
       await setClassCourses({ accessToken: session.access_token, classId, courseIds });
-      setInitial(new Set(courseIds));
-      onSaved?.(courseIds);
+      onSaved(courseIds);
       setStatus(
         courseIds.length
-          ? "Saved — students in this class now see only these courses."
-          : "Saved — scoping cleared; students see the full catalog.",
+          ? "Saved — this is now the class's curriculum; students see exactly these courses."
+          : "Saved — no courses linked; students in this class see no lessons until you link or create one.",
       );
     } catch (e) {
-      setError((e as Error).message || "Could not save linked courses.");
+      setError((e as Error).message || "Could not save the class's courses.");
     } finally {
       setSaving(false);
     }
@@ -106,39 +101,59 @@ export function LinkedCoursesPanel({
     <div className="rounded-card border border-border bg-depth-card p-4 shadow-card">
       <div className="mb-1 flex items-center gap-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
         <BookMarked className="h-3.5 w-3.5" strokeWidth={1.8} />
-        Linked courses
+        Courses in this class
       </div>
       <p className="mb-3 text-meta leading-relaxed text-muted-foreground">
-        Choose which courses this class's students see in their lesson catalog. Leave everything
-        unchecked to show the full published catalog.
+        Students see exactly the courses linked here — and the outline above shows the same set. A
+        course can be shared by several classes; edits reach them all.
       </p>
-      {loading ? (
-        <p className="text-meta text-muted-foreground">Loading…</p>
-      ) : availableCourses.length === 0 ? (
+      {!linked ? (
         <p className="text-meta text-muted-foreground">
-          No published courses are available to link yet.
+          Couldn't load this class's course links — refresh to try again. (Editing is disabled so a
+          save can't wipe links you can't see.)
+        </p>
+      ) : courses.length === 0 ? (
+        <p className="text-meta text-muted-foreground">
+          No courses exist yet — create a subject and course in the outline above.
         </p>
       ) : (
-        <div className="grid gap-1.5">
-          {availableCourses.map((course) => (
-            <label
-              key={course.id}
-              className="flex items-center gap-2.5 rounded-control border border-border bg-depth-field px-3 py-2 text-meta text-foreground"
-            >
-              <input
-                type="checkbox"
-                checked={selected.has(course.id)}
-                onChange={() => toggle(course.id)}
-                className="h-4 w-4 shrink-0 accent-foreground"
-              />
-              <span className="min-w-0 flex-1 truncate">{course.title}</span>
-            </label>
+        <div className="grid gap-3">
+          {groups.map((group) => (
+            <div key={group.subject}>
+              <div className="mb-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                {group.subject}
+              </div>
+              <div className="grid gap-1.5">
+                {group.courses.map((course) => {
+                  const peers = peerNames(course.id);
+                  return (
+                    <label
+                      key={course.id}
+                      className="flex items-center gap-2.5 rounded-control border border-border bg-depth-field px-3 py-2 text-meta text-foreground"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(course.id)}
+                        onChange={() => toggle(course.id)}
+                        className="h-4 w-4 shrink-0 accent-foreground"
+                      />
+                      <span className="min-w-0 flex-1 truncate">{course.title}</span>
+                      {peers.length ? (
+                        <span className="shrink-0 text-meta text-muted-foreground">
+                          also in {peers.join(", ")}
+                        </span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </div>
       )}
       {error ? <p className="mt-2 text-meta text-danger">{error}</p> : null}
       {status ? <p className="mt-2 text-meta text-success">{status}</p> : null}
-      {availableCourses.length ? (
+      {linked && courses.length ? (
         <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
@@ -146,10 +161,12 @@ export function LinkedCoursesPanel({
             disabled={saving || !dirty}
             className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground hover:bg-muted disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save linked courses"}
+            {saving ? "Saving…" : "Save courses"}
           </button>
           <span className="text-meta text-muted-foreground">
-            {selected.size ? `${selected.size} linked` : "No scoping (full catalog)"}
+            {selected.size
+              ? `${selected.size} in this class`
+              : "Nothing linked — students see no lessons"}
           </span>
         </div>
       ) : null}
