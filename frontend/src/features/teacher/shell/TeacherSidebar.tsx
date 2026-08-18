@@ -6,7 +6,6 @@ import {
   Home,
   LogOut,
   Moon,
-  NotebookPen,
   PanelLeftClose,
   Sun,
   User,
@@ -21,8 +20,10 @@ import type { TeacherClassSummary } from "@/lib/types";
 import { CLASS_SECTIONS, groupClassesByOrg, type ClassSection } from "./teacherNav";
 
 // The teacher shell's left column — the teacher sibling of the student AppSidebar, same anatomy:
-// wordmark, primary nav rows (Home / Curriculum), a scrollable classes list (grouped by org when
-// the teacher spans several), and an account row at the bottom opening a minimal popover menu.
+// wordmark, a Home row, a scrollable classes list (grouped by org when the teacher spans
+// several), and an account row at the bottom opening a minimal popover menu. R42: classes ARE
+// the hierarchy — there is no global Curriculum destination; each class expands into its
+// Students / Curriculum sections and all building happens inside a class.
 // Desktop: a docked aside at lg+ (hideable via collapse). Mobile: the same content in a left Sheet
 // drawer. Fully controlled for layout state; navigation happens internally via useNavigate.
 // NavRow/MenuRow are copied (not extracted) from AppSidebar so the live student file stays
@@ -97,7 +98,7 @@ export type TeacherSidebarProps = {
   email: string;
   // [] while the host's dashboard/authoring fetch is still in flight — the list just fills in.
   classes: TeacherClassSummary[];
-  activeView: "home" | "class" | "curriculum";
+  activeView: "home" | "class";
   activeClassId: string | null;
   // Which of the active class's sections is on screen; null outside the class routes.
   activeSection?: ClassSection | null;
@@ -142,8 +143,8 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
     if (currentOrg) setOpenOrgs((s) => (s[currentOrg] ? s : { ...s, [currentOrg]: true }));
   }, [activeClassId, groups]);
 
-  // The flow spine: the active class expands into its three section rows (Overview / Students /
-  // Structure) right in the list — always visible while you're in the class, no extra disclosure.
+  // The flow spine: the active class expands into its two section rows (Students / Curriculum)
+  // right in the list — always visible while you're in the class, no extra disclosure.
   // The class row itself stays a nav button (lands on the section you're already in, or Overview).
   const classRow = (cls: TeacherClassSummary) => {
     const active = cls.id === activeClassId;
@@ -156,7 +157,7 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
               to: "/teacher/class/$classId",
               params: { classId: cls.id },
               // Re-clicking the active class keeps the section you're on (also brings a
-              // student drill-down back to Students); other classes open on Overview.
+              // student drill-down back to Students); other classes open on Students.
               search: active && activeSection ? { tab: activeSection } : undefined,
             }),
           )}
@@ -231,12 +232,6 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
           label="Home"
           active={activeView === "home"}
           onClick={go(() => navigate({ to: "/teacher" }))}
-        />
-        <NavRow
-          icon={NotebookPen}
-          label="Curriculum"
-          active={activeView === "curriculum"}
-          onClick={go(() => navigate({ to: "/teacher/curriculum" }))}
         />
       </nav>
 

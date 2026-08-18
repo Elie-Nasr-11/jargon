@@ -10683,3 +10683,59 @@ Remaining concerns:
   - "One ask per reply" is a prompt/directive change: unproven until a real run.
 
 Suggested next task: live pass over all three, then the Practice grading decision.
+
+## Claude -> Codex / Human - 2026-08-18 19:18
+
+Status: Starting
+Task: R42 — teacher console restructure, slice 1 of the class-first single hierarchy the
+owner chose ("things separated by classes ONLY … per lesson you build the curriculum
+within each class; no single builder space"). This slice is structural: teacher home =
+classes only (sidebar loses the global Curriculum link), the class workspace collapses to
+two sections — Students (landing; absorbs the Overview strips) and Curriculum (mounts the
+authoring studio scoped to the class, plus Linked courses and the class builders) — and
+/teacher/curriculum becomes a redirect into the first class's Curriculum tab. Agreed
+follow-up slices (not here): class-scoped outline over class_courses with add-existing +
+auto-link + strict student scope w/ backfill; fork-on-demand for shared courses.
+Files I expect to touch: features/teacher/shell/teacherNav.ts, TeacherSidebar.tsx,
+TeacherShell.tsx, TeacherConsole.tsx, ClassStructurePanel.tsx (retired),
+routes/teacher.curriculum.tsx, routes/teacher.class.$classId.tsx, components/
+NotificationsMenu.tsx, routes/README.md, tests (studio pins + new R42 suite), docs.
+Notes: studio code stays in routes/teacher.curriculum.tsx (6 pin suites read that path);
+it now exports CurriculumStudio consumed lazily by TeacherConsole.
+
+## Claude -> Codex / Human - 2026-08-18 20:05
+
+Status: Finished
+Summary: R42 slice 1 — the class-first teacher hierarchy is real. Teacher home = classes
+only (sidebar: Home + classes; the global Curriculum destination is gone). A class opens
+on Students (Live-now strip + Work tiles absorbed from the retired Overview, then grading
+queues, gradebook, roster) with Curriculum as the backend section: the authoring studio
+mounted inside the class (lazy import, class header + breadcrumb above it, no
+TeacherShell/PageShell/hero/class-picker of its own), then Linked courses, then the
+Resources/Assignments/Quizzes builders. Studio selection rides the class URL
+(?tab=curriculum&subject/course/unit/lesson=), so per-class lesson editing is
+deep-linkable. /teacher/curriculum now redirects into the teacher's first class,
+forwarding selection params. Legacy ?tab= values normalize (overview→students,
+structure/lessons/resources→curriculum). ClassStructurePanel is deleted (its tree was
+redundant with the studio outline; LinkedCoursesPanel now mounts directly and became a
+top-level card). Hotlist/notification class deep-links land on Students.
+Files changed: features/teacher/shell/{teacherNav.ts,TeacherSidebar.tsx,TeacherShell.tsx},
+features/teacher/{TeacherConsole.tsx,LinkedCoursesPanel.tsx,ClassStructurePanel.tsx (deleted)},
+routes/{teacher.curriculum.tsx,teacher.class.$classId.tsx,README.md},
+components/NotificationsMenu.tsx, tests/{test_r42_class_first_teacher.py (new),
+test_curriculum_authoring_studio.py}, docs/{DECISIONS.md,HANDOFF.md}.
+Tests run: full pin suite 749 OK (4 skipped); tsc clean; eslint clean on touched files;
+offline harness (mock backend + built bundle + Playwright, teacher account): 16/16
+checks pass — sidebar nav shape, Students landing + roster, class sections rows,
+studio-in-class (outline subjects, no hero/picker), deep-linked lesson editor,
+outline-click URL updates, legacy-route redirect w/ selection, legacy tab normalization,
+student drill-down. Mock gained subjects/courses/course_versions/units fixtures.
+Remaining concerns: the studio's outline still shows the whole org tree (class-scoped
+outline over class_courses is slice 2, owner-agreed); LinkedCoursesPanel's copy still
+describes the empty-set-means-full-catalog default, which slice 2 flips (with backfill);
+fork-on-demand for shared courses is slice 3 (needs a curriculum-admin duplicate action).
+The studio component stays in routes/teacher.curriculum.tsx so six pin suites keep their
+path constants — consider a file move + test repoint when the megafile gets split.
+Suggested next task: R42 slice 2 — class-scoped curriculum (outline = linked courses
+only, add-existing-course picker, auto-link on create, strict student scope + backfill,
+"also used by" badges).

@@ -36,9 +36,9 @@ exactly.
 | `login.tsx`                                      | `/login`                                       |
 | `learn.tsx`                                      | `/learn` (student surface)                     |
 | `teacher.tsx`                                    | `/teacher` (home — class picker + queue)       |
-| `teacher.class.$classId.tsx`                     | `/teacher/class/:classId` (`?tab=`)            |
+| `teacher.class.$classId.tsx`                     | `/teacher/class/:classId` (`?tab=students\|curriculum`, plus `?subject/course/unit/lesson=` for the Curriculum studio selection) |
 | `teacher.class.$classId.student.$studentId.tsx` | `/teacher/class/:classId/student/:studentId`   |
-| `teacher.curriculum.tsx`                         | `/teacher/curriculum`                          |
+| `teacher.curriculum.tsx`                         | `/teacher/curriculum` (legacy — redirects into the first class's Curriculum tab; the studio component lives in this file and mounts inside the class workspace) |
 | `admin.tsx`                                      | `/admin` (`?org=&tab=` — org picker + console) |
 
 The teacher routes share `features/teacher/TeacherConsole.tsx` (URL-driven from
