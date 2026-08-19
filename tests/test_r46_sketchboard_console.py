@@ -85,7 +85,10 @@ class StudentsSectionTests(unittest.TestCase):
     def test_review_strip_is_the_door_to_review(self):
         self.assertIn("to review — open Review", self.STUDENTS)
         self.assertIn('search: { tab: "review" }', self.STUDENTS)
-        self.assertIn("Nothing to review.", self.STUDENTS)
+        # The door must survive an empty queue — Review also holds the gradebook and
+        # the assign-work builders, so the quiet state is a button, not a dead label.
+        self.assertIn("Review & assign work", self.STUDENTS)
+        self.assertNotIn("Nothing to review.", self.STUDENTS)
 
     def test_roster_rows_carry_live_needs_review_and_last_active(self):
         self.assertIn("live now — ${lessonName(", self.STUDENTS)

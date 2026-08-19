@@ -10900,3 +10900,22 @@ Transcript & notes. relTime/lessonsDone recompute on each render tick (Date.now(
 render) — cosmetic, not a correctness issue.
 Suggested next task: the assignment/quiz-as-lesson-step modeling slice (server +
 authoring UI), or the resources library's used-in/replace affordances.
+
+## Claude -> Codex / Human - 2026-08-19 02:05
+
+Status: Finished
+Summary: R46 follow-up — the Students review strip is now ALWAYS a button. The empty
+state was a plain "Nothing to review." label, which made Review (and the gradebook +
+assign-work builders inside it) unreachable for a class with an empty queue. Quiet
+state reads "Review & assign work" (border style), busy state keeps the amber
+"N to review — open Review".
+Files changed: frontend/src/features/teacher/TeacherConsole.tsx,
+tests/{test_r46_sketchboard_console.py,test_r42_class_first_teacher.py}.
+Tests run: pins 796 OK; tsc + eslint clean; harness 39/39 (new checks: the quiet door
+exists on the empty-queue class and opens Review with the builders reachable).
+Remaining concerns: none beyond the R46 entry above. Owner reports the console still
+feels hard to navigate — but the live site had not yet flipped to the R46 bundle when
+they looked; awaiting the deploy + their pass on the actual R46 UI before any
+restructuring.
+Suggested next task: watch the Render deploy; then collect the owner's specific
+walkthrough feedback on R46.
