@@ -1590,6 +1590,48 @@ export function duplicateCourseForClass(input: {
   );
 }
 
+// R45 consolidated classes — the Students tab's roster actions. Sections are student
+// groupings WITHIN a class (7A / 7B); enrollable students are existing accounts of the
+// class's org (account creation stays with the admin).
+export async function fetchEnrollableStudents(input: {
+  accessToken: string;
+  classId: string;
+}): Promise<Array<{ user_id: string; name: string; grade: string | null }>> {
+  const data = (await callCurriculumAdmin(input.accessToken, {
+    action: "list_enrollable_students",
+    class_id: input.classId,
+  })) as unknown as { students?: Array<{ user_id: string; name: string; grade: string | null }> };
+  return Array.isArray(data.students) ? data.students : [];
+}
+
+export function enrollStudents(input: {
+  accessToken: string;
+  classId: string;
+  userIds: string[];
+  section?: string | null;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "enroll_students",
+    class_id: input.classId,
+    user_ids: input.userIds,
+    section: input.section ?? null,
+  });
+}
+
+export function setMemberSection(input: {
+  accessToken: string;
+  classId: string;
+  userId: string;
+  section: string | null;
+}) {
+  return callCurriculumAdmin(input.accessToken, {
+    action: "set_member_section",
+    class_id: input.classId,
+    user_id: input.userId,
+    section: input.section,
+  });
+}
+
 // v4.0 Phase 5: the signed-in teacher's/admin's persistent notifications (RLS owner-read).
 export async function fetchNotifications(limit = 50): Promise<Notification[]> {
   const { data, error } = await supabase
@@ -1696,7 +1738,7 @@ export async function fetchTeacherDashboard(userId: string): Promise<TeacherDash
 
   const { data: membershipRows, error: membershipError } = await supabase
     .from("class_memberships")
-    .select("id,class_id,user_id,role,status,created_at")
+    .select("id,class_id,user_id,role,status,created_at,section")
     .in("class_id", classIds)
     .eq("status", "active");
   if (membershipError) throw membershipError;

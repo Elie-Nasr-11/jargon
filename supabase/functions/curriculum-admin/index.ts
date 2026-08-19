@@ -2041,6 +2041,126 @@ async function setClassCourses(config: Config, actorId: string, body: DbRow): Pr
   return json({ status: "ok", class_id: classId, course_ids: courseIds });
 }
 
+// ---------------------------------------------------------------------------
+// R45 consolidated classes — sections are student groupings WITHIN a class.
+// Three teacher-facing roster actions, all authorized via assertCanAuthor on the
+// class's org + class (class teachers, org admins, platform admins).
+// ---------------------------------------------------------------------------
+
+async function classScopeForRoster(config: Config, classId: string) {
+  if (!classId) throw new Error("class_id is required.");
+  const classRow = await selectFirst(
+    config,
+    `classes?id=eq.${enc(classId)}&select=id,organization_id&limit=1`,
+  );
+  if (!classRow) throw new Error("Class was not found.");
+  return { classId: String(classRow.id), organizationId: String(classRow.organization_id) };
+}
+
+function cleanSection(value: unknown): string | null {
+  const section = cleanText(value).slice(0, 60);
+  return section || null;
+}
+
+// Students of the class's ORG who are not yet active members of the class — the pool the
+// teacher can pull into sections. Account creation stays with the admin by design.
+async function listEnrollableStudents(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const scope = await classScopeForRoster(config, cleanText(body.class_id));
+  await assertCanAuthor(config, actorId, scope.organizationId, scope.classId);
+
+  const orgStudents = await selectAll(
+    config,
+    `organization_memberships?organization_id=eq.${enc(scope.organizationId)}&role=eq.student&status=eq.active&select=user_id`,
+  );
+  const members = await selectAll(
+    config,
+    `class_memberships?class_id=eq.${enc(scope.classId)}&role=eq.student&status=eq.active&select=user_id`,
+  );
+  const enrolled = new Set(members.map((row) => cleanText(row.user_id)));
+  const candidateIds = Array.from(
+    new Set(orgStudents.map((row) => cleanText(row.user_id)).filter(Boolean)),
+  ).filter((id) => !enrolled.has(id));
+
+  let students: Array<{ user_id: string; name: string; grade: string | null }> = [];
+  if (candidateIds.length) {
+    const profiles = await selectAll(
+      config,
+      `profiles?id=in.(${candidateIds.map(enc).join(",")})&select=id,name,grade`,
+    );
+    const byId = new Map(profiles.map((row) => [cleanText(row.id), row]));
+    students = candidateIds.map((id) => {
+      const profile = byId.get(id);
+      return {
+        user_id: id,
+        name: cleanText(profile?.name) || `Student ${id.slice(0, 8)}`,
+        grade: cleanText(profile?.grade) || null,
+      };
+    });
+    students.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return json({ status: "ok", class_id: scope.classId, students });
+}
+
+// Enroll existing org students into the class (optionally straight into a section).
+// Upsert on (class_id,user_id): re-enrolling a removed student reactivates the row.
+async function enrollStudents(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const scope = await classScopeForRoster(config, cleanText(body.class_id));
+  await assertCanAuthor(config, actorId, scope.organizationId, scope.classId);
+  const section = cleanSection(body.section);
+  const userIds = Array.from(
+    new Set(
+      (Array.isArray(body.user_ids) ? body.user_ids : [])
+        .map((value) => cleanText(value))
+        .filter(Boolean),
+    ),
+  ).slice(0, 200);
+  if (!userIds.length) throw new Error("user_ids is required.");
+
+  // Only org students are enrollable — a foreign id is a clean 4xx, not a silent insert.
+  const orgStudents = await selectAll(
+    config,
+    `organization_memberships?organization_id=eq.${enc(scope.organizationId)}&role=eq.student&status=eq.active&user_id=in.(${userIds.map(enc).join(",")})&select=user_id`,
+  );
+  const allowed = new Set(orgStudents.map((row) => cleanText(row.user_id)));
+  const missing = userIds.filter((id) => !allowed.has(id));
+  if (missing.length) {
+    throw new Error(`These users are not active students of this organization: ${missing.join(", ")}.`);
+  }
+
+  const now = new Date().toISOString();
+  await serviceFetch(config, "/rest/v1/class_memberships?on_conflict=class_id,user_id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(
+      userIds.map((userId) => ({
+        class_id: scope.classId,
+        user_id: userId,
+        role: "student",
+        status: "active",
+        section,
+        updated_at: now,
+      })),
+    ),
+  });
+  return json({ status: "ok", class_id: scope.classId, enrolled: userIds.length, section });
+}
+
+// Set (or clear) one student's section label within the class.
+async function setMemberSection(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const scope = await classScopeForRoster(config, cleanText(body.class_id));
+  await assertCanAuthor(config, actorId, scope.organizationId, scope.classId);
+  const userId = cleanText(body.user_id);
+  if (!userId) throw new Error("user_id is required.");
+  const section = cleanSection(body.section);
+  const updated = await patchRows(
+    config,
+    `class_memberships?class_id=eq.${enc(scope.classId)}&user_id=eq.${enc(userId)}&role=eq.student`,
+    { section, updated_at: new Date().toISOString() },
+  );
+  if (!updated.length) throw new Error("That student is not a member of this class.");
+  return json({ status: "ok", class_id: scope.classId, user_id: userId, section });
+}
+
 // R44 fork-on-demand (owner decision, docs/DECISIONS.md 2026-08-18): duplicate a shared
 // course for ONE class. Copies the course, its current version, units, lessons, and each
 // lesson's full teaching content — milestones, steps, quiz items, completion rules,
@@ -2658,6 +2778,9 @@ Deno.serve(async (req: Request) => {
     if (action === "archive_template") return await archiveTemplate(config, actorId, record);
     if (action === "set_class_courses") return await setClassCourses(config, actorId, record);
     if (action === "duplicate_course") return await duplicateCourse(config, actorId, record);
+    if (action === "list_enrollable_students") return await listEnrollableStudents(config, actorId, record);
+    if (action === "enroll_students") return await enrollStudents(config, actorId, record);
+    if (action === "set_member_section") return await setMemberSection(config, actorId, record);
 
 // --- Brain-first Phase D: the content-agnostic knowledge intake -----------------------
 // extract_knowledge drafts the brain graph (ideas / vocab / curriculum links / practice

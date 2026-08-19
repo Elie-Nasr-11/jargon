@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronsUpDown,
@@ -11,13 +11,12 @@ import {
   User,
 } from "lucide-react";
 import { Popover } from "@/components/Popover";
-import { Collapsible } from "@/components/Collapsible";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useTheme } from "@/lib/theme";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 import type { TeacherClassSummary } from "@/lib/types";
-import { CLASS_SECTIONS, groupClassesByOrg, type ClassSection } from "./teacherNav";
+import { CLASS_SECTIONS, type ClassSection } from "./teacherNav";
 
 // The teacher shell's left column — the teacher sibling of the student AppSidebar, same anatomy:
 // wordmark, a Home row, a scrollable classes list (grouped by org when the teacher spans
@@ -122,7 +121,6 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
   } = props;
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutError, setLogoutError] = useState(false);
-  const [openOrgs, setOpenOrgs] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
   const { resolved, toggle } = useTheme();
   const campusLiveUrl = useCampusLiveLink();
@@ -132,16 +130,6 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
     fn();
     if (inDrawer) onCloseDrawer();
   };
-
-  const groups = useMemo(() => groupClassesByOrg(classes), [classes]);
-
-  // Auto-open the org holding the active class — on load (classes arrive async) and each time the
-  // class changes — while merging so orgs the teacher expanded themselves stay open.
-  useEffect(() => {
-    if (!activeClassId) return;
-    const currentOrg = groups.find(([, list]) => list.some((c) => c.id === activeClassId))?.[0];
-    if (currentOrg) setOpenOrgs((s) => (s[currentOrg] ? s : { ...s, [currentOrg]: true }));
-  }, [activeClassId, groups]);
 
   // The flow spine: the active class expands into its two section rows (Students / Curriculum)
   // right in the list — always visible while you're in the class, no extra disclosure.
@@ -241,33 +229,9 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
             Classes
           </div>
         ) : null}
-        {/* One org reads best as a flat list; multiple orgs each get their own collapsible so the
-            list stays scannable and the active class's org is open. */}
-        {groups.length > 1
-          ? groups.map(([org, list]) => {
-              // The org holding the active class stays open while you're inside it — otherwise
-              // closing it would hide the only section switcher for the page you're on.
-              const containsActive = list.some((c) => c.id === activeClassId);
-              const open = containsActive || (openOrgs[org] ?? false);
-              return (
-                <Collapsible
-                  key={org}
-                  open={open}
-                  onToggle={() => setOpenOrgs((s) => ({ ...s, [org]: !(s[org] ?? false) }))}
-                  headerClassName="mt-0.5 rounded-control px-2 py-1.5 text-body text-foreground transition-colors duration-(--dur-fast) hover:bg-muted/60"
-                  title={<span className="truncate font-medium">{org}</span>}
-                  meta={
-                    <span className="shrink-0 pl-1 text-meta tabular-nums text-muted-foreground">
-                      {list.length}
-                    </span>
-                  }
-                  bodyClassName="pb-1 pl-1.5"
-                >
-                  {list.map((cls) => classRow(cls))}
-                </Collapsible>
-              );
-            })
-          : (groups[0]?.[1] ?? []).map((cls) => classRow(cls))}
+        {/* R45 consolidated: a teacher belongs to ONE school — the class list is always
+            flat, no organization grouping. */}
+        {classes.map((cls) => classRow(cls))}
       </div>
 
       <div className="shrink-0 border-t border-border/60 p-2">

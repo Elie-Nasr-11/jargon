@@ -1677,6 +1677,8 @@ export type TeacherClassMembership = {
   role: "student" | "teacher";
   status: string;
   created_at: string;
+  // R45 consolidated classes: student grouping within the class (7A / 7B). null = unsectioned.
+  section?: string | null;
 };
 
 export type TeacherDashboardData = {

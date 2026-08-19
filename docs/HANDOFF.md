@@ -10811,3 +10811,43 @@ both); "also used by" still only sees the signed-in teacher's own classes.
 Suggested next task: surface fork provenance in the course DetailPane (forked_from_course
 is already in curriculum_metadata) and consider outline progress chips (old structure
 tree's per-lesson N/M complete).
+
+## Claude -> Codex / Human - 2026-08-18 23:30
+
+Status: Finished
+Summary: R45 — the consolidated class, per the owner's directive (see DECISIONS.md
+2026-08-18 R45). One school per teacher: sidebar + landing render flat class lists, org
+names left teacher chrome, org-grouping helpers retired. The class IS the course in
+presentation: the studio outline flattened to Units → Lessons (subject/course remain
+invisible plumbing), "+ Unit" resolves the class's backing course (first linked
+org-owned course, else auto-creates subject+course titled after the class and links
+them), the breadcrumb hides subject/course, the courses panel demoted to a collapsed
+"Books & shared content" drawer, and shared units wear a compact "shared" chip with the
+full class list as a tooltip (a harness screenshot caught the long annotation squeezing
+unit titles to zero width — meta chips are now width-capped + truncating). Sections live
+in Students: class_memberships.section (migration 20261010000000, registered in
+deploy-backend.yml AND applied to prod directly so the new dashboard select can't race
+the deploy), roster grouped by section with a per-student section select (New section…
+via prompt) and an "Add students" dialog enrolling existing org students, powered by
+three new curriculum-admin actions (list_enrollable_students / enroll_students /
+set_member_section; class-teacher authorized; enroll validates the org-student pool and
+upserts on the unique pair so re-enrolls reactivate).
+Files changed: supabase/migrations/20261010000000_class_sections.sql (new),
+.github/workflows/deploy-backend.yml, supabase/functions/curriculum-admin/index.ts,
+frontend/src/lib/{api.ts,types.ts}, features/teacher/shell/{teacherNav.ts,
+TeacherSidebar.tsx}, features/teacher/TeacherConsole.tsx, routes/teacher.curriculum.tsx,
+tests/{test_r45_consolidated_class.py (new), test_r43_class_scoped_curriculum.py},
+docs/{DECISIONS.md,HANDOFF.md}. Mock: sections, org memberships, extra unenrolled
+students, and create_subject/create_course/create_unit + roster action handlers; mock
+courses now org-NULL like prod so the backing-course auto-create path is exercised.
+Tests run: pin suite 781 OK; tsc + eslint clean; offline deno check clean; harness 15/15
+(flat chrome, section grouping, section move persisted through the server, enroll into a
+new section, flat outline, no subject rows, + Unit, demoted drawer via inert probe, unit
+titles visibly rendered, hidden-crumb lesson deep link, new-unit auto-create path).
+Remaining concerns: unit drag-reorder disabled in the flat outline (cross-course);
+"New section…" uses window.prompt (candidate for an inline input); teacher-side student
+account creation deliberately out of scope (admin's job); gradebook/roster elsewhere
+don't yet show section columns; the admin surfaces still speak courses/orgs — fine for
+admins, revisit if the owner wants the same consolidation there.
+Suggested next task: section filter on the gradebook + section chips on student detail;
+inline new-section input.
