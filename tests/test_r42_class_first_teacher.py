@@ -88,7 +88,7 @@ class ConsoleTests(unittest.TestCase):
             '{section === "review" ? ('
         )[0]
         self.assertIn("to review — open Review", students_block)
-        self.assertIn("Nothing to review.", students_block)
+        self.assertIn("Review & assign work", students_block)
         self.assertNotIn("ClassOverviewStrips", CONSOLE)
         self.assertFalse(
             (FRONTEND / "features" / "teacher" / "ClassOverview.tsx").exists(),

@@ -1326,24 +1326,32 @@ function ClassDetail({
               {/* R46 sketchboard: this page is the roster and nothing else. Grading, the
                   gradebook, and the old strips live behind the review strip below —
                   the roster rows themselves carry live/needs-review/last-active. */}
+              {/* The strip is ALWAYS a door — Review also holds the gradebook and the
+                  assign-work builders, so it must stay reachable when the queue is empty. */}
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                {signals.toReview > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate({
-                        to: "/teacher/class/$classId",
-                        params: { classId: item.id },
-                        search: { tab: "review" },
-                      })
-                    }
-                    className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-4 py-1.5 text-body text-warning transition-colors hover:bg-warning/20"
-                  >
-                    <NumberFlip value={signals.toReview} /> to review — open Review
-                  </button>
-                ) : (
-                  <span className="text-meta text-muted-foreground">Nothing to review.</span>
-                )}
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate({
+                      to: "/teacher/class/$classId",
+                      params: { classId: item.id },
+                      search: { tab: "review" },
+                    })
+                  }
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-body transition-colors ${
+                    signals.toReview > 0
+                      ? "border-warning/40 bg-warning/12 text-warning hover:bg-warning/20"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {signals.toReview > 0 ? (
+                    <>
+                      <NumberFlip value={signals.toReview} /> to review — open Review
+                    </>
+                  ) : (
+                    "Review & assign work"
+                  )}
+                </button>
                 <button
                   type="button"
                   onClick={openEnroll}
