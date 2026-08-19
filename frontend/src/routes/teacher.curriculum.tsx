@@ -166,7 +166,7 @@ function CurriculumPage() {
           navigate({
             to: "/teacher/class/$classId",
             params: { classId: first.id },
-            search: { tab: "curriculum", ...search },
+            search: { tab: "classwork", ...search },
             replace: true,
           });
         } else {
@@ -189,7 +189,30 @@ function CurriculumPage() {
 // operations run with this class as the authorization scope (curriculum-admin re-checks
 // teacher membership server-side); the host (TeacherConsole) has already verified the
 // teacher role, so there is no role gate here.
-export function CurriculumStudio({ classId }: { classId: string }) {
+// R47: a work item as the console hands it to the Classwork list — assignments, quizzes,
+// and materials render as rows under their lesson's unit heading, next to the lessons.
+export type ClassworkItem = {
+  kind: "assignment" | "assessment" | "material";
+  id: string;
+  lessonId: string | null;
+  title: string;
+  status: string;
+  dueAt: string | null;
+  needsReviewCount: number;
+  submittedCount: number;
+};
+
+export function CurriculumStudio({
+  classId,
+  workItems = [],
+  onOpenItem,
+  onCreate,
+}: {
+  classId: string;
+  workItems?: ClassworkItem[];
+  onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
+  onCreate?: (kind: "assignment" | "assessment" | "material") => void;
+}) {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as CurriculumSearch;
   const [booting, setBooting] = useState(true);
@@ -205,9 +228,6 @@ export function CurriculumStudio({ classId }: { classId: string }) {
   classLinksRef.current = classLinks;
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  // Outline nodes are collapsed by default; this set holds the EXPANDED ids.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [outlineOpen, setOutlineOpen] = useState(true);
   // R45: the books/shared-content drawer is advanced machinery — collapsed by default.
   const [booksOpen, setBooksOpen] = useState(false);
   const undoable = useUndoable();
@@ -432,7 +452,7 @@ export function CurriculumStudio({ classId }: { classId: string }) {
       navigate({
         to: "/teacher/class/$classId",
         params: { classId },
-        search: { tab: "curriculum", [type]: id },
+        search: { tab: "classwork", [type]: id },
       });
     },
     [navigate, classId],
@@ -442,40 +462,9 @@ export function CurriculumStudio({ classId }: { classId: string }) {
     navigate({
       to: "/teacher/class/$classId",
       params: { classId },
-      search: { tab: "curriculum" },
+      search: { tab: "classwork" },
     });
   }, [navigate, classId]);
-
-  const toggleExpanded = (id: string) =>
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  // Auto-expand the ancestors of the selected node so it's visible in the otherwise
-  // collapsed tree (covers deep links and freshly-created child nodes).
-  useEffect(() => {
-    if (!selection || !data) return;
-    const path = nodePath(selection, data);
-    const ancestorIds = [path.subject?.id, path.course?.id, path.unit?.id].filter(
-      (id): id is string => Boolean(id) && id !== selection.id,
-    );
-    if (!ancestorIds.length) return;
-    setExpanded((current) => {
-      let changed = false;
-      const next = new Set(current);
-      for (const id of ancestorIds) {
-        if (!next.has(id)) {
-          next.add(id);
-          changed = true;
-        }
-      }
-      return changed ? next : current;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection?.type, selection?.id, data]);
 
   // --- Mutations ------------------------------------------------------------
   // Edits/deletes/reorders apply optimistically (instant; resync only on error).
@@ -1125,18 +1114,15 @@ export function CurriculumStudio({ classId }: { classId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Breadcrumb segments={crumbs} />
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setOutlineOpen((value) => !value)}
-            className="inline-flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-          >
-            {outlineOpen ? (
-              <PanelLeftClose className="h-3.5 w-3.5" strokeWidth={1.7} />
-            ) : (
-              <PanelLeft className="h-3.5 w-3.5" strokeWidth={1.7} />
-            )}
-            {outlineOpen ? "Hide outline" : "Show outline"}
-          </button>
+          {selection ? (
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+            >
+              ← Classwork
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void loadData()}
@@ -1173,35 +1159,24 @@ export function CurriculumStudio({ classId }: { classId: string }) {
           </div>
         </section>
       ) : data ? (
-        <div className={`grid gap-4 ${outlineOpen ? "lg:grid-cols-[330px_minmax(0,1fr)]" : ""}`}>
-          {/* Sticky offsets are relative to the class page's PageShell scroller: a small top
-              inset, capped so the outline never outgrows the viewport. */}
-          {outlineOpen ? (
-            <aside className="min-w-0 lg:sticky lg:top-2 lg:max-h-[calc(100dvh-4rem)] lg:overflow-x-hidden lg:overflow-y-auto">
-              <Outline
-                units={outlineUnits}
-                lessonsForUnit={lessonsForUnit}
-                emptyHint="No units yet — create one to start this class's curriculum, or open Books & shared content below to bring in existing material."
-                selection={selection}
-                expanded={expanded}
-                busy={busy}
-                onToggle={toggleExpanded}
-                onSelect={selectNode}
-                onReorder={reorder}
-                onAddUnit={addUnitToClass}
-                onAddLesson={addLesson}
-                onOpenResources={() =>
-                  navigate({
-                    to: "/teacher/class/$classId",
-                    params: { classId },
-                    search: { tab: "curriculum", view: "resources" },
-                  })
-                }
-                onCollapse={() => setOutlineOpen(false)}
-              />
-            </aside>
-          ) : null}
-
+        // R47: no aside, no tree. The list IS the surface (units as topic headings with
+        // lessons + work items beneath); a selection swaps the whole width to the editor.
+        selection === null ? (
+          <ClassworkList
+            units={outlineUnits}
+            lessonsForUnit={lessonsForUnit}
+            emptyHint="No units yet — create one to start this class's classwork, or open Books & shared content below to bring in existing material."
+            workItems={workItems}
+            busy={busy}
+            onSelectLesson={(id) => selectNode("lesson", id)}
+            onSelectUnit={(id) => selectNode("unit", id)}
+            onOpenItem={onOpenItem}
+            onCreate={onCreate}
+            onAddUnit={addUnitToClass}
+            onAddLesson={addLesson}
+            onReorder={reorder}
+          />
+        ) : (
           <div className="min-w-0">
             {sharedNotice ? (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-border bg-depth-sub px-3.5 py-2.5 text-meta text-muted-foreground">
@@ -1257,7 +1232,7 @@ export function CurriculumStudio({ classId }: { classId: string }) {
               }}
             />
           </div>
-        </div>
+        )
       ) : null}
 
       {/* R45 consolidated: the class curriculum reads as the teacher's own — the books
@@ -1301,95 +1276,162 @@ export function CurriculumStudio({ classId }: { classId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Outline sidebar — persistent Subject ▸ Course ▸ Unit ▸ Lesson tree with inline
-// create + native drag-reorder (scoped per sibling group via ReorderList).
+// Classwork list — the full-width face of the Classwork tab (R47). Units are topic
+// headings (always expanded, Classroom-style); beneath each: lesson rows, then the
+// work items (assignments / quizzes / materials) attached to those lessons. ONE
+// "+ Create" menu makes everything; per-unit "+ Lesson" adds in place.
 // ---------------------------------------------------------------------------
 
-// R45 consolidated: the class curriculum is ONE flat list of units — the subject/course
-// levels are invisible plumbing (each unit still knows its backing course, which powers
-// the shared-content annotation). Unit drag-reorder is intentionally off in the flat
-// view (adjacent units can live in different backing courses); lessons still drag
-// within their unit.
-function Outline({
+// R45 consolidated (still true here): the class curriculum is ONE flat list of units —
+// subject/course stay invisible plumbing (each unit knows its backing course, which
+// powers the shared-content annotation). Unit drag-reorder stays off (adjacent units
+// can live in different backing courses); lessons still drag within their unit.
+function ClassworkList({
   units,
   lessonsForUnit,
   emptyHint,
-  selection,
-  expanded,
+  workItems,
   busy,
-  onToggle,
-  onSelect,
-  onReorder,
+  onSelectLesson,
+  onSelectUnit,
+  onOpenItem,
+  onCreate,
   onAddUnit,
   onAddLesson,
-  onOpenResources,
-  onCollapse,
+  onReorder,
 }: {
   units: Array<{ unit: CurriculumUnit; annotation: string | null }>;
   lessonsForUnit: (unitId: string) => Lesson[];
   emptyHint?: string;
-  selection: Selection;
-  expanded: Set<string>;
+  workItems: ClassworkItem[];
   busy: boolean;
-  onToggle: (id: string) => void;
-  onSelect: (type: CurriculumNodeType, id: string) => void;
-  onReorder: (type: CurriculumNodeType, orderedIds: string[]) => void;
+  onSelectLesson: (id: string) => void;
+  onSelectUnit: (id: string) => void;
+  onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
+  onCreate?: (kind: "assignment" | "assessment" | "material") => void;
   onAddUnit: () => void;
   onAddLesson: (unitId: string) => void;
-  onOpenResources: () => void;
-  onCollapse: () => void;
+  onReorder: (type: CurriculumNodeType, orderedIds: string[]) => void;
 }) {
-  const isSelected = (type: CurriculumNodeType, id: string) =>
-    selection?.type === type && selection.id === id;
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+
+  // Work items grouped under the unit their lesson belongs to; anything whose lesson
+  // isn't in this class's outline falls into a trailing "Other classwork" bucket so
+  // nothing ever silently disappears.
+  const lessonUnitById = new Map<string, string>();
+  for (const { unit } of units) {
+    for (const lesson of lessonsForUnit(unit.id)) lessonUnitById.set(lesson.id, unit.id);
+  }
+  const itemsByUnit = new Map<string, ClassworkItem[]>();
+  const otherItems: ClassworkItem[] = [];
+  for (const item of workItems) {
+    const unitId = item.lessonId ? lessonUnitById.get(item.lessonId) : undefined;
+    if (unitId) {
+      const list = itemsByUnit.get(unitId) ?? [];
+      list.push(item);
+      itemsByUnit.set(unitId, list);
+    } else {
+      otherItems.push(item);
+    }
+  }
+
+  const kindLabel = (kind: ClassworkItem["kind"]) =>
+    kind === "assignment" ? "assignment" : kind === "assessment" ? "quiz" : "material";
+
+  const itemRow = (item: ClassworkItem) => (
+    <button
+      key={`${item.kind}:${item.id}`}
+      type="button"
+      onClick={() => onOpenItem?.(item.kind, item.id)}
+      className="flex min-w-0 items-center gap-2.5 rounded-control py-1.5 pl-7 pr-2 text-left transition-colors hover:bg-muted"
+    >
+      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-meta text-muted-foreground">
+        {kindLabel(item.kind)}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-body text-foreground">{item.title}</span>
+      {item.needsReviewCount > 0 ? (
+        <span className="shrink-0 rounded-full border border-warning/40 bg-warning/12 px-2 py-0.5 text-meta text-warning">
+          {item.needsReviewCount} to review
+        </span>
+      ) : null}
+      <span className="shrink-0 text-meta text-muted-foreground">
+        {item.status}
+        {item.dueAt ? ` · due ${new Date(item.dueAt).toLocaleDateString()}` : ""}
+      </span>
+    </button>
+  );
 
   return (
     <section className="rounded-card border border-border bg-depth-card shadow-card">
-      <div className="p-3">
-        <div className="mb-2 flex items-center justify-between gap-2 px-1">
+      <div className="p-4 sm:p-5">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-            Outline
+            Classwork
           </span>
-          <div className="flex items-center gap-1">
+          <div className="relative flex items-center gap-1">
             <button
               type="button"
-              onClick={onOpenResources}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-meta text-foreground transition-colors hover:bg-muted"
-            >
-              <Paperclip className="h-3.5 w-3.5" strokeWidth={1.8} />
-              Resources
-            </button>
-            <button
-              type="button"
-              onClick={onAddUnit}
+              onClick={() => setCreateMenuOpen((value) => !value)}
               disabled={busy}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              aria-haspopup="menu"
+              aria-expanded={createMenuOpen}
+              className="inline-flex items-center gap-1 rounded-full bg-foreground px-3.5 py-1.5 text-meta font-medium text-background transition-colors hover:opacity-90 disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
-              Unit
+              Create
             </button>
-            <button
-              type="button"
-              onClick={onCollapse}
-              aria-label="Hide outline"
-              title="Hide outline"
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <PanelLeftClose className="h-4 w-4" strokeWidth={1.7} />
-            </button>
+            {createMenuOpen ? (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-20 mt-1 w-44 rounded-card border border-border bg-depth-card p-1 shadow-card"
+              >
+                {(
+                  [
+                    { kind: "assignment", label: "Assignment" },
+                    { kind: "assessment", label: "Quiz" },
+                    { kind: "material", label: "Material" },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.kind}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setCreateMenuOpen(false);
+                      onCreate?.(option.kind);
+                    }}
+                    className="block w-full rounded-control px-3 py-1.5 text-left text-meta text-foreground transition-colors hover:bg-muted"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setCreateMenuOpen(false);
+                    onAddUnit();
+                  }}
+                  className="block w-full rounded-control px-3 py-1.5 text-left text-meta text-foreground transition-colors hover:bg-muted"
+                >
+                  Unit
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 
         {units.length === 0 ? (
           <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
-            {emptyHint ?? "No units yet. Create one to start the class curriculum."}
+            {emptyHint ?? "No units yet. Create one to start the class's classwork."}
           </div>
         ) : (
-          <div className="grid min-w-0 gap-1">
+          <div className="grid min-w-0 gap-4">
             {units.map(({ unit, annotation }) => {
-              const open = expanded.has(unit.id);
               const lessons = lessonsForUnit(unit.id);
+              const unitItems = itemsByUnit.get(unit.id) ?? [];
               return (
-                <div key={unit.id}>
+                <div key={unit.id} className="min-w-0">
                   <OutlineRow
                     depth={0}
                     label={unit.title}
@@ -1400,43 +1442,51 @@ function Outline({
                       .filter(Boolean)
                       .join(" · ")}
                     metaTitle={annotation ?? undefined}
-                    hasChildren
-                    open={open}
-                    selected={isSelected("unit", unit.id)}
-                    onToggle={() => onToggle(unit.id)}
-                    onSelect={() => onSelect("unit", unit.id)}
+                    hasChildren={false}
+                    selected={false}
+                    onSelect={() => onSelectUnit(unit.id)}
                     onAdd={() => onAddLesson(unit.id)}
                     addLabel="Add lesson"
                     dragging={false}
                     showGrip={false}
                   />
-                  {open ? (
-                    <div className="mt-0.5 grid min-w-0 gap-0.5">
-                      <ReorderList
-                        items={lessons}
-                        disabled={busy}
-                        onReorder={(ids) => onReorder("lesson", ids)}
-                      >
-                        {(lesson, lessonState) => (
-                          <div className={dropClass(lessonState)}>
-                            <OutlineRow
-                              depth={1}
-                              label={lesson.title}
-                              meta={lesson.publication_status || "published"}
-                              hasChildren={false}
-                              selected={isSelected("lesson", lesson.id)}
-                              onSelect={() => onSelect("lesson", lesson.id)}
-                              dragging={lessonState.dragging}
-                            />
-                          </div>
-                        )}
-                      </ReorderList>
-                      {lessons.length === 0 ? <EmptyHint depth={1} label="No lessons" /> : null}
-                    </div>
-                  ) : null}
+                  <div className="mt-0.5 grid min-w-0 gap-0.5">
+                    <ReorderList
+                      items={lessons}
+                      disabled={busy}
+                      onReorder={(ids) => onReorder("lesson", ids)}
+                    >
+                      {(lesson, lessonState) => (
+                        <div className={dropClass(lessonState)}>
+                          <OutlineRow
+                            depth={1}
+                            label={lesson.title}
+                            meta={lesson.publication_status || "published"}
+                            hasChildren={false}
+                            selected={false}
+                            onSelect={() => onSelectLesson(lesson.id)}
+                            dragging={lessonState.dragging}
+                          />
+                        </div>
+                      )}
+                    </ReorderList>
+                    {lessons.length === 0 ? <EmptyHint depth={1} label="No lessons" /> : null}
+                    {unitItems.map(itemRow)}
+                  </div>
                 </div>
               );
             })}
+            {otherItems.length ? (
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 px-1.5 py-1 text-body font-medium text-foreground">
+                  Other classwork
+                  <span className="text-meta font-normal text-muted-foreground">
+                    not attached to a unit here
+                  </span>
+                </div>
+                <div className="mt-0.5 grid min-w-0 gap-0.5">{otherItems.map(itemRow)}</div>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -4396,7 +4446,7 @@ function buildBreadcrumb({
   // Rooted at the class's Curriculum section — the studio has no page of its own anymore,
   // so the crumb encodes only the content path (subject → … → lesson) within this class.
   const segments: Array<{ label: string; onClick?: () => void }> = [
-    { label: "Curriculum", onClick: goRoot },
+    { label: "Classwork", onClick: goRoot },
   ];
   if (!selection || !data) return segments;
 

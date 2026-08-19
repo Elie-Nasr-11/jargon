@@ -109,9 +109,10 @@ export function NotificationsMenu() {
       );
       void markNotificationRead(n.id).catch(() => {});
     }
-    // Deep-link each kind to the surface where the teacher can act on it:
-    //  - assessment_to_review / submission_to_grade → the class's Students + performance
-    //    section (both grading queues live at its top)
+    // Deep-link each kind to the surface where the teacher can act on it (R47):
+    //  - submission_to_grade / assessment_to_review → the item's student-work view inside
+    //    the class's Classwork tab when the notification ref names the item, else the
+    //    Classwork list (grading lives ON the work now)
     //  - mentor_recommendation → the student's transcript (to see where they're stuck)
     //  - direct_message → the student's Messages tab (reply to the DM)
     if (n.kind === "direct_message" && n.class_id && n.related_student_id) {
@@ -124,10 +125,25 @@ export function NotificationsMenu() {
       (n.kind === "assessment_to_review" || n.kind === "submission_to_grade") &&
       n.class_id
     ) {
+      // The writer stamps the item id into ref (assignment_id / assessment_id) — parse it
+      // defensively; a plain Classwork landing is the safe fallback for old rows.
+      const ref = (n.ref ?? {}) as Record<string, unknown>;
+      const assignmentId =
+        n.kind === "submission_to_grade" && typeof ref.assignment_id === "string"
+          ? ref.assignment_id
+          : undefined;
+      const assessmentId =
+        n.kind === "assessment_to_review" && typeof ref.assessment_id === "string"
+          ? ref.assessment_id
+          : undefined;
       navigate({
         to: "/teacher/class/$classId",
         params: { classId: n.class_id },
-        search: { tab: "students" },
+        search: assignmentId
+          ? { tab: "classwork", assignment: assignmentId }
+          : assessmentId
+            ? { tab: "classwork", assessment: assessmentId }
+            : { tab: "classwork" },
       });
     } else if (n.kind === "mentor_recommendation" && n.class_id && n.related_student_id) {
       navigate({
@@ -145,7 +161,7 @@ export function NotificationsMenu() {
       navigate({
         to: "/teacher/class/$classId",
         params: { classId: n.class_id },
-        search: { tab: "students" },
+        search: { tab: "classwork" },
       });
     }
   };

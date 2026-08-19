@@ -10919,3 +10919,70 @@ they looked; awaiting the deploy + their pass on the actual R46 UI before any
 restructuring.
 Suggested next task: watch the Render deploy; then collect the owner's specific
 walkthrough feedback on R46.
+
+## Claude -> Codex / Human - 2026-08-19 03:10
+
+Status: Starting
+Task: R47 — rebuild the class workspace into four fixed tabs (Live / Classwork / People /
+Grades) per the owner-approved "Steal These Flows" synthesis (Classroom skeleton + SchoolAI
+live layer). Home gains a global To-review queue; the studio's outline becomes the full-width
+Classwork list (units as headings, lessons + work items, one + Create); grading moves onto
+each work item's student-work view; the gradebook becomes a visible tab.
+Files I expect to touch: frontend/src/features/teacher/{TeacherConsole.tsx,
+AssignmentGrading.tsx, AssessmentGrading.tsx, shell/teacherNav.ts},
+frontend/src/routes/{teacher.curriculum.tsx, teacher.class.$classId.tsx},
+frontend/src/components/NotificationsMenu.tsx, tests/* (r42/r45/r46/curriculum_authoring/
+admin_seed pins + new test_r47), docs/{DECISIONS.md,HANDOFF.md}.
+Notes: frontend-only; keep-names rules protect ~10 pin files (AssignmentGrading/AssessmentGrading
+filenames, AssignmentManager/AssessmentManager component names, units={outlineUnits},
+"no sessions yet").
+
+## Claude -> Codex / Human - 2026-08-19 04:30
+
+Status: Finished
+Summary: R47 — the four-tab teacher console, per the owner-approved "Steal These Flows"
+synthesis (Classroom skeleton + SchoolAI live layer). teacherNav is the single spine:
+ClassSection = live|classwork|people|grades, pills render from CLASS_SECTIONS.map so
+sidebar and header can't disagree. Live (landing) lists this class's unfinished sessions
+with Watch deep-links (quiet state: recent activity; keeps "no sessions yet"). People is
+the roster half of the old Students tab (sections, per-student select, Add students) with
+all activity context removed. Grades mounts GradebookTable as a visible tab. Classwork:
+the studio's Outline aside is deleted — ClassworkList (in teacher.curriculum.tsx) renders
+units as always-open topic headings with lesson rows (drag-reorder kept, OutlineRow
+reused) and work-item rows the console derives (ClassworkItem[]) and hands in as props;
+unmatched items land in "Other classwork"; ONE + Create menu (Assignment/Quiz/Material →
+console dialogs; Unit → addUnitToClass; per-unit "+ Lesson" auto-opens the editor).
+Selecting anything swaps the full width to DetailPane with a "← Classwork" toolbar
+button. AssignmentGrading.tsx/AssessmentGrading.tsx refactored in place into
+AssignmentWorkView/AssessmentWorkView — ONE item's surface: instructions, status
+controls (moved from the old manager lists), roster strip, submissions/attempts ordered
+needs-you-first, grade & return inline ("Return result" and onReviewAssessmentItem
+strings preserved for older pins). The managers kept their names but are form-only
+now, wrapped in + Create dialogs; ResourceManager became a controlled create/edit
+dialog (open/resource/onClose props; status+Open actions inside edit mode). Home gains
+globalReviewRows + GlobalReviewQueue — every submitted-ungraded piece across classes,
+rows deep-link ?tab=classwork&assignment|assessment=<id>. NotificationsMenu now parses
+ref.assignment_id/ref.assessment_id (the writers always stamped them) and deep-links
+the same way; class-only fallback → classwork. Route: ?assignment/?assessment added,
+?view removed. Legacy map: students→live, review/gradebook→grades, curriculum/*→
+classwork, default→live.
+Files changed: frontend/src/features/teacher/{TeacherConsole.tsx, AssignmentGrading.tsx,
+AssessmentGrading.tsx, shell/teacherNav.ts}, routes/{teacher.curriculum.tsx,
+teacher.class.$classId.tsx}, components/NotificationsMenu.tsx, tests/{test_r47_four_tab_
+console.py (new), test_r42_class_first_teacher.py, test_r45_consolidated_class.py,
+test_r46_sketchboard_console.py (slimmed to what survives), test_curriculum_authoring_
+studio.py}, docs/{DECISIONS.md, HANDOFF.md}. Mock: generic POST/PATCH /rest/v1 with
+eq./in. filters + .single() Accept handling, curriculum-admin create_lesson_stub,
+assessment-admin (create/set_status/review_item/return), quiz fixture with Maya's
+pending_review attempt.
+Tests run: pin suite 800 OK; tsc + eslint clean; offline harness verify_r47.mjs 25/25
+(home queue + deep links, grade-in-place, classwork list + create-assignment end-to-end,
++ Lesson → editor round-trip, quiz work view, Live landing + Watch, People purity,
+Grades visible, legacy tab links) with screenshots eyeballed.
+Remaining concerns: window.prompt still collects return-feedback (debt); opening a work
+item unmounts the studio (authoring data refetches on back — acceptable, the studio
+already refetched per tab entry); Live shows sessions for this class's students without
+lesson-to-class scoping (mirrors the old roster behavior); assignments/quizzes as a
+lesson STEP is still the future modeling slice.
+Suggested next task: watch the deploy + owner walkthrough of the four tabs; then either
+the notification writers for assessment ref ids audit, or an inline return-feedback field.
