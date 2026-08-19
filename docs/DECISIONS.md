@@ -1108,3 +1108,32 @@ to match it.
   upload-into-steps attachment stays as-is until the step-attachment slice.
 - **The student page names the student, their section chip, and the class** in the
   header (board 7).
+
+## 2026-08-19 - R47: The four-tab console (owner-approved synthesis "Steal These Flows")
+
+After R46 the owner still found the console hard to navigate. We tore down SchoolAI and
+Google Classroom, synthesized the takeaways into an artifact the owner approved ("I love
+it. Lay out a solid plan and go for it") — the artifact is the spec:
+claude.ai/code/artifact/134b04b4-4594-4c79-8709-a55f9e22c556.
+
+The recipe: **Classroom's skeleton + SchoolAI's live layer.** A class is exactly four
+fixed rooms, each answering one teacher question; tabs render FROM CLASS_SECTIONS so the
+pills and sidebar can never disagree, and nothing appears or disappears with state.
+
+- **Live** (landing) — who's on right now; Watch deep-links the session. Quiet state
+  lists recent activity. (The SchoolAI Mission Control layer, per class.)
+- **Classwork** — ONE list: units as topic headings; lessons, assignments, quizzes,
+  materials beneath (work items group under their lesson's unit; strays land in "Other
+  classwork"). ONE + Create menu. A lesson click opens the editor full-width
+  ("← Classwork" back); a work-item click opens its student-work view where grading
+  happens ON the work (Classroom's model). The outline tree/aside is gone.
+- **People** — roster, sections, enrolment. Admin only; no activity context.
+- **Grades** — the gradebook matrix as a visible tab (a rollup, not a workplace).
+- **Home** — class cards + a global cross-class **To review** queue; rows deep-link to
+  the item's student-work view. Notifications now use the item ids their writers always
+  stamped into `ref` and deep-link the same way.
+- Legacy `?tab=` map: students→live; curriculum/structure/lessons/resources/assignments/
+  assessments→classwork; review/gradebook→grades; unknown→live. `?view=` retired.
+- Principles adopted as standing rules (see the artifact): four fixed tabs; no hidden
+  rooms; one + Create; grading lives on the work; hierarchy is metadata, not navigation;
+  kill a noun before adding one.

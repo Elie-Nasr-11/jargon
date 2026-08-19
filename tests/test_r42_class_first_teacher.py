@@ -4,18 +4,15 @@
 for the whole thing … per lesson, you'll be able to build the curriculum within
 each class. I don't think there should be a single builder space for everything."
 
-Pins the structural contract of slice 1:
-- The class workspace's sidebar spine is exactly two sections — Students
-  (landing) and Curriculum — and every legacy ?tab= value maps into a section.
-  (R46 adds "review" as a reachable section behind the Students strip, but it
-  is deliberately NOT a sidebar row — see test_r46.)
-- The sidebar has no global Curriculum destination; classes are the hierarchy.
+Pins the structural contract of slice 1, updated through R47:
+- Classes are the single hierarchy; the class workspace's sidebar spine renders
+  from CLASS_SECTIONS (four fixed rooms since R47 — see test_r47), and every
+  legacy ?tab= value maps into a section.
+- The sidebar has no global Curriculum destination.
 - The authoring studio is an exported, class-scoped component mounted (lazily)
-  inside the class's Curriculum section; its selection rides the class route URL.
+  inside the class's Classwork section; its selection rides the class route URL.
 - /teacher/curriculum survives only as a redirect for old bookmarks.
-- The old Structure panel (a second tree, redundant with the studio outline)
-  is retired. (The old Overview strips were absorbed into Students here and
-  later replaced by roster-row signals in R46.)
+- The old Structure panel and Overview strips stay retired.
 """
 from pathlib import Path
 import unittest
@@ -37,27 +34,31 @@ NOTIFICATIONS = (FRONTEND / "components" / "NotificationsMenu.tsx").read_text(en
 
 
 class ClassSectionsTests(unittest.TestCase):
-    def test_class_workspace_has_exactly_students_and_curriculum(self):
-        # R46 widens the type with "review" (reachable, not a sidebar row) — the
-        # SIDEBAR spine (CLASS_SECTIONS) still holds exactly the two original rows.
-        self.assertIn('export type ClassSection = "students" | "curriculum" | "review";', NAV)
-        self.assertIn('{ value: "students", label: "Students" }', NAV)
-        self.assertIn('{ value: "curriculum", label: "Curriculum" }', NAV)
-        for retired in ('"overview"', '"structure", label', '"review"'):
+    def test_class_workspace_has_the_four_fixed_sections(self):
+        # R47 four-tab console: the class spine is Live / Classwork / People / Grades —
+        # every tab always visible (no hidden rooms), rendered from CLASS_SECTIONS.
+        self.assertIn('export type ClassSection = "live" | "classwork" | "people" | "grades";', NAV)
+        self.assertIn('{ value: "live", label: "Live" }', NAV)
+        self.assertIn('{ value: "classwork", label: "Classwork" }', NAV)
+        self.assertIn('{ value: "people", label: "People" }', NAV)
+        self.assertIn('{ value: "grades", label: "Grades" }', NAV)
+        for retired in ('"overview"', '"structure", label', '"review"', '"students"', '"curriculum"'):
             with self.subTest(retired=retired):
                 self.assertNotIn(f"value: {retired}", NAV)
 
-    def test_legacy_tabs_map_into_the_two_sections(self):
-        # Content-shaped legacy values land on Curriculum; everything else (including
-        # the retired Overview and unknown/absent values) lands on Students.
-        self.assertIn('case "curriculum":', NAV)
-        self.assertIn('case "structure":', NAV)
-        self.assertIn('case "lessons":', NAV)
-        self.assertIn('case "resources":', NAV)
-        self.assertIn('return "curriculum";', NAV)
-        self.assertIn('return "students";', NAV)
+    def test_legacy_tabs_map_into_the_four_sections(self):
+        # Content-shaped legacy values land on Classwork; grading-shaped ones on Grades;
+        # the old Students landing (and unknown/absent) lands on Live.
+        for case in ("curriculum", "structure", "lessons", "resources", "assignments", "assessments"):
+            with self.subTest(case=case):
+                self.assertIn(f'case "{case}":', NAV)
+        self.assertIn('case "review":', NAV)
+        self.assertIn('case "gradebook":', NAV)
+        self.assertIn('return "classwork";', NAV)
+        self.assertIn('return "grades";', NAV)
+        self.assertIn('return "live";', NAV)
         self.assertNotIn('return "overview"', NAV)
-        self.assertNotIn('return "structure"', NAV)
+        self.assertNotIn('return "students"', NAV)
 
 
 class SidebarTests(unittest.TestCase):
@@ -74,28 +75,27 @@ class SidebarTests(unittest.TestCase):
 
 
 class ConsoleTests(unittest.TestCase):
-    def test_studio_mounts_lazily_inside_the_class_curriculum_section(self):
+    def test_studio_mounts_lazily_inside_the_class_classwork_section(self):
         self.assertIn('import("@/routes/teacher.curriculum")', CONSOLE)
         self.assertIn("module.CurriculumStudio", CONSOLE)
-        self.assertIn("<CurriculumStudio classId={item.id} />", CONSOLE)
-        self.assertIn('{section === "curriculum" ? (', CONSOLE)
+        self.assertIn("<CurriculumStudio", CONSOLE)
+        self.assertIn('{section === "classwork" ? (', CONSOLE)
 
-    def test_students_section_owns_the_roster_and_no_overview_remains(self):
-        # R46: the old Overview strips are gone (component deleted) — the roster rows
-        # themselves carry the live/needs-review/last-active signals, and the review
-        # strip above them is the door to everything gradeable.
-        students_block = CONSOLE.split('{section === "students" ? (')[1].split(
-            '{section === "review" ? ('
+    def test_people_section_owns_the_roster_and_no_overview_remains(self):
+        # R47: the old Students tab split — activity went to Live, the roster (sections,
+        # enrolment) lives in People. No overview strips, no hidden review room.
+        people_block = CONSOLE.split('{section === "people" ? (')[1].split(
+            '{section === "grades" ? ('
         )[0]
-        self.assertIn("to review — open Review", students_block)
-        self.assertIn("Review & assign work", students_block)
+        self.assertIn("Add students", people_block)
         self.assertNotIn("ClassOverviewStrips", CONSOLE)
         self.assertFalse(
             (FRONTEND / "features" / "teacher" / "ClassOverview.tsx").exists(),
-            "ClassOverview.tsx should be deleted (strips replaced by roster-row signals)",
+            "ClassOverview.tsx should be deleted (strips replaced by Live rows)",
         )
-        # No standalone Overview section remains.
+        # No standalone Overview or Review sections remain.
         self.assertNotIn('{section === "overview" ? (', CONSOLE)
+        self.assertNotIn('{section === "review" ? (', CONSOLE)
 
     def test_structure_panel_is_retired_and_linked_courses_survive(self):
         self.assertNotIn("ClassStructurePanel", CONSOLE)
@@ -108,14 +108,19 @@ class ConsoleTests(unittest.TestCase):
         self.assertIn("<LinkedCoursesPanel", STUDIO)
         self.assertNotIn("LinkedCoursesPanel", CONSOLE)
 
-    def test_class_level_deep_links_land_on_students(self):
-        self.assertIn('search: { tab: "students" }', CONSOLE)
-        self.assertIn('search: { tab: "students" }', NOTIFICATIONS)
+    def test_class_level_deep_links_land_on_the_new_sections(self):
+        # Student-page back pill lands on Live; notification deep links land on Classwork
+        # (grading lives ON the work now) — nothing points at the retired Students tab.
+        self.assertIn('search: { tab: "live" }', CONSOLE)
+        self.assertIn('tab: "classwork"', NOTIFICATIONS)
+        self.assertNotIn('tab: "students"', CONSOLE)
+        self.assertNotIn('tab: "students"', NOTIFICATIONS)
 
 
 class StudioTests(unittest.TestCase):
     def test_studio_is_an_exported_class_scoped_component(self):
-        self.assertIn("export function CurriculumStudio({ classId }: { classId: string })", STUDIO)
+        self.assertIn("export function CurriculumStudio({", STUDIO)
+        self.assertIn("classId: string;", STUDIO)
         # The host (TeacherConsole) gates the teacher role; the studio must not re-gate
         # or render its own chrome (shell imports gone, class picker gone).
         self.assertNotIn("fetchPrimaryRole", STUDIO)
@@ -125,13 +130,13 @@ class StudioTests(unittest.TestCase):
 
     def test_selection_rides_the_class_route(self):
         self.assertIn('to: "/teacher/class/$classId"', STUDIO)
-        self.assertIn('search: { tab: "curriculum", [type]: id }', STUDIO)
-        self.assertIn('search: { tab: "curriculum" }', STUDIO)
+        self.assertIn('search: { tab: "classwork", [type]: id }', STUDIO)
+        self.assertIn('search: { tab: "classwork" }', STUDIO)
 
     def test_legacy_route_redirects_into_the_first_class(self):
         self.assertIn('createFileRoute("/teacher/curriculum")', STUDIO)
         self.assertIn("fetchTeacherClasses(session.user.id)", STUDIO)
-        self.assertIn('search: { tab: "curriculum", ...search }', STUDIO)
+        self.assertIn('search: { tab: "classwork", ...search }', STUDIO)
         self.assertIn("replace: true", STUDIO)
 
     def test_class_route_carries_the_studio_selection_params(self):

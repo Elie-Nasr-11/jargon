@@ -29,8 +29,10 @@ import {
   UsersRound,
 } from "lucide-react";
 import { NumberFlip } from "@/features/teacher/HotlistFeed";
-import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
-import { AssessmentGrading } from "@/features/teacher/AssessmentGrading";
+import { AssignmentWorkView } from "@/features/teacher/AssignmentGrading";
+import { AssessmentWorkView } from "@/features/teacher/AssessmentGrading";
+// Type-only: erased at compile time, so it does NOT pull the heavy studio chunk in.
+import type { ClassworkItem } from "@/routes/teacher.curriculum";
 // R42: the authoring studio lives inside each class's Curriculum section now. Its code
 // stays in the (heavy) route module and loads on demand the first time the section opens,
 // so the Students landing stays as light as before.
@@ -59,7 +61,11 @@ import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/componen
 import { Collapsible } from "@/components/Collapsible";
 import { PageShell } from "@/components/PageShell";
 import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
-import { normalizeClassSection, type ClassSection } from "@/features/teacher/shell/teacherNav";
+import {
+  CLASS_SECTIONS,
+  normalizeClassSection,
+  type ClassSection,
+} from "@/features/teacher/shell/teacherNav";
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { OverflowMenu } from "@/components/OverflowMenu";
@@ -132,8 +138,9 @@ export function TeacherConsole() {
   };
   const search = useSearch({ strict: false }) as {
     tab?: string;
-    view?: string;
     session?: string;
+    assignment?: string;
+    assessment?: string;
   };
   const [auth, setAuth] = useState<{ id: string; email: string } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -790,7 +797,7 @@ export function TeacherConsole() {
       activeView={selectedClassId || selectedStudentId ? "class" : "home"}
       activeClassId={selectedClassId}
       activeSection={
-        selectedStudentId ? "students" : selectedClassId ? normalizeClassSection(search.tab) : null
+        selectedStudentId ? "live" : selectedClassId ? normalizeClassSection(search.tab) : null
       }
     >
       {/* Keyed per navigation level so the page's entrance fade + focus handoff re-run on
@@ -804,8 +811,8 @@ export function TeacherConsole() {
                 navigate({
                   to: "/teacher/class/$classId",
                   params: { classId: selectedClassId ?? "" },
-                  // The drill-down lives under Students + performance — land back there.
-                  search: { tab: "students" },
+                  // The drill-down opens from Live (and People) — land back on the landing tab.
+                  search: { tab: "live" },
                 })
             : selectedClassId
               ? () => navigate({ to: "/teacher" })
@@ -862,6 +869,25 @@ export function TeacherConsole() {
                   </div>
                 ) : null}
 
+                {/* R47: the global To-review queue — grading never hides inside a class
+                    (Classroom's quiet masterstroke). Rows deep-link straight to the item's
+                    student-work view in its class. */}
+                {!selectedClassId ? (
+                  <GlobalReviewQueue
+                    rows={globalReviewRows(dashboard, model.profilesById, model.lessonsById)}
+                    onOpen={(row) =>
+                      navigate({
+                        to: "/teacher/class/$classId",
+                        params: { classId: row.classId },
+                        search:
+                          row.kind === "assignment"
+                            ? { tab: "classwork", assignment: row.itemId }
+                            : { tab: "classwork", assessment: row.itemId },
+                      })
+                    }
+                  />
+                ) : null}
+
                 <div className="grid gap-4">
                   {selectedStudentId ? null : selectedClass ? (
                     <ClassDetail
@@ -898,7 +924,8 @@ export function TeacherConsole() {
                         })
                       }
                       section={normalizeClassSection(search.tab)}
-                      resourcesView={search.view === "resources"}
+                      openAssignmentId={search.assignment ?? null}
+                      openAssessmentId={search.assessment ?? null}
                       onSetSection={(studentId, sectionLabel) =>
                         setStudentSection(selectedClass.id, studentId, sectionLabel)
                       }
@@ -1085,7 +1112,8 @@ function ClassDetail({
   onReturnAssessment,
   onUpdateResource,
   section,
-  resourcesView,
+  openAssignmentId,
+  openAssessmentId,
   onSetSection,
   onListEnrollable,
   onEnroll,
@@ -1134,19 +1162,23 @@ function ClassDetail({
   onReturnAssessment: (input: { attemptId: string; feedback: string }) => Promise<void>;
   onUpdateResource: (resource: LessonResource) => void;
   section: ClassSection;
-  // R46: Curriculum › Resources — the class's dedicated file library view.
-  resourcesView: boolean;
+  // R47: a work item opened inside Classwork (?assignment= / ?assessment=) — the
+  // student-work view takes the surface over from the studio while set.
+  openAssignmentId: string | null;
+  openAssessmentId: string | null;
   // R45 sections — student groupings within the class.
   onSetSection: (studentId: string, section: string | null) => Promise<void>;
   onListEnrollable: () => Promise<Array<{ user_id: string; name: string; grade: string | null }>>;
   onEnroll: (userIds: string[], section: string | null) => Promise<void>;
 }) {
   const navigate = useNavigate();
-  // The Curriculum section's three authoring benches, folded by default (state is
-  // per-visit; Collapsible keeps the children mounted either way).
-  const [openBuilders, setOpenBuilders] = useState<Record<string, boolean>>({});
-  const toggleBuilder = (key: string) =>
-    setOpenBuilders((current) => ({ ...current, [key]: !current[key] }));
+  // R47: the one + Create menu — everything a teacher makes starts from the same button.
+  // Which create dialog is open (null = none); "material" reuses ResourceManager's dialog.
+  const [createOpen, setCreateOpen] = useState<"assignment" | "assessment" | "material" | null>(
+    null,
+  );
+  // A material row opened for editing from the Classwork list.
+  const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
 
   // R45 sections: the roster is grouped by section (a label on the class membership).
   const sectionByStudent = useMemo(() => {
@@ -1238,23 +1270,104 @@ function ClassDetail({
     }
     return map;
   }, [dashboard.sessions]);
-  const pendingKindByStudent = useMemo(() => {
-    const classAssignmentIds = new Set(assignments.map((a) => a.id));
-    const classAssessmentIds = new Set(assessments.map((a) => a.id));
-    const map = new Map<string, "assignment" | "quiz">();
-    for (const attempt of dashboard.assessmentAttempts) {
-      if (attempt.status === "submitted" && classAssessmentIds.has(attempt.assessment_id)) {
-        map.set(attempt.user_id, "quiz");
-      }
-    }
-    for (const submission of dashboard.assignmentSubmissions) {
-      if (submission.status === "submitted" && classAssignmentIds.has(submission.assignment_id)) {
-        map.set(submission.user_id, "assignment");
-      }
-    }
-    return map;
-  }, [dashboard.assessmentAttempts, dashboard.assignmentSubmissions, assignments, assessments]);
   const signals = useMemo(() => classSignals(dashboard, item.id), [dashboard, item.id]);
+  // Live tab rows: this class's students with an unfinished session, most recent first.
+  const liveStudents = useMemo(
+    () =>
+      studentIds
+        .filter((studentId) => liveByStudent.has(studentId))
+        .sort((a, b) =>
+          (liveByStudent.get(b)?.updated_at ?? "").localeCompare(
+            liveByStudent.get(a)?.updated_at ?? "",
+          ),
+        ),
+    [studentIds, liveByStudent],
+  );
+
+  // R47 Classwork: every work item as a lightweight row for the studio's list — the studio
+  // groups them under its unit headings via the item's lesson. Counts feed the row badges.
+  const workItems = useMemo<ClassworkItem[]>(() => {
+    const submittedByAssignment = new Map<string, { submitted: number; toReview: number }>();
+    for (const submission of dashboard.assignmentSubmissions) {
+      const entry = submittedByAssignment.get(submission.assignment_id) ?? {
+        submitted: 0,
+        toReview: 0,
+      };
+      entry.submitted += 1;
+      if (submission.status === "submitted") entry.toReview += 1;
+      submittedByAssignment.set(submission.assignment_id, entry);
+    }
+    const attemptsByAssessment = new Map<string, { submitted: number; toReview: number }>();
+    for (const attempt of dashboard.assessmentAttempts) {
+      const entry = attemptsByAssessment.get(attempt.assessment_id) ?? {
+        submitted: 0,
+        toReview: 0,
+      };
+      entry.submitted += 1;
+      if (attempt.status === "submitted") entry.toReview += 1;
+      attemptsByAssessment.set(attempt.assessment_id, entry);
+    }
+    return [
+      ...assignments
+        .filter((assignment) => assignment.status !== "archived")
+        .map((assignment) => ({
+          kind: "assignment" as const,
+          id: assignment.id,
+          lessonId: assignment.lesson_id,
+          title: assignment.title || "Assignment",
+          status: assignment.status,
+          dueAt: assignment.due_at,
+          needsReviewCount: submittedByAssignment.get(assignment.id)?.toReview ?? 0,
+          submittedCount: submittedByAssignment.get(assignment.id)?.submitted ?? 0,
+        })),
+      ...assessments
+        .filter((assessment) => assessment.status !== "archived")
+        .map((assessment) => ({
+          kind: "assessment" as const,
+          id: assessment.id,
+          lessonId: assessment.lesson_id,
+          title: assessment.title || "Quiz",
+          status: assessment.status,
+          dueAt: assessment.due_at,
+          needsReviewCount: attemptsByAssessment.get(assessment.id)?.toReview ?? 0,
+          submittedCount: attemptsByAssessment.get(assessment.id)?.submitted ?? 0,
+        })),
+      ...resources
+        .filter((resource) => resource.status !== "archived")
+        .map((resource) => ({
+          kind: "material" as const,
+          id: resource.id,
+          lessonId: resource.lesson_id,
+          title: resource.title || "Material",
+          status: resource.status,
+          dueAt: null,
+          needsReviewCount: 0,
+          submittedCount: 0,
+        })),
+    ];
+  }, [
+    assignments,
+    assessments,
+    resources,
+    dashboard.assignmentSubmissions,
+    dashboard.assessmentAttempts,
+  ]);
+
+  const openAssignment = openAssignmentId
+    ? (assignments.find((assignment) => assignment.id === openAssignmentId) ?? null)
+    : null;
+  const openAssessment = openAssessmentId
+    ? (assessments.find((assessment) => assessment.id === openAssessmentId) ?? null)
+    : null;
+  const editingResource = editingResourceId
+    ? (resources.find((resource) => resource.id === editingResourceId) ?? null)
+    : null;
+  const backToClasswork = () =>
+    navigate({
+      to: "/teacher/class/$classId",
+      params: { classId: item.id },
+      search: { tab: "classwork" },
+    });
 
   const changeSection = async (studentId: string, value: string) => {
     let next: string | null = value || null;
@@ -1274,84 +1387,138 @@ function ClassDetail({
     <>
       <section className="rounded-card border border-border bg-depth-card shadow-card">
         <div className="p-4 sm:p-5">
-          {/* R46 sketchboard header: the class name and the two-tab spine — nothing else.
-              (The sidebar sub-rows mirror these pills; both navigate the same URL.) */}
+          {/* R47 header: the class name and the four fixed tabs — Live, Classwork, People,
+              Grades. Rendered FROM CLASS_SECTIONS so the pills and the sidebar sub-rows can
+              never disagree; tabs never appear or disappear (principle P2: no hidden rooms). */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-serif text-display text-foreground">{item.name}</h2>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  navigate({
-                    to: "/teacher/class/$classId",
-                    params: { classId: item.id },
-                    search: { tab: "students" },
-                  })
-                }
-                className={`rounded-full border px-4 py-1.5 text-body transition-colors ${
-                  section === "students"
-                    ? "border-foreground/25 bg-muted font-medium text-foreground"
-                    : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                }`}
-              >
-                Students
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  navigate({
-                    to: "/teacher/class/$classId",
-                    params: { classId: item.id },
-                    search: { tab: "curriculum" },
-                  })
-                }
-                className={`rounded-full border px-4 py-1.5 text-body transition-colors ${
-                  section === "curriculum"
-                    ? "border-foreground/25 bg-muted font-medium text-foreground"
-                    : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                }`}
-              >
-                Curriculum
-              </button>
-            </div>
-          </div>
-
-          {/* One section at a time — the sidebar's sub-rows under the active class are the
-            switcher. R42 class-first: Students is the landing face (who's live, what needs
-            grading, the roster) and Curriculum is the class's backend (rendered below,
-            outside this card, so the studio gets the full page width). */}
-          {section === "students" ? (
-            <div className="panel-fade mt-4">
-              <h3 className="sr-only">Students &amp; activity</h3>
-              {/* R46 sketchboard: this page is the roster and nothing else. Grading, the
-                  gradebook, and the old strips live behind the review strip below —
-                  the roster rows themselves carry live/needs-review/last-active. */}
-              {/* The strip is ALWAYS a door — Review also holds the gradebook and the
-                  assign-work builders, so it must stay reachable when the queue is empty. */}
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              {CLASS_SECTIONS.map((tabItem) => (
                 <button
+                  key={tabItem.value}
                   type="button"
                   onClick={() =>
                     navigate({
                       to: "/teacher/class/$classId",
                       params: { classId: item.id },
-                      search: { tab: "review" },
+                      search: { tab: tabItem.value },
                     })
                   }
-                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-body transition-colors ${
-                    signals.toReview > 0
-                      ? "border-warning/40 bg-warning/12 text-warning hover:bg-warning/20"
-                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className={`rounded-full border px-4 py-1.5 text-body transition-colors ${
+                    section === tabItem.value
+                      ? "border-foreground/25 bg-muted font-medium text-foreground"
+                      : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                   }`}
                 >
-                  {signals.toReview > 0 ? (
-                    <>
-                      <NumberFlip value={signals.toReview} /> to review — open Review
-                    </>
-                  ) : (
-                    "Review & assign work"
-                  )}
+                  {tabItem.label}
                 </button>
+              ))}
+            </div>
+          </div>
+
+          {/* One room per teacher question (R47). Live = what's happening right now —
+              SchoolAI's Mission Control scoped to this class. The landing tab. */}
+          {section === "live" ? (
+            <div className="panel-fade mt-4">
+              <h3 className="sr-only">Live now</h3>
+              {liveStudents.length ? (
+                <div className="grid gap-3">
+                  {liveStudents.map((studentId) => {
+                    const profile = profilesById.get(studentId) || null;
+                    const live = liveByStudent.get(studentId)!;
+                    return (
+                      <div key={studentId} className="flex items-stretch gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onSelectStudent(studentId)}
+                          className="flex min-w-0 flex-1 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-3 text-left transition-colors hover:bg-muted"
+                        >
+                          <span className="relative flex h-2.5 w-2.5 shrink-0">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
+                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
+                          </span>
+                          <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
+                            {displayName(profile, studentId)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                            {lessonName(lessonsById, live.lesson_id)}
+                            {live.stage ? ` · ${live.stage}` : ""} ·{" "}
+                            {relTime(live.updated_at, nowMs)}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate({
+                              to: "/teacher/class/$classId/student/$studentId",
+                              params: { classId: item.id, studentId },
+                              search: { tab: "overview", session: live.id },
+                            })
+                          }
+                          className="shrink-0 self-center rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                        >
+                          Watch
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  <p className="text-body text-muted-foreground">
+                    No one is live right now. Recent activity:
+                  </p>
+                  <div className="grid gap-2">
+                    {studentIds.map((studentId) => {
+                      const profile = profilesById.get(studentId) || null;
+                      const latest = latestSessionFor(dashboard.sessions, studentId);
+                      const completedCount = completedLessonNamesFor(
+                        dashboard.sessions,
+                        studentId,
+                        lessonsById,
+                      ).length;
+                      const lessonsDone = `${completedCount} lesson${completedCount === 1 ? "" : "s"} done`;
+                      const context = latest
+                        ? `last active ${relTime(latest.updated_at, nowMs)} · ${lessonsDone}`
+                        : "no sessions yet";
+                      return (
+                        <button
+                          key={studentId}
+                          type="button"
+                          onClick={() => onSelectStudent(studentId)}
+                          className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
+                        >
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-border" />
+                          <span className="min-w-[140px] shrink-0 truncate text-body text-foreground">
+                            {displayName(profile, studentId)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                            {context}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {studentIds.length === 0 ? (
+                      <p className="text-meta text-muted-foreground">
+                        No students in this class yet — add them under People.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {/* People = who's in the class — the roster, sections, enrolment. Admin only;
+              activity lives in Live (R47 split of the old Students tab). */}
+          {section === "people" ? (
+            <div className="panel-fade mt-4">
+              <h3 className="sr-only">People</h3>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-meta text-muted-foreground">
+                  {studentIds.length} student{studentIds.length === 1 ? "" : "s"}
+                  {signals.sections.length ? ` · sections ${signals.sections.join(" · ")}` : ""}
+                </span>
                 <button
                   type="button"
                   onClick={openEnroll}
@@ -1374,22 +1541,6 @@ function ClassDetail({
                       <div className="grid gap-3">
                         {group.students.map((studentId) => {
                           const profile = profilesById.get(studentId) || null;
-                          const live = liveByStudent.get(studentId) ?? null;
-                          const pendingKind = pendingKindByStudent.get(studentId) ?? null;
-                          const latest = latestSessionFor(dashboard.sessions, studentId);
-                          const completedCount = completedLessonNamesFor(
-                            dashboard.sessions,
-                            studentId,
-                            lessonsById,
-                          ).length;
-                          const lessonsDone = `${completedCount} lesson${completedCount === 1 ? "" : "s"} done`;
-                          const context = live
-                            ? `live now — ${lessonName(lessonsById, live.lesson_id)}`
-                            : pendingKind
-                              ? `${pendingKind} waiting for your review · ${lessonsDone}`
-                              : latest
-                                ? `last active ${relTime(latest.updated_at, nowMs)} · ${lessonsDone}`
-                                : "no sessions yet";
                           return (
                             <div key={studentId} className="flex items-stretch gap-2">
                               <button
@@ -1401,33 +1552,13 @@ function ClassDetail({
                                     : "border-border bg-depth-sub hover:bg-muted"
                                 }`}
                               >
-                                <span
-                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                                    live ? "bg-success" : pendingKind ? "bg-warning" : "bg-border"
-                                  }`}
-                                />
                                 <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
                                   {displayName(profile, studentId)}
                                 </span>
                                 <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                                  {context}
+                                  {profile?.grade ? `Grade ${profile.grade}` : ""}
                                 </span>
                               </button>
-                              {live ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    navigate({
-                                      to: "/teacher/class/$classId/student/$studentId",
-                                      params: { classId: item.id, studentId },
-                                      search: { tab: "overview", session: live.id },
-                                    })
-                                  }
-                                  className="shrink-0 self-center rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-                                >
-                                  Watch
-                                </button>
-                              ) : null}
                               <label className="flex shrink-0 items-center">
                                 <span className="sr-only">
                                   Section for {displayName(profile, studentId)}
@@ -1540,208 +1671,185 @@ function ClassDetail({
             </div>
           ) : null}
 
-          {/* R46 sketchboard Review: one place for everything gradeable, reached from the
-              Students strip (not a sidebar row). Queues first, the gradebook and the
-              assign-work builders one click behind. */}
-          {section === "review" ? (
+          {/* Grades = the rollup. A visible tab, not a drawer (R47) — the matrix is the
+              same data the work items grade, aggregated. */}
+          {section === "grades" ? (
             <div className="panel-fade mt-4">
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <h3 className="text-title font-medium text-foreground">
-                  Review — everything gradeable
-                </h3>
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate({
-                      to: "/teacher/class/$classId",
-                      params: { classId: item.id },
-                      search: { tab: "students" },
-                    })
-                  }
-                  className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-                >
-                  ← Students
-                </button>
-              </div>
-              <p className="mb-3 text-meta text-muted-foreground">
-                Newest first — empty when you're done. A row opens inline: score, feedback, accept /
-                return.
-              </p>
-              <div className="grid gap-4">
-                <AssignmentGrading
-                  key={item.id}
-                  assignments={assignments}
-                  recipients={assignmentRecipients}
-                  submissions={assignmentSubmissions}
-                  files={assignmentSubmissionFiles}
-                  profilesById={profilesById}
-                  lessons={lessons}
-                  onReviewSubmission={onReviewSubmission}
-                />
-                <AssessmentGrading
-                  key={`${item.id}:assessments`}
-                  assessments={assessments}
-                  assessmentItems={assessmentItems}
-                  assessmentRecipients={assessmentRecipients}
-                  assessmentAttempts={assessmentAttempts}
-                  assessmentItemAttempts={assessmentItemAttempts}
-                  quizItems={quizItems}
-                  profilesById={profilesById}
-                  lessons={lessons}
-                  onReviewAssessmentItem={onReviewAssessmentItem}
-                  onReturnAssessment={onReturnAssessment}
-                />
-              </div>
-              <div className="mt-4 grid gap-1 rounded-card border border-border bg-depth-sub p-3">
-                <Collapsible
-                  open={!!openBuilders.gradebook}
-                  onToggle={() => toggleBuilder("gradebook")}
-                  title={
-                    <span className="text-body font-medium text-foreground">Gradebook table</span>
-                  }
-                  meta={
-                    <span className="shrink-0 text-meta text-muted-foreground">
-                      the full lesson × student matrix
-                    </span>
-                  }
-                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                  bodyClassName="pb-2"
-                >
-                  <GradebookTable
-                    lessons={lessons}
-                    lessonsById={lessonsById}
-                    studentIds={studentIds}
-                    dashboard={dashboard}
-                    profilesById={profilesById}
-                    selectedLessonId={selectedLessonId}
-                    selectedStudentId={selectedStudentId}
-                    onSelectLesson={onSelectLesson}
-                    onSelectStudent={onSelectStudent}
-                  />
-                </Collapsible>
-                <Collapsible
-                  open={!!openBuilders.assignments}
-                  onToggle={() => toggleBuilder("assignments")}
-                  title={
-                    <span className="text-body font-medium text-foreground">
-                      Assign work — assignments
-                    </span>
-                  }
-                  meta={
-                    <span className="shrink-0 text-meta text-muted-foreground">
-                      {assignments.length}
-                    </span>
-                  }
-                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                  bodyClassName="pb-2"
-                >
-                  <AssignmentManager
-                    classSummary={item}
-                    lessons={lessons}
-                    resources={resources}
-                    assignments={assignments}
-                    recipients={assignmentRecipients}
-                    submissions={assignmentSubmissions}
-                    studentIds={studentIds}
-                    profilesById={profilesById}
-                    saving={savingAssignment}
-                    onSaveAssignment={onSaveAssignment}
-                    onSetAssignmentStatus={onSetAssignmentStatus}
-                  />
-                </Collapsible>
-                <Collapsible
-                  open={!!openBuilders.assessments}
-                  onToggle={() => toggleBuilder("assessments")}
-                  title={
-                    <span className="text-body font-medium text-foreground">
-                      Assign work — quizzes
-                    </span>
-                  }
-                  meta={
-                    <span className="shrink-0 text-meta text-muted-foreground">
-                      {assessments.length}
-                    </span>
-                  }
-                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                  bodyClassName="pb-2"
-                >
-                  <AssessmentManager
-                    classSummary={item}
-                    lessons={lessons}
-                    quizItems={quizItems}
-                    assessments={assessments}
-                    assessmentItems={assessmentItems}
-                    assessmentRecipients={assessmentRecipients}
-                    studentIds={studentIds}
-                    profilesById={profilesById}
-                    saving={savingAssessment}
-                    onSaveAssessment={onSaveAssessment}
-                    onSetAssessmentStatus={onSetAssessmentStatus}
-                  />
-                </Collapsible>
-              </div>
+              <h3 className="sr-only">Grades</h3>
+              <GradebookTable
+                lessons={lessons}
+                lessonsById={lessonsById}
+                studentIds={studentIds}
+                dashboard={dashboard}
+                profilesById={profilesById}
+                selectedLessonId={selectedLessonId}
+                selectedStudentId={selectedStudentId}
+                onSelectLesson={onSelectLesson}
+                onSelectStudent={onSelectStudent}
+              />
             </div>
           ) : null}
         </div>
       </section>
 
-      {/* R42: the Curriculum section renders OUTSIDE the class card so the studio's
-          two-column workspace gets the full page width. R46 sketchboard: the studio
-          owns the whole surface — the old builders card is retired (assignments and
-          quizzes moved into Review) and Resources have their own library view
-          (Curriculum › Resources). */}
-      {section === "curriculum" ? (
+      {/* R47 Classwork: everything the class works on, in one place, rendered OUTSIDE
+          the header card so the surface gets the full page width. Precedence: an open
+          assignment or quiz (student-work view) wins over the studio (list + editors). */}
+      {section === "classwork" ? (
         <div className="panel-fade flex flex-col gap-4">
-          <h3 className="sr-only">Curriculum</h3>
-          {resourcesView ? (
-            <div className="rounded-card border border-border bg-depth-card p-4 shadow-card">
-              <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-baseline gap-3">
-                  <h3 className="text-title font-medium text-foreground">
-                    Resources — this class's library
-                  </h3>
-                  <span className="text-meta text-muted-foreground">Curriculum › Resources</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate({
-                      to: "/teacher/class/$classId",
-                      params: { classId: item.id },
-                      search: { tab: "curriculum" },
-                    })
-                  }
-                  className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-                >
-                  ← Back to the outline
-                </button>
-              </div>
-              <p className="mb-3 text-meta text-muted-foreground">
-                Everything here belongs to this class only. Lesson steps attach files FROM this
-                library.
+          <h3 className="sr-only">Classwork</h3>
+          {openAssignment ? (
+            <AssignmentWorkView
+              assignment={openAssignment}
+              recipients={assignmentRecipients.filter(
+                (recipient) => recipient.assignment_id === openAssignment.id,
+              )}
+              submissions={assignmentSubmissions.filter(
+                (submission) => submission.assignment_id === openAssignment.id,
+              )}
+              files={assignmentSubmissionFiles.filter(
+                (file) => file.assignment_id === openAssignment.id,
+              )}
+              profilesById={profilesById}
+              lessons={lessons}
+              onReviewSubmission={onReviewSubmission}
+              onSetStatus={(status) => onSetAssignmentStatus(openAssignment.id, status)}
+              onBack={backToClasswork}
+            />
+          ) : openAssessment ? (
+            <AssessmentWorkView
+              assessment={openAssessment}
+              items={assessmentItems.filter(
+                (assessmentItem) => assessmentItem.assessment_id === openAssessment.id,
+              )}
+              recipients={assessmentRecipients.filter(
+                (recipient) => recipient.assessment_id === openAssessment.id,
+              )}
+              attempts={assessmentAttempts.filter(
+                (attempt) => attempt.assessment_id === openAssessment.id,
+              )}
+              itemAttempts={assessmentItemAttempts}
+              quizItems={quizItems}
+              profilesById={profilesById}
+              lessons={lessons}
+              onReviewAssessmentItem={onReviewAssessmentItem}
+              onReturnAssessment={onReturnAssessment}
+              onSetStatus={(status) => onSetAssessmentStatus(openAssessment.id, status)}
+              onBack={backToClasswork}
+            />
+          ) : openAssignmentId || openAssessmentId ? (
+            <div className="rounded-card border border-border bg-depth-card p-6 shadow-card">
+              <p className="text-body text-muted-foreground">
+                That piece of classwork isn't here any more — it may have been archived.
               </p>
-              <ResourceManager
-                classSummary={item}
-                lessons={lessons}
-                resources={resources}
-                saving={savingResource}
-                onSaveResource={onSaveResource}
-                onUpdateResource={onUpdateResource}
-              />
+              <button
+                type="button"
+                onClick={backToClasswork}
+                className="mt-3 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+              >
+                ← Classwork
+              </button>
             </div>
           ) : (
             <Suspense
               fallback={
                 <section className="rounded-card border border-border bg-depth-card shadow-card">
-                  <div className="p-6 text-body text-muted-foreground">Loading curriculum...</div>
+                  <div className="p-6 text-body text-muted-foreground">Loading classwork...</div>
                 </section>
               }
             >
-              <CurriculumStudio classId={item.id} />
+              <CurriculumStudio
+                classId={item.id}
+                workItems={workItems}
+                onOpenItem={(kind, id) => {
+                  if (kind === "material") {
+                    setEditingResourceId(id);
+                    return;
+                  }
+                  navigate({
+                    to: "/teacher/class/$classId",
+                    params: { classId: item.id },
+                    search:
+                      kind === "assignment"
+                        ? { tab: "classwork", assignment: id }
+                        : { tab: "classwork", assessment: id },
+                  });
+                }}
+                onCreate={(kind) => setCreateOpen(kind)}
+              />
             </Suspense>
           )}
         </div>
       ) : null}
+
+      {/* R47 + Create: one menu in the Classwork list, three dialogs here. The managers
+          keep their names and form copy; only their old in-page lists are gone (rows now
+          live in the Classwork list itself). */}
+      <Dialog
+        open={createOpen === "assignment"}
+        onOpenChange={(open) => {
+          if (!open) setCreateOpen(null);
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>New assignment</DialogTitle>
+          </DialogHeader>
+          <AssignmentManager
+            classSummary={item}
+            lessons={lessons}
+            resources={resources}
+            studentIds={studentIds}
+            profilesById={profilesById}
+            saving={savingAssignment}
+            onSaveAssignment={async (input) => {
+              await onSaveAssignment(input);
+              setCreateOpen(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={createOpen === "assessment"}
+        onOpenChange={(open) => {
+          if (!open) setCreateOpen(null);
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>New quiz</DialogTitle>
+          </DialogHeader>
+          <AssessmentManager
+            classSummary={item}
+            lessons={lessons}
+            quizItems={quizItems}
+            studentIds={studentIds}
+            profilesById={profilesById}
+            saving={savingAssessment}
+            onSaveAssessment={async (input) => {
+              await onSaveAssessment(input);
+              setCreateOpen(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+      <ResourceManager
+        classSummary={item}
+        lessons={lessons}
+        saving={savingResource}
+        open={createOpen === "material" || editingResource !== null}
+        resource={editingResource}
+        onSaveResource={async (input) => {
+          await onSaveResource(input);
+          setCreateOpen(null);
+          setEditingResourceId(null);
+        }}
+        onUpdateResource={onUpdateResource}
+        onClose={() => {
+          setCreateOpen(null);
+          setEditingResourceId(null);
+        }}
+      />
     </>
   );
 }
@@ -1789,59 +1897,61 @@ function defaultResourceForm(
 function ResourceManager({
   classSummary,
   lessons,
-  resources,
   saving,
+  open,
+  resource,
   onSaveResource,
   onUpdateResource,
+  onClose,
 }: {
   classSummary: TeacherClassSummary;
   lessons: Lesson[];
-  resources: LessonResource[];
   saving: boolean;
+  // R47: a controlled dialog — the + Create menu opens it empty, a material row opens it
+  // in edit mode. The old in-page list is gone (rows live in the Classwork list).
+  open: boolean;
+  resource: LessonResource | null;
   onSaveResource: (input: ResourceFormValues) => Promise<void>;
   onUpdateResource: (resource: LessonResource) => void;
+  onClose: () => void;
 }) {
   const [draft, setDraft] = useState<ResourceFormValues>(() =>
     defaultResourceForm(classSummary, lessons),
   );
   const [resourceMessage, setResourceMessage] = useState("");
   const [openingId, setOpeningId] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
 
+  // Seed the draft each time the dialog opens: edit mode from the material row,
+  // create mode from the + Create menu.
   useEffect(() => {
-    setDraft(defaultResourceForm(classSummary, lessons));
-    setResourceMessage("");
-  }, [classSummary, lessons]);
+    if (!open) return;
+    if (resource) {
+      setDraft({
+        resourceId: resource.id,
+        organizationId: resource.organization_id || classSummary.organization_id,
+        classId: resource.class_id || classSummary.id,
+        lessonId: resource.lesson_id || lessons[0]?.id || "",
+        title: resource.title,
+        description: resource.description || "",
+        studentInstructions: resource.student_instructions || "",
+        teacherNotes: resource.teacher_notes || "",
+        resourceType: resource.resource_type,
+        sourceType: resource.source_type,
+        status: resource.status,
+        visibility: resource.visibility,
+        displayMode: "card",
+        externalUrl: resource.external_url || "",
+        file: null,
+      });
+      setResourceMessage("Editing resource metadata. File/source cannot be replaced in v1.");
+    } else {
+      setDraft(defaultResourceForm(classSummary, lessons));
+      setResourceMessage("");
+    }
+  }, [open, resource, classSummary, lessons]);
 
   const setField = <K extends keyof ResourceFormValues>(key: K, value: ResourceFormValues[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
-  };
-
-  const editResource = (resource: LessonResource) => {
-    setDraft({
-      resourceId: resource.id,
-      organizationId: resource.organization_id || classSummary.organization_id,
-      classId: resource.class_id || classSummary.id,
-      lessonId: resource.lesson_id || lessons[0]?.id || "",
-      title: resource.title,
-      description: resource.description || "",
-      studentInstructions: resource.student_instructions || "",
-      teacherNotes: resource.teacher_notes || "",
-      resourceType: resource.resource_type,
-      sourceType: resource.source_type,
-      status: resource.status,
-      visibility: resource.visibility,
-      displayMode: "card",
-      externalUrl: resource.external_url || "",
-      file: null,
-    });
-    setResourceMessage("Editing resource metadata. File/source cannot be replaced in v1.");
-    setFormOpen(true);
-  };
-
-  const cancelEdit = () => {
-    setDraft(defaultResourceForm(classSummary, lessons));
-    setResourceMessage("");
   };
 
   const submit = async () => {
@@ -1872,21 +1982,19 @@ function ResourceManager({
         externalUrl,
       });
       setResourceMessage(draft.resourceId ? "Resource metadata saved." : "Resource created.");
-      setDraft(defaultResourceForm(classSummary, lessons));
-      setFormOpen(false);
     } catch (error) {
       setResourceMessage((error as Error).message || "Could not save resource.");
     }
   };
 
   const setStatus = async (
-    resource: LessonResource,
+    target: LessonResource,
     status: LessonResourceStatus,
     isUndo = false,
   ) => {
-    const prev = resource.status;
+    const prev = target.status;
     try {
-      const updated = await updateLessonResource(resource.id, { status });
+      const updated = await updateLessonResource(target.id, { status });
       onUpdateResource(updated);
       if (!isUndo && prev !== status) {
         const label =
@@ -1902,10 +2010,10 @@ function ResourceManager({
     }
   };
 
-  const openResource = async (resource: LessonResource) => {
+  const openResource = async (target: LessonResource) => {
     try {
-      setOpeningId(resource.id);
-      const url = await getLessonResourceSignedUrl(resource);
+      setOpeningId(target.id);
+      const url = await getLessonResourceSignedUrl(target);
       if (!url) throw new Error("This resource does not have an openable URL.");
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (error) {
@@ -1916,292 +2024,219 @@ function ResourceManager({
   };
 
   return (
-    <div className="pt-1">
-      {/* Hosted inside the Structure section's "Resources" bench — the Collapsible header
-          carries the title + count, so this keeps only the description and the action. */}
-      <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <p className="text-meta text-muted-foreground">
-          Attach teacher-approved files and links. Drafts stay hidden from students.
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            cancelEdit();
-            setFormOpen(true);
-          }}
-          className="shrink-0 rounded-full bg-foreground px-3 py-1.5 text-meta font-medium text-background transition-colors hover:opacity-90"
-        >
-          New resource
-        </button>
-      </div>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle>{draft.resourceId ? "Edit resource" : "New resource"}</DialogTitle>
+        </DialogHeader>
 
-      <div className="grid gap-4">
-        <Dialog
-          open={formOpen}
-          onOpenChange={(open) => {
-            setFormOpen(open);
-            if (!open) cancelEdit();
-          }}
-        >
-          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[560px]">
-            <DialogHeader>
-              <DialogTitle>{draft.resourceId ? "Edit resource" : "New resource"}</DialogTitle>
-            </DialogHeader>
+        {resource ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void openResource(resource)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+            >
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.6} />
+              {openingId === resource.id ? "Opening..." : "Open"}
+            </button>
+            <OverflowMenu
+              actions={[
+                {
+                  label: "Set to draft",
+                  onClick: () => void setStatus(resource, "draft"),
+                  disabled: resource.status === "draft",
+                },
+                {
+                  label: "Publish",
+                  onClick: () => void setStatus(resource, "published"),
+                  disabled: resource.status === "published",
+                },
+                {
+                  label: "Archive",
+                  icon: Archive,
+                  onClick: () => void setStatus(resource, "archived"),
+                  disabled: resource.status === "archived",
+                },
+              ]}
+            />
+            <ResourceStatusChip status={resource.status} />
+          </div>
+        ) : null}
 
-            <div className="grid gap-3">
-              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Lesson
-                <select
-                  value={draft.lessonId}
-                  onChange={(event) => setField("lessonId", event.target.value)}
-                  disabled={Boolean(draft.resourceId)}
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
-                >
-                  {lessons.map((lesson) => (
-                    <option key={lesson.id} value={lesson.id}>
-                      {lesson.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
+        <div className="grid gap-3">
+          <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Lesson
+            <select
+              value={draft.lessonId}
+              onChange={(event) => setField("lessonId", event.target.value)}
+              disabled={Boolean(draft.resourceId)}
+              className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+            >
+              {lessons.map((lesson) => (
+                <option key={lesson.id} value={lesson.id}>
+                  {lesson.title}
+                </option>
+              ))}
+            </select>
+          </label>
 
-              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Title
-                <input
-                  value={draft.title}
-                  onChange={(event) => setField("title", event.target.value)}
-                  placeholder="Purpose explainer PDF"
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </label>
+          <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Title
+            <input
+              value={draft.title}
+              onChange={(event) => setField("title", event.target.value)}
+              placeholder="Purpose explainer PDF"
+              className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  Source
-                  <select
-                    value={draft.sourceType}
-                    onChange={(event) => {
-                      const next = event.target.value as LessonResourceSource;
-                      setDraft((current) => ({
-                        ...current,
-                        sourceType: next,
-                        resourceType: next === "external_url" ? "link" : "pdf",
-                        file: null,
-                      }));
-                    }}
-                    disabled={Boolean(draft.resourceId)}
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
-                  >
-                    <option value="upload">Upload</option>
-                    <option value="external_url">External URL</option>
-                  </select>
-                </label>
-
-                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  Type
-                  <select
-                    value={draft.resourceType}
-                    onChange={(event) =>
-                      setField("resourceType", event.target.value as LessonResourceType)
-                    }
-                    disabled={draft.sourceType === "upload" || Boolean(draft.resourceId)}
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
-                  >
-                    <option value="pdf">PDF</option>
-                    <option value="video">Video</option>
-                    <option value="audio">Audio</option>
-                    <option value="image">Image</option>
-                    <option value="document">Document</option>
-                    <option value="youtube">YouTube</option>
-                    <option value="link">Link</option>
-                  </select>
-                </label>
-              </div>
-
-              {draft.sourceType === "upload" && !draft.resourceId ? (
-                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  File
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,image/*,audio/*,video/*"
-                    onChange={(event) => setField("file", event.target.files?.[0] || null)}
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-meta file:text-foreground"
-                  />
-                </label>
-              ) : null}
-
-              {draft.sourceType === "external_url" ? (
-                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  External URL
-                  <input
-                    value={draft.externalUrl || ""}
-                    onChange={(event) => setField("externalUrl", event.target.value)}
-                    placeholder="https://youtube.com/watch?v=..."
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-                  />
-                </label>
-              ) : null}
-
-              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Student instructions
-                <textarea
-                  value={draft.studentInstructions}
-                  onChange={(event) => setField("studentInstructions", event.target.value)}
-                  placeholder="Open this before the checkpoint and look for the input/process/output idea."
-                  className="min-h-[72px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </label>
-
-              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Description
-                <textarea
-                  value={draft.description}
-                  onChange={(event) => setField("description", event.target.value)}
-                  placeholder="Short student-facing summary."
-                  className="min-h-[66px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </label>
-
-              <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Teacher notes
-                <textarea
-                  value={draft.teacherNotes}
-                  onChange={(event) => setField("teacherNotes", event.target.value)}
-                  placeholder="Private classroom context for teachers."
-                  className="min-h-[66px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </label>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  Status
-                  <select
-                    value={draft.status}
-                    onChange={(event) =>
-                      setField("status", event.target.value as LessonResourceStatus)
-                    }
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                </label>
-
-                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  Visibility
-                  <select
-                    value={draft.visibility}
-                    onChange={(event) =>
-                      setField("visibility", event.target.value as LessonResourceVisibility)
-                    }
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
-                  >
-                    <option value="class_private">Class private</option>
-                    <option value="org_private">Organization private</option>
-                    <option value="public">Public metadata</option>
-                  </select>
-                </label>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void submit()}
-                disabled={saving}
-                className="mt-1 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Source
+              <select
+                value={draft.sourceType}
+                onChange={(event) => {
+                  const next = event.target.value as LessonResourceSource;
+                  setDraft((current) => ({
+                    ...current,
+                    sourceType: next,
+                    resourceType: next === "external_url" ? "link" : "pdf",
+                    file: null,
+                  }));
+                }}
+                disabled={Boolean(draft.resourceId)}
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
               >
-                {saving ? "Saving..." : draft.resourceId ? "Save resource" : "Create resource"}
-              </button>
-              {resourceMessage ? (
-                <div className="text-meta leading-relaxed text-muted-foreground">
-                  {resourceMessage}
-                </div>
-              ) : null}
-            </div>
-          </DialogContent>
-        </Dialog>
+                <option value="upload">Upload</option>
+                <option value="external_url">External URL</option>
+              </select>
+            </label>
 
-        <div className="grid content-start gap-2">
-          {resourceMessage && !formOpen ? (
-            <div className="rounded-card border border-border bg-depth-sub px-3 py-2 text-meta leading-relaxed text-muted-foreground">
-              {resourceMessage}
-            </div>
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Type
+              <select
+                value={draft.resourceType}
+                onChange={(event) =>
+                  setField("resourceType", event.target.value as LessonResourceType)
+                }
+                disabled={draft.sourceType === "upload" || Boolean(draft.resourceId)}
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+              >
+                <option value="pdf">PDF</option>
+                <option value="video">Video</option>
+                <option value="audio">Audio</option>
+                <option value="image">Image</option>
+                <option value="document">Document</option>
+                <option value="youtube">YouTube</option>
+                <option value="link">Link</option>
+              </select>
+            </label>
+          </div>
+
+          {draft.sourceType === "upload" && !draft.resourceId ? (
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              File
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,image/*,audio/*,video/*"
+                onChange={(event) => setField("file", event.target.files?.[0] || null)}
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-meta file:text-foreground"
+              />
+            </label>
           ) : null}
-          {resources.length ? (
-            resources.map((resource) => {
-              return (
-                <div
-                  key={resource.id}
-                  className="rounded-card border border-border bg-depth-sub p-4"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-body font-medium text-foreground">
-                          {resource.title}
-                        </span>
-                        <ResourceStatusChip status={resource.status} />
-                      </div>
-                      <div className="mt-1 text-meta text-muted-foreground">
-                        {resource.resource_type} ·{" "}
-                        {resource.source_type === "upload" ? "private file" : "external link"} ·{" "}
-                        {lessonTitle(lessons, resource.lesson_id)}
-                      </div>
-                      {resource.student_instructions ? (
-                        <p className="mt-2 line-clamp-2 text-meta leading-relaxed text-muted-foreground">
-                          {resource.student_instructions}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => editResource(resource)}
-                        className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void openResource(resource)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.6} />
-                        {openingId === resource.id ? "Opening..." : "Open"}
-                      </button>
-                      <OverflowMenu
-                        actions={[
-                          {
-                            label: "Set to draft",
-                            onClick: () => void setStatus(resource, "draft"),
-                            disabled: resource.status === "draft",
-                          },
-                          {
-                            label: "Publish",
-                            onClick: () => void setStatus(resource, "published"),
-                            disabled: resource.status === "published",
-                          },
-                          {
-                            label: "Archive",
-                            icon: Archive,
-                            onClick: () => void setStatus(resource, "archived"),
-                            disabled: resource.status === "archived",
-                          },
-                        ]}
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
-              No lesson resources yet. Add a draft, then publish it when students should see it.
-            </div>
-          )}
+
+          {draft.sourceType === "external_url" ? (
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              External URL
+              <input
+                value={draft.externalUrl || ""}
+                onChange={(event) => setField("externalUrl", event.target.value)}
+                placeholder="https://youtube.com/watch?v=..."
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+          ) : null}
+
+          <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Student instructions
+            <textarea
+              value={draft.studentInstructions}
+              onChange={(event) => setField("studentInstructions", event.target.value)}
+              placeholder="Open this before the checkpoint and look for the input/process/output idea."
+              className="min-h-[72px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+
+          <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Description
+            <textarea
+              value={draft.description}
+              onChange={(event) => setField("description", event.target.value)}
+              placeholder="Short student-facing summary."
+              className="min-h-[66px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+
+          <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Teacher notes
+            <textarea
+              value={draft.teacherNotes}
+              onChange={(event) => setField("teacherNotes", event.target.value)}
+              placeholder="Private classroom context for teachers."
+              className="min-h-[66px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Status
+              <select
+                value={draft.status}
+                onChange={(event) => setField("status", event.target.value as LessonResourceStatus)}
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="archived">Archived</option>
+              </select>
+            </label>
+
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Visibility
+              <select
+                value={draft.visibility}
+                onChange={(event) =>
+                  setField("visibility", event.target.value as LessonResourceVisibility)
+                }
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+              >
+                <option value="class_private">Class private</option>
+                <option value="org_private">Organization private</option>
+                <option value="public">Public metadata</option>
+              </select>
+            </label>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={saving}
+            className="mt-1 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Saving..." : draft.resourceId ? "Save resource" : "Create resource"}
+          </button>
+          {resourceMessage ? (
+            <div className="text-meta leading-relaxed text-muted-foreground">{resourceMessage}</div>
+          ) : null}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2288,26 +2323,18 @@ function AssessmentManager({
   classSummary,
   lessons,
   quizItems,
-  assessments,
-  assessmentItems,
-  assessmentRecipients,
   studentIds,
   profilesById,
   saving,
   onSaveAssessment,
-  onSetAssessmentStatus,
 }: {
   classSummary: TeacherClassSummary;
   lessons: Lesson[];
   quizItems: CurriculumQuizItem[];
-  assessments: Assessment[];
-  assessmentItems: AssessmentItem[];
-  assessmentRecipients: AssessmentRecipient[];
   studentIds: string[];
   profilesById: Map<string, Profile>;
   saving: boolean;
   onSaveAssessment: (input: AssessmentFormValues) => Promise<void>;
-  onSetAssessmentStatus: (assessmentId: string, status: AssessmentStatus) => void;
 }) {
   const [draft, setDraft] = useState<AssessmentFormValues>(() =>
     defaultAssessmentForm(classSummary, lessons, studentIds),
@@ -2675,105 +2702,6 @@ function AssessmentManager({
             ) : null}
           </div>
         </div>
-
-        <div className="grid content-start gap-3">
-          {assessments.length ? (
-            assessments.map((assessment) => {
-              const items = assessmentItems
-                .filter((item) => item.assessment_id === assessment.id)
-                .sort((a, b) => a.position - b.position);
-              const recipients = assessmentRecipients.filter(
-                (recipient) => recipient.assessment_id === assessment.id,
-              );
-              return (
-                <div
-                  key={assessment.id}
-                  className="rounded-card border border-border bg-depth-sub p-4"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-body font-medium text-foreground">
-                          {assessment.title}
-                        </span>
-                        <AssessmentStatusChip status={assessment.status} />
-                      </div>
-                      <div className="mt-1 text-meta text-muted-foreground">
-                        {lessonTitle(lessons, assessment.lesson_id)} · {items.length} questions ·{" "}
-                        {recipients.length} recipients
-                      </div>
-                      {assessment.due_at ? (
-                        <div className="mt-1 text-meta text-muted-foreground">
-                          Due {formatDateTime(assessment.due_at)}
-                        </div>
-                      ) : null}
-                      <p className="mt-2 whitespace-pre-wrap text-meta leading-relaxed text-muted-foreground">
-                        {assessment.instructions || "No instructions."}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onSetAssessmentStatus(assessment.id, "published")}
-                        disabled={assessment.status === "published"}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-success/35 px-3 py-1.5 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-45"
-                      >
-                        <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
-                        Publish
-                      </button>
-                      <OverflowMenu
-                        actions={[
-                          {
-                            label: "Set to draft",
-                            onClick: () => onSetAssessmentStatus(assessment.id, "draft"),
-                            disabled: assessment.status === "draft",
-                          },
-                          {
-                            label: "Archive",
-                            icon: Archive,
-                            onClick: () => onSetAssessmentStatus(assessment.id, "archived"),
-                            disabled: assessment.status === "archived",
-                          },
-                        ]}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Who this quiz went to and where each recipient stands — the only class-level
-                      view of "assigned but not yet attempted" (the grading queue starts at the
-                      first attempt). */}
-                  <div className="mt-4 grid gap-2">
-                    {recipients.map((recipient) => {
-                      const profile = profilesById.get(recipient.user_id) || null;
-                      return (
-                        <div
-                          key={recipient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-border bg-depth-field px-3 py-2"
-                        >
-                          <div className="text-meta text-foreground">
-                            {displayName(profile, recipient.user_id)}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <AssessmentRecipientChip status={recipient.status} />
-                            <span className="text-meta text-muted-foreground">
-                              {recipient.final_score === null
-                                ? "ungraded"
-                                : formatScore(recipient.final_score)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
-              No lesson quizzes yet. Create one when you need a larger checkpoint.
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -2802,26 +2730,18 @@ function AssignmentManager({
   classSummary,
   lessons,
   resources,
-  assignments,
-  recipients,
-  submissions,
   studentIds,
   profilesById,
   saving,
   onSaveAssignment,
-  onSetAssignmentStatus,
 }: {
   classSummary: TeacherClassSummary;
   lessons: Lesson[];
   resources: LessonResource[];
-  assignments: Assignment[];
-  recipients: AssignmentRecipient[];
-  submissions: AssignmentSubmission[];
   studentIds: string[];
   profilesById: Map<string, Profile>;
   saving: boolean;
   onSaveAssignment: (input: AssignmentFormValues) => Promise<void>;
-  onSetAssignmentStatus: (assignmentId: string, status: AssignmentStatus) => void;
 }) {
   const [draft, setDraft] = useState<AssignmentFormValues>(() =>
     defaultAssignmentForm(classSummary, lessons, studentIds),
@@ -3074,119 +2994,6 @@ function AssignmentManager({
               </div>
             ) : null}
           </div>
-        </div>
-
-        <div className="grid content-start gap-3">
-          {assignments.length ? (
-            assignments.map((assignment) => {
-              const assignmentRecipients = recipients.filter(
-                (recipient) => recipient.assignment_id === assignment.id,
-              );
-              const assignmentSubmissions = submissions.filter(
-                (submission) => submission.assignment_id === assignment.id,
-              );
-              const linkedResources = resources.filter(
-                (resource) => resource.assignment_id === assignment.id,
-              );
-              return (
-                <div
-                  key={assignment.id}
-                  className="rounded-card border border-border bg-depth-sub p-4"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-body font-medium text-foreground">
-                          {assignment.title}
-                        </span>
-                        <AssignmentStatusChip status={assignment.status} />
-                      </div>
-                      <div className="mt-1 text-meta text-muted-foreground">
-                        {lessonTitle(lessons, assignment.lesson_id)} · {assignmentRecipients.length}{" "}
-                        recipients · {assignmentSubmissions.length} submissions
-                      </div>
-                      {assignment.due_at ? (
-                        <div className="mt-1 text-meta text-muted-foreground">
-                          Due {formatDateTime(assignment.due_at)}
-                        </div>
-                      ) : null}
-                      <p className="mt-2 whitespace-pre-wrap text-meta leading-relaxed text-muted-foreground">
-                        {assignment.instructions || "No instructions."}
-                      </p>
-                      {linkedResources.length ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {linkedResources.map((resource) => (
-                            <span
-                              key={resource.id}
-                              className="inline-flex items-center gap-1 rounded-full border border-border bg-depth-sub px-2.5 py-1 text-meta text-muted-foreground"
-                            >
-                              <Paperclip className="h-3 w-3" strokeWidth={1.7} />
-                              {resource.title}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onSetAssignmentStatus(assignment.id, "assigned")}
-                        disabled={assignment.status === "assigned"}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-success/35 px-3 py-1.5 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-45"
-                      >
-                        <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
-                        Assign
-                      </button>
-                      <OverflowMenu
-                        actions={[
-                          {
-                            label: "Set to draft",
-                            onClick: () => onSetAssignmentStatus(assignment.id, "draft"),
-                            disabled: assignment.status === "draft",
-                          },
-                          {
-                            label: "Archive",
-                            icon: Archive,
-                            onClick: () => onSetAssignmentStatus(assignment.id, "archived"),
-                            disabled: assignment.status === "archived",
-                          },
-                        ]}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Who this assignment went to and where each recipient stands — the only
-                      class-level view of "assigned but not yet submitted" (the grading queue
-                      starts at the first submission). */}
-                  <div className="mt-4 grid gap-2">
-                    {assignmentRecipients.map((recipient) => {
-                      const profile = profilesById.get(recipient.user_id) || null;
-                      return (
-                        <div
-                          key={recipient.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-border bg-depth-field px-3 py-2"
-                        >
-                          <div className="text-meta text-foreground">
-                            {displayName(profile, recipient.user_id)}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <AssignmentRecipientChip status={recipient.status} />
-                            <span className="text-meta text-muted-foreground">
-                              {recipient.score === null ? "ungraded" : formatScore(recipient.score)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
-              No assignments yet. Create one for a lesson when students need to submit work.
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -4132,6 +3939,109 @@ function classSignals(dashboard: TeacherDashboardData, classId: string): ClassSi
     liveNow,
     toReview,
   };
+}
+
+// R47 Home: the global To-review queue — every piece of submitted, ungraded work across ALL
+// classes, newest first. Each row deep-links to the item's student-work view in its class.
+type GlobalReviewRow = {
+  kind: "assignment" | "assessment";
+  classId: string;
+  className: string;
+  itemId: string;
+  itemTitle: string;
+  studentName: string;
+  at: string;
+};
+
+function globalReviewRows(
+  dashboard: TeacherDashboardData,
+  profilesById: Map<string, Profile>,
+  lessonsById: Map<string, Lesson>,
+): GlobalReviewRow[] {
+  const classNames = new Map(dashboard.classes.map((item) => [item.id, item.name]));
+  const rows: GlobalReviewRow[] = [];
+  const assignmentsById = new Map(dashboard.assignments.map((item) => [item.id, item]));
+  for (const submission of dashboard.assignmentSubmissions) {
+    if (submission.status !== "submitted") continue;
+    const assignment = assignmentsById.get(submission.assignment_id);
+    if (!assignment?.class_id) continue;
+    rows.push({
+      kind: "assignment",
+      classId: assignment.class_id,
+      className: classNames.get(assignment.class_id) ?? "Class",
+      itemId: assignment.id,
+      itemTitle: assignment.title || lessonName(lessonsById, assignment.lesson_id),
+      studentName: displayName(profilesById.get(submission.user_id) ?? null, submission.user_id),
+      at: submission.updated_at || submission.created_at,
+    });
+  }
+  const assessmentsById = new Map(dashboard.assessments.map((item) => [item.id, item]));
+  for (const attempt of dashboard.assessmentAttempts) {
+    if (attempt.status !== "submitted") continue;
+    const assessment = assessmentsById.get(attempt.assessment_id);
+    if (!assessment?.class_id) continue;
+    rows.push({
+      kind: "assessment",
+      classId: assessment.class_id,
+      className: classNames.get(assessment.class_id) ?? "Class",
+      itemId: assessment.id,
+      itemTitle: assessment.title || lessonName(lessonsById, assessment.lesson_id),
+      studentName: displayName(profilesById.get(attempt.user_id) ?? null, attempt.user_id),
+      at: attempt.updated_at || attempt.created_at,
+    });
+  }
+  return rows.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+function GlobalReviewQueue({
+  rows,
+  onOpen,
+}: {
+  rows: GlobalReviewRow[];
+  onOpen: (row: GlobalReviewRow) => void;
+}) {
+  const nowMs = Date.now();
+  return (
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
+      <div className="p-4 sm:p-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-body-lg font-medium text-foreground">To review</h2>
+          <span className="text-meta text-muted-foreground">
+            {rows.length ? `${rows.length} across your classes` : "all caught up"}
+          </span>
+        </div>
+        {rows.length ? (
+          <div className="mt-3 grid gap-2">
+            {rows.map((row) => (
+              <button
+                key={`${row.kind}:${row.itemId}:${row.studentName}:${row.at}`}
+                type="button"
+                onClick={() => onOpen(row)}
+                className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full bg-warning" />
+                <span className="min-w-0 flex-1 truncate text-body text-foreground">
+                  {row.studentName}
+                  <span className="text-muted-foreground"> · {row.itemTitle}</span>
+                </span>
+                <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-meta text-muted-foreground">
+                  {row.kind === "assignment" ? "assignment" : "quiz"}
+                </span>
+                <span className="shrink-0 text-meta text-muted-foreground">{row.className}</span>
+                <span className="shrink-0 text-meta text-muted-foreground">
+                  {relTime(row.at, nowMs)}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-meta text-muted-foreground">
+            Nothing waiting on you — submitted work lands here the moment it arrives.
+          </p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 // Relative time for roster rows ("2h ago"), shared shape with the old overview strips.

@@ -92,7 +92,9 @@ class ClassIsTheCourseTests(unittest.TestCase):
         self.assertIn("units={outlineUnits}", STUDIO)
         self.assertIn("const classUnits = useMemo", STUDIO)
         # The outline header creates units, not subjects.
-        outline = STUDIO.split("function Outline({")[1].split("function OutlineRow(")[0]
+        # R47: the flat unit list renders as the full-width ClassworkList (units are
+        # topic headings) — still creating units, never subjects.
+        outline = STUDIO.split("function ClassworkList({")[1].split("function OutlineRow(")[0]
         self.assertIn("onAddUnit", outline)
         self.assertNotIn("onAddSubject", outline)
         self.assertNotIn('"subject"', outline)
