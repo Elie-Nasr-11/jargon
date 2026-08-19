@@ -11,12 +11,14 @@ export const Route = createFileRoute("/teacher/class/$classId")({
     search: Record<string, unknown>,
   ): {
     tab?: string;
+    view?: string;
     subject?: string;
     course?: string;
     unit?: string;
     lesson?: string;
   } => ({
     tab: typeof search.tab === "string" ? search.tab : undefined,
+    view: typeof search.view === "string" ? search.view : undefined,
     subject: typeof search.subject === "string" ? search.subject : undefined,
     course: typeof search.course === "string" ? search.course : undefined,
     unit: typeof search.unit === "string" ? search.unit : undefined,

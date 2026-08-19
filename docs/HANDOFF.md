@@ -10851,3 +10851,52 @@ don't yet show section columns; the admin surfaces still speak courses/orgs — 
 admins, revisit if the owner wants the same consolidation there.
 Suggested next task: section filter on the gradebook + section chips on student detail;
 inline new-section input.
+
+## Claude -> Codex / Human - 2026-08-19 01:40
+
+Status: Finished
+Summary: R46 — the teacher console rebuilt to the sketchboard spec. After the owner's
+"back to the drawing board" we sketched 8 wireframe boards together on a shared canvas
+(Teacher Console Sketchboard), the owner corrected two things (editor sees only its own
+class; resources get a dedicated section) and said "go for it" — the boards are now the
+spec and this slice implements them. Home is just the class grid ("Your classes") — the
+hero and hotlist feed are gone; each card carries students · sections plus live-now and
+to-review badges (classSignals derives both from the dashboard blob). A class page is
+the name + two tab pills (Students/Curriculum). Students is the roster only: a review
+strip ("N to review — open Review") is the door to the new Review section, roster rows
+carry live/needs-review/last-active context inline, live rows get a Watch button that
+deep-links the student page with the session preselected, and R45's section
+grouping/controls survive unchanged. Review (?tab=review — reachable, deliberately NOT
+a sidebar row; normalizeClassSection maps review/gradebook/assignments/assessments to
+it) gathers everything gradeable: the assignment + quiz queues first, then the
+gradebook table and both assign-work builders in collapsed drawers. Curriculum is the
+studio full-width (the old builders card is deleted); the outline header gains a
+Resources button opening the dedicated library view (?tab=curriculum&view=resources):
+"Resources — this class's library" wrapping the existing ResourceManager, with a
+back-to-outline button. StudentDetail's header now shows the section chip (from THIS
+class's membership) and the class name. ClassOverview.tsx (the old strips) is deleted;
+NumberFlip still lives in HotlistFeed.tsx (the feed component itself is unmounted —
+left in place for the student/other surfaces that import NumberFlip).
+Files changed: frontend/src/features/teacher/TeacherConsole.tsx (the bulk),
+routes/teacher.curriculum.tsx (outline Resources button + onOpenResources),
+routes/teacher.class.$classId.tsx (?view= search param),
+features/teacher/shell/teacherNav.ts (ClassSection + "review"; sidebar spine unchanged),
+features/teacher/ClassOverview.tsx (deleted), tests/test_r46_sketchboard_console.py
+(new, 17 pins), tests/test_r42_class_first_teacher.py (strips pin -> roster/review pin;
+type-literal pin), tests/test_admin_seed_pilot.py (phrase swap),
+docs/{DECISIONS.md,HANDOFF.md}. Mock: seeded one live assignment with a submitted
+piece of work so the review path has signal.
+Tests run: pin suite 796 OK; tsc + eslint clean; offline harness verify_r46.mjs 37/37
+(home badges + no feed, roster contexts + Watch gating, strip -> review nav, queues +
+collapsed gradebook via inert probe, builders relocated, studio surface + Resources
+button, library view round-trip, student chip/class label, session deep-link) with
+screenshots eyeballed against the boards.
+Remaining concerns: Q4's real modeling (assignment/quiz as a lesson STEP with work
+landing in Review) is NOT done — the builders are relocated, not remodeled; same for
+resources-as-step-attachments and the library's used-in column (the sketch draws
+rename/replace/delete + "used in", ResourceManager v1 has edit-metadata only). The
+sketchboard's student-page notes panel ("private notes" board) already exists as
+Transcript & notes. relTime/lessonsDone recompute on each render tick (Date.now() per
+render) — cosmetic, not a correctness issue.
+Suggested next task: the assignment/quiz-as-lesson-step modeling slice (server +
+authoring UI), or the resources library's used-in/replace affordances.

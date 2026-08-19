@@ -28,13 +28,7 @@ import {
   Send,
   UsersRound,
 } from "lucide-react";
-import {
-  HotlistFeed,
-  NumberFlip,
-  deriveHotlist,
-  type HotlistItem,
-} from "@/features/teacher/HotlistFeed";
-import { ClassOverviewStrips } from "@/features/teacher/ClassOverview";
+import { NumberFlip } from "@/features/teacher/HotlistFeed";
 import { AssignmentGrading } from "@/features/teacher/AssignmentGrading";
 import { AssessmentGrading } from "@/features/teacher/AssessmentGrading";
 // R42: the authoring studio lives inside each class's Curriculum section now. Its code
@@ -136,7 +130,11 @@ export function TeacherConsole() {
     classId?: string;
     studentId?: string;
   };
-  const search = useSearch({ strict: false }) as { tab?: string; session?: string };
+  const search = useSearch({ strict: false }) as {
+    tab?: string;
+    view?: string;
+    session?: string;
+  };
   const [auth, setAuth] = useState<{ id: string; email: string } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -294,41 +292,6 @@ export function TeacherConsole() {
     return { profilesById, lessonsById, classesById };
   }, [dashboard]);
 
-  // v4.0 hotlist: one attention feed derived from the dashboard blob (replaces the
-  // 3-count "Needs attention" card). nowMs recomputes each render — fine for a feed.
-  const hotlist = useMemo(() => {
-    if (!dashboard || !model) return [] as HotlistItem[];
-    return deriveHotlist(
-      dashboard,
-      {
-        classesById: model.classesById,
-        profilesById: model.profilesById,
-        lessonsById: model.lessonsById,
-      },
-      Date.now(),
-    );
-  }, [dashboard, model]);
-
-  const openHotlistItem = useCallback(
-    (item: HotlistItem) => {
-      if (item.classId && item.studentId) {
-        navigate({
-          to: "/teacher/class/$classId/student/$studentId",
-          params: { classId: item.classId, studentId: item.studentId },
-          search: { tab: "overview" },
-        });
-      } else if (item.classId) {
-        // Every class-level attention item is people-shaped — land on Students.
-        navigate({
-          to: "/teacher/class/$classId",
-          params: { classId: item.classId },
-          search: { tab: "students" },
-        });
-      }
-    },
-    [navigate],
-  );
-
   const selectedClass =
     selectedClassId && model ? model.classesById.get(selectedClassId) || null : null;
   const classStudents =
@@ -425,8 +388,6 @@ export function TeacherConsole() {
     }
   }, [liveViewer, selectedSessionId]);
 
-  const classStats =
-    dashboard && selectedClassId ? summarizeClass(dashboard, selectedClassId) : null;
   const studentStats =
     dashboard && selectedStudentId ? summarizeStudent(dashboard, selectedStudentId) : null;
 
@@ -862,31 +823,10 @@ export function TeacherConsole() {
         }
       >
         <div className="flex flex-col gap-5">
-          {/* The landing hero — the class/student pages carry their own name headers instead. */}
+          {/* R46 sketchboard: Home is just your classes — no hero, no feed. Each card
+              carries its own signals; the class pages carry their own name headers. */}
           {!selectedClassId ? (
-            <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <div className="text-overline uppercase tracking-[0.1em] text-muted-foreground">
-                  Teacher dashboard
-                </div>
-                <h1 className="font-serif mt-2 text-display text-foreground">
-                  Classroom evidence.
-                </h1>
-                <p className="mt-2 max-w-2xl text-body leading-relaxed text-muted-foreground">
-                  Inspect roster progress, learning attempts, chat transcripts, quiz checks,
-                  mastery, and notes for students in your assigned pilot classes.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void loadDashboard()}
-                  className="rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
-                >
-                  Refresh
-                </button>
-              </div>
-            </section>
+            <h1 className="font-serif text-title text-foreground">Your classes</h1>
           ) : null}
 
           {booting ? (
@@ -903,52 +843,29 @@ export function TeacherConsole() {
             <>
               <div className="flex flex-col gap-4">
                 {!selectedClassId ? (
-                  <section className="rounded-card border border-border bg-depth-card shadow-card">
-                    <div className="p-4">
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                          <h2 className="text-title font-medium text-foreground">Classes</h2>
-                          <p className="mt-1 text-meta text-muted-foreground">
-                            Live roster counts and latest student activity.
-                          </p>
-                        </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {(dashboard.classes ?? []).map((item) => (
+                      <div key={item.id} className="min-w-0 h-full">
+                        <ClassButton
+                          item={item}
+                          active={item.id === selectedClassId}
+                          signals={classSignals(dashboard, item.id)}
+                          onClick={() =>
+                            navigate({
+                              to: "/teacher/class/$classId",
+                              params: { classId: item.id },
+                            })
+                          }
+                        />
                       </div>
-                      {/* R45 consolidated: one school per teacher — a flat class grid,
-                          no organization grouping. */}
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {(dashboard.classes ?? []).map((item) => {
-                          const attention = classAttention(dashboard, item.id);
-                          return (
-                            <div key={item.id} className="min-w-0 h-full">
-                              <ClassButton
-                                item={item}
-                                active={item.id === selectedClassId}
-                                stats={summarizeClass(dashboard, item.id)}
-                                attention={attention}
-                                onClick={() =>
-                                  navigate({
-                                    to: "/teacher/class/$classId",
-                                    params: { classId: item.id },
-                                    search:
-                                      attention.tone === "warning"
-                                        ? { tab: "students" }
-                                        : undefined,
-                                  })
-                                }
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </section>
+                    ))}
+                  </div>
                 ) : null}
 
                 <div className="grid gap-4">
-                  {selectedStudentId ? null : selectedClass && classStats ? (
+                  {selectedStudentId ? null : selectedClass ? (
                     <ClassDetail
                       item={selectedClass}
-                      stats={classStats}
                       dashboard={dashboard}
                       profilesById={model.profilesById}
                       lessons={dashboard.lessons}
@@ -981,6 +898,7 @@ export function TeacherConsole() {
                         })
                       }
                       section={normalizeClassSection(search.tab)}
+                      resourcesView={search.view === "resources"}
                       onSetSection={(studentId, sectionLabel) =>
                         setStudentSection(selectedClass.id, studentId, sectionLabel)
                       }
@@ -1016,15 +934,21 @@ export function TeacherConsole() {
                         )
                       }
                     />
-                  ) : (
-                    <HotlistFeed items={hotlist} onOpen={openHotlistItem} nowMs={Date.now()} />
-                  )}
+                  ) : null}
 
                   {selectedStudentId && studentStats ? (
                     <StudentDetail
                       studentId={selectedStudentId}
                       profile={selectedStudent}
                       stats={studentStats}
+                      section={
+                        dashboard.memberships.find(
+                          (membership) =>
+                            membership.class_id === selectedClassId &&
+                            membership.user_id === selectedStudentId,
+                        )?.section ?? null
+                      }
+                      classLabel={selectedClass?.name ?? null}
                       dashboard={dashboard}
                       lessonsById={model.lessonsById}
                       sessions={studentSessions}
@@ -1071,63 +995,63 @@ export function TeacherConsole() {
   );
 }
 
+// R46 sketchboard card: the class name, who's in it, and the two signals that matter —
+// live now and to review. No stats tiles, no feed; the card IS the summary.
 function ClassButton({
   item,
   active,
-  stats,
+  signals,
   onClick,
-  attention,
 }: {
   item: TeacherClassSummary;
   active: boolean;
-  stats: ClassSummary;
+  signals: ClassSignals;
   onClick: () => void;
-  attention?: ClassAttention;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`elev-hover flex h-full w-full flex-col rounded-card border bg-depth-card p-4 text-left shadow-card ${
+      className={`elev-hover flex h-full w-full flex-col gap-2 rounded-card border bg-depth-card p-4 text-left shadow-card ${
         active ? "border-foreground/25" : "border-border"
       }`}
     >
       <div className="text-body font-medium text-foreground">{item.name}</div>
-      <div className="mt-3 flex flex-wrap gap-3 text-meta text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <UsersRound className="h-3.5 w-3.5" strokeWidth={1.6} />
-          {stats.students} students
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <GraduationCap className="h-3.5 w-3.5" strokeWidth={1.6} />
-          {stats.teachers} teachers
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.6} />
-          {stats.completedSessions} complete
-        </span>
+      <div className="text-meta text-muted-foreground">
+        {signals.students} student{signals.students === 1 ? "" : "s"}
+        {signals.sections.length ? ` · sections ${signals.sections.join(" · ")}` : ""}
       </div>
-      {attention ? (
-        <div className="mt-auto pt-3">
-          {attention.tone === "warning" ? (
-            <span className="inline-flex items-center gap-1.5 rounded-pill border border-warning/40 bg-warning/12 px-2.5 py-1 text-meta text-warning">
-              <ClipboardList className="h-3 w-3" strokeWidth={2} />{" "}
-              <NumberFlip value={attention.pendingGrading} /> to grade
+      <div className="mt-auto flex flex-wrap gap-3 pt-1 text-meta">
+        {signals.liveNow > 0 ? (
+          <span className="inline-flex items-center gap-1.5 text-success">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
             </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-pill border border-success/40 bg-success/12 px-2.5 py-1 text-meta text-success">
-              <CheckCircle2 className="h-3 w-3" strokeWidth={2} /> Clear
-            </span>
-          )}
-        </div>
-      ) : null}
+            <NumberFlip value={signals.liveNow} /> live now
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-border" /> quiet
+          </span>
+        )}
+        {signals.toReview > 0 ? (
+          <span className="inline-flex items-center gap-1.5 text-warning">
+            <span className="h-2 w-2 rounded-full bg-warning" />
+            <NumberFlip value={signals.toReview} /> to review
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-border" /> nothing to review
+          </span>
+        )}
+      </div>
     </button>
   );
 }
 
 function ClassDetail({
   item,
-  stats,
   dashboard,
   profilesById,
   lessons,
@@ -1161,12 +1085,12 @@ function ClassDetail({
   onReturnAssessment,
   onUpdateResource,
   section,
+  resourcesView,
   onSetSection,
   onListEnrollable,
   onEnroll,
 }: {
   item: TeacherClassSummary;
-  stats: ClassSummary;
   dashboard: TeacherDashboardData;
   profilesById: Map<string, Profile>;
   lessons: Lesson[];
@@ -1210,6 +1134,8 @@ function ClassDetail({
   onReturnAssessment: (input: { attemptId: string; feedback: string }) => Promise<void>;
   onUpdateResource: (resource: LessonResource) => void;
   section: ClassSection;
+  // R46: Curriculum › Resources — the class's dedicated file library view.
+  resourcesView: boolean;
   // R45 sections — student groupings within the class.
   onSetSection: (studentId: string, section: string | null) => Promise<void>;
   onListEnrollable: () => Promise<Array<{ user_id: string; name: string; grade: string | null }>>;
@@ -1299,6 +1225,37 @@ function ClassDetail({
     }
   };
 
+  // R46 roster context: who's live right now, and who has work waiting in Review.
+  const nowMs = Date.now();
+  const liveByStudent = useMemo(() => {
+    const map = new Map<string, LearningSession>();
+    for (const session of dashboard.sessions) {
+      if (session.status === "complete") continue;
+      const existing = map.get(session.user_id);
+      if (!existing || session.updated_at > existing.updated_at) {
+        map.set(session.user_id, session);
+      }
+    }
+    return map;
+  }, [dashboard.sessions]);
+  const pendingKindByStudent = useMemo(() => {
+    const classAssignmentIds = new Set(assignments.map((a) => a.id));
+    const classAssessmentIds = new Set(assessments.map((a) => a.id));
+    const map = new Map<string, "assignment" | "quiz">();
+    for (const attempt of dashboard.assessmentAttempts) {
+      if (attempt.status === "submitted" && classAssessmentIds.has(attempt.assessment_id)) {
+        map.set(attempt.user_id, "quiz");
+      }
+    }
+    for (const submission of dashboard.assignmentSubmissions) {
+      if (submission.status === "submitted" && classAssignmentIds.has(submission.assignment_id)) {
+        map.set(submission.user_id, "assignment");
+      }
+    }
+    return map;
+  }, [dashboard.assessmentAttempts, dashboard.assignmentSubmissions, assignments, assessments]);
+  const signals = useMemo(() => classSignals(dashboard, item.id), [dashboard, item.id]);
+
   const changeSection = async (studentId: string, value: string) => {
     let next: string | null = value || null;
     if (value === "__new__") {
@@ -1317,23 +1274,45 @@ function ClassDetail({
     <>
       <section className="rounded-card border border-border bg-depth-card shadow-card">
         <div className="p-4 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                {item.status}
-              </div>
-              <h2 className="mt-1 font-serif text-display text-foreground">{item.name}</h2>
-              <p className="mt-1 text-body text-muted-foreground">
-                {stats.students} students, {stats.teachers} teacher, {stats.sessions} learning
-                sessions.
-              </p>
-            </div>
-            <div className="flex flex-col items-stretch gap-2 lg:items-end">
-              <div className="grid grid-cols-3 gap-2 text-center text-meta">
-                <MiniMetric label="Attempts" value={String(stats.attempts)} />
-                <MiniMetric label="Quizzes" value={String(stats.quizAttempts)} />
-                <MiniMetric label="Evidence" value={String(stats.evidence)} />
-              </div>
+          {/* R46 sketchboard header: the class name and the two-tab spine — nothing else.
+              (The sidebar sub-rows mirror these pills; both navigate the same URL.) */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-serif text-display text-foreground">{item.name}</h2>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  navigate({
+                    to: "/teacher/class/$classId",
+                    params: { classId: item.id },
+                    search: { tab: "students" },
+                  })
+                }
+                className={`rounded-full border px-4 py-1.5 text-body transition-colors ${
+                  section === "students"
+                    ? "border-foreground/25 bg-muted font-medium text-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                }`}
+              >
+                Students
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate({
+                    to: "/teacher/class/$classId",
+                    params: { classId: item.id },
+                    search: { tab: "curriculum" },
+                  })
+                }
+                className={`rounded-full border px-4 py-1.5 text-body transition-colors ${
+                  section === "curriculum"
+                    ? "border-foreground/25 bg-muted font-medium text-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                }`}
+              >
+                Curriculum
+              </button>
             </div>
           </div>
 
@@ -1344,171 +1323,134 @@ function ClassDetail({
           {section === "students" ? (
             <div className="panel-fade mt-4">
               <h3 className="sr-only">Students &amp; activity</h3>
-              {/* The at-a-glance strips lead: who's in a live session right now + the work
-                counters (absorbed from the retired Overview section). */}
-              <ClassOverviewStrips
-                classId={item.id}
-                dashboard={dashboard}
-                studentIds={studentIds}
-                assignments={assignments}
-                assessments={assessments}
-                profilesById={profilesById}
-                lessonTitle={(lessonId) =>
-                  (lessonId && lessonsById.get(lessonId)?.title) || "a lesson"
-                }
-                onWatch={(studentId, sessionId) =>
-                  navigate({
-                    to: "/teacher/class/$classId/student/$studentId",
-                    params: { classId: item.id, studentId },
-                    search: { tab: "overview", session: sessionId },
-                  })
-                }
-              />
-              <div className="mt-4 grid gap-4">
-                <AssignmentGrading
-                  key={item.id}
-                  assignments={assignments}
-                  recipients={assignmentRecipients}
-                  submissions={assignmentSubmissions}
-                  files={assignmentSubmissionFiles}
-                  profilesById={profilesById}
-                  lessons={lessons}
-                  onReviewSubmission={onReviewSubmission}
-                />
-                <AssessmentGrading
-                  key={`${item.id}:assessments`}
-                  assessments={assessments}
-                  assessmentItems={assessmentItems}
-                  assessmentRecipients={assessmentRecipients}
-                  assessmentAttempts={assessmentAttempts}
-                  assessmentItemAttempts={assessmentItemAttempts}
-                  quizItems={quizItems}
-                  profilesById={profilesById}
-                  lessons={lessons}
-                  onReviewAssessmentItem={onReviewAssessmentItem}
-                  onReturnAssessment={onReturnAssessment}
-                />
-              </div>
-
-              <div className="scroll-mt-4">
-                <GradebookTable
-                  lessons={lessons}
-                  lessonsById={lessonsById}
-                  studentIds={studentIds}
-                  dashboard={dashboard}
-                  profilesById={profilesById}
-                  selectedLessonId={selectedLessonId}
-                  selectedStudentId={selectedStudentId}
-                  onSelectLesson={onSelectLesson}
-                  onSelectStudent={onSelectStudent}
-                />
-              </div>
-
-              {/* R45: the roster, grouped by SECTION (7A / 7B …) — sections are student
-                  groupings within this one class, managed right here. */}
-              <div className="mt-5">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <h4 className="text-title font-medium text-foreground">Students</h4>
+              {/* R46 sketchboard: this page is the roster and nothing else. Grading, the
+                  gradebook, and the old strips live behind the review strip below —
+                  the roster rows themselves carry live/needs-review/last-active. */}
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                {signals.toReview > 0 ? (
                   <button
                     type="button"
-                    onClick={openEnroll}
-                    className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                    onClick={() =>
+                      navigate({
+                        to: "/teacher/class/$classId",
+                        params: { classId: item.id },
+                        search: { tab: "review" },
+                      })
+                    }
+                    className="inline-flex items-center gap-2 rounded-full border border-warning/40 bg-warning/12 px-4 py-1.5 text-body text-warning transition-colors hover:bg-warning/20"
                   >
-                    Add students
+                    <NumberFlip value={signals.toReview} /> to review — open Review
                   </button>
-                </div>
-                {rosterError ? <p className="mb-2 text-meta text-danger">{rosterError}</p> : null}
-                <div className="grid gap-4">
-                  {sectionGroups.length ? (
-                    sectionGroups.map((group) => (
-                      <div key={group.label ?? "__none__"}>
-                        {sectionGroups.length > 1 || group.label ? (
-                          <div className="mb-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                            {group.label ? `Section ${group.label}` : "No section"} ·{" "}
-                            {group.students.length}
-                          </div>
-                        ) : null}
-                        <div className="grid gap-3">
-                          {group.students.map((studentId) => {
-                            const profile = profilesById.get(studentId) || null;
-                            const latest = latestSessionFor(dashboard.sessions, studentId);
-                            const completedLessons = completedLessonNamesFor(
-                              dashboard.sessions,
-                              studentId,
-                              lessonsById,
-                            );
-                            const masteryCount = dashboard.mastery.filter(
-                              (row) => row.user_id === studentId,
-                            ).length;
-                            return (
-                              <div key={studentId} className="flex items-stretch gap-2">
+                ) : (
+                  <span className="text-meta text-muted-foreground">Nothing to review.</span>
+                )}
+                <button
+                  type="button"
+                  onClick={openEnroll}
+                  className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                >
+                  Add students
+                </button>
+              </div>
+              {rosterError ? <p className="mb-2 text-meta text-danger">{rosterError}</p> : null}
+              <div className="grid gap-4">
+                {sectionGroups.length ? (
+                  sectionGroups.map((group) => (
+                    <div key={group.label ?? "__none__"}>
+                      {sectionGroups.length > 1 || group.label ? (
+                        <div className="mb-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                          {group.label ? `Section ${group.label}` : "No section"} ·{" "}
+                          {group.students.length}
+                        </div>
+                      ) : null}
+                      <div className="grid gap-3">
+                        {group.students.map((studentId) => {
+                          const profile = profilesById.get(studentId) || null;
+                          const live = liveByStudent.get(studentId) ?? null;
+                          const pendingKind = pendingKindByStudent.get(studentId) ?? null;
+                          const latest = latestSessionFor(dashboard.sessions, studentId);
+                          const completedCount = completedLessonNamesFor(
+                            dashboard.sessions,
+                            studentId,
+                            lessonsById,
+                          ).length;
+                          const lessonsDone = `${completedCount} lesson${completedCount === 1 ? "" : "s"} done`;
+                          const context = live
+                            ? `live now — ${lessonName(lessonsById, live.lesson_id)}`
+                            : pendingKind
+                              ? `${pendingKind} waiting for your review · ${lessonsDone}`
+                              : latest
+                                ? `last active ${relTime(latest.updated_at, nowMs)} · ${lessonsDone}`
+                                : "no sessions yet";
+                          return (
+                            <div key={studentId} className="flex items-stretch gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onSelectStudent(studentId)}
+                                className={`flex min-w-0 flex-1 items-center gap-3 rounded-card border px-4 py-3 text-left transition-colors ${
+                                  selectedStudentId === studentId
+                                    ? "border-foreground/25 bg-depth-card"
+                                    : "border-border bg-depth-sub hover:bg-muted"
+                                }`}
+                              >
+                                <span
+                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                                    live ? "bg-success" : pendingKind ? "bg-warning" : "bg-border"
+                                  }`}
+                                />
+                                <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
+                                  {displayName(profile, studentId)}
+                                </span>
+                                <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                                  {context}
+                                </span>
+                              </button>
+                              {live ? (
                                 <button
                                   type="button"
-                                  onClick={() => onSelectStudent(studentId)}
-                                  className={`min-w-0 flex-1 rounded-card border p-4 text-left transition-colors ${
-                                    selectedStudentId === studentId
-                                      ? "border-foreground/25 bg-depth-card"
-                                      : "border-border bg-depth-sub hover:bg-muted"
-                                  }`}
+                                  onClick={() =>
+                                    navigate({
+                                      to: "/teacher/class/$classId/student/$studentId",
+                                      params: { classId: item.id, studentId },
+                                      search: { tab: "overview", session: live.id },
+                                    })
+                                  }
+                                  className="shrink-0 self-center rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
                                 >
-                                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                      <div className="text-body font-medium text-foreground">
-                                        {displayName(profile, studentId)}
-                                      </div>
-                                      <div className="mt-1 text-meta text-muted-foreground">
-                                        {profile?.grade || "Grade not set"} - {masteryCount} mastery
-                                        skills
-                                      </div>
-                                      <div className="mt-2 text-meta text-muted-foreground">
-                                        {completedLessons.length
-                                          ? `Completed: ${completedLessons.join(", ")}`
-                                          : "No completed lessons yet"}
-                                      </div>
-                                    </div>
-                                    <div className="text-left text-meta text-muted-foreground sm:text-right">
-                                      <div>{latest ? statusLabel(latest) : "No session yet"}</div>
-                                      <div className="mt-1">
-                                        {latest
-                                          ? lessonName(lessonsById, latest.lesson_id)
-                                          : "Waiting for first lesson"}
-                                      </div>
-                                    </div>
-                                  </div>
+                                  Watch
                                 </button>
-                                <label className="flex shrink-0 items-center">
-                                  <span className="sr-only">
-                                    Section for {displayName(profile, studentId)}
-                                  </span>
-                                  <select
-                                    value={sectionByStudent.get(studentId) ?? ""}
-                                    onChange={(event) =>
-                                      void changeSection(studentId, event.target.value)
-                                    }
-                                    className="h-9 rounded-control border border-border bg-depth-field px-2 text-meta text-foreground outline-none"
-                                  >
-                                    <option value="">No section</option>
-                                    {sectionNames.map((name) => (
-                                      <option key={name} value={name}>
-                                        {name}
-                                      </option>
-                                    ))}
-                                    <option value="__new__">New section…</option>
-                                  </select>
-                                </label>
-                              </div>
-                            );
-                          })}
-                        </div>
+                              ) : null}
+                              <label className="flex shrink-0 items-center">
+                                <span className="sr-only">
+                                  Section for {displayName(profile, studentId)}
+                                </span>
+                                <select
+                                  value={sectionByStudent.get(studentId) ?? ""}
+                                  onChange={(event) =>
+                                    void changeSection(studentId, event.target.value)
+                                  }
+                                  className="h-9 rounded-control border border-border bg-depth-field px-2 text-meta text-foreground outline-none"
+                                >
+                                  <option value="">No section</option>
+                                  {sectionNames.map((name) => (
+                                    <option key={name} value={name}>
+                                      {name}
+                                    </option>
+                                  ))}
+                                  <option value="__new__">New section…</option>
+                                </select>
+                              </label>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))
-                  ) : (
-                    <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
-                      No students in this class yet — add your students and group them into
-                      sections.
                     </div>
-                  )}
-                </div>
+                  ))
+                ) : (
+                  <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
+                    No students in this class yet — add your students and group them into sections.
+                  </div>
+                )}
               </div>
 
               <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
@@ -1589,113 +1531,207 @@ function ClassDetail({
               </Dialog>
             </div>
           ) : null}
+
+          {/* R46 sketchboard Review: one place for everything gradeable, reached from the
+              Students strip (not a sidebar row). Queues first, the gradebook and the
+              assign-work builders one click behind. */}
+          {section === "review" ? (
+            <div className="panel-fade mt-4">
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <h3 className="text-title font-medium text-foreground">
+                  Review — everything gradeable
+                </h3>
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate({
+                      to: "/teacher/class/$classId",
+                      params: { classId: item.id },
+                      search: { tab: "students" },
+                    })
+                  }
+                  className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                >
+                  ← Students
+                </button>
+              </div>
+              <p className="mb-3 text-meta text-muted-foreground">
+                Newest first — empty when you're done. A row opens inline: score, feedback, accept /
+                return.
+              </p>
+              <div className="grid gap-4">
+                <AssignmentGrading
+                  key={item.id}
+                  assignments={assignments}
+                  recipients={assignmentRecipients}
+                  submissions={assignmentSubmissions}
+                  files={assignmentSubmissionFiles}
+                  profilesById={profilesById}
+                  lessons={lessons}
+                  onReviewSubmission={onReviewSubmission}
+                />
+                <AssessmentGrading
+                  key={`${item.id}:assessments`}
+                  assessments={assessments}
+                  assessmentItems={assessmentItems}
+                  assessmentRecipients={assessmentRecipients}
+                  assessmentAttempts={assessmentAttempts}
+                  assessmentItemAttempts={assessmentItemAttempts}
+                  quizItems={quizItems}
+                  profilesById={profilesById}
+                  lessons={lessons}
+                  onReviewAssessmentItem={onReviewAssessmentItem}
+                  onReturnAssessment={onReturnAssessment}
+                />
+              </div>
+              <div className="mt-4 grid gap-1 rounded-card border border-border bg-depth-sub p-3">
+                <Collapsible
+                  open={!!openBuilders.gradebook}
+                  onToggle={() => toggleBuilder("gradebook")}
+                  title={
+                    <span className="text-body font-medium text-foreground">Gradebook table</span>
+                  }
+                  meta={
+                    <span className="shrink-0 text-meta text-muted-foreground">
+                      the full lesson × student matrix
+                    </span>
+                  }
+                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  bodyClassName="pb-2"
+                >
+                  <GradebookTable
+                    lessons={lessons}
+                    lessonsById={lessonsById}
+                    studentIds={studentIds}
+                    dashboard={dashboard}
+                    profilesById={profilesById}
+                    selectedLessonId={selectedLessonId}
+                    selectedStudentId={selectedStudentId}
+                    onSelectLesson={onSelectLesson}
+                    onSelectStudent={onSelectStudent}
+                  />
+                </Collapsible>
+                <Collapsible
+                  open={!!openBuilders.assignments}
+                  onToggle={() => toggleBuilder("assignments")}
+                  title={
+                    <span className="text-body font-medium text-foreground">
+                      Assign work — assignments
+                    </span>
+                  }
+                  meta={
+                    <span className="shrink-0 text-meta text-muted-foreground">
+                      {assignments.length}
+                    </span>
+                  }
+                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  bodyClassName="pb-2"
+                >
+                  <AssignmentManager
+                    classSummary={item}
+                    lessons={lessons}
+                    resources={resources}
+                    assignments={assignments}
+                    recipients={assignmentRecipients}
+                    submissions={assignmentSubmissions}
+                    studentIds={studentIds}
+                    profilesById={profilesById}
+                    saving={savingAssignment}
+                    onSaveAssignment={onSaveAssignment}
+                    onSetAssignmentStatus={onSetAssignmentStatus}
+                  />
+                </Collapsible>
+                <Collapsible
+                  open={!!openBuilders.assessments}
+                  onToggle={() => toggleBuilder("assessments")}
+                  title={
+                    <span className="text-body font-medium text-foreground">
+                      Assign work — quizzes
+                    </span>
+                  }
+                  meta={
+                    <span className="shrink-0 text-meta text-muted-foreground">
+                      {assessments.length}
+                    </span>
+                  }
+                  headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+                  bodyClassName="pb-2"
+                >
+                  <AssessmentManager
+                    classSummary={item}
+                    lessons={lessons}
+                    quizItems={quizItems}
+                    assessments={assessments}
+                    assessmentItems={assessmentItems}
+                    assessmentRecipients={assessmentRecipients}
+                    studentIds={studentIds}
+                    profilesById={profilesById}
+                    saving={savingAssessment}
+                    onSaveAssessment={onSaveAssessment}
+                    onSetAssessmentStatus={onSetAssessmentStatus}
+                  />
+                </Collapsible>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
       {/* R42: the Curriculum section renders OUTSIDE the class card so the studio's
-          two-column workspace gets the full page width. The studio owns the whole
-          curriculum surface (outline + editor + the class's course links); the class's
-          own builders follow. */}
+          two-column workspace gets the full page width. R46 sketchboard: the studio
+          owns the whole surface — the old builders card is retired (assignments and
+          quizzes moved into Review) and Resources have their own library view
+          (Curriculum › Resources). */}
       {section === "curriculum" ? (
         <div className="panel-fade flex flex-col gap-4">
           <h3 className="sr-only">Curriculum</h3>
-          <Suspense
-            fallback={
-              <section className="rounded-card border border-border bg-depth-card shadow-card">
-                <div className="p-6 text-body text-muted-foreground">Loading curriculum...</div>
-              </section>
-            }
-          >
-            <CurriculumStudio classId={item.id} />
-          </Suspense>
-
-          {/* The authoring benches, folded by default so the section reads as one screen.
-              Collapsible keeps children mounted (height-0 + inert), so builder drafts and
-              chunk-QA state survive folding. */}
-          <div className="rounded-card border border-border bg-depth-card p-4">
-            <div className="mb-2">
-              <h3 className="text-title font-medium text-foreground">Build for this class</h3>
-              <p className="text-meta text-muted-foreground">
-                Resources, assignments, and quizzes you author for these lessons. Submitted work is
-                graded under Students &amp; performance.
+          {resourcesView ? (
+            <div className="rounded-card border border-border bg-depth-card p-4 shadow-card">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-title font-medium text-foreground">
+                    Resources — this class's library
+                  </h3>
+                  <span className="text-meta text-muted-foreground">Curriculum › Resources</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate({
+                      to: "/teacher/class/$classId",
+                      params: { classId: item.id },
+                      search: { tab: "curriculum" },
+                    })
+                  }
+                  className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                >
+                  ← Back to the outline
+                </button>
+              </div>
+              <p className="mb-3 text-meta text-muted-foreground">
+                Everything here belongs to this class only. Lesson steps attach files FROM this
+                library.
               </p>
+              <ResourceManager
+                classSummary={item}
+                lessons={lessons}
+                resources={resources}
+                saving={savingResource}
+                onSaveResource={onSaveResource}
+                onUpdateResource={onUpdateResource}
+              />
             </div>
-            <div className="grid gap-1">
-              <Collapsible
-                open={!!openBuilders.resources}
-                onToggle={() => toggleBuilder("resources")}
-                title={<span className="text-body font-medium text-foreground">Resources</span>}
-                meta={
-                  <span className="shrink-0 text-meta text-muted-foreground">
-                    {resources.length}
-                  </span>
-                }
-                headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                bodyClassName="pb-2"
-              >
-                <ResourceManager
-                  classSummary={item}
-                  lessons={lessons}
-                  resources={resources}
-                  saving={savingResource}
-                  onSaveResource={onSaveResource}
-                  onUpdateResource={onUpdateResource}
-                />
-              </Collapsible>
-              <Collapsible
-                open={!!openBuilders.assignments}
-                onToggle={() => toggleBuilder("assignments")}
-                title={<span className="text-body font-medium text-foreground">Assignments</span>}
-                meta={
-                  <span className="shrink-0 text-meta text-muted-foreground">
-                    {assignments.length}
-                  </span>
-                }
-                headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                bodyClassName="pb-2"
-              >
-                <AssignmentManager
-                  classSummary={item}
-                  lessons={lessons}
-                  resources={resources}
-                  assignments={assignments}
-                  recipients={assignmentRecipients}
-                  submissions={assignmentSubmissions}
-                  studentIds={studentIds}
-                  profilesById={profilesById}
-                  saving={savingAssignment}
-                  onSaveAssignment={onSaveAssignment}
-                  onSetAssignmentStatus={onSetAssignmentStatus}
-                />
-              </Collapsible>
-              <Collapsible
-                open={!!openBuilders.assessments}
-                onToggle={() => toggleBuilder("assessments")}
-                title={<span className="text-body font-medium text-foreground">Quizzes</span>}
-                meta={
-                  <span className="shrink-0 text-meta text-muted-foreground">
-                    {assessments.length}
-                  </span>
-                }
-                headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-                bodyClassName="pb-2"
-              >
-                <AssessmentManager
-                  classSummary={item}
-                  lessons={lessons}
-                  quizItems={quizItems}
-                  assessments={assessments}
-                  assessmentItems={assessmentItems}
-                  assessmentRecipients={assessmentRecipients}
-                  studentIds={studentIds}
-                  profilesById={profilesById}
-                  saving={savingAssessment}
-                  onSaveAssessment={onSaveAssessment}
-                  onSetAssessmentStatus={onSetAssessmentStatus}
-                />
-              </Collapsible>
-            </div>
-          </div>
+          ) : (
+            <Suspense
+              fallback={
+                <section className="rounded-card border border-border bg-depth-card shadow-card">
+                  <div className="p-6 text-body text-muted-foreground">Loading curriculum...</div>
+                </section>
+              }
+            >
+              <CurriculumStudio classId={item.id} />
+            </Suspense>
+          )}
         </div>
       ) : null}
     </>
@@ -3396,6 +3432,8 @@ function StudentDetail({
   studentId,
   profile,
   stats,
+  section,
+  classLabel,
   dashboard,
   lessonsById,
   sessions,
@@ -3425,6 +3463,8 @@ function StudentDetail({
   studentId: string;
   profile: Profile | null;
   stats: StudentSummary;
+  section: string | null;
+  classLabel: string | null;
   dashboard: TeacherDashboardData;
   lessonsById: Map<string, Lesson>;
   sessions: LearningSession[];
@@ -3495,9 +3535,19 @@ function StudentDetail({
             <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               Student detail
             </div>
-            <h2 className="mt-1 font-serif text-display text-foreground">
-              {displayName(profile, studentId)}
-            </h2>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+              <h2 className="font-serif text-display text-foreground">
+                {displayName(profile, studentId)}
+              </h2>
+              {section ? (
+                <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-meta font-medium text-foreground">
+                  {section}
+                </span>
+              ) : null}
+              {classLabel ? (
+                <span className="text-body text-muted-foreground">{classLabel}</span>
+              ) : null}
+            </div>
             <p className="mt-1 text-body text-muted-foreground">
               {profile?.grade || "Grade not set"} - latest status:{" "}
               {sessions[0] ? statusLabel(sessions[0]) : "no session yet"}
@@ -3980,16 +4030,6 @@ function EmptyInline({ title, body }: { title: string; body: string }) {
   );
 }
 
-type ClassSummary = {
-  students: number;
-  teachers: number;
-  sessions: number;
-  completedSessions: number;
-  attempts: number;
-  quizAttempts: number;
-  evidence: number;
-};
-
 type StudentSummary = {
   sessions: number;
   completedSessions: number;
@@ -4039,51 +4079,62 @@ function studentAnalyticsFor(dashboard: TeacherDashboardData, studentId: string)
   };
 }
 
-type ClassAttention = {
-  pendingGrading: number;
-  tone: "warning" | "ok";
+// R46 sketchboard signals: everything a class card (and the Students tab's review
+// strip) needs — roster size, section names, who's live, and how much is waiting in
+// Review (submitted assignment work + submitted quiz attempts).
+type ClassSignals = {
+  students: number;
+  sections: string[];
+  liveNow: number;
+  toReview: number;
 };
 
-// Per-class "what needs me" signal for the card health badge: submissions waiting
-// to be graded, else clear.
-function classAttention(dashboard: TeacherDashboardData, classId: string): ClassAttention {
+function classSignals(dashboard: TeacherDashboardData, classId: string): ClassSignals {
+  const studentSet = new Set<string>();
+  const sections = new Set<string>();
+  for (const membership of dashboard.memberships) {
+    if (
+      membership.class_id === classId &&
+      membership.role === "student" &&
+      membership.status === "active"
+    ) {
+      studentSet.add(membership.user_id);
+      if (membership.section) sections.add(membership.section);
+    }
+  }
+  const liveNow = dashboard.sessions.filter(
+    (session) => studentSet.has(session.user_id) && session.status !== "complete",
+  ).length;
   const classAssignmentIds = new Set(
     dashboard.assignments.filter((a) => a.class_id === classId).map((a) => a.id),
   );
-  const pendingGrading = dashboard.assignmentSubmissions.filter(
-    (s) => s.status === "submitted" && classAssignmentIds.has(s.assignment_id),
-  ).length;
-  const tone = pendingGrading > 0 ? "warning" : "ok";
-  return { pendingGrading, tone };
+  const classAssessmentIds = new Set(
+    dashboard.assessments.filter((a) => a.class_id === classId).map((a) => a.id),
+  );
+  const toReview =
+    dashboard.assignmentSubmissions.filter(
+      (s) => s.status === "submitted" && classAssignmentIds.has(s.assignment_id),
+    ).length +
+    dashboard.assessmentAttempts.filter(
+      (a) => a.status === "submitted" && classAssessmentIds.has(a.assessment_id),
+    ).length;
+  return {
+    students: studentSet.size,
+    sections: Array.from(sections).sort((a, b) => a.localeCompare(b)),
+    liveNow,
+    toReview,
+  };
 }
 
-function summarizeClass(dashboard: TeacherDashboardData, classId: string): ClassSummary {
-  const studentIds = new Set(
-    dashboard.memberships
-      .filter(
-        (membership) =>
-          membership.class_id === classId &&
-          membership.role === "student" &&
-          membership.status === "active",
-      )
-      .map((membership) => membership.user_id),
-  );
-  const teachers = dashboard.memberships.filter(
-    (membership) =>
-      membership.class_id === classId &&
-      membership.role === "teacher" &&
-      membership.status === "active",
-  ).length;
-  const sessions = dashboard.sessions.filter((session) => studentIds.has(session.user_id));
-  return {
-    students: studentIds.size,
-    teachers,
-    sessions: sessions.length,
-    completedSessions: sessions.filter((session) => session.status === "complete").length,
-    attempts: dashboard.attempts.filter((item) => studentIds.has(item.user_id)).length,
-    quizAttempts: dashboard.quizAttempts.filter((item) => studentIds.has(item.user_id)).length,
-    evidence: dashboard.evidence.filter((item) => studentIds.has(item.user_id)).length,
-  };
+// Relative time for roster rows ("2h ago"), shared shape with the old overview strips.
+function relTime(iso: string, now: number): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const diff = now - t;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.round(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.round(diff / 3_600_000)}h ago`;
+  return `${Math.round(diff / 86_400_000)}d ago`;
 }
 
 function gradebookRowForStudent(

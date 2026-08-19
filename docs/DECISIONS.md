@@ -1074,3 +1074,37 @@ the admin); classes stay admin-created; existing class content is preserved, fla
   upserts on the unique (class_id,user_id) pair so re-enrolls reactivate).
 - Unit drag-reorder is off in the flat outline for now (adjacent units can belong to
   different backing courses); lessons still reorder within their unit.
+
+## 2026-08-19 - R46: The sketchboard is the teacher-console spec (owner: "go for it")
+
+Owner: "It's still very convoluted. Let's go back to the drawing board and clearly
+layout each page and function" — we sketched the whole console together on a shared
+canvas ("Teacher Console Sketchboard", 8 wireframe boards), the owner corrected two
+things ("in the editor I can only see and edit that class I'm in"; "give a dedicated
+section to uploading resources and editing them"), then approved the boards: the
+sketchboard is now the living spec for the teacher console, and R46 rebuilt the UI
+to match it.
+
+- **Home = your classes, nothing else.** No hero, no activity feed. Each class card
+  carries its own signals: students · sections, a live-now badge, a to-review badge.
+  (Sketch default stood for open Q1: badges only, no feed on Home.)
+- **A class has two tabs** — Students (landing) and Curriculum — as header pills and
+  sidebar sub-rows. **Review is a reachable section, not a tab**: the "N to review"
+  strip at the top of Students is its door (sketch default for Q2/Q3).
+- **Students = the roster.** Rows carry the signal inline (live now — lesson /
+  assignment·quiz waiting for your review / last active · N lessons done), live rows
+  get a Watch shortcut straight into the session, sections keep their R45 grouping
+  and controls. Grading no longer lives on this page.
+- **Review = everything gradeable in one place**: assignment + quiz queues first;
+  the gradebook table and the assign-work builders (assignments/quizzes) sit one
+  click behind in collapsed drawers. Interim for Q4: assigning still uses the
+  existing builders relocated here; "assignment/quiz as a lesson STEP" is a future
+  modeling slice, not part of R46.
+- **Curriculum = the studio owns the whole surface** (the old "builders" card is
+  retired). The studio still edits only the class it's in (R43 scope). **Resources
+  get a dedicated library view** (Curriculum › Resources, `?view=resources`),
+  opened from a Resources button in the outline header — per the owner's second
+  correction. Interim: the library is the existing ResourceManager relocated;
+  upload-into-steps attachment stays as-is until the step-attachment slice.
+- **The student page names the student, their section chip, and the class** in the
+  header (board 7).

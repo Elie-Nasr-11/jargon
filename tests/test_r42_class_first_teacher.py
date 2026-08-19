@@ -5,14 +5,17 @@ for the whole thing … per lesson, you'll be able to build the curriculum withi
 each class. I don't think there should be a single builder space for everything."
 
 Pins the structural contract of slice 1:
-- The class workspace has exactly two sections — Students (landing) and
-  Curriculum — and every legacy ?tab= value maps into one of them.
+- The class workspace's sidebar spine is exactly two sections — Students
+  (landing) and Curriculum — and every legacy ?tab= value maps into a section.
+  (R46 adds "review" as a reachable section behind the Students strip, but it
+  is deliberately NOT a sidebar row — see test_r46.)
 - The sidebar has no global Curriculum destination; classes are the hierarchy.
 - The authoring studio is an exported, class-scoped component mounted (lazily)
   inside the class's Curriculum section; its selection rides the class route URL.
 - /teacher/curriculum survives only as a redirect for old bookmarks.
-- The old Overview strips live at the top of Students; the old Structure panel
-  (a second tree, redundant with the studio outline) is retired.
+- The old Structure panel (a second tree, redundant with the studio outline)
+  is retired. (The old Overview strips were absorbed into Students here and
+  later replaced by roster-row signals in R46.)
 """
 from pathlib import Path
 import unittest
@@ -35,10 +38,12 @@ NOTIFICATIONS = (FRONTEND / "components" / "NotificationsMenu.tsx").read_text(en
 
 class ClassSectionsTests(unittest.TestCase):
     def test_class_workspace_has_exactly_students_and_curriculum(self):
-        self.assertIn('export type ClassSection = "students" | "curriculum";', NAV)
+        # R46 widens the type with "review" (reachable, not a sidebar row) — the
+        # SIDEBAR spine (CLASS_SECTIONS) still holds exactly the two original rows.
+        self.assertIn('export type ClassSection = "students" | "curriculum" | "review";', NAV)
         self.assertIn('{ value: "students", label: "Students" }', NAV)
         self.assertIn('{ value: "curriculum", label: "Curriculum" }', NAV)
-        for retired in ('"overview"', '"structure", label'):
+        for retired in ('"overview"', '"structure", label', '"review"'):
             with self.subTest(retired=retired):
                 self.assertNotIn(f"value: {retired}", NAV)
 
@@ -75,9 +80,20 @@ class ConsoleTests(unittest.TestCase):
         self.assertIn("<CurriculumStudio classId={item.id} />", CONSOLE)
         self.assertIn('{section === "curriculum" ? (', CONSOLE)
 
-    def test_students_section_absorbs_the_overview_strips(self):
-        students_block = CONSOLE.split('{section === "students" ? (')[1]
-        self.assertIn("<ClassOverviewStrips", students_block.split("</div>")[0] + "</div>")
+    def test_students_section_owns_the_roster_and_no_overview_remains(self):
+        # R46: the old Overview strips are gone (component deleted) — the roster rows
+        # themselves carry the live/needs-review/last-active signals, and the review
+        # strip above them is the door to everything gradeable.
+        students_block = CONSOLE.split('{section === "students" ? (')[1].split(
+            '{section === "review" ? ('
+        )[0]
+        self.assertIn("to review — open Review", students_block)
+        self.assertIn("Nothing to review.", students_block)
+        self.assertNotIn("ClassOverviewStrips", CONSOLE)
+        self.assertFalse(
+            (FRONTEND / "features" / "teacher" / "ClassOverview.tsx").exists(),
+            "ClassOverview.tsx should be deleted (strips replaced by roster-row signals)",
+        )
         # No standalone Overview section remains.
         self.assertNotIn('{section === "overview" ? (', CONSOLE)
 
