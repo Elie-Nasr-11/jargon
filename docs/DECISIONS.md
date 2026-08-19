@@ -1045,3 +1045,32 @@ teacher's testing affordance (owner correction — do not describe testing as mi
   exactly the class's linked courses", behavior-preservingly (backfill links for
   currently-unscoped classes first); (3) class-scoped outline with "add existing
   course" + auto-link on create.
+
+## 2026-08-18 - R45: The consolidated class (owner directive)
+
+Owner: "There shouldn't be multiple organisations for one teacher. … Why do we have
+classes and then courses? Let's consolidate the whole thing. You create a class, and in
+the class, I have a curriculum — you wrote the curriculum for the class, not for a
+course. And then if you have another section of the class, you just go into your
+students section and you input all of your students as multiple sections."
+Owner-confirmed scope: sections assign EXISTING registered accounts (creation stays with
+the admin); classes stay admin-created; existing class content is preserved, flattened.
+
+- **One school per teacher**: org grouping and org names are gone from teacher chrome
+  (flat class lists; the org-grouping helpers are retired).
+- **The class IS the course (presentation)**: the studio outline is a flat Units →
+  Lessons list; subject/course stay as invisible data-model plumbing. "+ Unit" targets
+  the class's backing course — the first linked org-owned course, else it auto-creates a
+  subject + course titled after the class and links it. The breadcrumb shows only
+  Curriculum → unit → lesson. The link-management panel is demoted to a collapsed
+  "Books & shared content" drawer (still the only way to trim what students see).
+  Shared units carry a compact "shared" chip (full class list in the tooltip) and the
+  R44 honesty strip + fork-on-demand still cover cross-class edits.
+- **Sections in Students**: `class_memberships.section` (free text, migration
+  20261010000000, also applied directly to prod so the deploy can't race). The roster
+  groups by section; per-student section select; "Add students" enrolls existing org
+  students (curriculum-admin: list_enrollable_students / enroll_students /
+  set_member_section — all class-teacher-authorized, enroll validates the org pool and
+  upserts on the unique (class_id,user_id) pair so re-enrolls reactivate).
+- Unit drag-reorder is off in the flat outline for now (adjacent units can belong to
+  different backing courses); lessons still reorder within their unit.

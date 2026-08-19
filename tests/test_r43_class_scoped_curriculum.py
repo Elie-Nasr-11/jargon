@@ -56,8 +56,8 @@ class ClassScopedStudioTests(unittest.TestCase):
     def test_outline_is_scoped_to_the_class_links(self):
         self.assertIn("const linkedCourseIds = useMemo", STUDIO)
         self.assertIn("classCoursesForSubject", STUDIO)
-        self.assertIn("subjects={classSubjects}", STUDIO)
-        self.assertIn("coursesForSubject={classCoursesForSubject}", STUDIO)
+        # R45 flattened the outline to units — the class scoping now feeds classUnits.
+        self.assertIn("units={outlineUnits}", STUDIO)
         # Links unknown (read failed) degrades to the unscoped tree, never a hidden one.
         self.assertIn("if (!classLinks) return null;", STUDIO)
         self.assertIn("!linkedCourseIds || linkedCourseIds.has(course.id)", STUDIO)

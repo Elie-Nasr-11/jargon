@@ -13,7 +13,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   BarChart3,
-  Building2,
   Check,
   CheckCircle2,
   ClipboardList,
@@ -66,12 +65,7 @@ import { Tabs, WorkspaceTab, WorkspaceTabList, WorkspacePanel } from "@/componen
 import { Collapsible } from "@/components/Collapsible";
 import { PageShell } from "@/components/PageShell";
 import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
-import {
-  groupClassesByOrg,
-  normalizeClassSection,
-  organizationName,
-  type ClassSection,
-} from "@/features/teacher/shell/teacherNav";
+import { normalizeClassSection, type ClassSection } from "@/features/teacher/shell/teacherNav";
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { OverflowMenu } from "@/components/OverflowMenu";
@@ -82,6 +76,8 @@ import {
   createAssessment,
   createLessonResource,
   createTeacherNote,
+  enrollStudents,
+  fetchEnrollableStudents,
   fetchTeacherDashboard,
   gradeAssignmentSubmission,
   getLessonResourceSignedUrl,
@@ -95,6 +91,7 @@ import {
   fetchSessionHold,
   holdSession,
   releaseSessionHold,
+  setMemberSection,
   updateAssignmentStatus,
   updateAssessmentStatus,
   reviewAssessmentItem,
@@ -236,6 +233,53 @@ export function TeacherConsole() {
     await queryClient.invalidateQueries({ queryKey: ["teacherDashboard", teacherId] });
   }, [queryClient, teacherId]);
 
+  // R45 sections: sections are student groupings WITHIN the class. Optimistic label
+  // change; enrollment pulls existing org accounts (account creation stays with the
+  // admin) and refetches the dashboard so profiles/rosters fill in.
+  const setStudentSection = useCallback(
+    async (classId: string, studentId: string, section: string | null) => {
+      const session = await getSession();
+      if (!session) throw new Error("Sign in again to update sections.");
+      await setMemberSection({
+        accessToken: session.access_token,
+        classId,
+        userId: studentId,
+        section,
+      });
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              memberships: current.memberships.map((membership) =>
+                membership.class_id === classId &&
+                membership.user_id === studentId &&
+                membership.role === "student"
+                  ? { ...membership, section }
+                  : membership,
+              ),
+            }
+          : current,
+      );
+    },
+    [setDashboard],
+  );
+
+  const listEnrollable = useCallback(async (classId: string) => {
+    const session = await getSession();
+    if (!session) throw new Error("Sign in again.");
+    return fetchEnrollableStudents({ accessToken: session.access_token, classId });
+  }, []);
+
+  const enrollIntoClass = useCallback(
+    async (classId: string, userIds: string[], section: string | null) => {
+      const session = await getSession();
+      if (!session) throw new Error("Sign in again.");
+      await enrollStudents({ accessToken: session.access_token, classId, userIds, section });
+      await loadDashboard();
+    },
+    [loadDashboard],
+  );
+
   useEffect(() => {
     if (dashboardQuery.error) {
       setMessage((dashboardQuery.error as Error).message || "Could not load teacher dashboard.");
@@ -249,9 +293,6 @@ export function TeacherConsole() {
     const classesById = new Map(dashboard.classes.map((item) => [item.id, item]));
     return { profilesById, lessonsById, classesById };
   }, [dashboard]);
-
-  // Org -> classes, so the picker mirrors the real hierarchy (shared with the shell sidebar).
-  const classesByOrg = useMemo(() => groupClassesByOrg(dashboard?.classes ?? []), [dashboard]);
 
   // v4.0 hotlist: one attention feed derived from the dashboard blob (replaces the
   // 3-count "Needs attention" card). nowMs recomputes each render — fine for a feed.
@@ -872,41 +913,32 @@ export function TeacherConsole() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex flex-col gap-4">
-                        {classesByOrg.map(([org, items]) => (
-                          <div key={org}>
-                            <div className="mb-2 flex items-center gap-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                              <Building2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                              {org}
-                              <span className="text-muted-foreground/60">· {items.length}</span>
+                      {/* R45 consolidated: one school per teacher — a flat class grid,
+                          no organization grouping. */}
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {(dashboard.classes ?? []).map((item) => {
+                          const attention = classAttention(dashboard, item.id);
+                          return (
+                            <div key={item.id} className="min-w-0 h-full">
+                              <ClassButton
+                                item={item}
+                                active={item.id === selectedClassId}
+                                stats={summarizeClass(dashboard, item.id)}
+                                attention={attention}
+                                onClick={() =>
+                                  navigate({
+                                    to: "/teacher/class/$classId",
+                                    params: { classId: item.id },
+                                    search:
+                                      attention.tone === "warning"
+                                        ? { tab: "students" }
+                                        : undefined,
+                                  })
+                                }
+                              />
                             </div>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                              {items.map((item) => {
-                                const attention = classAttention(dashboard, item.id);
-                                return (
-                                  <div key={item.id} className="min-w-0 h-full">
-                                    <ClassButton
-                                      item={item}
-                                      active={item.id === selectedClassId}
-                                      stats={summarizeClass(dashboard, item.id)}
-                                      attention={attention}
-                                      onClick={() =>
-                                        navigate({
-                                          to: "/teacher/class/$classId",
-                                          params: { classId: item.id },
-                                          search:
-                                            attention.tone === "warning"
-                                              ? { tab: "students" }
-                                              : undefined,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </section>
@@ -949,6 +981,13 @@ export function TeacherConsole() {
                         })
                       }
                       section={normalizeClassSection(search.tab)}
+                      onSetSection={(studentId, sectionLabel) =>
+                        setStudentSection(selectedClass.id, studentId, sectionLabel)
+                      }
+                      onListEnrollable={() => listEnrollable(selectedClass.id)}
+                      onEnroll={(userIds, sectionLabel) =>
+                        enrollIntoClass(selectedClass.id, userIds, sectionLabel)
+                      }
                       savingResource={savingResource}
                       savingAssignment={savingAssignment}
                       savingAssessment={savingAssessment}
@@ -1054,7 +1093,6 @@ function ClassButton({
       }`}
     >
       <div className="text-body font-medium text-foreground">{item.name}</div>
-      <div className="mt-1 text-meta text-muted-foreground">{organizationName(item)}</div>
       <div className="mt-3 flex flex-wrap gap-3 text-meta text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <UsersRound className="h-3.5 w-3.5" strokeWidth={1.6} />
@@ -1123,6 +1161,9 @@ function ClassDetail({
   onReturnAssessment,
   onUpdateResource,
   section,
+  onSetSection,
+  onListEnrollable,
+  onEnroll,
 }: {
   item: TeacherClassSummary;
   stats: ClassSummary;
@@ -1169,6 +1210,10 @@ function ClassDetail({
   onReturnAssessment: (input: { attemptId: string; feedback: string }) => Promise<void>;
   onUpdateResource: (resource: LessonResource) => void;
   section: ClassSection;
+  // R45 sections — student groupings within the class.
+  onSetSection: (studentId: string, section: string | null) => Promise<void>;
+  onListEnrollable: () => Promise<Array<{ user_id: string; name: string; grade: string | null }>>;
+  onEnroll: (userIds: string[], section: string | null) => Promise<void>;
 }) {
   const navigate = useNavigate();
   // The Curriculum section's three authoring benches, folded by default (state is
@@ -1176,6 +1221,98 @@ function ClassDetail({
   const [openBuilders, setOpenBuilders] = useState<Record<string, boolean>>({});
   const toggleBuilder = (key: string) =>
     setOpenBuilders((current) => ({ ...current, [key]: !current[key] }));
+
+  // R45 sections: the roster is grouped by section (a label on the class membership).
+  const sectionByStudent = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const membership of dashboard.memberships) {
+      if (membership.class_id === item.id && membership.role === "student") {
+        map.set(membership.user_id, membership.section ?? null);
+      }
+    }
+    return map;
+  }, [dashboard.memberships, item.id]);
+  const sectionNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          Array.from(sectionByStudent.values()).filter((value): value is string => Boolean(value)),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [sectionByStudent],
+  );
+  const sectionGroups = useMemo(() => {
+    const groups = new Map<string | null, string[]>();
+    for (const studentId of studentIds) {
+      const label = sectionByStudent.get(studentId) ?? null;
+      const list = groups.get(label) ?? [];
+      list.push(studentId);
+      groups.set(label, list);
+    }
+    const named = (
+      Array.from(groups.entries()).filter(([label]) => label !== null) as Array<[string, string[]]>
+    ).sort((a, b) => a[0].localeCompare(b[0]));
+    const result: Array<{ label: string | null; students: string[] }> = named.map(
+      ([label, students]) => ({ label, students }),
+    );
+    const unsectioned = groups.get(null);
+    if (unsectioned) result.push({ label: null, students: unsectioned });
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentIds.join(","), sectionByStudent]);
+
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollable, setEnrollable] = useState<Array<{
+    user_id: string;
+    name: string;
+    grade: string | null;
+  }> | null>(null);
+  const [enrollChecked, setEnrollChecked] = useState<Set<string>>(() => new Set());
+  const [enrollSection, setEnrollSection] = useState("");
+  const [enrollBusy, setEnrollBusy] = useState(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+
+  const openEnroll = () => {
+    setEnrollOpen(true);
+    setEnrollable(null);
+    setEnrollChecked(new Set());
+    setRosterError(null);
+    void onListEnrollable()
+      .then(setEnrollable)
+      .catch((error) => {
+        setEnrollable([]);
+        setRosterError((error as Error).message || "Could not load the school's students.");
+      });
+  };
+
+  const submitEnroll = async () => {
+    if (!enrollChecked.size) return;
+    setEnrollBusy(true);
+    setRosterError(null);
+    try {
+      await onEnroll(Array.from(enrollChecked), enrollSection.trim() || null);
+      setEnrollOpen(false);
+    } catch (error) {
+      setRosterError((error as Error).message || "Could not add those students.");
+    } finally {
+      setEnrollBusy(false);
+    }
+  };
+
+  const changeSection = async (studentId: string, value: string) => {
+    let next: string | null = value || null;
+    if (value === "__new__") {
+      const name = window.prompt("Section name (e.g. 7A)")?.trim();
+      if (!name) return;
+      next = name.slice(0, 60);
+    }
+    setRosterError(null);
+    try {
+      await onSetSection(studentId, next);
+    } catch (error) {
+      setRosterError((error as Error).message || "Could not update the section.");
+    }
+  };
   return (
     <>
       <section className="rounded-card border border-border bg-depth-card shadow-card">
@@ -1183,7 +1320,7 @@ function ClassDetail({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                {organizationName(item)} · {item.status}
+                {item.status}
               </div>
               <h2 className="mt-1 font-serif text-display text-foreground">{item.name}</h2>
               <p className="mt-1 text-body text-muted-foreground">
@@ -1267,62 +1404,189 @@ function ClassDetail({
                 />
               </div>
 
-              <div className="mt-5 grid gap-3">
-                {studentIds.length ? (
-                  studentIds.map((studentId) => {
-                    const profile = profilesById.get(studentId) || null;
-                    const latest = latestSessionFor(dashboard.sessions, studentId);
-                    const completedLessons = completedLessonNamesFor(
-                      dashboard.sessions,
-                      studentId,
-                      lessonsById,
-                    );
-                    const masteryCount = dashboard.mastery.filter(
-                      (item) => item.user_id === studentId,
-                    ).length;
-                    return (
-                      <button
-                        type="button"
-                        key={studentId}
-                        onClick={() => onSelectStudent(studentId)}
-                        className={`rounded-card border p-4 text-left transition-colors ${
-                          selectedStudentId === studentId
-                            ? "border-foreground/25 bg-depth-card"
-                            : "border-border bg-depth-sub hover:bg-muted"
-                        }`}
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <div className="text-body font-medium text-foreground">
-                              {displayName(profile, studentId)}
-                            </div>
-                            <div className="mt-1 text-meta text-muted-foreground">
-                              {profile?.grade || "Grade not set"} - {masteryCount} mastery skills
-                            </div>
-                            <div className="mt-2 text-meta text-muted-foreground">
-                              {completedLessons.length
-                                ? `Completed: ${completedLessons.join(", ")}`
-                                : "No completed lessons yet"}
-                            </div>
+              {/* R45: the roster, grouped by SECTION (7A / 7B …) — sections are student
+                  groupings within this one class, managed right here. */}
+              <div className="mt-5">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h4 className="text-title font-medium text-foreground">Students</h4>
+                  <button
+                    type="button"
+                    onClick={openEnroll}
+                    className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                  >
+                    Add students
+                  </button>
+                </div>
+                {rosterError ? <p className="mb-2 text-meta text-danger">{rosterError}</p> : null}
+                <div className="grid gap-4">
+                  {sectionGroups.length ? (
+                    sectionGroups.map((group) => (
+                      <div key={group.label ?? "__none__"}>
+                        {sectionGroups.length > 1 || group.label ? (
+                          <div className="mb-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                            {group.label ? `Section ${group.label}` : "No section"} ·{" "}
+                            {group.students.length}
                           </div>
-                          <div className="text-left text-meta text-muted-foreground sm:text-right">
-                            <div>{latest ? statusLabel(latest) : "No session yet"}</div>
-                            <div className="mt-1">
-                              {latest
-                                ? lessonName(lessonsById, latest.lesson_id)
-                                : "Waiting for first lesson"}
-                            </div>
-                          </div>
+                        ) : null}
+                        <div className="grid gap-3">
+                          {group.students.map((studentId) => {
+                            const profile = profilesById.get(studentId) || null;
+                            const latest = latestSessionFor(dashboard.sessions, studentId);
+                            const completedLessons = completedLessonNamesFor(
+                              dashboard.sessions,
+                              studentId,
+                              lessonsById,
+                            );
+                            const masteryCount = dashboard.mastery.filter(
+                              (row) => row.user_id === studentId,
+                            ).length;
+                            return (
+                              <div key={studentId} className="flex items-stretch gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectStudent(studentId)}
+                                  className={`min-w-0 flex-1 rounded-card border p-4 text-left transition-colors ${
+                                    selectedStudentId === studentId
+                                      ? "border-foreground/25 bg-depth-card"
+                                      : "border-border bg-depth-sub hover:bg-muted"
+                                  }`}
+                                >
+                                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                      <div className="text-body font-medium text-foreground">
+                                        {displayName(profile, studentId)}
+                                      </div>
+                                      <div className="mt-1 text-meta text-muted-foreground">
+                                        {profile?.grade || "Grade not set"} - {masteryCount} mastery
+                                        skills
+                                      </div>
+                                      <div className="mt-2 text-meta text-muted-foreground">
+                                        {completedLessons.length
+                                          ? `Completed: ${completedLessons.join(", ")}`
+                                          : "No completed lessons yet"}
+                                      </div>
+                                    </div>
+                                    <div className="text-left text-meta text-muted-foreground sm:text-right">
+                                      <div>{latest ? statusLabel(latest) : "No session yet"}</div>
+                                      <div className="mt-1">
+                                        {latest
+                                          ? lessonName(lessonsById, latest.lesson_id)
+                                          : "Waiting for first lesson"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </button>
+                                <label className="flex shrink-0 items-center">
+                                  <span className="sr-only">
+                                    Section for {displayName(profile, studentId)}
+                                  </span>
+                                  <select
+                                    value={sectionByStudent.get(studentId) ?? ""}
+                                    onChange={(event) =>
+                                      void changeSection(studentId, event.target.value)
+                                    }
+                                    className="h-9 rounded-control border border-border bg-depth-field px-2 text-meta text-foreground outline-none"
+                                  >
+                                    <option value="">No section</option>
+                                    {sectionNames.map((name) => (
+                                      <option key={name} value={name}>
+                                        {name}
+                                      </option>
+                                    ))}
+                                    <option value="__new__">New section…</option>
+                                  </select>
+                                </label>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
-                    No active students are assigned to this class yet.
-                  </div>
-                )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
+                      No students in this class yet — add your students and group them into
+                      sections.
+                    </div>
+                  )}
+                </div>
               </div>
+
+              <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[480px]">
+                  <DialogHeader>
+                    <DialogTitle>Add students</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-meta text-muted-foreground">
+                    Pick from your school's registered students. New accounts are created by your
+                    admin.
+                  </p>
+                  <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                    Section (optional)
+                    <input
+                      value={enrollSection}
+                      onChange={(event) => setEnrollSection(event.target.value)}
+                      placeholder="e.g. 7A"
+                      className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                  </label>
+                  {enrollable === null ? (
+                    <p className="text-meta text-muted-foreground">Loading students…</p>
+                  ) : enrollable.length === 0 ? (
+                    <p className="text-meta text-muted-foreground">
+                      Every registered student is already in this class.
+                    </p>
+                  ) : (
+                    <div className="grid max-h-[300px] gap-1.5 overflow-y-auto">
+                      {enrollable.map((student) => (
+                        <label
+                          key={student.user_id}
+                          className="flex items-center gap-2.5 rounded-control border border-border bg-depth-field px-3 py-2 text-meta text-foreground"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={enrollChecked.has(student.user_id)}
+                            onChange={() =>
+                              setEnrollChecked((current) => {
+                                const next = new Set(current);
+                                if (next.has(student.user_id)) next.delete(student.user_id);
+                                else next.add(student.user_id);
+                                return next;
+                              })
+                            }
+                            className="h-4 w-4 shrink-0 accent-foreground"
+                          />
+                          <span className="min-w-0 flex-1 truncate">{student.name}</span>
+                          {student.grade ? (
+                            <span className="shrink-0 text-meta text-muted-foreground">
+                              Grade {student.grade}
+                            </span>
+                          ) : null}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {rosterError ? <p className="text-meta text-danger">{rosterError}</p> : null}
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEnrollOpen(false)}
+                      className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground hover:bg-muted"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void submitEnroll()}
+                      disabled={enrollBusy || !enrollChecked.size}
+                      className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground hover:bg-muted disabled:opacity-50"
+                    >
+                      {enrollBusy
+                        ? "Adding…"
+                        : `Add ${enrollChecked.size || ""} student${enrollChecked.size === 1 ? "" : "s"}`}
+                    </button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           ) : null}
         </div>

@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { Collapsible } from "@/components/Collapsible";
 import { RouteLoader } from "@/components/RouteLoader";
 import { ArtifactFrame } from "@/components/ArtifactFrame";
 import { DeckRenderer } from "@/components/DeckRenderer";
@@ -207,6 +208,8 @@ export function CurriculumStudio({ classId }: { classId: string }) {
   // Outline nodes are collapsed by default; this set holds the EXPANDED ids.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [outlineOpen, setOutlineOpen] = useState(true);
+  // R45: the books/shared-content drawer is advanced machinery — collapsed by default.
+  const [booksOpen, setBooksOpen] = useState(false);
   const undoable = useUndoable();
   // Deferred-undo ops (delete/publish) hold their optimistic change here so a
   // background refetch (from a create/AI-apply) doesn't resurrect a row that's
@@ -386,6 +389,28 @@ export function CurriculumStudio({ classId }: { classId: string }) {
     return rows;
   }, [classSubjects, classCoursesForSubject, unitsForCourse]);
 
+  // R45 consolidated: the class curriculum is ONE flat list of units (subject/course
+  // levels are invisible plumbing). Order: subject, course, then unit position. Each
+  // unit keeps its backing course so shared-content honesty can annotate it.
+  const classUnits = useMemo(() => {
+    const rows: Array<{ unit: CurriculumUnit; course: CurriculumCourse }> = [];
+    for (const subject of classSubjects) {
+      for (const course of classCoursesForSubject(subject.id)) {
+        for (const unit of unitsForCourse(course.id)) rows.push({ unit, course });
+      }
+    }
+    return rows;
+  }, [classSubjects, classCoursesForSubject, unitsForCourse]);
+
+  const outlineUnits = useMemo(
+    () =>
+      classUnits.map(({ unit, course }) => {
+        const peers = peerClassNames(course.id);
+        return { unit, annotation: peers.length ? `also in ${peers.join(", ")}` : null };
+      }),
+    [classUnits, peerClassNames],
+  );
+
   // Every org course (with its subject for context) — the options list for the
   // "Courses in this class" panel below the workspace.
   const orgCourseOptions = useMemo(
@@ -534,18 +559,6 @@ export function CurriculumStudio({ classId }: { classId: string }) {
       return id ? { type, id } : null;
     };
 
-  const addSubject = () =>
-    reloading(
-      (accessToken, classId) =>
-        createCurriculumSubject({
-          accessToken,
-          classId,
-          organizationId: selectedClass!.organization_id,
-          title: "New subject",
-        }),
-      { select: selectFromId("subject") },
-    );
-
   const addCourse = (subjectId: string) =>
     reloading(
       async (accessToken, targetClassId) => {
@@ -575,6 +588,71 @@ export function CurriculumStudio({ classId }: { classId: string }) {
         return created;
       },
       { select: selectFromId("course") },
+    );
+
+  // R45 consolidated: "New unit" needs a home course, but courses are invisible now.
+  // The class's backing course = the first linked course OWNED by this org (a fork or a
+  // previously auto-created one). If none exists, create subject + course named after
+  // the class and link it (guarded on a known link baseline, like addCourse).
+  const addUnitToClass = () =>
+    reloading(
+      async (accessToken, targetClassId) => {
+        let backing: CurriculumCourse | null = null;
+        for (const subject of orgSubjects) {
+          for (const course of coursesForSubject(subject.id)) {
+            if (
+              course.organization_id === selectedClass!.organization_id &&
+              linkedCourseIds?.has(course.id)
+            ) {
+              backing = course;
+              break;
+            }
+          }
+          if (backing) break;
+        }
+        let versionId = backing ? (currentVersionForCourse(backing.id)?.id ?? null) : null;
+        if (!backing) {
+          const subject = await createCurriculumSubject({
+            accessToken,
+            classId: targetClassId,
+            organizationId: selectedClass!.organization_id,
+            title: selectedClass!.name,
+          });
+          const subjectId = (subject as { id?: string } | null)?.id;
+          if (!subjectId) throw new Error("Could not create the class curriculum home.");
+          const course = await createCurriculumCourse({
+            accessToken,
+            classId: targetClassId,
+            subjectId,
+            title: selectedClass!.name,
+          });
+          const courseId = (course as { id?: string } | null)?.id;
+          versionId = (course as { course_version_id?: string } | null)?.course_version_id ?? null;
+          if (!courseId || !versionId) {
+            throw new Error("Could not create the class curriculum home.");
+          }
+          const links = classLinksRef.current;
+          if (links) {
+            const mine = links
+              .filter((row) => row.class_id === targetClassId)
+              .map((row) => row.course_id);
+            await setClassCourses({
+              accessToken,
+              classId: targetClassId,
+              courseIds: Array.from(new Set([...mine, courseId])),
+            });
+            setClassLinks([...links, { class_id: targetClassId, course_id: courseId }]);
+          }
+        }
+        if (!versionId) throw new Error("The class course has no version to add a unit to.");
+        return createCurriculumUnit({
+          accessToken,
+          classId: targetClassId,
+          courseVersionId: versionId,
+          title: "New unit",
+        });
+      },
+      { select: selectFromId("unit") },
     );
 
   const addUnit = (courseId: string) =>
@@ -1101,24 +1179,16 @@ export function CurriculumStudio({ classId }: { classId: string }) {
           {outlineOpen ? (
             <aside className="min-w-0 lg:sticky lg:top-2 lg:max-h-[calc(100dvh-4rem)] lg:overflow-x-hidden lg:overflow-y-auto">
               <Outline
-                subjects={classSubjects}
-                coursesForSubject={classCoursesForSubject}
-                courseAnnotation={(courseId) => {
-                  const peers = peerClassNames(courseId);
-                  return peers.length ? `also in ${peers.join(", ")}` : null;
-                }}
-                emptyHint="No courses in this class yet — tick one under “Courses in this class” below, or create a subject to start fresh."
-                unitsForCourse={unitsForCourse}
+                units={outlineUnits}
                 lessonsForUnit={lessonsForUnit}
+                emptyHint="No units yet — create one to start this class's curriculum, or open Books & shared content below to bring in existing material."
                 selection={selection}
                 expanded={expanded}
                 busy={busy}
                 onToggle={toggleExpanded}
                 onSelect={selectNode}
                 onReorder={reorder}
-                onAddSubject={addSubject}
-                onAddCourse={addCourse}
-                onAddUnit={addUnit}
+                onAddUnit={addUnitToClass}
                 onAddLesson={addLesson}
                 onCollapse={() => setOutlineOpen(false)}
               />
@@ -1151,7 +1221,7 @@ export function CurriculumStudio({ classId }: { classId: string }) {
               orgUnits={orgUnits}
               resources={data.resources}
               busy={busy}
-              onAddSubject={addSubject}
+              onAddSubject={addUnitToClass}
               onRename={renameNode}
               onArchive={archiveNode}
               onDelete={deleteNode}
@@ -1183,21 +1253,41 @@ export function CurriculumStudio({ classId }: { classId: string }) {
         </div>
       ) : null}
 
-      {/* Which of the org's courses this class runs — the single management surface for the
-          class↔course links the outline (and the students' catalog) are scoped by. */}
+      {/* R45 consolidated: the class curriculum reads as the teacher's own — the books
+          machinery (linking shared content in/out) is demoted to an advanced drawer,
+          collapsed by default. It stays the only surface that can trim what students see. */}
       {!booting && data && selectedClass ? (
-        <LinkedCoursesPanel
-          classId={classId}
-          courses={orgCourseOptions}
-          linked={linkedCourseIds}
-          peerNames={peerClassNames}
-          onSaved={(courseIds) =>
-            setClassLinks((current) => [
-              ...(current ?? []).filter((row) => row.class_id !== classId),
-              ...courseIds.map((courseId) => ({ class_id: classId, course_id: courseId })),
-            ])
-          }
-        />
+        <div className="rounded-card border border-border bg-depth-card p-4 shadow-card">
+          <Collapsible
+            open={booksOpen}
+            onToggle={() => setBooksOpen((value) => !value)}
+            title={
+              <span className="text-body font-medium text-foreground">
+                Books &amp; shared content
+              </span>
+            }
+            meta={
+              <span className="shrink-0 text-meta text-muted-foreground">
+                {linkedCourseIds ? `${linkedCourseIds.size} in this class` : "…"}
+              </span>
+            }
+            headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+            bodyClassName="pt-2"
+          >
+            <LinkedCoursesPanel
+              classId={classId}
+              courses={orgCourseOptions}
+              linked={linkedCourseIds}
+              peerNames={peerClassNames}
+              onSaved={(courseIds) =>
+                setClassLinks((current) => [
+                  ...(current ?? []).filter((row) => row.class_id !== classId),
+                  ...courseIds.map((courseId) => ({ class_id: classId, course_id: courseId })),
+                ])
+              }
+            />
+          </Collapsible>
+        </div>
       ) : null}
     </div>
   );
@@ -1208,42 +1298,35 @@ export function CurriculumStudio({ classId }: { classId: string }) {
 // create + native drag-reorder (scoped per sibling group via ReorderList).
 // ---------------------------------------------------------------------------
 
+// R45 consolidated: the class curriculum is ONE flat list of units — the subject/course
+// levels are invisible plumbing (each unit still knows its backing course, which powers
+// the shared-content annotation). Unit drag-reorder is intentionally off in the flat
+// view (adjacent units can live in different backing courses); lessons still drag
+// within their unit.
 function Outline({
-  subjects,
-  coursesForSubject,
-  courseAnnotation,
-  emptyHint,
-  unitsForCourse,
+  units,
   lessonsForUnit,
+  emptyHint,
   selection,
   expanded,
   busy,
   onToggle,
   onSelect,
   onReorder,
-  onAddSubject,
-  onAddCourse,
   onAddUnit,
   onAddLesson,
   onCollapse,
 }: {
-  subjects: CurriculumSubject[];
-  coursesForSubject: (subjectId: string) => CurriculumCourse[];
-  // R43: extra note on a course row (e.g. "also in 7B" when other classes share it).
-  courseAnnotation?: (courseId: string) => string | null;
-  // Copy for the no-subjects state — the class-scoped studio explains linking.
-  emptyHint?: string;
-  unitsForCourse: (courseId: string) => CurriculumUnit[];
+  units: Array<{ unit: CurriculumUnit; annotation: string | null }>;
   lessonsForUnit: (unitId: string) => Lesson[];
+  emptyHint?: string;
   selection: Selection;
   expanded: Set<string>;
   busy: boolean;
   onToggle: (id: string) => void;
   onSelect: (type: CurriculumNodeType, id: string) => void;
   onReorder: (type: CurriculumNodeType, orderedIds: string[]) => void;
-  onAddSubject: () => void;
-  onAddCourse: (subjectId: string) => void;
-  onAddUnit: (courseId: string) => void;
+  onAddUnit: () => void;
   onAddLesson: (unitId: string) => void;
   onCollapse: () => void;
 }) {
@@ -1260,12 +1343,12 @@ function Outline({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={onAddSubject}
+              onClick={onAddUnit}
               disabled={busy}
               className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
-              Subject
+              Unit
             </button>
             <button
               type="button"
@@ -1279,137 +1362,64 @@ function Outline({
           </div>
         </div>
 
-        {subjects.length === 0 ? (
+        {units.length === 0 ? (
           <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
-            {emptyHint ?? "No subjects yet. Create one to start building."}
+            {emptyHint ?? "No units yet. Create one to start the class curriculum."}
           </div>
         ) : (
           <div className="grid min-w-0 gap-1">
-            <ReorderList
-              items={subjects}
-              disabled={busy}
-              onReorder={(ids) => onReorder("subject", ids)}
-            >
-              {(subject, state) => {
-                const open = expanded.has(subject.id);
-                const courses = coursesForSubject(subject.id);
-                return (
-                  <div className={dropClass(state)}>
-                    <OutlineRow
-                      depth={0}
-                      label={subject.title}
-                      meta={subject.status}
-                      hasChildren
-                      open={open}
-                      selected={isSelected("subject", subject.id)}
-                      onToggle={() => onToggle(subject.id)}
-                      onSelect={() => onSelect("subject", subject.id)}
-                      onAdd={() => onAddCourse(subject.id)}
-                      addLabel="Add course"
-                      dragging={state.dragging}
-                    />
-                    {open ? (
-                      <div className="mt-0.5 grid min-w-0 gap-0.5">
-                        <ReorderList
-                          items={courses}
-                          disabled={busy}
-                          onReorder={(ids) => onReorder("course", ids)}
-                        >
-                          {(course, courseState) => {
-                            const courseOpen = expanded.has(course.id);
-                            const units = unitsForCourse(course.id);
-                            return (
-                              <div className={dropClass(courseState)}>
-                                <OutlineRow
-                                  depth={1}
-                                  label={course.title}
-                                  meta={[course.status, courseAnnotation?.(course.id)]
-                                    .filter(Boolean)
-                                    .join(" · ")}
-                                  hasChildren
-                                  open={courseOpen}
-                                  selected={isSelected("course", course.id)}
-                                  onToggle={() => onToggle(course.id)}
-                                  onSelect={() => onSelect("course", course.id)}
-                                  onAdd={() => onAddUnit(course.id)}
-                                  addLabel="Add unit"
-                                  dragging={courseState.dragging}
-                                />
-                                {courseOpen ? (
-                                  <div className="mt-0.5 grid min-w-0 gap-0.5">
-                                    <ReorderList
-                                      items={units}
-                                      disabled={busy}
-                                      onReorder={(ids) => onReorder("unit", ids)}
-                                    >
-                                      {(unit, unitState) => {
-                                        const unitOpen = expanded.has(unit.id);
-                                        const lessons = lessonsForUnit(unit.id);
-                                        return (
-                                          <div className={dropClass(unitState)}>
-                                            <OutlineRow
-                                              depth={2}
-                                              label={unit.title}
-                                              meta={`${lessons.length} lesson${lessons.length === 1 ? "" : "s"}`}
-                                              hasChildren
-                                              open={unitOpen}
-                                              selected={isSelected("unit", unit.id)}
-                                              onToggle={() => onToggle(unit.id)}
-                                              onSelect={() => onSelect("unit", unit.id)}
-                                              onAdd={() => onAddLesson(unit.id)}
-                                              addLabel="Add lesson"
-                                              dragging={unitState.dragging}
-                                            />
-                                            {unitOpen ? (
-                                              <div className="mt-0.5 grid min-w-0 gap-0.5">
-                                                <ReorderList
-                                                  items={lessons}
-                                                  disabled={busy}
-                                                  onReorder={(ids) => onReorder("lesson", ids)}
-                                                >
-                                                  {(lesson, lessonState) => (
-                                                    <div className={dropClass(lessonState)}>
-                                                      <OutlineRow
-                                                        depth={3}
-                                                        label={lesson.title}
-                                                        meta={
-                                                          lesson.publication_status || "published"
-                                                        }
-                                                        hasChildren={false}
-                                                        selected={isSelected("lesson", lesson.id)}
-                                                        onSelect={() =>
-                                                          onSelect("lesson", lesson.id)
-                                                        }
-                                                        dragging={lessonState.dragging}
-                                                      />
-                                                    </div>
-                                                  )}
-                                                </ReorderList>
-                                                {lessons.length === 0 ? (
-                                                  <EmptyHint depth={3} label="No lessons" />
-                                                ) : null}
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        );
-                                      }}
-                                    </ReorderList>
-                                    {units.length === 0 ? (
-                                      <EmptyHint depth={2} label="No units" />
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                              </div>
-                            );
-                          }}
-                        </ReorderList>
-                        {courses.length === 0 ? <EmptyHint depth={1} label="No courses" /> : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              }}
-            </ReorderList>
+            {units.map(({ unit, annotation }) => {
+              const open = expanded.has(unit.id);
+              const lessons = lessonsForUnit(unit.id);
+              return (
+                <div key={unit.id}>
+                  <OutlineRow
+                    depth={0}
+                    label={unit.title}
+                    meta={[
+                      `${lessons.length} lesson${lessons.length === 1 ? "" : "s"}`,
+                      annotation ? "shared" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    metaTitle={annotation ?? undefined}
+                    hasChildren
+                    open={open}
+                    selected={isSelected("unit", unit.id)}
+                    onToggle={() => onToggle(unit.id)}
+                    onSelect={() => onSelect("unit", unit.id)}
+                    onAdd={() => onAddLesson(unit.id)}
+                    addLabel="Add lesson"
+                    dragging={false}
+                    showGrip={false}
+                  />
+                  {open ? (
+                    <div className="mt-0.5 grid min-w-0 gap-0.5">
+                      <ReorderList
+                        items={lessons}
+                        disabled={busy}
+                        onReorder={(ids) => onReorder("lesson", ids)}
+                      >
+                        {(lesson, lessonState) => (
+                          <div className={dropClass(lessonState)}>
+                            <OutlineRow
+                              depth={1}
+                              label={lesson.title}
+                              meta={lesson.publication_status || "published"}
+                              hasChildren={false}
+                              selected={isSelected("lesson", lesson.id)}
+                              onSelect={() => onSelect("lesson", lesson.id)}
+                              dragging={lessonState.dragging}
+                            />
+                          </div>
+                        )}
+                      </ReorderList>
+                      {lessons.length === 0 ? <EmptyHint depth={1} label="No lessons" /> : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1429,6 +1439,8 @@ function OutlineRow({
   onAdd,
   addLabel,
   dragging,
+  showGrip = true,
+  metaTitle,
 }: {
   depth: number;
   label: string;
@@ -1441,6 +1453,10 @@ function OutlineRow({
   onAdd?: () => void;
   addLabel?: string;
   dragging: boolean;
+  // R45: unit rows in the flat outline are not draggable — no grip affordance.
+  showGrip?: boolean;
+  // Tooltip for the meta chip (e.g. the full "also in …" class list behind "shared").
+  metaTitle?: string;
 }) {
   return (
     <div
@@ -1449,9 +1465,13 @@ function OutlineRow({
       } ${dragging ? "opacity-40" : ""}`}
       style={{ paddingLeft: `${depth * 14 + 2}px` }}
     >
-      <span className="shrink-0 cursor-grab text-muted-foreground/60 group-hover:text-muted-foreground">
-        <GripVertical className="h-3.5 w-3.5" strokeWidth={1.6} />
-      </span>
+      {showGrip ? (
+        <span className="shrink-0 cursor-grab text-muted-foreground/60 group-hover:text-muted-foreground">
+          <GripVertical className="h-3.5 w-3.5" strokeWidth={1.6} />
+        </span>
+      ) : (
+        <span className="w-1 shrink-0" />
+      )}
       {hasChildren ? (
         <button
           type="button"
@@ -1480,9 +1500,10 @@ function OutlineRow({
         </span>
         {meta ? (
           <span
-            className={`shrink-0 text-overline uppercase tracking-[0.08em] ${
+            className={`max-w-[45%] shrink-0 truncate text-overline uppercase tracking-[0.08em] ${
               selected ? "text-background/70" : "text-muted-foreground"
             }`}
+            title={metaTitle}
           >
             {meta}
           </span>
@@ -1668,10 +1689,10 @@ function DetailPane({
       <section className="rounded-card border border-border bg-depth-card shadow-card">
         <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
           <Layers3 className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
-          <div className="text-body text-foreground">Select a node to edit it.</div>
+          <div className="text-body text-foreground">Select a unit or lesson to edit it.</div>
           <p className="max-w-md text-meta leading-relaxed text-muted-foreground">
-            Pick a subject, course, unit, or lesson from the outline — or create a subject to start
-            a new path. Drag items in the outline to reorder them.
+            This is your class's curriculum — units of lessons, written for this class. Pick one
+            from the outline, or create a unit to get started.
           </p>
           <button
             type="button"
@@ -1680,7 +1701,7 @@ function DetailPane({
             className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
-            New subject
+            New unit
           </button>
         </div>
       </section>
@@ -4365,10 +4386,8 @@ function buildBreadcrumb({
   const path = nodePath(selection, data);
   const go = goNode;
 
-  if (path.subject)
-    segments.push({ label: path.subject.title, onClick: () => go("subject", path.subject!.id) });
-  if (path.course)
-    segments.push({ label: path.course.title, onClick: () => go("course", path.course!.id) });
+  // R45 consolidated: subject/course are invisible plumbing — the crumb shows only the
+  // levels the teacher actually navigates (unit → lesson).
   if (path.unit)
     segments.push({ label: path.unit.title, onClick: () => go("unit", path.unit!.id) });
   if (path.lesson) segments.push({ label: path.lesson.title });
