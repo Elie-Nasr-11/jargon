@@ -6,7 +6,9 @@
 // (the authoring studio scoped to this class, linked courses, and the class builders). They
 // ride the existing ?tab= search param (a free string on both class routes) and render as
 // sidebar sub-rows under the active class; the in-page tab row is gone.
-export type ClassSection = "students" | "curriculum";
+// R46 sketchboard: "review" is a reachable section (the "N to review" strip on Students
+// opens it) but NOT a sidebar row — CLASS_SECTIONS stays the two-tab spine.
+export type ClassSection = "students" | "curriculum" | "review";
 
 export const CLASS_SECTIONS: ReadonlyArray<{ value: ClassSection; label: string }> = [
   { value: "students", label: "Students" },
@@ -24,6 +26,11 @@ export function normalizeClassSection(tab: string | undefined): ClassSection {
     case "lessons":
     case "resources":
       return "curriculum";
+    case "review":
+    case "gradebook":
+    case "assignments":
+    case "assessments":
+      return "review";
     default:
       return "students";
   }

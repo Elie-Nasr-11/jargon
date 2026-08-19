@@ -1190,6 +1190,13 @@ export function CurriculumStudio({ classId }: { classId: string }) {
                 onReorder={reorder}
                 onAddUnit={addUnitToClass}
                 onAddLesson={addLesson}
+                onOpenResources={() =>
+                  navigate({
+                    to: "/teacher/class/$classId",
+                    params: { classId },
+                    search: { tab: "curriculum", view: "resources" },
+                  })
+                }
                 onCollapse={() => setOutlineOpen(false)}
               />
             </aside>
@@ -1315,6 +1322,7 @@ function Outline({
   onReorder,
   onAddUnit,
   onAddLesson,
+  onOpenResources,
   onCollapse,
 }: {
   units: Array<{ unit: CurriculumUnit; annotation: string | null }>;
@@ -1328,6 +1336,7 @@ function Outline({
   onReorder: (type: CurriculumNodeType, orderedIds: string[]) => void;
   onAddUnit: () => void;
   onAddLesson: (unitId: string) => void;
+  onOpenResources: () => void;
   onCollapse: () => void;
 }) {
   const isSelected = (type: CurriculumNodeType, id: string) =>
@@ -1341,6 +1350,14 @@ function Outline({
             Outline
           </span>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onOpenResources}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-meta text-foreground transition-colors hover:bg-muted"
+            >
+              <Paperclip className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Resources
+            </button>
             <button
               type="button"
               onClick={onAddUnit}

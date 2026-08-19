@@ -126,7 +126,7 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
             "Transcript",
             "Teacher notes",
             "Mastery",
-            "Completed:",
+            "no sessions yet",
             "No completed lessons yet",
             "Choose a session to inspect the transcript.",
         ):
