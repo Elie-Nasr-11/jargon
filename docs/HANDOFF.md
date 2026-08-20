@@ -11079,3 +11079,17 @@ admin-ops 403s at 05:12 (demo-teacher poking an admin surface) are unexamined; p
 edits (two video urls) bypassed the studio deliberately.
 Suggested next task: owner confirms the three reports are resolved on prod; then either
 result_release_policy enforcement or the notifications audit.
+
+## Claude -> Codex / Human - 2026-08-20 11:15 (R49 follow-up)
+
+Status: Finished
+Summary: The R49 deploy smoke check FAILED ITS FIRST RUN — by working: it caught
+curriculum-admin answering the auth layer's "Forbidden" (non-user bearer) with HTTP 500,
+an auth refusal dressed as a server fault (fell through the status keyword ladder).
+Mapped "forbidden" to 403; pinned. The R49 deploy itself had completed before the check
+step (functions + migrations were live); this follow-up re-runs the workflow to green.
+Files changed: supabase/functions/curriculum-admin/index.ts, tests/test_r49_field_fixes.py.
+Tests run: 837 pin tests OK; esbuild + offline deno check clean on curriculum-admin.
+Remaining concerns: assessment-admin maps the same refusal to 400 (imprecise but 4xx —
+left alone); admin-ops 403s from demo-teacher at 05:12 still unexamined.
+Suggested next task: unchanged (owner confirms the three tester reports on prod).
