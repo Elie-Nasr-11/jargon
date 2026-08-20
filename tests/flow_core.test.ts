@@ -548,3 +548,129 @@ Deno.test("readiness: content-bearing text never matches either recognizer", () 
     ok(CONTINUE_SIGNAL_RE.test(text) || CONTINUE_PHRASE_RE.test(text), `must match: ${text}`);
   }
 });
+
+// ---- R48: linked-work steps (work items as lesson steps) -----------------------------
+Deno.test("R48: work gate holds stepDone false regardless of every other timestamp", () => {
+  const r = rng(0x48a);
+  for (let run = 0; run < 80; run++) {
+    const state: StepState = {
+      ...emptyStepState("a1"),
+      presented_at: r() < 0.8 ? T0 : null,
+      code_passed_at: r() < 0.5 ? T0 : null,
+      quiz_passed_at: r() < 0.5 ? T0 : null,
+      understanding_at: r() < 0.5 ? T0 : null,
+      acknowledged_at: r() < 0.5 ? T0 : null,
+    };
+    ok(!stepDone(state, req({ work: true })), "work:true must hold the step in every state");
+    const base = req({ acknowledge: r() < 0.5, quiz: r() < 0.5 });
+    eq(
+      stepDone(state, { ...base, work: false }),
+      stepDone(state, base),
+      "work:false must be identical to work-absent",
+    );
+  }
+});
+
+Deno.test("R48: requirementsFor with stepWork null is byte-identical to the two-arg call", () => {
+  const activities = [
+    null,
+    { id: "a1", mode: "assignment" },
+    { id: "a2", mode: "assessment", mode_type: "mcq" },
+    { id: "a3", mode: "assessment", mode_type: "open_ended" },
+    { id: "a4", mode: "explanation" },
+    { id: "a5", mode: "practice", mode_type: "applied" },
+    { id: "a6", response_mode: "code" },
+  ];
+  const quizzes = [null, { id: "q1", choices: [{ id: "c1" }, { id: "c2" }] }];
+  for (const activity of activities) {
+    for (const quiz of quizzes) {
+      eq(
+        requirementsFor(activity as never, quiz as never, null),
+        requirementsFor(activity as never, quiz as never),
+        `third-arg null must not change requirements (${JSON.stringify(activity)})`,
+      );
+    }
+  }
+});
+
+Deno.test("R48: a linked work item replaces every in-chat gate with acknowledge + work", () => {
+  const work = (satisfied: boolean | null) => ({
+    kind: "assessment" as const,
+    id: "w1",
+    title: "Input devices check",
+    status: "published",
+    satisfied,
+  });
+  for (const mode of ["assignment", "assessment"]) {
+    const activity = { id: "a1", mode, mode_type: mode === "assessment" ? "mcq" : "" };
+    const quiz = { id: "q1", choices: [{ id: "c1" }, { id: "c2" }] };
+    const pending = requirementsFor(activity as never, quiz as never, work(false));
+    eq(
+      { code: pending.code, quiz: pending.quiz, understanding: pending.understanding },
+      { code: false, quiz: false, understanding: false },
+      `linked ${mode} step must drop the in-chat gates`,
+    );
+    ok(pending.acknowledge, "linked steps keep the present→continue beat");
+    ok(pending.work === true, "unsubmitted linked work must gate");
+    ok(
+      requirementsFor(activity as never, quiz as never, work(true)).work === false,
+      "submitted linked work must not gate",
+    );
+    ok(
+      requirementsFor(activity as never, quiz as never, work(null)).work === true,
+      "unknown satisfaction must hold the step (fail-closed)",
+    );
+  }
+  // Linked work on a NON-work mode is ignored (the loader never produces this, but the
+  // pure function must not invent gates for it).
+  eq(
+    requirementsFor({ id: "a9", mode: "explanation" } as never, null, work(false)),
+    requirementsFor({ id: "a9", mode: "explanation" } as never, null),
+    "linked work must be inert on non-work modes",
+  );
+});
+
+Deno.test("R48: the await_step_work rung fires only after presentation, on held work", () => {
+  const baseArgs = {
+    currentStage: "practice" as never,
+    answer: null,
+    stepStateBefore: emptyStepState("a1"),
+    draftState: { ...emptyStepState("a1"), presented_at: T0 },
+    draftFlow: { stage: "practice", responseMode: "text", nextAction: "reply", choices: [] } as never,
+    requirements: req({ acknowledge: true, work: true }),
+    activityMode: "text" as never,
+    stepMode: "assignment" as never,
+    stepModeType: "",
+    gradedUnderstanding: null,
+    gradedCode: null,
+    runtimeTimedOut: false,
+    assessment: null,
+    attachedResources: [],
+    routedKind: "answer_attempt" as never,
+    inRevisit: false,
+    navAction: null,
+    preemptedNote: null,
+    studentMode: null,
+    advanceAskedButCeilinged: false,
+    attemptCeilinged: false,
+    modeOfferAccept: null,
+    stepWork: { kind: "assignment" as const, title: "Label the computer parts" },
+    brainHints: {
+      recallIdea: null,
+      compress: false,
+      practiceTarget: null,
+      practiceStretch: null,
+      figure: null,
+      practiceBank: null,
+    },
+  };
+  const presenting = turnDirective({ ...baseArgs, presentedBefore: false } as never);
+  eq(presenting.key, "present_step", "first turn presents the work hand-off");
+  ok(
+    presenting.text.includes("Label the computer parts"),
+    "presentation names the work item",
+  );
+  const held = turnDirective({ ...baseArgs, presentedBefore: true } as never);
+  eq(held.key, "await_step_work", "held turns use the await rung");
+  ok(held.text.includes("never collect answers in chat"), "await rung forbids chat collection");
+});

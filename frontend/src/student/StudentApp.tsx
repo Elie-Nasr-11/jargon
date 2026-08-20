@@ -5,6 +5,7 @@ import { MentorControls } from "@/features/student/MentorControls";
 import {
   fetchClassScopedLessons,
   fetchStudentAssessments,
+  fetchStudentAssignments,
   fetchStudentClasses,
   fetchStudentLessonProgress,
   fetchStudentSettings,
@@ -18,8 +19,15 @@ import {
   type MentorConfig,
   type VoiceSettings,
 } from "@/lib/jargon-store";
-import type { Lesson, StudentAssessmentBundle, StudentClass } from "@/lib/types";
+import type {
+  Lesson,
+  StudentAssessmentBundle,
+  StudentAssignmentBundle,
+  StudentClass,
+} from "@/lib/types";
+import { invalidateSurface } from "@/lib/surfaceCache";
 import { AssessmentSurface } from "@/student/AssessmentSurface";
+import { AssignmentSurface } from "@/student/AssignmentSurface";
 import { ChatWindow } from "@/student/ChatWindow";
 import {
   ChatDock,
@@ -30,7 +38,7 @@ import {
 import { CheckpointsPanel } from "@/student/CheckpointsPanel";
 import { ClassList, ClassSwitcher } from "@/student/ClassList";
 import { ClassSummary } from "@/student/ClassSummary";
-import { checkpointRowsByClass } from "@/student/checkpoints";
+import { checkpointRowsByClass, type CheckpointRowModel } from "@/student/checkpoints";
 import { ResourcesPanel } from "@/student/ResourcesPanel";
 import { MentorNoteCard, ProfilePanel } from "@/student/ProfilePanel";
 import { ReportsPanel } from "@/student/ReportsPanel";
@@ -41,7 +49,7 @@ import { LessonWelcome } from "@/student/LessonWelcome";
 import { SuggestionRows, buildReentrySuggestions } from "@/student/suggestions";
 import { StudentHome } from "@/student/StudentHome";
 import { Transcript } from "@/student/Transcript";
-import type { ModeOffer } from "@/features/student/chat/chatMessages";
+import type { ModeOffer, WorkOffer } from "@/features/student/chat/chatMessages";
 import { useConversation } from "@/student/useConversation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { isTurnMode } from "@/student/turnModes";
@@ -269,9 +277,32 @@ export function StudentApp({
     refreshAssessments();
   }, [refreshAssessments]);
 
+  // R48: the assignment bundle — same posture as assessments (one fetch per mount,
+  // refreshed after a submit lands). Feeds the merged dock/panel/strip rows so a required
+  // assignment finally has a student surface to be opened from.
+  const [assignmentWork, setAssignmentWork] = useState<StudentAssignmentBundle | null>(null);
+  const refreshAssignmentWork = useCallback(() => {
+    void fetchStudentAssignments()
+      .then(setAssignmentWork)
+      .catch(() => {
+        setAssignmentWork(
+          (current) => current ?? { assignments: [], recipients: [], submissions: [], files: [] },
+        );
+      });
+  }, []);
+  useEffect(() => {
+    refreshAssignmentWork();
+  }, [refreshAssignmentWork]);
+
   // The open assessment attempt (focused overlay). Deliberately local state, not URL — see the
   // component comment.
   const [openAssessmentId, setOpenAssessmentId] = useState<string | null>(null);
+  // R48: the open assignment surface (same posture, same reasons). Either overlay can now
+  // ALSO be opened from a lesson's work card — openedFromOfferRef remembers that, so the
+  // submit fires the continue handshake back into the conversation (and ONLY then: work
+  // opened from the dock finishes without injecting a chat turn).
+  const [openAssignmentId, setOpenAssignmentId] = useState<string | null>(null);
+  const openedFromOfferRef = useRef(false);
 
   // ---- Class context ----------------------------------------------------------------------
   // The student's classes (sidebar list, switcher) and the selected class's scoped lessons
@@ -364,7 +395,9 @@ export function StudentApp({
   }, [liveLessonId, classes, classLessons, scopeClassId, onSelectClass]);
 
   // Per-class work rows: due tags in the sidebar list + each summary's work section.
-  const rowsByClass = assessments ? checkpointRowsByClass(assessments) : new Map<string, never[]>();
+  const rowsByClass = assessments
+    ? checkpointRowsByClass(assessments, assignmentWork)
+    : new Map<string, never[]>();
   const dueByClass = new Map<string, number>();
   for (const [id, rows] of rowsByClass) {
     dueByClass.set(id, rows.filter((r) => r.state === "todo" || r.state === "in_progress").length);
@@ -510,6 +543,40 @@ export function StudentApp({
     conversation.sendModeOffer(offer);
   };
 
+  // R48: the lesson's work card. Opens the matching focus surface; the ref arms the
+  // submitted→continue handshake. Assessments ride the shared bundle, which may be up to
+  // 60s stale (cached("assessments")) — a step-created assessment could be missing from
+  // it, so the tap invalidates and refetches before the surface reads it.
+  const openWork = (offer: WorkOffer) => {
+    openedFromOfferRef.current = true;
+    if (offer.kind === "assessment") {
+      invalidateSurface("assessments");
+      refreshAssessments();
+      setOpenAssessmentId(offer.id);
+      return;
+    }
+    setOpenAssignmentId(offer.id);
+  };
+
+  // R48: dock/panel/strip rows open the matching surface WITHOUT arming the handshake —
+  // only the lesson's work card does that (openWork above).
+  const openWorkRow = (row: CheckpointRowModel) => {
+    if (row.kind === "assignment") {
+      setOpenAssignmentId(row.id);
+      return;
+    }
+    setOpenAssessmentId(row.id);
+  };
+
+  // Consumed ONCE per hand-off: the submit lands, the conversation gets its continue turn
+  // (the server re-reads satisfaction there — see sendWorkDone), and the ref disarms so a
+  // second submit from the same overlay can't double-send.
+  const workDoneFromOffer = () => {
+    if (!openedFromOfferRef.current) return;
+    openedFromOfferRef.current = false;
+    conversation.sendWorkDone();
+  };
+
   // Chat-flow Phase 1: the checkpoint DOCK — the panel above the message box the server's
   // prompt has been promising ("your checkpoint work is docked above the message box").
   // Due/in-progress work for the class in scope, capped at two rows; a tap opens the
@@ -523,7 +590,7 @@ export function StudentApp({
         <button
           key={row.id}
           type="button"
-          onClick={() => setOpenAssessmentId(row.id)}
+          onClick={() => openWorkRow(row)}
           className="flex items-center gap-2.5 rounded-pill border px-3.5 py-1.5 text-left transition-colors duration-(--dur-fast) hover:brightness-105"
           style={{
             borderColor: "color-mix(in oklab, var(--mode-assignment) 40%, transparent)",
@@ -536,7 +603,11 @@ export function StudentApp({
               color: "color-mix(in oklab, var(--mode-assignment) 60%, var(--foreground))",
             }}
           >
-            {row.state === "in_progress" ? "Resume" : "Checkpoint"}
+            {row.state === "in_progress"
+              ? "Resume"
+              : row.kind === "assignment"
+                ? "Assignment"
+                : "Checkpoint"}
           </span>
           <span className="min-w-0 flex-1 truncate text-body text-foreground">{row.title}</span>
           <span className="shrink-0 text-meta text-muted-foreground">
@@ -674,6 +745,7 @@ export function StudentApp({
               void conversation.retry(answer, isTurnMode(mode) ? mode : undefined)
             }
             onAcceptOffer={acceptModeOffer}
+            onOpenWork={openWork}
             onChoose={(choiceId, label) => {
               // R33c lives in the hook now: sendChoice reads the register at the one
               // owner, so a call site can never stamp a Practice tap as LESSON again.
@@ -794,7 +866,8 @@ export function StudentApp({
                 ) : destination === "checkpoints" ? (
                   <CheckpointsPanel
                     bundle={assessments}
-                    onOpenAssessment={(id) => setOpenAssessmentId(id)}
+                    assignments={assignmentWork}
+                    onOpenWork={openWorkRow}
                   />
                 ) : destination === "customize" ? (
                   // MentorControls already exists and works; Customize is its home on this
@@ -829,14 +902,15 @@ export function StudentApp({
                 currentLessonId={conversation.lesson?.id ?? null}
                 assignmentRows={rowsByClass.get(summaryClass.id) ?? []}
                 onOpenLesson={openLesson}
-                onOpenAssessment={(id) => setOpenAssessmentId(id)}
+                onOpenWork={openWorkRow}
               />
             ) : (
               <StudentHome
                 lessons={conversation.lessons}
                 onOpenLesson={openLesson}
                 assessments={assessments}
-                onOpenAssessment={(id) => setOpenAssessmentId(id)}
+                assignments={assignmentWork}
+                onOpenWork={openWorkRow}
                 classCount={classes ? classes.length : null}
                 progress={progress}
                 currentLessonId={conversation.lesson?.id ?? null}
@@ -895,8 +969,29 @@ export function StudentApp({
           <AssessmentSurface
             assessmentId={openAssessmentId}
             bundle={assessments}
-            onClose={() => setOpenAssessmentId(null)}
-            onFinished={refreshAssessments}
+            onClose={() => {
+              setOpenAssessmentId(null);
+              // Left without submitting (or after the handshake already consumed the ref):
+              // disarm so a later dock-opened submit can't send a phantom continue.
+              openedFromOfferRef.current = false;
+            }}
+            onFinished={() => {
+              refreshAssessments();
+              workDoneFromOffer();
+            }}
+          />
+        ) : null}
+        {openAssignmentId ? (
+          <AssignmentSurface
+            assignmentId={openAssignmentId}
+            onClose={() => {
+              setOpenAssignmentId(null);
+              openedFromOfferRef.current = false;
+            }}
+            onFinished={() => {
+              refreshAssignmentWork();
+              workDoneFromOffer();
+            }}
           />
         ) : null}
       </div>

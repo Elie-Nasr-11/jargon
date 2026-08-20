@@ -90,13 +90,14 @@ class FlowV3RouterInvariants(unittest.TestCase):
         self.assertNotIn("continue_offer &&", CHAT_MESSAGES)
 
     def test_v6_surface_sends_control_turns(self):
-        # Re-anchored (B1, then Pillar 5): the v6 hook posts the structured controls the
-        # server parses — navigate (revisit a completed step) and resume (return to the
-        # frontier). The continue control lost its last sender with the R31b button
-        # (typed readiness is the advance verb); the SERVER still parses it for any tab
-        # open since before R31b — see test_control_turn_parsed.
+        # Re-anchored (B1, Pillar 5, then R48): the v6 hook posts the structured
+        # controls the server parses — navigate (revisit a completed step), resume
+        # (return to the frontier), and continue from EXACTLY one place: sendWorkDone,
+        # the work-step submitted→continue handshake. The R31b Continue button stays
+        # retired — typed readiness is still the conversational advance verb.
         hook = (REPO / "frontend" / "src" / "student" / "useConversation.ts").read_text()
-        self.assertNotIn('control: { type: "continue" }', hook)
+        self.assertEqual(hook.count('control: { type: "continue" }'), 1)
+        self.assertIn("const sendWorkDone", hook)
         for fragment in (
             'control: { type: "navigate", target_activity_id: targetActivityId }',
             'control: { type: "resume" }',

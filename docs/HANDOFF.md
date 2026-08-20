@@ -10986,3 +10986,68 @@ lesson-to-class scoping (mirrors the old roster behavior); assignments/quizzes a
 lesson STEP is still the future modeling slice.
 Suggested next task: watch the deploy + owner walkthrough of the four tabs; then either
 the notification writers for assessment ref ids audit, or an inline return-feedback field.
+
+## Claude -> Codex / Human - 2026-08-19 05:40
+
+Status: Starting
+Task: R48 — quiz/assignment as lesson STEPS (sketchboard Q4, owner: "Both, steps first").
+A teacher authoring an assignment/assessment-mode step creates the real work item linked
+to that step (new activity_id on assignments/assessments, mirrored to checkpoints);
+students hitting the step get a work_offer hand-off card in the chat (opens the existing
+AssessmentSurface, or a NEW minimal AssignmentSurface over the existing-but-uncalled
+submitAssignment api); the step gates on submission server-side; grading stays in the
+Classwork student-work views. Folded in: inline return-feedback in AssessmentWorkView
+(replacing window.prompt) and a cheap studio data cache for back-from-work-item re-entry.
+Files I expect to touch: supabase/migrations/<new>_step_work_links.sql,
+.github/workflows/deploy-backend.yml, supabase/functions/{chat,assessment-admin}/index.ts,
+frontend/src/routes/teacher.curriculum.tsx, frontend/src/features/teacher/
+{TeacherConsole.tsx,AssessmentGrading.tsx}, frontend/src/lib/{api.ts,types.ts},
+frontend/src/student/{StudentApp.tsx,AssignmentSurface.tsx (new),checkpoints.ts?},
+frontend/src/student/Transcript.tsx + useConversation.ts, tests/test_r48*, docs.
+Notes: design being validated by a planning pass; will ship as one PR with migration
+registered in the deploy workflow; edge functions get offline deno check before push.
+
+## Claude -> Codex / Human - 2026-08-20 07:35
+
+Status: Finished (R48 shipped pending merge)
+Summary: R48 — quiz/assignment as lesson STEPS + R47 debt polish, one PR. Migration
+20261015000000_step_work_links.sql adds activity_id (FK lesson_activities, SET NULL) to
+assignments/assessments (+ loose mirror on checkpoints, sync triggers updated,
+backfills, partial indexes) and is registered in deploy-backend.yml. Chat fn: StepWork
+loader (mode-gated, status-filtered, late-enrollee guard, link fail-open /
+satisfaction fail-closed), requirementsFor 3rd param + work gate in stepDone, tri-state
+work_offer emission beside artifact_offer, await_step_work directive rung, SYSTEM_PROMPT
+note. assessment-admin accepts body.activity_id. Client: work card replays from history
+(mode_offer pattern), opens AssessmentSurface or the NEW AssignmentSurface (first caller
+of submitAssignment), submit fires one continue control turn (sendWorkDone) armed only
+from the card; checkpoints rows carry kind + assignmentRows() merges assignments into
+dock/panel/strips (dead-end closed). Studio: "Step work" strip per assignment/assessment
+step (linked → open in Classwork; unlinked → create pre-bound, lesson locked). Console:
+createContext + onCreateForStep (onCreate/createOpen untouched). api: createAssignment/
+createAssessment carry activityId; fetchCurriculumAuthoringData cached 60s with
+authoring: invalidation on every curriculum-admin write + updateLessonResource.
+AssessmentWorkView: inline return-feedback field (window.prompt gone).
+Files changed: supabase/migrations/20261015000000_step_work_links.sql,
+.github/workflows/deploy-backend.yml, supabase/functions/chat/index.ts,
+supabase/functions/assessment-admin/index.ts, frontend/src/lib/{api,types}.ts,
+frontend/src/features/teacher/{TeacherConsole,AssessmentGrading}.tsx,
+frontend/src/routes/teacher.curriculum.tsx,
+frontend/src/features/student/chat/chatMessages.ts,
+frontend/src/student/{Transcript.tsx,useConversation.ts,AssignmentSurface.tsx (new),
+StudentApp.tsx,checkpoints.ts,CheckpointsPanel.tsx,StudentHome.tsx,ClassSummary.tsx,
+summaryBits.tsx}, tests/test_r48_step_work.py (new, 31 pins),
+tests/flow_core.test.ts (4 R48 properties), 3 evolved pins in
+test_flow_pillar2_register/test_flow_pillar5_dead_contracts/test_flow_v3_router
+(sendWorkDone is the continue control's ONE deliberate caller), docs.
+Tests run: 831 pin tests OK (incl. pillar-4 Deno flow-core 13/13); frontend tsc +
+eslint clean; esbuild parse both fns; offline deno differential clean (chat: same 8
+pre-existing errors as HEAD, admin: 0); offline harness verify_r48.mjs 18/18 (teacher
+strip linked/unlinked + pre-bound create + inline return; student replay card → surface
+→ submit → continue handshake → live re-offer → merged panel) and verify_r47.mjs 25/25
+regression — no page errors.
+Remaining concerns: result_release_policy still stored-never-enforced; the studio
+remounts when opening a work view (mitigated by the 60s authoring cache, not removed);
+double-gating (step on submission, lesson end on completion for required work) is
+deliberate and documented in DECISIONS.
+Suggested next task: owner walkthrough of an end-to-end step-work lesson on prod; then
+either enforcing result_release_policy or the notifications audit.

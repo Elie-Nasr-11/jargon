@@ -483,6 +483,7 @@ export function TeacherConsole() {
         organizationId: input.organizationId,
         classId: input.classId,
         lessonId: input.lessonId,
+        activityId: input.activityId ?? null,
         title: input.title,
         instructions: input.instructions,
         dueAt: input.dueAt || null,
@@ -585,6 +586,7 @@ export function TeacherConsole() {
         organizationId: input.organizationId,
         classId: input.classId,
         lessonId: input.lessonId,
+        activityId: input.activityId ?? null,
         title: input.title,
         instructions: input.instructions,
         dueAt: input.dueAt || null,
@@ -1177,6 +1179,12 @@ function ClassDetail({
   const [createOpen, setCreateOpen] = useState<"assignment" | "assessment" | "material" | null>(
     null,
   );
+  // R48: when + Create was invoked FROM a lesson step ("create the assignment for this
+  // step"), the dialog locks the lesson and stamps the step link on the created row.
+  const [createContext, setCreateContext] = useState<{
+    lessonId: string;
+    activityId: string;
+  } | null>(null);
   // A material row opened for editing from the Classwork list.
   const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
 
@@ -1314,6 +1322,7 @@ function ClassDetail({
           kind: "assignment" as const,
           id: assignment.id,
           lessonId: assignment.lesson_id,
+          activityId: assignment.activity_id ?? null,
           title: assignment.title || "Assignment",
           status: assignment.status,
           dueAt: assignment.due_at,
@@ -1326,6 +1335,7 @@ function ClassDetail({
           kind: "assessment" as const,
           id: assessment.id,
           lessonId: assessment.lesson_id,
+          activityId: assessment.activity_id ?? null,
           title: assessment.title || "Quiz",
           status: assessment.status,
           dueAt: assessment.due_at,
@@ -1338,6 +1348,7 @@ function ClassDetail({
           kind: "material" as const,
           id: resource.id,
           lessonId: resource.lesson_id,
+          activityId: resource.activity_id ?? null,
           title: resource.title || "Material",
           status: resource.status,
           dueAt: null,
@@ -1776,6 +1787,10 @@ function ClassDetail({
                   });
                 }}
                 onCreate={(kind) => setCreateOpen(kind)}
+                onCreateForStep={(kind, ctx) => {
+                  setCreateContext(ctx);
+                  setCreateOpen(kind);
+                }}
               />
             </Suspense>
           )}
@@ -1788,7 +1803,10 @@ function ClassDetail({
       <Dialog
         open={createOpen === "assignment"}
         onOpenChange={(open) => {
-          if (!open) setCreateOpen(null);
+          if (!open) {
+            setCreateOpen(null);
+            setCreateContext(null);
+          }
         }}
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[600px]">
@@ -1802,9 +1820,11 @@ function ClassDetail({
             studentIds={studentIds}
             profilesById={profilesById}
             saving={savingAssignment}
+            context={createContext}
             onSaveAssignment={async (input) => {
               await onSaveAssignment(input);
               setCreateOpen(null);
+              setCreateContext(null);
             }}
           />
         </DialogContent>
@@ -1812,7 +1832,10 @@ function ClassDetail({
       <Dialog
         open={createOpen === "assessment"}
         onOpenChange={(open) => {
-          if (!open) setCreateOpen(null);
+          if (!open) {
+            setCreateOpen(null);
+            setCreateContext(null);
+          }
         }}
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[640px]">
@@ -1826,9 +1849,11 @@ function ClassDetail({
             studentIds={studentIds}
             profilesById={profilesById}
             saving={savingAssessment}
+            context={createContext}
             onSaveAssessment={async (input) => {
               await onSaveAssessment(input);
               setCreateOpen(null);
+              setCreateContext(null);
             }}
           />
         </DialogContent>
@@ -2244,6 +2269,8 @@ type AssignmentFormValues = {
   organizationId: string;
   classId: string;
   lessonId: string;
+  // R48: set when the dialog was opened FROM a lesson step — links the created row.
+  activityId?: string | null;
   title: string;
   instructions: string;
   dueAt: string;
@@ -2269,6 +2296,8 @@ type AssessmentFormValues = {
   organizationId: string;
   classId: string;
   lessonId: string;
+  // R48: set when the dialog was opened FROM a lesson step — links the created row.
+  activityId?: string | null;
   title: string;
   instructions: string;
   dueAt: string;
@@ -2326,6 +2355,7 @@ function AssessmentManager({
   studentIds,
   profilesById,
   saving,
+  context = null,
   onSaveAssessment,
 }: {
   classSummary: TeacherClassSummary;
@@ -2334,20 +2364,26 @@ function AssessmentManager({
   studentIds: string[];
   profilesById: Map<string, Profile>;
   saving: boolean;
+  // R48: present when the dialog was opened FROM a lesson step — the lesson is locked
+  // to that step's lesson and the created row carries the step link.
+  context?: { lessonId: string; activityId: string } | null;
   onSaveAssessment: (input: AssessmentFormValues) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<AssessmentFormValues>(() =>
-    defaultAssessmentForm(classSummary, lessons, studentIds),
-  );
+  const seedDraft = () => ({
+    ...defaultAssessmentForm(classSummary, lessons, studentIds),
+    ...(context ? { lessonId: context.lessonId, activityId: context.activityId } : {}),
+  });
+  const [draft, setDraft] = useState<AssessmentFormValues>(seedDraft);
   const [assessmentMessage, setAssessmentMessage] = useState("");
   const lessonQuizItems = quizItems.filter(
     (quiz) => quiz.lesson_id === draft.lessonId && quiz.status !== "archived",
   );
 
   useEffect(() => {
-    setDraft(defaultAssessmentForm(classSummary, lessons, studentIds));
+    setDraft(seedDraft());
     setAssessmentMessage("");
-  }, [classSummary, lessons, studentIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classSummary, lessons, studentIds, context]);
 
   const setField = <K extends keyof AssessmentFormValues>(key: K, value: AssessmentFormValues[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -2431,7 +2467,8 @@ function AssessmentManager({
               <select
                 value={draft.lessonId}
                 onChange={(event) => setField("lessonId", event.target.value)}
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                disabled={Boolean(context)}
+                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
               >
                 {lessons.map((lesson) => (
                   <option key={lesson.id} value={lesson.id}>
@@ -2733,6 +2770,7 @@ function AssignmentManager({
   studentIds,
   profilesById,
   saving,
+  context = null,
   onSaveAssignment,
 }: {
   classSummary: TeacherClassSummary;
@@ -2741,20 +2779,26 @@ function AssignmentManager({
   studentIds: string[];
   profilesById: Map<string, Profile>;
   saving: boolean;
+  // R48: present when the dialog was opened FROM a lesson step — the lesson is locked
+  // to that step's lesson and the created row carries the step link.
+  context?: { lessonId: string; activityId: string } | null;
   onSaveAssignment: (input: AssignmentFormValues) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<AssignmentFormValues>(() =>
-    defaultAssignmentForm(classSummary, lessons, studentIds),
-  );
+  const seedDraft = () => ({
+    ...defaultAssignmentForm(classSummary, lessons, studentIds),
+    ...(context ? { lessonId: context.lessonId, activityId: context.activityId } : {}),
+  });
+  const [draft, setDraft] = useState<AssignmentFormValues>(seedDraft);
   const [assignmentMessage, setAssignmentMessage] = useState("");
   const resourcesForLesson = resources.filter(
     (resource) => resource.lesson_id === draft.lessonId && resource.status !== "archived",
   );
 
   useEffect(() => {
-    setDraft(defaultAssignmentForm(classSummary, lessons, studentIds));
+    setDraft(seedDraft());
     setAssignmentMessage("");
-  }, [classSummary, lessons, studentIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classSummary, lessons, studentIds, context]);
 
   const setField = <K extends keyof AssignmentFormValues>(
     key: K,
@@ -2829,6 +2873,7 @@ function AssignmentManager({
               Lesson
               <select
                 value={draft.lessonId}
+                disabled={Boolean(context)}
                 onChange={(event) =>
                   setDraft((current) => ({
                     ...current,

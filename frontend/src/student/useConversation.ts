@@ -1090,6 +1090,20 @@ export function useConversation() {
     [sendAnswer, setRegister],
   );
 
+  // R48: the student just submitted a work-step's assignment/assessment (the surface's
+  // onFinished). A deterministic continue-control turn — the server re-reads satisfaction
+  // (loadStepWork) on this turn, so a real submission releases the step and a phantom
+  // "done" without one keeps it held. Text rides as the persisted student turn (mode_offer
+  // pattern): a reloaded transcript shows WHY the lesson moved on.
+  const sendWorkDone = useCallback(() => {
+    void sendAnswer(
+      { mode: "text", text: "I've submitted it.", client_msg_id: uid() },
+      registerRef.current,
+      "I've submitted it.",
+      { control: { type: "continue" } },
+    );
+  }, [sendAnswer]);
+
   // Return from a revisit to exactly where the lesson left off (the server restores the paused
   // step state and clears the frame). Pillar 5: controls ride the LIVE register — the
   // old hardcoded "lesson" made the server's REGISTER SHIFT voice nod fire on a stepper
@@ -1365,6 +1379,7 @@ export function useConversation() {
     sendCode,
     sendChoice,
     sendModeOffer,
+    sendWorkDone,
     sendResume,
     sendNavigate,
     openLesson,

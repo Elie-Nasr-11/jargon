@@ -39,6 +39,15 @@ export type ChatChoice = { id?: string; label?: string; text?: string; value?: s
 // that message rather than as a floating row above the composer — see Transcript.
 export type ModeOffer = { mode: "practice" | "discuss" | "lesson"; topic: string; label: string };
 
+// R48: a lesson step that IS a real assignment/assessment. The mentor's reply carries the
+// hand-off card the student opens the work surface from; the step holds until they submit.
+export type WorkOffer = {
+  kind: "assignment" | "assessment";
+  id: string;
+  title: string;
+  status: string;
+};
+
 export type Msg =
   | {
       id: string;
@@ -71,6 +80,11 @@ export type Msg =
       // P8: this message offered a live mentor-built activity. Live-turn only —
       // deliberately NOT replayed from history (artifact-live enforces once-per-step).
       artifactOffer?: { label: string; kind: "html_sim" | "deck"; activity_id: string };
+      // R48: the work card for an assignment/assessment step. Replayed from history
+      // (mode_offer pattern, NOT artifact_offer's live-only rule): the step stays held
+      // until the submission lands, so losing the card on refresh would dead-end the
+      // lesson. The transcript renders it only on the latest mentor message.
+      workOffer?: WorkOffer;
       createdAt?: string;
       // Error bubbles must never become the "latest mentor message" — that would strip the
       // live quiz choices off the real question with no recovery path.
@@ -221,6 +235,24 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
               label: (payload.mode_offer as ModeOffer).label,
             }
           : undefined,
+      // R48: the work card replays for the same reason as mode_offer — the mentor's text
+      // points at it and the step is HELD until the submission lands, so a reload without
+      // the card would strand the student. Latest-mentor-message rendering retires stale
+      // ones once the lesson moves on.
+      workOffer:
+        payload.work_offer &&
+        typeof payload.work_offer === "object" &&
+        ["assignment", "assessment"].includes(
+          String((payload.work_offer as { kind?: unknown }).kind),
+        ) &&
+        typeof (payload.work_offer as { id?: unknown }).id === "string"
+          ? {
+              kind: (payload.work_offer as WorkOffer).kind,
+              id: (payload.work_offer as WorkOffer).id,
+              title: String((payload.work_offer as { title?: unknown }).title || ""),
+              status: String((payload.work_offer as { status?: unknown }).status || ""),
+            }
+          : undefined,
       // Persisted envelope payloads carry the arc; older turns simply don't have one.
       lessonArc:
         payload.lesson_arc && typeof payload.lesson_arc === "object"
@@ -284,6 +316,7 @@ export function envelopeMessage(envelope: TypedChatEnvelope, turnMode?: string):
     figures: envelope.figures?.length ? envelope.figures : undefined,
     modeOffer: envelope.mode_offer ?? undefined,
     artifactOffer: envelope.artifact_offer ?? undefined,
+    workOffer: envelope.work_offer ?? undefined,
     turnMode,
     lessonArc: envelope.lesson_arc ?? undefined,
     // Pillar 1: the live message carries the same flow log the persisted turn keeps,

@@ -860,6 +860,8 @@ export type Assignment = {
   course_id: string | null;
   lesson_id: string | null;
   milestone_id: string | null;
+  // R48: the lesson step this assignment IS (created from the step editor); null = standalone.
+  activity_id?: string | null;
   title: string;
   instructions: string;
   assigned_by: string | null;
@@ -934,6 +936,8 @@ export type Assessment = {
   organization_id: string | null;
   class_id: string | null;
   lesson_id: string;
+  // R48: the lesson step this quiz IS (created from the step editor); null = standalone.
+  activity_id?: string | null;
   title: string;
   instructions: string;
   created_by: string | null;
@@ -1236,6 +1240,15 @@ export type TypedChatEnvelope = {
   // R31e: "lesson" joined the set — the pill that returns a student from Discuss or
   // Practice to the lesson spine, which is the only register that can advance a step.
   mode_offer?: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string } | null;
+  // R48: the current step IS a real work item (linked assignment/quiz) the student
+  // hasn't submitted — renders the hand-off card. Tri-state like mode_offer, and it
+  // REPLAYS from stored turns (the card must survive a reload while the step holds).
+  work_offer?: {
+    kind: "assignment" | "assessment";
+    id: string;
+    title: string;
+    status: string;
+  } | null;
   turn_kind?: string;
   router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for this student. Live-turn only

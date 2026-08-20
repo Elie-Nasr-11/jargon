@@ -101,13 +101,38 @@ export function AssessmentWorkView({
     }
   };
 
+  // R48 (R47 debt): final feedback is an inline per-attempt field, not a browser prompt —
+  // the prompt dialog clipped long feedback, couldn't be reviewed before sending, and
+  // looked nothing like the rest of the console. Absent draft falls back to the feedback
+  // already on the attempt, so Return without typing keeps prior feedback intact.
+  const [returnDrafts, setReturnDrafts] = useState<
+    Record<string, { feedback: string; saving: boolean }>
+  >({});
+  const updateReturnDraft = (
+    attemptId: string,
+    patch: Partial<{ feedback: string; saving: boolean }>,
+  ) => {
+    setReturnDrafts((current) => ({
+      ...current,
+      [attemptId]: {
+        feedback: current[attemptId]?.feedback ?? "",
+        saving: current[attemptId]?.saving || false,
+        ...patch,
+      },
+    }));
+  };
+
   const returnAttempt = async (attempt: AssessmentAttempt) => {
-    const feedback = window.prompt("Final feedback for the student", attempt.feedback || "") || "";
+    const draft = returnDrafts[attempt.id];
+    const feedback = (draft?.feedback ?? attempt.feedback ?? "").trim();
+    updateReturnDraft(attempt.id, { saving: true });
     try {
       await onReturnAssessment({ attemptId: attempt.id, feedback });
       setMessage("Quiz result returned.");
     } catch (error) {
       setMessage((error as Error).message || "Could not return quiz result.");
+    } finally {
+      updateReturnDraft(attempt.id, { saving: false });
     }
   };
 
@@ -314,12 +339,25 @@ export function AssessmentWorkView({
                   );
                 })}
               </div>
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                {attempt.status !== "returned" ? (
+                  <input
+                    value={returnDrafts[attempt.id]?.feedback ?? attempt.feedback ?? ""}
+                    onChange={(event) =>
+                      updateReturnDraft(attempt.id, { feedback: event.target.value })
+                    }
+                    placeholder="Final feedback for the student"
+                    aria-label="Final feedback for the student"
+                    className="min-w-0 flex-1 rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+                  />
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void returnAttempt(attempt)}
-                  disabled={pending || attempt.status === "returned"}
-                  className="rounded-full border border-success/35 px-3 py-1.5 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-45"
+                  disabled={
+                    pending || attempt.status === "returned" || returnDrafts[attempt.id]?.saving
+                  }
+                  className="shrink-0 rounded-full border border-success/35 px-3 py-1.5 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-45"
                 >
                   Return result
                 </button>

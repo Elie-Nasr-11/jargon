@@ -20,7 +20,7 @@ import {
 import { formatScore, relativeTime } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/motion";
 import { masteryBands, type IdeaMasteryRow } from "@/lib/mastery";
-import { checkpointRows } from "@/student/checkpoints";
+import { assignmentRows, checkpointRows, type CheckpointRowModel } from "@/student/checkpoints";
 import { SectionLabel, StatPill, WorkRow } from "@/student/summaryBits";
 import type {
   CurriculumLinkRow,
@@ -30,6 +30,7 @@ import type {
   StudentLinkRow,
   SessionSummary,
   StudentAssessmentBundle,
+  StudentAssignmentBundle,
   StudentGradeRow,
   VocabTerm,
   StudentMemory,
@@ -52,7 +53,9 @@ export type StudentHomeProps = {
   onOpenLesson: (lessonId: string) => void;
   // The shell's assessment bundle (null while loading) — feeds the due strip.
   assessments: StudentAssessmentBundle | null;
-  onOpenAssessment: (assessmentId: string) => void;
+  // R48: the assignment bundle joins the due strip; rows dispatch on kind in the shell.
+  assignments?: StudentAssignmentBundle | null;
+  onOpenWork: (row: CheckpointRowModel) => void;
   // The shell's class list length (null while loading) — the identity band's CLASSES pill.
   classCount: number | null;
   // The shell's progress map + current lesson — the brain map's node colors and aurora.
@@ -333,7 +336,8 @@ export function StudentHome({
   lessons,
   onOpenLesson,
   assessments,
-  onOpenAssessment,
+  onOpenWork,
+  assignments = null,
   classCount,
   progress,
   currentLessonId,
@@ -429,10 +433,11 @@ export function StudentHome({
 
   const due = useMemo(() => {
     if (!assessments) return [];
-    return checkpointRows(assessments).filter(
-      (row) => row.state === "todo" || row.state === "in_progress",
-    );
-  }, [assessments]);
+    return [
+      ...checkpointRows(assessments),
+      ...(assignments ? assignmentRows(assignments) : []),
+    ].filter((row) => row.state === "todo" || row.state === "in_progress");
+  }, [assessments, assignments]);
 
   const recentGrades = useMemo(
     () =>
@@ -564,7 +569,7 @@ export function StudentHome({
             ) : due.length ? (
               <ul className="flex flex-col">
                 {due.slice(0, 5).map((row) => (
-                  <WorkRow key={row.id} row={row} onOpen={onOpenAssessment} />
+                  <WorkRow key={row.id} row={row} onOpen={onOpenWork} />
                 ))}
               </ul>
             ) : (

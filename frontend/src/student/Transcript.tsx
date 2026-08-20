@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
-import { Paperclip, RotateCcw, Sparkles } from "lucide-react";
+import { ClipboardList, Paperclip, RotateCcw, Sparkles } from "lucide-react";
 import { prefersReducedMotion } from "@/lib/motion";
 import { splitSentences } from "@/lib/sentences";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
@@ -38,6 +38,7 @@ import {
   type ChatFigureBlock,
   type ModeOffer,
   type Msg,
+  type WorkOffer,
 } from "@/features/student/chat/chatMessages";
 
 // Renders the conversation as a sequence of MODE SECTIONS.
@@ -973,6 +974,9 @@ export type TranscriptProps = {
   // R32: accepting an inline hand-off offer ([Talk it through], [Back to the lesson]).
   // The shell owns it because accepting also moves the composer's mode picker.
   onAcceptOffer?: (offer: ModeOffer) => void;
+  // R48: opening a work-step's assignment/assessment surface. The shell owns it because
+  // the surfaces (and the submitted→continue handshake) live above the transcript.
+  onOpenWork?: (offer: WorkOffer) => void;
   disabled?: boolean;
 };
 
@@ -981,6 +985,7 @@ export function Transcript({
   onChoose,
   onRetry,
   onAcceptOffer,
+  onOpenWork,
   disabled,
 }: TranscriptProps) {
   // Live-conversation context the shell does not thread as props: the hold lock (which also
@@ -1327,6 +1332,38 @@ export function Transcript({
                       >
                         <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
                         {message.artifactOffer.label || "Build me a quick activity"}
+                      </button>
+                    </div>
+                  ) : null}
+                  {/* R48: an assignment/assessment step's hand-off card. The step is HELD
+                      server-side until the submission lands (requirements.work), so this
+                      card IS the way forward — it rides the latest mentor message and,
+                      unlike artifact_offer, replays after a reload (workOffer restores
+                      from the persisted envelope, mode_offer pattern). */}
+                  {message.workOffer && isLatestBot && !message.isError && onOpenWork ? (
+                    <div className="flex pl-1">
+                      <button
+                        type="button"
+                        disabled={inert}
+                        onClick={() => onOpenWork(message.workOffer!)}
+                        className="group flex w-full max-w-md items-center gap-3 rounded-card border border-border bg-depth-card px-4 py-3 text-left transition-colors duration-(--dur-fast) hover:bg-muted disabled:opacity-40"
+                        style={{ boxShadow: "var(--inset-highlight)" }}
+                      >
+                        <ClipboardList
+                          className="h-4 w-4 shrink-0 text-muted-foreground"
+                          strokeWidth={1.7}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                            {message.workOffer.kind === "assignment" ? "Assignment" : "Quiz"}
+                          </span>
+                          <span className="block truncate text-body font-semibold text-foreground">
+                            {message.workOffer.title || "This step's work"}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-pill border border-border px-3 py-1 text-meta text-muted-foreground transition-colors group-hover:text-foreground">
+                          Open
+                        </span>
                       </button>
                     </div>
                   ) : null}

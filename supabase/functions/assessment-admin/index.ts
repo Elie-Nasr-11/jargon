@@ -356,10 +356,13 @@ async function createAssessment(config: Config, userId: string, body: DbRow): Pr
     }
   }
 
+  // R48: the lesson step this quiz IS (created from the step editor); null = standalone.
+  const activityId = cleanId(body.activity_id);
   const assessment = await insertRow(config, "assessments", {
     organization_id: organizationId || null,
     class_id: classId,
     lesson_id: lessonId,
+    activity_id: activityId || null,
     title,
     instructions: cleanText(body.instructions),
     created_by: userId,

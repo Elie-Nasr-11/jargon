@@ -26,7 +26,8 @@ export type ClassSummaryProps = {
   currentLessonId: string | null;
   assignmentRows: CheckpointRowModel[];
   onOpenLesson: (lessonId: string) => void;
-  onOpenAssessment: (assessmentId: string) => void;
+  // R48: receives the whole row — the shell dispatches on row.kind to the right surface.
+  onOpenWork: (row: CheckpointRowModel) => void;
 };
 
 // One thin segment per lesson — the unit's shape at a glance.
@@ -70,7 +71,7 @@ export function ClassSummary({
   currentLessonId,
   assignmentRows,
   onOpenLesson,
-  onOpenAssessment,
+  onOpenWork,
 }: ClassSummaryProps) {
   const [grades, setGrades] = useState<StudentGradeRow[] | null>(null);
   const [resources, setResources] = useState<LessonChatResource[] | null>(null);
@@ -232,7 +233,7 @@ export function ClassSummary({
                   return rank(a) - rank(b);
                 })
                 .map((row) => (
-                  <WorkRow key={row.id} row={row} onOpen={onOpenAssessment} />
+                  <WorkRow key={row.id} row={row} onOpen={onOpenWork} />
                 ))}
             </ul>
           ) : (

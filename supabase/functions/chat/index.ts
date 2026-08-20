@@ -253,6 +253,9 @@ GOVERNANCE:
 - "checkpoints" lists unfinished assignments/assessments docked above the message box. When relevant (the
   lesson wraps, or they ask what's next) point the student to one warmly by title — they open it from the
   panel above the message box; mention a due date if present. Nudge, don't block; never invent one.
+- A step whose directive names a WORK CARD (a real assignment/quiz for that step) is submitted on the card
+  under your reply, never in the chat: answer questions about the task, but do not collect answers, grade,
+  or reveal solutions — the lesson moves on when they submit there.
 - "resources": when the directive says card(s) are attached below your reply, tell the student to tap Open on
   the card — never say you can't share it. Never claim a resource was viewed unless resource_interactions
   proves it. Cite document chunks by resource title/page and audio/video chunks by title/time range.
@@ -474,6 +477,12 @@ type Envelope = {
   // design (applyModeCeiling); without this pill the only exit was the mode picker,
   // which the demo showed nobody finds.
   mode_offer?: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string } | null;
+  // R48: the current step IS a real work item (linked assignment/quiz) the student
+  // hasn't submitted — the client renders a hand-off card that opens the matching
+  // surface. Same tri-state contract as mode_offer: a value offers, null clears
+  // (submitted/advanced), absent leaves client state (and replays like mode_offer —
+  // the card must survive a reload while the step is held).
+  work_offer?: { kind: "assignment" | "assessment"; id: string; title: string; status: string } | null;
   // Flow v3 backtracking: non-null while revisiting a completed step ("revisit") or on
   // the turn that returned to the frontier ("resume"); null on normal turns; ABSENT on
   // envelopes that never touched navigation (held/error) so the client keeps its state.
@@ -808,6 +817,27 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
           mode: raw.mode,
           topic: raw.topic.slice(0, 120),
           label: raw.label.slice(0, 60),
+        };
+      }
+      return undefined;
+    })(),
+    work_offer: (() => {
+      const raw = partial.work_offer as
+        | { kind?: unknown; id?: unknown; title?: unknown; status?: unknown }
+        | null
+        | undefined;
+      if (raw === null) return null;
+      if (
+        raw &&
+        (raw.kind === "assignment" || raw.kind === "assessment") &&
+        typeof raw.id === "string" &&
+        raw.id
+      ) {
+        return {
+          kind: raw.kind,
+          id: raw.id,
+          title: typeof raw.title === "string" ? raw.title.slice(0, 160) : "",
+          status: typeof raw.status === "string" ? raw.status.slice(0, 40) : "",
         };
       }
       return undefined;
@@ -3127,7 +3157,23 @@ export type StepRequirements = {
   // Presence gate for content-delivery modes (explanation/media/assignment/inquiry):
   // the step passes on the student's next contentful turn after presentation.
   acknowledge: boolean;
+  // R48: the step IS a real work item (an assignment/assessment row linked via
+  // activity_id) that the student hasn't submitted yet. Optional so every existing
+  // requirements literal stays valid; stepDone treats absence as false.
+  work?: boolean;
   quizChoices: unknown[];
+};
+
+// R48: the work item linked to the current step (assignments/assessments.activity_id),
+// loaded per turn. `satisfied` is tri-state: true = submitted (attempt or submission
+// exists), false = confirmed pending, null = the satisfaction read failed — hold the
+// step (fail-closed; steps_done is monotonic, a wrongly skipped gate never re-arms).
+export type StepWork = {
+  kind: "assignment" | "assessment";
+  id: string;
+  title: string;
+  status: string;
+  satisfied: boolean | null;
 };
 
 // Requirements come from the step's SHAPE, never from the turn: a code step must pass a
@@ -3136,9 +3182,15 @@ export type StepRequirements = {
 // step (its choices live on the activity itself; the mentor's assessment grades it).
 // When the step has a v4 mode, the mode decides; a bound quiz row stays an orthogonal
 // gate in every mode (matching the legacy behavior for code steps with quizzes).
+// R48: when the step carries a LINKED work item (stepWork), the real submission replaces
+// every in-chat gate — the formal attempt/submission is the assessment, so the inline
+// quiz/understanding gates drop and the step holds on `work` until it's submitted
+// (acknowledge keeps the present→continue beat). stepWork = null leaves every mode
+// byte-identical to the two-argument behavior.
 export function requirementsFor(
   activity: DbRow | null,
   quiz: DbRow | null,
+  stepWork: StepWork | null = null,
 ): StepRequirements {
   const quizChoices = Array.isArray(quiz?.choices)
     ? (quiz.choices as unknown[])
@@ -3147,6 +3199,16 @@ export function requirementsFor(
       : [];
   const needsQuizRow = Boolean(quiz);
   const stepMode = modeOf(activity);
+  if (stepWork && (stepMode === "assignment" || stepMode === "assessment")) {
+    return {
+      code: false,
+      quiz: false,
+      understanding: false,
+      acknowledge: true,
+      work: stepWork.satisfied !== true,
+      quizChoices: [],
+    };
+  }
   if (stepMode) {
     switch (stepMode) {
       case "explanation":
@@ -3381,7 +3443,10 @@ export function stepDone(state: StepState, req: StepRequirements): boolean {
     (!req.code || Boolean(state.code_passed_at)) &&
     (!req.quiz || Boolean(state.quiz_passed_at)) &&
     (!req.understanding || Boolean(state.understanding_at)) &&
-    (!req.acknowledge || Boolean(state.acknowledged_at))
+    (!req.acknowledge || Boolean(state.acknowledged_at)) &&
+    // R48: a linked-work step holds until the submission exists in the DB — the gate is
+    // re-read every turn (never folded into step_state; the DB fact is monotonic).
+    !(req.work === true)
   );
 }
 
@@ -3621,6 +3686,9 @@ export function turnDirective(args: {
   attemptCeilinged: boolean;
   // Phase A: non-null when THIS turn is the student tapping a mode hand-off pill.
   modeOfferAccept: { mode: "practice" | "discuss" | "lesson"; topic: string } | null;
+  // R48: the current step's linked work item (assignment/quiz created FROM the step).
+  // Optional so existing callers/tests stay valid; only read when requirements.work.
+  stepWork?: { kind: "assignment" | "assessment"; title: string } | null;
   // Phase C: the brain's precomputed teaching hints (code-derived, never model vibes).
   brainHints: {
     recallIdea: string | null;
@@ -3658,6 +3726,7 @@ export function turnDirective(args: {
     modeOfferAccept,
     brainHints,
   } = args;
+  const stepWork = args.stepWork ?? null;
 
   const quizActive = draftFlow.nextAction === "choose";
   const textStep = activityMode === "text" && requirements.understanding;
@@ -3823,6 +3892,23 @@ export function turnDirective(args: {
       return {
         key: "meta_reply",
         text: "The student said something about the lesson or process itself, not an attempt. Respond to it helpfully — summarize, reassure, or adjust pace — then hand the floor back without grading anything.",
+      };
+    }
+    // R48: linked-work steps — the card under the reply IS the task. Owns both the
+    // presentation and every held turn after it (content_discuss/converse must never
+    // steal a work step); revisit, ceilings, help and meta rungs above keep priority.
+    if (stepWork && requirements.work === true) {
+      const workNoun = stepWork.kind === "assessment" ? "quiz" : "assignment";
+      const workTitle = stepWork.title || (workNoun === "quiz" ? "the quiz" : "the assignment");
+      if (!presentedBefore) {
+        return {
+          key: "present_step",
+          text: `This step IS a real ${workNoun} the student must submit: "${workTitle}". A work card sits UNDER your reply — frame the task in a sentence or two at their grade level, tell them to open the card and ${workNoun === "quiz" ? "answer it in the quiz screen" : "do the work and hit Submit"}, and make clear the lesson continues the moment they submit. Never collect the work in the chat, and never reveal answers.`,
+        };
+      }
+      return {
+        key: "await_step_work",
+        text: `The student has NOT yet submitted this step's ${workNoun} "${workTitle}" — the card under your reply is the only way to do it. Answer their questions about the task briefly and helpfully, but never collect answers in chat, never grade or reveal solutions, and never advance the lesson yourself; close by pointing them back to the card ("open ${workTitle} and submit it there").`,
       };
     }
     // Tangents on GRADED steps (content steps take the discuss branch below): engage
@@ -4260,6 +4346,85 @@ async function loadPendingCheckpoints(
   }
 }
 
+// R48: the work item linked to THIS step (assignments/assessments.activity_id), plus
+// whether this student has submitted it. Failure posture is deliberately split:
+//  - the LINK read fails open (null = unlinked) — a transient error must never start
+//    gating steps that were never gated;
+//  - the SATISFACTION read fails closed (satisfied: null → the step holds) — steps_done
+//    is monotonic, so wrongly skipping a real gate is permanent while holding one turn
+//    is recoverable.
+// A linked assessment with no recipient row for this student reads as UNLINKED: RLS and
+// start_assessment both require a recipient, so gating a late enrollee would brick them.
+async function loadStepWork(
+  config: SupabaseConfig,
+  userId: string,
+  activity: DbRow | null,
+): Promise<StepWork | null> {
+  const stepMode = modeOf(activity);
+  const activityId = typeof activity?.id === "string" ? activity.id : "";
+  if (!activityId || (stepMode !== "assignment" && stepMode !== "assessment")) return null;
+  const aid = encodeURIComponent(activityId);
+  const uid = encodeURIComponent(userId);
+  try {
+    if (stepMode === "assignment") {
+      const rows = await loadMany(
+        config,
+        `assignments?activity_id=eq.${aid}&status=eq.assigned&select=id,title,status&order=created_at.desc&limit=1`,
+      );
+      const row = rows[0];
+      if (!row) return null;
+      const work: StepWork = {
+        kind: "assignment",
+        id: String(row.id),
+        title: String(row.title || "Assignment"),
+        status: String(row.status || "assigned"),
+        satisfied: null,
+      };
+      try {
+        const subs = await loadMany(
+          config,
+          `assignment_submissions?assignment_id=eq.${encodeURIComponent(work.id)}&user_id=eq.${uid}&select=id&limit=1`,
+        );
+        work.satisfied = subs.length > 0;
+      } catch {
+        // fail-closed: hold the step this turn
+      }
+      return work;
+    }
+    const rows = await loadMany(
+      config,
+      `assessments?activity_id=eq.${aid}&status=eq.published&select=id,title,status&order=created_at.desc&limit=1`,
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const workId = String(row.id);
+    const recipients = await loadMany(
+      config,
+      `assessment_recipients?assessment_id=eq.${encodeURIComponent(workId)}&user_id=eq.${uid}&select=id&limit=1`,
+    );
+    if (!recipients.length) return null; // late enrollee — treat as unlinked
+    const work: StepWork = {
+      kind: "assessment",
+      id: workId,
+      title: String(row.title || "Quiz"),
+      status: String(row.status || "published"),
+      satisfied: null,
+    };
+    try {
+      const attempts = await loadMany(
+        config,
+        `assessment_attempts?assessment_id=eq.${encodeURIComponent(workId)}&user_id=eq.${uid}&status=neq.in_progress&select=id&limit=1`,
+      );
+      work.satisfied = attempts.length > 0;
+    } catch {
+      // fail-closed: hold the step this turn
+    }
+    return work;
+  } catch {
+    return null; // link read fails open — behave as an unlinked step
+  }
+}
+
 async function loadContext(
   config: SupabaseConfig,
   userId: string,
@@ -4284,6 +4449,8 @@ async function loadContext(
   misconceptions: DbRow[];
   pendingCheckpoints: PendingCheckpoint[];
   pendingCheckpointsOk: boolean;
+  // R48: the work item linked to the CURRENT step (null = unlinked / late enrollee).
+  stepWork: StepWork | null;
   // Memory v1: the student's rolling profile row and their last few completed-session
   // summaries (newest first, current session excluded). Both BEST-EFFORT — a read
   // failure yields absent memory and never blocks the turn.
@@ -4447,7 +4614,7 @@ async function loadContext(
   // single-activity lessons — on a multi-step lesson it would glue one unbound quiz onto
   // EVERY step. Misconceptions are filtered by the ACTIVITY's skills (milestone/quiz
   // skills resolve in this same wave; empty → unfiltered, and the prompt caps at 3).
-  const [milestone, activityQuiz, fallbackQuiz, misconceptions, resourceChunks] =
+  const [milestone, activityQuiz, fallbackQuiz, misconceptions, resourceChunks, stepWork] =
     await Promise.all([
       milestoneId
         ? loadFirst(
@@ -4480,6 +4647,7 @@ async function loadContext(
             `resource_text_chunks?resource_id=${inFilter(resourceIds)}&status=eq.approved&order=source_kind.asc,start_seconds.asc,page_number.asc,chunk_index.asc&limit=18&select=resource_id,page_number,chunk_index,chunk_text,status,source_kind,start_seconds,end_seconds`,
           )
         : Promise.resolve([] as DbRow[]),
+      loadStepWork(config, userId, activity),
     ]);
   const quiz = activityQuiz ?? fallbackQuiz;
 
@@ -4518,6 +4686,7 @@ async function loadContext(
     misconceptions,
     pendingCheckpoints: pendingResult ?? [],
     pendingCheckpointsOk: pendingResult !== null,
+    stepWork,
     memory,
     recentSummaries: relevantSummaries,
     lessonSubject: typeof lessonSubjectRow?.subject === "string" ? lessonSubjectRow.subject : "",
@@ -6041,11 +6210,16 @@ async function handleTypedRequest(
         String((paused as DbRow).activity_id || "") === String(frontierId || "")
           ? paused
           : {};
+      // R48: the frontier's linked work must be in scope too — resume gates are real,
+      // and the loaded stepWork belonged to the revisit target. Same fail-open posture
+      // as loadContext (loadStepWork never throws).
+      const frontierWork = await loadStepWork(config, userId, frontier);
       context = {
         ...context,
         activity: frontier,
         quiz: scoped.quiz,
         milestone: scoped.milestone,
+        stepWork: frontierWork,
       };
       navFrame = null;
     }
@@ -6138,7 +6312,11 @@ async function handleTypedRequest(
   // Revisit mode neutralizes every gate: a revisited step can never re-grade, re-pass,
   // or advance — its authoritative completion lives in steps_done, and the lazy
   // step_state backfill can't accidentally mark it "done again" and stomp the frame.
-  const realRequirements = requirementsFor(context.activity, context.quiz);
+  const realRequirements = requirementsFor(
+    context.activity,
+    context.quiz,
+    inRevisit ? null : context.stepWork,
+  );
   const requirements: StepRequirements = inRevisit
     ? { code: false, quiz: false, understanding: false, acknowledge: false, quizChoices: [] }
     : realRequirements;
@@ -6769,6 +6947,10 @@ async function handleTypedRequest(
       advanceAskedButCeilinged,
       attemptCeilinged,
       brainHints,
+      stepWork:
+        !inRevisit && context.stepWork
+          ? { kind: context.stepWork.kind, title: context.stepWork.title }
+          : null,
       modeOfferAccept:
         controlType === "mode_offer" &&
         (control?.mode === "practice" ||
@@ -7686,6 +7868,23 @@ async function handleTypedRequest(
         : null;
     if (envelope.artifact_offer) {
       finalState.artifact_offer_at = turnStartedIso;
+    }
+    // R48: the step-work hand-off card. A value while THIS step's linked work is still
+    // unsubmitted (requirements.work); an explicit null the moment it's satisfied so the
+    // client retires the card; absent on unlinked steps and revisits (client state
+    // untouched — matches mode_offer's tri-state).
+    {
+      const effectiveWork = inRevisit ? null : context.stepWork;
+      if (effectiveWork && requirements.work === true) {
+        envelope.work_offer = {
+          kind: effectiveWork.kind,
+          id: effectiveWork.id,
+          title: effectiveWork.title,
+          status: effectiveWork.status,
+        };
+      } else if (effectiveWork) {
+        envelope.work_offer = null;
+      }
     }
     // Revisit frame surfaced to the client (renders the "Return to where you were" chip
     // and marks the stepper). null on normal turns; a resume turn reports mode "resume".
