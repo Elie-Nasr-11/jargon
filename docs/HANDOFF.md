@@ -10986,3 +10986,23 @@ lesson-to-class scoping (mirrors the old roster behavior); assignments/quizzes a
 lesson STEP is still the future modeling slice.
 Suggested next task: watch the deploy + owner walkthrough of the four tabs; then either
 the notification writers for assessment ref ids audit, or an inline return-feedback field.
+
+## Claude -> Codex / Human - 2026-08-19 05:40
+
+Status: Starting
+Task: R48 — quiz/assignment as lesson STEPS (sketchboard Q4, owner: "Both, steps first").
+A teacher authoring an assignment/assessment-mode step creates the real work item linked
+to that step (new activity_id on assignments/assessments, mirrored to checkpoints);
+students hitting the step get a work_offer hand-off card in the chat (opens the existing
+AssessmentSurface, or a NEW minimal AssignmentSurface over the existing-but-uncalled
+submitAssignment api); the step gates on submission server-side; grading stays in the
+Classwork student-work views. Folded in: inline return-feedback in AssessmentWorkView
+(replacing window.prompt) and a cheap studio data cache for back-from-work-item re-entry.
+Files I expect to touch: supabase/migrations/<new>_step_work_links.sql,
+.github/workflows/deploy-backend.yml, supabase/functions/{chat,assessment-admin}/index.ts,
+frontend/src/routes/teacher.curriculum.tsx, frontend/src/features/teacher/
+{TeacherConsole.tsx,AssessmentGrading.tsx}, frontend/src/lib/{api.ts,types.ts},
+frontend/src/student/{StudentApp.tsx,AssignmentSurface.tsx (new),checkpoints.ts?},
+frontend/src/student/Transcript.tsx + useConversation.ts, tests/test_r48*, docs.
+Notes: design being validated by a planning pass; will ship as one PR with migration
+registered in the deploy workflow; edge functions get offline deno check before push.
