@@ -46,6 +46,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Depth 2 so the migration step can diff against the parent commit and skip
+          # the replay on function-only deploys (see that step's comment).
+          fetch-depth: 2
 
       - name: Require access token
         run: |
@@ -63,6 +67,18 @@ jobs:
 
       - name: Apply additive migrations (Management API; idempotent)
         run: |
+          # R50b: function-only pushes skip the replay entirely. The replay exists to
+          # CONVERGE SCHEMA when migrations change; running it on every deploy made
+          # function fixes hostage to the Management API's database/query endpoint,
+          # which timed out (HTTP 544) for three straight attempts on 2026-08-20 and
+          # blocked a functions-only deploy. Manual dispatch and unknown parents still
+          # replay (safe default).
+          if [ "${{ github.event_name }}" = "push" ] && git rev-parse -q --verify HEAD^ >/dev/null 2>&1; then
+            if ! git diff --name-only HEAD^ HEAD | grep -q '^supabase/migrations/'; then
+              echo "No migration changes in this push — skipping the replay."
+              exit 0
+            fi
+          fi
           for f in \
             supabase/migrations/20260629000000_curriculum_authoring.sql \
             supabase/migrations/20260630000000_tutor_pedagogy.sql \
@@ -116,15 +132,24 @@ jobs:
             body="$(mktemp)"
             jq -Rs '{query: .}' "$f" > "$body"
             resp="$(mktemp)"
-            code="$(curl -sS -o "$resp" -w '%{http_code}' \
-              -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
-              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
-              -H "Content-Type: application/json" \
-              --data-binary "@$body")"
-            echo "HTTP $code"
-            cat "$resp"; echo
+            # R50b: the endpoint throws transient gateway timeouts (HTTP 544 observed);
+            # retry each idempotent migration up to 3 times with backoff before failing.
+            code="000"
+            for attempt in 1 2 3; do
+              code="$(curl -sS -o "$resp" -w '%{http_code}' \
+                -X POST "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+                -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data-binary "@$body")"
+              echo "HTTP $code (attempt $attempt)"
+              if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+                break
+              fi
+              cat "$resp"; echo
+              [ "$attempt" -lt 3 ] && sleep $((attempt * 15))
+            done
             if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
-              echo "::error::Migration query failed for $f (HTTP $code)."
+              echo "::error::Migration query failed for $f (HTTP $code) after 3 attempts."
               exit 1
             fi
             echo "Applied $f."
