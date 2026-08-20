@@ -55,7 +55,7 @@ function NavRow({
       <Icon className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {badge ? (
-        <span className="shrink-0 rounded-pill bg-foreground px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums leading-none text-background">
+        <span className="shrink-0 rounded-pill bg-primary px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums leading-none text-primary-foreground">
           {badge > 99 ? "99+" : badge}
         </span>
       ) : null}

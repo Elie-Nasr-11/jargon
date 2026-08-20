@@ -133,3 +133,21 @@ is the ONLY way to draw these controls:
   Watch for min-width:auto — a grid/flex item containing a wide table needs
   `min-w-0` or the table stretches the card past the viewport and clips (the
   pre-R52 gradebook bug).
+
+## 8. R53 amendments — primary chrome, and tables that scroll
+
+- **Primary chrome is the platform blue, not graphite.** `--primary` / `--primary-ink` /
+  `--primary-hover` exist on both ladders (light #4F6BFD, dark #5F76FD, white ink).
+  `.btn-primary`, active tab pills, segmented-control thumbs, count badges, the voice
+  orb, and selected chips all wear it. Graphite (`--foreground`) is TEXT ink only —
+  solid near-black fills read as "dark mode leaking into light" (owner call, 2026-08-20).
+- **The brain on the light ladder**: course hubs fill with their subject hue (the same
+  hue as their neighborhood wash); lesson dust steps one ink tier lighter. Dark keeps
+  the strong-ink coins.
+- **Login speaks the app's language**: page ladder + dot grid, hairline card,
+  `jargon-input` fields, blue primary — the aurora is rationed to one dot in the brand
+  pill and the ambient sits at working-surface intensity (0.16 neutral).
+- **Tables that scroll sideways** (`.table-scroll`): rows inside are full-bleed
+  hairline rows — NEVER rounded row-cards (their borders slice mid-strip at the clip
+  edge). The container paints pure-CSS scroll fades (local covers + scroll shadows);
+  a pinned identity column uses `.table-sticky-cell` (opaque, hairline + soft lip).

@@ -189,7 +189,7 @@ export function AssignmentSurface({ assignmentId, onClose, onFinished }: Assignm
               <button
                 type="button"
                 onClick={() => setConfirmLeave(false)}
-                className="rounded-control bg-foreground px-2.5 py-1 text-meta font-medium text-background"
+                className="rounded-control bg-primary px-2.5 py-1 text-meta font-medium text-primary-foreground"
               >
                 Keep going
               </button>
@@ -247,7 +247,7 @@ export function AssignmentSurface({ assignmentId, onClose, onFinished }: Assignm
               <button
                 type="button"
                 onClick={() => setPhase("writing")}
-                className="mt-5 rounded-control bg-foreground px-3.5 py-2 text-body font-medium text-background"
+                className="mt-5 rounded-control bg-primary px-3.5 py-2 text-body font-medium text-primary-foreground"
               >
                 {latest ? "Submit another version" : "Start working"}
               </button>
@@ -319,7 +319,7 @@ export function AssignmentSurface({ assignmentId, onClose, onFinished }: Assignm
               <button
                 type="button"
                 onClick={onClose}
-                className="mt-5 rounded-control bg-foreground px-3.5 py-2 text-body font-medium text-background"
+                className="mt-5 rounded-control bg-primary px-3.5 py-2 text-body font-medium text-primary-foreground"
               >
                 Done
               </button>
@@ -337,7 +337,7 @@ export function AssignmentSurface({ assignmentId, onClose, onFinished }: Assignm
               type="button"
               onClick={() => void submit()}
               disabled={phase === "submitting" || !canSubmit}
-              className="inline-flex items-center gap-2 rounded-control bg-foreground px-3.5 py-2 text-body font-medium text-background transition-opacity duration-(--dur-fast) disabled:opacity-40"
+              className="inline-flex items-center gap-2 rounded-control bg-primary px-3.5 py-2 text-body font-medium text-primary-foreground transition-opacity duration-(--dur-fast) disabled:opacity-40"
             >
               {phase === "submitting" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Submit

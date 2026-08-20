@@ -112,9 +112,12 @@ class R52StructureTests(unittest.TestCase):
         # People rows: the section picker sits inside the row container now.
         self.assertIn("the section picker lives inside", CONSOLE)
 
-    def test_class_tabs_use_the_dark_active_pill(self):
+    def test_class_tabs_use_the_solid_active_pill(self):
+        # R53 evolved the active pill from graphite to the primary blue (the owner
+        # read the black chrome as "light mode is too dark") — the contract is still
+        # ONE solid active pill, now in primary.
         self.assertIn(
-            '? "border-foreground bg-foreground font-medium text-background"',
+            '? "border-primary bg-primary font-medium text-primary-foreground"',
             CONSOLE,
         )
 

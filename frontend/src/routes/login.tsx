@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import { AmbientCanvas } from "@/components/AmbientCanvas";
-import { GradientCard } from "@/components/GradientCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { prefersReducedMotion } from "@/lib/motion";
 import { fetchPrimaryRole, getSession, roleHomeNav, signIn } from "@/lib/api";
@@ -118,26 +117,36 @@ function LoginPage() {
   const headline = "Learn anything,\nin your own words.".split(" ");
 
   return (
-    <div
-      className="relative min-h-screen overflow-hidden"
-      style={{ background: "var(--background)" }}
-    >
-      {/* The brand moment: full ambient presence, capped at the entry-surface ceiling
-          (DESIGN_V6 §2: up to 0.5 on entry surfaces). hue null = the untinted rainbow —
-          the brand gradient itself, deliberately not pulled toward any single accent. */}
-      <AmbientCanvas intensity={0.5} hue={null} />
+    // R53: the login speaks the same language as the app it opens — the page ladder
+    // (dot-grid background from <body>), hairline card, one blue accent — instead of
+    // the old full-strength rainbow wash. The ambient stays as a whisper at the
+    // working-surface intensity, tinted neutral like the consoles.
+    <div className="relative min-h-screen overflow-hidden">
+      <AmbientCanvas intensity={0.16} hue="--ambient-neutral" />
       <ThemeToggle floating />
       <div
         ref={wrapRef}
         className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-16"
       >
-        <GradientCard pill data-anim="pill">
-          <div className="px-4 py-1.5 text-[13px] leading-none">
-            <span className="grad-text font-medium tracking-tight">Jargon AI tutor</span>
-          </div>
-        </GradientCard>
+        {/* The brand pill: a quiet hairline chip with the aurora rationed to one dot. */}
+        <div
+          data-anim="pill"
+          className="inline-flex items-center gap-2 rounded-pill border border-border bg-depth-card px-4 py-1.5 shadow-card"
+        >
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-full"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--aurora-1), var(--aurora-2), var(--aurora-3))",
+            }}
+          />
+          <span className="text-[13px] font-medium leading-none tracking-tight text-foreground">
+            Jargon AI tutor
+          </span>
+        </div>
 
-        <h1 className="font-serif mt-7 max-w-[820px] text-center text-[44px] leading-[1.05] tracking-tight text-foreground sm:text-[64px]">
+        <h1 className="font-serif mt-7 max-w-[720px] text-center text-[36px] leading-[1.08] tracking-tight text-foreground sm:text-[46px]">
           {headline.map((w, i) => (
             <span key={i} data-anim="word" className="inline-block">
               {w}
@@ -148,13 +157,13 @@ function LoginPage() {
 
         <p
           data-anim="sub"
-          className="mt-5 max-w-md text-center text-[15px] leading-relaxed text-muted-foreground"
+          className="mt-4 max-w-md text-center text-[15px] leading-relaxed text-muted-foreground"
         >
           Hyper-personal lessons that meet you where you are. One conversation at a time.
         </p>
 
-        <div data-anim="card" className="mt-12 w-full max-w-[400px]">
-          <GradientCard className="shadow-raised">
+        <div data-anim="card" className="mt-10 w-full max-w-[400px]">
+          <div className="rounded-card border border-border bg-depth-card shadow-raised">
             <form onSubmit={onSubmit} className="space-y-5 p-7">
               <div>
                 <label className="text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -166,7 +175,7 @@ function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@somewhere.com"
-                  className="mt-1.5 w-full border-b border-border bg-transparent py-2 text-[15px] outline-none placeholder:text-muted-foreground/60 focus:border-foreground transition-colors"
+                  className="jargon-input mt-1.5 w-full text-[15px]"
                 />
               </div>
               <div>
@@ -180,14 +189,14 @@ function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="jargon123"
-                    className="w-full border-b border-border bg-transparent py-2 pr-9 text-[15px] outline-none placeholder:text-muted-foreground/60 focus:border-foreground transition-colors"
+                    className="jargon-input w-full pr-10 text-[15px]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     aria-pressed={showPassword}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:text-foreground"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:text-foreground"
                   >
                     {showPassword ? (
                       <EyeOff className="h-[16px] w-[16px]" strokeWidth={1.6} />
@@ -257,7 +266,7 @@ function LoginPage() {
                 ) : null}
               </div>
             </form>
-          </GradientCard>
+          </div>
         </div>
       </div>
     </div>

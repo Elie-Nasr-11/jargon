@@ -310,7 +310,7 @@ export function ChatDock({ children }: { children: ReactNode }) {
         type="button"
         onClick={() => setCollapsed(false)}
         aria-label="Open the conversation"
-        className="absolute bottom-4 right-4 z-[var(--z-header)] flex h-11 w-11 items-center justify-center rounded-full border border-border bg-foreground text-background transition-transform duration-(--dur-fast) hover:scale-105"
+        className="absolute bottom-4 right-4 z-[var(--z-header)] flex h-11 w-11 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground transition-transform duration-(--dur-fast) hover:scale-105"
       >
         <MessageCircle className="h-[18px] w-[18px]" strokeWidth={1.7} />
       </button>

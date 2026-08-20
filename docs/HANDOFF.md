@@ -11192,3 +11192,30 @@ where markup is pinned), docs/DESIGN_V6.md addendum.
 Notes: audit-first — screenshotting the live surfaces at 1440px and ~820px against
 the mock before changing anything. Pin suite is markup-sensitive; run it per file
 swept.
+
+## Claude -> Codex / Human - 2026-08-20 19:55
+
+Status: Finished
+Summary: R53 — light-mode revision. Primary interactive chrome moved from graphite to
+the platform blue on both ladders (new --primary tokens; .btn-primary, workspace tabs,
+class-header pills, sidebar badge, mentor pace thumb, student work-surface actions,
+voice orb, media Run button, selected chips). Brain course hubs now carry their
+subject hue in light mode; lesson dust one tier lighter. Login rebuilt on the platform
+language (dot grid, hairline card, jargon-input fields, aurora rationed to one dot,
+ambient 0.16). Gradebook rows de-carded to hairline rows with .table-sticky-cell
+pinned Student column; .table-scroll paints pure-CSS scroll fades so sideways scroll
+clips cleanly.
+Files changed: frontend/src/styles.css, components/WorkspaceTabs.tsx,
+routes/login.tsx, routes/teacher.curriculum.tsx, student/BrainGraph.tsx,
+student/{AssessmentSurface,AssignmentSurface,VoicePanel,MediaStage,Transcript}.tsx,
+features/teacher/TeacherConsole.tsx, features/teacher/shell/TeacherSidebar.tsx,
+features/student/MentorControls.tsx, tests/test_r53_light_polish.py (13 pins),
+tests/test_r52_ui_consolidation.py (one pin re-anchored), docs.
+Tests run: python pin suite 880 OK; tsc clean; eslint clean on changed files;
+light+dark Playwright screenshots (login, student home + brain, chat, teacher
+classwork/grades, admin, narrow gradebook scrolled both themes).
+Remaining concerns: none blocking. The scroll-fade trick needs transparent row
+backgrounds — enforced by the hairline-row rule; if a future table reintroduces
+opaque row fills the fades vanish silently. GradientCard is still used by ModalCard
+(kept deliberately).
+Suggested next task: owner's demo prep.
