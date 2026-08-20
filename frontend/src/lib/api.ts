@@ -64,6 +64,8 @@ import type {
   AdminScopeResult,
   AdminSeedResponse,
   AdminSeedUser,
+  ClassSnapshotExport,
+  PilotReadiness,
   MentorPreferences,
   Profile,
   QuizAttempt,
@@ -1136,6 +1138,143 @@ export async function fetchActiveSessions(accessToken: string): Promise<ActiveSe
   const data = await invokeAdminOps({ accessToken, action: "list_active_sessions" });
   const sessions = data.data?.sessions;
   return Array.isArray(sessions) ? (sessions as ActiveSession[]) : [];
+}
+
+// R51 admin window: thin wrappers over the long-deployed admin-ops management
+// actions. Every mutation response carries the refreshed scope, so callers update
+// state from the return value instead of re-fetching list_admin_scope.
+function adminScopeFromResponse(data: AdminOpsResponse): AdminScopeResult {
+  if (!data.data?.scope || !data.data.actor_access) {
+    throw new Error("Admin response was missing the refreshed scope.");
+  }
+  return { actorAccess: data.data.actor_access, scope: data.data.scope };
+}
+
+export async function fetchPilotReadiness(accessToken: string): Promise<{
+  actorAccess: AdminActorAccess;
+  scope: AdminScopeResult["scope"];
+  readiness: PilotReadiness;
+}> {
+  const data = await invokeAdminOps({ accessToken, action: "list_pilot_readiness" });
+  if (!data.data?.readiness || !data.data.actor_access || !data.data.scope) {
+    throw new Error("Pilot readiness response was missing data.");
+  }
+  return {
+    actorAccess: data.data.actor_access,
+    scope: data.data.scope,
+    readiness: data.data.readiness,
+  };
+}
+
+export async function adminResetUserPassword(
+  accessToken: string,
+  userId: string,
+  temporaryPassword: string,
+): Promise<AdminScopeResult> {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "reset_user_password",
+    userId,
+    temporaryPassword,
+  });
+  return adminScopeFromResponse(data);
+}
+
+export async function adminSetMembershipStatus(
+  accessToken: string,
+  input: {
+    membershipType: "organization" | "class";
+    membershipId: string;
+    status: "active" | "invited" | "disabled" | "removed";
+  },
+): Promise<AdminScopeResult> {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "update_membership_status",
+    membershipId: input.membershipId,
+    status: input.status,
+    payload: { membership_type: input.membershipType },
+  });
+  return adminScopeFromResponse(data);
+}
+
+export async function adminSetMembershipRole(
+  accessToken: string,
+  input: {
+    membershipType: "organization" | "class";
+    membershipId: string;
+    role: "student" | "teacher" | "org_admin";
+  },
+): Promise<AdminScopeResult> {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "update_membership_role",
+    membershipId: input.membershipId,
+    role: input.role,
+    payload: { membership_type: input.membershipType },
+  });
+  return adminScopeFromResponse(data);
+}
+
+export async function adminAddUserToClass(
+  accessToken: string,
+  input: {
+    organizationId: string;
+    classId: string;
+    userId: string;
+    role: "student" | "teacher";
+  },
+): Promise<AdminScopeResult> {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "add_existing_user_to_class",
+    organizationId: input.organizationId,
+    classId: input.classId,
+    userId: input.userId,
+    role: input.role,
+  });
+  return adminScopeFromResponse(data);
+}
+
+export async function adminCreateClass(
+  accessToken: string,
+  input: { organizationId: string; name: string },
+): Promise<AdminScopeResult> {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "create_class",
+    organizationId: input.organizationId,
+    payload: { name: input.name },
+  });
+  return adminScopeFromResponse(data);
+}
+
+export async function adminUpdateClass(
+  accessToken: string,
+  input: { classId: string; name?: string; status?: "active" | "archived" },
+): Promise<AdminScopeResult> {
+  const data = await invokeAdminOps({
+    accessToken,
+    action: "update_class",
+    classId: input.classId,
+    payload: {
+      ...(input.name ? { name: input.name } : {}),
+      ...(input.status ? { status: input.status } : {}),
+    },
+  });
+  return adminScopeFromResponse(data);
+}
+
+export async function adminExportClassSnapshot(
+  accessToken: string,
+  classId: string,
+): Promise<ClassSnapshotExport> {
+  const data = await invokeAdminOps({ accessToken, action: "export_class_snapshot", classId });
+  const exported = data.data?.export;
+  if (!exported?.body || !exported.filename) {
+    throw new Error("Class snapshot export returned no file.");
+  }
+  return exported;
 }
 
 function campusLiveUrlFromResourceSettings(value: unknown): string {

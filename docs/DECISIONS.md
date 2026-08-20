@@ -1244,3 +1244,32 @@ every curriculum-admin WRITE on shared content crashed this way, not just + Less
 - Related: the deploy smoke check earned its keep on its FIRST run — it caught
   curriculum-admin answering 500 to an anon probe ("Forbidden" fell through the status
   ladder), fixed forward as PR #33 (Forbidden → 403).
+
+## 2026-08-20 — R51: the admin window grows management tabs (over dormant admin-ops)
+
+- The admin-ops edge function has shipped a full management suite since the pilot
+  rounds — reset_user_password, update_membership_status/role,
+  add_existing_user_to_class, create_class/update_class, list_pilot_readiness,
+  export_class_snapshot — but the 2026-07-30 MVP strip cut the portal down to
+  Seeding + Live + Cost, leaving those actions with zero UI. R51 adds the UI only:
+  Overview (headline stats, per-class readiness, audit feed), People (org roster
+  with search/filters; reset password, org role, disable/enable, class membership),
+  Classes (create/rename/archive, readiness badges, roster, CSV snapshot export).
+  No backend or migration changes; nothing to deploy but the frontend.
+- Scope updates ride the mutation responses: every admin-ops write already answers
+  with the refreshed scope, so panels apply it via one callback instead of
+  re-fetching list_admin_scope after each action.
+- Guards mirror the backend instead of discovering it: org admins see no org-role
+  editor (the backend forbids it), you cannot disable or re-role your own account,
+  class removal is a status flip to "removed", archive is a status flip to
+  "archived" with a Restore path. Destructive-ish actions use the two-click inline
+  ConfirmButton — no window.confirm (R47 rule).
+- Fixed with it: org admins used to get a BLANK Seeding tab (the tab rendered for
+  both levels, the panel body was platform-gated). The panel now renders for both;
+  the demo-logins section inside stays platform-only.
+- Default landing tab changed live -> overview; stale ?tab= deep links fall back to
+  Overview. The Live fleet poll now also runs while Overview is open (it shows the
+  same live count).
+- Select widths inside admin panels use the !w-[..] important modifier: the
+  .jargon-input component class (width:100%) is declared after Tailwind's
+  utilities in the compiled CSS, so plain w-[..] loses the cascade to it.

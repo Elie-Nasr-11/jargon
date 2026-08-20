@@ -52,6 +52,10 @@ const TAB_ICONS: Record<string, LucideIcon> = {
   cost: DollarSign,
   ops: Settings,
   seeding: UserPlus,
+  // R51 admin tabs
+  people: Users,
+  classes: GraduationCap,
+  live: Activity,
 };
 
 export function WorkspaceTabList({

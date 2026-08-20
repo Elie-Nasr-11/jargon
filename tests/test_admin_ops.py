@@ -1,8 +1,8 @@
-"""Trimmed 2026-07-30: the 7-tab admin operations dashboard (Readiness, School
-data, Integrations, Operations, CSV import/export, retention/consent) was cut to
-three MVP tabs — Seeding, Live, Cost & runtime — in the MVP strip (see
-docs/MVP_SCOPE.md §1). The admin-ops edge function keeps every action (dormant
-subset), so all server-side scoping/audit/no-plaintext-password pins survive."""
+"""Trimmed 2026-07-30 to three MVP tabs (Seeding, Live, Cost & runtime); R51
+(2026-08-20) grew the portal back over the dormant admin-ops actions: Overview,
+People (reset password / role / status / class membership), and Classes
+(create / rename / archive, readiness badges, CSV snapshot export). The
+server-side scoping/audit/no-plaintext-password pins survive both eras."""
 from pathlib import Path
 import unittest
 
@@ -99,14 +99,23 @@ class AdminOpsStaticTests(unittest.TestCase):
         self.assertNotIn("admin_account_seed_entries", reset_section)
 
     def test_frontend_exposes_admin_ops_without_service_role(self):
-        # MVP wrapper surface: scope + cost dashboard + live sessions only
-        # (pilot-readiness and snapshot-export wrappers were cut with their tabs).
+        # R51 wrapper surface: the original reads plus the management actions the
+        # People/Classes tabs drive. All go through invokeAdminOps (user JWT);
+        # nothing in the frontend touches the service role.
         self.assertIn('"admin-ops"', self.supabase)
         self.assertIn('functionUrl("admin-ops")', self.api)
         self.assertIn("invokeAdminOps", self.api)
         self.assertIn("fetchAdminScope", self.api)
         self.assertIn("fetchCostModelDashboard", self.api)
         self.assertIn("fetchActiveSessions", self.api)
+        self.assertIn("fetchPilotReadiness", self.api)
+        self.assertIn("adminResetUserPassword", self.api)
+        self.assertIn("adminSetMembershipStatus", self.api)
+        self.assertIn("adminSetMembershipRole", self.api)
+        self.assertIn("adminAddUserToClass", self.api)
+        self.assertIn("adminCreateClass", self.api)
+        self.assertIn("adminUpdateClass", self.api)
+        self.assertIn("adminExportClassSnapshot", self.api)
         self.assertIn("AdminActorAccess", self.types)
         self.assertIn("AdminScope", self.types)
         self.assertIn("CostModelDashboard", self.types)
@@ -123,15 +132,30 @@ class AdminOpsStaticTests(unittest.TestCase):
         self.assertIn("Completed lessons", export_section)
         self.assertIn("Open alerts", export_section)
 
-    def test_admin_route_keeps_three_mvp_tabs(self):
-        # The MVP admin is exactly Seeding + Live + (platform-admin only) Cost & runtime,
-        # with stale ?tab= deep links falling back to a tab every admin level can see.
+    def test_admin_route_tabs(self):
+        # R51 admin tab set: Overview / People / Classes (management over admin-ops)
+        # plus the original Seeding + Live + (platform-admin only) Cost & runtime,
+        # with stale ?tab= deep links falling back to Overview, which every admin
+        # level can see.
         for fragment in (
+            'const visibleTabs = isPlatformLevel\n'
+            '    ? ["overview", "people", "classes", "seeding", "live", "cost"]\n'
+            '    : ["overview", "people", "classes", "seeding", "live"];',
+            'search.tab && visibleTabs.includes(search.tab) ? search.tab : "overview"',
+            '<WorkspaceTab value="overview">Overview</WorkspaceTab>',
+            '<WorkspaceTab value="people">People</WorkspaceTab>',
+            '<WorkspaceTab value="classes">Classes</WorkspaceTab>',
+            # The R51 panels mount inside the org-scoped tab frame.
+            "<OverviewPanel",
+            "<PeoplePanel",
+            "<ClassesPanel",
             '<WorkspaceTab value="seeding">Seeding</WorkspaceTab>',
             '<WorkspaceTab value="live">Live</WorkspaceTab>',
             '<WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>',
-            'const visibleTabs = isPlatformLevel ? ["seeding", "live", "cost"] : ["seeding", "live"];',
-            # Seeding tab: roster seeding via the admin-seed edge fn; passwords never persist.
+            # Seeding tab: roster seeding via the admin-seed edge fn; passwords never
+            # persist. R51: the panel renders for BOTH admin levels (org admins used to
+            # get a blank tab because the panel body was platform-gated).
+            '<WorkspacePanel value="seeding">',
             "invokeAdminSeed",
             "Seed classroom",
             "Passwords are sent only to Supabase Auth and are not stored in Jargon tables.",

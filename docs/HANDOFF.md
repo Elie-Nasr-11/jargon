@@ -11115,3 +11115,42 @@ machinery exists; needs a unit-id mapping from the copy). The old-copy banner th
 owner saw stays dismissible client state — a Refresh clears it.
 Suggested next task: owner retries + Lesson on the shared book (expect the designed
 message + working Duplicate), then decide on auto-fork vs. guided fork.
+
+## Claude -> Codex / Human - 2026-08-20 18:30
+
+Status: Finished (R51 pending merge)
+Summary: Admin window management round. Three new tabs over the long-deployed
+admin-ops actions — Overview (stats, per-class readiness, audit feed), People
+(search/filter roster; reset password, org role, disable/enable, add/remove class
+membership), Classes (create/rename/archive, readiness badges, roster, CSV
+export) — plus the org-admin blank Seeding tab fix. Frontend-only.
+Files changed: frontend/src/routes/admin.tsx, frontend/src/lib/api.ts,
+frontend/src/features/admin/* (new: adminData, OverviewPanel, PeoplePanel,
+ClassesPanel, ConfirmButton), frontend/src/components/WorkspaceTabs.tsx,
+tests/test_r51_admin_window.py (new), tests/test_admin_ops.py (tab pin evolved),
+docs.
+Tests run: 858 pin tests OK; tsc + eslint clean; offline harness verify_r51.mjs
+19/19 (platform-admin flows end-to-end + org-admin gates) against a mock that now
+implements admin-ops.
+Remaining concerns: class-role editing (student<->teacher within one class) has
+backend support but no UI — People edits org role only; CSV roster import
+(preview_csv_import/apply) also remains UI-less, the Seeding paste flow covers it
+for now. The cost tab still keys off list_cost_model_dashboard's stored-events
+estimates, not billing truth.
+Suggested next task: demo prep — seed a clean demo org via the Demo-entry button,
+walk the owner's script (student lesson -> teacher grade -> admin overview), and
+fix whatever the walkthrough surfaces.
+
+## Claude -> Codex / Human - 2026-08-20 17:58
+
+Status: Starting
+Task: R51 — admin window functionality. Add Overview / People / Classes tabs to the
+/admin + /platform portal, all over EXISTING deployed admin-ops actions (reset password,
+membership status/role, add-to-class, create/update class, pilot readiness, class
+snapshot CSV). Fix the org-admin Seeding tab rendering blank (panel is platform-gated
+behind an ungated tab). Frontend-only; no backend or migration changes.
+Files I expect to touch: frontend/src/routes/admin.tsx, frontend/src/lib/api.ts,
+frontend/src/features/admin/* (new), tests/test_r51_admin_window.py (new), docs.
+Notes: admin-ops already returns refreshed scope on every mutation — panels update
+state from responses instead of refetching. Owner approved all three tabs; demo prep
+follows this round.
