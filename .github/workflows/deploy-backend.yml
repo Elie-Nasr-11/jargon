@@ -149,3 +149,36 @@ jobs:
           # artifact-live: P8 live mentor-generated artifacts — student-JWT identity,
           # service-role writes (student_private lesson_resources rows + storage).
           supabase functions deploy artifact-live --project-ref "$PROJECT_REF"
+
+      - name: Smoke-check deployed functions answer typed responses
+        run: |
+          # Incident guard (Aug 16–20 chat outage): a deploy left the chat function
+          # answering bare runtime 500s on every POST — no function logs, no telemetry,
+          # nothing red anywhere — until a student hit it days later. A broken-on-arrival
+          # function must fail THIS run instead: a garbage POST has to come back as the
+          # function's own TYPED JSON refusal (4xx), never a bare 5xx / non-JSON body.
+          ANON_KEY="$(curl -sS "https://api.supabase.com/v1/projects/${PROJECT_REF}/api-keys" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            | jq -r '.[] | select(.name == "anon") | .api_key')"
+          if [ -z "$ANON_KEY" ] || [ "$ANON_KEY" = "null" ]; then
+            echo "::error::Could not resolve the anon key for the smoke check."
+            exit 1
+          fi
+          for fn in chat assessment-admin curriculum-admin; do
+            resp="$(mktemp)"
+            code="$(curl -sS -o "$resp" -w '%{http_code}' \
+              -X POST "https://${PROJECT_REF}.supabase.co/functions/v1/${fn}" \
+              -H "Authorization: Bearer ${ANON_KEY}" \
+              -H "Content-Type: application/json" \
+              --data '"not-an-object"')"
+            body="$(cat "$resp")"
+            echo "${fn}: HTTP ${code} — ${body:0:200}"
+            if [ "$code" -ge 500 ] || [ "$code" -lt 200 ]; then
+              echo "::error::${fn} answered HTTP ${code} to the smoke probe — the deployed function is not serving."
+              exit 1
+            fi
+            if ! echo "$body" | jq -e . > /dev/null 2>&1; then
+              echo "::error::${fn} smoke response is not JSON — a bare runtime answer, not the function's typed refusal."
+              exit 1
+            fi
+          done

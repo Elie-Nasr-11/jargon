@@ -11051,3 +11051,31 @@ double-gating (step on submission, lesson end on completion for required work) i
 deliberate and documented in DECISIONS.
 Suggested next task: owner walkthrough of an end-to-end step-work lesson on prod; then
 either enforcing result_release_policy or the notifications audit.
+
+## Claude -> Codex / Human - 2026-08-20 09:20
+
+Status: Finished (R49 pending merge)
+Summary: Field-feedback triage. (1) Diagnosed the "starting a lesson is glitching"
+report as a FOUR-DAY chat outage (bare runtime 500s since Aug 16 14:19 UTC, zero logs/
+telemetry/turns; the tester's Aug 20 05:19-05:32 attempts were the first traffic since).
+Already healed by the R48 redeploy; verified end-to-end via a throwaway student through
+pg_net (JSON + SSE turns 200 on camp-math-l3, telemetry writing; user fully torn down).
+Guards: deploy-backend.yml now smoke-checks freshly deployed fns (typed 4xx JSON
+required, bare 5xx fails the run); chat's catch paths console.error synchronously.
+Anthropic key probed healthy (ops-probe-r49, to be retired to an inert stub post-merge).
+(2) Unit-circle video: case-garbled id fixed in prod + full YouTube sweep found one more
+dead id (camp-math-l5) — both replaced with oEmbed-verified Khan Academy videos.
+(3) Sign-in lands on Home (?section=home via new roleHomeNav; all 5 redirect call sites);
+bare /learn unchanged.
+Files changed: frontend/src/lib/api.ts, frontend/src/routes/{login,index,admin}.tsx,
+frontend/src/features/teacher/TeacherConsole.tsx, supabase/functions/chat/index.ts,
+.github/workflows/deploy-backend.yml, tests/test_r49_field_fixes.py (new), docs.
+Tests run: 836 pin tests OK; tsc/eslint clean; yml parses; esbuild + offline deno
+differential clean (same 8 pre-existing chat errors); harness spot-check 4/4 (student
+sign-in → Home/Overview with content, bare /learn keeps Learn, teacher → /teacher).
+Remaining concerns: the outage's root cause is INFERRED (broken deployed build cleared
+by redeploy) — v102's artifact is gone, so the smoke check is the real defense; the
+admin-ops 403s at 05:12 (demo-teacher poking an admin surface) are unexamined; prod data
+edits (two video urls) bypassed the studio deliberately.
+Suggested next task: owner confirms the three reports are resolved on prod; then either
+result_release_policy enforcement or the notifications audit.

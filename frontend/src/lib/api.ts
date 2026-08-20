@@ -324,6 +324,18 @@ export function roleHome(role: PrimaryRole): "/learn" | "/teacher" | "/admin" | 
   return "/learn";
 }
 
+// R49 (tester feedback): SIGNING IN lands on Home — the overview — not mid-conversation.
+// Every role-home redirect goes through this; students get ?section=home stamped on the
+// target. Bare /learn deep links keep meaning the conversation (absent section = Learn
+// stays the in-app default) — only the sign-in/role redirects opt into Home.
+export function roleHomeNav(role: PrimaryRole): {
+  to: ReturnType<typeof roleHome>;
+  search?: { section: "home" };
+} {
+  const to = roleHome(role);
+  return to === "/learn" ? { to, search: { section: "home" } } : { to };
+}
+
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;

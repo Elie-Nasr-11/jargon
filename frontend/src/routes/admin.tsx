@@ -20,7 +20,7 @@ import { RouteLoader } from "@/components/RouteLoader";
 import {
   fetchAdminScope,
   fetchTeacherClasses,
-  roleHome,
+  roleHomeNav,
   fetchCostModelDashboard,
   fetchActiveSessions,
   getSession,
@@ -238,7 +238,7 @@ export function AdminPage() {
           // dead "admins only" page.
           const classes = await fetchTeacherClasses(session.user.id).catch(() => [] as unknown[]);
           const role = Array.isArray(classes) && classes.length > 0 ? "teacher" : "student";
-          navigate({ to: roleHome(role), replace: true });
+          navigate({ ...roleHomeNav(role), replace: true });
           return;
         }
         void refreshCostDashboard(session.access_token, true);
