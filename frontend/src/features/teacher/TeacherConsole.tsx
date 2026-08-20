@@ -83,7 +83,7 @@ import {
   getLessonResourceSignedUrl,
   getSession,
   fetchPrimaryRole,
-  roleHome,
+  roleHomeNav,
   heartbeatLiveSessionViewer,
   sendTeacherLiveComment,
   startLiveSessionViewer,
@@ -179,7 +179,7 @@ export function TeacherConsole() {
         const role = await fetchPrimaryRole(session.access_token, session.user.id);
         if (!alive) return;
         if (role !== "teacher") {
-          navigate({ to: roleHome(role), replace: true });
+          navigate({ ...roleHomeNav(role), replace: true });
           return;
         }
         setAuth({ id: session.user.id, email: session.user.email || "" });

@@ -1195,3 +1195,32 @@ assessment-mode lesson step no longer merely *frames* work — it IS the work.
   lesson. Form default `required:false` stays.
 - Debt carried: `result_release_policy` stored but never enforced; work items created
   from steps notify students only through the existing assignment/assessment writers.
+
+## 2026-08-20 - R49: Field-feedback triage (sign-in → Home; dead videos; the chat outage)
+
+Tester feedback (owner-forwarded screenshot, 8:22 AM Beirut) surfaced three issues.
+
+- **"Starting a lesson is glitching" was a FOUR-DAY total chat outage, not a glitch.**
+  Every chat POST since Aug 16 14:19 UTC answered a bare runtime 500 in under a second —
+  no function logs, no telemetry row, no persisted turn (last successful turn: Aug 16
+  14:13; the tester's 21 attempts on Aug 20 05:19–05:32 were the first traffic since).
+  The R36 note in api.ts observed this exact signature live on Aug 16 and mitigated with
+  client retries, believing it transient worker churn; it was actually a broken deployed
+  function build. The R48 redeploy (Aug 20 06:56 UTC) replaced it; verified healthy
+  end-to-end afterwards with a throwaway student via pg_net (created and torn down in
+  the DB): JSON turn + SSE turn both 200 on the tester's own lesson, telemetry writing
+  again. Guards shipped: the deploy workflow now SMOKE-CHECKS freshly deployed functions
+  (a garbage POST must return the function's typed JSON refusal; a bare 5xx fails the
+  run), and the chat function's catch paths console.error synchronously so the next
+  post-mortem has evidence in function_logs even when background telemetry can't flush.
+  The Anthropic key was probed and is healthy (both chat models answer).
+- **The Unit-circle video was a case-garbled YouTube id** (`1m9p9iubmLU` vs the real
+  `1m9p9iubMLU`) from the Aug-4 campus seeding; a sweep of all nine YouTube resources
+  found ONE more dead id (camp-math-l5, "transforming trig graphs"). Both replaced in
+  prod with oEmbed-VERIFIED Khan Academy videos ("Introduction to the unit circle";
+  "Midline, amplitude and period"). Rule going forward: never write a YouTube id
+  without an oEmbed 200 + title check — ids are case-sensitive and hallucination-prone.
+- **Sign-in lands on Home.** Every role-home redirect rides the new roleHomeNav helper,
+  which stamps `?section=home` for students (the sidebar's "Overview" row). Bare /learn
+  deep links keep meaning the conversation — only sign-in/role redirects opt into Home;
+  the R42 "conversation is the default" decision stands inside the app.

@@ -8505,6 +8505,11 @@ async function handleTypedRequest(
     if (wantsStream) return sseResponse(finishTurn);
     return await finishTurn(null);
   } catch (err) {
+    // R49: ALSO log to the function console. During the Aug 16–20 chat outage the only
+    // failure signal was the telemetry row — and background writes don't flush when the
+    // worker dies right after responding, so the incident left NOTHING in any log.
+    // console.error lands in function_logs synchronously.
+    console.error("chat_turn_failed", errorMessage(err));
     scheduleBackground(
       recordRuntimeEvent(config, {
         userId,
@@ -8546,6 +8551,9 @@ const chatRequestHandler = async (req: Request) => {
     const record = body as Record<string, unknown>;
     return await handleTypedRequest(req, record);
   } catch (err) {
+    // R49: see the inner catch — a throw this early has no telemetry writer at all,
+    // so the console line is the only evidence a post-mortem gets.
+    console.error("chat_request_failed", errorMessage(err));
     return typedError(errorMessage(err), 500);
   }
 };

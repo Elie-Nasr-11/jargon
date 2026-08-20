@@ -6,7 +6,7 @@ import { AmbientCanvas } from "@/components/AmbientCanvas";
 import { GradientCard } from "@/components/GradientCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { prefersReducedMotion } from "@/lib/motion";
-import { fetchPrimaryRole, getSession, roleHome, signIn } from "@/lib/api";
+import { fetchPrimaryRole, getSession, roleHomeNav, signIn } from "@/lib/api";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -39,7 +39,7 @@ function LoginPage() {
       .then(async (session) => {
         if (!alive || !session) return;
         const role = await fetchPrimaryRole(session.access_token, session.user.id);
-        if (alive) navigate({ to: roleHome(role), replace: true });
+        if (alive) navigate({ ...roleHomeNav(role), replace: true });
       })
       .catch(() => {
         // Stay on the login page; the submit action will surface auth errors.
@@ -97,7 +97,7 @@ function LoginPage() {
         ? await fetchPrimaryRole(session.access_token, session.user.id)
         : "student";
       if (prefersReducedMotion()) {
-        navigate({ to: roleHome(role) });
+        navigate(roleHomeNav(role));
       } else {
         gsap.to(wrapRef.current, {
           opacity: 0,
@@ -105,7 +105,7 @@ function LoginPage() {
           duration: 0.35,
           ease: "power2.in",
           onComplete: () => {
-            navigate({ to: roleHome(role) });
+            navigate(roleHomeNav(role));
           },
         });
       }
