@@ -1290,7 +1290,7 @@ export function Transcript({
                             key={value || choiceLabel(choice)}
                             className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-body ${
                               picked
-                                ? "border-foreground/50 bg-foreground/10 font-medium text-foreground"
+                                ? "border-primary/50 bg-primary/10 font-medium text-foreground"
                                 : "border-border/60 text-muted-foreground opacity-70"
                             }`}
                           >

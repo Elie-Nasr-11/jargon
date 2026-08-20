@@ -24,8 +24,10 @@
      existing palette so Button/Card/Badge/Input render correctly. */
   --color-input: var(--border);
   --color-ring: var(--ring);
-  --color-primary: var(--emphasis);
-  --color-primary-foreground: var(--background);
+  /* R53: primary = the platform blue (was near-black emphasis). bg-primary /
+     text-primary-foreground now paint the blue chrome on every primitive. */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-ink);
   --color-secondary: var(--surface);
   --color-secondary-foreground: var(--foreground);
   --color-accent: var(--surface-hover);
@@ -124,6 +126,14 @@
 
   /* "live / current" marker — the lesson blue (the cursor-tag hue) */
   --accent-text: #4f6bfd;
+
+  /* R53 — primary interactive chrome. The owner's light-mode read: near-black pills
+     everywhere made the whole theme feel dark. Primary actions and active states now
+     carry the platform blue on BOTH ladders (one product, one accent); graphite stays
+     for TEXT ink only. */
+  --primary: #4f6bfd;
+  --primary-ink: #ffffff;
+  --primary-hover: #3d55e8;
 
   /* code palette (board 5c: white block, hairline, Geist Mono; command #3D55E8) */
   --code-background: #ffffff;
@@ -252,6 +262,11 @@
 
   /* "live / current" marker (lighter blue reads on charcoal) */
   --accent-text: #7d8ffd;
+
+  /* R53 primary chrome (dark): a slightly lifted blue so the pill reads on charcoal. */
+  --primary: #5f76fd;
+  --primary-ink: #ffffff;
+  --primary-hover: #7d8ffd;
 
   /* focus ring (dark) */
   --ring: rgba(242, 242, 245, 0.45);
@@ -623,10 +638,11 @@ body {
   padding: 0.42rem;
 }
 .btn-primary {
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--primary);
+  color: var(--primary-ink);
 }
 .btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
   transform: translateY(-1px);
 }
 .btn-secondary {
@@ -657,10 +673,44 @@ body {
 
 /* R52: every real <table> lives inside one of these — the table keeps its natural
    min-width and SCROLLS inside its card on narrow viewports instead of clipping
-   (the gradebook used to cut its action column off-screen at tablet widths). */
+   (the gradebook used to cut its action column off-screen at tablet widths).
+   R53: clean clip — rows inside a scroller must be full-bleed hairline rows (never
+   rounded row-cards, whose borders slice mid-strip at the clip edge), and the
+   container itself signals "more content this way" with pure-CSS scroll fades:
+   the `local` cover layers ride the content and hide the `scroll` shadow layers
+   whenever that end of the table is fully in view. Rows need transparent
+   backgrounds for the fades to show — another reason row-cards are banned here. */
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-control);
+  background:
+    linear-gradient(90deg, var(--depth-card) 40%, transparent) left/26px 100% no-repeat local,
+    linear-gradient(270deg, var(--depth-card) 40%, transparent) right/26px 100% no-repeat local,
+    linear-gradient(90deg, rgb(0 0 0 / 0.09), transparent) left/13px 100% no-repeat scroll,
+    linear-gradient(270deg, rgb(0 0 0 / 0.09), transparent) right/13px 100% no-repeat scroll;
+}
+.dark .table-scroll {
+  background:
+    linear-gradient(90deg, var(--depth-card) 40%, transparent) left/26px 100% no-repeat local,
+    linear-gradient(270deg, var(--depth-card) 40%, transparent) right/26px 100% no-repeat local,
+    linear-gradient(90deg, rgb(0 0 0 / 0.4), transparent) left/13px 100% no-repeat scroll,
+    linear-gradient(270deg, rgb(0 0 0 / 0.4), transparent) right/13px 100% no-repeat scroll;
+}
+/* A column pinned inside a .table-scroll (the gradebook's Student column): opaque
+   card surface plus a soft right-edge lip so scrolled cells visibly pass beneath it. */
+.table-sticky-cell {
+  position: sticky;
+  left: 0;
+  background: var(--depth-card);
+  box-shadow:
+    inset -1px 0 0 var(--border),
+    6px 0 12px -8px rgb(0 0 0 / 0.28);
+}
+/* Keep the pinned cell in step with its row's translucent hover tint — it must stay
+   opaque (cells scroll beneath it), so it mixes the same tint over the card surface. */
+tbody tr:hover > .table-sticky-cell {
+  background: color-mix(in oklab, var(--muted) 50%, var(--depth-card));
 }
 
 /* Touch devices: keep every focusable form field at >=16px so mobile Safari does

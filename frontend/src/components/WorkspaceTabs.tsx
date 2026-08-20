@@ -84,7 +84,7 @@ export function WorkspaceTab({ value, children }: { value: string; children: Rea
   return (
     <TabsTrigger
       value={value}
-      className="inline-flex items-center gap-1.5 rounded-pill whitespace-nowrap px-3.5 py-1.5 text-body font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-none"
+      className="inline-flex items-center gap-1.5 rounded-pill whitespace-nowrap px-3.5 py-1.5 text-body font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
     >
       {Icon ? <Icon className="h-3.5 w-3.5" strokeWidth={1.7} /> : null}
       {children}

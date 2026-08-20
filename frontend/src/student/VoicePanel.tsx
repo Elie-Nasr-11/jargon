@@ -457,7 +457,7 @@ export function VoicePanel({
             onClose?.();
           }}
           aria-label="Close voice mode"
-          className="inline-flex items-center gap-2 rounded-pill bg-foreground px-4 py-2 text-meta font-medium text-background transition-opacity duration-(--dur-fast) hover:opacity-90"
+          className="inline-flex items-center gap-2 rounded-pill bg-primary px-4 py-2 text-meta font-medium text-primary-foreground transition-opacity duration-(--dur-fast) hover:opacity-90"
         >
           <Square className="h-3.5 w-3.5" strokeWidth={2} fill="currentColor" />{" "}
           {status === "live" || status === "connecting" ? "Stop" : "Close"}

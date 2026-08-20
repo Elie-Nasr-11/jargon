@@ -106,7 +106,7 @@ export function MentorGroup({
         <div
           ref={pillRef}
           aria-hidden
-          className="absolute left-0 top-[3px] h-[calc(100%-6px)] rounded-full bg-foreground"
+          className="absolute left-0 top-[3px] h-[calc(100%-6px)] rounded-full bg-primary"
           style={{ width: 0, willChange: "transform, width" }}
         />
         {options.map((opt, i) => {
@@ -120,7 +120,7 @@ export function MentorGroup({
               }}
               onClick={() => onSelect(opt)}
               className={`relative z-10 flex-1 rounded-full px-2.5 py-2.5 text-[13px] transition-colors sm:py-1.5 sm:text-[12.5px] ${
-                active ? "text-background" : "text-muted-foreground hover:text-foreground"
+                active ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {opt}

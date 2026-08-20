@@ -1042,7 +1042,7 @@ function ClassButton({
       type="button"
       onClick={onClick}
       className={`elev-hover flex h-full w-full flex-col gap-2 rounded-card border bg-depth-card p-4 text-left shadow-card ${
-        active ? "border-foreground/25" : "border-border"
+        active ? "border-primary/45" : "border-border"
       }`}
     >
       <div className="text-body font-medium text-foreground">{item.name}</div>
@@ -1421,7 +1421,7 @@ function ClassDetail({
                   }
                   className={`rounded-full border px-4 py-1.5 text-body transition-colors ${
                     section === tabItem.value
-                      ? "border-foreground bg-foreground font-medium text-background"
+                      ? "border-primary bg-primary font-medium text-primary-foreground"
                       : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                   }`}
                 >
@@ -1566,7 +1566,7 @@ function ClassDetail({
                               key={studentId}
                               className={`flex items-center gap-3 rounded-card border py-2 pl-4 pr-2 transition-colors ${
                                 selectedStudentId === studentId
-                                  ? "border-foreground/25 bg-depth-card"
+                                  ? "border-primary/45 bg-depth-card"
                                   : "border-border bg-depth-sub"
                               }`}
                             >
@@ -3185,10 +3185,14 @@ function GradebookTable({
             })}
           </div>
           <div className="table-scroll hidden max-h-[58vh] overflow-auto pb-1 md:block">
-            <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
+            {/* R53: rows inside a .table-scroll are hairline rows, never rounded
+                row-cards — card borders sliced mid-strip at the clip edge when the
+                table scrolled sideways. The Student column stays pinned via
+                .table-sticky-cell (opaque, with a right-edge lip). */}
+            <table className="min-w-[920px] w-full border-collapse text-left">
               <thead className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 <tr>
-                  <th className="sticky left-0 top-0 z-[3] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
+                  <th className="table-sticky-cell top-0 z-[3] border-b border-border px-3 py-1.5 font-medium">
                     Student
                   </th>
                   <th className="sticky top-0 z-[2] border-b border-border bg-depth-card px-3 py-1.5 font-medium">
@@ -3224,13 +3228,13 @@ function GradebookTable({
                     <tr
                       key={row.studentId}
                       onClick={() => onSelectStudent(row.studentId)}
-                      className={`group cursor-pointer rounded-card border border-border bg-depth-sub transition-colors hover:bg-muted ${
+                      className={`group cursor-pointer border-b border-border/70 transition-colors hover:bg-muted/50 ${
                         selectedStudentId === row.studentId
-                          ? "outline outline-1 outline-foreground/20"
+                          ? "outline outline-1 -outline-offset-1 outline-primary/45"
                           : ""
                       }`}
                     >
-                      <td className="sticky left-0 z-[1] rounded-l-2xl border-y border-l border-border bg-depth-sub px-3 py-3 transition-colors group-hover:bg-muted">
+                      <td className="table-sticky-cell z-[1] px-3 py-3">
                         <div className="text-body font-medium text-foreground">
                           {displayName(profile, row.studentId)}
                         </div>
@@ -3238,7 +3242,7 @@ function GradebookTable({
                           {profile?.grade || "Grade not set"}
                         </div>
                       </td>
-                      <td className="border-y border-border px-3 py-3">
+                      <td className="px-3 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <span
                             className={`rounded-full border px-2.5 py-1 text-meta ${row.statusClass}`}
@@ -3255,27 +3259,19 @@ function GradebookTable({
                           {row.lessonDetail}
                         </div>
                       </td>
-                      <td className="border-y border-border px-3 py-3 text-meta text-foreground">
-                        {row.scoreLabel}
-                      </td>
-                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
-                        {row.attempts}
-                      </td>
-                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
+                      <td className="px-3 py-3 text-meta text-foreground">{row.scoreLabel}</td>
+                      <td className="px-3 py-3 text-meta text-muted-foreground">{row.attempts}</td>
+                      <td className="px-3 py-3 text-meta text-muted-foreground">
                         {row.quizAttempts}
                       </td>
-                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
-                        {row.evidence}
-                      </td>
-                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
-                        {row.mastery}
-                      </td>
-                      <td className="border-y border-border px-3 py-3 text-meta text-muted-foreground">
+                      <td className="px-3 py-3 text-meta text-muted-foreground">{row.evidence}</td>
+                      <td className="px-3 py-3 text-meta text-muted-foreground">{row.mastery}</td>
+                      <td className="px-3 py-3 text-meta text-muted-foreground">
                         {row.latestSession
                           ? formatDateTime(row.latestSession.updated_at)
                           : "No activity"}
                       </td>
-                      <td className="rounded-r-2xl border-y border-r border-border px-3 py-3">
+                      <td className="px-3 py-3">
                         <button
                           type="button"
                           onClick={() => onSelectStudent(row.studentId)}
@@ -3605,7 +3601,7 @@ function StudentDetail({
                       const modality = inputModalityFromPayload(item.turn.payload);
                       const isStudent = item.turn.role === "student";
                       const toneClass = isStudent
-                        ? "bg-foreground text-background"
+                        ? "bg-primary text-primary-foreground"
                         : item.turn.role === "mentor"
                           ? "bg-depth-sub text-foreground"
                           : "border border-border bg-depth-sub text-muted-foreground";
@@ -3619,7 +3615,7 @@ function StudentDetail({
                           >
                             <span
                               className={`mb-1 flex flex-wrap items-center gap-2 text-overline uppercase tracking-[0.08em] ${
-                                isStudent ? "text-background/70" : "text-muted-foreground"
+                                isStudent ? "text-primary-foreground/70" : "text-muted-foreground"
                               }`}
                             >
                               {item.turn.role} · {item.turn.stage}
@@ -3839,7 +3835,7 @@ function SessionChipGroup({
               onClick={() => onSelectSession(session.id)}
               className={`rounded-full border px-3 py-1.5 text-meta transition-colors ${
                 selectedSessionId === session.id
-                  ? "border-foreground/25 bg-background text-foreground"
+                  ? "border-primary/45 bg-background text-foreground"
                   : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >

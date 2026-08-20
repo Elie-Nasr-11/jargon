@@ -1558,7 +1558,7 @@ function OutlineRow({
   return (
     <div
       className={`group flex min-w-0 items-center gap-1 overflow-hidden rounded-lg pr-1 transition-colors ${
-        selected ? "bg-foreground text-background" : "hover:bg-muted"
+        selected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
       } ${dragging ? "opacity-40" : ""}`}
       style={{ paddingLeft: `${depth * 14 + 2}px` }}
     >
@@ -1576,7 +1576,7 @@ function OutlineRow({
             event.stopPropagation();
             onToggle?.();
           }}
-          className={`shrink-0 ${selected ? "text-background/80" : "text-muted-foreground"}`}
+          className={`shrink-0 ${selected ? "text-primary-foreground/80" : "text-muted-foreground"}`}
           aria-label={open ? "Collapse" : "Expand"}
         >
           <ChevronRight
@@ -1598,7 +1598,7 @@ function OutlineRow({
         {meta ? (
           <span
             className={`max-w-[45%] shrink-0 truncate text-overline uppercase tracking-[0.08em] ${
-              selected ? "text-background/70" : "text-muted-foreground"
+              selected ? "text-primary-foreground/70" : "text-muted-foreground"
             }`}
             title={metaTitle}
           >
@@ -1617,7 +1617,7 @@ function OutlineRow({
           aria-label={addLabel}
           className={`shrink-0 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100 ${
             selected
-              ? "text-background/80 hover:bg-background/20"
+              ? "text-primary-foreground/80 hover:bg-background/20"
               : "text-muted-foreground hover:bg-depth-field"
           }`}
         >
@@ -2712,7 +2712,7 @@ function LessonMetaForm({
                 onClick={() => toggleMode(mode)}
                 className={`rounded-full border px-3 py-1.5 text-meta transition-colors ${
                   allowedModes.includes(mode)
-                    ? "border-foreground/25 bg-foreground text-background"
+                    ? "border-primary/25 bg-primary text-primary-foreground"
                     : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
@@ -2769,7 +2769,7 @@ function LessonMetaForm({
             onClick={() => setRequireAttemptFirst((current) => !current)}
             className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors ${
               requireAttemptFirst
-                ? "border-foreground/25 bg-foreground text-background"
+                ? "border-primary/25 bg-primary text-primary-foreground"
                 : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
           >
@@ -2782,7 +2782,7 @@ function LessonMetaForm({
               onClick={() => setAllowLiveArtifacts((current) => !current)}
               className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors ${
                 allowLiveArtifacts
-                  ? "border-foreground/25 bg-foreground text-background"
+                  ? "border-primary/25 bg-primary text-primary-foreground"
                   : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
@@ -3417,7 +3417,9 @@ function ViewToggle({
       type="button"
       onClick={onClick}
       className={`rounded-full px-3 py-1 text-meta transition-colors ${
-        active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:text-foreground"
       }`}
     >
       {label}

@@ -645,10 +645,12 @@ export function BrainGraph({
         const r = n.r * Math.sqrt(zoom) * (i === picked ? 1.22 : 1);
         ctx.globalAlpha = inFocus ? 1 : DIM;
         if (n.kind === "course") {
-          // The apex tier: a heavy filled anchor in the strongest ink, ringed in its
-          // subject hue — unmistakably not a lesson.
+          // The apex tier: a heavy filled anchor ringed in its subject hue —
+          // unmistakably not a lesson. R53: on the light ladder the near-black fill
+          // read as an ink blot, so light mode fills the hub with its own subject hue
+          // (the same hue as its neighborhood wash); dark keeps the strong-ink coin.
           const hue = subjectHue(pal.accent, n.tint ?? 0);
-          ctx.fillStyle = pal.ink92;
+          ctx.fillStyle = pal.dark ? pal.ink92 : `hsl(${hue} 52% 47%)`;
           ctx.beginPath();
           ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           ctx.fill();
@@ -665,8 +667,14 @@ export function BrainGraph({
                 : (n.progress ?? 0) >= 1
                   ? pal.success
                   : (n.progress ?? 0) > 0
-                    ? pal.ink62
-                    : pal.ink45
+                    ? // R53: one ink step lighter on the light ladder — the mid grays
+                      // massed into a dark cloud against white.
+                      pal.dark
+                      ? pal.ink62
+                      : pal.ink45
+                    : pal.dark
+                      ? pal.ink45
+                      : pal.ink30
               : n.kind === "idea"
                 ? n.idea?.origin === "emergent"
                   ? pal.emergent

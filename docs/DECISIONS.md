@@ -1296,3 +1296,35 @@ every curriculum-admin WRITE on shared content crashed this way, not just + Less
   harness 19/19 on the consolidated build; before/after screenshots at 1440px and
   820px (r52audit/) show the gradebook scrolling inside its card with all four
   tabs reachable.
+
+## R53 — light-mode revision: blue primary chrome, brain hues, login, table clip (2026-08-20)
+
+Owner: "revise the light mode color palette because the colors are too dark and its
+just not right all in all… revamp the colors of the brain in light mode and the design
+of the login based on the rest of the platform… revise the table scroll thing because
+they dont clip cleanly on horizontal scroll."
+
+Diagnosis: the light SURFACES were already the white daylight ladder — what read as
+dark was the interactive chrome: active tabs, primary buttons, the voice orb, count
+badges, and the brain's course hubs all painted near-black `--foreground`.
+
+Decisions:
+1. **Primary chrome = platform blue on both ladders.** New `--primary/--primary-ink/
+   --primary-hover` tokens; `.btn-primary` + shadcn `--color-primary` remapped; ~38
+   call sites swept from `bg-foreground text-background` to `bg-primary
+   text-primary-foreground` (tabs, class-header pills, sidebar badge, mentor pace
+   thumb, assessment/assignment/voice/media primary actions, selected chips in chat +
+   studio). Graphite stays for text ink. Dark mode adopts the same blue (one product).
+2. **Brain (light)**: hubs fill with their subject hue `hsl(hue 52% 47%)` (dark keeps
+   ink92 coins); touched/untouched lesson tiers each step one ink lighter in light.
+3. **Login**: rainbow ambient (0.5) + gradient-ring card retired → page ladder + dot
+   grid, hairline card, boxed `jargon-input` fields, blue Continue, aurora rationed to
+   one dot in the brand pill, ambient 0.16 neutral. Demo-access disclosure unchanged.
+4. **Table clip**: gradebook row-cards → hairline rows (`border-collapse`, no rounded
+   row strips); `.table-scroll` gains pure-CSS scroll fades; `.table-sticky-cell`
+   pins the Student column opaque with a hairline+shadow lip (hover tint mixed in CSS
+   so the pinned cell tracks its row).
+
+Verified: 880 pins OK (one R52 pin re-anchored to the blue pill by design), tsc +
+eslint clean, light+dark screenshots across login/student home+brain/chat/teacher
+tabs/gradebook narrow-scrolled/admin.
