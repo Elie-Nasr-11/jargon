@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, NotebookPen } from "lucide-react";
 import { formatDate, formatScore } from "@/lib/format";
 import type { CheckpointRowModel } from "@/student/checkpoints";
 
@@ -58,12 +58,14 @@ export function WorkRow({
   onOpen,
 }: {
   row: CheckpointRowModel;
-  onOpen: (assessmentId: string) => void;
+  // R48: receives the whole row — the shell dispatches on row.kind to the right surface.
+  onOpen: (row: CheckpointRowModel) => void;
 }) {
   const actionable = row.state === "todo" || row.state === "in_progress";
+  const Icon = row.kind === "assignment" ? NotebookPen : ClipboardCheck;
   const body = (
     <>
-      <ClipboardCheck
+      <Icon
         className="h-3.5 w-3.5 shrink-0"
         strokeWidth={1.7}
         style={{ color: actionable ? "var(--mode-open)" : "var(--ink-30)" }}
@@ -93,7 +95,7 @@ export function WorkRow({
       {actionable ? (
         <button
           type="button"
-          onClick={() => onOpen(row.id)}
+          onClick={() => onOpen(row)}
           className="hvp flex w-full items-center gap-2.5 rounded-control px-2 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-muted"
         >
           {body}

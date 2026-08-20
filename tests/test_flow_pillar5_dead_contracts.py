@@ -35,9 +35,14 @@ class ContinueOfferIsRetired(unittest.TestCase):
         self.assertNotIn("partial.continue_offer", CHAT_FN)
         self.assertNotIn("payload.continue_offer", MESSAGES)
 
-    def test_send_continue_lost_its_last_caller_and_is_gone(self):
+    def test_continue_pill_sender_stays_gone(self):
+        # Pillar 5 removed sendContinue (the dead Continue pill's sender). R48 gave the
+        # continue CONTROL one deliberate caller back — sendWorkDone, the work-step
+        # submitted→continue handshake (a deterministic post-submit control turn, not a
+        # rendered button). Exactly one caller; the pill sender itself stays gone.
         self.assertNotIn("const sendContinue", HOOK)
-        self.assertNotIn('control: { type: "continue" }', HOOK)
+        self.assertEqual(HOOK.count('control: { type: "continue" }'), 1)
+        self.assertIn("const sendWorkDone", HOOK)
 
     def test_the_server_still_parses_the_continue_control_for_old_tabs(self):
         self.assertIn('controlType === "continue"', CHAT_FN)

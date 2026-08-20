@@ -195,6 +195,8 @@ export type ClassworkItem = {
   kind: "assignment" | "assessment" | "material";
   id: string;
   lessonId: string | null;
+  // R48: the lesson step this item IS (created from the step editor); null = standalone.
+  activityId: string | null;
   title: string;
   status: string;
   dueAt: string | null;
@@ -207,11 +209,18 @@ export function CurriculumStudio({
   workItems = [],
   onOpenItem,
   onCreate,
+  onCreateForStep,
 }: {
   classId: string;
   workItems?: ClassworkItem[];
   onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
   onCreate?: (kind: "assignment" | "assessment" | "material") => void;
+  // R48: create a work item FOR a lesson step — the console opens the matching dialog
+  // with the lesson locked and stamps the step link on the created row.
+  onCreateForStep?: (
+    kind: "assignment" | "assessment",
+    ctx: { lessonId: string; activityId: string },
+  ) => void;
 }) {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as CurriculumSearch;
@@ -1199,6 +1208,9 @@ export function CurriculumStudio({
               key={selection ? `${selection.type}:${selection.id}` : "empty"}
               selection={selection}
               data={data}
+              workItems={workItems}
+              onOpenItem={onOpenItem}
+              onCreateForStep={onCreateForStep}
               lessonsById={lessonsById}
               orgUnits={orgUnits}
               resources={data.resources}
@@ -1701,6 +1713,9 @@ function DetailPane({
   onApplyOutline,
   onGenerateSteps,
   onApplySteps,
+  workItems,
+  onOpenItem,
+  onCreateForStep,
   counts,
 }: {
   selection: Selection;
@@ -1709,6 +1724,14 @@ function DetailPane({
   orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
   resources: LessonResource[];
   busy: boolean;
+  // R48: the class's work items (from the console) + the step-link callbacks, threaded
+  // down to StepCard's "Step work" strip.
+  workItems: ClassworkItem[];
+  onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
+  onCreateForStep?: (
+    kind: "assignment" | "assessment",
+    ctx: { lessonId: string; activityId: string },
+  ) => void;
   onAddSubject: () => void;
   onRename: (type: CurriculumNodeType, id: string, title: string, description?: string) => void;
   onArchive: (type: CurriculumNodeType, id: string) => void;
@@ -1868,6 +1891,9 @@ function DetailPane({
       resources={resources}
       onGenerateSteps={(args) => onGenerateSteps(lesson.id, args)}
       onApplySteps={(drafts) => onApplySteps(lesson.id, drafts)}
+      workItems={workItems}
+      onOpenItem={onOpenItem}
+      onCreateForStep={onCreateForStep}
     />
   );
 }
@@ -2323,12 +2349,21 @@ function LessonDetail({
   onDelete,
   onGenerateSteps,
   onApplySteps,
+  workItems,
+  onOpenItem,
+  onCreateForStep,
 }: {
   lesson: Lesson;
   data: CurriculumAuthoringData;
   orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
   resources: LessonResource[];
   busy: boolean;
+  workItems: ClassworkItem[];
+  onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
+  onCreateForStep?: (
+    kind: "assignment" | "assessment",
+    ctx: { lessonId: string; activityId: string },
+  ) => void;
   onSaveMeta: (meta: CurriculumLessonMetaInput, milestone: CurriculumMilestoneInput) => void;
   onUpsertStep: (step: CurriculumStepInput) => void;
   onReorderSteps: (orderedIds: string[]) => void;
@@ -2428,8 +2463,15 @@ function LessonDetail({
                           dragging={state.dragging}
                           canDelete={steps.length > 1}
                           resources={lessonResources}
+                          workItem={
+                            workItems.find(
+                              (item) => item.activityId === activity.id && item.kind !== "material",
+                            ) ?? null
+                          }
                           onBind={onBindResource}
                           onShare={onShareResource}
+                          onOpenItem={onOpenItem}
+                          onCreateForStep={onCreateForStep}
                           onGenerateArtifact={onGenerateArtifact}
                           onApproveArtifact={onApproveArtifact}
                           onSave={onUpsertStep}
@@ -2760,8 +2802,11 @@ function StepCard({
   dragging,
   canDelete,
   resources,
+  workItem,
   onBind,
   onShare,
+  onOpenItem,
+  onCreateForStep,
   onGenerateArtifact,
   onApproveArtifact,
   onSave,
@@ -2776,9 +2821,16 @@ function StepCard({
   // P5: this lesson's materials — bind/unbind writes lesson_resources.activity_id, and
   // the chat runtime attaches a step's bound materials on its presentation turn.
   resources: LessonResource[];
+  // R48: the real assignment/assessment row linked to this step (null = none yet).
+  workItem: ClassworkItem | null;
   onBind: (resourceId: string, activityId: string | null) => void;
   // P8: promote a mentor-built (student-private) activity to the whole class.
   onShare: (resourceId: string) => void;
+  onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
+  onCreateForStep?: (
+    kind: "assignment" | "assessment",
+    ctx: { lessonId: string; activityId: string },
+  ) => void;
   // P7: generate an interactive artifact for this step, preview it, and approve → publish.
   onGenerateArtifact: (args: ArtifactGenArgs) => Promise<CurriculumAdminResponse | null>;
   onApproveArtifact: (activityId: string, payload: ArtifactApprovePayload) => void;
@@ -3122,6 +3174,75 @@ function StepCard({
               </select>
             ) : null}
           </div>
+
+          {/* R48: assignment/assessment steps run on a REAL work item — an assignments/
+              assessments row whose activity_id points at this step. The chat runtime holds
+              the step until the student submits it, so an unlinked step is just a
+              conversation. Gated on the SAVED mode (the loader reads stored mode too):
+              flipping the mode select above doesn't link anything until Save step. */}
+          {activity.mode === "assignment" || activity.mode === "assessment" ? (
+            <div className="grid gap-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  Step work
+                </div>
+                <span className="text-meta text-muted-foreground/70">
+                  {activity.mode === "assignment"
+                    ? "Students submit it before the lesson moves on"
+                    : "Students take it before the lesson moves on"}
+                </span>
+              </div>
+              {workItem ? (
+                <div className="flex items-center gap-2 rounded-card border border-border bg-depth-sub px-3 py-2">
+                  <ListChecks
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    strokeWidth={1.7}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-meta text-foreground">
+                    {workItem.title}
+                  </span>
+                  <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                    {workItem.status}
+                  </span>
+                  {workItem.needsReviewCount > 0 ? (
+                    <span className="shrink-0 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-overline uppercase tracking-[0.06em] text-warning">
+                      {workItem.needsReviewCount} to review
+                    </span>
+                  ) : null}
+                  {onOpenItem ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenItem(workItem.kind, workItem.id)}
+                      className="shrink-0 rounded-full border border-border px-3 py-1.5 text-meta text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Open in Classwork
+                    </button>
+                  ) : null}
+                </div>
+              ) : onCreateForStep ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onCreateForStep(activity.mode === "assignment" ? "assignment" : "assessment", {
+                      lessonId: activity.lesson_id,
+                      activityId: activity.id,
+                    })
+                  }
+                  disabled={busy || !bindable}
+                  title={bindable ? undefined : "Save the new step first, then create its work."}
+                  className="justify-self-start rounded-full border border-border px-3 py-1.5 text-meta text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  {activity.mode === "assignment"
+                    ? "Create the assignment for this step"
+                    : "Create the quiz for this step"}
+                </button>
+              ) : (
+                <div className="rounded-card border border-dashed border-border px-3 py-2 text-meta text-muted-foreground">
+                  No work linked to this step yet.
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {/* P8: mentor-built activities for this step (live-generated for one student).
               Oversight list: the teacher can share one with the class — after the promote

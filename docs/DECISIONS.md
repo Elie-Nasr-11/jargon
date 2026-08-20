@@ -1137,3 +1137,61 @@ pills and sidebar can never disagree, and nothing appears or disappears with sta
 - Principles adopted as standing rules (see the artifact): four fixed tabs; no hidden
   rooms; one + Create; grading lives on the work; hierarchy is metadata, not navigation;
   kill a noun before adding one.
+
+## 2026-08-20 - R48: Quiz/assignment as lesson STEPS (sketchboard Q4; owner: "Both, steps first")
+
+The last big noun consolidation from the approved synthesis (P8): an assignment- or
+assessment-mode lesson step no longer merely *frames* work — it IS the work.
+
+- **Linkage is one nullable column**: `activity_id` (TEXT, FK `lesson_activities` ON
+  DELETE SET NULL) on `assignments` and `assessments`, mirrored loosely onto
+  `checkpoints` by the sync triggers. Deleting a step orphans its work item back to
+  standalone classwork — history and grades outlive lesson editing. Partial indexes
+  keep the loader's per-turn lookup off the (majority) unlinked rows.
+- **Authoring**: the step editor gets a "Step work" strip — a linked step shows the
+  real item (status, to-review badge, "Open in Classwork"); an unlinked
+  assignment/assessment step offers "Create the assignment/quiz for this step", which
+  opens the ordinary console builders pre-bound (lesson locked, activityId carried).
+  Gated on the SAVED mode and on the temp-id swap, same rule as material binding.
+  The console's `onCreate`/`createOpen` seams are untouched (R47 pins) — the step path
+  is additive: `onCreateForStep(kind, {lessonId, activityId})` + `createContext`.
+- **The chat runtime holds the step until the submission exists.** The gate rides the
+  requirements spine — `requirementsFor(activity, quiz, stepWork)` returns
+  `work: satisfied !== true`, and `stepDone` refuses while it's true; NO post-hoc
+  clamping (activitiesDoneThisTurn re-derives independently and would disagree;
+  applyTurn untouched). A linked step overrides its in-chat gates (no quiz/code/
+  understanding demands in chat — the real item is the assessment now). Failure split:
+  the LINK read fails open (null = unlinked; an outage must not brick unlinked steps),
+  the SATISFACTION read on a confirmed link fails closed (steps_done is monotonic — a
+  wrong skip is permanent, a wrong hold retries next turn). A linked assessment with no
+  recipient row for this student reads as unlinked (late enrollee; RLS would brick
+  start_assessment). Revisits never pass stepWork. Status filters (assignment
+  `assigned`, assessment `published`, newest wins) make archiving un-gate gracefully.
+- **The hand-off is a work card** (`work_offer` on the envelope, tri-state: value while
+  pending, null once satisfied, absent when unlinked) rendered under the mentor's
+  reply on the latest message only. It REPLAYS from the persisted turn payload
+  (mode_offer pattern, NOT artifact_offer's live-only rule) — the step is held, so a
+  reload without the card would strand the student. A new directive rung
+  (`await_step_work`, ranked above content_discuss) keeps the mentor from collecting
+  the work in chat.
+- **The card opens a real surface**: assessments reuse AssessmentSurface; assignments
+  get the NEW AssignmentSurface — the first caller of the shipped-but-unused
+  submitAssignment api (text + files, client limits enforced). Submitting fires ONE
+  deterministic continue control turn ("I've submitted it." + `{type:"continue"}`,
+  `sendWorkDone`) — the server re-reads satisfaction there, so a phantom "done"
+  without a submission keeps holding. The handshake arms ONLY when the surface was
+  opened from the card (dock/panel opens finish silently).
+- **The dock dead-end is closed**: checkpoint rows carry a `kind` discriminator and
+  `assignmentRows()` merges assignments into the dock, Checkpoints panel, Home due
+  strip, and class summaries; rows dispatch to the matching surface. (Previously a
+  required assignment could hold the lesson-end gate with NO student surface anywhere.)
+- **R47 debts paid**: assessment return-feedback is an inline per-attempt field (the
+  window.prompt is gone; "Return result" contract unchanged), and the studio's
+  authoring read is cached 60s (`authoring:` surface key, invalidated by every
+  curriculum-admin write) so back-from-work-item re-entry stops refetching the world.
+- **Double-gating is deliberate**: the step gates on SUBMISSION (any status); the
+  lesson-END checkpoints gate still waits for the recipient to be COMPLETE when the
+  teacher marked the work required. Submitting un-holds the step; grading closes the
+  lesson. Form default `required:false` stays.
+- Debt carried: `result_release_policy` stored but never enforced; work items created
+  from steps notify students only through the existing assignment/assessment writers.

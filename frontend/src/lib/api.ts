@@ -1,6 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { functionUrl, supabase, supabaseAnonKey } from "@/lib/supabase";
-import { cached, warm } from "@/lib/surfaceCache";
+import { cached, invalidateSurface, warm } from "@/lib/surfaceCache";
 import { parseArtifactConfig } from "@/lib/artifact-schema";
 import type { DeckSpec } from "@/lib/artifact-schema";
 import type {
@@ -1155,7 +1155,15 @@ export async function fetchCampusLiveLink(): Promise<string | null> {
   return url || null;
 }
 
+// R48: cached so re-entering the studio (back from a work item / tab bounce) paints
+// instantly from the last snapshot; every curriculum-admin write invalidates it.
 export async function fetchCurriculumAuthoringData(
+  userId: string,
+): Promise<CurriculumAuthoringData> {
+  return cached(`authoring:${userId}`, 60_000, () => fetchCurriculumAuthoringDataUncached(userId));
+}
+
+async function fetchCurriculumAuthoringDataUncached(
   userId: string,
 ): Promise<CurriculumAuthoringData> {
   const classes = await fetchTeacherClasses(userId);
@@ -1230,6 +1238,8 @@ async function callCurriculumAdmin(
   if (!response.ok || data.status === "error") {
     throw new Error(data.error || "Curriculum update failed.");
   }
+  // R48: any authoring write makes the cached studio snapshot stale.
+  invalidateSurface("authoring:");
   return data;
 }
 
@@ -2495,6 +2505,8 @@ export async function updateLessonResource(
     .single();
   if (fetchError) throw fetchError;
 
+  // R48: resource writes (incl. step binds) make the cached studio snapshot stale.
+  invalidateSurface("authoring:");
   return data as LessonResource;
 }
 
@@ -2639,6 +2651,8 @@ export async function createAssignment(input: {
   organizationId: string;
   classId: string;
   lessonId: string;
+  // R48: the lesson step this assignment IS (created from the step editor).
+  activityId?: string | null;
   title: string;
   instructions: string;
   dueAt?: string | null;
@@ -2656,6 +2670,8 @@ export async function createAssignment(input: {
     organization_id: input.organizationId,
     class_id: input.classId,
     lesson_id: input.lessonId,
+    // Conditional so a deployed frontend never 400s against a not-yet-migrated DB.
+    ...(input.activityId ? { activity_id: input.activityId } : {}),
     title: input.title.trim(),
     instructions: input.instructions.trim(),
     assigned_by: input.teacherId,
@@ -2988,6 +3004,8 @@ export async function createAssessment(input: {
   organizationId: string;
   classId: string;
   lessonId: string;
+  // R48: the lesson step this quiz IS (created from the step editor).
+  activityId?: string | null;
   title: string;
   instructions: string;
   dueAt?: string | null;
@@ -3014,6 +3032,7 @@ export async function createAssessment(input: {
     organization_id: input.organizationId,
     class_id: input.classId,
     lesson_id: input.lessonId,
+    activity_id: input.activityId || null,
     title: input.title,
     instructions: input.instructions,
     due_at: input.dueAt || null,
