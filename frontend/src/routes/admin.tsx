@@ -629,7 +629,7 @@ export function AdminPage() {
               type="button"
               onClick={() => void refreshScope()}
               disabled={scopeLoading}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="btn btn-secondary"
             >
               <RefreshCw
                 className={`h-4 w-4 ${scopeLoading ? "animate-spin" : ""}`}
@@ -767,7 +767,7 @@ export function AdminPage() {
                         type="button"
                         onClick={() => void refreshActiveSessions()}
                         disabled={activeSessionsLoading}
-                        className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        className="btn btn-secondary btn-sm shrink-0"
                       >
                         {activeSessionsLoading ? "Refreshing…" : "Refresh"}
                       </button>
@@ -856,7 +856,7 @@ export function AdminPage() {
                         type="button"
                         onClick={() => void refreshCostDashboard()}
                         disabled={costLoading}
-                        className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        className="btn btn-secondary"
                       >
                         <RefreshCw
                           className={`h-4 w-4 ${costLoading ? "animate-spin" : ""}`}
@@ -1067,7 +1067,7 @@ export function AdminPage() {
                               disabled={
                                 demoBusy || demoPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH
                               }
-                              className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-meta font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+                              className="btn btn-primary"
                             >
                               <UserPlus className="h-4 w-4" strokeWidth={1.6} />
                               {demoBusy ? "Creating…" : "Create demo logins"}
@@ -1185,17 +1185,13 @@ export function AdminPage() {
                           className="min-h-[170px] w-full resize-y rounded-card border border-border bg-depth-field p-3 text-body leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
                         />
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={applyPaste}
-                            className="rounded-full bg-foreground px-4 py-2 text-body font-medium text-background transition-transform hover:-translate-y-[1px]"
-                          >
+                          <button type="button" onClick={applyPaste} className="btn btn-primary">
                             Load pasted roster
                           </button>
                           <button
                             type="button"
                             onClick={() => setRows((current) => [...current, blankRow()])}
-                            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
+                            className="btn btn-secondary"
                           >
                             <Plus className="h-4 w-4" strokeWidth={1.6} /> Add row
                           </button>
@@ -1219,12 +1215,12 @@ export function AdminPage() {
                           onClick={seedRoster}
                           disabled={!canSeed}
                           title={formErrors[0] || "Seed classroom"}
-                          className="rounded-full bg-foreground px-5 py-2.5 text-body font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
+                          className="btn btn-primary"
                         >
                           {submitting ? "Seeding..." : "Seed classroom"}
                         </button>
                       </div>
-                      <div className="overflow-x-auto">
+                      <div className="table-scroll">
                         <table className="min-w-[820px] w-full border-collapse text-left text-body">
                           <thead className="border-b border-border text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                             <tr>
@@ -1362,7 +1358,7 @@ export function AdminPage() {
                           </div>
                         )}
                         {results.length > 0 && (
-                          <div className="overflow-x-auto">
+                          <div className="table-scroll">
                             <table className="min-w-[680px] w-full border-collapse text-left text-body">
                               <thead className="border-b border-border text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                                 <tr>
@@ -1490,7 +1486,7 @@ function CostMetricTable({
   return (
     <div className="rounded-card border border-border/80 bg-depth-sub p-4">
       <h3 className="text-body font-medium text-foreground">{title}</h3>
-      <div className="mt-3 overflow-x-auto">
+      <div className="table-scroll mt-3">
         <table
           className={`${wide ? "min-w-[860px]" : "min-w-[620px]"} w-full border-collapse text-left text-meta`}
         >

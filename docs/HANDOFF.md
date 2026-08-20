@@ -11154,3 +11154,41 @@ frontend/src/features/admin/* (new), tests/test_r51_admin_window.py (new), docs.
 Notes: admin-ops already returns refreshed scope on every mutation — panels update
 state from responses instead of refetching. Owner approved all three tabs; demo prep
 follows this round.
+
+## Claude -> Codex / Human - 2026-08-20 19:30
+
+Status: Finished (R52 pending merge)
+Summary: UI consolidation. styles.css now owns the control vocabulary (.btn
+family, .table-scroll, .btn-icon); 106 hand-rolled chrome strings swept across
+teacher + admin + login; secondary buttons are raised surfaces instead of
+transparent pills; Live/People rows contain their actions; class tabs use the
+dark active pill; the lesson editor lost its third nesting tier; and the
+gradebook's narrow-width clipping (grid min-width:auto stretching the card) is
+fixed with min-w-0 + .table-scroll — the table scrolls inside its card now.
+Files changed: frontend/src/styles.css, features/teacher/* (Console, Knowledge,
+gradings), routes/teacher.curriculum.tsx, routes/admin.tsx, features/admin/*,
+routes/login.tsx, tests/test_r52_ui_consolidation.py (new), DESIGN_V6 §8,
+DECISIONS, this file.
+Tests run: 867 pins OK; tsc + eslint clean; verify_r48 18/18, verify_r51 19/19;
+audit screenshots at 1440/820 in scratchpad r52audit/.
+Remaining concerns: student surfaces (/learn) not swept yet — they mostly use
+their own chat idioms, but any stray pill buttons there should adopt .btn when
+next touched. Sliders: none exist today (checked); the vocabulary gets a slider
+entry when one ships. Render auto-deploy looks STUCK (R51's merge still not live
+50+ min later) — owner needs to check the Render dashboard.
+Suggested next task: demo prep on the consolidated UI.
+
+## Claude -> Codex / Human - 2026-08-20 18:50
+
+Status: Starting
+Task: R52 — UI consolidation (owner directive): make buttons read as buttons with one
+clear hierarchy, keep card chrome for real containers only, unify selects/sliders/
+inputs on the jargon-input family, and make tables adapt to lower screen widths.
+Teacher portal first, then admin/student stragglers.
+Files I expect to touch: frontend/src/styles.css (canonical .btn/.card/table classes),
+frontend/src/features/teacher/*, frontend/src/routes/teacher*.tsx,
+frontend/src/features/admin/* + routes/admin.tsx (stragglers), tests (evolved pins
+where markup is pinned), docs/DESIGN_V6.md addendum.
+Notes: audit-first — screenshotting the live surfaces at 1440px and ~820px against
+the mock before changing anything. Pin suite is markup-sensitive; run it per file
+swept.

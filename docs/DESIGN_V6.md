@@ -104,3 +104,32 @@ hard-won security/telemetry invariants intact:
 tsc 0 errors · eslint 0 errors · build green · affected python test modules green ·
 reduced-motion path verified by reading the code (no RAF loops without the media query guard) ·
 no new WebGL contexts beyond the single AmbientCanvas per page.
+
+## 8. The control vocabulary (R52 addendum, 2026-08-20)
+
+Owner directive: buttons obvious, cards are cards, non-cards are not cards, controls
+consistent, tables adapting to narrow widths. The vocabulary lives in styles.css and
+is the ONLY way to draw these controls:
+
+- **Buttons**: `.btn` + exactly one of `.btn-primary` (the single main action of a
+  view, solid), `.btn-secondary` (raised surface — background + border + shadow, so
+  it never reads as a chip), `.btn-ghost` (tertiary), `.btn-danger` (destructive,
+  pairs with the two-click inline confirm). `.btn-sm` / `.btn-icon` compact them.
+  Utilities on a .btn element may add layout, never chrome.
+- **Fields**: `.jargon-input` is the only field chrome (inputs, selects, textareas).
+  Width utilities need the `!` modifier (`!w-[220px]`) — component classes sit after
+  the utility layer in the compiled CSS and win ties on purpose.
+- **Cards**: `bg-depth-card + border + shadow-card` for top-level sections only;
+  `bg-depth-sub` for ONE inset grouping level; deeper grouping uses hairlines
+  (`border-t`) + overline headers, never a third box. List rows may sit on
+  `bg-depth-field`/`bg-depth-sub` but must CONTAIN their controls — no detached
+  action pills floating beside a row.
+- **Chips** (status/kind labels): small `px-2 py-0.5` bordered pills, never
+  interactive, never hover states — size and weight keep them from competing with
+  buttons.
+- **Tabs**: the dark active pill everywhere (WorkspaceTabs and the class-header
+  pills share the read).
+- **Tables**: every `<table>` sits in `.table-scroll` and scrolls INSIDE its card.
+  Watch for min-width:auto — a grid/flex item containing a wide table needs
+  `min-w-0` or the table stretches the card past the viewport and clips (the
+  pre-R52 gradebook bug).

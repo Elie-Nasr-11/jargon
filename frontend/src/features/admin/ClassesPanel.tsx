@@ -159,7 +159,7 @@ export function ClassesPanel({
               type="button"
               onClick={createClass}
               disabled={Boolean(busy) || !newClassName.trim()}
-              className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-meta font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
+              className="btn btn-primary"
             >
               <Plus className="h-4 w-4" strokeWidth={1.6} />
               {busy === "create" ? "Creating…" : "Create class"}
@@ -236,7 +236,7 @@ export function ClassesPanel({
                         type="button"
                         onClick={() => void exportSnapshot(klass.id)}
                         disabled={Boolean(busy)}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        className="btn btn-secondary btn-sm shrink-0"
                       >
                         <Download className="h-3.5 w-3.5" strokeWidth={1.7} />
                         {busy === "export" ? "Exporting…" : "Export CSV"}
@@ -244,7 +244,7 @@ export function ClassesPanel({
                       <button
                         type="button"
                         onClick={() => toggleExpanded(klass.id, klass.name)}
-                        className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                        className="btn btn-secondary btn-sm shrink-0"
                       >
                         {expanded ? "Close" : "Manage"}
                       </button>
@@ -277,7 +277,7 @@ export function ClassesPanel({
                               !renameValue.trim() ||
                               renameValue.trim() === klass.name
                             }
-                            className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            className="btn btn-secondary btn-sm"
                           >
                             {busy === "rename" ? "Saving…" : "Rename"}
                           </button>
@@ -286,7 +286,7 @@ export function ClassesPanel({
                               type="button"
                               onClick={() => setClassStatus(klass.id, "active")}
                               disabled={Boolean(busy)}
-                              className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                              className="btn btn-secondary btn-sm"
                             >
                               {busy === "status" ? "Restoring…" : "Restore"}
                             </button>
@@ -368,7 +368,7 @@ export function ClassesPanel({
                                 type="button"
                                 onClick={() => addMember(klass.id)}
                                 disabled={Boolean(busy) || !addUserId}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                                className="btn btn-secondary btn-sm"
                               >
                                 <UserPlus className="h-3.5 w-3.5" strokeWidth={1.7} />
                                 {busy === "member-add" ? "Adding…" : "Add"}

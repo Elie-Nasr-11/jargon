@@ -581,6 +581,88 @@ body {
   background-color: color-mix(in oklab, var(--background) 88%, transparent);
 }
 
+/* R52 control vocabulary — ONE button hierarchy for every portal (owner directive:
+   "buttons are obvious"). `.btn` is the base; pair it with exactly one tier:
+     .btn-primary    the single main action of a view (solid)
+     .btn-secondary  normal actions — a real raised surface, not a chip
+     .btn-ghost      tertiary/inline (back links, refresh)
+     .btn-danger     destructive intent (pairs with the two-click confirm idiom)
+   `.btn-sm` compacts either tier for dense rows. Extra Tailwind utilities on a
+   .btn element may add LAYOUT (margin, shrink, width) — never chrome. These are
+   component classes, so like .jargon-input they win the cascade against utility
+   chrome; that is deliberate. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  padding: 0.5rem 1.05rem;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-sm {
+  padding: 0.34rem 0.8rem;
+  font-size: 12px;
+}
+.btn-icon {
+  padding: 0.42rem;
+}
+.btn-primary {
+  background: var(--foreground);
+  color: var(--background);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  background: var(--depth-card);
+  border-color: var(--border);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.07);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--muted);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.btn-danger {
+  background: var(--depth-card);
+  border-color: color-mix(in oklab, var(--danger) 45%, var(--border));
+  color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--danger) 9%, var(--depth-card));
+}
+
+/* R52: every real <table> lives inside one of these — the table keeps its natural
+   min-width and SCROLLS inside its card on narrow viewports instead of clipping
+   (the gradebook used to cut its action column off-screen at tablet widths). */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Touch devices: keep every focusable form field at >=16px so mobile Safari does
    NOT zoom the viewport when the field is focused — that focus-zoom (and its partial
    un-zoom on blur) is what makes the page lurch as the on-screen keyboard opens and

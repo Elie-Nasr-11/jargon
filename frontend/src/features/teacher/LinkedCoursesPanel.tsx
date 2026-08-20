@@ -159,7 +159,7 @@ export function LinkedCoursesPanel({
             type="button"
             onClick={save}
             disabled={saving || !dirty}
-            className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground hover:bg-muted disabled:opacity-50"
+            className="btn btn-secondary btn-sm"
           >
             {saving ? "Saving…" : "Save courses"}
           </button>

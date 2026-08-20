@@ -128,11 +128,7 @@ export function AssignmentWorkView({
           <h3 className="text-title font-medium text-foreground">{assignment.title}</h3>
           <AssignmentStatusChip status={assignment.status} />
         </div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-        >
+        <button type="button" onClick={onBack} className="btn btn-secondary btn-sm">
           ← Classwork
         </button>
       </div>
@@ -263,7 +259,7 @@ export function AssignmentWorkView({
                               ? "Flagged by the malware scan"
                               : undefined
                         }
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:line-through disabled:hover:bg-transparent"
+                        className="btn btn-secondary btn-sm disabled:text-muted-foreground disabled:line-through"
                       >
                         <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
                         {file.original_filename}
@@ -285,7 +281,7 @@ export function AssignmentWorkView({
                   }
                   placeholder="Score"
                   aria-label="Score (0–100)"
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+                  className="jargon-input"
                 />
                 <input
                   value={draft.feedback}
@@ -296,7 +292,7 @@ export function AssignmentWorkView({
                   }
                   placeholder="Feedback for the student"
                   aria-label="Feedback for the student"
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+                  className="jargon-input"
                 />
               </div>
               <div className="mt-2 flex flex-wrap gap-2">

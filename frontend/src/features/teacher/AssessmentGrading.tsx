@@ -150,11 +150,7 @@ export function AssessmentWorkView({
           <h3 className="text-title font-medium text-foreground">{assessment.title}</h3>
           <AssessmentStatusChip status={assessment.status} />
         </div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-        >
+        <button type="button" onClick={onBack} className="btn btn-secondary btn-sm">
           ← Classwork
         </button>
       </div>
@@ -308,7 +304,7 @@ export function AssessmentWorkView({
                             }
                             placeholder="Score"
                             aria-label="Score (0–100)"
-                            className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+                            className="jargon-input"
                           />
                           <input
                             value={draft.feedback}
@@ -319,13 +315,13 @@ export function AssessmentWorkView({
                             }
                             placeholder="Feedback"
                             aria-label="Feedback for the student"
-                            className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+                            className="jargon-input"
                           />
                           <button
                             type="button"
                             onClick={() => void reviewItem(itemAttempt)}
                             disabled={draft.saving}
-                            className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-45"
+                            className="btn btn-secondary btn-sm"
                           >
                             Review
                           </button>
@@ -348,7 +344,7 @@ export function AssessmentWorkView({
                     }
                     placeholder="Final feedback for the student"
                     aria-label="Final feedback for the student"
-                    className="min-w-0 flex-1 rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+                    className="jargon-input min-w-0 flex-1"
                   />
                 ) : null}
                 <button

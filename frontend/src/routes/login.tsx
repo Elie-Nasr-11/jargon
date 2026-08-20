@@ -200,7 +200,7 @@ function LoginPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-full bg-foreground py-3 text-[14px] font-medium text-background transition-transform hover:-translate-y-[1px] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                className="btn btn-primary w-full py-3 text-[14px] active:translate-y-0 disabled:opacity-60 disabled:hover:translate-y-0"
               >
                 {submitting ? "Signing in..." : "Continue"}
               </button>
