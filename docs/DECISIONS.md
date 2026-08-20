@@ -1224,3 +1224,23 @@ Tester feedback (owner-forwarded screenshot, 8:22 AM Beirut) surfaced three issu
   which stamps `?section=home` for students (the sidebar's "Overview" row). Bare /learn
   deep links keep meaning the conversation — only sign-in/role redirects opt into Home;
   the R42 "conversation is the default" decision stands inside the app.
+
+## 2026-08-20 - R50: Shared books refuse edits gracefully (the + Lesson uuid crash)
+
+The owner's next click after R49: "+ Lesson" on a unit of the GLOBAL anatomy book blew
+up with the raw banner 'invalid input syntax for type uuid: ""'. Root cause (prod
+postgres + edge logs): shared books have no owning organization, unitScope resolves
+organizationId to "", and assertCanAuthor fed that straight into a uuid filter —
+every curriculum-admin WRITE on shared content crashed this way, not just + Lesson.
+
+- assertCanAuthor now refuses an empty organizationId with the designed message
+  (platform admins still pass — they author global books directly): shared books
+  can't be edited in place; duplicate for the class first. The guard sits before any
+  uuid filter, covering all twenty authoring actions at one seam.
+- The studio's shared-course notice (with "Duplicate for this class") now ALSO renders
+  for a global book with no peer classes — previously peers-gated, which would have
+  left the refusal pointing at a button that never rendered. The R43 peers copy and
+  R44 fork action are unchanged.
+- Related: the deploy smoke check earned its keep on its FIRST run — it caught
+  curriculum-admin answering 500 to an anon probe ("Forbidden" fell through the status
+  ladder), fixed forward as PR #33 (Forbidden → 403).

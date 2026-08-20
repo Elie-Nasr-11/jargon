@@ -1084,7 +1084,13 @@ export function CurriculumStudio({
     const course = nodePath(selection, data).course;
     if (!course) return null;
     const peers = peerClassNames(course.id);
-    return peers.length ? { courseId: course.id, names: peers.join(", ") } : null;
+    // R50: a GLOBAL book (no owning organization) can never be edited directly, so the
+    // fork affordance must render even when no peer class links it — otherwise the
+    // server's "duplicate first" refusal points at a button that doesn't exist.
+    const isGlobal = !course.organization_id;
+    return peers.length || isGlobal
+      ? { courseId: course.id, names: peers.join(", "), isGlobal }
+      : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection?.type, selection?.id, data, peerClassNames]);
 
@@ -1191,8 +1197,24 @@ export function CurriculumStudio({
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-border bg-depth-sub px-3.5 py-2.5 text-meta text-muted-foreground">
                 <BookOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
                 <span className="min-w-0 flex-1">
-                  This course is shared — changes here also reach{" "}
-                  <span className="text-foreground">{sharedNotice.names}</span>.
+                  {sharedNotice.isGlobal ? (
+                    <>
+                      This is a shared book — duplicate it to edit or add lessons
+                      {sharedNotice.names ? (
+                        <>
+                          {" "}
+                          (also used by{" "}
+                          <span className="text-foreground">{sharedNotice.names}</span>)
+                        </>
+                      ) : null}
+                      .
+                    </>
+                  ) : (
+                    <>
+                      This course is shared — changes here also reach{" "}
+                      <span className="text-foreground">{sharedNotice.names}</span>.
+                    </>
+                  )}
                 </span>
                 <button
                   type="button"
