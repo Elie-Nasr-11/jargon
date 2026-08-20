@@ -3073,10 +3073,15 @@ async function reviewKnowledge(config: Config, actorId: string, body: DbRow): Pr
   } catch (error) {
     const message = errorMessage(error);
     const lower = message.toLowerCase();
-    const status = lower.includes("access") || lower.includes("author")
-      ? 403
-      : lower.includes("authentication") || lower.includes("authenticated")
-        ? 401
+    // R49: "forbidden" is the auth layer's own word — fetchCurrentUser surfaces the
+    // upstream "Forbidden" when the bearer isn't a user JWT (e.g. the anon key). It
+    // was falling through this ladder to 500, which read as a server fault (and
+    // failed the deploy smoke check that expects typed 4xx refusals).
+    const status =
+      lower.includes("access") || lower.includes("author") || lower.includes("forbidden")
+        ? 403
+        : lower.includes("authentication") || lower.includes("authenticated")
+          ? 401
         : lower.includes("before deleting") || lower.includes("instead of deleting")
           ? 409
           : lower.includes("required") ||

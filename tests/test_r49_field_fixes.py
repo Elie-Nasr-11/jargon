@@ -29,6 +29,9 @@ INDEX = (FRONTEND / "routes" / "index.tsx").read_text(encoding="utf-8")
 LEARN = (FRONTEND / "routes" / "learn.tsx").read_text(encoding="utf-8")
 CHAT = (ROOT / "supabase" / "functions" / "chat" / "index.ts").read_text(encoding="utf-8")
 DEPLOY_YML = (ROOT / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8")
+CURRICULUM_ADMIN = (ROOT / "supabase" / "functions" / "curriculum-admin" / "index.ts").read_text(
+    encoding="utf-8"
+)
 
 
 class SignInLandsOnHomeTests(unittest.TestCase):
@@ -64,6 +67,12 @@ class ChatOutageGuardTests(unittest.TestCase):
         self.assertIn("for fn in chat assessment-admin curriculum-admin; do", smoke)
         self.assertIn('if [ "$code" -ge 500 ]', smoke)
         self.assertIn("jq -e .", smoke)
+
+    def test_curriculum_admin_maps_forbidden_to_403(self):
+        # The smoke check's first-ever run caught this: the auth layer's "Forbidden"
+        # (a non-user bearer) fell through the status ladder to 500 — an auth refusal
+        # dressed as a server fault. It maps to 403 now.
+        self.assertIn('lower.includes("forbidden")', CURRICULUM_ADMIN)
 
 
 if __name__ == "__main__":
