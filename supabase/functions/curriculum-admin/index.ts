@@ -249,6 +249,19 @@ async function assertCanAuthor(
   );
   if (platformAdmin) return;
 
+  // R50: SHARED content (a course/subject with no owning organization — the global
+  // books) resolves to an empty organizationId here. Only platform admins may author
+  // it directly; everyone else gets the designed hand-off to the class fork. Before
+  // this guard the empty string reached the uuid filter below and teachers saw the
+  // raw Postgres error ('invalid input syntax for type uuid: ""') as a banner.
+  if (!organizationId) {
+    throw new Error(
+      "This is a shared book, so it can't be edited directly. Open one of its lessons and " +
+        'use "Duplicate for this class" in the notice above the editor — your class gets ' +
+        "its own editable copy.",
+    );
+  }
+
   const orgAdmin = await selectFirst(
     config,
     `organization_memberships?organization_id=eq.${encodeURIComponent(organizationId)}&user_id=eq.${encodeURIComponent(actorId)}&role=eq.org_admin&status=eq.active&select=id&limit=1`,

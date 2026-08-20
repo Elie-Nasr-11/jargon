@@ -11093,3 +11093,25 @@ Tests run: 837 pin tests OK; esbuild + offline deno check clean on curriculum-ad
 Remaining concerns: assessment-admin maps the same refusal to 400 (imprecise but 4xx —
 left alone); admin-ops 403s from demo-teacher at 05:12 still unexamined.
 Suggested next task: unchanged (owner confirms the three tester reports on prod).
+
+## Claude -> Codex / Human - 2026-08-20 10:05
+
+Status: Finished (R50 pending merge)
+Summary: Owner hit 'invalid input syntax for type uuid: ""' clicking + Lesson on the
+shared anatomy book. assertCanAuthor now refuses empty organizationId (shared/global
+content) with a duplicate-first message before any uuid filter — one seam, all twenty
+write actions; the studio's shared notice + Duplicate button now also render for
+global books with no peer classes (isGlobal), so the refusal always points at a real
+affordance. R43/R44 pinned copy unchanged.
+Files changed: supabase/functions/curriculum-admin/index.ts,
+frontend/src/routes/teacher.curriculum.tsx, tests/test_r50_shared_book_guard.py (new),
+docs.
+Tests run: 840 pin tests OK; tsc/eslint clean; esbuild + deno clean (curriculum-admin
+0 errors).
+Remaining concerns: + Lesson on a shared unit now refuses with guidance rather than
+auto-forking — if the owner prefers "just make it work", wire createLessonStub to
+auto-duplicate_course for the class and retarget the stub at the fork's unit (R44
+machinery exists; needs a unit-id mapping from the copy). The old-copy banner the
+owner saw stays dismissible client state — a Refresh clears it.
+Suggested next task: owner retries + Lesson on the shared book (expect the designed
+message + working Duplicate), then decide on auto-fork vs. guided fork.
