@@ -23,6 +23,7 @@ import {
   roleHomeNav,
   fetchCostModelDashboard,
   fetchActiveSessions,
+  fetchPilotReadiness,
   getSession,
   invokeAdminSeed,
   seedDemoLogins,
@@ -30,13 +31,18 @@ import {
 import type {
   AdminActorAccess,
   AdminScope,
+  AdminScopeResult,
   AdminSeedResult,
   AdminSeedUser,
   CostModelDashboard,
   CostModelMetric,
   ActiveSession,
+  PilotReadiness,
   PilotRole,
 } from "@/lib/types";
+import { OverviewPanel } from "@/features/admin/OverviewPanel";
+import { PeoplePanel } from "@/features/admin/PeoplePanel";
+import { ClassesPanel } from "@/features/admin/ClassesPanel";
 
 // Org + active tab live in the URL (?org=&tab=) so context is set once and is
 // deep-linkable. Unknown params are preserved. Shared by the /admin (org admin)
@@ -75,6 +81,19 @@ const blankRow = (): RosterRow => ({
   grade: "",
   password: "",
 });
+
+// Placeholder scope for the frame between authorization and the first scope load —
+// the R51 panels render their empty states against it instead of null-guarding.
+const emptyScope: AdminScope = {
+  organizations: [],
+  classes: [],
+  organization_memberships: [],
+  class_memberships: [],
+  profiles: [],
+  users: [],
+  seed_batches: [],
+  audit_events: [],
+};
 
 function slugify(value: string) {
   return value
@@ -178,6 +197,7 @@ export function AdminPage() {
   const [booting, setBooting] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState("");
   const [token, setToken] = useState("");
   const [orgName, setOrgName] = useState("Pilot School");
   const [orgSlug, setOrgSlug] = useState("pilot-school");
@@ -221,6 +241,10 @@ export function AdminPage() {
     accounts: Array<{ email: string; role: string }>;
   } | null>(null);
   const [demoMessage, setDemoMessage] = useState("");
+  // R51: pilot readiness backs the Overview + Classes panels; loaded lazily the
+  // first time either tab opens, refreshed on demand.
+  const [readiness, setReadiness] = useState<PilotReadiness | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -243,6 +267,7 @@ export function AdminPage() {
         }
         void refreshCostDashboard(session.access_token, true);
         setEmail(session.user.email || "");
+        setUserId(session.user.id);
         setToken(session.access_token);
         setAuthorized(true);
         setMessage("");
@@ -320,6 +345,28 @@ export function AdminPage() {
     } finally {
       setCostLoading(false);
     }
+  };
+
+  const refreshReadiness = async (accessToken = token) => {
+    if (!accessToken || readinessLoading) return;
+    setReadinessLoading(true);
+    try {
+      const data = await fetchPilotReadiness(accessToken);
+      setActorAccess(data.actorAccess);
+      setScope(data.scope);
+      setReadiness(data.readiness);
+    } catch (error) {
+      notifyErr(error, "Could not load pilot readiness.");
+    } finally {
+      setReadinessLoading(false);
+    }
+  };
+
+  // Every admin-ops mutation answers with the refreshed scope — apply it directly
+  // instead of a second list_admin_scope round-trip.
+  const applyScopeResult = (result: AdminScopeResult) => {
+    setActorAccess(result.actorAccess);
+    setScope(result.scope);
   };
 
   const validRows = useMemo(
@@ -404,19 +451,22 @@ export function AdminPage() {
   ]);
 
   const canSeed = !submitting && formErrors.length === 0;
-  // Tabs kept for the MVP: Seeding, Live, and (platform-admin only) Cost & runtime.
-  // Unknown or no-longer-visible ?tab= values (including stale deep links to
-  // removed tabs) fall back to Live, which every admin level can see.
-  const visibleTabs = isPlatformLevel ? ["seeding", "live", "cost"] : ["seeding", "live"];
-  const adminTab = search.tab && visibleTabs.includes(search.tab) ? search.tab : "live";
+  // R51 tab set: Overview / People / Classes (management over admin-ops) plus the
+  // original Seeding, Live, and (platform-admin only) Cost & runtime. Unknown or
+  // no-longer-visible ?tab= values (including stale deep links to removed tabs)
+  // fall back to Overview, which every admin level can see.
+  const visibleTabs = isPlatformLevel
+    ? ["overview", "people", "classes", "seeding", "live", "cost"]
+    : ["overview", "people", "classes", "seeding", "live"];
+  const adminTab = search.tab && visibleTabs.includes(search.tab) ? search.tab : "overview";
   const setAdminTab = (tab: string) =>
     navigate({ to: adminHome, search: (prev: Record<string, unknown>) => ({ ...prev, tab }) });
 
   // Keep the Live fleet current while its tab is open: load on first open, then poll every 30s
   // (foreground only) so the session list + the "Xm ago" labels stay live. The panel keeps its
-  // manual Refresh too.
+  // manual Refresh too. R51: Overview shows the same fleet count, so it shares the loop.
   useEffect(() => {
-    if (adminTab !== "live" || !token) return;
+    if ((adminTab !== "live" && adminTab !== "overview") || !token) return;
     if (activeSessions === null && !activeSessionsLoading) {
       void refreshActiveSessions(token);
     }
@@ -426,6 +476,14 @@ export function AdminPage() {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminTab, token]);
+
+  // R51: readiness lazy-loads the first time Overview or Classes opens.
+  useEffect(() => {
+    if (adminTab !== "overview" && adminTab !== "classes") return;
+    if (!token || readiness !== null || readinessLoading) return;
+    void refreshReadiness(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminTab, token, readiness, readinessLoading]);
 
   const liveAgo = (iso: string): string => {
     const diff = Date.now() - Date.parse(iso);
@@ -561,8 +619,8 @@ export function AdminPage() {
             </h1>
             <p className="mt-2 max-w-2xl text-body leading-relaxed text-muted-foreground">
               {isPlatformLevel
-                ? "Seed pilot classes, watch live sessions, and track AI/runtime cost across the pilot."
-                : "Seed rosters and watch live sessions inside your organization."}{" "}
+                ? "Manage people and classes, seed pilot rosters, watch live sessions, and track AI/runtime cost across the pilot."
+                : "Manage people and classes, seed rosters, and watch live sessions inside your organization."}{" "}
               Passwords are sent only to Supabase Auth and are not stored in Jargon tables.
             </p>
           </div>
@@ -590,8 +648,8 @@ export function AdminPage() {
               </div>
               <p className="mt-1 text-meta text-muted-foreground">
                 {isPlatformLevel
-                  ? "Pick an organization to manage its seeding, live sessions, and cost."
-                  : "Pick an organization to manage its seeding and live sessions."}
+                  ? "Pick an organization to manage its people, classes, seeding, live sessions, and cost."
+                  : "Pick an organization to manage its people, classes, and live sessions."}
               </p>
               <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {(scope?.organizations || []).map((organization) => {
@@ -644,12 +702,48 @@ export function AdminPage() {
 
             <Tabs value={adminTab} onValueChange={setAdminTab}>
               <WorkspaceTabList>
+                <WorkspaceTab value="overview">Overview</WorkspaceTab>
+                <WorkspaceTab value="people">People</WorkspaceTab>
+                <WorkspaceTab value="classes">Classes</WorkspaceTab>
                 <WorkspaceTab value="seeding">Seeding</WorkspaceTab>
                 <WorkspaceTab value="live">Live</WorkspaceTab>
                 {isPlatformLevel ? (
                   <WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>
                 ) : null}
               </WorkspaceTabList>
+
+              <WorkspacePanel value="overview">
+                <OverviewPanel
+                  scope={scope || emptyScope}
+                  organizationId={selectedOrgId}
+                  activeSessions={activeSessions}
+                  readiness={readiness}
+                  readinessLoading={readinessLoading}
+                  onRefreshReadiness={() => void refreshReadiness()}
+                />
+              </WorkspacePanel>
+
+              <WorkspacePanel value="people">
+                <PeoplePanel
+                  token={token}
+                  scope={scope || emptyScope}
+                  organizationId={selectedOrgId}
+                  currentUserId={userId}
+                  isPlatformAdmin={isPlatformAdmin}
+                  onScope={applyScopeResult}
+                />
+              </WorkspacePanel>
+
+              <WorkspacePanel value="classes">
+                <ClassesPanel
+                  token={token}
+                  scope={scope || emptyScope}
+                  organizationId={selectedOrgId}
+                  readiness={readiness}
+                  readinessLoading={readinessLoading}
+                  onScope={applyScopeResult}
+                />
+              </WorkspacePanel>
 
               <WorkspacePanel value="live">
                 <section className="rounded-card border border-border bg-depth-card shadow-card">
@@ -927,385 +1021,386 @@ export function AdminPage() {
                 </section>
               </WorkspacePanel>
 
-              {isPlatformLevel ? (
-                <WorkspacePanel value="seeding">
-                  <div className="space-y-5">
-                    {isPlatformAdmin ? (
-                      <div>
-                        <section className="rounded-card border border-border bg-depth-card shadow-card">
-                          <div className="space-y-4 p-5">
-                            <div>
-                              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                                Demo entry
-                              </div>
-                              <h2 className="mt-1 text-title font-medium text-foreground">
-                                Create demo logins
-                              </h2>
-                              <p className="mt-1 max-w-2xl text-meta leading-relaxed text-muted-foreground">
-                                One click creates (or resets) three test accounts in a "Demo Org" so
-                                you can sign in as each role — student, teacher, and org admin. Your
-                                own account is the platform admin. All three share the password
-                                below.
-                              </p>
-                            </div>
-                            {demoMessage ? (
-                              <div className="rounded-card border border-border bg-depth-sub px-3 py-2 text-meta text-muted-foreground">
-                                {demoMessage}
-                              </div>
-                            ) : null}
-                            <div className="flex flex-wrap items-end gap-2">
-                              <div className="min-w-[220px]">
-                                <Field label="Demo password">
-                                  <input
-                                    type="text"
-                                    autoComplete="off"
-                                    value={demoPassword}
-                                    onChange={(event) => setDemoPassword(event.target.value)}
-                                    className="jargon-input"
-                                  />
-                                </Field>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => void createDemoLogins()}
-                                disabled={
-                                  demoBusy || demoPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH
-                                }
-                                className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-meta font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
-                              >
-                                <UserPlus className="h-4 w-4" strokeWidth={1.6} />
-                                {demoBusy ? "Creating…" : "Create demo logins"}
-                              </button>
-                            </div>
-                            {demoResult ? (
-                              <div className="rounded-card border border-success/30 bg-success/10 p-3 text-meta">
-                                <div className="font-medium text-success">
-                                  Logins ready — password{" "}
-                                  <span className="font-mono">{demoResult.password}</span>
-                                </div>
-                                <ul className="mt-2 space-y-1 text-foreground">
-                                  {demoResult.accounts.map((account) => (
-                                    <li key={account.email}>
-                                      <span className="text-muted-foreground">{account.role}:</span>{" "}
-                                      {account.email}
-                                    </li>
-                                  ))}
-                                  <li>
-                                    <span className="text-muted-foreground">platform_admin:</span>{" "}
-                                    your own account
-                                  </li>
-                                </ul>
-                              </div>
-                            ) : null}
-                          </div>
-                        </section>
-                      </div>
-                    ) : null}
-                    <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
-                      <section className="rounded-card border border-border bg-depth-card shadow-card">
-                        <div className="space-y-5 p-5">
-                          <div>
-                            <h2 className="text-title font-medium text-foreground">Class setup</h2>
-                            <p className="mt-1 text-meta text-muted-foreground">
-                              Use stable names for the real classroom pilot.
-                            </p>
-                          </div>
-                          {isPlatformLevel ? (
-                            <>
-                              <Field label="Organization name">
-                                <input
-                                  value={orgName}
-                                  onChange={(event) => {
-                                    setOrgName(event.target.value);
-                                    if (!orgSlug || orgSlug === slugify(orgName))
-                                      setOrgSlug(slugify(event.target.value));
-                                  }}
-                                  className="jargon-input"
-                                />
-                              </Field>
-                              <Field label="Organization slug">
-                                <input
-                                  value={orgSlug}
-                                  onChange={(event) => setOrgSlug(event.target.value)}
-                                  className="jargon-input"
-                                />
-                              </Field>
-                            </>
-                          ) : (
-                            <Field label="Organization">
-                              <div className="jargon-input flex items-center text-muted-foreground">
-                                {selectedOrg?.name || "Your organization"}
-                              </div>
-                            </Field>
-                          )}
-                          <Field label="Class name">
-                            <input
-                              value={className}
-                              onChange={(event) => setClassName(event.target.value)}
-                              className="jargon-input"
-                            />
-                          </Field>
-                          <Field label="Default temporary password">
-                            <input
-                              type="password"
-                              value={defaultPassword}
-                              onChange={(event) => setDefaultPassword(event.target.value)}
-                              placeholder="Optional if every row has a password"
-                              className={`jargon-input ${hasShortDefaultPassword ? "border-danger/60" : ""}`}
-                            />
-                            <p
-                              className={`mt-1.5 text-meta ${
-                                hasShortDefaultPassword ? "text-danger" : "text-muted-foreground"
-                              }`}
-                            >
-                              {hasShortDefaultPassword
-                                ? `Use at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`
-                                : "Required unless every row has a password override."}
-                            </p>
-                          </Field>
-                          <div className="rounded-card border border-border bg-muted/30 p-3 text-meta leading-relaxed text-muted-foreground">
-                            Bootstrap note: the first platform admin is still created manually in
-                            Supabase by inserting the signed-in admin user id into{" "}
-                            <code>public.platform_admins</code>.
-                          </div>
-                        </div>
-                      </section>
-
+              {/* R51: the Seeding panel now renders for BOTH admin levels — the tab was
+                  always visible to org admins, but the panel body was platform-gated,
+                  leaving org admins a blank tab. The seeding form itself has handled the
+                  org-admin path (seed into your own org) since the pilot rounds. */}
+              <WorkspacePanel value="seeding">
+                <div className="space-y-5">
+                  {isPlatformAdmin ? (
+                    <div>
                       <section className="rounded-card border border-border bg-depth-card shadow-card">
                         <div className="space-y-4 p-5">
                           <div>
-                            <h2 className="text-title font-medium text-foreground">Roster paste</h2>
-                            <p className="mt-1 text-meta text-muted-foreground">
-                              Paste CSV or tab-separated rows. Header fields can be email, name,
-                              role, grade, password.
+                            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                              Demo entry
+                            </div>
+                            <h2 className="mt-1 text-title font-medium text-foreground">
+                              Create demo logins
+                            </h2>
+                            <p className="mt-1 max-w-2xl text-meta leading-relaxed text-muted-foreground">
+                              One click creates (or resets) three test accounts in a "Demo Org" so
+                              you can sign in as each role — student, teacher, and org admin. Your
+                              own account is the platform admin. All three share the password below.
                             </p>
                           </div>
-                          <textarea
-                            value={pasteText}
-                            onChange={(event) => setPasteText(event.target.value)}
-                            placeholder={
-                              "email,name,role,grade,password\nteacher@example.com,Teacher Name,teacher,,temporary123\nstudent@example.com,Student Name,student,Grade 4,temporary123"
-                            }
-                            className="min-h-[170px] w-full resize-y rounded-card border border-border bg-depth-field p-3 text-body leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
-                          />
-                          <div className="flex flex-wrap gap-2">
+                          {demoMessage ? (
+                            <div className="rounded-card border border-border bg-depth-sub px-3 py-2 text-meta text-muted-foreground">
+                              {demoMessage}
+                            </div>
+                          ) : null}
+                          <div className="flex flex-wrap items-end gap-2">
+                            <div className="min-w-[220px]">
+                              <Field label="Demo password">
+                                <input
+                                  type="text"
+                                  autoComplete="off"
+                                  value={demoPassword}
+                                  onChange={(event) => setDemoPassword(event.target.value)}
+                                  className="jargon-input"
+                                />
+                              </Field>
+                            </div>
                             <button
                               type="button"
-                              onClick={applyPaste}
-                              className="rounded-full bg-foreground px-4 py-2 text-body font-medium text-background transition-transform hover:-translate-y-[1px]"
+                              onClick={() => void createDemoLogins()}
+                              disabled={
+                                demoBusy || demoPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH
+                              }
+                              className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-meta font-medium text-background transition-transform hover:-translate-y-[1px] disabled:opacity-50"
                             >
-                              Load pasted roster
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setRows((current) => [...current, blankRow()])}
-                              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
-                            >
-                              <Plus className="h-4 w-4" strokeWidth={1.6} /> Add row
+                              <UserPlus className="h-4 w-4" strokeWidth={1.6} />
+                              {demoBusy ? "Creating…" : "Create demo logins"}
                             </button>
                           </div>
+                          {demoResult ? (
+                            <div className="rounded-card border border-success/30 bg-success/10 p-3 text-meta">
+                              <div className="font-medium text-success">
+                                Logins ready — password{" "}
+                                <span className="font-mono">{demoResult.password}</span>
+                              </div>
+                              <ul className="mt-2 space-y-1 text-foreground">
+                                {demoResult.accounts.map((account) => (
+                                  <li key={account.email}>
+                                    <span className="text-muted-foreground">{account.role}:</span>{" "}
+                                    {account.email}
+                                  </li>
+                                ))}
+                                <li>
+                                  <span className="text-muted-foreground">platform_admin:</span>{" "}
+                                  your own account
+                                </li>
+                              </ul>
+                            </div>
+                          ) : null}
                         </div>
                       </section>
                     </div>
-
+                  ) : null}
+                  <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
                     <section className="rounded-card border border-border bg-depth-card shadow-card">
-                      <div className="p-5">
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <h2 className="text-title font-medium text-foreground">Roster rows</h2>
-                            <p className="mt-1 text-meta text-muted-foreground">
-                              {validRows.length} ready{" "}
-                              {validRows.length === 1 ? "account" : "accounts"}.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={seedRoster}
-                            disabled={!canSeed}
-                            title={formErrors[0] || "Seed classroom"}
-                            className="rounded-full bg-foreground px-5 py-2.5 text-body font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
-                          >
-                            {submitting ? "Seeding..." : "Seed classroom"}
-                          </button>
+                      <div className="space-y-5 p-5">
+                        <div>
+                          <h2 className="text-title font-medium text-foreground">Class setup</h2>
+                          <p className="mt-1 text-meta text-muted-foreground">
+                            Use stable names for the real classroom pilot.
+                          </p>
                         </div>
-                        <div className="overflow-x-auto">
-                          <table className="min-w-[820px] w-full border-collapse text-left text-body">
-                            <thead className="border-b border-border text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                              <tr>
-                                <th className="py-2 pr-3 font-medium">Role</th>
-                                <th className="py-2 pr-3 font-medium">Email</th>
-                                <th className="py-2 pr-3 font-medium">Name</th>
-                                <th className="py-2 pr-3 font-medium">Grade</th>
-                                <th className="py-2 pr-3 font-medium">Password override</th>
-                                <th className="py-2 font-medium" />
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rows.map((row) => (
-                                <tr key={row.rowId} className="border-b border-border/60">
-                                  <td className="py-2 pr-3">
-                                    <select
-                                      value={row.role}
-                                      onChange={(event) =>
-                                        updateRow(row.rowId, {
-                                          role: event.target.value as PilotRole,
-                                        })
-                                      }
-                                      className="jargon-input min-w-[110px]"
-                                    >
-                                      <option value="student">student</option>
-                                      <option value="teacher">teacher</option>
-                                    </select>
-                                  </td>
-                                  <td className="py-2 pr-3">
-                                    <div className="space-y-1">
-                                      <input
-                                        value={row.email}
-                                        onChange={(event) =>
-                                          updateRow(row.rowId, { email: event.target.value })
-                                        }
-                                        className={`jargon-input min-w-[220px] ${
-                                          emailErrors[row.rowId] ? "border-danger/60" : ""
-                                        }`}
-                                      />
-                                      {emailErrors[row.rowId] ? (
-                                        <div className="text-meta text-danger">
-                                          {emailErrors[row.rowId]}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 pr-3">
-                                    <div className="space-y-1">
-                                      <input
-                                        value={row.name}
-                                        onChange={(event) =>
-                                          updateRow(row.rowId, { name: event.target.value })
-                                        }
-                                        className={`jargon-input min-w-[180px] ${
-                                          nameErrors[row.rowId] ? "border-danger/60" : ""
-                                        }`}
-                                      />
-                                      {nameErrors[row.rowId] ? (
-                                        <div className="text-meta text-danger">
-                                          {nameErrors[row.rowId]}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 pr-3">
-                                    <input
-                                      value={row.grade || ""}
-                                      onChange={(event) =>
-                                        updateRow(row.rowId, { grade: event.target.value })
-                                      }
-                                      className="jargon-input min-w-[120px]"
-                                    />
-                                  </td>
-                                  <td className="py-2 pr-3">
-                                    <div className="space-y-1">
-                                      <input
-                                        type="password"
-                                        value={row.password || ""}
-                                        onChange={(event) =>
-                                          updateRow(row.rowId, { password: event.target.value })
-                                        }
-                                        className={`jargon-input min-w-[180px] ${
-                                          passwordErrors[row.rowId] ? "border-danger/60" : ""
-                                        }`}
-                                      />
-                                      {passwordErrors[row.rowId] ? (
-                                        <div className="text-meta text-danger">
-                                          {passwordErrors[row.rowId]}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 text-right">
-                                    <button
-                                      type="button"
-                                      onClick={() => removeRow(row.rowId)}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                      aria-label="Remove roster row"
-                                    >
-                                      <Trash2 className="h-4 w-4" strokeWidth={1.6} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        {isPlatformLevel ? (
+                          <>
+                            <Field label="Organization name">
+                              <input
+                                value={orgName}
+                                onChange={(event) => {
+                                  setOrgName(event.target.value);
+                                  if (!orgSlug || orgSlug === slugify(orgName))
+                                    setOrgSlug(slugify(event.target.value));
+                                }}
+                                className="jargon-input"
+                              />
+                            </Field>
+                            <Field label="Organization slug">
+                              <input
+                                value={orgSlug}
+                                onChange={(event) => setOrgSlug(event.target.value)}
+                                className="jargon-input"
+                              />
+                            </Field>
+                          </>
+                        ) : (
+                          <Field label="Organization">
+                            <div className="jargon-input flex items-center text-muted-foreground">
+                              {selectedOrg?.name || "Your organization"}
+                            </div>
+                          </Field>
+                        )}
+                        <Field label="Class name">
+                          <input
+                            value={className}
+                            onChange={(event) => setClassName(event.target.value)}
+                            className="jargon-input"
+                          />
+                        </Field>
+                        <Field label="Default temporary password">
+                          <input
+                            type="password"
+                            value={defaultPassword}
+                            onChange={(event) => setDefaultPassword(event.target.value)}
+                            placeholder="Optional if every row has a password"
+                            className={`jargon-input ${hasShortDefaultPassword ? "border-danger/60" : ""}`}
+                          />
+                          <p
+                            className={`mt-1.5 text-meta ${
+                              hasShortDefaultPassword ? "text-danger" : "text-muted-foreground"
+                            }`}
+                          >
+                            {hasShortDefaultPassword
+                              ? `Use at least ${MIN_TEMP_PASSWORD_LENGTH} characters.`
+                              : "Required unless every row has a password override."}
+                          </p>
+                        </Field>
+                        <div className="rounded-card border border-border bg-muted/30 p-3 text-meta leading-relaxed text-muted-foreground">
+                          Bootstrap note: the first platform admin is still created manually in
+                          Supabase by inserting the signed-in admin user id into{" "}
+                          <code>public.platform_admins</code>.
                         </div>
                       </div>
                     </section>
 
-                    {(message || results.length > 0) && (
-                      <section className="rounded-card border border-border bg-depth-card shadow-card">
-                        <div className="space-y-4 p-5">
-                          {message && (
-                            <div className="flex items-start gap-2 text-body text-muted-foreground">
-                              {results.some((result) => result.status === "failed") ? (
-                                <AlertCircle
-                                  className="mt-0.5 h-4 w-4 shrink-0 text-danger"
-                                  strokeWidth={1.7}
-                                />
-                              ) : (
-                                <CheckCircle2
-                                  className="mt-0.5 h-4 w-4 shrink-0 text-success"
-                                  strokeWidth={1.7}
-                                />
-                              )}
-                              <span>
-                                {message}
-                                {batchId ? (
-                                  <span className="ml-2 text-muted-foreground/70">
-                                    Batch {batchId}
-                                  </span>
-                                ) : null}
-                              </span>
-                            </div>
-                          )}
-                          {results.length > 0 && (
-                            <div className="overflow-x-auto">
-                              <table className="min-w-[680px] w-full border-collapse text-left text-body">
-                                <thead className="border-b border-border text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                                  <tr>
-                                    <th className="py-2 pr-3 font-medium">Status</th>
-                                    <th className="py-2 pr-3 font-medium">Role</th>
-                                    <th className="py-2 pr-3 font-medium">Email</th>
-                                    <th className="py-2 font-medium">Detail</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {results.map((result) => (
-                                    <tr
-                                      key={`${result.email}-${result.role}`}
-                                      className="border-b border-border/60"
-                                    >
-                                      <td
-                                        className={`py-2 pr-3 font-medium ${resultTone(result.status)}`}
-                                      >
-                                        {result.status}
-                                      </td>
-                                      <td className="py-2 pr-3 text-muted-foreground">
-                                        {result.role}
-                                      </td>
-                                      <td className="py-2 pr-3 text-foreground">{result.email}</td>
-                                      <td className="py-2 text-muted-foreground">
-                                        {result.error || result.user_id || ""}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
+                    <section className="rounded-card border border-border bg-depth-card shadow-card">
+                      <div className="space-y-4 p-5">
+                        <div>
+                          <h2 className="text-title font-medium text-foreground">Roster paste</h2>
+                          <p className="mt-1 text-meta text-muted-foreground">
+                            Paste CSV or tab-separated rows. Header fields can be email, name, role,
+                            grade, password.
+                          </p>
                         </div>
-                      </section>
-                    )}
+                        <textarea
+                          value={pasteText}
+                          onChange={(event) => setPasteText(event.target.value)}
+                          placeholder={
+                            "email,name,role,grade,password\nteacher@example.com,Teacher Name,teacher,,temporary123\nstudent@example.com,Student Name,student,Grade 4,temporary123"
+                          }
+                          className="min-h-[170px] w-full resize-y rounded-card border border-border bg-depth-field p-3 text-body leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/55 focus:border-foreground/50"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={applyPaste}
+                            className="rounded-full bg-foreground px-4 py-2 text-body font-medium text-background transition-transform hover:-translate-y-[1px]"
+                          >
+                            Load pasted roster
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRows((current) => [...current, blankRow()])}
+                            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-body text-foreground transition-colors hover:bg-muted"
+                          >
+                            <Plus className="h-4 w-4" strokeWidth={1.6} /> Add row
+                          </button>
+                        </div>
+                      </div>
+                    </section>
                   </div>
-                </WorkspacePanel>
-              ) : null}
+
+                  <section className="rounded-card border border-border bg-depth-card shadow-card">
+                    <div className="p-5">
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-title font-medium text-foreground">Roster rows</h2>
+                          <p className="mt-1 text-meta text-muted-foreground">
+                            {validRows.length} ready{" "}
+                            {validRows.length === 1 ? "account" : "accounts"}.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={seedRoster}
+                          disabled={!canSeed}
+                          title={formErrors[0] || "Seed classroom"}
+                          className="rounded-full bg-foreground px-5 py-2.5 text-body font-medium text-background transition-transform hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                          {submitting ? "Seeding..." : "Seed classroom"}
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-[820px] w-full border-collapse text-left text-body">
+                          <thead className="border-b border-border text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                            <tr>
+                              <th className="py-2 pr-3 font-medium">Role</th>
+                              <th className="py-2 pr-3 font-medium">Email</th>
+                              <th className="py-2 pr-3 font-medium">Name</th>
+                              <th className="py-2 pr-3 font-medium">Grade</th>
+                              <th className="py-2 pr-3 font-medium">Password override</th>
+                              <th className="py-2 font-medium" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row) => (
+                              <tr key={row.rowId} className="border-b border-border/60">
+                                <td className="py-2 pr-3">
+                                  <select
+                                    value={row.role}
+                                    onChange={(event) =>
+                                      updateRow(row.rowId, {
+                                        role: event.target.value as PilotRole,
+                                      })
+                                    }
+                                    className="jargon-input min-w-[110px]"
+                                  >
+                                    <option value="student">student</option>
+                                    <option value="teacher">teacher</option>
+                                  </select>
+                                </td>
+                                <td className="py-2 pr-3">
+                                  <div className="space-y-1">
+                                    <input
+                                      value={row.email}
+                                      onChange={(event) =>
+                                        updateRow(row.rowId, { email: event.target.value })
+                                      }
+                                      className={`jargon-input min-w-[220px] ${
+                                        emailErrors[row.rowId] ? "border-danger/60" : ""
+                                      }`}
+                                    />
+                                    {emailErrors[row.rowId] ? (
+                                      <div className="text-meta text-danger">
+                                        {emailErrors[row.rowId]}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className="py-2 pr-3">
+                                  <div className="space-y-1">
+                                    <input
+                                      value={row.name}
+                                      onChange={(event) =>
+                                        updateRow(row.rowId, { name: event.target.value })
+                                      }
+                                      className={`jargon-input min-w-[180px] ${
+                                        nameErrors[row.rowId] ? "border-danger/60" : ""
+                                      }`}
+                                    />
+                                    {nameErrors[row.rowId] ? (
+                                      <div className="text-meta text-danger">
+                                        {nameErrors[row.rowId]}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className="py-2 pr-3">
+                                  <input
+                                    value={row.grade || ""}
+                                    onChange={(event) =>
+                                      updateRow(row.rowId, { grade: event.target.value })
+                                    }
+                                    className="jargon-input min-w-[120px]"
+                                  />
+                                </td>
+                                <td className="py-2 pr-3">
+                                  <div className="space-y-1">
+                                    <input
+                                      type="password"
+                                      value={row.password || ""}
+                                      onChange={(event) =>
+                                        updateRow(row.rowId, { password: event.target.value })
+                                      }
+                                      className={`jargon-input min-w-[180px] ${
+                                        passwordErrors[row.rowId] ? "border-danger/60" : ""
+                                      }`}
+                                    />
+                                    {passwordErrors[row.rowId] ? (
+                                      <div className="text-meta text-danger">
+                                        {passwordErrors[row.rowId]}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className="py-2 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => removeRow(row.rowId)}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                    aria-label="Remove roster row"
+                                  >
+                                    <Trash2 className="h-4 w-4" strokeWidth={1.6} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </section>
+
+                  {(message || results.length > 0) && (
+                    <section className="rounded-card border border-border bg-depth-card shadow-card">
+                      <div className="space-y-4 p-5">
+                        {message && (
+                          <div className="flex items-start gap-2 text-body text-muted-foreground">
+                            {results.some((result) => result.status === "failed") ? (
+                              <AlertCircle
+                                className="mt-0.5 h-4 w-4 shrink-0 text-danger"
+                                strokeWidth={1.7}
+                              />
+                            ) : (
+                              <CheckCircle2
+                                className="mt-0.5 h-4 w-4 shrink-0 text-success"
+                                strokeWidth={1.7}
+                              />
+                            )}
+                            <span>
+                              {message}
+                              {batchId ? (
+                                <span className="ml-2 text-muted-foreground/70">
+                                  Batch {batchId}
+                                </span>
+                              ) : null}
+                            </span>
+                          </div>
+                        )}
+                        {results.length > 0 && (
+                          <div className="overflow-x-auto">
+                            <table className="min-w-[680px] w-full border-collapse text-left text-body">
+                              <thead className="border-b border-border text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                                <tr>
+                                  <th className="py-2 pr-3 font-medium">Status</th>
+                                  <th className="py-2 pr-3 font-medium">Role</th>
+                                  <th className="py-2 pr-3 font-medium">Email</th>
+                                  <th className="py-2 font-medium">Detail</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {results.map((result) => (
+                                  <tr
+                                    key={`${result.email}-${result.role}`}
+                                    className="border-b border-border/60"
+                                  >
+                                    <td
+                                      className={`py-2 pr-3 font-medium ${resultTone(result.status)}`}
+                                    >
+                                      {result.status}
+                                    </td>
+                                    <td className="py-2 pr-3 text-muted-foreground">
+                                      {result.role}
+                                    </td>
+                                    <td className="py-2 pr-3 text-foreground">{result.email}</td>
+                                    <td className="py-2 text-muted-foreground">
+                                      {result.error || result.user_id || ""}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              </WorkspacePanel>
             </Tabs>
           </>
         )}
