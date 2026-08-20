@@ -1396,7 +1396,11 @@ function ClassDetail({
   };
   return (
     <>
-      <section className="rounded-card border border-border bg-depth-card shadow-card">
+      {/* min-w-0: this card is a grid item, and grid items refuse to shrink below their
+          content (min-width:auto) — without it the 920px gradebook table stretched the
+          whole card past the viewport and CLIPPED the action column + header tabs at
+          tablet widths instead of scrolling inside .table-scroll (R52). */}
+      <section className="min-w-0 rounded-card border border-border bg-depth-card shadow-card">
         <div className="p-4 sm:p-5">
           {/* R47 header: the class name and the four fixed tabs — Live, Classwork, People,
               Grades. Rendered FROM CLASS_SECTIONS so the pills and the sidebar sub-rows can
@@ -1417,7 +1421,7 @@ function ClassDetail({
                   }
                   className={`rounded-full border px-4 py-1.5 text-body transition-colors ${
                     section === tabItem.value
-                      ? "border-foreground/25 bg-muted font-medium text-foreground"
+                      ? "border-foreground bg-foreground font-medium text-background"
                       : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                   }`}
                 >
@@ -1438,11 +1442,17 @@ function ClassDetail({
                     const profile = profilesById.get(studentId) || null;
                     const live = liveByStudent.get(studentId)!;
                     return (
-                      <div key={studentId} className="flex items-stretch gap-2">
+                      // R52: ONE row container owns the chrome; the open-student hit
+                      // area and the Watch action both live INSIDE it (previously two
+                      // detached pills side by side).
+                      <div
+                        key={studentId}
+                        className="flex items-center gap-3 rounded-card border border-border bg-depth-sub py-2 pl-4 pr-2"
+                      >
                         <button
                           type="button"
                           onClick={() => onSelectStudent(studentId)}
-                          className="flex min-w-0 flex-1 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-3 text-left transition-colors hover:bg-muted"
+                          className="flex min-w-0 flex-1 items-center gap-3 rounded-control py-1 text-left transition-colors hover:opacity-80"
                         >
                           <span className="relative flex h-2.5 w-2.5 shrink-0">
                             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
@@ -1466,7 +1476,7 @@ function ClassDetail({
                               search: { tab: "overview", session: live.id },
                             })
                           }
-                          className="shrink-0 self-center rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                          className="btn btn-secondary btn-sm shrink-0"
                         >
                           Watch
                         </button>
@@ -1530,11 +1540,7 @@ function ClassDetail({
                   {studentIds.length} student{studentIds.length === 1 ? "" : "s"}
                   {signals.sections.length ? ` · sections ${signals.sections.join(" · ")}` : ""}
                 </span>
-                <button
-                  type="button"
-                  onClick={openEnroll}
-                  className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-                >
+                <button type="button" onClick={openEnroll} className="btn btn-secondary btn-sm">
                   Add students
                 </button>
               </div>
@@ -1553,15 +1559,21 @@ function ClassDetail({
                         {group.students.map((studentId) => {
                           const profile = profilesById.get(studentId) || null;
                           return (
-                            <div key={studentId} className="flex items-stretch gap-2">
+                            // R52: one row container; the section picker lives inside
+                            // the row instead of floating next to it. Row fill stays
+                            // distinct from field chrome so rows never read as inputs.
+                            <div
+                              key={studentId}
+                              className={`flex items-center gap-3 rounded-card border py-2 pl-4 pr-2 transition-colors ${
+                                selectedStudentId === studentId
+                                  ? "border-foreground/25 bg-depth-card"
+                                  : "border-border bg-depth-sub"
+                              }`}
+                            >
                               <button
                                 type="button"
                                 onClick={() => onSelectStudent(studentId)}
-                                className={`flex min-w-0 flex-1 items-center gap-3 rounded-card border px-4 py-3 text-left transition-colors ${
-                                  selectedStudentId === studentId
-                                    ? "border-foreground/25 bg-depth-card"
-                                    : "border-border bg-depth-sub hover:bg-muted"
-                                }`}
+                                className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left transition-colors hover:opacity-80"
                               >
                                 <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
                                   {displayName(profile, studentId)}
@@ -1579,7 +1591,7 @@ function ClassDetail({
                                   onChange={(event) =>
                                     void changeSection(studentId, event.target.value)
                                   }
-                                  className="h-9 rounded-control border border-border bg-depth-field px-2 text-meta text-foreground outline-none"
+                                  className="jargon-input !w-auto"
                                 >
                                   <option value="">No section</option>
                                   {sectionNames.map((name) => (
@@ -1618,7 +1630,7 @@ function ClassDetail({
                       value={enrollSection}
                       onChange={(event) => setEnrollSection(event.target.value)}
                       placeholder="e.g. 7A"
-                      className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                      className="jargon-input normal-case tracking-normal"
                     />
                   </label>
                   {enrollable === null ? (
@@ -1662,7 +1674,7 @@ function ClassDetail({
                     <button
                       type="button"
                       onClick={() => setEnrollOpen(false)}
-                      className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground hover:bg-muted"
+                      className="btn btn-secondary btn-sm"
                     >
                       Cancel
                     </button>
@@ -1670,7 +1682,7 @@ function ClassDetail({
                       type="button"
                       onClick={() => void submitEnroll()}
                       disabled={enrollBusy || !enrollChecked.size}
-                      className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground hover:bg-muted disabled:opacity-50"
+                      className="btn btn-secondary btn-sm"
                     >
                       {enrollBusy
                         ? "Adding…"
@@ -1756,7 +1768,7 @@ function ClassDetail({
               <button
                 type="button"
                 onClick={backToClasswork}
-                className="mt-3 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                className="btn btn-secondary btn-sm mt-3"
               >
                 ← Classwork
               </button>
@@ -2065,7 +2077,7 @@ function ResourceManager({
             <button
               type="button"
               onClick={() => void openResource(resource)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+              className="btn btn-secondary btn-sm"
             >
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.6} />
               {openingId === resource.id ? "Opening..." : "Open"}
@@ -2101,7 +2113,7 @@ function ResourceManager({
               value={draft.lessonId}
               onChange={(event) => setField("lessonId", event.target.value)}
               disabled={Boolean(draft.resourceId)}
-              className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+              className="jargon-input normal-case tracking-normal disabled:opacity-60"
             >
               {lessons.map((lesson) => (
                 <option key={lesson.id} value={lesson.id}>
@@ -2117,7 +2129,7 @@ function ResourceManager({
               value={draft.title}
               onChange={(event) => setField("title", event.target.value)}
               placeholder="Purpose explainer PDF"
-              className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              className="jargon-input normal-case tracking-normal"
             />
           </label>
 
@@ -2136,7 +2148,7 @@ function ResourceManager({
                   }));
                 }}
                 disabled={Boolean(draft.resourceId)}
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                className="jargon-input normal-case tracking-normal disabled:opacity-60"
               >
                 <option value="upload">Upload</option>
                 <option value="external_url">External URL</option>
@@ -2151,7 +2163,7 @@ function ResourceManager({
                   setField("resourceType", event.target.value as LessonResourceType)
                 }
                 disabled={draft.sourceType === "upload" || Boolean(draft.resourceId)}
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                className="jargon-input normal-case tracking-normal disabled:opacity-60"
               >
                 <option value="pdf">PDF</option>
                 <option value="video">Video</option>
@@ -2171,7 +2183,7 @@ function ResourceManager({
                 type="file"
                 accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,image/*,audio/*,video/*"
                 onChange={(event) => setField("file", event.target.files?.[0] || null)}
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-meta file:text-foreground"
+                className="jargon-input normal-case tracking-normal file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-meta file:text-foreground"
               />
             </label>
           ) : null}
@@ -2183,7 +2195,7 @@ function ResourceManager({
                 value={draft.externalUrl || ""}
                 onChange={(event) => setField("externalUrl", event.target.value)}
                 placeholder="https://youtube.com/watch?v=..."
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="jargon-input normal-case tracking-normal"
               />
             </label>
           ) : null}
@@ -2194,7 +2206,7 @@ function ResourceManager({
               value={draft.studentInstructions}
               onChange={(event) => setField("studentInstructions", event.target.value)}
               placeholder="Open this before the checkpoint and look for the input/process/output idea."
-              className="min-h-[72px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              className="jargon-input min-h-[72px] normal-case leading-relaxed tracking-normal"
             />
           </label>
 
@@ -2204,7 +2216,7 @@ function ResourceManager({
               value={draft.description}
               onChange={(event) => setField("description", event.target.value)}
               placeholder="Short student-facing summary."
-              className="min-h-[66px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              className="jargon-input min-h-[66px] normal-case leading-relaxed tracking-normal"
             />
           </label>
 
@@ -2214,7 +2226,7 @@ function ResourceManager({
               value={draft.teacherNotes}
               onChange={(event) => setField("teacherNotes", event.target.value)}
               placeholder="Private classroom context for teachers."
-              className="min-h-[66px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+              className="jargon-input min-h-[66px] normal-case leading-relaxed tracking-normal"
             />
           </label>
 
@@ -2224,7 +2236,7 @@ function ResourceManager({
               <select
                 value={draft.status}
                 onChange={(event) => setField("status", event.target.value as LessonResourceStatus)}
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                className="jargon-input normal-case tracking-normal"
               >
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
@@ -2239,7 +2251,7 @@ function ResourceManager({
                 onChange={(event) =>
                   setField("visibility", event.target.value as LessonResourceVisibility)
                 }
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                className="jargon-input normal-case tracking-normal"
               >
                 <option value="class_private">Class private</option>
                 <option value="org_private">Organization private</option>
@@ -2252,7 +2264,7 @@ function ResourceManager({
             type="button"
             onClick={() => void submit()}
             disabled={saving}
-            className="mt-1 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn btn-secondary mt-1"
           >
             {saving ? "Saving..." : draft.resourceId ? "Save resource" : "Create resource"}
           </button>
@@ -2468,7 +2480,7 @@ function AssessmentManager({
                 value={draft.lessonId}
                 onChange={(event) => setField("lessonId", event.target.value)}
                 disabled={Boolean(context)}
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none disabled:opacity-60"
+                className="jargon-input normal-case tracking-normal disabled:opacity-60"
               >
                 {lessons.map((lesson) => (
                   <option key={lesson.id} value={lesson.id}>
@@ -2483,7 +2495,7 @@ function AssessmentManager({
                 value={draft.title}
                 onChange={(event) => setField("title", event.target.value)}
                 placeholder="Clear reasons checkpoint"
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="jargon-input normal-case tracking-normal"
               />
             </label>
             <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
@@ -2492,7 +2504,7 @@ function AssessmentManager({
                 value={draft.instructions}
                 onChange={(event) => setField("instructions", event.target.value)}
                 placeholder="Answer each question carefully. Written answers will be reviewed by your teacher."
-                className="min-h-[76px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="jargon-input min-h-[76px] normal-case leading-relaxed tracking-normal"
               />
             </label>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -2502,7 +2514,7 @@ function AssessmentManager({
                   type="datetime-local"
                   value={draft.dueAt}
                   onChange={(event) => setField("dueAt", event.target.value)}
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                  className="jargon-input normal-case tracking-normal"
                 />
               </label>
               <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
@@ -2515,7 +2527,7 @@ function AssessmentManager({
                       event.target.value as Extract<AssessmentStatus, "draft" | "published">,
                     )
                   }
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                  className="jargon-input normal-case tracking-normal"
                 >
                   <option value="published">Published</option>
                   <option value="draft">Draft</option>
@@ -2529,7 +2541,7 @@ function AssessmentManager({
                   max={10}
                   value={draft.attemptLimit}
                   onChange={(event) => setField("attemptLimit", Number(event.target.value) || 1)}
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                  className="jargon-input normal-case tracking-normal"
                 />
               </label>
             </div>
@@ -2596,7 +2608,7 @@ function AssessmentManager({
                 <button
                   type="button"
                   onClick={() => setField("items", [...draft.items, defaultAssessmentQuestion()])}
-                  className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                  className="btn btn-secondary btn-sm"
                 >
                   Add question
                 </button>
@@ -2612,7 +2624,7 @@ function AssessmentManager({
                           prompt: event.target.value ? "" : question.prompt,
                         })
                       }
-                      className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
+                      className="jargon-input"
                     >
                       <option value="">New question</option>
                       {lessonQuizItems.map((quiz) => (
@@ -2629,7 +2641,7 @@ function AssessmentManager({
                       onChange={(event) =>
                         updateQuestion(index, { points: Number(event.target.value) || 1 })
                       }
-                      className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
+                      className="jargon-input"
                     />
                   </div>
                   {!question.quizItemId ? (
@@ -2642,7 +2654,7 @@ function AssessmentManager({
                               .value as AssessmentFormQuestion["questionType"],
                           })
                         }
-                        className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
+                        className="jargon-input"
                       >
                         <option value="multiple_choice">Multiple choice</option>
                         <option value="text">Text response</option>
@@ -2652,7 +2664,7 @@ function AssessmentManager({
                         value={question.prompt || ""}
                         onChange={(event) => updateQuestion(index, { prompt: event.target.value })}
                         placeholder="Question prompt"
-                        className="min-h-[72px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+                        className="jargon-input min-h-[72px] leading-relaxed"
                       />
                       {question.questionType === "multiple_choice" ? (
                         <div className="grid gap-2">
@@ -2678,7 +2690,7 @@ function AssessmentManager({
                                   updateChoice(index, choice.id, event.target.value)
                                 }
                                 placeholder={`Choice ${choice.id.toUpperCase()}`}
-                                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+                                className="jargon-input"
                               />
                             </div>
                           ))}
@@ -2695,7 +2707,7 @@ function AssessmentManager({
                           })
                         }
                         placeholder="Skill keys, comma separated"
-                        className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+                        className="jargon-input"
                       />
                     </div>
                   ) : (
@@ -2727,7 +2739,7 @@ function AssessmentManager({
               type="button"
               onClick={() => void submit()}
               disabled={saving}
-              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-secondary mt-1"
             >
               <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
               {saving ? "Saving..." : draft.status === "published" ? "Assign quiz" : "Save draft"}
@@ -2881,7 +2893,7 @@ function AssignmentManager({
                     resourceIds: [],
                   }))
                 }
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                className="jargon-input normal-case tracking-normal"
               >
                 {lessons.map((lesson) => (
                   <option key={lesson.id} value={lesson.id}>
@@ -2897,7 +2909,7 @@ function AssignmentManager({
                 value={draft.title}
                 onChange={(event) => setField("title", event.target.value)}
                 placeholder="Purpose reflection"
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="jargon-input normal-case tracking-normal"
               />
             </label>
 
@@ -2907,7 +2919,7 @@ function AssignmentManager({
                 value={draft.instructions}
                 onChange={(event) => setField("instructions", event.target.value)}
                 placeholder="Use the resource and explain what the tool is for in your own words."
-                className="min-h-[86px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+                className="jargon-input min-h-[86px] normal-case leading-relaxed tracking-normal"
               />
             </label>
 
@@ -2918,7 +2930,7 @@ function AssignmentManager({
                   type="datetime-local"
                   value={draft.dueAt}
                   onChange={(event) => setField("dueAt", event.target.value)}
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                  className="jargon-input normal-case tracking-normal"
                 />
               </label>
 
@@ -2932,7 +2944,7 @@ function AssignmentManager({
                       event.target.value as Extract<AssignmentStatus, "draft" | "assigned">,
                     )
                   }
-                  className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                  className="jargon-input normal-case tracking-normal"
                 >
                   <option value="assigned">Assigned</option>
                   <option value="draft">Draft</option>
@@ -3028,7 +3040,7 @@ function AssignmentManager({
               type="button"
               onClick={() => void submit()}
               disabled={saving}
-              className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-secondary mt-1"
             >
               <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
               {saving ? "Saving..." : draft.status === "assigned" ? "Assign work" : "Save draft"}
@@ -3089,7 +3101,7 @@ function GradebookTable({
           <select
             value={selectedLessonId}
             onChange={(event) => onSelectLesson(event.target.value)}
-            className="min-w-[220px] rounded-full border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+            className="jargon-input min-w-[220px] normal-case tracking-normal"
           >
             <option value="all">All lessons</option>
             {Object.entries(lessonGroups).map(([moduleName, moduleLessons]) => (
@@ -3172,7 +3184,7 @@ function GradebookTable({
               );
             })}
           </div>
-          <div className="hidden max-h-[58vh] overflow-auto pb-1 md:block">
+          <div className="table-scroll hidden max-h-[58vh] overflow-auto pb-1 md:block">
             <table className="min-w-[920px] w-full border-separate border-spacing-y-2 text-left">
               <thead className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 <tr>
@@ -3267,7 +3279,7 @@ function GradebookTable({
                         <button
                           type="button"
                           onClick={() => onSelectStudent(row.studentId)}
-                          className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                          className="btn btn-secondary btn-sm"
                         >
                           Inspect
                         </button>
@@ -3447,7 +3459,7 @@ function StudentDetail({
                 type="button"
                 onClick={watchingSelectedSession ? onStopWatching : onStartWatching}
                 disabled={!canWatchSelectedSession}
-                className="inline-flex w-fit items-center gap-2 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                className="btn btn-secondary btn-sm w-fit"
               >
                 {watchingSelectedSession ? (
                   <EyeOff className="h-3.5 w-3.5" strokeWidth={1.7} />
@@ -3550,7 +3562,7 @@ function StudentDetail({
                             ? "Send a short tip to this student..."
                             : "Start watching live before sending a tip."
                         }
-                        className="min-w-0 flex-1 rounded-full border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-55"
+                        className="jargon-input min-w-0 flex-1 disabled:opacity-55"
                       />
                       <button
                         type="button"
@@ -3558,7 +3570,7 @@ function StudentDetail({
                         disabled={
                           !watchingSelectedSession || !liveCommentDraft.trim() || sendingLiveComment
                         }
-                        className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-3 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                        className="btn btn-secondary btn-sm"
                       >
                         <Send className="h-3.5 w-3.5" strokeWidth={1.7} />
                         {sendingLiveComment ? "Sending..." : "Send"}
@@ -3655,7 +3667,7 @@ function StudentDetail({
                     value={noteDraft}
                     onChange={(event) => onNoteChange(event.target.value)}
                     placeholder="Add a private observation or student-visible note..."
-                    className="min-h-[96px] w-full rounded-card border border-border bg-depth-field px-3 py-3 text-body leading-relaxed text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/30"
+                    className="jargon-input min-h-[96px] w-full py-3 text-body leading-relaxed transition-colors focus:border-foreground/30"
                   />
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <select
@@ -3663,7 +3675,7 @@ function StudentDetail({
                       onChange={(event) =>
                         onNoteVisibilityChange(event.target.value as TeacherNote["visibility"])
                       }
-                      className="rounded-full border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
+                      className="jargon-input"
                     >
                       <option value="teacher_private">Teacher private</option>
                       <option value="student_visible">Student visible</option>
@@ -3672,7 +3684,7 @@ function StudentDetail({
                       type="button"
                       onClick={onSaveNote}
                       disabled={!noteDraft.trim() || savingNote}
-                      className="rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+                      className="btn btn-secondary"
                     >
                       {savingNote ? "Saving..." : "Save note"}
                     </button>

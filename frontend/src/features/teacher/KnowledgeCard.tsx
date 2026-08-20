@@ -142,7 +142,7 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
             disabled={loading || extracting}
             aria-label="Reload knowledge"
             title="Reload"
-            className="rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            className="btn btn-secondary btn-icon"
           >
             <RefreshCw
               className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
@@ -153,7 +153,7 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
             type="button"
             onClick={() => void onExtract()}
             disabled={extracting || loading}
-            className="inline-flex items-center gap-2 rounded-full border border-foreground/25 bg-foreground px-3 py-1.5 text-meta text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="btn btn-primary btn-sm"
           >
             <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
             {extracting ? "Reading lesson..." : "Draft knowledge"}
@@ -330,7 +330,7 @@ function KnowledgeGroup({
                     type="button"
                     onClick={() => void onReview(kind, row.id, "publish")}
                     disabled={busy}
-                    className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    className="btn btn-secondary btn-sm gap-1"
                   >
                     <Check className="h-3 w-3" strokeWidth={2} />
                     Publish
@@ -341,7 +341,7 @@ function KnowledgeGroup({
                     disabled={busy}
                     aria-label="Discard draft"
                     title="Discard"
-                    className="rounded-full border border-border p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    className="btn btn-secondary btn-icon"
                   >
                     <X className="h-3 w-3" strokeWidth={2} />
                   </button>

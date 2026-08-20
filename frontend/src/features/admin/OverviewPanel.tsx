@@ -89,7 +89,7 @@ export function OverviewPanel({
                 type="button"
                 onClick={onRefreshReadiness}
                 disabled={readinessLoading}
-                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                className="btn btn-secondary btn-sm shrink-0"
               >
                 <RefreshCw
                   className={`h-3.5 w-3.5 ${readinessLoading ? "animate-spin" : ""}`}

@@ -1130,18 +1130,14 @@ export function CurriculumStudio({
         <Breadcrumb segments={crumbs} />
         <div className="flex flex-wrap items-center gap-2">
           {selection ? (
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
-            >
+            <button type="button" onClick={clearSelection} className="btn btn-secondary btn-sm">
               ← Classwork
             </button>
           ) : null}
           <button
             type="button"
             onClick={() => void loadData()}
-            className="rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+            className="btn btn-secondary btn-sm"
           >
             Refresh
           </button>
@@ -1220,7 +1216,7 @@ export function CurriculumStudio({
                   type="button"
                   disabled={busy}
                   onClick={() => duplicateSharedCourse(sharedNotice.courseId)}
-                  className="shrink-0 rounded-full border border-border px-3 py-1 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                  className="btn btn-secondary btn-sm shrink-0"
                 >
                   Duplicate for this class
                 </button>
@@ -1409,7 +1405,7 @@ function ClassworkList({
               disabled={busy}
               aria-haspopup="menu"
               aria-expanded={createMenuOpen}
-              className="inline-flex items-center gap-1 rounded-full bg-foreground px-3.5 py-1.5 text-meta font-medium text-background transition-colors hover:opacity-90 disabled:opacity-50"
+              className="btn btn-primary btn-sm gap-1"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
               Create
@@ -1810,7 +1806,7 @@ function DetailPane({
             type="button"
             onClick={onAddSubject}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            className="btn btn-secondary"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
             New unit
@@ -1994,7 +1990,7 @@ function StructureDetail({
               type="button"
               onClick={() => onSave(title.trim(), description.trim())}
               disabled={busy || !title.trim() || !dirty}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-secondary"
             >
               <Pencil className="h-3.5 w-3.5" strokeWidth={1.7} />
               {busy ? "Saving..." : "Save changes"}
@@ -2003,7 +1999,7 @@ function StructureDetail({
               type="button"
               onClick={onAddChild}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="btn btn-secondary"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
               {addLabel}
@@ -2032,7 +2028,7 @@ function StructureDetail({
                 type="button"
                 onClick={onArchive}
                 disabled={busy}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                className="btn btn-secondary"
               >
                 <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Archive
@@ -2063,7 +2059,7 @@ function StructureDetail({
                 onClick={() => setConfirmDelete(true)}
                 disabled={busy || !canDelete}
                 title={canDelete ? undefined : deleteHint}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn btn-secondary"
               >
                 <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Delete
@@ -2540,11 +2536,7 @@ function LessonDetail({
                 <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Publish
               </button>
-              <button
-                type="button"
-                onClick={onArchiveLesson}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
+              <button type="button" onClick={onArchiveLesson} className="btn btn-secondary">
                 <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
                 Archive
               </button>
@@ -2565,7 +2557,7 @@ function LessonDetail({
                       }
                     }}
                     disabled={busy}
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+                    className="jargon-input normal-case tracking-normal"
                   >
                     {orgUnits.map(({ unit, courseTitle }) => (
                       <option key={unit.id} value={unit.id}>
@@ -2598,7 +2590,7 @@ function LessonDetail({
                     type="button"
                     onClick={() => setConfirmDelete(true)}
                     disabled={busy}
-                    className="inline-flex items-center gap-2 self-end rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    className="btn btn-secondary self-end"
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
                     Delete
@@ -2729,7 +2721,10 @@ function LessonMetaForm({
             ))}
           </div>
         </div>
-        <div className="grid gap-3 rounded-card border border-border bg-depth-field p-3">
+        {/* R52: a flat hairline group, not a third tier of nested card chrome — the
+            editor keeps ONE inset level (this Lesson basics card) and separates
+            sub-groups with rules instead of boxes-in-boxes. */}
+        <div className="grid gap-3 border-t border-border/60 pt-4">
           <div>
             <div className="text-body font-medium text-foreground">Tutor behavior</div>
             <p className="mt-0.5 text-meta text-muted-foreground">
@@ -2801,12 +2796,7 @@ function LessonMetaForm({
           </div>
         </div>
         <div>
-          <button
-            type="button"
-            onClick={save}
-            disabled={busy}
-            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-          >
+          <button type="button" onClick={save} disabled={busy} className="btn btn-secondary">
             <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
             {busy ? "Saving..." : "Save lesson basics"}
           </button>
@@ -3086,12 +3076,12 @@ function StepCard({
                   <input
                     value={choice.id}
                     onChange={(event) => updateChoice(i, { id: event.target.value })}
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
+                    className="jargon-input"
                   />
                   <input
                     value={choice.text}
                     onChange={(event) => updateChoice(i, { text: event.target.value })}
-                    className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none"
+                    className="jargon-input"
                   />
                   <button
                     type="button"
@@ -3183,7 +3173,7 @@ function StepCard({
                   event.target.value = "";
                 }}
                 title={bindable ? undefined : "Save the new step first, then attach materials."}
-                className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-muted-foreground outline-none disabled:opacity-50"
+                className="jargon-input text-muted-foreground disabled:opacity-50"
               >
                 <option value="">Attach a material…</option>
                 {attachable.map((resource) => (
@@ -3315,12 +3305,7 @@ function StepCard({
           />
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={save}
-              disabled={busy}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-            >
+            <button type="button" onClick={save} disabled={busy} className="btn btn-secondary">
               <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
               {busy ? "Saving..." : "Save step"}
             </button>
@@ -3329,7 +3314,7 @@ function StepCard({
               onClick={onDelete}
               disabled={busy || !canDelete}
               title={canDelete ? undefined : "A lesson needs at least one step."}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-secondary"
             >
               <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
               Delete step
@@ -3586,7 +3571,7 @@ function AiReferenceInput({
                 void handleFiles(event.target.files);
                 event.target.value = "";
               }}
-              className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-meta file:text-foreground"
+              className="jargon-input file:mr-3 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-meta file:text-foreground"
             />
             {extracting ? (
               <span className="text-meta text-muted-foreground">Reading files…</span>
@@ -3665,14 +3650,14 @@ function RefineBox({
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder={placeholder}
-        className="rounded-control border border-border bg-depth-field px-3 py-2 text-meta text-foreground outline-none placeholder:text-muted-foreground"
+        className="jargon-input"
       />
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => onSubmit(text.trim())}
           disabled={loading || !text.trim()}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          className="btn btn-secondary btn-sm"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
           {loading ? "Refining…" : "Refine"}
@@ -3759,7 +3744,7 @@ function AiOutlinePanel({
           type="button"
           onClick={() => void generate()}
           disabled={loading || busy || !prompt.trim()}
-          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          className="btn btn-secondary"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
           {loading ? "Working…" : draft ? "Regenerate" : "Generate"}
@@ -3917,7 +3902,7 @@ function AiStepsPanel({
           type="button"
           onClick={() => void generate()}
           disabled={loading || busy || !prompt.trim()}
-          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          className="btn btn-secondary"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
           {loading ? "Working…" : drafts ? "Regenerate" : "Generate"}
@@ -4155,7 +4140,7 @@ function ArtifactGeneratePanel({
             type="button"
             onClick={() => void generate()}
             disabled={busy || loading || !bindable || !brief.trim()}
-            className="inline-flex items-center gap-2 self-start rounded-full border border-border px-4 py-2 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            className="btn btn-secondary self-start"
           >
             <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
             {loading ? "Generating…" : hasDraft ? "Regenerate" : "Generate"}
@@ -4653,7 +4638,7 @@ function TextInput({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+        className="jargon-input normal-case tracking-normal"
       />
     </label>
   );
@@ -4674,7 +4659,7 @@ function TextArea({
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-[82px] rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case leading-relaxed tracking-normal text-foreground outline-none placeholder:text-muted-foreground"
+        className="jargon-input min-h-[82px] normal-case leading-relaxed tracking-normal"
       />
     </label>
   );
@@ -4699,7 +4684,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-card border border-border bg-depth-field px-3 py-2 text-meta normal-case tracking-normal text-foreground outline-none"
+        className="jargon-input normal-case tracking-normal"
       >
         {options.map((option) => (
           <option key={option} value={option}>

@@ -279,7 +279,7 @@ export function PeoplePanel({
                     <button
                       type="button"
                       onClick={() => toggleExpanded(person.userId)}
-                      className="shrink-0 rounded-full border border-border px-3.5 py-1.5 text-meta text-foreground transition-colors hover:bg-muted"
+                      className="btn btn-secondary btn-sm shrink-0"
                     >
                       {expanded ? "Close" : "Manage"}
                     </button>
@@ -307,7 +307,7 @@ export function PeoplePanel({
                             disabled={
                               Boolean(busy) || tempPassword.trim().length < MIN_TEMP_PASSWORD_LENGTH
                             }
-                            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            className="btn btn-secondary btn-sm shrink-0"
                           >
                             <KeyRound className="h-3.5 w-3.5" strokeWidth={1.7} />
                             {busy === "reset" ? "Setting…" : "Reset password"}
@@ -358,7 +358,7 @@ export function PeoplePanel({
                                   type="button"
                                   onClick={() => setOrgStatus(person, "active")}
                                   disabled={Boolean(busy)}
-                                  className="rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                                  className="btn btn-secondary btn-sm"
                                 >
                                   {busy === "status" ? "Enabling…" : "Enable account"}
                                 </button>
@@ -431,7 +431,7 @@ export function PeoplePanel({
                               type="button"
                               onClick={() => addToClass(person)}
                               disabled={Boolean(busy) || !addClassId}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-meta text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                              className="btn btn-secondary btn-sm"
                             >
                               <UserPlus className="h-3.5 w-3.5" strokeWidth={1.7} />
                               {busy === "class-add" ? "Adding…" : "Add"}

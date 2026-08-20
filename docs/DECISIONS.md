@@ -1273,3 +1273,26 @@ every curriculum-admin WRITE on shared content crashed this way, not just + Less
 - Select widths inside admin panels use the !w-[..] important modifier: the
   .jargon-input component class (width:100%) is declared after Tailwind's
   utilities in the compiled CSS, so plain w-[..] loses the cascade to it.
+
+## 2026-08-20 — R52: the control vocabulary (UI consolidation)
+
+- One button hierarchy (.btn + primary/secondary/ghost/danger, .btn-sm/.btn-icon)
+  and one table idiom (.table-scroll) now live in styles.css; 106 hand-rolled
+  button/field chrome strings across the teacher + admin portals were swept onto
+  them. Secondary buttons gained a real raised surface (bg + border + shadow) —
+  the pre-R52 transparent pills read as chips, which is why nothing looked
+  clickable.
+- Structure rules: cards keep ONE inset level (hairline groups below that — the
+  lesson editor's Tutor behavior box-in-box-in-box is flattened); list rows must
+  contain their controls (the Live row's Watch button and the People row's section
+  select moved inside their rows); class tabs use the dark active pill, matching
+  the admin WorkspaceTabs read.
+- The narrow-width table bug had a one-line root cause: the class card is a grid
+  item, and grid items refuse to shrink below content (min-width:auto), so the
+  920px gradebook table stretched the card past the viewport and CLIPPED the
+  Action column instead of scrolling. Fixed with min-w-0 on the card + the
+  .table-scroll wrapper; pinned with the reason in test_r52.
+- Verified: 867 pins OK; tsc/eslint clean; R48 teacher harness 18/18 and R51 admin
+  harness 19/19 on the consolidated build; before/after screenshots at 1440px and
+  820px (r52audit/) show the gradebook scrolling inside its card with all four
+  tabs reachable.
