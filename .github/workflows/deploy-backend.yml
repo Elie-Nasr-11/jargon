@@ -157,23 +157,33 @@ jobs:
 
       - name: Deploy edge functions
         run: |
-          supabase functions deploy curriculum-admin --project-ref "$PROJECT_REF"
-          supabase functions deploy chat --project-ref "$PROJECT_REF"
-          supabase functions deploy assessment-admin --project-ref "$PROJECT_REF"
-          supabase functions deploy voice-session --project-ref "$PROJECT_REF"
-          supabase functions deploy run --project-ref "$PROJECT_REF"
-          supabase functions deploy canvas --project-ref "$PROJECT_REF"
-          supabase functions deploy google-classroom --project-ref "$PROJECT_REF"
-          supabase functions deploy resource-processing --project-ref "$PROJECT_REF"
+          # R55 incident (2026-08-21): GoTrue signs user access tokens with the
+          # asymmetric ES256 key (kid published in the project JWKS), but the edge
+          # functions GATEWAY intermittently rejects those tokens with
+          # UNAUTHORIZED_ASYMMETRIC_JWT — its JWKS cache went stale after the
+          # 2026-08-20 platform outage/restart. Every user-token function therefore
+          # deploys with --no-verify-jwt: the gateway check was a redundant layer —
+          # each of these functions resolves the actor from the Authorization JWT
+          # internally (GoTrue/PostgREST + RLS) and refuses junk with a typed 4xx
+          # (the smoke step below proves that on every deploy). Revert the flags
+          # when Supabase confirms the gateway validates ES256 reliably.
+          supabase functions deploy curriculum-admin --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy chat --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy assessment-admin --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy voice-session --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy run --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy canvas --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy google-classroom --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy resource-processing --project-ref "$PROJECT_REF" --no-verify-jwt
           # admin-ops now auto-deploys (actively developed as of the Live tab); it stays JWT- +
           # actor-access-gated internally. admin-seed remains manual (account provisioning).
-          supabase functions deploy admin-ops --project-ref "$PROJECT_REF"
+          supabase functions deploy admin-ops --project-ref "$PROJECT_REF" --no-verify-jwt
           # submission-maintenance is system-only (accepts ONLY the service-role bearer); invoked
           # by the scheduled submission-maintenance.yml workflow.
           supabase functions deploy submission-maintenance --project-ref "$PROJECT_REF"
           # artifact-live: P8 live mentor-generated artifacts — student-JWT identity,
           # service-role writes (student_private lesson_resources rows + storage).
-          supabase functions deploy artifact-live --project-ref "$PROJECT_REF"
+          supabase functions deploy artifact-live --project-ref "$PROJECT_REF" --no-verify-jwt
 
       - name: Smoke-check deployed functions answer typed responses
         run: |
