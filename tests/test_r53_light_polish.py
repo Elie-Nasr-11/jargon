@@ -50,9 +50,12 @@ class PrimaryChromeTests(unittest.TestCase):
 
 
 class BrainLightTests(unittest.TestCase):
-    def test_course_hubs_carry_their_subject_hue_in_light(self):
-        # Dark keeps the strong-ink coin; light fills the hub with its wash hue.
-        self.assertIn("ctx.fillStyle = pal.dark ? pal.ink92 : `hsl(${hue} 52% 47%)`;", BRAIN)
+    def test_course_hubs_carry_their_subject_hue(self):
+        # R53 gave light-mode hubs their hue (dark kept ink coins); R54 extended the
+        # hue fill to BOTH ladders via the curated SUBJECT_COLORS cycle. The living
+        # contract: hub fill comes from subjectColor, never bare ink.
+        self.assertIn("const color = subjectColor(n.tint ?? 0, pal.dark);", BRAIN)
+        self.assertIn("ctx.fillStyle = color;", BRAIN)
 
     def test_lesson_tiers_step_one_ink_lighter_in_light(self):
         # The mid grays massed into a dark cloud against white — light mode uses the

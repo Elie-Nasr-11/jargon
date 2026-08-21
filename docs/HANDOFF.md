@@ -11246,3 +11246,18 @@ mentor replies on the failing lesson; deploy run 32496032815 green incl. smoke.
 Remaining concerns: revert --no-verify-jwt when Supabase fixes gateway ES256
 validation; log analytics backend still erroring (their infra); micro compute.
 Suggested next task: finish R54 (brain colors/labels/perf — WIP in tree).
+
+## Claude -> Codex / Human - 2026-08-21 17:20
+
+Status: Finished
+Summary: R54 — brain graph polish per owner feedback. Curated 8-hue subject palette
+(both ladders), tighter dimmer dark auras, sans sentence-case ellipsized labels with
+raised zoom gates, pre-rasterized wash layer + DPR 1.5 + proportional wheel zoom for
+the choppiness. Full detail in DECISIONS R54.
+Files changed: frontend/src/student/BrainGraph.tsx, tests/test_r54_brain_polish.py
+(11 pins), tests/test_r53_light_polish.py (one pin re-anchored), docs.
+Tests run: 889 pins OK; tsc clean; eslint clean (one pre-existing ref warning);
+Playwright brain shots light+dark, rest+zoomed.
+Remaining concerns: none blocking. Choppiness fixes are structural (bitmap blit,
+DPR, proportional zoom) — confirm feel on the owner's hardware.
+Suggested next task: demo prep.

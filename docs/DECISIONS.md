@@ -1360,3 +1360,29 @@ Verified end-to-end after the fix: two consecutive full mentor replies on
 camp-bio-l1 (session advanced intro → practice). Note for future forensics: the
 project's log analytics backend ("Backend error! Retry") was down throughout —
 pg_net probes + direct table reads were the only working instruments.
+
+## R54 — brain polish: curated palette, quiet dark glow, whispering labels, smooth zoom (2026-08-21)
+
+Owner: brain "colours are a bit dead" both modes; "the glow on the dark mode is not
+it"; "the labels are sometimes a bit too much"; zoom/drag "very choppy".
+
+1. **Curated subject palette.** SUBJECT_COLORS — eight of the platform's own tag
+   hues (each with a lifted dark-ladder variant), cycled by course rank — replaces
+   the computed accent-hue-rotation (which landed on muddy in-between angles). Hubs
+   fill with their subject hue on BOTH ladders now (the dark ink coins read dead
+   next to the colored washes); withAlpha derives washes/rings from the same hex.
+2. **Dark glow**: tighter (reach × 0.82) and dimmer with a faster falloff — a faint
+   colored aura instead of the wide low-sat fog.
+3. **Labels whisper**: sans + sentence case everywhere (ALL-CAPS mono hub names
+   retired); ellipsized (hubs 24, others 28 chars; hover shows the full name);
+   zoom gates raised one step per tier (lessons 0.9, ideas 1.25, words 1.7) so the
+   rest state names only anchors + the current lesson.
+4. **Smoothness**: subject washes pre-rasterized once per bind/theme into a
+   world-space bitmap and blitted per frame (was N radial-gradient rasterizations
+   per repaint — the dominant pan/zoom cost); DPR capped at 1.5 (AmbientCanvas
+   convention); wheel zoom proportional to deltaY via exp scaling (the fixed ±10%
+   per event made trackpad gestures a staircase), deltaMode-aware.
+
+Verified: 889 pins OK (one R53 brain pin re-anchored to the curated-palette
+contract by design); tsc + eslint clean; light/dark screenshots at rest + zoomed
+(label reveal ladder intact, occupancy grid uncontested).
