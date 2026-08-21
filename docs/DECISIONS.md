@@ -1328,3 +1328,61 @@ Decisions:
 Verified: 880 pins OK (one R52 pin re-anchored to the blue pill by design), tsc +
 eslint clean, light+dark screenshots across login/student home+brain/chat/teacher
 tabs/gradebook narrow-scrolled/admin.
+
+## R55 — incident: mentor turns failing; gateway rejects ES256 JWTs (2026-08-21)
+
+Owner report: every lesson turn answered the "Something went wrong on our side"
+bubble (reproduced on camp-bio-l1 "A factory with compartments"). Zero successful
+model calls since Aug 20 07:44Z — the entire day after the DB outage.
+
+Two stacked causes, found with in-database pg_net probes (throwaway student
+created and fully torn down, 0 rows left):
+
+1. **Edge-functions gateway rejected user JWTs.** GoTrue signs user access tokens
+   with the project's asymmetric ES256 key (kid IS in the published JWKS), but the
+   functions gateway intermittently answered `401 UNAUTHORIZED_ASYMMETRIC_JWT` (4 of
+   5 attempts) — a stale JWKS cache on their side dating from the Aug 20
+   outage/restart. GoTrue/PostgREST accepted the same token. FIX SHIPPED: all
+   user-token functions deploy with `--no-verify-jwt` (PR #39) — the gateway check
+   was a redundant outer layer; every function resolves the actor internally
+   (GoTrue/PostgREST + RLS) and refuses junk with a typed 4xx (smoke-checked each
+   deploy). submission-maintenance keeps gateway verification (service-role only).
+   REVERT the flags when Supabase confirms reliable ES256 validation.
+
+2. **Intermittent DB statement timeouts** ("canceling statement due to statement
+   timeout", stage intro) — three consecutive failures at 15:15Z, healthy at 16:22Z
+   with the identical request. Individual context queries measure in milliseconds
+   under RLS; the t4g.micro instance simply stalls in bursts (post-incident CPU
+   credit exhaustion pattern). Not a code defect. Mitigation is infrastructure:
+   upgrade compute (micro → small) before the demo — owner's call (costs money).
+
+Verified end-to-end after the fix: two consecutive full mentor replies on
+camp-bio-l1 (session advanced intro → practice). Note for future forensics: the
+project's log analytics backend ("Backend error! Retry") was down throughout —
+pg_net probes + direct table reads were the only working instruments.
+
+## R54 — brain polish: curated palette, quiet dark glow, whispering labels, smooth zoom (2026-08-21)
+
+Owner: brain "colours are a bit dead" both modes; "the glow on the dark mode is not
+it"; "the labels are sometimes a bit too much"; zoom/drag "very choppy".
+
+1. **Curated subject palette.** SUBJECT_COLORS — eight of the platform's own tag
+   hues (each with a lifted dark-ladder variant), cycled by course rank — replaces
+   the computed accent-hue-rotation (which landed on muddy in-between angles). Hubs
+   fill with their subject hue on BOTH ladders now (the dark ink coins read dead
+   next to the colored washes); withAlpha derives washes/rings from the same hex.
+2. **Dark glow**: tighter (reach × 0.82) and dimmer with a faster falloff — a faint
+   colored aura instead of the wide low-sat fog.
+3. **Labels whisper**: sans + sentence case everywhere (ALL-CAPS mono hub names
+   retired); ellipsized (hubs 24, others 28 chars; hover shows the full name);
+   zoom gates raised one step per tier (lessons 0.9, ideas 1.25, words 1.7) so the
+   rest state names only anchors + the current lesson.
+4. **Smoothness**: subject washes pre-rasterized once per bind/theme into a
+   world-space bitmap and blitted per frame (was N radial-gradient rasterizations
+   per repaint — the dominant pan/zoom cost); DPR capped at 1.5 (AmbientCanvas
+   convention); wheel zoom proportional to deltaY via exp scaling (the fixed ±10%
+   per event made trackpad gestures a staircase), deltaMode-aware.
+
+Verified: 889 pins OK (one R53 brain pin re-anchored to the curated-palette
+contract by design); tsc + eslint clean; light/dark screenshots at rest + zoomed
+(label reveal ladder intact, occupancy grid uncontested).

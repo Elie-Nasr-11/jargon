@@ -57,27 +57,34 @@ const DIM = 0.15;
 const STAR_EMERGENT = "#9b7bf5";
 const STAR_EMERGENT_DARK = "#b49df8";
 
-// Subject territories: the accent hue rotated per course, painted as a whisper-alpha
-// wash behind each course's cluster. Hue does the grouping; alpha keeps it quiet.
-function subjectHue(accent: string, rank: number): number {
-  const hex = accent.startsWith("#") ? accent : "#4f6bfd";
-  const n = parseInt(hex.slice(1, 7).padEnd(6, "0"), 16);
-  const r = ((n >> 16) & 255) / 255;
-  const g = ((n >> 8) & 255) / 255;
-  const b = (n & 255) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h = 0;
-  if (max !== min) {
-    const d = max - min;
-    h =
-      max === r
-        ? ((g - b) / d + (g < b ? 6 : 0)) / 6
-        : max === g
-          ? ((b - r) / d + 2) / 6
-          : ((r - g) / d + 4) / 6;
-  }
-  return Math.round((h * 360 + rank * 67) % 360);
+// R54: curated subject colors — the platform's own tag hues, cycled by course rank.
+// The old accent-hue-rotated-per-rank scheme landed on muddy in-between angles
+// (owner: "the colours are a bit dead"); these are the vivid hues every other
+// surface already speaks, with a lifted variant per hue for the charcoal ladder.
+const SUBJECT_COLORS: Array<{ light: string; dark: string }> = [
+  { light: "#4f6bfd", dark: "#7d8ffd" }, // lesson blue
+  { light: "#2fbf71", dark: "#4ed492" }, // practice green
+  { light: "#e8578f", dark: "#f585bb" }, // quiz pink (deepened for white)
+  { light: "#ff8c3a", dark: "#ffa35e" }, // open orange
+  { light: "#8f6ef5", dark: "#a98ffd" }, // assignment violet
+  { light: "#2fbfa7", dark: "#4ed4be" }, // media teal
+  { light: "#d9a514", dark: "#ffd83d" }, // discuss gold (deepened for white)
+  { light: "#e05d38", dark: "#f0805e" }, // aurora coral
+];
+function subjectColor(rank: number, dark: boolean): string {
+  const c = SUBJECT_COLORS[Math.abs(Math.round(rank)) % SUBJECT_COLORS.length];
+  return dark ? c.dark : c.light;
+}
+// 8-digit hex alpha — canvas accepts it, and it keeps the wash colors derivable
+// from ONE source of truth instead of parallel hsla recipes.
+function withAlpha(hex: string, alpha: number): string {
+  const a = Math.round(Math.min(1, Math.max(0, alpha)) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `${hex}${a}`;
+}
+function ellipsize(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
 type Palette = {
@@ -94,7 +101,6 @@ type Palette = {
   success: string;
   emergent: string;
   fontSans: string;
-  fontMono: string;
 };
 
 // The graph reads the live theme from the cascade — the same custom properties every
@@ -123,7 +129,6 @@ function readPalette(el: HTMLElement): Palette {
     success: v("--success", "#2fbf71"),
     emergent: dark ? STAR_EMERGENT_DARK : STAR_EMERGENT,
     fontSans: v("--font-sans", "ui-sans-serif, system-ui, sans-serif"),
-    fontMono: v("--font-mono", "ui-monospace, monospace"),
   };
 }
 
@@ -405,6 +410,7 @@ export function BrainGraph({
     // Theme flips re-read the cascade — the graph follows the app instantly.
     const themeWatch = new MutationObserver(() => {
       pal = readPalette(wrap);
+      buildWashLayer();
       dirty.current = true;
     });
     themeWatch.observe(document.documentElement, {
@@ -416,7 +422,9 @@ export function BrainGraph({
       const rect = wrap.getBoundingClientRect();
       width = Math.max(1, rect.width);
       height = Math.max(1, rect.height);
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      // R54: 1.5 cap (the AmbientCanvas convention) — the DPR-2 backing store was a
+      // measurable slice of the pan/zoom repaint cost on retina Chromebooks.
+      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -520,6 +528,64 @@ export function BrainGraph({
       cam.current = { ...home };
       cameraLive.current = true;
     }
+
+    // R54: SUBJECT TERRITORIES are pre-rasterized ONCE per bind/theme into a
+    // world-space bitmap and blitted per frame. Painting N radial gradients per
+    // frame was the biggest slice of the pan/zoom repaint (the "very choppy" fix);
+    // the washes are soft by design, so bitmap scaling costs nothing visually.
+    // Reach per hub is precomputed here too — layout is still after settle (R39).
+    const hubReach = new Map<number, number>();
+    for (let i = 0; i < nodes.length; i += 1) {
+      if (nodes[i].kind !== "course") continue;
+      let reach = 60;
+      for (const other of adjacency[i]) {
+        const n = nodes[other];
+        reach = Math.max(reach, Math.hypot(n.x - nodes[i].x, n.y - nodes[i].y) + 42);
+      }
+      hubReach.set(i, reach);
+    }
+    const washPad = Math.max(80, ...hubReach.values());
+    const wash = {
+      x0: minX - washPad,
+      y0: minY - washPad,
+      w: maxX - minX + washPad * 2,
+      h: maxY - minY + washPad * 2,
+      density: 1,
+      canvas: document.createElement("canvas"),
+    };
+    const buildWashLayer = () => {
+      wash.density = Math.min(1, 1600 / Math.max(wash.w, wash.h));
+      wash.canvas.width = Math.max(1, Math.round(wash.w * wash.density));
+      wash.canvas.height = Math.max(1, Math.round(wash.h * wash.density));
+      const wctx = wash.canvas.getContext("2d");
+      if (!wctx) return;
+      wctx.setTransform(wash.density, 0, 0, wash.density, 0, 0);
+      wctx.clearRect(0, 0, wash.w, wash.h);
+      for (const [i, reach] of hubReach) {
+        const hub = nodes[i];
+        const color = subjectColor(hub.tint ?? 0, pal.dark);
+        const cx = hub.x - wash.x0;
+        const cy = hub.y - wash.y0;
+        // Dark: tighter, dimmer aura — the wide low-sat fog read as murk on
+        // charcoal (owner: "the glow on the dark mode is not it").
+        const rr = pal.dark ? reach * 0.82 : reach;
+        const g = wctx.createRadialGradient(cx, cy, 0, cx, cy, rr);
+        if (pal.dark) {
+          g.addColorStop(0, withAlpha(color, 0.11));
+          g.addColorStop(0.55, withAlpha(color, 0.035));
+          g.addColorStop(1, withAlpha(color, 0));
+        } else {
+          g.addColorStop(0, withAlpha(color, 0.075));
+          g.addColorStop(0.75, withAlpha(color, 0.03));
+          g.addColorStop(1, withAlpha(color, 0));
+        }
+        wctx.fillStyle = g;
+        wctx.beginPath();
+        wctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        wctx.fill();
+      }
+    };
+    buildWashLayer();
     if (previousSelectedId) {
       const keep = nodes.findIndex((n) => n.id === previousSelectedId);
       if (keep >= 0) selectedRef.current = keep;
@@ -579,36 +645,13 @@ export function BrainGraph({
       const neighbors = picked >= 0 ? adjacency[picked] : null;
       const focusOn = picked >= 0;
 
-      // SUBJECT TERRITORIES first, under everything: one soft hue-rotated wash per
-      // course, sized to reach its lessons. This is what makes subjects legible at a
-      // glance without any 3D — each cluster owns a region.
-      for (let i = 0; i < nodes.length; i += 1) {
-        const hub = nodes[i];
-        if (hub.kind !== "course") continue;
-        const hp = toScreen(hub);
-        let reach = 60;
-        for (const other of adjacency[i]) {
-          const n = nodes[other];
-          reach = Math.max(reach, Math.hypot(n.x - hub.x, n.y - hub.y) + 42);
-        }
-        const rr = reach * zoom;
-        if (hp.x < -rr || hp.x > width + rr || hp.y < -rr || hp.y > height + rr) continue;
-        const hue = subjectHue(pal.accent, hub.tint ?? 0);
-        const wash = ctx.createRadialGradient(hp.x, hp.y, 0, hp.x, hp.y, rr);
-        wash.addColorStop(
-          0,
-          `hsla(${hue}, 70%, ${pal.dark ? 62 : 48}%, ${pal.dark ? 0.085 : 0.06})`,
-        );
-        wash.addColorStop(
-          0.75,
-          `hsla(${hue}, 70%, ${pal.dark ? 62 : 48}%, ${pal.dark ? 0.04 : 0.028})`,
-        );
-        wash.addColorStop(1, "hsla(0, 0%, 0%, 0)");
+      // SUBJECT TERRITORIES first, under everything: one soft wash per course in its
+      // curated hue, sized to reach its lessons — pre-rasterized in buildWashLayer,
+      // blitted here (no per-frame gradient rasterization).
+      {
+        const origin = toScreen({ x: wash.x0, y: wash.y0 });
         ctx.globalAlpha = focusOn ? 0.4 : 1;
-        ctx.fillStyle = wash;
-        ctx.beginPath();
-        ctx.arc(hp.x, hp.y, rr, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.drawImage(wash.canvas, origin.x, origin.y, wash.w * zoom, wash.h * zoom);
         ctx.globalAlpha = 1;
       }
 
@@ -645,16 +688,21 @@ export function BrainGraph({
         const r = n.r * Math.sqrt(zoom) * (i === picked ? 1.22 : 1);
         ctx.globalAlpha = inFocus ? 1 : DIM;
         if (n.kind === "course") {
-          // The apex tier: a heavy filled anchor ringed in its subject hue —
-          // unmistakably not a lesson. R53: on the light ladder the near-black fill
-          // read as an ink blot, so light mode fills the hub with its own subject hue
-          // (the same hue as its neighborhood wash); dark keeps the strong-ink coin.
-          const hue = subjectHue(pal.accent, n.tint ?? 0);
-          ctx.fillStyle = pal.dark ? pal.ink92 : `hsl(${hue} 52% 47%)`;
+          // The apex tier: a filled anchor in its own subject hue on BOTH ladders
+          // (R54 — the dark ink coins read dead next to the colored washes), with a
+          // background keyline so it sits ON the wash, and a hue ring at a breath's
+          // distance.
+          const color = subjectColor(n.tint ?? 0, pal.dark);
+          ctx.fillStyle = color;
           ctx.beginPath();
           ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = `hsla(${hue}, 60%, ${pal.dark ? 68 : 50}%, 0.72)`;
+          ctx.strokeStyle = pal.bg;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = withAlpha(color, 0.65);
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
@@ -730,7 +778,6 @@ export function BrainGraph({
         y: number;
         size: number;
         weight: number;
-        mono: boolean;
         color: string;
         priority: number;
         alpha: number;
@@ -745,14 +792,17 @@ export function BrainGraph({
         // A dimmed graph shows only the selection's names.
         if (focusOn && !isHover && !isNeighbor) continue;
         // Zoom gates by kind — course hubs and the current lesson always qualify.
+        // R54: each tier gates later than before (owner: "the labels are sometimes
+        // a bit too much") — at rest the graph names only its anchors; zooming in
+        // still surfaces everything.
         const gate =
           n.kind === "course" || (n.kind === "lesson" && n.current)
             ? 1
             : n.kind === "lesson"
-              ? Math.min(1, Math.max(0, (zoom - 0.7) * 2.4))
+              ? Math.min(1, Math.max(0, (zoom - 0.9) * 2.4))
               : n.kind === "idea"
-                ? Math.min(1, Math.max(0, (zoom - 1.05) * 2.2))
-                : Math.min(1, Math.max(0, (zoom - 1.4) * 2.2));
+                ? Math.min(1, Math.max(0, (zoom - 1.25) * 2.2))
+                : Math.min(1, Math.max(0, (zoom - 1.7) * 2.2));
         if (!isHover && !isNeighbor && gate <= 0.05) continue;
         const priority = isHover
           ? 6
@@ -767,16 +817,19 @@ export function BrainGraph({
                   : n.kind === "idea"
                     ? 1
                     : 0.5;
+        // R54: labels whisper — sentence case in the sans face for every tier (the
+        // ALL-CAPS mono hub names shouted over the graph), truncated so one long
+        // title can't blanket a neighborhood. Hover always shows the full name.
         jobs.push({
-          text: n.label,
+          text: isHover ? n.label : ellipsize(n.label, n.kind === "course" ? 24 : 28),
           x: p.x,
           y: p.y + n.r * Math.sqrt(zoom) + 12.5,
-          size: n.kind === "course" ? 12.5 : n.kind === "lesson" ? 11.5 : 10.5,
-          weight: n.kind === "lesson" && (n.current || isHover) ? 600 : 500,
-          mono: n.kind === "course",
+          size: n.kind === "course" ? 11.5 : n.kind === "lesson" ? 11 : 10.5,
+          weight:
+            n.kind === "course" ? 700 : n.kind === "lesson" && (n.current || isHover) ? 600 : 500,
           color:
             n.kind === "course"
-              ? pal.ink92
+              ? pal.ink62
               : n.kind === "lesson"
                 ? n.current
                   ? pal.accent
@@ -789,8 +842,8 @@ export function BrainGraph({
       jobs.sort((a, b) => b.priority - a.priority);
       const claimed: { x1: number; y1: number; x2: number; y2: number }[] = [];
       for (const job of jobs) {
-        const text = job.mono ? job.text.toUpperCase() : job.text;
-        ctx.font = `${job.weight} ${job.size}px ${job.mono ? pal.fontMono : pal.fontSans}`;
+        const text = job.text;
+        ctx.font = `${job.weight} ${job.size}px ${pal.fontSans}`;
         const measureKey = `${text}|${ctx.font}`;
         let w = textWidths.get(measureKey);
         if (w == null) {
@@ -912,9 +965,14 @@ export function BrainGraph({
         x: (mx - width / 2) / cam.current.zoom + cam.current.x,
         y: (my - height / 2) / cam.current.zoom + cam.current.y,
       };
+      // R54: zoom proportional to the wheel delta instead of a fixed step per
+      // event — trackpads fire dozens of small deltas per gesture and the fixed
+      // ±10% step made every one of them a visible jump ("very choppy"). deltaMode
+      // 1 = lines (classic mouse wheels); scale those up to pixel terms.
+      const deltaPx = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
       cam.current.zoom = Math.min(
         ZOOM_MAX,
-        Math.max(ZOOM_MIN, cam.current.zoom * (event.deltaY > 0 ? 0.9 : 1.11)),
+        Math.max(ZOOM_MIN, cam.current.zoom * Math.exp(-deltaPx * 0.0022)),
       );
       cam.current.x = before.x - (mx - width / 2) / cam.current.zoom;
       cam.current.y = before.y - (my - height / 2) / cam.current.zoom;
