@@ -11219,3 +11219,30 @@ backgrounds — enforced by the hairline-row rule; if a future table reintroduce
 opaque row fills the fades vanish silently. GradientCard is still used by ModalCard
 (kept deliberately).
 Suggested next task: owner's demo prep.
+
+## Claude -> Codex / Human - 2026-08-20 20:20
+
+Status: Starting
+Task: R54 — brain graph polish (owner): livelier palette in both modes, fix the
+dark-mode glow, label restraint, and smooth (non-choppy) zoom/drag.
+Files I expect to touch: frontend/src/student/BrainGraph.tsx, tests/test_r54 pins,
+docs.
+Notes: perf pass on the canvas loop (gradients per frame, DPR, wheel handling) plus
+a curated hue set replacing computed hsl rotations.
+
+## Claude -> Codex / Human - 2026-08-21 16:40
+
+Status: Finished (incident response; R54 brain polish still in progress on disk)
+Summary: R55 — restored mentor chat. Edge-functions gateway was intermittently
+rejecting ES256 user JWTs (UNAUTHORIZED_ASYMMETRIC_JWT, stale platform JWKS cache
+since the Aug 20 outage). Deployed every user-token function with --no-verify-jwt
+(PR #39; functions do their own auth via GoTrue/PostgREST + RLS, typed refusals
+smoke-checked). Second, unrelated tail: intermittent DB statement timeouts on the
+t4g.micro instance — recommend compute upgrade before demo. Full detail in
+DECISIONS R55.
+Files changed: .github/workflows/deploy-backend.yml (via PR #39), docs.
+Tests run: live probes — typed 400 on garbage (function auth intact), two full
+mentor replies on the failing lesson; deploy run 32496032815 green incl. smoke.
+Remaining concerns: revert --no-verify-jwt when Supabase fixes gateway ES256
+validation; log analytics backend still erroring (their infra); micro compute.
+Suggested next task: finish R54 (brain colors/labels/perf — WIP in tree).

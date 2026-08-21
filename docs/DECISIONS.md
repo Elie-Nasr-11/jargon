@@ -1328,3 +1328,35 @@ Decisions:
 Verified: 880 pins OK (one R52 pin re-anchored to the blue pill by design), tsc +
 eslint clean, light+dark screenshots across login/student home+brain/chat/teacher
 tabs/gradebook narrow-scrolled/admin.
+
+## R55 — incident: mentor turns failing; gateway rejects ES256 JWTs (2026-08-21)
+
+Owner report: every lesson turn answered the "Something went wrong on our side"
+bubble (reproduced on camp-bio-l1 "A factory with compartments"). Zero successful
+model calls since Aug 20 07:44Z — the entire day after the DB outage.
+
+Two stacked causes, found with in-database pg_net probes (throwaway student
+created and fully torn down, 0 rows left):
+
+1. **Edge-functions gateway rejected user JWTs.** GoTrue signs user access tokens
+   with the project's asymmetric ES256 key (kid IS in the published JWKS), but the
+   functions gateway intermittently answered `401 UNAUTHORIZED_ASYMMETRIC_JWT` (4 of
+   5 attempts) — a stale JWKS cache on their side dating from the Aug 20
+   outage/restart. GoTrue/PostgREST accepted the same token. FIX SHIPPED: all
+   user-token functions deploy with `--no-verify-jwt` (PR #39) — the gateway check
+   was a redundant outer layer; every function resolves the actor internally
+   (GoTrue/PostgREST + RLS) and refuses junk with a typed 4xx (smoke-checked each
+   deploy). submission-maintenance keeps gateway verification (service-role only).
+   REVERT the flags when Supabase confirms reliable ES256 validation.
+
+2. **Intermittent DB statement timeouts** ("canceling statement due to statement
+   timeout", stage intro) — three consecutive failures at 15:15Z, healthy at 16:22Z
+   with the identical request. Individual context queries measure in milliseconds
+   under RLS; the t4g.micro instance simply stalls in bursts (post-incident CPU
+   credit exhaustion pattern). Not a code defect. Mitigation is infrastructure:
+   upgrade compute (micro → small) before the demo — owner's call (costs money).
+
+Verified end-to-end after the fix: two consecutive full mentor replies on
+camp-bio-l1 (session advanced intro → practice). Note for future forensics: the
+project's log analytics backend ("Backend error! Retry") was down throughout —
+pg_net probes + direct table reads were the only working instruments.
