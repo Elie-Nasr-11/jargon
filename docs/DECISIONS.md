@@ -1386,3 +1386,44 @@ it"; "the labels are sometimes a bit too much"; zoom/drag "very choppy".
 Verified: 889 pins OK (one R53 brain pin re-anchored to the curated-palette
 contract by design); tsc + eslint clean; light/dark screenshots at rest + zoomed
 (label reveal ladder intact, occupancy grid uncontested).
+
+## R56 — build from material: a teacher's upload becomes a whole draft lesson (2026-08-21)
+
+Owner (post-meeting): make the teacher end "more of a one-stop job for education —
+create the curriculum, entire lessons, slide decks, quizzes, and assignments from the
+material that the teacher uploads… rather than manual upload and input of everything,
+our platform builds it out for them."
+
+Survey first: ~60% already existed — material ingestion (PDF extract, OCR, A/V
+transcription, teacher-approved chunks), single-lesson step generation, knowledge
+extraction grounded in approved chunks, and deck/sim generation. The gaps were
+SCALE (nothing drafts a curriculum), COMPLETENESS (quiz/assignment/deck still manual
+per lesson), and ONE FLOW. Owner picked "full lesson from material" as slice 1; the
+curriculum-outline builder loops this engine next.
+
+Decisions:
+1. **One call, one package.** New generate mode `lesson_package` drafts lesson meta +
+   steps + wrap-up quiz + assignment brief + a deck brief, from a 24k-char material
+   window (3x the step generator's — a chapter is the normal input). Deck generation
+   stays the existing `artifact` mode (separate budget, separate refine).
+2. **Review-first is absolute.** Generation writes NOTHING (pinned). Apply runs
+   through the same create_lesson_stub / upsert_step actions manual authoring uses —
+   no privileged bulk path, so every guard, gate and audit trail still applies — and
+   the lesson lands as a DRAFT.
+3. **Quiz + assignment land as STEPS, not classwork rows.** The studio has no roster
+   (create_assessment/createAssignment need recipients), and R48 already made
+   assignment/assessment steps first-class: students meet them inside the lesson, and
+   R48's step-work strip turns any of them into graded classwork in one click.
+4. **Degrade, don't break.** An MCQ whose choices/answer fail validation becomes an
+   open-ended question rather than a broken auto-scored one; an ungrounded package
+   (brief only, no material) is flagged in the review panel, not silently passed off.
+5. **Ingestion widened to what teachers actually have** (owner's list): PDFs, pasted
+   notes, .docx, .pptx, images, and URLs — on top of the existing A/V transcription.
+   Office formats are unzipped and parsed IN THE BROWSER via DecompressionStream (no
+   new dependency); only images (vision OCR) and URLs (SSRF-guarded server fetch,
+   blocking private ranges/credentials/non-http schemes) touch the server, and both
+   return text only, storing nothing.
+
+Verified: 907 pins OK (24 new); tsc + eslint clean; offline deno check 0 errors on
+both edge functions; 13/13 browser walkthrough — unit → paste material → Build lesson
+→ review steps/quiz/assignment → Apply creates the lesson.

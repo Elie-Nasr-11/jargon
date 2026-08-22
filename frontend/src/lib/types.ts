@@ -258,6 +258,30 @@ export type CurriculumStepDraft = {
   correct_choice_id: string;
 };
 
+// R56 "build from material": one grounded generation drafts a whole lesson — meta,
+// steps, the wrap-up quiz, and the assignment brief — plus a brief the studio feeds
+// straight into deck generation. Every field is a DRAFT; nothing exists in the
+// database until the teacher applies the package.
+export type CurriculumPackageQuizItem = {
+  question_type: "multiple_choice" | "open_ended";
+  prompt: string;
+  choices: Array<{ id: string; text: string }>;
+  correct_choice_ids: string[];
+  points: number;
+  position: number;
+};
+
+export type CurriculumLessonPackage = {
+  lesson: { title: string; objective: string; level: string; tutor_prompt: string };
+  steps: CurriculumStepDraft[];
+  quiz: { title: string; instructions: string; items: CurriculumPackageQuizItem[] };
+  assignment: { title: string; instructions: string; success_criteria: string[] } | null;
+  deck_brief: string;
+  // False when the teacher generated from a brief alone — the studio says so, because
+  // an ungrounded package is a starting point, not a lesson built from their material.
+  grounded: boolean;
+};
+
 // v4.0 org-shared lesson template (a by-value snapshot of a lesson's mode flow + policy).
 export type CurriculumTemplate = {
   id: string;
@@ -289,6 +313,8 @@ export type CurriculumAdminResponse = {
   mode?: string;
   outline?: CurriculumOutlineDraft;
   steps?: CurriculumStepDraft[];
+  // R56: mode "lesson_package" — the whole lesson as one reviewable draft.
+  package?: CurriculumLessonPackage;
   // P7 artifact generation (mode "artifact"): one of these is set per artifact_kind.
   artifact_kind?: "html_sim" | "deck";
   artifact_html?: string;

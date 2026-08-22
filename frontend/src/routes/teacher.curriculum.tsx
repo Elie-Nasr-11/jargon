@@ -54,7 +54,17 @@ import {
   setClassCourses,
   updateLessonResource,
   upsertCurriculumStep,
+  readImageMaterial,
+  readUrlMaterial,
 } from "@/lib/api";
+import {
+  extractDocxText,
+  extractPptxText,
+  htmlToText,
+  isDocx,
+  isPlainTextFile,
+  isPptx,
+} from "@/lib/materialText";
 import type {
   CurriculumAdminResponse,
   CurriculumAuthoringData,
@@ -74,6 +84,7 @@ import type {
   Lesson,
   LessonActivity,
   LessonResource,
+  CurriculumLessonPackage,
 } from "@/lib/types";
 import { KnowledgeCard } from "@/features/teacher/KnowledgeCard";
 import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
@@ -967,6 +978,109 @@ export function CurriculumStudio({
       { successMessage: "Steps added." },
     );
 
+  // R56 "build from material": ONE generation drafts a whole lesson from the teacher's
+  // uploads — meta, steps, wrap-up quiz, assignment brief. Still review-first: this
+  // returns a draft and writes nothing.
+  const generatePackage = async (args: {
+    unitId?: string;
+    lessonId?: string;
+    prompt: string;
+    referenceText: string;
+    includeQuiz: boolean;
+    includeAssignment: boolean;
+  }): Promise<CurriculumLessonPackage | null> => {
+    if (!selectedClass) return null;
+    try {
+      const session = await getSession();
+      if (!session) throw new Error("Sign in to use AI authoring.");
+      const result = await generateCurriculumDraft({
+        accessToken: session.access_token,
+        classId: selectedClass.id,
+        mode: "lesson_package",
+        unitId: args.unitId,
+        lessonId: args.lessonId,
+        prompt: args.prompt,
+        referenceText: args.referenceText,
+        includeQuiz: args.includeQuiz,
+        includeAssignment: args.includeAssignment,
+      });
+      return result.package || null;
+    } catch (error) {
+      setMessage((error as Error).message || "Could not build the lesson.");
+      return null;
+    }
+  };
+
+  // Apply writes the package through the SAME actions a teacher's manual authoring uses —
+  // no privileged bulk path — so every guard, gate, and audit trail still applies. The
+  // lesson lands as a DRAFT: publishing stays the teacher's explicit act.
+  const applyPackage = (unitId: string, pkg: CurriculumLessonPackage) =>
+    reloading(
+      async (accessToken, classId) => {
+        const created = await createCurriculumLessonStub({
+          accessToken,
+          classId,
+          unitId,
+          title: pkg.lesson.title,
+          level: pkg.lesson.level,
+          tutorPrompt: pkg.lesson.tutor_prompt,
+        });
+        const lessonId = created.lesson_id || created.id;
+        if (!lessonId) throw new Error("The lesson could not be created.");
+        for (const draft of pkg.steps) {
+          await upsertCurriculumStep({
+            accessToken,
+            classId,
+            lessonId,
+            step: stepInputFromDraft(draft),
+          });
+        }
+        // The wrap-up quiz and the assignment land as STEPS, not as classwork rows:
+        // steps need no roster (the studio has none), students meet them inside the
+        // lesson, and R48's step-work strip already turns any assignment/assessment
+        // step into graded classwork in one click when the teacher wants grading.
+        for (const item of pkg.quiz.items.slice(0, 4)) {
+          const isMcq = item.question_type === "multiple_choice" && item.choices.length >= 2;
+          await upsertCurriculumStep({
+            accessToken,
+            classId,
+            lessonId,
+            step: stepInputFromDraft({
+              kind: "checkpoint",
+              mode: "assessment",
+              mode_type: isMcq ? "mcq" : "open_ended",
+              title: item.prompt.slice(0, 60),
+              prompt: item.prompt,
+              choices: isMcq ? item.choices : [],
+              correct_choice_id: isMcq ? item.correct_choice_ids[0] || "" : "",
+            }),
+          });
+        }
+        if (pkg.assignment) {
+          const criteria = pkg.assignment.success_criteria.length
+            ? `\n\nWhat a strong response includes:\n${pkg.assignment.success_criteria
+                .map((line) => `- ${line}`)
+                .join("\n")}`
+            : "";
+          await upsertCurriculumStep({
+            accessToken,
+            classId,
+            lessonId,
+            step: stepInputFromDraft({
+              kind: "reflect",
+              mode: "assignment",
+              mode_type: "",
+              title: pkg.assignment.title,
+              prompt: `${pkg.assignment.instructions}${criteria}`,
+              choices: [],
+              correct_choice_id: "",
+            }),
+          });
+        }
+      },
+      { successMessage: "Lesson drafted from your material." },
+    );
+
   // P7: generate an artifact (html_sim / deck) — read-only draft round-trip; the studio
   // previews it, and approveArtifact persists it as a published resource bound to the step.
   const generateArtifact = async (
@@ -1255,6 +1369,8 @@ export function CurriculumStudio({
               onApplyOutline={applyOutline}
               onGenerateSteps={generateSteps}
               onApplySteps={applyStepDrafts}
+              onGeneratePackage={generatePackage}
+              onApplyPackage={applyPackage}
               counts={{
                 coursesForSubject: (id) => classCoursesForSubject(id).length,
                 unitsForCourse: (id) => unitsForCourse(id).length,
@@ -1731,6 +1847,8 @@ function DetailPane({
   onApplyOutline,
   onGenerateSteps,
   onApplySteps,
+  onGeneratePackage,
+  onApplyPackage,
   workItems,
   onOpenItem,
   onCreateForStep,
@@ -1779,6 +1897,15 @@ function DetailPane({
   ) => void;
   onPublishLesson: (lessonId: string) => void;
   onArchiveLesson: (lessonId: string) => void;
+  // R56: build a whole lesson from teacher material (unit-level).
+  onGeneratePackage?: (args: {
+    unitId: string;
+    prompt: string;
+    referenceText: string;
+    includeQuiz: boolean;
+    includeAssignment: boolean;
+  }) => Promise<CurriculumLessonPackage | null>;
+  onApplyPackage?: (unitId: string, pkg: CurriculumLessonPackage) => void;
   onGenerateOutline: (
     courseId: string,
     args: OutlineGenArgs,
@@ -1881,6 +2008,15 @@ function DetailPane({
         onSave={(title, description) => onRename("unit", unit.id, title, description)}
         onAddChild={() => onAddLesson(unit.id)}
         onDelete={() => onDelete("unit", unit.id)}
+        buildFromMaterial={
+          onGeneratePackage && onApplyPackage
+            ? {
+                resources: data.resources,
+                onGenerate: (args) => onGeneratePackage({ ...args, unitId: unit.id }),
+                onApply: (pkg) => onApplyPackage(unit.id, pkg),
+              }
+            : undefined
+        }
       />
     );
   }
@@ -1940,6 +2076,7 @@ function StructureDetail({
   onArchive,
   onDelete,
   ai,
+  buildFromMaterial,
 }: {
   kind: string;
   node: { id: string; title: string; description?: string };
@@ -1957,6 +2094,17 @@ function StructureDetail({
     resources: LessonResource[];
     onGenerate: (args: OutlineGenArgs) => Promise<CurriculumOutlineDraft | null>;
     onApply: (outline: CurriculumOutlineDraft) => void;
+  };
+  // R56: on a UNIT, the studio can build a whole lesson from the teacher's material.
+  buildFromMaterial?: {
+    resources: LessonResource[];
+    onGenerate: (args: {
+      prompt: string;
+      referenceText: string;
+      includeQuiz: boolean;
+      includeAssignment: boolean;
+    }) => Promise<CurriculumLessonPackage | null>;
+    onApply: (pkg: CurriculumLessonPackage) => void;
   };
 }) {
   const [title, setTitle] = useState(node.title);
@@ -2014,6 +2162,17 @@ function StructureDetail({
               resources={ai.resources}
               onGenerate={ai.onGenerate}
               onApply={ai.onApply}
+            />
+          </div>
+        ) : null}
+
+        {buildFromMaterial ? (
+          <div className="mt-5">
+            <BuildFromMaterialPanel
+              busy={busy}
+              resources={buildFromMaterial.resources}
+              onGenerate={buildFromMaterial.onGenerate}
+              onApply={buildFromMaterial.onApply}
             />
           </div>
         ) : null}
@@ -3490,6 +3649,9 @@ function AiReferenceInput({
   const [docs, setDocs] = useState<Array<{ name: string; text: string }>>([]);
   const [resourceIds, setResourceIds] = useState<string[]>([]);
   const [extracting, setExtracting] = useState(false);
+  const [link, setLink] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [fileError, setFileError] = useState("");
 
   const usableResources = useMemo(
     () => resources.filter((resource) => resourceReferenceText(resource).length > 0),
@@ -3504,10 +3666,14 @@ function AiReferenceInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paste, docs, resourceIds, usableResources]);
 
+  // R56: teachers bring what they have — PDFs, Word, PowerPoint, notes, and photos of
+  // worksheets. Office formats and PDFs are read IN THE BROWSER; only images need the
+  // server (vision), and only the resulting text is ever sent on.
   const handleFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
     setExtracting(true);
     const added: Array<{ name: string; text: string }> = [];
+    const failed: string[] = [];
     for (const file of Array.from(files)) {
       try {
         let text = "";
@@ -3519,16 +3685,61 @@ function AiReferenceInput({
           } finally {
             URL.revokeObjectURL(url);
           }
+        } else if (isDocx(file)) {
+          text = await extractDocxText(file);
+        } else if (isPptx(file)) {
+          text = await extractPptxText(file);
+        } else if (file.type.startsWith("image/")) {
+          const session = await getSession();
+          if (!session) throw new Error("Sign in again to read images.");
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("Could not read that image."));
+            reader.readAsDataURL(file);
+          });
+          text = await readImageMaterial(session.access_token, dataUrl);
+        } else if (isPlainTextFile(file)) {
+          const raw = await file.text();
+          text = /\.html?$/i.test(file.name) ? htmlToText(raw) : raw;
         } else {
-          text = await file.text();
+          throw new Error("Unsupported file type.");
         }
-        if (text.trim()) added.push({ name: file.name, text: text.trim().slice(0, 20000) });
+        if (text.trim()) added.push({ name: file.name, text: text.trim().slice(0, 40000) });
+        else failed.push(file.name);
       } catch {
-        // Skip files we can't read.
+        failed.push(file.name);
       }
     }
     setDocs((current) => [...current, ...added]);
+    setFileError(
+      failed.length
+        ? `Couldn't read ${failed.join(", ")} — try a PDF, Word, PowerPoint, image, or plain-text file.`
+        : "",
+    );
     setExtracting(false);
+  };
+
+  const addLink = async () => {
+    const url = link.trim();
+    if (!url) return;
+    setLinkBusy(true);
+    setFileError("");
+    try {
+      const session = await getSession();
+      if (!session) throw new Error("Sign in again to read links.");
+      const result = await readUrlMaterial(session.access_token, url);
+      if (!result.text.trim()) throw new Error("That page had no readable text.");
+      setDocs((current) => [
+        ...current,
+        { name: result.title || url, text: result.text.slice(0, 40000) },
+      ]);
+      setLink("");
+    } catch (error) {
+      setFileError((error as Error).message || "Could not read that link.");
+    } finally {
+      setLinkBusy(false);
+    }
   };
 
   const summary =
@@ -3562,12 +3773,12 @@ function AiReferenceInput({
           <TextArea label="Paste source text" value={paste} onChange={setPaste} />
           <div className="grid gap-1">
             <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-              Upload files (.txt, .md, .pdf)
+              Upload files (PDF, Word, PowerPoint, images, notes)
             </span>
             <input
               type="file"
               multiple
-              accept=".txt,.md,.markdown,.pdf,text/plain,application/pdf"
+              accept=".txt,.md,.markdown,.csv,.html,.htm,.pdf,.docx,.pptx,image/*,text/plain,application/pdf"
               disabled={busy || extracting}
               onChange={(event) => {
                 void handleFiles(event.target.files);
@@ -3578,6 +3789,7 @@ function AiReferenceInput({
             {extracting ? (
               <span className="text-meta text-muted-foreground">Reading files…</span>
             ) : null}
+            {fileError ? <span className="text-meta text-danger">{fileError}</span> : null}
             {docs.length ? (
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {docs.map((doc, i) => (
@@ -3598,6 +3810,34 @@ function AiReferenceInput({
                 ))}
               </div>
             ) : null}
+          </div>
+          <div className="grid gap-1">
+            <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Add a link
+            </span>
+            <div className="flex gap-2">
+              <input
+                value={link}
+                onChange={(event) => setLink(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void addLink();
+                  }
+                }}
+                placeholder="https://…"
+                disabled={busy || linkBusy}
+                className="jargon-input min-w-0 flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => void addLink()}
+                disabled={busy || linkBusy || !link.trim()}
+                className="btn btn-secondary btn-sm shrink-0"
+              >
+                {linkBusy ? "Reading…" : "Read page"}
+              </button>
+            </div>
           </div>
           {usableResources.length ? (
             <div className="grid gap-1">
@@ -3672,6 +3912,237 @@ function RefineBox({
           Cancel
         </button>
       </div>
+    </div>
+  );
+}
+
+// R56 "build from material" — the one-stop authoring moment. The teacher points at
+// what they already have (upload, paste, link, or an existing lesson resource), and
+// the platform drafts the whole lesson: steps, a wrap-up quiz, and an assignment.
+// Everything shown here is a DRAFT — Apply writes it as an unpublished lesson.
+function BuildFromMaterialPanel({
+  busy,
+  resources,
+  onGenerate,
+  onApply,
+}: {
+  busy: boolean;
+  resources: LessonResource[];
+  onGenerate: (args: {
+    prompt: string;
+    referenceText: string;
+    includeQuiz: boolean;
+    includeAssignment: boolean;
+  }) => Promise<CurriculumLessonPackage | null>;
+  onApply: (pkg: CurriculumLessonPackage) => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [referenceText, setReferenceText] = useState("");
+  const [includeQuiz, setIncludeQuiz] = useState(true);
+  const [includeAssignment, setIncludeAssignment] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [pkg, setPkg] = useState<CurriculumLessonPackage | null>(null);
+
+  const run = async () => {
+    setLoading(true);
+    const result = await onGenerate({
+      prompt: prompt.trim(),
+      referenceText,
+      includeQuiz,
+      includeAssignment,
+    });
+    setLoading(false);
+    if (result) setPkg(result);
+  };
+
+  return (
+    <div className="rounded-card border border-border bg-depth-sub p-4">
+      <div className="flex items-start gap-2">
+        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+        <div className="min-w-0">
+          <h4 className="text-body font-medium text-foreground">Build a lesson from material</h4>
+          <p className="mt-0.5 text-meta text-muted-foreground">
+            Upload a chapter, paste your notes, or add a link. Jargon drafts the lesson steps, a
+            wrap-up quiz, and an assignment for you to review.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3">
+        <AiReferenceInput
+          resources={resources}
+          busy={busy || loading}
+          onChange={setReferenceText}
+        />
+        <TextArea
+          label="Anything to steer it? (optional) — e.g. Grade 7, one period, focus on the diagram on page 3"
+          value={prompt}
+          onChange={setPrompt}
+        />
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-meta text-foreground">
+            <input
+              type="checkbox"
+              checked={includeQuiz}
+              onChange={() => setIncludeQuiz((value) => !value)}
+              className="h-3.5 w-3.5 accent-foreground"
+            />
+            Include a wrap-up quiz
+          </label>
+          <label className="flex items-center gap-2 text-meta text-foreground">
+            <input
+              type="checkbox"
+              checked={includeAssignment}
+              onChange={() => setIncludeAssignment((value) => !value)}
+              className="h-3.5 w-3.5 accent-foreground"
+            />
+            Include an assignment
+          </label>
+        </div>
+        <div>
+          <button
+            type="button"
+            onClick={() => void run()}
+            disabled={busy || loading || (!referenceText.trim() && !prompt.trim())}
+            className="btn btn-primary btn-sm"
+          >
+            {loading ? "Building the lesson…" : "Build lesson"}
+          </button>
+          {!referenceText.trim() && !prompt.trim() ? (
+            <span className="ml-2 text-meta text-muted-foreground">
+              Add material or a brief first.
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      {pkg ? (
+        <div className="mt-4 grid gap-3 border-t border-border pt-4">
+          {!pkg.grounded ? (
+            <p className="text-meta text-warning">
+              Built from your brief alone — no material was attached, so check the facts before
+              publishing.
+            </p>
+          ) : null}
+          <div className="rounded-card border border-border bg-depth-card p-3">
+            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Lesson
+            </div>
+            <div className="mt-1 text-body font-medium text-foreground">{pkg.lesson.title}</div>
+            {pkg.lesson.objective ? (
+              <div className="mt-0.5 text-meta text-muted-foreground">{pkg.lesson.objective}</div>
+            ) : null}
+          </div>
+
+          <div className="grid gap-1.5">
+            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              {pkg.steps.length} steps
+            </div>
+            {pkg.steps.map((step, index) => (
+              <div key={index} className="rounded-card border border-border bg-depth-card p-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-border px-2 py-0.5 text-overline uppercase text-muted-foreground">
+                    {step.mode || step.kind}
+                  </span>
+                  <span className="min-w-0 truncate text-meta font-medium text-foreground">
+                    {step.title}
+                  </span>
+                </div>
+                {step.prompt ? (
+                  <p className="mt-1 line-clamp-2 text-meta text-muted-foreground">{step.prompt}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          {pkg.quiz.items.length ? (
+            <div className="grid gap-1.5">
+              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                Wrap-up quiz · {pkg.quiz.items.length} questions
+              </div>
+              {pkg.quiz.items.map((item, index) => (
+                <div key={index} className="rounded-card border border-border bg-depth-card p-2.5">
+                  <div className="text-meta text-foreground">{item.prompt}</div>
+                  {item.choices.length ? (
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {item.choices.map((choice) => (
+                        <span
+                          key={choice.id}
+                          className={`rounded-full border px-2 py-0.5 text-overline ${
+                            item.correct_choice_ids.includes(choice.id)
+                              ? "border-success/45 text-success"
+                              : "border-border text-muted-foreground"
+                          }`}
+                        >
+                          {choice.text}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-overline uppercase text-muted-foreground">
+                      Written answer
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {pkg.assignment ? (
+            <div className="rounded-card border border-border bg-depth-card p-3">
+              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                Assignment
+              </div>
+              <div className="mt-1 text-meta font-medium text-foreground">
+                {pkg.assignment.title}
+              </div>
+              <p className="mt-1 text-meta text-muted-foreground">{pkg.assignment.instructions}</p>
+              {pkg.assignment.success_criteria.length ? (
+                <ul className="mt-2 grid gap-0.5">
+                  {pkg.assignment.success_criteria.map((line, index) => (
+                    <li key={index} className="text-meta text-muted-foreground">
+                      · {line}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onApply(pkg);
+                setPkg(null);
+              }}
+              disabled={busy}
+              className="btn btn-primary btn-sm"
+            >
+              Add this lesson
+            </button>
+            <button
+              type="button"
+              onClick={() => void run()}
+              disabled={busy || loading}
+              className="btn btn-secondary btn-sm"
+            >
+              Rebuild
+            </button>
+            <button
+              type="button"
+              onClick={() => setPkg(null)}
+              disabled={busy}
+              className="btn btn-ghost btn-sm"
+            >
+              Discard
+            </button>
+            <span className="text-meta text-muted-foreground">
+              Lands as a draft — publish it when you're happy.
+            </span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

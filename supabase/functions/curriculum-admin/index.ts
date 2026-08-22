@@ -2530,8 +2530,165 @@ async function instantiateTemplate(config: Config, actorId: string, body: DbRow)
   });
 }
 
+// R56 "build from material": ONE grounded call drafts a whole lesson — meta, steps,
+// the wrap-up quiz, and the assignment brief — so a teacher's upload becomes a
+// reviewable lesson instead of a blank editor. Deck generation stays the existing
+// `artifact` mode (the studio fires it alongside; separate budget, separate refine).
+// Review-first is unchanged: this writes NOTHING. The studio applies the package
+// through the normal create_lesson / upsert_step / create_assessment / assignment
+// paths, and publish still gates what students see.
+function parsePackageQuiz(result: DbRow) {
+  const raw = result.quiz && typeof result.quiz === "object" ? (result.quiz as DbRow) : {};
+  const rawItems = Array.isArray(raw.items) ? raw.items : [];
+  const items = rawItems
+    .slice(0, 12)
+    .map((item, index) => {
+      const row = item && typeof item === "object" ? (item as DbRow) : {};
+      const openEnded = cleanText(row.question_type) === "open_ended";
+      const choices = parseChoices(row.choices);
+      const correct = cleanText(row.correct_choice_id);
+      // An MCQ whose choices/answer didn't survive validation becomes open-ended
+      // rather than a broken auto-scored question.
+      const usable = choices.length >= 2 && choices.some((choice) => choice.id === correct);
+      return {
+        question_type: openEnded || !usable ? "open_ended" : "multiple_choice",
+        prompt: cleanText(row.prompt),
+        choices: openEnded || !usable ? [] : choices,
+        correct_choice_ids: openEnded || !usable ? [] : [correct],
+        points: Math.max(0.5, Math.min(10, Number(row.points) || 1)),
+        position: index + 1,
+      };
+    })
+    .filter((item) => item.prompt);
+  return {
+    title: cleanText(raw.title) || "Wrap-up quiz",
+    instructions: cleanText(raw.instructions),
+    items,
+  };
+}
+
+function parsePackageAssignment(result: DbRow) {
+  const raw =
+    result.assignment && typeof result.assignment === "object" ? (result.assignment as DbRow) : {};
+  const title = cleanText(raw.title);
+  const instructions = cleanText(raw.instructions);
+  if (!title && !instructions) return null;
+  return {
+    title: title || "Assignment",
+    instructions,
+    // A brief the mentor can grade against — kept as plain lines, not a rubric table.
+    success_criteria: cleanStringArray(raw.success_criteria).slice(0, 6),
+  };
+}
+
+async function generateLessonPackage(
+  config: Config,
+  actorId: string,
+  body: DbRow,
+): Promise<Response> {
+  const unitId = cleanText(body.unit_id);
+  const lessonId = cleanText(body.lesson_id);
+  if (!unitId && !lessonId) throw new Error("unit_id or lesson_id is required.");
+
+  // Two entry points: draft a NEW lesson into a unit, or re-draft an existing one.
+  let organizationId = "";
+  let contextText = "";
+  if (lessonId) {
+    const ctx = await lessonStepsContext(config, lessonId);
+    organizationId = ctx.organizationId;
+    contextText = ctx.text;
+  } else {
+    const scope = await unitScope(config, unitId);
+    organizationId = scope.organizationId;
+    const ctx = await courseOutlineContext(config, scope.courseId).catch(() => null);
+    contextText = ctx?.text || "";
+  }
+  await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+
+  const prompt = clampText(cleanText(body.prompt), 2000);
+  // Material is the point of this mode: a bigger window than the step generator's,
+  // because a chapter upload is the normal input here.
+  const referenceText = clampText(cleanText(body.reference_text), 24000);
+  if (!referenceText && !prompt) {
+    throw new Error("Add material (upload, paste, or a link) or a brief to generate from.");
+  }
+  const wantQuiz = body.include_quiz !== false;
+  const wantAssignment = body.include_assignment !== false;
+
+  const system =
+    "You are a curriculum designer building ONE complete lesson for a conversational AI " +
+    "tutoring platform, GROUNDED IN THE TEACHER'S MATERIAL. Return ONLY JSON of the form " +
+    '{"lesson":{"title":string,"objective":string,"level":string,"tutor_prompt":string},' +
+    '"steps":[{"mode":"explanation"|"media"|"reflection"|"practice"|"assignment"|"inquiry"|"assessment"|"revision",' +
+    '"mode_type":string,"title":string,"prompt":string,' +
+    '"choices":[{"id":string,"text":string}],"correct_choice_id":string}],' +
+    '"quiz":{"title":string,"instructions":string,"items":[{"question_type":"multiple_choice"|"open_ended",' +
+    '"prompt":string,"choices":[{"id":string,"text":string}],"correct_choice_id":string,"points":number}]},' +
+    '"assignment":{"title":string,"instructions":string,"success_criteria":[string]},' +
+    '"deck_brief":string}. ' +
+    "RULES. lesson.tutor_prompt is how the mentor should open and carry the lesson — one " +
+    "paragraph, second person, no meta-talk. steps: 4-7, opening with explanation or media, " +
+    "working the idea with reflection/practice/inquiry, and NOT ending with an assessment " +
+    "step (the wrap-up quiz below covers assessment). mode_type is required only for " +
+    "practice ('code' | 'applied') and assessment ('mcq' | 'open_ended'); include choices " +
+    "and correct_choice_id ONLY for assessment/mcq steps (ids a,b,c,d). quiz: 3-6 items " +
+    "checking THIS lesson's objective, mostly multiple_choice with exactly one correct " +
+    "choice id, each with 2-4 choices. assignment: one piece of real work a student hands " +
+    "in (a paragraph, a problem set write-up, a small build) with 2-4 success_criteria a " +
+    "teacher can grade against. deck_brief: one or two sentences describing the slide deck " +
+    "this lesson needs — the platform generates the deck separately from it. " +
+    "EVERY fact, example, and question must come from the teacher's material; never invent " +
+    "content beyond it. Keep language age-appropriate for the lesson's level.";
+
+  const parts: string[] = [];
+  if (contextText) parts.push(`Curriculum context (do not duplicate existing lessons):\n${contextText}`);
+  if (referenceText) parts.push(`TEACHER'S MATERIAL — the source of truth:\n${referenceText}`);
+  if (prompt) parts.push(`Teacher's brief for this lesson:\n${prompt}`);
+  else parts.push("Design the single best lesson this material supports.");
+  if (!wantQuiz) parts.push('Return "quiz":{"items":[]} — the teacher does not want a quiz.');
+  if (!wantAssignment) parts.push('Omit "assignment" — the teacher does not want one.');
+
+  // A package is ~4x a steps draft; give it the artifact budget rather than the
+  // default one (a truncated package fails validation and wastes the whole call).
+  const result = await callModelJson(system, parts.join("\n\n"), {
+    model: artifactModel(),
+    maxTokens: 5000,
+    timeoutMs: 90000,
+  });
+
+  const lessonRaw =
+    result.lesson && typeof result.lesson === "object" ? (result.lesson as DbRow) : {};
+  const steps = parseStepDrafts(result);
+  if (!steps.length) {
+    throw new Error("Couldn't draft steps from that material. Try a clearer brief or more text.");
+  }
+  const quiz = wantQuiz ? parsePackageQuiz(result) : { title: "", instructions: "", items: [] };
+  const assignment = wantAssignment ? parsePackageAssignment(result) : null;
+
+  return json({
+    status: "ok",
+    mode: "lesson_package",
+    package: {
+      lesson: {
+        title: cleanText(lessonRaw.title) || "Untitled lesson",
+        objective: cleanText(lessonRaw.objective),
+        level: cleanText(lessonRaw.level) || "Any level",
+        tutor_prompt:
+          cleanText(lessonRaw.tutor_prompt) ||
+          "Introduce this lesson and guide the learner step by step.",
+      },
+      steps,
+      quiz,
+      assignment,
+      deck_brief: cleanText(result.deck_brief),
+      grounded: Boolean(referenceText),
+    },
+  });
+}
+
 async function generateDraft(config: Config, actorId: string, body: DbRow): Promise<Response> {
   const mode = cleanText(body.mode);
+  if (mode === "lesson_package") return await generateLessonPackage(config, actorId, body);
   const prompt = cleanText(body.prompt);
   const referenceText = clampText(cleanText(body.reference_text), 8000);
   const feedback = cleanText(body.feedback);

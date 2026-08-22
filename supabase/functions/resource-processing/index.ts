@@ -1321,6 +1321,178 @@ function firstSentence(value: string): string {
   return match?.[1]?.trim() || trimmed.slice(0, 220);
 }
 
+// R56 "build from material": two read-only ingestion helpers that turn a teacher's
+// link or photo into reference TEXT for lesson generation. Neither writes anything —
+// the text goes straight back to the studio, where the teacher sees it before it is
+// ever used. Both require an authenticated teacher/admin (the router resolves `user`).
+
+// Public-internet only. A URL the teacher pastes must never make this function reach
+// into the platform's own network: block non-http(s) schemes, credentials, and hosts
+// that resolve to loopback/link-local/private ranges by name or literal IP.
+function assertPublicHttpUrl(raw: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("That doesn't look like a valid link.");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Only http and https links can be read.");
+  }
+  if (url.username || url.password) throw new Error("Links with credentials are not allowed.");
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    host === "localhost" ||
+    host === "0.0.0.0" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".local")
+  ) {
+    throw new Error("That link points inside a private network.");
+  }
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    const isPrivate =
+      a === 10 ||
+      a === 127 ||
+      a === 0 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      (a === 100 && b >= 64 && b <= 127);
+    if (isPrivate) throw new Error("That link points inside a private network.");
+  }
+  // IPv6 loopback / unique-local / link-local.
+  if (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80")) {
+    throw new Error("That link points inside a private network.");
+  }
+  return url;
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+    .replace(/<\/(p|div|li|h[1-6]|tr|br)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+async function readUrlMaterial(body: DbRow, user: DbRow) {
+  if (!cleanId(user.id)) throw new Error("Authentication is required.");
+  const url = assertPublicHttpUrl(cleanText(body.url));
+  const response = await fetch(url.toString(), {
+    headers: { "User-Agent": "JargonBot/1.0 (teacher material import)", Accept: "text/html,text/plain,*/*" },
+    redirect: "follow",
+    signal: AbortSignal.timeout(20_000),
+  }).catch(() => null);
+  if (!response || !response.ok) {
+    throw new Error("Could not read that link. Check it opens in a browser, then try again.");
+  }
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
+    throw new Error(
+      "That link isn't a readable page. Download the file and upload it instead.",
+    );
+  }
+  const raw = (await response.text()).slice(0, 400_000);
+  const text = contentType.includes("text/html") ? htmlToPlainText(raw) : raw.trim();
+  if (!text) throw new Error("That page had no readable text.");
+  const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return {
+    status: "ok",
+    title: cleanText(titleMatch?.[1]).slice(0, 200) || url.hostname,
+    url: url.toString(),
+    text: text.slice(0, 40_000),
+  };
+}
+
+// A photo of a worksheet/whiteboard is material too. Same vision path as scanned-PDF
+// OCR, but on a teacher-supplied image, and read-only (no chunks written).
+async function readImageMaterial(config: Config, body: DbRow, user: DbRow) {
+  if (!cleanId(user.id)) throw new Error("Authentication is required.");
+  const dataUrl = cleanText(body.image_data_url);
+  if (!dataUrl.startsWith("data:image/")) {
+    throw new Error("Send the image as a data URL.");
+  }
+  // ~8MB of base64 ≈ a 6MB photo; beyond that the model call is the wrong tool.
+  if (dataUrl.length > 8_000_000) throw new Error("That image is too large. Use one under 6MB.");
+  const openAiKey = requireOpenAiKey("image material");
+  const model = Deno.env.get("OPENAI_OCR_MODEL") || "gpt-5.4-mini";
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "This is teaching material a teacher photographed or screenshotted. Transcribe " +
+                "ALL visible text in natural reading order. If it is a diagram, chart, or " +
+                "illustration, also describe what it shows in one or two sentences so a lesson " +
+                "can be written from it. Return plain text only.",
+            },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+      max_completion_tokens: 1800,
+    }),
+    signal: AbortSignal.timeout(60_000),
+  }).catch(() => null);
+  const data = (await res?.json().catch(() => null)) as DbRow | null;
+  if (!res || !res.ok) {
+    const message =
+      data && typeof data === "object" && "error" in data
+        ? cleanText((data.error as DbRow)?.message, "the vision request failed")
+        : "the vision request failed";
+    throw new Error(`Could not read that image: ${message}`);
+  }
+  const choices = Array.isArray(data?.choices) ? (data?.choices as DbRow[]) : [];
+  const text = cleanText((choices[0]?.message as DbRow | undefined)?.content);
+  if (!text) throw new Error("No readable content in that image.");
+  // Cost telemetry: no resource row exists here (the image is loose material), so the
+  // event is written directly rather than through insertModelUsage.
+  const usage = data?.usage && typeof data.usage === "object" ? (data.usage as DbRow) : {};
+  const usedModel = typeof data?.model === "string" ? data.model : model;
+  const inputTokens = numberValue(usage.prompt_tokens);
+  const outputTokens = numberValue(usage.completion_tokens);
+  await supabaseFetch(config, "model_usage_events", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      user_id: user.id,
+      provider: "openai",
+      model: usedModel,
+      task_type: "authoring",
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cached_tokens: 0,
+      estimated_cost_usd: estimatedCostUsd(usedModel, inputTokens, outputTokens, 0),
+      status: "ok",
+    }),
+  }).catch(() => {});
+  return { status: "ok", text: text.slice(0, 20_000) };
+}
+
 async function createCurriculumImportDraft(config: Config, body: DbRow, user: DbRow) {
   const resourceId = cleanId(body.resource_id);
   const resource = await requireManageableResource(config, resourceId);
@@ -1505,6 +1677,12 @@ Deno.serve(async (req) => {
     }
     if (action === "delete_chunks") {
       return json(await deleteChunks(config, body));
+    }
+    if (action === "read_url_material") {
+      return json(await readUrlMaterial(body, user));
+    }
+    if (action === "read_image_material") {
+      return json(await readImageMaterial(config, body, user));
     }
     if (action === "create_curriculum_import_draft") {
       return json(await createCurriculumImportDraft(config, body, user));

@@ -11261,3 +11261,42 @@ Playwright brain shots light+dark, rest+zoomed.
 Remaining concerns: none blocking. Choppiness fixes are structural (bitmap blit,
 DPR, proportional zoom) — confirm feel on the owner's hardware.
 Suggested next task: demo prep.
+
+## Claude -> Codex / Human - 2026-08-21 18:05
+
+Status: Starting
+Task: R56 — "Build from material": one complete draft lesson generated from teacher
+material (steps + wrap-up quiz + assignment + deck), grounded in approved
+resource_text_chunks; plus ingestion widening (pasted text, standalone images, URLs,
+docx, pptx — PDFs/audio/video already ingest). Review-first throughout: generation
+returns a package draft, Apply writes through the existing upsert/create actions,
+nothing reaches students without publish.
+Files I expect to touch: supabase/functions/curriculum-admin/index.ts (new
+generate_lesson_package action), supabase/functions/resource-processing/index.ts
+(image OCR for standalone images, url fetch), frontend studio (material picker +
+package review panel + paste/docx/pptx extraction client-side), api.ts wrappers,
+tests, docs.
+Notes: owner picked "full lesson from material" first; curriculum-outline builder
+(loops this engine) is the follow-up slice.
+
+## Claude -> Codex / Human - 2026-08-21 19:40
+
+Status: Finished
+Summary: R56 slice 1 — "build a lesson from material". New curriculum-admin generate
+mode `lesson_package` (grounded, writes nothing) + studio panel on any unit that
+reviews the draft and applies it through the normal authoring actions as a draft
+lesson; quiz/assignment land as steps (R48 machinery). Ingestion widened to docx,
+pptx, images, and URLs alongside the existing PDF/paste/A-V paths.
+Files changed: supabase/functions/curriculum-admin/index.ts (+generateLessonPackage,
+parsePackageQuiz, parsePackageAssignment), supabase/functions/resource-processing/
+index.ts (+read_url_material with SSRF guard, +read_image_material),
+frontend/src/lib/{materialText.ts (new), api.ts, types.ts},
+frontend/src/routes/teacher.curriculum.tsx (BuildFromMaterialPanel, widened
+AiReferenceInput, generatePackage/applyPackage), tests/test_r56_build_from_material.py
+(24 pins), docs.
+Tests run: 907 pins OK; tsc + eslint clean; deno check 0 errors both functions;
+verify_r56.mjs 13/13 in the browser harness.
+Remaining concerns: deck generation is wired by brief but the studio doesn't yet
+auto-fire it on apply (teacher clicks Generate deck in the lesson editor) — natural
+follow-up. Curriculum-outline-from-a-book (loop this engine) is the next slice.
+Suggested next task: outline builder, or auto-deck on apply.
