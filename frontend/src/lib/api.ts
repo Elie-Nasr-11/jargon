@@ -1664,10 +1664,63 @@ export function deleteCurriculumStep(input: {
 // Drafts a course outline or a lesson's steps from a prompt. Returns structured
 // JSON for the teacher to review; never writes (apply uses the create/upsert actions).
 
+// R56 "build from material": two read-only ingestion helpers. A link the teacher
+// pastes is fetched server-side (the browser can't, and the function guards against
+// reaching into private networks); a photo of a worksheet is read by vision. Both
+// return TEXT the teacher sees before it feeds generation — nothing is stored.
+async function callResourceProcessing(
+  accessToken: string,
+  payload: Record<string, unknown>,
+  timeoutMs?: number,
+): Promise<Record<string, unknown>> {
+  const response = await fetchWithTimeout(
+    functionUrl("resource-processing"),
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(payload),
+    },
+    timeoutMs,
+  );
+  const data = (await response.json()) as Record<string, unknown>;
+  if (!response.ok || data.status === "error") {
+    throw new Error(typeof data.error === "string" ? data.error : "Could not read that material.");
+  }
+  return data;
+}
+
+export async function readUrlMaterial(
+  accessToken: string,
+  url: string,
+): Promise<{ title: string; url: string; text: string }> {
+  const data = await callResourceProcessing(
+    accessToken,
+    { action: "read_url_material", url },
+    45000,
+  );
+  return {
+    title: typeof data.title === "string" ? data.title : url,
+    url: typeof data.url === "string" ? data.url : url,
+    text: typeof data.text === "string" ? data.text : "",
+  };
+}
+
+export async function readImageMaterial(
+  accessToken: string,
+  imageDataUrl: string,
+): Promise<string> {
+  const data = await callResourceProcessing(
+    accessToken,
+    { action: "read_image_material", image_data_url: imageDataUrl },
+    90000,
+  );
+  return typeof data.text === "string" ? data.text : "";
+}
+
 export function generateCurriculumDraft(input: {
   accessToken: string;
   classId?: string | null;
-  mode: "course_outline" | "lesson_steps" | "artifact";
+  mode: "course_outline" | "lesson_steps" | "artifact" | "lesson_package";
   prompt?: string;
   organizationId?: string;
   lessonId?: string;
@@ -1680,6 +1733,10 @@ export function generateCurriculumDraft(input: {
   // P7 artifact generation.
   artifactKind?: "html_sim" | "deck";
   brief?: string;
+  // R56 lesson_package: draft into a unit (new lesson) or re-draft an existing one.
+  unitId?: string;
+  includeQuiz?: boolean;
+  includeAssignment?: boolean;
 }) {
   return callCurriculumAdmin(
     input.accessToken,
@@ -1698,10 +1755,13 @@ export function generateCurriculumDraft(input: {
       target: input.target || undefined,
       artifact_kind: input.artifactKind || undefined,
       brief: input.brief || undefined,
+      unit_id: input.unitId || undefined,
+      include_quiz: input.includeQuiz,
+      include_assignment: input.includeAssignment,
     },
     // Artifact generation runs a larger model + (for sims) a self-repair pass, well past
     // the default 30s. Give the client room to outlast the server's ~135s worst case.
-    input.mode === "artifact" ? 150000 : undefined,
+    input.mode === "artifact" || input.mode === "lesson_package" ? 150000 : undefined,
   );
 }
 
