@@ -245,7 +245,14 @@ export type CurriculumMilestoneInput = {
 };
 
 export type CurriculumOutlineDraft = {
-  units: Array<{ title: string; lessons: Array<{ title: string }> }>;
+  units: Array<{
+    title: string;
+    summary?: string;
+    // R57: source_hint is a short verbatim phrase from the uploaded material — the
+    // anchor the per-lesson build uses to find ITS slice of a long upload.
+    lessons: Array<{ title: string; source_hint?: string }>;
+  }>;
+  grounded?: boolean;
 };
 
 export type CurriculumStepDraft = {

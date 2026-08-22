@@ -1427,3 +1427,41 @@ Decisions:
 Verified: 907 pins OK (24 new); tsc + eslint clean; offline deno check 0 errors on
 both edge functions; 13/13 browser walkthrough — unit → paste material → Build lesson
 → review steps/quiz/assignment → Apply creates the lesson.
+
+## R57 — a whole course, built from the teacher's material (2026-08-21)
+
+Owner (meeting): the platform should BUILD curriculum from what a teacher uploads —
+lessons, decks, quizzes, assignments — instead of making them type it in. R56 made
+one lesson generatable; R57 wraps the curriculum around it.
+
+Shape: **outline the material, then loop the R56 engine over every lesson it names.**
+
+1. **Outline from material.** `course_outline` accepts material ALONE (a chapter
+   upload IS the brief), reads a book-sized window (24k, was the shared 8k clamp),
+   and is told to follow the material's own order and cover it end to end — one
+   lesson per teachable chunk, not a summary. Each lesson comes back with a
+   `source_hint`: a SHORT VERBATIM PHRASE copied out of the text.
+2. **Per-lesson slicing** (`sliceMaterialForLesson`, client, pure). Handing a whole
+   book to every lesson generation makes them all drift to the loudest chapter. Each
+   build reads only its window, located by the verbatim hint (exact hit outranks any
+   word overlap) and widened over neighbouring paragraphs toward the higher-scoring
+   side. Short material passes through whole; no match falls back to the head.
+3. **The runner.** Units are created up front; lessons are NOT stubbed — each package
+   write creates its own lesson, so a stopped run leaves real lessons and no empty
+   shells. Sequential (a generation is a ~40s model call; parallel would hit the rate
+   limit and there'd be nothing honest to show), cancellable between lessons,
+   resumable, and per-lesson retryable — the loop skips anything not `queued`, which
+   is what makes retry/resume safe. Per-lesson failures are captured in the run's own
+   ledger (`quiet` on generatePackage) instead of stomping the studio banner.
+4. **One write path.** The R56 apply body became `writeLessonPackage`, shared by the
+   runner and the single-lesson panel: ordinary authoring actions, every guard and
+   audit trail intact, everything a DRAFT until the teacher publishes.
+5. **The teacher keeps the choice**: "Build N lessons" or "Outline only".
+
+Verified: 921 pins OK (two R56 pins re-anchored to writeLessonPackage — same
+contract, new home); tsc + eslint clean; offline deno check 0 new errors; harness
+verify_r57 10/10 (material-only generation → outline → build → three distinct
+lessons land) plus light/dark panel shots.
+
+Next: auto-deck per generated lesson (deck_brief already rides in the package), and
+grounding each generated lesson's resources in the uploaded file it came from.

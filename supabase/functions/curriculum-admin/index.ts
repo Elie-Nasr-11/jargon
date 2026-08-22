@@ -1799,11 +1799,18 @@ function parseOutlineUnits(result: DbRow) {
       const row = unit && typeof unit === "object" ? (unit as DbRow) : {};
       const lessons = (Array.isArray(row.lessons) ? row.lessons : [])
         .slice(0, 12)
-        .map((lesson) => ({
-          title: cleanText((lesson && typeof lesson === "object" ? (lesson as DbRow) : {}).title),
-        }))
+        .map((lesson) => {
+          const item = lesson && typeof lesson === "object" ? (lesson as DbRow) : {};
+          return {
+            title: cleanText(item.title),
+            // R57: the anchor that lets the per-lesson build find ITS slice of a long
+            // upload — a few words the model saw in the material for this lesson.
+            // Optional: an outline drafted from a brief alone carries none.
+            source_hint: clampText(cleanText(item.source_hint), 160),
+          };
+        })
         .filter((lesson) => lesson.title);
-      return { title: cleanText(row.title), lessons };
+      return { title: cleanText(row.title), summary: clampText(cleanText(row.summary), 240), lessons };
     })
     .filter((unit) => unit.title);
 }
@@ -2708,28 +2715,53 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
     }
     if (!organizationId) throw new Error("organization_id is required.");
     await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
-    if (!isRefine && !prompt) throw new Error("prompt is required.");
+    // R57: material alone is enough to draft an outline (a chapter upload IS the brief);
+    // a brief alone still works. One of the two is required.
+    const outlineReference = clampText(cleanText(body.reference_text), 24000);
+    if (!isRefine && !prompt && !outlineReference) {
+      throw new Error("Add material (upload, paste, or a link) or a brief to generate from.");
+    }
 
     const system =
       "You are a curriculum designer. Return ONLY JSON of the form " +
-      '{"units":[{"title":string,"lessons":[{"title":string}]}]}. ' +
-      "Use 2-5 units and 2-6 short, student-facing lesson titles each. Fit the existing " +
-      "curriculum context: do not duplicate existing units/lessons; match the level and style. " +
-      "If reference material is provided, ground the outline in it.";
+      '{"units":[{"title":string,"summary":string,' +
+      '"lessons":[{"title":string,"source_hint":string}]}]}. ' +
+      "Use 2-5 units and 2-6 short, student-facing lesson titles each; summary is one line " +
+      "on what the unit covers. Fit the existing curriculum context: do not duplicate " +
+      "existing units/lessons; match the level and style. " +
+      "WHEN REFERENCE MATERIAL IS PROVIDED: derive the whole outline from it, follow the " +
+      "material's own order, and cover it end to end — one lesson per teachable chunk, not " +
+      "a summary of the whole. Set each lesson's source_hint to a SHORT VERBATIM PHRASE " +
+      "(3-10 words) copied from the part of the material that lesson teaches, so the " +
+      "platform can find that passage again; use a distinctive phrase, never a heading you " +
+      "invented. With no material, omit source_hint.";
     const parts: string[] = [];
     if (contextText) parts.push(`Existing curriculum context:\n${contextText}`);
-    if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
+    if (outlineReference) {
+      parts.push(`TEACHER'S MATERIAL — the source of truth for this outline:\n${outlineReference}`);
+    }
     if (isRefine) {
       parts.push(`Current draft outline (JSON):\n${currentJson}`);
       parts.push(
         `Revise the draft per this feedback${target ? ` (which targets ${target})` : ""}: ${feedback}\n` +
           "Change only what the feedback asks; keep everything else identical. Return the full updated outline.",
       );
-    } else {
+    } else if (prompt) {
       parts.push(`Design a course outline for this brief:\n${clampText(prompt, 2000)}`);
+    } else {
+      parts.push("Design the course outline this material supports, covering it end to end.");
     }
-    const result = await callModelJson(system, parts.join("\n\n"));
-    return json({ status: "ok", mode, outline: { units: parseOutlineUnits(result) } });
+    // An outline over a whole book is a bigger read than the default budget allows.
+    const result = await callModelJson(system, parts.join("\n\n"), {
+      model: artifactModel(),
+      maxTokens: 3000,
+      timeoutMs: 90000,
+    });
+    return json({
+      status: "ok",
+      mode,
+      outline: { units: parseOutlineUnits(result), grounded: Boolean(outlineReference) },
+    });
   }
 
   if (mode === "lesson_steps") {

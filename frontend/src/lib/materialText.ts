@@ -145,3 +145,134 @@ export function isPptx(file: File): boolean {
     file.type === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
   );
 }
+
+// ---------------------------------------------------------------------------
+// R57: slicing a book-length upload per lesson.
+//
+// A whole-course build generates one lesson at a time. Feeding the ENTIRE upload
+// into every lesson's generation is both wasteful and wrong: the model drifts
+// toward the loudest part of the book instead of the passage that lesson teaches.
+// So each generated lesson gets a WINDOW of the material — located by the
+// source_hint the outline pass copied verbatim out of the text, with the lesson
+// title as the fallback signal.
+//
+// Deliberately dumb (no embeddings, no server round-trip): the outline pass
+// already did the semantic work, so this only has to find that phrase again and
+// widen around it.
+
+/** Words worth scoring — drops stop-words and punctuation-only tokens. */
+const STOP_WORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "of",
+  "to",
+  "in",
+  "on",
+  "for",
+  "with",
+  "is",
+  "are",
+  "be",
+  "as",
+  "at",
+  "by",
+  "from",
+  "that",
+  "this",
+  "it",
+  "its",
+  "how",
+  "what",
+  "why",
+  "when",
+  "into",
+  "your",
+  "you",
+  "we",
+  "our",
+  "their",
+  "they",
+  "can",
+  "will",
+  "do",
+  "does",
+]);
+
+function signalWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !STOP_WORDS.has(word));
+}
+
+/**
+ * The window of `material` that best matches a lesson.
+ *
+ * Splits into paragraphs, scores each against the hint + title signal words
+ * (exact hint match dominates), then returns the best paragraph plus its
+ * neighbours up to `maxChars` — contiguous, so the model reads prose, not
+ * shuffled fragments. Falls back to the head of the material when nothing
+ * matches (an outline drafted from a brief, or a hint the model paraphrased).
+ */
+export function sliceMaterialForLesson(
+  material: string,
+  lesson: { title: string; source_hint?: string },
+  maxChars = 6000,
+): string {
+  const text = material.trim();
+  if (text.length <= maxChars) return text;
+
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (paragraphs.length <= 1) return text.slice(0, maxChars);
+
+  const hint = (lesson.source_hint || "").trim().toLowerCase();
+  const words = signalWords(`${lesson.source_hint || ""} ${lesson.title}`);
+  const scores = paragraphs.map((paragraph) => {
+    const haystack = paragraph.toLowerCase();
+    // A verbatim hint hit is worth more than any amount of word overlap.
+    let score = hint && hint.length > 8 && haystack.includes(hint) ? 100 : 0;
+    for (const word of words) if (haystack.includes(word)) score += 1;
+    return score;
+  });
+
+  let bestIndex = 0;
+  let bestScore = -1;
+  for (let i = 0; i < scores.length; i += 1) {
+    if (scores[i] > bestScore) {
+      bestScore = scores[i];
+      bestIndex = i;
+    }
+  }
+  // Nothing matched: the head of the material is the honest default.
+  if (bestScore <= 0) return text.slice(0, maxChars);
+
+  // Grow outward from the best paragraph, preferring the higher-scoring side, so
+  // the window keeps the passage in context.
+  let start = bestIndex;
+  let end = bestIndex;
+  let size = paragraphs[bestIndex].length;
+  while (size < maxChars && (start > 0 || end < paragraphs.length - 1)) {
+    const beforeScore = start > 0 ? scores[start - 1] : -1;
+    const afterScore = end < paragraphs.length - 1 ? scores[end + 1] : -1;
+    if (afterScore >= beforeScore && end < paragraphs.length - 1) {
+      end += 1;
+      size += paragraphs[end].length + 2;
+    } else if (start > 0) {
+      start -= 1;
+      size += paragraphs[start].length + 2;
+    } else {
+      break;
+    }
+  }
+  return paragraphs
+    .slice(start, end + 1)
+    .join("\n\n")
+    .slice(0, maxChars);
+}
