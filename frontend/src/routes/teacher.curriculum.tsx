@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import {
+  AlertCircle,
   Archive,
   BookOpen,
   Check,
@@ -9,6 +10,7 @@ import {
   GripVertical,
   Layers3,
   ListChecks,
+  Loader2,
   MessageSquare,
   NotebookPen,
   PanelLeft,
@@ -64,6 +66,7 @@ import {
   isDocx,
   isPlainTextFile,
   isPptx,
+  sliceMaterialForLesson,
 } from "@/lib/materialText";
 import type {
   CurriculumAdminResponse,
@@ -911,6 +914,169 @@ export function CurriculumStudio({
     }
   };
 
+  // R57 WHOLE-COURSE BUILD. The outline pass names the lessons; this runner fills
+  // each one by looping the R56 package engine — sequentially, because a generation
+  // is a ~40s model call and a book makes twenty of them: parallel would hammer the
+  // rate limit and the studio would have nothing honest to show. Progress is per
+  // lesson, cancellable between lessons, and every failure is captured and retryable
+  // instead of killing the run.
+  const [build, setBuild] = useState<CourseBuild | null>(null);
+  const buildCancel = useRef(false);
+
+  const runCourseBuild = async (plan: CourseBuild) => {
+    buildCancel.current = false;
+    setBuild(plan);
+    const session = await getSession();
+    if (!session) {
+      setMessage("Sign in to build a course.");
+      setBuild({ ...plan, running: false });
+      return;
+    }
+    const classId = plan.classId;
+    const patch = (index: number, next: Partial<CourseBuildItem>) =>
+      setBuild((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item, i) => (i === index ? { ...item, ...next } : item)),
+            }
+          : current,
+      );
+
+    for (let i = 0; i < plan.items.length; i += 1) {
+      if (buildCancel.current) {
+        setBuild((current) => (current ? { ...current, running: false, canceled: true } : current));
+        await refresh();
+        return;
+      }
+      const item = plan.items[i];
+      // Only queued work runs: a re-entry (retry) re-queues just the item it targets,
+      // so finished lessons are never generated twice.
+      if (item.status !== "queued") continue;
+      patch(i, { status: "building", error: "" });
+      try {
+        const pkg = await generatePackage({
+          unitId: item.unitId,
+          // Each lesson reads only ITS slice of the upload (materialText.sliceMaterialForLesson):
+          // handing a whole book to every lesson makes them all drift to the same loud chapter.
+          prompt: `Lesson "${item.lessonTitle}" in the unit "${item.unitTitle}". Teach exactly this and nothing from neighbouring lessons.`,
+          referenceText: item.material,
+          includeQuiz: plan.includeQuiz,
+          includeAssignment: plan.includeAssignment,
+          quiet: true,
+        });
+        if (!pkg) throw new Error("The model returned nothing for this lesson.");
+        await writeLessonPackage({
+          accessToken: session.access_token,
+          classId,
+          unitId: item.unitId,
+          pkg,
+        });
+        patch(i, { status: "done", builtTitle: pkg.lesson.title });
+        // Refresh as we go: the teacher watches lessons appear in the outline instead
+        // of staring at a spinner for ten minutes.
+        await refresh();
+      } catch (error) {
+        patch(i, { status: "failed", error: (error as Error).message || "Generation failed." });
+      }
+    }
+    setBuild((current) => (current ? { ...current, running: false } : current));
+    await refresh();
+  };
+
+  // Create the units, then queue one build item per outline lesson. Units are created
+  // up front (cheap, and the run needs their ids); lessons are NOT stubbed here —
+  // each package write creates its own lesson, so a cancelled run leaves real lessons
+  // and no empty shells.
+  const startCourseBuild = (
+    courseId: string,
+    outline: CurriculumOutlineDraft,
+    options: { material: string; includeQuiz: boolean; includeAssignment: boolean },
+  ) => {
+    if (!selectedClass) return;
+    const version = currentVersionForCourse(courseId);
+    if (!version) {
+      setMessage("This course has no version to add units to.");
+      return;
+    }
+    const classId = selectedClass.id;
+    setBusy(true);
+    void (async () => {
+      try {
+        const session = await getSession();
+        if (!session) throw new Error("Sign in to build a course.");
+        const items: CourseBuildItem[] = [];
+        for (const unit of outline.units) {
+          const created = await createCurriculumUnit({
+            accessToken: session.access_token,
+            classId,
+            courseVersionId: version.id,
+            title: unit.title,
+          });
+          const unitId = created.id;
+          if (!unitId) continue;
+          for (const lesson of unit.lessons) {
+            items.push({
+              unitId,
+              unitTitle: unit.title,
+              lessonTitle: lesson.title,
+              material: options.material ? sliceMaterialForLesson(options.material, lesson) : "",
+              status: "queued",
+              error: "",
+              builtTitle: "",
+            });
+          }
+        }
+        await refresh();
+        if (!items.length) {
+          setMessage("Outline applied.");
+          return;
+        }
+        void runCourseBuild({
+          classId,
+          courseId,
+          items,
+          includeQuiz: options.includeQuiz,
+          includeAssignment: options.includeAssignment,
+          running: true,
+          canceled: false,
+        });
+      } catch (error) {
+        setMessage((error as Error).message || "Could not start the build.");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
+  const retryBuildItem = (index: number) => {
+    const current = build;
+    if (!current || current.running) return;
+    void runCourseBuild({
+      ...current,
+      running: true,
+      canceled: false,
+      items: current.items.map((item, i) =>
+        i === index ? { ...item, status: "queued", error: "" } : item,
+      ),
+    });
+  };
+
+  // Resume: re-queue everything still unfinished (a cancelled run, or one that hit
+  // failures) and run again from there.
+  const resumeCourseBuild = () => {
+    const current = build;
+    if (!current || current.running) return;
+    void runCourseBuild({
+      ...current,
+      running: true,
+      canceled: false,
+      items: current.items.map((item) =>
+        item.status === "done" ? item : { ...item, status: "queued", error: "" },
+      ),
+    });
+  };
+
   const applyOutline = (courseId: string, outline: CurriculumOutlineDraft) =>
     reloading(
       async (accessToken, classId) => {
@@ -988,6 +1154,8 @@ export function CurriculumStudio({
     referenceText: string;
     includeQuiz: boolean;
     includeAssignment: boolean;
+    /** R57: inside a course run, failures are reported per lesson, not in the banner. */
+    quiet?: boolean;
   }): Promise<CurriculumLessonPackage | null> => {
     if (!selectedClass) return null;
     try {
@@ -1006,6 +1174,7 @@ export function CurriculumStudio({
       });
       return result.package || null;
     } catch (error) {
+      if (args.quiet) throw error;
       setMessage((error as Error).message || "Could not build the lesson.");
       return null;
     }
@@ -1017,66 +1186,7 @@ export function CurriculumStudio({
   const applyPackage = (unitId: string, pkg: CurriculumLessonPackage) =>
     reloading(
       async (accessToken, classId) => {
-        const created = await createCurriculumLessonStub({
-          accessToken,
-          classId,
-          unitId,
-          title: pkg.lesson.title,
-          level: pkg.lesson.level,
-          tutorPrompt: pkg.lesson.tutor_prompt,
-        });
-        const lessonId = created.lesson_id || created.id;
-        if (!lessonId) throw new Error("The lesson could not be created.");
-        for (const draft of pkg.steps) {
-          await upsertCurriculumStep({
-            accessToken,
-            classId,
-            lessonId,
-            step: stepInputFromDraft(draft),
-          });
-        }
-        // The wrap-up quiz and the assignment land as STEPS, not as classwork rows:
-        // steps need no roster (the studio has none), students meet them inside the
-        // lesson, and R48's step-work strip already turns any assignment/assessment
-        // step into graded classwork in one click when the teacher wants grading.
-        for (const item of pkg.quiz.items.slice(0, 4)) {
-          const isMcq = item.question_type === "multiple_choice" && item.choices.length >= 2;
-          await upsertCurriculumStep({
-            accessToken,
-            classId,
-            lessonId,
-            step: stepInputFromDraft({
-              kind: "checkpoint",
-              mode: "assessment",
-              mode_type: isMcq ? "mcq" : "open_ended",
-              title: item.prompt.slice(0, 60),
-              prompt: item.prompt,
-              choices: isMcq ? item.choices : [],
-              correct_choice_id: isMcq ? item.correct_choice_ids[0] || "" : "",
-            }),
-          });
-        }
-        if (pkg.assignment) {
-          const criteria = pkg.assignment.success_criteria.length
-            ? `\n\nWhat a strong response includes:\n${pkg.assignment.success_criteria
-                .map((line) => `- ${line}`)
-                .join("\n")}`
-            : "";
-          await upsertCurriculumStep({
-            accessToken,
-            classId,
-            lessonId,
-            step: stepInputFromDraft({
-              kind: "reflect",
-              mode: "assignment",
-              mode_type: "",
-              title: pkg.assignment.title,
-              prompt: `${pkg.assignment.instructions}${criteria}`,
-              choices: [],
-              correct_choice_id: "",
-            }),
-          });
-        }
+        await writeLessonPackage({ accessToken, classId, unitId, pkg });
       },
       { successMessage: "Lesson drafted from your material." },
     );
@@ -1273,6 +1383,18 @@ export function CurriculumStudio({
         </section>
       ) : null}
 
+      {build ? (
+        <CourseBuildProgress
+          build={build}
+          onCancel={() => {
+            buildCancel.current = true;
+          }}
+          onResume={resumeCourseBuild}
+          onRetry={retryBuildItem}
+          onDismiss={() => setBuild(null)}
+        />
+      ) : null}
+
       {booting ? (
         <section className="rounded-card border border-border bg-depth-card shadow-card">
           <div className="p-6 text-body text-muted-foreground">Loading curriculum...</div>
@@ -1367,6 +1489,13 @@ export function CurriculumStudio({
               onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
               onGenerateOutline={generateOutline}
               onApplyOutline={applyOutline}
+              onBuildCourse={(courseId, outline, material) =>
+                startCourseBuild(courseId, outline, {
+                  material,
+                  includeQuiz: true,
+                  includeAssignment: true,
+                })
+              }
               onGenerateSteps={generateSteps}
               onApplySteps={applyStepDrafts}
               onGeneratePackage={generatePackage}
@@ -1845,6 +1974,7 @@ function DetailPane({
   onArchiveLesson,
   onGenerateOutline,
   onApplyOutline,
+  onBuildCourse,
   onGenerateSteps,
   onApplySteps,
   onGeneratePackage,
@@ -1911,6 +2041,7 @@ function DetailPane({
     args: OutlineGenArgs,
   ) => Promise<CurriculumOutlineDraft | null>;
   onApplyOutline: (courseId: string, outline: CurriculumOutlineDraft) => void;
+  onBuildCourse: (courseId: string, outline: CurriculumOutlineDraft, material: string) => void;
   onGenerateSteps: (lessonId: string, args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
   onApplySteps: (lessonId: string, drafts: CurriculumStepDraft[]) => void;
   counts: {
@@ -1987,6 +2118,7 @@ function DetailPane({
           resources,
           onGenerate: (args) => onGenerateOutline(course.id, args),
           onApply: (outline) => onApplyOutline(course.id, outline),
+          onBuild: (outline, material) => onBuildCourse(course.id, outline, material),
         }}
       />
     );
@@ -2052,6 +2184,127 @@ function DetailPane({
   );
 }
 
+// R57: the whole-course build's face. A run is minutes long and made of many model
+// calls, so the teacher gets a live per-lesson ledger — not a spinner: what is being
+// written now, what landed, what failed and why (with a retry that re-queues only
+// that lesson), and a Stop that takes effect between lessons.
+function CourseBuildProgress({
+  build,
+  onCancel,
+  onResume,
+  onRetry,
+  onDismiss,
+}: {
+  build: CourseBuild;
+  onCancel: () => void;
+  onResume: () => void;
+  onRetry: (index: number) => void;
+  onDismiss: () => void;
+}) {
+  const done = build.items.filter((item) => item.status === "done").length;
+  const failed = build.items.filter((item) => item.status === "failed").length;
+  const total = build.items.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const finished = !build.running;
+
+  return (
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-title font-medium text-foreground">
+              <Sparkles className="h-4 w-4" strokeWidth={1.7} />
+              {build.running
+                ? `Building your course — ${done} of ${total} lessons`
+                : build.canceled
+                  ? `Build stopped — ${done} of ${total} lessons written`
+                  : `Build finished — ${done} of ${total} lessons written`}
+            </div>
+            <p className="mt-1 text-meta text-muted-foreground">
+              {build.running
+                ? "Each lesson is written from its own part of your material. You can keep working — this keeps going."
+                : failed
+                  ? `${failed} ${failed === 1 ? "lesson" : "lessons"} need another try. Everything written is a draft until you publish it.`
+                  : "Every lesson is a draft until you publish it."}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {build.running ? (
+              <button type="button" onClick={onCancel} className="btn btn-secondary btn-sm">
+                Stop after this lesson
+              </button>
+            ) : (
+              <>
+                {done + failed < total || failed ? (
+                  <button type="button" onClick={onResume} className="btn btn-secondary btn-sm">
+                    Resume
+                  </button>
+                ) : null}
+                <button type="button" onClick={onDismiss} className="btn btn-ghost btn-sm">
+                  Dismiss
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div
+          className="mt-3 h-1.5 w-full overflow-hidden rounded-pill bg-muted"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Course build progress"
+        >
+          <div
+            className="h-full rounded-pill bg-primary transition-[width] duration-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        <div className="mt-3 grid max-h-[280px] gap-1 overflow-y-auto">
+          {build.items.map((item, index) => (
+            <div
+              key={`${item.unitId}-${index}`}
+              className="flex items-center gap-2.5 rounded-control border border-border/70 bg-depth-sub px-3 py-2"
+            >
+              <span className="shrink-0" aria-hidden>
+                {item.status === "done" ? (
+                  <Check className="h-3.5 w-3.5 text-success" strokeWidth={2} />
+                ) : item.status === "building" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" strokeWidth={2} />
+                ) : item.status === "failed" ? (
+                  <AlertCircle className="h-3.5 w-3.5 text-danger" strokeWidth={2} />
+                ) : (
+                  <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-meta text-foreground">
+                  {item.builtTitle || item.lessonTitle}
+                </span>
+                <span className="block truncate text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                  {item.unitTitle}
+                  {item.error ? ` · ${item.error}` : ""}
+                </span>
+              </span>
+              {item.status === "failed" && finished ? (
+                <button
+                  type="button"
+                  onClick={() => onRetry(index)}
+                  className="btn btn-secondary btn-sm shrink-0"
+                >
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MissingNode() {
   return (
     <section className="rounded-card border border-border bg-depth-card shadow-card">
@@ -2094,6 +2347,7 @@ function StructureDetail({
     resources: LessonResource[];
     onGenerate: (args: OutlineGenArgs) => Promise<CurriculumOutlineDraft | null>;
     onApply: (outline: CurriculumOutlineDraft) => void;
+    onBuild: (outline: CurriculumOutlineDraft, material: string) => void;
   };
   // R56: on a UNIT, the studio can build a whole lesson from the teacher's material.
   buildFromMaterial?: {
@@ -2162,6 +2416,7 @@ function StructureDetail({
               resources={ai.resources}
               onGenerate={ai.onGenerate}
               onApply={ai.onApply}
+              onBuild={ai.onBuild}
             />
           </div>
         ) : null}
@@ -2471,6 +2726,98 @@ function defaultStepForMode(mode: LearningMode): CurriculumStepInput {
 }
 
 // Map an AI-drafted step (mode or legacy kind + free text) onto the upsert payload.
+// R56/R57: the ONE write path for a generated lesson package. Every row goes
+// through the same actions manual authoring uses — no privileged bulk path — so the
+// authoring guards, gates, and audit trail all still apply, and the lesson lands as
+// a DRAFT (publishing stays the teacher's explicit act). R57 calls this per lesson
+// from the whole-course runner; the single-lesson panel calls it through reloading().
+async function writeLessonPackage(input: {
+  accessToken: string;
+  classId: string;
+  unitId: string;
+  pkg: CurriculumLessonPackage;
+}): Promise<string> {
+  const { accessToken, classId, unitId, pkg } = input;
+  const created = await createCurriculumLessonStub({
+    accessToken,
+    classId,
+    unitId,
+    title: pkg.lesson.title,
+    level: pkg.lesson.level,
+    tutorPrompt: pkg.lesson.tutor_prompt,
+  });
+  const lessonId = created.lesson_id || created.id;
+  if (!lessonId) throw new Error("The lesson could not be created.");
+  for (const draft of pkg.steps) {
+    await upsertCurriculumStep({ accessToken, classId, lessonId, step: stepInputFromDraft(draft) });
+  }
+  // The wrap-up quiz and the assignment land as STEPS, not as classwork rows: steps
+  // need no roster (the studio has none), students meet them inside the lesson, and
+  // R48's step-work strip turns any assignment/assessment step into graded classwork
+  // in one click when the teacher wants grading.
+  for (const item of pkg.quiz.items.slice(0, 4)) {
+    const isMcq = item.question_type === "multiple_choice" && item.choices.length >= 2;
+    await upsertCurriculumStep({
+      accessToken,
+      classId,
+      lessonId,
+      step: stepInputFromDraft({
+        kind: "checkpoint",
+        mode: "assessment",
+        mode_type: isMcq ? "mcq" : "open_ended",
+        title: item.prompt.slice(0, 60),
+        prompt: item.prompt,
+        choices: isMcq ? item.choices : [],
+        correct_choice_id: isMcq ? item.correct_choice_ids[0] || "" : "",
+      }),
+    });
+  }
+  if (pkg.assignment) {
+    const criteria = pkg.assignment.success_criteria.length
+      ? `\n\nWhat a strong response includes:\n${pkg.assignment.success_criteria
+          .map((line) => `- ${line}`)
+          .join("\n")}`
+      : "";
+    await upsertCurriculumStep({
+      accessToken,
+      classId,
+      lessonId,
+      step: stepInputFromDraft({
+        kind: "reflect",
+        mode: "assignment",
+        mode_type: "",
+        title: pkg.assignment.title,
+        prompt: `${pkg.assignment.instructions}${criteria}`,
+        choices: [],
+        correct_choice_id: "",
+      }),
+    });
+  }
+  return lessonId;
+}
+
+// R57: one queued lesson in a whole-course build, and the run that owns them.
+type CourseBuildItem = {
+  unitId: string;
+  unitTitle: string;
+  lessonTitle: string;
+  /** This lesson's slice of the upload (see sliceMaterialForLesson). */
+  material: string;
+  status: "queued" | "building" | "done" | "failed";
+  error: string;
+  /** The title the model actually gave the lesson — usually the outline's, not always. */
+  builtTitle: string;
+};
+type CourseBuild = {
+  classId: string;
+  courseId: string;
+  items: CourseBuildItem[];
+  includeQuiz: boolean;
+  includeAssignment: boolean;
+  running: boolean;
+  canceled: boolean;
+};
+
 function stepInputFromDraft(draft: CurriculumStepDraft): CurriculumStepInput {
   const draftMode: LearningMode =
     draft.mode ||
@@ -4152,11 +4499,14 @@ function AiOutlinePanel({
   resources,
   onGenerate,
   onApply,
+  onBuild,
 }: {
   busy: boolean;
   resources: LessonResource[];
   onGenerate: (args: OutlineGenArgs) => Promise<CurriculumOutlineDraft | null>;
   onApply: (outline: CurriculumOutlineDraft) => void;
+  // R57: apply the outline AND write every lesson from the same material.
+  onBuild: (outline: CurriculumOutlineDraft, material: string) => void;
 }) {
   const [prompt, setPrompt] = useState("");
   const [referenceText, setReferenceText] = useState("");
@@ -4166,9 +4516,14 @@ function AiOutlinePanel({
   const [refineFor, setRefineFor] = useState<number | null>(null);
 
   const sigOf = (unit: CurriculumOutlineDraft["units"][number]) => JSON.stringify(unit);
+  const lessonCount = draft
+    ? draft.units.reduce((total, unit) => total + unit.lessons.length, 0)
+    : 0;
 
   const generate = async () => {
-    if (!prompt.trim()) return;
+    // R57: material alone is a brief — a chapter upload IS the instruction. Either
+    // one is enough; both together is best.
+    if (!prompt.trim() && !referenceText.trim()) return;
     setLoading(true);
     const result = await onGenerate({ prompt: prompt.trim(), referenceText });
     if (result) {
@@ -4205,8 +4560,9 @@ function AiOutlinePanel({
         Draft an outline with AI
       </div>
       <p className="mb-3 text-meta text-muted-foreground">
-        Describe the course. The AI sees the rest of this subject and any reference material you
-        attach. Refine individual units before anything is created.
+        Attach a book, chapter, or syllabus — or describe the course. The AI sees the rest of this
+        subject too. Refine individual units before anything is created, then choose whether to
+        build every lesson in one run.
       </p>
       <TextArea label="Brief" value={prompt} onChange={setPrompt} />
       <div className="mt-3">
@@ -4216,11 +4572,11 @@ function AiOutlinePanel({
         <button
           type="button"
           onClick={() => void generate()}
-          disabled={loading || busy || !prompt.trim()}
+          disabled={loading || busy || (!prompt.trim() && !referenceText.trim())}
           className="btn btn-secondary"
         >
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
-          {loading ? "Working…" : draft ? "Regenerate" : "Generate"}
+          {loading ? "Working…" : draft ? "Regenerate" : "Generate outline"}
         </button>
       </div>
 
@@ -4276,16 +4632,32 @@ function AiOutlinePanel({
               <button
                 type="button"
                 onClick={() => {
+                  onBuild(draft, referenceText);
+                  setDraft(null);
+                  setStatuses([]);
+                  setPrompt("");
+                }}
+                disabled={busy}
+                title={`Create the units and write all ${lessonCount} lessons`}
+                className="btn btn-primary"
+              >
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
+                Build {lessonCount} {lessonCount === 1 ? "lesson" : "lessons"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   onApply(draft);
                   setDraft(null);
                   setStatuses([]);
                   setPrompt("");
                 }}
                 disabled={busy}
+                title="Create the units and empty lessons only — write them yourself later"
                 className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
-                Apply outline
+                Outline only
               </button>
               <button
                 type="button"

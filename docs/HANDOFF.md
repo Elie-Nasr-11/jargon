@@ -11300,3 +11300,25 @@ Remaining concerns: deck generation is wired by brief but the studio doesn't yet
 auto-fire it on apply (teacher clicks Generate deck in the lesson editor) — natural
 follow-up. Curriculum-outline-from-a-book (loop this engine) is the next slice.
 Suggested next task: outline builder, or auto-deck on apply.
+
+## Claude -> Codex / Human - 2026-08-21 19:30
+
+Status: Finished
+Summary: R57 — whole-course build from material. Outline mode now accepts material
+alone, reads a 24k window, and returns per-lesson verbatim source_hints; a new pure
+sliceMaterialForLesson gives each generated lesson its own passage; a sequential,
+cancellable, resumable, per-lesson-retryable runner loops the R56 package engine and
+writes through the shared writeLessonPackage path; CourseBuildProgress is the live
+ledger. Detail in DECISIONS R57.
+Files changed: supabase/functions/curriculum-admin/index.ts (course_outline mode),
+frontend/src/lib/materialText.ts (slicer), frontend/src/lib/types.ts,
+frontend/src/routes/teacher.curriculum.tsx (runner, progress panel, outline panel),
+tests/test_r57_course_build.py (14 pins), tests/test_r56_build_from_material.py
+(two pins re-anchored), docs.
+Tests run: 921 pins OK; tsc + eslint clean; deno check 0 new errors; verify_r57
+10/10; light/dark screenshots of the build panel.
+Remaining concerns: a 20-lesson run is ~15 minutes of model calls — fine in the
+background, but the DB is still on t4g.micro (see R55); the compute upgrade matters
+more now. Deck generation per lesson is not wired yet (deck_brief is returned and
+unused) — that's the next slice.
+Suggested next task: auto-deck per generated lesson, then demo prep.

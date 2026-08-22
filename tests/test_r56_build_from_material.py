@@ -84,16 +84,24 @@ class PackageGenerationTests(unittest.TestCase):
 
 class ApplyTests(unittest.TestCase):
     def test_apply_goes_through_the_normal_authoring_actions(self):
-        body = STUDIO.split("const applyPackage = (", 1)[1].split("\n  // P7:", 1)[0]
-        self.assertIn("createCurriculumLessonStub(", body)
-        self.assertIn("upsertCurriculumStep(", body)
-        # No privileged bulk path — same guards, gates, and audit trail as manual work.
+        # R57 moved this write body into writeLessonPackage so the whole-course
+        # runner shares ONE path with the single-lesson panel; the contract is
+        # unchanged — ordinary authoring actions, no privileged bulk insert.
+        body = STUDIO.split("async function writeLessonPackage(input: {", 1)[1].split(
+            "\nfunction stepInputFromDraft", 1
+        )[0]
+        self.assertIn("createCurriculumLessonStub({", body)
+        self.assertIn("upsertCurriculumStep({", body)
         self.assertIn("no privileged bulk path", STUDIO)
+        # And applyPackage still routes through it (the panel's Apply button).
+        self.assertIn("await writeLessonPackage({ accessToken, classId, unitId, pkg });", STUDIO)
 
     def test_quiz_and_assignment_land_as_steps(self):
         # Steps need no roster (the studio has none) and R48's step-work strip turns
         # them into graded classwork in one click.
-        body = STUDIO.split("const applyPackage = (", 1)[1].split("\n  // P7:", 1)[0]
+        body = STUDIO.split("async function writeLessonPackage(input: {", 1)[1].split(
+            "\nfunction stepInputFromDraft", 1
+        )[0]
         self.assertIn('mode: "assessment"', body)
         self.assertIn('mode: "assignment"', body)
         self.assertIn("R48's step-work strip", STUDIO)
