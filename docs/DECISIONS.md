@@ -1465,3 +1465,44 @@ lessons land) plus light/dark panel shots.
 
 Next: auto-deck per generated lesson (deck_brief already rides in the package), and
 grounding each generated lesson's resources in the uploaded file it came from.
+
+## R58 — curriculum import: a whole book lands as drafts (2026-08-22)
+
+Owner: two full textbooks, as two classes, with real figures — and the question
+"do we build a system or hand it to an agent?" Answer: **both, with a seam between
+them.** R56/R57 generate curriculum inside the app, which is right for a teacher
+working from a handout and wrong for a book: a book is long, worth doing carefully,
+and worth being able to redo. A file contract separates the AUTHORING (an agent
+reading chapter by chapter, or the in-app generator) from the LANDING (this
+importer), so either side can be redone without the other.
+
+Decisions:
+1. **One chapter = one JSON document** (docs/CURRICULUM_IMPORT.md is the contract
+   an author writes against). A book is a directory of them, imported in order.
+2. **Idempotent by the source's own stable ids** (`ict-f-ch3-l2`). Re-importing a
+   chapter updates those rows in place — never duplicates.
+3. **Never eat a teacher's work.** Imported rows are stamped `import_key`; a row
+   that exists but belongs to someone else is skipped and reported, never
+   overwritten. The importer NEVER deletes — dropping a lesson from the JSON leaves
+   the old one for a human to archive. An importer that deletes is an importer that
+   eats edits.
+4. **Same guard as every other write**: assertCanAuthor, so an import can never
+   reach an org the operator couldn't author in (R50's shared-book refusal included).
+   The CLI signs in with ordinary credentials — deliberately no service-role path.
+5. **Figures move to private storage.** The 11 legacy figures are static repo assets
+   (/figures/*.png); a textbook's are not. Imported figures upload to the private
+   lesson-resources bucket under figures/<book>/, store `storage_path`, and the
+   client signs them at render (the same createSignedUrl path every private resource
+   uses). Legacy image_url still wins when there's no storage_path. Images travel
+   BESIDE the document, never inside it — base64 at book scale would blow the edge
+   body limit and re-upload every image on every re-run.
+6. **One derivation for a step's stored shape** (`stepRowFrom`), shared by upsertStep
+   (a teacher editing one step) and the importer (a book landing hundreds). Parallel
+   copies would drift.
+
+Verified: 939 pins OK (three older pins re-anchored — they sliced fixed character
+windows that new code pushed past, now slice to the next top-level function);
+tsc + eslint clean; deno check 0 new errors; migration applied to prod and columns
+confirmed.
+
+Next: the books themselves — an agent pass per chapter emitting these documents.

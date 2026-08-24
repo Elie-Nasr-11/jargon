@@ -1,0 +1,132 @@
+# Curriculum Import (R58)
+
+The contract for putting a **whole book** into Jargon as a course, without hand
+entry and without a browser tab staying open for an hour.
+
+One JSON document describes one **chapter** (a unit and its lessons). A book is a
+directory of them, imported in order. Everything lands as **drafts** — publishing
+stays a human act, exactly as with hand-authored curriculum.
+
+## Why a file format at all
+
+R56/R57 generate curriculum inside the app, which is right for a teacher working
+from a handout. A textbook is different: it is long, it is worth doing carefully,
+and it is worth being able to redo. A file lets the authoring (an agent reading the
+book chapter by chapter, or the in-app generator) be separated from the landing (this
+importer), so either side can be redone without the other.
+
+## Idempotency — the rule that makes re-imports safe
+
+Every node carries a stable `id` **you** choose, derived from the book and its
+position: `ict-f-ch3`, `ict-f-ch3-l2`, `ict-f-ch3-l2-s1`. Re-importing the same
+chapter **updates those rows in place**. It never duplicates, and it never touches a
+row it did not create — imported rows are stamped with `import_key`, so a teacher's
+own lessons in the same unit survive a re-import untouched.
+
+Change a lesson's `id` and you get a new lesson; the old one stays until someone
+archives it. That is deliberate: an importer that deletes is an importer that eats
+a teacher's edits.
+
+## Shape
+
+```jsonc
+{
+  "import_key": "ict-f",              // the book. Stamps every row this run writes.
+  "course": {
+    "id": "course-ict-f",             // existing course id, or a new stable one
+    "title": "ICT Book F",
+    "subject": "ICT",                 // matched by title to an existing subject
+    "level": "Grade 7"
+  },
+  "unit": {
+    "id": "ict-f-ch3",
+    "title": "Chapter 3 · Inside a computer",
+    "summary": "What the parts do and how they talk to each other.",
+    "position": 3
+  },
+  "lessons": [
+    {
+      "id": "ict-f-ch3-l1",
+      "title": "The processor",
+      "level": "Grade 7",
+      "objective": "Explain what a CPU does in one sentence.",
+      // How the mentor opens and carries the lesson. Second person, no meta-talk.
+      "tutor_prompt": "Open by asking what they think is doing the thinking…",
+      "steps": [
+        {
+          "mode": "explanation",      // explanation|media|reflection|practice|inquiry|assessment|revision|assignment
+          "mode_type": "",            // practice: code|applied · assessment: mcq|open_ended
+          "title": "A tiny, fast worker",
+          "prompt": "The CPU follows instructions one at a time, very fast…",
+          "choices": [],              // assessment/mcq only, ids a,b,c,d
+          "correct_choice_id": ""
+        }
+      ],
+      // The wrap-up check. Lands as assessment STEPS (R56 precedent) — no roster
+      // needed, and R48's step-work strip turns any of them into graded classwork
+      // in one click.
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does the CPU do?",
+          "choices": [{ "id": "a", "text": "Follows instructions" }],
+          "correct_choice_id": "a"
+        }
+      ],
+      "assignment": {
+        "title": "Spot the processor",
+        "instructions": "Find a device at home and describe…",
+        "success_criteria": ["Names the device", "Says what it processes"]
+      },
+      // Diagrams lifted from the book. Upload the image first (the CLI does this),
+      // then reference the object path it returns.
+      "figures": [
+        {
+          "id": "ict-f-ch3-l1-fig1",
+          "title": "Inside the case",
+          "caption": "The CPU sits under the fan.",
+          "alt_text": "Photograph of an opened desktop computer…",
+          "storage_path": "figures/ict-f/ch3/l1-fig1.png",
+          "source_page": 41
+        }
+      ]
+    }
+  ]
+}
+```
+
+Every field except `id`, `title`, and `steps` is optional. Omit what the book does
+not give you rather than inventing it.
+
+## Figures
+
+Figures do **not** travel inside the JSON. The CLI uploads each image to the private
+`lesson-resources` bucket and writes the returned object path into `storage_path`;
+the student's browser signs it at render time, like every other private resource.
+Base64 in the document would blow the edge function's body limit at book scale and
+would make re-imports re-upload every image.
+
+Legacy figures that use a static `image_url` keep working — `storage_path` simply
+wins when both are present.
+
+## Running it
+
+```bash
+# One chapter
+node scripts/import-curriculum.mjs --file books/ict-f/ch3.json
+
+# A whole book, in order, resuming where it stopped
+node scripts/import-curriculum.mjs --dir books/ict-f
+```
+
+The CLI signs in as a teacher or admin (the same credentials the app uses — no
+service-role key on a laptop), uploads that chapter's figures, posts the document,
+and prints what it created, updated, and skipped. Re-run it as often as you like.
+
+## What the importer will refuse
+
+- A lesson with no steps (an empty lesson is worse than no lesson).
+- A `mode` outside the platform's vocabulary, or an mcq step with no correct choice.
+- A figure whose `storage_path` is not under `figures/`.
+- Writing into an organization the signed-in user cannot author in — the importer
+  runs through the same `assertCanAuthor` guard as every other authoring action.

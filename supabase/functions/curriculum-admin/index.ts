@@ -1334,18 +1334,14 @@ async function saveLessonMeta(config: Config, actorId: string, body: DbRow): Pro
   return json({ status: "ok", lesson_id: lessonId, milestone_id: milestoneId });
 }
 
-async function upsertStep(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const lessonId = cleanText(body.lesson_id);
-  if (!lessonId) throw new Error("lesson_id is required.");
-  const scope = await courseScopeForLesson(config, lessonId);
-  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
-
-  const step = body.step && typeof body.step === "object" ? (body.step as DbRow) : {};
-  const title = cleanText(step.title) || "Step";
-  const stage = isStage(step.stage) ? step.stage : "practice";
-  // v4 mode (docs/PLATFORM.md): when set, the mode PINS response_mode so the stored shape
-  // can't drift from the mode's runtime contract; activity_type is derived for legacy
-  // compat (deprecated — the runtime keys on mode). When absent, everything is legacy.
+// R58: ONE derivation for a step's stored shape (mode → response_mode → activity_type
+// → the row). upsertStep (a teacher editing one step) and importCurriculum (a book
+// landing hundreds at once) must agree byte for byte, so they share this instead of
+// keeping parallel copies that drift.
+function stepRowFrom(
+  step: DbRow,
+  ctx: { lessonId: string; milestoneId: string | null; activityId: string; position: number },
+): DbRow {
   const stepMode = cleanMode(step.mode);
   const stepModeType = cleanModeType(stepMode, step.mode_type);
   const responseMode: ResponseMode = stepMode
@@ -1373,6 +1369,56 @@ async function upsertStep(config: Config, actorId: string, body: DbRow): Promise
           ? "multiple_choice"
           : "discussion";
 
+  const passScore = Number(step.pass_score) > 0 ? Number(step.pass_score) : 1;
+  return {
+    id: ctx.activityId,
+    lesson_id: ctx.lessonId,
+    milestone_id: ctx.milestoneId,
+    position: ctx.position,
+    title: cleanText(step.title) || "Step",
+    activity_type: activityType,
+    stage: isStage(step.stage) ? step.stage : "practice",
+    prompt: cleanText(step.prompt) || "Add a prompt for learners.",
+    response_mode: responseMode,
+    starter_code: cleanText(step.starter_code),
+    expected_output: cleanText(step.expected_output) || null,
+    choices: parseChoices(step.choices),
+    rubric:
+      step.rubric && typeof step.rubric === "object" && !Array.isArray(step.rubric)
+        ? (step.rubric as DbRow)
+        : {},
+    skill_keys: cleanStringArray(step.skill_keys),
+    pass_score: passScore,
+    ...("mode" in step ? { mode: stepMode, mode_type: stepModeType || null } : {}),
+  };
+}
+
+async function upsertStep(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
+
+  const step = body.step && typeof body.step === "object" ? (body.step as DbRow) : {};
+  const title = cleanText(step.title) || "Step";
+  const stage = isStage(step.stage) ? step.stage : "practice";
+  // v4 mode (docs/PLATFORM.md): when set, the mode PINS response_mode so the stored shape
+  // can't drift from the mode's runtime contract; activity_type is derived for legacy
+  // compat (deprecated — the runtime keys on mode). When absent, everything is legacy.
+  // The quiz branch below keys on the derived response mode; stepRowFrom owns the
+  // full derivation, this mirrors just the one value it needs.
+  const stepMode = cleanMode(step.mode);
+  const stepModeType = cleanModeType(stepMode, step.mode_type);
+  const responseMode: ResponseMode = stepMode
+    ? stepMode === "practice" && stepModeType !== "applied"
+      ? "code"
+      : stepMode === "assessment" && stepModeType !== "open_ended"
+        ? "multiple_choice"
+        : "text"
+    : isResponseMode(step.response_mode)
+      ? step.response_mode
+      : "text";
+
   const milestoneId = await lessonMilestoneId(config, lessonId);
 
   let activityId = cleanText(step.id);
@@ -1389,31 +1435,15 @@ async function upsertStep(config: Config, actorId: string, body: DbRow): Promise
     activityId = await uniqueId(config, "lesson_activities", safeId(lessonId, "step", String(position)));
   }
 
-  const passScore = Number(step.pass_score) > 0 ? Number(step.pass_score) : 1;
-  await upsertByConflict(config, "lesson_activities", "id", {
-    id: activityId,
-    lesson_id: lessonId,
-    milestone_id: milestoneId,
-    position,
-    title,
-    activity_type: activityType,
-    stage,
-    prompt: cleanText(step.prompt) || "Add a prompt for learners.",
-    response_mode: responseMode,
-    starter_code: cleanText(step.starter_code),
-    expected_output: cleanText(step.expected_output) || null,
-    choices: parseChoices(step.choices),
-    rubric:
-      step.rubric && typeof step.rubric === "object" && !Array.isArray(step.rubric)
-        ? (step.rubric as DbRow)
-        : {},
-    skill_keys: cleanStringArray(step.skill_keys),
-    pass_score: passScore,
-    // Only touch the mode columns when the payload carries the key: an explicit value
-    // (or explicit null/"none") sets or clears it; an old client that doesn't know about
-    // modes can never clobber one back to legacy.
-    ...("mode" in step ? { mode: stepMode, mode_type: stepModeType || null } : {}),
-  });
+  // Shared with the importer (stepRowFrom): one derivation, no drift. The mode
+  // columns are only touched when the payload carries the key, so an old client that
+  // doesn't know about modes can never clobber one back to legacy.
+  await upsertByConflict(
+    config,
+    "lesson_activities",
+    "id",
+    stepRowFrom(step, { lessonId, milestoneId, activityId, position }),
+  );
 
   // Checkpoint step: upsert its quiz_item. Otherwise archive any quiz so the runtime
   // (which only loads published quizzes) stops treating this step as an assessment.
@@ -2693,6 +2723,329 @@ async function generateLessonPackage(
   });
 }
 
+// ---------------------------------------------------------------------------
+// R58: CURRICULUM IMPORT — a whole book lands as drafts, one chapter per call.
+//
+// The contract lives in docs/CURRICULUM_IMPORT.md. Two rules carry the design:
+//
+//   IDEMPOTENT BY THE SOURCE'S OWN IDS. Every node arrives with a stable id the
+//   author chose ("ict-f-ch3-l2"). Re-importing a chapter updates those rows in
+//   place — never duplicates.
+//
+//   NEVER EAT A TEACHER'S WORK. Imported rows are stamped with import_key. A row
+//   that exists but belongs to someone else (no key, or a different book) is left
+//   exactly as it is and reported as skipped. The importer also never deletes:
+//   dropping a lesson from the JSON leaves the old lesson alone for a human to
+//   archive.
+//
+// Everything lands publication_status = draft, like every other authoring path.
+
+type ImportReport = {
+  units: { created: number; updated: number; skipped: number };
+  lessons: { created: number; updated: number; skipped: number };
+  steps: { created: number; updated: number };
+  figures: { created: number; updated: number; skipped: number };
+  warnings: string[];
+};
+
+function ownedByImport(row: DbRow | null, importKey: string): boolean {
+  if (!row) return true; // nothing there yet — ours to create
+  const existing = cleanText(row.import_key);
+  return existing === importKey;
+}
+
+async function importCurriculum(
+  config: Config,
+  actorId: string,
+  body: DbRow,
+): Promise<Response> {
+  const importKey = cleanText(body.import_key);
+  if (!importKey) throw new Error("import_key is required — it stamps every row this run writes.");
+
+  const courseRaw = body.course && typeof body.course === "object" ? (body.course as DbRow) : {};
+  const unitRaw = body.unit && typeof body.unit === "object" ? (body.unit as DbRow) : {};
+  const lessonsRaw = Array.isArray(body.lessons) ? body.lessons : [];
+  const courseId = cleanText(courseRaw.id);
+  const unitId = cleanText(unitRaw.id);
+  if (!courseId) throw new Error("course.id is required.");
+  if (!unitId) throw new Error("unit.id is required.");
+  if (!lessonsRaw.length) throw new Error("Send at least one lesson.");
+
+  const course = await selectFirst(
+    config,
+    `courses?id=eq.${enc(courseId)}&select=id,title,organization_id&limit=1`,
+  );
+  if (!course) throw new Error(`Course ${courseId} was not found. Create the book first.`);
+  const organizationId = cleanText(course.organization_id);
+  // Same guard as every other authoring action — including R50's shared-book refusal.
+  await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+
+  const version = await selectFirst(
+    config,
+    `course_versions?course_id=eq.${enc(courseId)}&select=id&order=created_at.desc&limit=1`,
+  );
+  const courseVersionId = cleanText(version?.id);
+  if (!courseVersionId) throw new Error(`Course ${courseId} has no version to import into.`);
+
+  const report: ImportReport = {
+    units: { created: 0, updated: 0, skipped: 0 },
+    lessons: { created: 0, updated: 0, skipped: 0 },
+    steps: { created: 0, updated: 0 },
+    figures: { created: 0, updated: 0, skipped: 0 },
+    warnings: [],
+  };
+  const now = new Date().toISOString();
+
+  // --- unit -----------------------------------------------------------------
+  const existingUnit = await selectFirst(
+    config,
+    `units?id=eq.${enc(unitId)}&select=id,import_key&limit=1`,
+  );
+  if (!ownedByImport(existingUnit, importKey)) {
+    throw new Error(
+      `Unit ${unitId} already exists and was not created by this import. Choose a different id.`,
+    );
+  }
+  await upsertByConflict(config, "units", "id", {
+    id: unitId,
+    course_version_id: courseVersionId,
+    title: cleanText(unitRaw.title) || "Untitled chapter",
+    description: clampText(cleanText(unitRaw.summary), 600),
+    position: Number(unitRaw.position) > 0
+      ? Number(unitRaw.position)
+      : await nextPosition(config, "units", `course_version_id=eq.${enc(courseVersionId)}`),
+    updated_at: now,
+    import_key: importKey,
+  });
+  if (existingUnit) report.units.updated += 1;
+  else report.units.created += 1;
+
+  // --- lessons ---------------------------------------------------------------
+  for (const [index, raw] of lessonsRaw.entries()) {
+    const lesson = raw && typeof raw === "object" ? (raw as DbRow) : {};
+    const lessonId = cleanText(lesson.id);
+    const title = cleanText(lesson.title);
+    const steps = Array.isArray(lesson.steps) ? lesson.steps : [];
+    if (!lessonId || !title) {
+      report.warnings.push(`Lesson ${index + 1} has no id or title — skipped.`);
+      report.lessons.skipped += 1;
+      continue;
+    }
+    if (!steps.length) {
+      // An empty lesson is worse than no lesson: a student opens it and there is
+      // nothing to do.
+      report.warnings.push(`${lessonId} has no steps — skipped.`);
+      report.lessons.skipped += 1;
+      continue;
+    }
+
+    const existingLesson = await selectFirst(
+      config,
+      `lessons?id=eq.${enc(lessonId)}&select=id,import_key,position,unit_position&limit=1`,
+    );
+    if (!ownedByImport(existingLesson, importKey)) {
+      report.warnings.push(`${lessonId} exists and is not owned by this import — left alone.`);
+      report.lessons.skipped += 1;
+      continue;
+    }
+
+    const milestoneId = `${lessonId}-milestone-1`;
+    const level = cleanText(lesson.level) || "Any level";
+    const position = existingLesson
+      ? Number(existingLesson.position) || (await nextLessonPosition(config))
+      : await nextLessonPosition(config);
+    const unitPosition = existingLesson
+      ? Number(existingLesson.unit_position) || index + 1
+      : index + 1;
+
+    await upsertByConflict(config, "lessons", "id", {
+      id: lessonId,
+      position,
+      unit_position: unitPosition,
+      title,
+      module: cleanText(unitRaw.title) || "Lesson",
+      level,
+      tutor_prompt:
+        cleanText(lesson.tutor_prompt) ||
+        "Introduce this lesson and guide the learner step by step.",
+      sample_code: "",
+      expected_output: null,
+      unit_id: unitId,
+      author_user_id: actorId,
+      publication_status: "draft",
+      curriculum_metadata: {
+        course_id: courseId,
+        course_version_id: courseVersionId,
+        class_id: cleanText(body.class_id) || null,
+        imported_from: importKey,
+      },
+      import_key: importKey,
+    });
+    await upsertByConflict(config, "milestones", "id", {
+      id: milestoneId,
+      lesson_id: lessonId,
+      position: 1,
+      title,
+      objective: cleanText(lesson.objective) || "Describe what the learner should be able to do.",
+      level,
+      skill_keys: [],
+      expected_evidence: {},
+      completion_rules: { requires: ["activity_complete"], min_score: 1 },
+      allowed_response_modes: ["text"],
+      updated_at: now,
+    });
+    await patchRows(config, `lessons?id=eq.${enc(lessonId)}`, { milestone_id: milestoneId });
+    if (existingLesson) report.lessons.updated += 1;
+    else report.lessons.created += 1;
+
+    // --- steps, then the wrap-up quiz and assignment as steps ---------------
+    // Quiz and assignment become STEPS (the R56 precedent): they need no roster,
+    // students meet them inside the lesson, and R48's step-work strip promotes any
+    // of them to graded classwork in one click.
+    const stepInputs: DbRow[] = steps
+      .map((entry) => (entry && typeof entry === "object" ? (entry as DbRow) : null))
+      .filter((entry): entry is DbRow => entry !== null);
+
+    const quizItems = Array.isArray(lesson.quiz) ? lesson.quiz : [];
+    for (const entry of quizItems) {
+      const item = entry && typeof entry === "object" ? (entry as DbRow) : {};
+      const prompt = cleanText(item.prompt);
+      if (!prompt) continue;
+      const choices = parseChoices(item.choices);
+      const correct = cleanText(item.correct_choice_id);
+      const isMcq =
+        cleanText(item.question_type) !== "open_ended" && choices.length >= 2 && Boolean(correct);
+      stepInputs.push({
+        mode: "assessment",
+        mode_type: isMcq ? "mcq" : "open_ended",
+        title: prompt.slice(0, 60),
+        prompt,
+        choices: isMcq ? choices : [],
+        quiz: isMcq ? { prompt, choices, correct_choice_ids: [correct] } : null,
+      });
+    }
+
+    const assignment =
+      lesson.assignment && typeof lesson.assignment === "object"
+        ? (lesson.assignment as DbRow)
+        : null;
+    if (assignment && cleanText(assignment.instructions)) {
+      const criteria = cleanStringArray(assignment.success_criteria);
+      const tail = criteria.length
+        ? `\n\nWhat a strong response includes:\n${criteria.map((line) => `- ${line}`).join("\n")}`
+        : "";
+      stepInputs.push({
+        mode: "assignment",
+        mode_type: "",
+        title: cleanText(assignment.title) || "Assignment",
+        prompt: `${cleanText(assignment.instructions)}${tail}`,
+      });
+    }
+
+    for (const [stepIndex, step] of stepInputs.entries()) {
+      const activityId = `${lessonId}-s${stepIndex + 1}`;
+      const existingStep = await selectFirst(
+        config,
+        `lesson_activities?id=eq.${enc(activityId)}&select=id&limit=1`,
+      );
+      await upsertByConflict(
+        config,
+        "lesson_activities",
+        "id",
+        stepRowFrom(step, {
+          lessonId,
+          milestoneId,
+          activityId,
+          position: stepIndex + 1,
+        }),
+      );
+      // An mcq step carries its quiz_item, exactly as upsertStep writes it.
+      const quiz = step.quiz && typeof step.quiz === "object" ? (step.quiz as DbRow) : null;
+      const quizChoices = quiz ? parseChoices(quiz.choices) : [];
+      const quizCorrect = quiz ? cleanStringArray(quiz.correct_choice_ids) : [];
+      if (quiz && quizChoices.length >= 2 && quizCorrect.length) {
+        await upsertByConflict(config, "quiz_items", "id", {
+          id: `${activityId}-quiz`,
+          lesson_id: lessonId,
+          milestone_id: milestoneId,
+          activity_id: activityId,
+          position: stepIndex + 1,
+          prompt: cleanText(quiz.prompt) || cleanText(step.prompt) || "Choose the best answer.",
+          question_type: "multiple_choice",
+          choices: quizChoices,
+          correct_choice_ids: quizCorrect,
+          rubric: {},
+          skill_keys: [],
+          status: "draft",
+          updated_at: now,
+        });
+      }
+      if (existingStep) report.steps.updated += 1;
+      else report.steps.created += 1;
+    }
+
+    // --- figures --------------------------------------------------------------
+    const figures = Array.isArray(lesson.figures) ? lesson.figures : [];
+    for (const [figIndex, entry] of figures.entries()) {
+      const figure = entry && typeof entry === "object" ? (entry as DbRow) : {};
+      const figureId = cleanText(figure.id) || `${lessonId}-fig${figIndex + 1}`;
+      const storagePath = cleanText(figure.storage_path);
+      const imageUrl = cleanText(figure.image_url);
+      if (!storagePath && !imageUrl) {
+        report.warnings.push(`${figureId} has no image — skipped.`);
+        report.figures.skipped += 1;
+        continue;
+      }
+      // Imported images live under figures/ in the private bucket; anything else is
+      // someone pointing the importer at a path it has no business writing.
+      if (storagePath && !storagePath.startsWith("figures/")) {
+        report.warnings.push(`${figureId}: storage_path must start with "figures/" — skipped.`);
+        report.figures.skipped += 1;
+        continue;
+      }
+      const existingFigure = await selectFirst(
+        config,
+        `lesson_figures?id=eq.${enc(figureId)}&select=id,import_key&limit=1`,
+      );
+      if (!ownedByImport(existingFigure, importKey)) {
+        report.warnings.push(`${figureId} exists and is not owned by this import — left alone.`);
+        report.figures.skipped += 1;
+        continue;
+      }
+      await upsertByConflict(config, "lesson_figures", "id", {
+        id: figureId,
+        lesson_id: lessonId,
+        idea_key: cleanText(figure.idea_key) || null,
+        title: cleanText(figure.title) || "Figure",
+        caption: clampText(cleanText(figure.caption), 400),
+        image_url: imageUrl,
+        storage_path: storagePath || null,
+        alt_text: clampText(cleanText(figure.alt_text), 400),
+        source_page: Number(figure.source_page) > 0 ? Number(figure.source_page) : null,
+        position: figIndex + 1,
+        // Figures are what the mentor SHOWS, so they publish with the import: a
+        // draft figure would be invisible to the runtime and read as a bug.
+        status: "published",
+        created_by: actorId,
+        import_key: importKey,
+      });
+      if (existingFigure) report.figures.updated += 1;
+      else report.figures.created += 1;
+    }
+  }
+
+  await audit(config, {
+    actorId,
+    organizationId: organizationId || null,
+    eventType: "curriculum.imported",
+    entityType: "unit",
+    entityId: unitId,
+    payload: { import_key: importKey, course_id: courseId, report },
+  });
+
+  return json({ status: "ok", unit_id: unitId, course_id: courseId, report });
+}
+
 async function generateDraft(config: Config, actorId: string, body: DbRow): Promise<Response> {
   const mode = cleanText(body.mode);
   if (mode === "lesson_package") return await generateLessonPackage(config, actorId, body);
@@ -3267,6 +3620,7 @@ async function reviewKnowledge(config: Config, actorId: string, body: DbRow): Pr
   return json({ status: "ok" });
 }
 
+    if (action === "import_curriculum") return await importCurriculum(config, actorId, record);
     if (action === "generate") return await generateDraft(config, actorId, record);
     if (action === "extract_knowledge") return await extractKnowledge(config, actorId, record);
     if (action === "list_knowledge") return await listKnowledge(config, actorId, record);

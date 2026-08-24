@@ -312,6 +312,10 @@ export type LessonFigure = {
   caption: string;
   image_url: string;
   alt_text: string;
+  // R58: imported figures live in the private lesson-resources bucket; the client
+  // signs this at render. Legacy static figures (/figures/*.png) leave it null and
+  // keep using image_url.
+  storage_path?: string | null;
 };
 
 export type CurriculumAdminResponse = {
