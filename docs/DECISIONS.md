@@ -1525,3 +1525,60 @@ The class that matters is TS2304 "Cannot find name" — that is the one that mea
 runtime crash, and it is now visible.
 
 Lesson kept: a green gate proves nothing until you have watched it go red.
+
+### R58b — the importer, verified against production (2026-08-22)
+
+Not "the tests pass" — an actual import, run twice, against the deployed function:
+
+- **First run** wrote the unit, the lesson, 4 steps (2 content + the quiz as an
+  assessment step + the assignment step) and the quiz_item — and surfaced the audit
+  bug above.
+- **Second run, same document**: `created: 0` across the board, `updated: 4 steps,
+  1 lesson, 1 unit`. Row counts identical, content changed in place. Idempotency is
+  real, not aspirational.
+- **Guard run**: a lesson claiming an id a teacher owns, a figure with
+  `storage_path: "../secrets/key.png"`, and a lesson with no steps. All three were
+  refused with named warnings; the teacher's published lesson came out with its
+  title, its status and its (zero) steps untouched.
+
+Test data fully removed afterwards — 0 rows left.
+
+## R59 — make the PRODUCT path good enough for a chapter PDF (2026-08-24)
+
+Owner: "cut up the 2 PDFs into individual PDFs for each chapter and I'll plug in each
+chapter on its own… have the platform do the work it's supposed to do rather than
+just feeding it in through the back end."
+
+Right call, and the reason is important: hand-authored JSON through the importer
+proves the IMPORTER works, not the FEATURE. If a teacher uploads a chapter and gets
+mush, the product is broken no matter how good the back-end path looks. So the
+importer stays as the bulk/repeatable route, and the product path becomes primary.
+
+Two things stood between that plan and a good result:
+
+1. **The platform could not see the answers.** Teacher editions mark the key by
+   COLOUR — IT Frontiers prints every correct option and every written model answer
+   in red. `getTextContent()` drops colour, so a teacher uploading a teacher edition
+   handed us the questions and hid the answers, and the generator guessed a key the
+   book was already stating. Extraction now walks the operator list alongside the
+   text, collects runs drawn in anything other than the page's dominant ink, and
+   appends them to their own page as a labelled line. Deliberately generic: no
+   hardcoded hue, so any book that colours its key or its terms benefits. Failures
+   are swallowed — colour is a bonus on top of text and must never fail an
+   extraction. A page where half the runs are "marked" is decorative, so it marks
+   nothing.
+
+2. **The platform only read the start of a chapter.** A real chapter is 111 pages
+   ≈ 140k characters. The client truncated uploads at 40k and the outline window was
+   24k, so a chapter upload produced an outline for its first lesson and a half.
+   Raised: client 40k → 400k, outline 24k → 180k, package 24k → 48k, per-lesson
+   slice 6k → 24k (a book lesson is 20–35 pages; 6k cut one off at its first
+   section). The pin now asserts the CONTRACT — a window bigger than any single
+   lesson — rather than a magic number.
+
+Also produced: both books cut into 4 chapter PDFs and 17 lesson PDFs
+(tools/book-import/split.mjs), cut on the extractor's own lesson map so the
+boundaries follow the book rather than a guess.
+
+Verified: 949 pins OK (one R57 pin re-anchored from a number to the contract); tsc,
+eslint, deno gate all clean.

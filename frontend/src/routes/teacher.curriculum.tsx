@@ -4052,7 +4052,10 @@ function AiReferenceInput({
         } else {
           throw new Error("Unsupported file type.");
         }
-        if (text.trim()) added.push({ name: file.name, text: text.trim().slice(0, 40000) });
+        // R59: a real chapter upload is ~140k characters (111 pages). The old 40k cap
+        // silently truncated it to the first lesson and a half, so the outline pass
+        // proposed a course for a chapter it had only read the start of.
+        if (text.trim()) added.push({ name: file.name, text: text.trim().slice(0, 400000) });
         else failed.push(file.name);
       } catch {
         failed.push(file.name);
@@ -4079,7 +4082,7 @@ function AiReferenceInput({
       if (!result.text.trim()) throw new Error("That page had no readable text.");
       setDocs((current) => [
         ...current,
-        { name: result.title || url, text: result.text.slice(0, 40000) },
+        { name: result.title || url, text: result.text.slice(0, 400000) },
       ]);
       setLink("");
     } catch (error) {

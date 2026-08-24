@@ -46,12 +46,15 @@ class OutlineFromMaterialTests(unittest.TestCase):
         )
 
     def test_outline_reads_a_book_sized_window(self):
-        # The shared 8k clamp is a chapter; an outline over a book needs the
-        # package-sized window.
-        self.assertIn(
-            'const outlineReference = clampText(cleanText(body.reference_text), 24000);',
-            ADMIN,
+        # The outline must see the WHOLE upload, or it proposes a course for the part
+        # it happened to read. R59 raised this to 180k after measuring a real chapter
+        # at ~140k characters (111 pages); the pin follows the CONTRACT — a window
+        # bigger than any single lesson's — rather than a magic number.
+        window = int(
+            ADMIN.split("const outlineReference = clampText(cleanText(body.reference_text), ", 1)[1]
+            .split(")", 1)[0]
         )
+        self.assertGreaterEqual(window, 100_000, "an outline window must fit a whole chapter")
 
     def test_outline_lessons_carry_a_verbatim_source_hint(self):
         self.assertIn('"lessons":[{"title":string,"source_hint":string}]', ADMIN)

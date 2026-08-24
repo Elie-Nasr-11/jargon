@@ -1,4 +1,4 @@
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions, OPS } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFPageProxy } from "pdfjs-dist";
 
@@ -34,6 +34,55 @@ function textFromItem(item: unknown): string {
 
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+// R59: WHAT THE COLOUR KNOWS.
+//
+// Publisher teacher editions mark the answer key by colour — the IT Frontiers
+// Teacher Editions print every correct multiple-choice option and every written
+// model answer in red. getTextContent() throws that away, so a teacher uploading a
+// teacher edition used to hand us the questions and hide the answers, leaving the
+// generator to GUESS a key the book was already telling us.
+//
+// So walk the operator list alongside the text: track the fill colour in force, and
+// collect the runs drawn in anything other than the page's dominant ink. Those runs
+// are appended to the page as a labelled line the generator can act on. This is
+// deliberately generic — no hardcoded hue, no publisher-specific rule — so it also
+// picks up highlighted key terms in any other book. Headings come along too; that is
+// harmless, because the note says these are marked, not that they are answers.
+async function markedRunsForPage(page: PDFPageProxy): Promise<string[]> {
+  let ops;
+  try {
+    ops = await page.getOperatorList();
+  } catch {
+    return []; // colour is a bonus; never fail an extraction over it
+  }
+  let fill = "";
+  const runs: Array<{ fill: string; text: string }> = [];
+  for (let i = 0; i < ops.fnArray.length; i += 1) {
+    if (ops.fnArray[i] === OPS.setFillRGBColor) {
+      const arg = ops.argsArray[i]?.[0];
+      fill = typeof arg === "string" ? arg.toLowerCase() : "";
+    } else if (ops.fnArray[i] === OPS.showText) {
+      const glyphs = ops.argsArray[i]?.[0];
+      if (!Array.isArray(glyphs)) continue;
+      const text = glyphs
+        .map((g) => (g && typeof g === "object" && "unicode" in g ? String(g.unicode ?? "") : ""))
+        .join("")
+        .trim();
+      if (text) runs.push({ fill, text });
+    }
+  }
+  if (runs.length < 4) return [];
+
+  const counts = new Map<string, number>();
+  for (const run of runs) counts.set(run.fill, (counts.get(run.fill) || 0) + 1);
+  const [dominant] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  // A colour used for MOST of the page is body ink, not a mark.
+  const marked = runs.filter((run) => run.fill !== dominant && run.text.length > 3);
+  // If almost everything is "marked", the page is decorative — trust nothing.
+  if (marked.length > runs.length * 0.5) return [];
+  return marked.map((run) => run.text);
 }
 
 function splitPageText(text: string, pageNumber: number): ExtractedPdfChunk[] {
@@ -90,7 +139,13 @@ export async function extractPdfTextChunksFromUrl(url: string): Promise<Extracte
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
     const pageText = content.items.map(textFromItem).filter(Boolean).join(" ");
-    chunks.push(...splitPageText(pageText, pageNumber));
+    const marked = await markedRunsForPage(page);
+    // The marks ride WITH their page, so a question and its key stay together no
+    // matter how the material is later sliced per lesson.
+    const withMarks = marked.length
+      ? `${pageText}\n[Marked in the source (in a teacher edition these are usually the answers): ${marked.join(" | ")}]`
+      : pageText;
+    chunks.push(...splitPageText(withMarks, pageNumber));
   }
 
   return chunks;

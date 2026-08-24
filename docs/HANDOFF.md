@@ -11360,3 +11360,62 @@ this deploy lands (see the next entry). Figure extraction from PDFs is still the
 author's job — the CLI uploads whatever files the document points at.
 Suggested next task: the two books — an agent pass per chapter emitting these
 documents, then import.
+
+## Claude -> Codex / Human - 2026-08-22 11:25
+
+Status: Finished (R58 + R58a/b)
+Summary: The import pipeline is live and proven against production. Fixed an
+undefined audit() the first real round-trip exposed, and the offline deno gate that
+had been silently passing everything (ANSI-prefixed diagnostics never matched its
+^TS grep). Verified: re-import updates in place (0 created / 4 steps updated), and
+the ownership, figure-path and empty-lesson guards all refuse with named warnings
+while leaving a teacher's published lesson untouched. Prod test data removed.
+Files changed: supabase/functions/curriculum-admin/index.ts (audit row written
+directly, fail-open), scratchpad deno gate, docs.
+Tests run: 939 pins OK; deno gate (now working) — curriculum-admin 0, chat 8,
+admin-ops 2 (known type-inference baselines), others 0; live prod round-trips.
+Remaining concerns: PDF figure EXTRACTION is still the author's job — the CLI
+uploads whatever files a document points at. That is the next real gap for books.
+Suggested next task: the two books — an agent pass per chapter emitting these
+documents. Waiting on the files (they did not arrive in chat).
+
+## Claude -> Codex / Human - 2026-08-24 08:40
+
+Status: Finished (first book lesson live)
+Summary: Both IT Frontiers Advanced Teacher Editions parsed and lesson 1 imported to
+production as a draft. KEY FINDING: the Teacher Editions print every answer in red
+(#ff5739) — correct MCQ options AND written model answers — so the answer key is
+EXTRACTED, not inferred. Built tools/book-import (extract/survey/sections/colors),
+created the two classes + book courses in the demo org, authored
+books/itf-a1/ch1-l1.json against the R58 contract, and imported it: 1 unit, 1
+lesson, 18 steps (11 teaching + 6 quiz + 1 assignment), 0 warnings. All six quiz
+keys verified against the book's own red marks.
+Files changed: tools/book-import/*, books/itf-a1/ch1-l1.json, docs.
+Tests run: live import against prod (report: 18 steps created, no warnings); quiz
+keys spot-checked against the extracted answer key.
+Remaining concerns: the CLI cannot run from this container (proxy blocks
+*.supabase.co) — imports from here go through pg_net; on the owner's machine the
+CLI is the intended path. Figures (A2 has ~108 images; A1's diagrams are vector)
+are not yet extracted — that is the next gap.
+Suggested next task: owner reviews lesson 1 in the studio, then author the
+remaining 16 lessons the same way.
+
+## Claude -> Codex / Human - 2026-08-24 15:10
+
+Status: Finished
+Summary: R59 — the product path can now take a chapter PDF properly. PDF extraction
+became colour-aware (teacher-edition answer keys survive; generic, no hardcoded
+hue, fail-open), and the material caps were raised to fit a real chapter (client
+400k, outline 180k, package 48k, per-lesson slice 24k). Both books were also cut
+into 4 chapter PDFs and 17 lesson PDFs via tools/book-import/split.mjs.
+Files changed: frontend/src/lib/pdf-extract.ts, frontend/src/lib/materialText.ts,
+frontend/src/routes/teacher.curriculum.tsx,
+supabase/functions/curriculum-admin/index.ts, tools/book-import/split.mjs,
+tests/test_r59_pdf_ingest.py (10 pins), tests/test_r57 (one pin re-anchored), docs.
+Tests run: 949 pins OK; tsc + eslint clean; deno gate 0 errors.
+Remaining concerns: figures still are not extracted from PDFs (A2 has ~108 images;
+A1's diagrams are vector line art needing page-region crops). Cost: an outline pass
+over 180k chars is ~45k input tokens per chapter — fine, but worth watching if
+someone uploads a whole book.
+Suggested next task: owner uploads a chapter through the studio and we judge the
+result; then figures.
