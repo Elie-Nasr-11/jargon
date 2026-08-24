@@ -11360,3 +11360,21 @@ this deploy lands (see the next entry). Figure extraction from PDFs is still the
 author's job — the CLI uploads whatever files the document points at.
 Suggested next task: the two books — an agent pass per chapter emitting these
 documents, then import.
+
+## Claude -> Codex / Human - 2026-08-22 11:25
+
+Status: Finished (R58 + R58a/b)
+Summary: The import pipeline is live and proven against production. Fixed an
+undefined audit() the first real round-trip exposed, and the offline deno gate that
+had been silently passing everything (ANSI-prefixed diagnostics never matched its
+^TS grep). Verified: re-import updates in place (0 created / 4 steps updated), and
+the ownership, figure-path and empty-lesson guards all refuse with named warnings
+while leaving a teacher's published lesson untouched. Prod test data removed.
+Files changed: supabase/functions/curriculum-admin/index.ts (audit row written
+directly, fail-open), scratchpad deno gate, docs.
+Tests run: 939 pins OK; deno gate (now working) — curriculum-admin 0, chat 8,
+admin-ops 2 (known type-inference baselines), others 0; live prod round-trips.
+Remaining concerns: PDF figure EXTRACTION is still the author's job — the CLI
+uploads whatever files a document points at. That is the next real gap for books.
+Suggested next task: the two books — an agent pass per chapter emitting these
+documents. Waiting on the files (they did not arrive in chat).

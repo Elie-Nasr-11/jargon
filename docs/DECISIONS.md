@@ -1525,3 +1525,20 @@ The class that matters is TS2304 "Cannot find name" — that is the one that mea
 runtime crash, and it is now visible.
 
 Lesson kept: a green gate proves nothing until you have watched it go red.
+
+### R58b — the importer, verified against production (2026-08-22)
+
+Not "the tests pass" — an actual import, run twice, against the deployed function:
+
+- **First run** wrote the unit, the lesson, 4 steps (2 content + the quiz as an
+  assessment step + the assignment step) and the quiz_item — and surfaced the audit
+  bug above.
+- **Second run, same document**: `created: 0` across the board, `updated: 4 steps,
+  1 lesson, 1 unit`. Row counts identical, content changed in place. Idempotency is
+  real, not aspirational.
+- **Guard run**: a lesson claiming an id a teacher owns, a figure with
+  `storage_path: "../secrets/key.png"`, and a lesson with no steps. All three were
+  refused with named warnings; the teacher's published lesson came out with its
+  title, its status and its (zero) steps untouched.
+
+Test data fully removed afterwards — 0 rows left.
