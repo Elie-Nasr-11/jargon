@@ -6,6 +6,7 @@ import { splitSentences } from "@/lib/sentences";
 import { tokenizeJargon } from "@/lib/jargon-syntax";
 import { store } from "@/lib/jargon-store";
 import { mathSpans, renderWithMath } from "@/lib/mathText";
+import { signFigureUrl } from "@/lib/api";
 import { ReadAloudAction } from "@/components/ReadAloudAction";
 import { ResourceCard } from "@/student/ResourceCard";
 import { useMediaStage } from "@/student/MediaStage";
@@ -497,6 +498,27 @@ function StreamingBody({ text }: { text: string }) {
 // used it. Falls back to the plain link when no stage is in scope (the teacher studio
 // renders this component outside the student shell).
 function SourceFigure({ figure }: { figure: LessonFigure }) {
+  // R58: an imported figure is a private storage object — sign it for this sitting.
+  // Legacy figures (static /figures/*.png) have no storage_path and render as-is.
+  const [signed, setSigned] = useState("");
+  useEffect(() => {
+    let alive = true;
+    if (!figure.storage_path) {
+      setSigned("");
+      return;
+    }
+    void signFigureUrl(figure.storage_path)
+      .then((url) => {
+        if (alive) setSigned(url);
+      })
+      .catch(() => {
+        // Fall back to image_url — a missing signature must not blank the lesson.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [figure.storage_path]);
+  const src = signed || figure.image_url;
   const stage = useMediaStage();
   // The stage speaks LessonChatResource; a figure is one in all but name. Built here
   // rather than server-side so an approved figure stays a figure everywhere else.
@@ -507,12 +529,12 @@ function SourceFigure({ figure }: { figure: LessonFigure }) {
     resource_type: "image",
     display_mode: "inline",
     source_type: "external_url",
-    external_url: figure.image_url,
+    external_url: src,
     student_instructions: figure.alt_text || undefined,
   };
   const image = (
     <img
-      src={figure.image_url}
+      src={src}
       alt={figure.alt_text || figure.title}
       loading="lazy"
       // The scans are grayscale line art: a white plate keeps them legible in dark mode.
@@ -531,7 +553,7 @@ function SourceFigure({ figure }: { figure: LessonFigure }) {
           {image}
         </button>
       ) : (
-        <a href={figure.image_url} target="_blank" rel="noopener noreferrer" title="Open full size">
+        <a href={src} target="_blank" rel="noopener noreferrer" title="Open full size">
           {image}
         </a>
       )}

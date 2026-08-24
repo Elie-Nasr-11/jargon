@@ -2751,6 +2751,17 @@ export async function getLessonResourceThumbnailSignedUrl(resource: {
   return data.signedUrl;
 }
 
+// R58: an imported figure is a private object, not a public URL — sign it for the
+// length of a lesson sitting. Legacy figures carry no storage_path and render from
+// image_url directly, so callers fall back to that.
+export async function signFigureUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from("lesson-resources")
+    .createSignedUrl(storagePath, 60 * 30);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
 export async function recordResourceInteraction(event: ResourceInteractionEvent) {
   // Telemetry fires on every open/progress tick — read the locally-cached session
   // instead of a per-event auth round trip (RLS still enforces the user server-side).

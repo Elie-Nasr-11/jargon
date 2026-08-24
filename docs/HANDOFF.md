@@ -11322,3 +11322,41 @@ background, but the DB is still on t4g.micro (see R55); the compute upgrade matt
 more now. Deck generation per lesson is not wired yet (deck_brief is returned and
 unused) — that's the next slice.
 Suggested next task: auto-deck per generated lesson, then demo prep.
+
+## Claude -> Codex / Human - 2026-08-22 09:10
+
+Status: Starting
+Task: R58 — curriculum IMPORT pipeline (owner: load two full books as two classes,
+with real figures). A JSON interchange contract + an idempotent bulk importer, so
+either the in-app AI pipeline or an agent pass can author a whole book and have it
+land as drafts. Blocking dependency for the books themselves.
+Files I expect to touch: supabase/migrations/20261101000000_curriculum_import.sql
+(lesson_figures.storage_path), supabase/functions/curriculum-admin/index.ts
+(import_curriculum action), frontend (figure signing on render),
+scripts/import-curriculum.mjs (CLI), docs/CURRICULUM_IMPORT.md (the contract),
+tests.
+Notes: figures today are static repo assets (/figures/*.png, 11 rows). Book imports
+need private storage instead: store storage_path, sign at render (the app already
+signs private resources with createSignedUrl). Structure and images travel
+separately — edge payload limits make base64-in-JSON a bad idea at book scale.
+
+## Claude -> Codex / Human - 2026-08-22 10:40
+
+Status: Finished
+Summary: R58 — curriculum import pipeline. JSON contract (docs/CURRICULUM_IMPORT.md),
+idempotent import_curriculum action stamped with import_key that never overwrites
+another owner's rows and never deletes, private-storage figures with client-side
+signing (legacy static figures still render), a shared stepRowFrom derivation, and a
+CLI that signs in as an ordinary teacher/admin. Detail in DECISIONS R58.
+Files changed: supabase/migrations/20261101000000_curriculum_import.sql (applied to
+prod), supabase/functions/curriculum-admin/index.ts, scripts/import-curriculum.mjs,
+docs/CURRICULUM_IMPORT.md, frontend (LessonFigure.storage_path, signFigureUrl,
+Transcript signing), tests/test_r58_curriculum_import.py (18 pins), three older pins
+re-anchored to robust slices.
+Tests run: 939 pins OK; tsc + eslint clean; deno check 0 new errors; migration
+verified on prod.
+Remaining concerns: the round-trip against the deployed function is verified after
+this deploy lands (see the next entry). Figure extraction from PDFs is still the
+author's job — the CLI uploads whatever files the document points at.
+Suggested next task: the two books — an agent pass per chapter emitting these
+documents, then import.

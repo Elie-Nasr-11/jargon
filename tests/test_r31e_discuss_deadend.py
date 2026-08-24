@@ -20,6 +20,16 @@ from pathlib import Path
 import re
 import unittest
 
+def _component(source: str, marker: str) -> str:
+    """A whole component body: its declaration to the next top-level one.
+
+    A fixed character window silently truncates when the component grows (R58 added
+    figure signing to SourceFigure), turning a real contract into a flaky pin.
+    """
+    rest = source[source.index(marker) :]
+    nxt = rest.find("\nfunction ", 1)
+    return rest if nxt < 0 else rest[:nxt]
+
 ROOT = Path(__file__).resolve().parents[1]
 CHAT = (ROOT / "supabase" / "functions" / "chat" / "index.ts").read_text(encoding="utf-8")
 SRC = ROOT / "frontend" / "src"
@@ -487,13 +497,13 @@ class MediaOpensInTheApp(unittest.TestCase):
     def test_a_figure_opens_in_the_media_panel(self):
         # The stage already rendered "image" — the figure just never used it, so clicking
         # a picture the lesson was about threw the student out of the lesson.
-        block = self.TRANSCRIPT[self.TRANSCRIPT.index("function SourceFigure(") :][:1600]
+        block = _component(self.TRANSCRIPT, "function SourceFigure(")
         self.assertIn("const stage = useMediaStage();", block)
         self.assertIn('stage.open(asResource, "side")', block)
 
     def test_it_still_degrades_outside_the_student_shell(self):
         # The teacher studio renders this component with no stage in scope.
-        block = self.TRANSCRIPT[self.TRANSCRIPT.index("function SourceFigure(") :][:1600]
+        block = _component(self.TRANSCRIPT, "function SourceFigure(")
         self.assertIn("stage ? (", block)
         self.assertIn('target="_blank"', block)
 

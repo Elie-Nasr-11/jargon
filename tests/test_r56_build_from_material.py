@@ -41,18 +41,22 @@ class PackageGenerationTests(unittest.TestCase):
         )
 
     def test_generation_authorizes_before_calling_the_model(self):
-        body = ADMIN.split("async function generateLessonPackage(", 1)[1].split(
-            "\nasync function generateDraft(", 1
-        )[0]
+        # Slice to the NEXT top-level function rather than a named neighbour:
+        # R58 inserted importCurriculum between these two, and a pin that names
+        # its neighbour silently starts asserting about someone else's code.
+        rest = ADMIN.split("async function generateLessonPackage(", 1)[1]
+        body = rest.split("\nasync function ", 1)[0]
         guard = body.index("await assertCanAuthor(")
         model = body.index("await callModelJson(")
         self.assertLess(guard, model)
 
     def test_generation_writes_nothing(self):
         # The whole point of review-first: no insert/upsert/patch in this path.
-        body = ADMIN.split("async function generateLessonPackage(", 1)[1].split(
-            "\nasync function generateDraft(", 1
-        )[0]
+        # Slice to the NEXT top-level function rather than a named neighbour:
+        # R58 inserted importCurriculum between these two, and a pin that names
+        # its neighbour silently starts asserting about someone else's code.
+        rest = ADMIN.split("async function generateLessonPackage(", 1)[1]
+        body = rest.split("\nasync function ", 1)[0]
         for writer in ("insertRow(", "upsertByConflict(", "patchRows(", "bulkInsert("):
             self.assertNotIn(writer, body)
 
