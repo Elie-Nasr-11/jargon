@@ -1,0 +1,156 @@
+{
+  "import_key": "itf-a1",
+  "course": { "id": "itf-adv-a1", "title": "IT Frontiers Advanced — Book A1", "subject": "IT Frontiers — Advanced Series", "level": "Advanced" },
+  "unit": {
+    "id": "itf-a1-ch1",
+    "title": "Chapter 1 · Computers",
+    "summary": "What computers are, what processing means, and how information is created, shared and stored.",
+    "position": 1
+  },
+  "lessons": [
+    {
+      "id": "itf-a1-ch1-l1",
+      "title": "Introducing Computers",
+      "level": "Advanced",
+      "objective": "Define a computer as a technology that processes information according to a stored program, and explain how computers create, share and store information.",
+      "tutor_prompt": "You are teaching Lesson 1 of Chapter 1 from IT Frontiers Advanced Book A1. Open by asking the student what they think a computer actually IS — most will say a laptop or a phone, and the lesson's job is to move them from naming objects to naming a purpose. Work through the book's own arc: technology has a purpose, processing is structured repeatable change, information is meaningful content, and a computer is the technology whose purpose is processing information according to a stored program. Use the book's examples (the pencil, the car, wheat into bread, Sarah's blindfolded guessing game, the school report card) rather than inventing your own. Never hand over a definition the student is one question away from reaching. Keep the language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Technology has a purpose",
+          "prompt": "Ask the student to name three technologies they used today. Then draw out what all of them have in common: every technology is a tool or machine that helps us perform a task, and each one is DESIGNED for a particular purpose. Use the book's pencil example — many kinds of pencils, one task: writing. Land the definition in their words: technology is the tools and machines we use to help us perform tasks, and every technology has a purpose."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Naming the purpose",
+          "prompt": "Give the student a short list — a ship, a freezer, a wind turbine, a laptop — and ask what purpose each one was designed for. Push for the PURPOSE (transport, cooling food, generating electrical energy, processing information), not a description of the object. If they answer with what it looks like, ask what task it exists to perform. Close by asking why knowing a technology's purpose is useful at all — the book's answer is that it tells you how to use it, whether it is useful to you, and what risks it carries."
+        },
+        {
+          "mode": "explanation",
+          "title": "What processing really means",
+          "prompt": "Establish that processing is not any old change — it is structured, follows a specific set of steps, and is repeatable: same starting materials and same steps give the same result every time. Walk the book's wheat-to-bread example through its steps (clean the grains, grind them, sift the flour, send it to the bakery, make dough, bake it) and ask what would happen if the steps were shuffled. Land the definition: a process is a series of steps that complete a particular task and can be replicated."
+        },
+        {
+          "mode": "practice",
+          "mode_type": "applied",
+          "title": "Write a process",
+          "prompt": "Ask the student to pick something ordinary they do — making a sandwich, getting ready for school, charging a phone — and write it as a numbered process. Then challenge it: could someone else follow those exact steps and get the same result? If a step is vague ('get ready'), ask them to break it down. The goal is for them to feel the difference between describing an activity and specifying a process."
+        },
+        {
+          "mode": "explanation",
+          "title": "Information, and how we process it",
+          "prompt": "Introduce information as anything meaningful that tells us something about ourselves or the world. Then use the book's example: Sarah is blindfolded and has to identify objects by touch and smell. Ask the student to trace what Sarah's brain actually does — gather information through the senses, compare it with information already in memory, find a match, name the object. Draw out that this is processing: information went in through the senses and came out as the object's name."
+        },
+        {
+          "mode": "practice",
+          "mode_type": "applied",
+          "title": "Information from the world",
+          "prompt": "Ask what information a driver gets from a red traffic light, and what information they get from an ambulance siren behind them. Then ask which sense delivered each one. Follow with a harder one: if they were blindfolded and asked whether the object in front of them was an ice cube, what information would they be hunting for? Push them to name properties — cold, wet, smooth — rather than saying 'I'd feel it'."
+        },
+        {
+          "mode": "explanation",
+          "title": "Computers create information",
+          "prompt": "Now define the computer: a technology designed for the purpose of processing information — creating it, sharing it and storing it. Start with creating. Typing a message, recording a video, capturing an image all create new information. So does calculation and analysis: use the book's report-card example, where teachers enter grades and the computer produces an average, then sorts the list to produce ranks. Ask the student what the NEW information is in each case — the average, and the rank."
+        },
+        {
+          "mode": "explanation",
+          "title": "Sharing information",
+          "prompt": "Explain that information becomes more valuable when shared, and that the Internet — a global network of telecommunication technologies — is what makes sharing possible. Introduce the Web as all the information reachable through the Internet, organised into files, each with a web address that locates it. Draw the private/public distinction: private information needs a password, public information does not, and use the school website versus the student portal as the example. Then introduce communication as sharing that goes both ways, and compare messaging (short, frequent) with email (longer, less frequent)."
+        },
+        {
+          "mode": "explanation",
+          "title": "Storing information, and the stored program",
+          "prompt": "Ask what would happen if information evaporated every time a computer was switched off — every message, essay and photo gone. Use that to establish storage as the permanent repository for information, held as files: each file has a filename that identifies it and an address that locates it, and can hold anything from one byte to gigabytes. Then introduce the stored program: ask the student to imagine their computer with no apps at all and what it could possibly do. Land it — a program is a set of instructions intended to perform a particular task, and a computer is a technology whose purpose is to process information according to a stored program."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Created, stored, shared",
+          "prompt": "Give the student a scenario and ask them to identify how information was created, stored and shared in it. Use the book's cases: Karl watching a YouTube video; Jenna sending a voice message from her phone; a teacher entering grades that parents later view as a report card. For each, make them name all three — what was created, where it was stored, how it reached the other person. Then ask them for a scenario of their own."
+        },
+        {
+          "mode": "revision",
+          "title": "Putting it together",
+          "prompt": "Ask the student to define a computer in one sentence, without repeating the book word for word. Listen for the three parts: it is a technology, its purpose is processing information, and it does so according to a stored program. Fill only the part they miss, then ask them to name the three things computers let us do with information — create, share, store."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following best describes a process?",
+          "choices": [
+            { "id": "a", "text": "A random sequence of events" },
+            { "id": "b", "text": "A type of machine used in manufacturing" },
+            { "id": "c", "text": "A clear sequence of steps for completing a task" },
+            { "id": "d", "text": "A finished product" }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following is a characteristic of a well-defined process?",
+          "choices": [
+            { "id": "a", "text": "It is constantly changing" },
+            { "id": "b", "text": "It is repeatable and consistent" },
+            { "id": "c", "text": "It does not have a clear beginning" },
+            { "id": "d", "text": "It does not have clear steps to follow" }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following is NOT an example of a process?",
+          "choices": [
+            { "id": "a", "text": "Baking a cake" },
+            { "id": "b", "text": "Getting dressed" },
+            { "id": "c", "text": "Watching a movie" },
+            { "id": "d", "text": "Brushing teeth" }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What information do drivers get when they see a red traffic light?",
+          "choices": [
+            { "id": "a", "text": "Go" },
+            { "id": "b", "text": "Stop" },
+            { "id": "c", "text": "Turn left" },
+            { "id": "d", "text": "Turn right" }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What information do you need to bake a cake?",
+          "choices": [
+            { "id": "a", "text": "Which ingredients go into making a cake" },
+            { "id": "b", "text": "What steps need to be performed" },
+            { "id": "c", "text": "Which utensils are required to perform the steps" },
+            { "id": "d", "text": "All of the above" }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What item of information would be useful for you to navigate your way out of your classroom?",
+          "choices": [
+            { "id": "a", "text": "The colour of the walls" },
+            { "id": "b", "text": "The location of the exit" },
+            { "id": "c", "text": "The names of the students" },
+            { "id": "d", "text": "The number of open windows" }
+          ],
+          "correct_choice_id": "b"
+        }
+      ],
+      "assignment": {
+        "title": "Create, store, share — your own example",
+        "instructions": "Describe your own example of using a computer to create, store and share information. Say clearly what information was created, where it was stored, and how it was shared with someone else. Then list at least three ways you will use computers to help you learn this year, and explain why each one helps.",
+        "success_criteria": [
+          "Names one specific piece of information and says how it was created",
+          "Says where that information was stored",
+          "Explains how it was shared, and with whom",
+          "Gives at least three distinct ways computers support their learning, each with a reason"
+        ]
+      }
+    }
+  ]
+}

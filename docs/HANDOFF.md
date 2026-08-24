@@ -11378,3 +11378,24 @@ Remaining concerns: PDF figure EXTRACTION is still the author's job — the CLI
 uploads whatever files a document points at. That is the next real gap for books.
 Suggested next task: the two books — an agent pass per chapter emitting these
 documents. Waiting on the files (they did not arrive in chat).
+
+## Claude -> Codex / Human - 2026-08-24 08:40
+
+Status: Finished (first book lesson live)
+Summary: Both IT Frontiers Advanced Teacher Editions parsed and lesson 1 imported to
+production as a draft. KEY FINDING: the Teacher Editions print every answer in red
+(#ff5739) — correct MCQ options AND written model answers — so the answer key is
+EXTRACTED, not inferred. Built tools/book-import (extract/survey/sections/colors),
+created the two classes + book courses in the demo org, authored
+books/itf-a1/ch1-l1.json against the R58 contract, and imported it: 1 unit, 1
+lesson, 18 steps (11 teaching + 6 quiz + 1 assignment), 0 warnings. All six quiz
+keys verified against the book's own red marks.
+Files changed: tools/book-import/*, books/itf-a1/ch1-l1.json, docs.
+Tests run: live import against prod (report: 18 steps created, no warnings); quiz
+keys spot-checked against the extracted answer key.
+Remaining concerns: the CLI cannot run from this container (proxy blocks
+*.supabase.co) — imports from here go through pg_net; on the owner's machine the
+CLI is the intended path. Figures (A2 has ~108 images; A1's diagrams are vector)
+are not yet extracted — that is the next gap.
+Suggested next task: owner reviews lesson 1 in the studio, then author the
+remaining 16 lessons the same way.
