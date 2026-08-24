@@ -2645,7 +2645,9 @@ async function generateLessonPackage(
   const prompt = clampText(cleanText(body.prompt), 2000);
   // Material is the point of this mode: a bigger window than the step generator's,
   // because a chapter upload is the normal input here.
-  const referenceText = clampText(cleanText(body.reference_text), 24000);
+  // R59: one lesson's slice of a book (a 35-page lesson is ~40k chars). The whole
+  // upload never lands here — the client slices per lesson before calling.
+  const referenceText = clampText(cleanText(body.reference_text), 48000);
   if (!referenceText && !prompt) {
     throw new Error("Add material (upload, paste, or a link) or a brief to generate from.");
   }
@@ -3054,7 +3056,7 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
   const mode = cleanText(body.mode);
   if (mode === "lesson_package") return await generateLessonPackage(config, actorId, body);
   const prompt = cleanText(body.prompt);
-  const referenceText = clampText(cleanText(body.reference_text), 8000);
+  const referenceText = clampText(cleanText(body.reference_text), 24000);
   const feedback = cleanText(body.feedback);
   const target = cleanText(body.target);
   const hasCurrent = Boolean(body.current && typeof body.current === "object");
@@ -3074,7 +3076,9 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
     await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
     // R57: material alone is enough to draft an outline (a chapter upload IS the brief);
     // a brief alone still works. One of the two is required.
-    const outlineReference = clampText(cleanText(body.reference_text), 24000);
+    // R59: the outline must see the WHOLE chapter or it proposes a course for the
+    // part it happened to read. 111 pages is ~140k characters.
+    const outlineReference = clampText(cleanText(body.reference_text), 180000);
     if (!isRefine && !prompt && !outlineReference) {
       throw new Error("Add material (upload, paste, or a link) or a brief to generate from.");
     }

@@ -221,7 +221,9 @@ function signalWords(text: string): string[] {
 export function sliceMaterialForLesson(
   material: string,
   lesson: { title: string; source_hint?: string },
-  maxChars = 6000,
+  // R59: a book lesson is 20-35 pages (~25-40k chars). 6k was sized for a handout
+  // and cut a real lesson off at its first section.
+  maxChars = 24000,
 ): string {
   const text = material.trim();
   if (text.length <= maxChars) return text;

@@ -11399,3 +11399,23 @@ CLI is the intended path. Figures (A2 has ~108 images; A1's diagrams are vector)
 are not yet extracted — that is the next gap.
 Suggested next task: owner reviews lesson 1 in the studio, then author the
 remaining 16 lessons the same way.
+
+## Claude -> Codex / Human - 2026-08-24 15:10
+
+Status: Finished
+Summary: R59 — the product path can now take a chapter PDF properly. PDF extraction
+became colour-aware (teacher-edition answer keys survive; generic, no hardcoded
+hue, fail-open), and the material caps were raised to fit a real chapter (client
+400k, outline 180k, package 48k, per-lesson slice 24k). Both books were also cut
+into 4 chapter PDFs and 17 lesson PDFs via tools/book-import/split.mjs.
+Files changed: frontend/src/lib/pdf-extract.ts, frontend/src/lib/materialText.ts,
+frontend/src/routes/teacher.curriculum.tsx,
+supabase/functions/curriculum-admin/index.ts, tools/book-import/split.mjs,
+tests/test_r59_pdf_ingest.py (10 pins), tests/test_r57 (one pin re-anchored), docs.
+Tests run: 949 pins OK; tsc + eslint clean; deno gate 0 errors.
+Remaining concerns: figures still are not extracted from PDFs (A2 has ~108 images;
+A1's diagrams are vector line art needing page-region crops). Cost: an outline pass
+over 180k chars is ~45k input tokens per chapter — fine, but worth watching if
+someone uploads a whole book.
+Suggested next task: owner uploads a chapter through the studio and we judge the
+result; then figures.
