@@ -1506,3 +1506,22 @@ tsc + eslint clean; deno check 0 new errors; migration applied to prod and colum
 confirmed.
 
 Next: the books themselves — an agent pass per chapter emitting these documents.
+
+### R58a — the verification gate that wasn't (2026-08-22)
+
+The first real import round-trip against production returned
+`{"status":"error","error":"audit is not defined"}` — the importer called an `audit()`
+helper that exists in admin-ops but not in curriculum-admin. Everything else worked
+(unit, lesson, 4 steps, quiz item all landed); only the trailing audit line threw.
+
+The interesting part is why nothing caught it. The offline deno gate counted output
+lines matching `^TS`, but deno COLORIZES diagnostics, so every error line really
+starts with an ANSI escape. The gate had been printing "0 errors" for every function
+in every round — it was a no-op, and an undefined function walked through it into
+production. Fixed: strip ANSI, then count `TS#### [ERROR]`, and print the errors
+instead of just a number. Current baselines with the working gate: chat 8,
+admin-ops 2 (both type-inference noise on untyped row reads), everything else 0.
+The class that matters is TS2304 "Cannot find name" — that is the one that means a
+runtime crash, and it is now visible.
+
+Lesson kept: a green gate proves nothing until you have watched it go red.

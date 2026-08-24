@@ -3034,14 +3034,18 @@ async function importCurriculum(
     }
   }
 
-  await audit(config, {
-    actorId,
-    organizationId: organizationId || null,
-    eventType: "curriculum.imported",
-    entityType: "unit",
-    entityId: unitId,
+  // A bulk write deserves a trail — curriculum-admin has no audit helper of its own
+  // (admin-ops does), so write the row directly. Fail-open: a missing audit must
+  // never fail an import whose curriculum already landed.
+  await insertRow(config, "audit_events", {
+    actor_id: actorId,
+    organization_id: organizationId || null,
+    class_id: cleanText(body.class_id) || null,
+    event_type: "curriculum.imported",
+    entity_type: "unit",
+    entity_id: unitId,
     payload: { import_key: importKey, course_id: courseId, report },
-  });
+  }).catch(() => {});
 
   return json({ status: "ok", unit_id: unitId, course_id: courseId, report });
 }
