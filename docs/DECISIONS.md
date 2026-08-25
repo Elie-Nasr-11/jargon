@@ -1561,12 +1561,25 @@ Two things stood between that plan and a good result:
    in red. `getTextContent()` drops colour, so a teacher uploading a teacher edition
    handed us the questions and hid the answers, and the generator guessed a key the
    book was already stating. Extraction now walks the operator list alongside the
-   text, collects runs drawn in anything other than the page's dominant ink, and
-   appends them to their own page as a labelled line. Deliberately generic: no
-   hardcoded hue, so any book that colours its key or its terms benefits. Failures
-   are swallowed — colour is a bonus on top of text and must never fail an
-   extraction. A page where half the runs are "marked" is decorative, so it marks
-   nothing.
+   text and appends the marked runs to their own page as a labelled line, so a
+   question and its key stay together however the material is later sliced.
+
+   **Which colour is the key is a document-level question, and the first two
+   answers were wrong.** "Not the dominant ink on this page" marked 965 runs over
+   100 pages — every heading and every running title. "Not the dominant ink in the
+   document" also failed, because the book sets body copy in TWO inks (`40%` and
+   `19%` of the characters), so one of them slipped through and half the chapter came
+   back marked. What separates them is measurable: page furniture is on nearly every
+   page in SHORT runs, body ink carries the bulk of the WORDS, and a key is a sliver
+   of text on a minority of pages in long runs. So a stats pass runs first and a
+   colour is a mark only if it carries ≤15% of the document's characters, appears on
+   ≤85% of pages and on ≥3 of them, and averages ≥12 characters per run. On the real
+   chapter that picks exactly the red key (255 runs over 37 pages) plus the Notes
+   sidebar, and the Activity pages carry precisely their four correct answers.
+   Deliberately generic — the executable lines carry no colour literal at all, so any
+   book that colours its key or its terms benefits and a book that colours nothing
+   loses nothing. Failures are swallowed: colour is a bonus on top of text and must
+   never fail an extraction.
 
 2. **The platform only read the start of a chapter.** A real chapter is 111 pages
    ≈ 140k characters. The client truncated uploads at 40k and the outline window was
@@ -1580,5 +1593,9 @@ Also produced: both books cut into 4 chapter PDFs and 17 lesson PDFs
 (tools/book-import/split.mjs), cut on the extractor's own lesson map so the
 boundaries follow the book rather than a guess.
 
-Verified: 949 pins OK (one R57 pin re-anchored from a number to the contract); tsc,
-eslint, deno gate all clean.
+Verified: 950 pins OK (one R57 pin re-anchored from a number to the contract, and
+three R59 pins re-anchored to the measured algorithm — including the
+publisher-specific pin, which now reads the file with comments stripped so the
+measured colour table can stay as the record of the measurement while the rule stays
+hue-free); tsc, eslint, deno gate all clean. The mark thresholds were verified by
+running the shipped extractor over the real 111-page chapter PDF, not by inspection.

@@ -11419,3 +11419,27 @@ over 180k chars is ~45k input tokens per chapter — fine, but worth watching if
 someone uploads a whole book.
 Suggested next task: owner uploads a chapter through the studio and we judge the
 result; then figures.
+
+## Claude -> Codex / Human - 2026-08-25 09:20
+
+Status: Finished
+Summary: R59a — the colour-mark rule, corrected by measurement. I ran the shipped
+extractor over the real 111-page chapter instead of trusting it, and it marked 965
+runs across 100 pages: the "not the dominant ink" test was catching every heading
+and running title, and the document-level version failed too because the book sets
+body copy in TWO inks. markColoursFor now judges by SHARE OF CHARACTERS (body ink
+carries the bulk of the words; a key carries a sliver) plus page-share, run-length
+and minimum-pages guards. On the real chapter it now picks exactly the red key (255
+runs / 37 pages) and the Notes sidebar, and the Activity pages carry precisely their
+four correct answers.
+Files changed: frontend/src/lib/pdf-extract.ts, tests/test_r59_pdf_ingest.py,
+docs/DECISIONS.md.
+Tests run: 950 pins OK; tsc + eslint clean. Three R59 pins re-anchored to the
+measured algorithm — the publisher-specific pin now strips comments before
+searching, so the measured colour table survives as the record of the measurement
+while the executable lines stay hue-free (verified non-vacuous: the hex is present
+in the file and absent from the code).
+Remaining concerns: unchanged — figures are still not extracted from PDFs (A2 has
+~108 raster images; A1's diagrams are vector line art needing page-region crops).
+Suggested next task: owner uploads a chapter through the studio and we judge the
+built lessons; figures after that.
