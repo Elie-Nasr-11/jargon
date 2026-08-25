@@ -1,0 +1,70 @@
+{
+  "book": "a1",
+  "lessons": {
+    "a1-ch1-l1": [],
+    "a1-ch1-l2": [
+      {
+        "page": 35,
+        "why": "raster",
+        "heading": "Specific Purpose"
+      },
+      {
+        "page": 37,
+        "why": "raster",
+        "heading": "Specific Purpose"
+      },
+      {
+        "page": 38,
+        "why": "raster",
+        "heading": "Specific Purpose"
+      },
+      {
+        "page": 45,
+        "why": "activity-cue",
+        "heading": "Specific Purpose"
+      }
+    ],
+    "a1-ch1-l3": [
+      {
+        "page": 57,
+        "why": "raster",
+        "heading": "Interfaces & Translation"
+      }
+    ],
+    "a1-ch1-l4": [],
+    "a1-ch1-l5": [
+      {
+        "page": 105,
+        "why": "text-cue",
+        "heading": "Architecture"
+      }
+    ],
+    "a1-ch2-l1": [],
+    "a1-ch2-l2": [
+      {
+        "page": 162,
+        "why": "activity-cue",
+        "heading": "Career Tips"
+      },
+      {
+        "page": 163,
+        "why": "activity-cue",
+        "heading": "Career Tips"
+      }
+    ],
+    "a1-ch2-l3": [
+      {
+        "page": 188,
+        "why": "activity-cue",
+        "heading": "Career Tips"
+      }
+    ],
+    "a1-ch2-l4": [
+      {
+        "page": 224,
+        "why": "raster",
+        "heading": "Career Tips"
+      }
+    ]
+  }
+}

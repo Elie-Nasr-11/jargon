@@ -1,0 +1,1410 @@
+{
+  "import_key": "itf-a2",
+  "course": {
+    "id": "itf-adv-a2",
+    "title": "IT Frontiers Advanced — Book A2",
+    "subject": "IT Frontiers — Advanced Series",
+    "level": "Advanced"
+  },
+  "unit": {
+    "id": "itf-a2-ch1",
+    "title": "Chapter 3 · Data & Information",
+    "summary": "How raw data becomes information — collecting it, structuring it, and searching and sorting it.",
+    "position": 1
+  },
+  "lessons": [
+    {
+      "id": "itf-a2-ch1-l1",
+      "title": "From Data to Information",
+      "level": "Advanced",
+      "objective": "Work through \"From Data to Information\" from the book: identifying data, organizing data, visualizing data, interpreting data.",
+      "tutor_prompt": "You are teaching Lesson 1 of Chapter 3 from IT Frontiers Advanced Book A2: \"From Data to Information\". Work through the book's own arc: Identifying Data → Organizing Data → Visualizing Data → Interpreting Data → Career Tips. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "From Data to Information (p8)",
+          "prompt": "Teach the book's section \"From Data to Information (p8)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Date May 6 May 7 May 8 May 9 May 10 May 11 May 12 May 13 May 14 May 15 Time 12:00 12:00 12:00 12:00 12:00 12:00 12:00 12:00 12:00 12:00 Temp °C Definitions to land in the student's own words: \"Most of our interaction with the world relies on our ability to form an understanding of it; we need to know about it. As we have previously learned, our interactions with the world around us have three basic phases: sensing, processing, and responding. The sensing phase provides us with very basic signals from our environment: light, sound, touch, smell, and others. These are merely signals that we are capable of acquiring and converting into electrical signals our brain can use. It is only after we process these signals that they become meaningful; they become information. Prior to that, they were merely data. is any form of raw input that can be processed into meaningful information. Example 1.1 When we see something, it is initially light signals perceived as various colors and shapes. But once we process them, these colors and shapes become our best friend’s face. The colors and shapes in the light signals now have meaning; the data was transformed into information."
+        },
+        {
+          "mode": "explanation",
+          "title": "Organizing Data",
+          "prompt": "Teach the book's section \"Organizing Data\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: AX Raw set of data Cleaned set of data 29, 28, 33, 37, 38, 39, 38, 31, 29, 28 Data structured as an array with one item following the other. Date May 6 May 7 May 8 May 9 May 10 May 11 May 12 May 13 May 14 May 15 Temp °C Data structured as a table with rows and columns. Date May 6 May 7 May 8 May 9 May 10 May 11 May 12 May 13 May 14 May 15 Temp °C Data sorted chronologically by increasing dates. Date May 7 May 15 May 6 May 14 May 13 May 8 May 9 May 10 May 12 May 11 Temp °C Data sorted by increasing temperature readings. Definitions to land in the student's own words: \"Another important step in the process of extracting information is organizing the available data. There are several ways in which data can be organized: cleaning, structuring, and sorting.\" · \"Cleaning Data Cleaning data is the process of removing erroneous data. Errors can enter a dataset for several reasons: errors during input, such as a faulty sensor in an automated system or a mistake by a person entering the data manually. Other errors can arise while data is being stored, waiting to be processed. While there are other reasons errors can occur, the important point is that data should be screened and errors removed."
+        },
+        {
+          "mode": "explanation",
+          "title": "Identifying Data",
+          "prompt": "Teach the book's section \"Identifying Data\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: outdoor degrees celsius temperature Definitions to land in the student's own words: \"One of the initial steps in processing data is identifying what it represents. The information extracted from data is significantly influenced by how it is identified. In the previous example, the list of numbers: `29, 28, 33, 37, 38, 39, 38, 31, 29, 28`, could represent the number of students going on a field trip, or the number of views someone received on their YouTube posting. Therefore, identifying the data by determining its source and what it represents is critical, as it sets the foundation for all subsequent steps. Labeling Data Labeling data is an essential part of identifying it. This helps prevent mistakes and ensures that everyone examining the data understands its context and meaning. So in the case of Example 1.2, the labels that would be required are: ‘temperature’, ‘outdoor’, and ‘degrees Celsius’.\""
+        },
+        {
+          "mode": "explanation",
+          "title": "Visualizing Data",
+          "prompt": "Teach the book's section \"Visualizing Data\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"To visualize data means to present it in a way that makes it easy to visually identify trends and patterns. A common and effective method to visually present data is through charts. There are different types of charts, each presenting the data in a slightly different way. Four common types of charts are: line chart, scatter plot, bar chart, and pie chart. A line chart is a chart in which the value of each data point is represented by a point on the chart, and the points are then connected by a line. Line charts are useful for showing trends over time or continuous data. A scatter plot is similar to a line chart in that the value of each data point is represented by a point on the chart. However, in a scatter plot, the points are not connected by a line. Instead, scatter plots are used to display the relationship between two continuous variables, making it easier to identify patterns, trends, and correlations.\" · \"A bar chart is a chart in which data is organized into groups or categories, with the value of each category represented by a bar. Bar charts can be either vertical or horizontal and are useful for comparing quantities across different categories."
+        },
+        {
+          "mode": "explanation",
+          "title": "Interpreting Data",
+          "prompt": "Teach the book's section \"Interpreting Data\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"The final step in the process of converting raw data to actionable information is the interpretation of the findings. This step involves explaining what the data is presenting to us, whether it is a spike in outdoor temperature, a relationship between two sets of data such as study time and exam results, or a discrepancy between the proportion of boys and girls in a school. Interpreting these findings poses two crucial questions: “Why?” and “What should we do?” The first question, “Why?” forces us to identify the factors underlying our findings. This step is essential for uncovering the reasons that have led to the\" · \"information we have discovered. It adds an extra layer of understanding that is necessary for a deeper comprehension of the world around us. The second question, “What should we do?” prompts us to consider our next steps based on our findings. These next steps may involve further investigating the underlying causes or, if we are satisfied with our findings, learning from them and incorporating them into our decision-making process. This kind of information is referred to as ‘actionable information’, which is information that we can use to make informed decisions."
+        },
+        {
+          "mode": "explanation",
+          "title": "Career Tips",
+          "prompt": "Teach the book's section \"Career Tips\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Understanding the process of converting raw data into actionable information can open doors to a variety of rewarding careers, such as data analysts, data scientists, business intelligence developers, financial analysts, and market research analysts. All of these roles are in high demand in today’s data-driven world. Summary The essential steps and processes for converting raw data into information are categorized into four main stages: 1. Identifying Data: This includes collecting, identifying, and labeling data. 2. Organizing Data: This includes cleaning, structuring, and sorting data. 3. Visualizing Data: Creating visual representations (charts, graphs) to highlight trends and patterns. 4. Interpreting Data: Analyzing visualized data to extract meaningful insights that lead to informed decision-making. Data can be categorized as quantitative and qualitative. Quantitative data is numerical data that can be measured (continuous) or counted (discrete)."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. The process of converting raw data into information only includes organizing the data. — F 2. Labeling data helps prevent mistakes. — T 3. Continuous data can only take discrete values. — F 4. A line chart is best for showing trends over time. — T 5. Categorical data represents measurements that can take any value within a range. — F 6. A scatter plot is best suited for displaying continuous data. — T 7. Cleaning data involves removing erroneous data. — T 8. A pie chart is suitable for visualizing continuous data. — F 9. Sorting data arranges it for easy access and analysis. — T 10. Interpreting data involves explaining what the data is presenting. — T"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 1.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 6. What type of chart would you use to compare quantities across different categories? a) Bar Chart b) Line Chart c) Pie Chart d) Scatter Plot [correct: c] 7. What type of chart is best for showing proportions of a whole? a) Bar Chart b) Line Chart c) Pie Chart d) Scatter Plot 8. Which of the following is a key aspect of data visualization? a) Removing erroneous data b) Arranging data in a list c) Presenting data in a visual format d) Labeling data points [correct: c] 9. Why is it important to interpret data after visualizing it? a) To ensure data is labeled correctly b) To derive meaningful insights and make decisions c) To remove duplicate entries d) To organize data in a table [correct: b]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 1.3)",
+          "prompt": "Read the provided data examples. Classify each example as either quantitative or qualitative. Data Examples 1. Types of Pets: Different kinds of pets owned by students. 2. Temperature: Daily temperatures recorded over a month. 3. Weight: The weight of different fruits 4. Brands of Cars: Different car brands owned by people. 5. Time: The time taken by athletes to complete a race. 6. Blood Types: Blood types of students. Quantitative : Qualitative : Model answers from the teacher edition — guide toward these, never read them out: 6) 2. Temperature, 3. Weight, 5. Time"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 1.4)",
+          "prompt": "Identify 2 examples of quantitative data and 2 examples of qualitative data from your daily life. Quantitative : Qualitative :"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 1.6)",
+          "prompt": "Examine the datasets provided and read the supporting narrative. Based on the information given, use a spreadsheet application to generate a chart that visually represents the data. Ensure that the data is appropriately organized, and that both your tabulated data and chart are clearly labeled. Identify patterns and draw conclusions from the data. 1. Age_Height_List = { (11, 143), (12, 145), (13, 153), (14, 162), (15, 170), (16, 175), (17, 178), (18, 180), (19, 181), (20, 181) } Format: (age, height) Omar’s pediatrician has been keeping track of his height from the age of 11 to 20 years. Every year, she records his height in centimeters. 2. Rainfall_Weight_List = { (12, 150), (10, 120), (20, 180), (11, 140), (15, 160), (13, 137), (19, 195), (10, 135), (18, 180), (11, 115), (17, 180), (14, 142), (13, 155), (13, 130), (17, 165), (11, 134), (14, 158), (12, 141), (16, 180), (16, 162) } Format: (rainfall, weight) A farmer records the weekly rainfall in millimeters and the weight of the fruit picked from the tree in grams. The weekly rainfall ranged between 10 and 20 mm. 3. Item_Count_List = { (Laptops, 200), (Smartphones, 300), (Tablets, 170), (Desktops, 150) } Format: (item, count) An electronics store manager keeps a record of the items in his store. He wants to present this data to his administration."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does a scatter plot best represent?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Proportions within a whole"
+            },
+            {
+              "id": "b",
+              "text": "Trends over time"
+            },
+            {
+              "id": "c",
+              "text": "Relationships between two continuous variables"
+            },
+            {
+              "id": "d",
+              "text": "Comparisons across categories"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which type of data can take any value within a range?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Categorical Data"
+            },
+            {
+              "id": "b",
+              "text": "Discrete Data"
+            },
+            {
+              "id": "c",
+              "text": "Continuous Data"
+            },
+            {
+              "id": "d",
+              "text": "Nominal Data"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the primary purpose of cleaning data?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "To identify data"
+            },
+            {
+              "id": "b",
+              "text": "To create charts"
+            },
+            {
+              "id": "c",
+              "text": "To remove erroneous data"
+            },
+            {
+              "id": "d",
+              "text": "To label data"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following charts is best used for showing trends over time?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Bar Chart"
+            },
+            {
+              "id": "b",
+              "text": "Line Chart"
+            },
+            {
+              "id": "c",
+              "text": "Pie Chart"
+            },
+            {
+              "id": "d",
+              "text": "Scatter Plot"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the first step in converting raw data into information?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Visualizing Data"
+            },
+            {
+              "id": "b",
+              "text": "Organizing Data"
+            },
+            {
+              "id": "c",
+              "text": "Identifying Data"
+            },
+            {
+              "id": "d",
+              "text": "Interpreting Data"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "List C = {yes, yes, no, no, maybe, maybe, yes, yes, yes}",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Qualitative Categorical Data"
+            },
+            {
+              "id": "b",
+              "text": "Quantitative Continuous Data"
+            },
+            {
+              "id": "c",
+              "text": "Quantitative Discrete Data"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "List B = {red, blue, red, red, yellow, blue, blue, red}",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Qualitative Categorical Data"
+            },
+            {
+              "id": "b",
+              "text": "Quantitative Continuous Data"
+            },
+            {
+              "id": "c",
+              "text": "Quantitative Discrete Data"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "List A = {12.5, 12.3, 11.7, 14.6, 15.1}",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Qualitative Categorical Data"
+            },
+            {
+              "id": "b",
+              "text": "Quantitative Continuous Data"
+            },
+            {
+              "id": "c",
+              "text": "Quantitative Discrete Data"
+            }
+          ],
+          "correct_choice_id": "b"
+        }
+      ],
+      "assignment": {
+        "title": "From Data to Information: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. Climate_Data_List = { (20th, 310, 14.5), (19th, 290, 14.0), (18th, 280, 13.8), (17th, 275, 13.6), (16th, 270, 13.5), (15th, 265, 13.3), (14th, 260, 13.2), (13th, 255, 13.1), (12th, 250, 13.0), (11th, 245, 12.9), (10th, 240, 12.8), (9th, 235, 12.7), (8th, 230, 12.6), (7th, 225, 12.5), (6th, 220, 12.4), (5th, 215, 12.3), (4th, 210, 12.2), (3rd, 205, 12.1), (2nd, 200, 12.0), (1st, 195, 11.9) } Format: (century, CO2 level, temperature) Sarah is a climatologist. She is studying global warming and is collecting ice core samples from Antarctica to measure the carbon dioxide levels trapped in the ice for each century. She is also measuring the ratios of gases trapped in the ice samples to estimate global temperatures at the time the ice was formed. 2. Coral_Reef_List = { (25.0, 8.2), (24.8, 8.3), (25.2, 8.1), (24.5, 8.5), (26.0, 7.8), (24.3, 8.7), (24.4, 8.6), (25.0, 8.0), (24.2, 8.8), (25.5, 8.0), (24.5, 8.4), (26.2, 7.5), (25.8, 7.6), (24.1, 8.9), (24.5, 19.1), (25.2, 7.9), (24.9, 8.1), (26.5, 7.4), (24.7, 8.5), (24.3, 8.6), (26.0, 7.7), (24.8, 8.3), (24.5, 8.5), (25.1, 8.0), (26.3, 7.5), (24.0, 9.0) } Format: (temperature, O2 level) Jordan is a marine biologist studying the health of coral reefs. He uses underwater sensors to monitor the temperature of the water and the amount of dissolved oxygen at various depths. 3.",
+        "success_criteria": [
+          "Answers: Climate_Data_List = { (20th, 310, 14.5), (19th, 290, 14.0), (18th, 280, 13.8), (",
+          "Answers: Coral_Reef_List = { (25.0, 8.2), (24.8, 8.3), (25.2, 8.1), (24.5, 8.5), (26.0, 7",
+          "Answers: Movie_Opinion_List = { Great, Good, Okay, Great, Good, Bad, Awful, Great, Good,",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a2-ch1-l1-p14",
+          "title": "Book page 14 — Visualizing Data",
+          "external_url": "/books/a2-ch1-l1/p14.jpg",
+          "step": 2,
+          "source_page": 14
+        },
+        {
+          "id": "itf-a2-ch1-l1-p15",
+          "title": "Book page 15 — Visualizing Data",
+          "external_url": "/books/a2-ch1-l1/p15.jpg",
+          "step": 4,
+          "source_page": 15
+        },
+        {
+          "id": "itf-a2-ch1-l1-p16",
+          "title": "Book page 16 — Visualizing Data",
+          "external_url": "/books/a2-ch1-l1/p16.jpg",
+          "step": 4,
+          "source_page": 16
+        },
+        {
+          "id": "itf-a2-ch1-l1-p23",
+          "title": "Book page 23 — Career Tips",
+          "external_url": "/books/a2-ch1-l1/p23.jpg",
+          "step": 7,
+          "source_page": 23
+        },
+        {
+          "id": "itf-a2-ch1-l1-p24",
+          "title": "Book page 24 — Career Tips",
+          "external_url": "/books/a2-ch1-l1/p24.jpg",
+          "step": 8,
+          "source_page": 24
+        },
+        {
+          "id": "itf-a2-ch1-l1-p25",
+          "title": "Book page 25 — Career Tips",
+          "external_url": "/books/a2-ch1-l1/p25.jpg",
+          "step": 8,
+          "source_page": 25
+        },
+        {
+          "id": "itf-a2-ch1-l1-p28",
+          "title": "Book page 28 — Career Tips",
+          "external_url": "/books/a2-ch1-l1/p28.jpg",
+          "step": 11,
+          "source_page": 28
+        },
+        {
+          "id": "itf-a2-ch1-l1-p29",
+          "title": "Book page 29 — Career Tips",
+          "external_url": "/books/a2-ch1-l1/p29.jpg",
+          "step": 11,
+          "source_page": 29
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a2-ch1-l1-pg14",
+          "idea_key": "visualizing-data",
+          "title": "Page 14 — Visualizing Data",
+          "caption": "",
+          "alt_text": "Page 14 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p14.jpg",
+          "source_page": 14
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg15",
+          "idea_key": "visualizing-data",
+          "title": "Page 15 — Visualizing Data",
+          "caption": "",
+          "alt_text": "Page 15 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p15.jpg",
+          "source_page": 15
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg16",
+          "idea_key": "visualizing-data",
+          "title": "Page 16 — Visualizing Data",
+          "caption": "",
+          "alt_text": "Page 16 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p16.jpg",
+          "source_page": 16
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg23",
+          "idea_key": "career-tips",
+          "title": "Page 23 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 23 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p23.jpg",
+          "source_page": 23
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg24",
+          "idea_key": "career-tips",
+          "title": "Page 24 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 24 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p24.jpg",
+          "source_page": 24
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg25",
+          "idea_key": "career-tips",
+          "title": "Page 25 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 25 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p25.jpg",
+          "source_page": 25
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg28",
+          "idea_key": "career-tips",
+          "title": "Page 28 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 28 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p28.jpg",
+          "source_page": 28
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg29",
+          "idea_key": "career-tips",
+          "title": "Page 29 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 29 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p29.jpg",
+          "source_page": 29
+        }
+      ]
+    },
+    {
+      "id": "itf-a2-ch1-l2",
+      "title": "Data Structures",
+      "level": "Advanced",
+      "objective": "Work through \"Data Structures\" from the book: classifying data structures, algorithms & data structures.",
+      "tutor_prompt": "You are teaching Lesson 2 of Chapter 3 from IT Frontiers Advanced Book A2: \"Data Structures\". Work through the book's own arc: Classifying Data Structures → Algorithms & Data Structures. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Classifying Data Structures",
+          "prompt": "Teach the book's section \"Classifying Data Structures\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: st nd rd 5, 32” Data in a linear structure are arranged sequentially. Dana Chen Lana Omar Maya Alex st th th th rd nd “Dana, Alex, Maya, Omar, Lana, Chen” A binary search tree is used for efficiently searching databases and directories. This one has four levels. Can you count them? School Grade 1 Omar Maya Alex Grade 2 Chen Lana Grade 3 Sarah Karl Ziad Joe This organization chart for a school is a tree data structure with three hierarchical levels. C Drive: Admin User Documents Desktop User Documents Desktop Program Files Libraries System Applications Downloads This computer directory is a tree data structure with three hierarchical levels. of flight routes between cities. A graph data structure used to digitally represent the flight routes, with each city defined as a node. Definitions to land in the student's own words: \"Data structures are broadly classified based on the arrangement of data items within the structure. When data items are arranged sequentially (e.g., 1\" · \", 2\" · \",\""
+        },
+        {
+          "mode": "explanation",
+          "title": "Data Structures (p30)",
+          "prompt": "Teach the book's section \"Data Structures (p30)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"In our current digital age, data is everywhere. From a simple image file on a smartphone to a complex database on a Google server, data surrounds us and is essential for the functioning of our apps and the generation of the information we rely on daily. However, data does not exist randomly in our computers; all stored data is organized in specific structures that allow us to organize, retrieve, modify, process, and store it efficiently. In this lesson, we will explore these data structures to gain a better understanding of their roles and importance. are specialized formats for organizing, retrieving, modifying, processing, and storing data.\""
+        },
+        {
+          "mode": "explanation",
+          "title": "Algorithms & Data Structures (cont.)",
+          "prompt": "Teach the book's section \"Algorithms & Data Structures (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: So when Maya’s data needs to be moved, it is moved together as a tuple from its position at index (0) to its new position at index (2). Teacher note from the book: Creating a list of tuples in the same format is akin to creating a table, with each tuple acting as an entry on a row and the data items in each tuple placed according to their corresponding field or column."
+        },
+        {
+          "mode": "explanation",
+          "title": "Algorithms & Data Structures (cont.)",
+          "prompt": "Teach the book's section \"Algorithms & Data Structures (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: name_list = [“Maya”, “Sarah”, “Leen”] INSERT index (2) = “Jamal” PRINT name_list END OUTPUT: Maya, Sarah, Jamal, Leen age_list = [12, 9, 14] INSERT index (2) = 11 PRINT age_list END OUTPUT: 12, 9, 11, 14 age_list = [12, 9, 11, 14] REMOVE index (0) = 12 INSERT index (2) = 12 PRINT age_list END OUTPUT: 9, 11, 12, 14 name_list = [“Maya”, “Sarah”, “Jamal”, “Leen”] REMOVE index (0) = “Maya” INSERT index (2) = “Maya” PRINT name_list END OUTPUT: Sarah, Jamal, Maya, Leen The two sets of pseudocode instructions show that we first sort the ‘age_list’ by changing the position of data item 12 from index (0) to (2). Then, the second set of instructions does the same with the name “Maya.” Now, both lists are sorted."
+        },
+        {
+          "mode": "explanation",
+          "title": "Algorithms & Data Structures",
+          "prompt": "Teach the book's section \"Algorithms & Data Structures\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Array List Stack Queue Size Fixed Dynamic Dynamic Dynamic Data type accepted one type mixed mixed mixed Insert data not allowed any position end end Remove data not allowed any position end beginning The three sisters: Maya, Sarah, and Leen. name_array = [“Maya”, “Sarah”, “Leen”] age_array = [12, 7, 14] Instructions for creating two arrays one for each type of data. CREATE New Dataset Structure = Linear Size = Fixed Data Type = Numeric Elements = [12, 7, 14] Name = “age_array” Insert = Not Allowed Remove = Not Allowed A hypothetical algorithm in pseudocode that would operate behind the scenes to create the ‘age_array’. The pseudocode instructions and the output for changing the value of the data held at position (1) in the array. Note: Positions in a linear data structure are indexed, meaning each position is assigned a sequential number. Indexing typically starts at 0, so the first position in the structure has an index of 0. Definitions to land in the student's own words: \"Everything inside a computer is determined by instructions, or algorithms— sets of instructions specific for particular tasks. One such group of tasks involves controlling data structures. Algorithms control data structures."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. An array can hold multiple data types within the same structure. — F 2. A list has a dynamic size, meaning you can add or remove items from it. — T 3. A stack follows the First In, First Out (FIFO) principle. — F 4. In a tree structure, the root node is the node from which all other nodes descend. — T 5. A queue allows data to be added at any position and removed from any position. — F 6. In a graph, an edge represents a connection between two nodes and can carry additional information. — T 7. Tuples can have a dynamic size and allow for the addition of new data after creation. — F 8. Nodes in a tree can connect directly to nodes in different branches. — F 9. The Last In, First Out (LIFO) principle is applied when using a stack data structure. — T 10. A graph structure is more suitable than a tree structure for representing hierarchical data. — F"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 2.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 5. What is the primary feature of a tuple? a) It has a dynamic size b) It follows the First In, First Out (FIFO) principle c) It can be modified after creation d) It has a fixed format [correct: d]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.4)",
+          "prompt": "Match each data structure with the statement that best describes it. Tree Array Tuple Stack 1. Handling tasks in the order they arrive, like print jobs. Queue 2. Modeling networks, like social connections. Graph 3. Organizing a file system, like a computer’s directory. 4. Storing the coordinates of a point in a 2D space as (x, y). 5. Storing a city’s monthly average temperatures for a year. 6. Managing undo operations in a software application. Model answers from the teacher edition — guide toward these, never read them out: 1) Graph 4) Tree 5) Tuple 6) Array"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.5)",
+          "prompt": "Match each data structure with the task for which it is best optimized."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.6)",
+          "prompt": "Answer the questions below about the following dataset, which represents the average month - ly temperatures (in °C) for a city over a year. monthly_temp = [2.5, 3.0, 7.8, 12.5, 16.4, 20.1, 23.3, 22.8, 18.5, 13.2, 8.3, 4.1] 6. Assume there was an error with the average temperature for February— it is actually 3.2°C rather than 3.0°C. Review the following instructions and determine which ones can be implemented and which cannot. Explain. REMOVE index (1) = 3.0 INSERT index (1) = 3.2 UPDATE index (1) = 3.2 1. How many data items are in the array? 2. What type of data is in the array? 3. What data item is in the fourth position? 4. What was the temperature in September? 5. What would be the output of this instruction? PRINT index (10) Model answers from the teacher edition — guide toward these, never read them out: 6) The remove and insert instructions cannot be implemented because they would change the size of the array, which is not allowed. However, updating the value held at a particular position is allowed as it does not affect the size of the array. 3) numeric 4) 12.5 5) 18.5 | 8.3"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 2.7)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. How many data items are in the list? 2. What type of data is in the list? 3. What data item is in the third position? 4. What is the index of the data item “Cheese”? 5. Fill in the blanks with the data items from the list and write the index beneath each. 6. Assume the eggs were removed from the grocery cart. To modify the list, you must: a) Remove all data items before and including index (3). b) Remove all data items after and including index (3). Update the list accordingly. 7. Pears were added to the grocery cart. Write a pseudocode instruction that will add “Pears” to the list to follow “Apples”. Then update the list."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.8)",
+          "prompt": "Answer the questions below about the undo stack of a text editor. undo_stack = [ “Italicize ‘World’”, “Type ‘World’”, “Bold ‘Hello’”, “Type ‘Hello’” ] 1. How many actions were taken by the user? 2. What was the first action taken by the user? 3. What was the last action taken by the user? 4. What action is held at index (1)? 5. To undo “Bold ‘Hello’”, which actions must be undone? Write them in the order in which they are removed from the stack. 6. How many are left in the stack? 7. What is the item left in the stack? 8. The user now performs the following actions in this order: italicizes ‘Hello’, types ‘World’, italicizes ‘World’, underlines ‘Hello World’. Rewrite the items in the order in which they would appear in the stack. Indicate the index of each. Model answers from the teacher edition — guide toward these, never read them out: 3) Type ‘Hello’ 4) Italicize ‘World’ 5) Type ‘World’ 6) The last action taken will be removed first: “Italicize ‘World’”. The next action to be removed is: “Type ‘World’”. Finally, after removing the previous two actions, you can undo “Bold ‘Hello’”. 8) Type ‘Hello’"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.9)",
+          "prompt": "Answer the questions below about the queue of customers waiting to speak with a customer service representative. customer_queue = [“Maya”, “Lee”, “Chen”, “Sara”, “Omar”] 1. How many customers are in the queue? 2. Who was the first customer to enter the queue? 3. Who was the last customer to enter the queue? 4. Which customer will be the first to be served? 5. From which index will customer names leave the queue? 6. Write the updated queue after the next customer is served. 7. Which customer will be served next? Lee 8. Write the updated queue after the Lee is served. 9. Jenna joins the queue. Write the updated queue. 10. At which index is “Jenna”? 11. Read the following instruction and determine how it would be handled. INSERT index (1) = “Mike” Model answers from the teacher edition — guide toward these, never read them out: 3) Maya 4) Omar 5) Maya 7) customer_queue = [“Lee”, “Chen”, “Sara”, “Omar”] 9) customer_queue = [“Chen”, “Sara”, “Omar”] 10) customer_queue = [“Chen”, “Sara”, “Omar”, “Jenna”] 11) A queue operates based on the FIFO principle, so any new data must be added at the end. This instruction will result in an error and cannot be carried out."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 2.10)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. How many tuples are in the list? 2. What format does each tuple have? 3. Which tuple is at index (0)? 4. What is Sara’s grade? 6. Assume there was an error entering Lee’s grade. To modify the data, you must: a) Swap the incorrect grade with the correct one inside the tuple at index (2). c) Remove all tuples before index (2) before inserting the correct tuple 5. Read the following instruction and update the list accordingly. INSERT index (1) = (“Mike”, 83)"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.11)",
+          "prompt": "Answer the questions below about the organization chart of the company where Jenna works. CEO Finance Manager Operations Manager IT Manager Sales Accounts Warehouse Logisitics Inventory 1. Which data structure is best suited for this chart? 2. How many hierarchical levels are in this chart? 3. Which data item is at the root node? 4. How many child nodes does the root node have? 5. How many child nodes does the ‘Finance Manager’ have? 6. How many leaf nodes are there in total? 7. What are the leaf nodes under ‘Finance Manager’? 8. Is ‘IT Manager’ a leaf node or a parent node? 9. Using pseudocode, write the tree data structure for the first two levels of the hierarchy. Name it ‘org_chart’. 10. Write a pseudocode instruction that will add ‘Marketing’ to follow ‘Sales’ under ‘Finance Manager’. C: Router 12 D: Router 25 A: Router 01 B: Router 03 Model answers from the teacher edition — guide toward these, never read them out: 2) Tree 4) CEO 8) Accounts, Sales 9) Leaf node 10) org_chart = [(R, “CEO”), (R_0, “Finance Manager”), (R_1, “Operations Manager”), (R_2, “IT Manager”)] | INSERT node (R_0_2, “Marketing”)"
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which data structure is most suitable for managing hierarchical data?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Tree"
+            },
+            {
+              "id": "b",
+              "text": "Graph"
+            },
+            {
+              "id": "c",
+              "text": "Array"
+            },
+            {
+              "id": "d",
+              "text": "Stack"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "In a tree structure, what is the topmost node called?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Leaf node"
+            },
+            {
+              "id": "b",
+              "text": "Child node"
+            },
+            {
+              "id": "c",
+              "text": "Root node"
+            },
+            {
+              "id": "d",
+              "text": "Parent node"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which is a characteristic of an array?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "It can hold multiple data types"
+            },
+            {
+              "id": "b",
+              "text": "It has a dynamic size"
+            },
+            {
+              "id": "c",
+              "text": "It can only hold one data type"
+            },
+            {
+              "id": "d",
+              "text": "It allows insertion and deletion of data at any position"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which data structure follows the Last In, First Out (LIFO) principle?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Queue"
+            },
+            {
+              "id": "b",
+              "text": "Stack"
+            },
+            {
+              "id": "c",
+              "text": "List"
+            },
+            {
+              "id": "d",
+              "text": "Array"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What happens when a node with child nodes is removed from a tree structure?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The tree collapses."
+            },
+            {
+              "id": "b",
+              "text": "The child nodes become root nodes."
+            },
+            {
+              "id": "c",
+              "text": "The tree becomes a graph."
+            },
+            {
+              "id": "d",
+              "text": "The child nodes are automatically removed."
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of these data structures can freely connect nodes?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Tree"
+            },
+            {
+              "id": "b",
+              "text": "Graph"
+            },
+            {
+              "id": "c",
+              "text": "Stack"
+            },
+            {
+              "id": "d",
+              "text": "Queue"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does an edge represent in a graph?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The data stored in a node"
+            },
+            {
+              "id": "b",
+              "text": "The hierarchical level of a node"
+            },
+            {
+              "id": "c",
+              "text": "The connection between two nodes"
+            },
+            {
+              "id": "d",
+              "text": "The index of a node"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which data structure follows the First In, First Out (FIFO) principle?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Stack"
+            },
+            {
+              "id": "b",
+              "text": "Queue"
+            },
+            {
+              "id": "c",
+              "text": "Tuple"
+            },
+            {
+              "id": "d",
+              "text": "List"
+            }
+          ],
+          "correct_choice_id": "b"
+        }
+      ],
+      "assignment": {
+        "title": "Data Structures: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. What type of data structure best represents this network? 2. How many nodes are in this graph? 3. What is the name of the router designated as node B? Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: What type of data structure best represents this network?",
+          "Answers: How many nodes are in this graph?",
+          "Answers: What is the name of the router designated as node B?",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a2-ch1-l2-p31",
+          "title": "Book page 31 — Classifying Data Structures",
+          "external_url": "/books/a2-ch1-l2/p31.jpg",
+          "step": 1,
+          "source_page": 31
+        },
+        {
+          "id": "itf-a2-ch1-l2-p32",
+          "title": "Book page 32 — Classifying Data Structures",
+          "external_url": "/books/a2-ch1-l2/p32.jpg",
+          "step": 1,
+          "source_page": 32
+        },
+        {
+          "id": "itf-a2-ch1-l2-p34",
+          "title": "Book page 34 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p34.jpg",
+          "step": 3,
+          "source_page": 34
+        },
+        {
+          "id": "itf-a2-ch1-l2-p35",
+          "title": "Book page 35 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p35.jpg",
+          "step": 3,
+          "source_page": 35
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a2-ch1-l2-pg31",
+          "idea_key": "classifying-data-structures",
+          "title": "Page 31 — Classifying Data Structures",
+          "caption": "",
+          "alt_text": "Page 31 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p31.jpg",
+          "source_page": 31
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg32",
+          "idea_key": "classifying-data-structures",
+          "title": "Page 32 — Classifying Data Structures",
+          "caption": "",
+          "alt_text": "Page 32 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p32.jpg",
+          "source_page": 32
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg34",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 34 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 34 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p34.jpg",
+          "source_page": 34
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg35",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 35 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 35 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p35.jpg",
+          "source_page": 35
+        }
+      ]
+    },
+    {
+      "id": "itf-a2-ch1-l3",
+      "title": "Searching Linear Data",
+      "level": "Advanced",
+      "objective": "Work through \"Searching Linear Data\" from the book: linear search, binary search.",
+      "tutor_prompt": "You are teaching Lesson 3 of Chapter 3 from IT Frontiers Advanced Book A2: \"Searching Linear Data\". Work through the book's own arc: Linear Search → Binary Search. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Linear Search (cont.)",
+          "prompt": "Teach the book's section \"Linear Search (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Execution Time = Time per Attempt x Number of Attempts Size of Dataset Execution Time 1o books 10o books 3 x 100 = 300 seconds (5 minutes) 1,000 books 3 x 1,000 = 3,000 seconds (50 minutes) 1o,000 books 3 x 10,000 = 30,000 seconds (8 hours 20 minutes) Teacher note from the book: The concepts of algorithm performance in this section are approached with a focus solely on time complexity. This helps students concentrate on understanding how execution time scales with input size before introducing additional factors like space complexity."
+        },
+        {
+          "mode": "explanation",
+          "title": "Linear Search",
+          "prompt": "Teach the book's section \"Linear Search\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Using a linear search, books on a bookshelf are checked one by one from left to right across the shelf. end yes say “found it!” if title = “______” no start read title go to first book end yes say “not found.” if book is the last book no go to next book Flowchart depicting the linear search process for finding a book on a bookshelf. The search ends under two conditions: either the book is found, or the end of the bookshelf is reached. end yes print “found it!” if data item = “______” no start read data item go to index (0) end yes print “not found.” if end of list is reached no go to next index ( )+1 Flowchart illustrating the linear search process using an index-based approach. The search begins at the first index and sequentially checks each item. The search ends when either the target item is found, or the end of the list is reached. Definitions to land in the student's own words: \"One of the simplest strategies is known as linear search. It is a straightforward approach applied to linear data structures, where the algorithm starts at the first position in the dataset and moves sequentially from one position to the next, checking each data item for a match. If a data item matches the search item, the search ends."
+        },
+        {
+          "mode": "explanation",
+          "title": "Searching Linear Data (p68)",
+          "prompt": "Teach the book's section \"Searching Linear Data (p68)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"One of the fundamental operations on data is searching for a specific item within a dataset. Before we can modify, extract, relocate, or process any data item, we must first locate it accurately. Searching, like all computer operations, is defined and guided by algorithms, each with its own performance characteristics. In this lesson, we will explore the mechanics and applications of basic search algorithms—linear search and binary search—and compare their performance. Through this comparison, we’ll understand how choosing the right algorithm can make a significant difference in efficiency, particularly when dealing with large datasets organized in a linear format.\""
+        },
+        {
+          "mode": "explanation",
+          "title": "Binary Search",
+          "prompt": "Teach the book's section \"Binary Search\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: The 12 books on the shelf are sorted in alphabetical order. Steps Range (index) Middle (index) Comments Attempt 1 0 - 11 Attempt 2 6 - 11 Attempt 3 8 - 11 Attempt 4 Found it! book_titles = [ “A Tale”, “Blue Moon”, “Crimson Sky”, “Deep Waters”, “Endless Night”, “Frost Fire”, “Golden Path”, “Hidden World”, “Iron Fist”, “Jungle King”, “Silver Light”, “Zebra Crossing” ] The list of 12 book titles in alphabetical order, which serves as the dataset for the binary search simulation. The simulation illustrates the steps of a binary search to locate the book title ‘Zebra Crossing’ within the sorted list. Each attempt shows the search range, middle index, and the decision to disregard half of the list based on comparisons, continuing until the target is found at index 11. Definitions to land in the student's own words: \"What if we could use a strategy that reduces the size of the list as the search progresses? The binary search algorithm does exactly that. Instead of starting at the beginning of the list, binary search begins at the middle index. If the target is less than the value of the data item at the middle index, the algorithm knows the target must be in the first half of the list, so it disregards the second half."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. A linear search algorithm can be used on both sorted and unsorted datasets. — T 2. A binary search algorithm can be used on both sorted and unsorted datasets. — F 3. A binary search algorithm begins by checking the first item in the dataset. — F 4. In a linear search algorithm, the search range is halved with each iteration. — F 5. Execution time for a linear search increases directly with the size of the dataset. — T 6. Execution time for a binary search increases logarithmically with the size of the dataset. — T 7. In the worst-case scenario, binary search requires more attempts than linear search. — F 8. In the best-case scenario, binary search and linear search are equally efficient. — T 9. In the worst-case scenario, binary search is more efficient than linear search, regardless of dataset size. — T 10. The choice of search algorithm does not impact the overall performance of a program. — F"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 3.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. What is the primary characteristic of a linear search algorithm? a) It requires a sorted dataset. b) It searches each item sequentially. c) It divides the dataset in half each time. d) It starts at the middle of the dataset. [correct: b] 2. Which of the following is a limitation of linear search for large datasets? a) It requires a sorted list. b) It can be very slow because it checks each item sequentially. c) It cannot be used with unique values. d) It does not work on datasets with numbers. [correct: b] 3. What is the best-case scenario for a linear search algorithm? a) The target is in the middle of the dataset. b) The target is at the end of the dataset. c) The dataset is already sorted. d) The target is the first item in the dataset. [correct: d] 4. Which type of data structure can linear search be applied to? a) Only sorted arrays b) Only linked lists c) Any list, sorted or unsorted d) Only binary trees [correct: c] 5. What happens in a linear search if the target item is not in the dataset? a) The search stops at the midpoint of the dataset. b) The search checks every item and then stops. c) The search requires the dataset to be reordered. d) The search skips some items to save time. [correct: b]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 3.3)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 5. What is the growth rate of a binary search algorithm? b) Exponential c) Logarithmic d) Quadratic [correct: c]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.5)",
+          "prompt": "Refer to the sorted list. Compare the number of attempts required for linear search and binary search to find specific numbers in the list. 1. Find the number 3. Linear Search Attempts: Binary Search Attempts: 2. Find the number 88. Linear Search Attempts: Binary Search Attempts: 3. Find the number 190. Linear Search Attempts: Binary Search Attempts: 4. Find the number 105. Linear Search Attempts: Binary Search Attempts: 5. What is the number of worst-case scenario attempts? Linear Search Attempts: Binary Search Attempts: 6. Which index in the list provides a best-case scenario for: Linear Search: Binary Search: List_A = [3, 7, 12, 19, 25, 31, 44, 52, 67, 72, 88, 93, 105, 117, 126, 139, 145, 159, 167, 178, 190] Model answers from the teacher edition — guide toward these, never read them out: 6) index (0) first | index (10) middle"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.6)",
+          "prompt": "For each of the three scenarios provided below, determine the number of attempts that a linear and a binary search algorithm would require to find the target item in the worst-case scenario. Then, calculate the execution time for each algorithm's search. 1. A dataset contains 1,024 items, and each attempt takes 2 milliseconds. Calculate the worst-case number of attempts and the execution time for both a linear and a binary search on this dataset. 2. A dataset of 20,000 items is searched, with each attempt taking 5 milliseconds. Calculate the worst-case number of attempts and the execution time for both a linear and a binary search. 3. A large dataset of 1,000,000 items is searched, and each attempt takes 10 milliseconds. Calculate the worst-case number of attempts and the execution time for both a linear and a binary search. Model answers from the teacher edition — guide toward these, never read them out: 2) Linear Search: Attempts: n = 1,024 (all items are checked) Execution time = t x n = 2 x 1,024 = 2,048 ms (about 2 seconds) Binary Search: Attempts: log2(n) = log2(1,024) = 10 3) Linear Search: Attempts: n = 20,000 (all items are checked) Execution time = t x n = 5 x 20,000 = 100,000 ms (100 seconds) Binary Search: Attempts: log2(n) = log2(20,000) = 14.29 = 15 (round up)"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.7)",
+          "prompt": "Use the linear search algorithm provided in pseudocode to answer the following questions. START LinearSearch OPEN list SET search_index (0) REPEAT_UNTIL search_index reaches end of list READ data_item AT: search_index IF data_item = target THEN PRINT “Found it!” END LinearSearch ELSE SET search_index (search_index + 1. PRINT “Not found” END LinearSearch 1. What is the purpose of the instruction: SET search_index (0) ? 2. Which instruction increments the search index by 1 position? 3. What is the purpose of the instruction: REPEAT_UNTIL ? 4. Which two conditions end the REPEAT_UNTIL loop? Model answers from the teacher edition — guide toward these, never read them out: 2) Sets the starting position of the search at the first item in the list. 3) SET search_index (search_index + 1) 4) It creates a loop to repeatedly check items in the list."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.8)",
+          "prompt": "Use the binary search algorithm provided in pseudocode to answer the following questions. START BinarySearch OPEN list SET start_index (0) SET end_index (last index of list) REPEAT_UNTIL search_index reaches end of list SET midpoint = (start_index + end_index)/2 SET search_index (midpoint) READ data_item AT: search_index IF data_item = target THEN PRINT “Found it!” END BinarySearch ELSE IF data_item > target THEN SET end_index (search_index - 1. ELSE SET start_index (search_index + 1. PRINT “Not found” END BinarySearch 1. Which two parameters define the search range? 2. What is the purpose of the midpoint variable? 3. What is the purpose of the instruction: SET end_index (search_index - 1. ? 4. Why is the instruction IF data_item < target THEN not included? Model answers from the teacher edition — guide toward these, never read them out: 2) The two parameters are the start_index and the end_index. 3) The midpoint variable calculates the middle index of the current search range. 4) It focuses the search on the lower half of the current search range by resetting the current end index to one position below the current midpoint."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the best-case scenario for a binary search algorithm?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The dataset is very large."
+            },
+            {
+              "id": "b",
+              "text": "The dataset is unsorted."
+            },
+            {
+              "id": "c",
+              "text": "The target is the first item in the dataset."
+            },
+            {
+              "id": "d",
+              "text": "The target is the middle item on the first check."
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "In a binary search, if the target is less than the middle item, what should the algorithm do next?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Focus on the lower half of the search range."
+            },
+            {
+              "id": "b",
+              "text": "Focus on the upper half of the search range."
+            },
+            {
+              "id": "c",
+              "text": "Ignore the entire list."
+            },
+            {
+              "id": "d",
+              "text": "Conclude that the target is not present."
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does binary search do with each iteration?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Moves one step closer to the target from the beginning of the list."
+            },
+            {
+              "id": "b",
+              "text": "Divides the search range in half."
+            },
+            {
+              "id": "c",
+              "text": "Checks each item sequentially."
+            },
+            {
+              "id": "d",
+              "text": "Moves in reverse through the list."
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the main requirement for using a binary search algorithm on a dataset?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The dataset must contain unique values."
+            },
+            {
+              "id": "b",
+              "text": "The dataset must be sorted."
+            },
+            {
+              "id": "c",
+              "text": "The dataset must be large."
+            },
+            {
+              "id": "d",
+              "text": "The dataset must be stored in a linked list."
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "If the target is the first item in a dataset, how does the performance of binary search compare to linear search?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Binary search will be slower."
+            },
+            {
+              "id": "b",
+              "text": "Linear search will be slower."
+            },
+            {
+              "id": "c",
+              "text": "Both will perform the same."
+            },
+            {
+              "id": "d",
+              "text": "The result depends on dataset size."
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Why is binary search more efficient than linear search on large, sorted datasets?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "It skips every other item in the list."
+            },
+            {
+              "id": "b",
+              "text": "It checks each item twice."
+            },
+            {
+              "id": "c",
+              "text": "It divides the search range in half with each attempt."
+            },
+            {
+              "id": "d",
+              "text": "It starts at the end of the list."
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "When would a linear search be preferred over a binary search?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "When there are fewer than 10 items."
+            },
+            {
+              "id": "b",
+              "text": "When the dataset is sorted and very large."
+            },
+            {
+              "id": "c",
+              "text": "When binary search fails to find the target."
+            },
+            {
+              "id": "d",
+              "text": "When the dataset is unsorted."
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which search algorithm is generally faster for large, sorted datasets?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Binary search"
+            },
+            {
+              "id": "b",
+              "text": "Linear search"
+            },
+            {
+              "id": "c",
+              "text": "Both are equally fast"
+            },
+            {
+              "id": "d",
+              "text": "It depends on the dataset size"
+            }
+          ],
+          "correct_choice_id": "a"
+        }
+      ],
+      "assignment": {
+        "title": "Searching Linear Data: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. Linear Search Program : This program performs a linear search on a user- defined, sorted range. It checks each item in the list sequentially until it finds the target or reaches the end. The program outputs the number of attempts taken, demonstrating the step-by-step process of linear search. 2. Binary Search Program : This program performs a binary search on a user- defined, sorted range. It begins by checking the midpoint of the range and repeatedly halves the search space based on comparisons. The program reports the number of attempts, showing the efficiency of binary search on sorted data. 3. Combined Search Program : This program includes both linear and binary search algorithms, operating on the same user-defined, sorted range. It allows users to compare the performance of linear and binary search directly by running both methods on the same target and range. This comparison highlights the efficiency differences between the two search methods. Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: Linear Search Program : This program performs a linear search on a user- defined",
+          "Answers: Binary Search Program : This program performs a binary search on a user- defined",
+          "Answers: Combined Search Program : This program includes both linear and binary search al",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a2-ch1-l3-p73",
+          "title": "Book page 73 — Linear Search",
+          "external_url": "/books/a2-ch1-l3/p73.jpg",
+          "step": 1,
+          "source_page": 73
+        },
+        {
+          "id": "itf-a2-ch1-l3-p75",
+          "title": "Book page 75 — Binary Search",
+          "external_url": "/books/a2-ch1-l3/p75.jpg",
+          "step": 4,
+          "source_page": 75
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a2-ch1-l3-pg73",
+          "idea_key": "linear-search",
+          "title": "Page 73 — Linear Search",
+          "caption": "",
+          "alt_text": "Page 73 of Book A2, Searching Linear Data",
+          "image_url": "/books/a2-ch1-l3/p73.jpg",
+          "source_page": 73
+        },
+        {
+          "id": "itf-a2-ch1-l3-pg75",
+          "idea_key": "binary-search",
+          "title": "Page 75 — Binary Search",
+          "caption": "",
+          "alt_text": "Page 75 of Book A2, Searching Linear Data",
+          "image_url": "/books/a2-ch1-l3/p75.jpg",
+          "source_page": 75
+        }
+      ]
+    },
+    {
+      "id": "itf-a2-ch1-l4",
+      "title": "Sorting Linear Data",
+      "level": "Advanced",
+      "objective": "Work through \"Sorting Linear Data\" from the book: order & criteria, sorting algorithms, performance.",
+      "tutor_prompt": "You are teaching Lesson 4 of Chapter 3 from IT Frontiers Advanced Book A2: \"Sorting Linear Data\". Work through the book's own arc: Order & Criteria → Sorting Algorithms → Performance. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Sorting Linear Data (p94)",
+          "prompt": "Teach the book's section \"Sorting Linear Data (p94)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"In earlier lessons, we worked with data in many forms: we tracked temperature changes over time, compared students' exam scores with their study hours, and even helped organize a warehouse of electronics and groceries. We learned how to label, clean, and organize data, and how to search through it efficiently using linear and binary search. But what if you wanted to find the highest temperature, rank students by their exam scores, or organize your inventory from oldest to newest? Before you can do any of that, you need to sort your data. is the arrangement of data in a specific order based on a certain criterion. Sorting means arranging data in a specific order based on a certain criterion. For example: - Books can be sorted by their titles. - Apple crates in a warehouse can be sorted by their arrival date. - Students can be sorted by their exam scores. Sorting is a powerful approach to organizing data within any data structure."
+        },
+        {
+          "mode": "explanation",
+          "title": "Order & Criteria",
+          "prompt": "Teach the book's section \"Order & Criteria\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Ascending Descending Name Family Absences Average Transport Leila Carter Bus Tarek Najem Walk Sofia Petrovic Parents Ahmed Dandash Bus Ethan Müller Parents Dana Lankart Parents Isabel Garcia Parents Roland Bauer Walk Felix Jensen Bus Ben Zimmer Bus Name Family Absences Average Transport Roland Bauer Walk Leila Carter Bus Ahmed Dandash Bus Isabel Garcia Parents Felix Jensen Bus Dana Lankart Parents Ethan Müller Parents Tarek Najem Walk Sofia Petrovic Parents Ben Zimmer Bus Name Family Absences Average Transport Roland Bauer Walk Sofia Petrovic Parents Ahmed Dandash Bus Felix Jensen Bus Dana Lankart Parents Leila Carter Bus Isabel Garcia Parents Tarek Najem Walk Ethan Müller Parents Ben Zimmer Bus Name Family Absences Average Transport Roland Bauer Walk Sofia Petrovic Parents Ahmed Dandash Bus Felix Jensen Bus Dana Lankart Parents Leila Carter Bus Isabel Garcia Parents Tarek Najem Walk Ethan Müller Parents Ben Zimmer Bus Definitions to land in the student's own words: \"Sorting is defined as the arrangement of data in a specific order based on a certain criterion. This definition combines two key ideas: “a specific order” and “a certain criterion.” Order refers to the direction in which the data is arranged."
+        },
+        {
+          "mode": "explanation",
+          "title": "Sorting Algorithms (cont.)",
+          "prompt": "Teach the book's section \"Sorting Algorithms (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: START InsertionSort OPEN list SET hold_index (1) SET end_index (last index of list) REPEAT_UNTIL hold_index > end_index SET hold_data (data_item AT hold_index) SET compare_index (hold_index - 1) SET compare_data (data_item AT compare_index) AS_LONG_AS hold_data > compare_data SHIFT compare_data FROM compare_index TO compare_index + 1 RESET compare_index (compare_index - 1) RESET compare_data (data_item AT compare_index) INSERT hold_data TO compare_index RESET hold_index (hold_index + 1) PRINT “List is sorted!” END InsertionSort START InsertionSort OPEN list SET hold_index (1) SET end_index (last index of list) REPEAT_UNTIL hold_index > end_index SET hold_data (data_item AT hold_index) SET compare_index (hold_index - 1) SET compare_data (data_item AT compare_index) AS_LONG_AS hold_data > compare_data SHIFT compare_data FROM compare_index TO compare_index + 1 RESET compare_index (compare_index - 1) RESET compare_data (data_item AT compare_index) INSERT hold_data TO compare_index RESET ho Teacher note from the book: Program blocks can be arranged: • Sequentially – one after another in order. • Nested – with one block contained inside another. 4."
+        },
+        {
+          "mode": "explanation",
+          "title": "Sorting Algorithms (cont.)",
+          "prompt": "Teach the book's section \"Sorting Algorithms (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: START InsertionSort OPEN list SET hold_index (1) SET end_index (last index of list) REPEAT_UNTIL hold_index > end_index SET hold_data (data_item AT hold_index) SET compare_index (hold_index - 1) SET compare_data (data_item AT compare_index) AS_LONG_AS hold_data > compare_data SHIFT compare_data FROM compare_index TO compare_index + 1 RESET compare_index (compare_index - 1) RESET compare_data (data_item AT compare_index) INSERT hold_data TO compare_index RESET hold_index (hold_index + 1) PRINT “List is sorted!” END InsertionSort The pink brackets and green text indicate the outer loop of the algorithm. This loop controls the progression through the list, selecting one data item at a time using the hold_index. For each pass, it prepares the held data and sets up comparisons before calling the inner loop. The loop continues until the hold_index has passed the end_index, meaning the entire list has been sorted."
+        },
+        {
+          "mode": "explanation",
+          "title": "Sorting Algorithms (cont.)",
+          "prompt": "Teach the book's section \"Sorting Algorithms (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: The loop breaks when the compared data is less than or equal to the held data, at which point the held data is inserted into the empty index created by the shifting. no insert hold_data at empty index hold data item at hold_index no end print “list is sorted!” yes did you pass the end of the list? set compare_index to hold_index - 1 shift data up by 1 position yes is compare_data > hold_data? decrease compare_index by 1 increase hold_index by 1 This flowchart highlights the two main components of the insertion sort process. The outer loop (blue) moves sequentially through each data item in the list using the hold_index. The inner loop (pink) repeatedly compares the held data with preceding items and shifts larger values upward until the correct position is found for insertion. no insert hold_data at empty index hold data item at hold_index no end print “list is sorted!” yes did you pass the end of the list?"
+        },
+        {
+          "mode": "explanation",
+          "title": "Sorting Algorithms",
+          "prompt": "Teach the book's section \"Sorting Algorithms\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: To better visualize the list, each data item is shown in its respective position, labeled by its index. INDEX INDEX Step 1 - Hold Data item at Index 1 is temporarily held. The First Iteration Step 2 - Compare Yes, \"5\" is greater than \"3\". INDEX Step 3 - Shift \"5\" is shifted to Index 1 instead of \"3\". INDEX Step 4 - Insert \"3\" is inserted at Index 0 instead of \"5\". INDEX The Second Iteration Step 1 - Hold Data item at Index 2 is temporarily held. INDEX Step 2 - Compare Yes, \"5\" is greater than \"4\". No, \"3\" is not greater than \"4\". INDEX Step 3 - Shift Only \"5\" is shifted to Index 2 instead of \"4\". INDEX Step 4 - Insert \"4\" is inserted at Index 1 instead of \"5\". INDEX The Third Iteration Step 1 - Hold Data item at Index 3 is temporarily held. INDEX Step 2 - Compare Yes, \"5\", \"4\", and \"3\" are greater than \"1\". INDEX INDEX Step 4 - Insert \"1\" is inserted at Index 0 instead of \"3\". INDEX Step 3 - Shift \"5\", \"4\", and \"3\" are shifted one index up. Definitions to land in the student's own words: \"Sorting algorithms determine the step-by-step process of arranging data in a specific order. All sorting algorithms must be able to compare data items and change their positions so that the data becomes organized."
+        },
+        {
+          "mode": "explanation",
+          "title": "Performance",
+          "prompt": "Teach the book's section \"Performance\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: INDEX INDEX Each curved arrow represents one iteration of the outer loop in the insertion sort algorithm. At each index, the algorithm holds the current value and prepares to compare it with the values in all preceding indices. This process repeats from index 1 to the end of the list. Index Hold Compare Shift Insert Total Definitions to land in the student's own words: \"When more than one algorithm can solve the same problem, performance becomes an important way to compare them. Two measures of performance are step count and execution time . Worst-Case Scenario Algorithms and programs can perform differently depending on the dataset they are given. Since datasets can vary considerably, we typically use the worst-case scenario as a standard way to evaluate performance. In the case of sorting, the worst-case scenario occurs when the list is arranged in the exact opposite order of the desired outcome. So, if we are trying to sort a list in ascending order, the worst case would be a list that starts in descending order. In this situation, the algorithm must shift or swap nearly every item to put the list in the correct order. Step count and execution time are two measures of performance."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. Sorting is the arrangement of data in a specific order based on a certain criterion. — T 2. In programming, a variable is a label whose value cannot change. — F 3. The order in sorting refers to the basis or criterion used to determine how data is arranged. — F 4. Flow refers to the sequence of steps in a program, while control refers to the conditions that decide which steps are executed, repeated, or skipped. — T 5. A program is typically organized into initialization, main body, and termination blocks. — T 6. In insertion sort, the inner loop compares the held item with preceding items, shifts items as needed, and inserts it in the correct position. — T 7. In bubble sort, each swap requires one move in memory. — F 8. Step count and execution time are two measures used to compare algorithm performance. — T 9. A worst-case scenario is the easiest dataset arrangement for an algorithm to sort. — F 10. As dataset size increases, the need for slower memory tiers can raise memory latency and increase execution time. — T"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 4.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. What does “order” refer to in sorting? a) The basis for sorting b) The sequence in which algorithms are written c) The direction of arrangement d) The type of data being sorted [correct: c] 2. Which of the following is an example of a numeric sorting criterion? a) Student names b) Exam scores c) Book titles d) File names [correct: b] 3. Which statement about sorting criteria is correct? a) They can only be numeric b) They can be numeric or alphanumeric c) They must be alphabetical d) They must be in descending order [correct: b] 4. Which of the following is an example of alphanumeric data? a) Temperatures b) Prices c) ID codes d) Time [correct: c] 5. Why is sorting used? a) To make programs run faster b) To organize data for easier search and analysis c) To reduce memory usage d) To prevent data duplication [correct: b]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 4.3)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. What is an algorithm? a) A program written in a specific language b) A series of steps designed to perform a task c) A list of variables d) A method for compiling code [correct: b] 2. What is a program? a) A set of instructions a computer can execute b) A flowchart showing an algorithm c) A memory location in a computer d) A sorting method [correct: a] 3. What does declaring a variable involve? a) Stating its label and assigning an initial value b) Sorting its contents c) Creating a loop for it d) Printing it to the screen [correct: a] 4. Which of the following controls the order in which program steps run? b) Variables c) Flow & control structures d) Program termination [correct: c] 5. Which is NOT a typical program block? a) Initialization b) Main body c) Termination d) Compilation [correct: d]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 4.4)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. What is the basic strategy of insertion sort? a) Pair, compare, swap b) Compare, shift, insert c) Merge, split, compare d) Select, swap, compare [correct: b] 2. What does the outer loop in insertion sort do? a) Compares adjacent pairs b) Holds an item and inserts it in its correct position c) Moves through each index and hands control to the inner loop d) Swaps items until sorted [correct: c] 3. What does the inner loop in insertion sort do? a) Pairs adjacent items for comparison b) Shifts items and inserts the held item in the correct position c) Selects the smallest value in the list d) Divides the list into halves [correct: b] 4. Which step is NOT part of insertion sort? a) Compare b) Shift c) Insert d) Swap [correct: d] 5. In the worst-case scenario, how is the dataset arranged for insertion sort? a) Already in the intended order b) In reverse of the intended order c) In random order d) Grouped by type [correct: b]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 4.5)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 4. How many moves are required for one swap in bubble sort? c) d) 5. In bubble sort, after each pass, which item is moved into its correct position? a) The largest item b) The smallest item c) The next item in the intended order d) The item with the highest index [correct: c]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 4.7)",
+          "prompt": "In this activity, you will use a spreadsheet application to sort three different lists of numbers. You will then extract specific information from each list before sorting and after sorting, and reflect on the time and effort it took. Download the spreadsheet here: bit.ly/Activity4_7 a. List 1 – 50 Random 6-Digit Numbers (100,000–999,999) The smallest number: The largest number: The duplicate number: Find the number specified in the spreadsheet. b. List 2 – 100 Random 6-Digit Numbers (100,000–999,999) The smallest number: The largest number: The duplicate number: Find the number specified in the spreadsheet. Did the larger dataset size make it easier or harder to find the data without sorting? Explain: c. List 3 – 100 Random 6-Digit Numbers (222,222–333,333) The smallest number: The largest number: The duplicate number: Find the number specified in the spreadsheet. Did the larger dataset size make it easier or harder to find the data without sorting? Explain:"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 4.8)",
+          "prompt": "In this activity, you will work with data presented in table form, each representing a real-world scenario. Sort the data and extract the information needed to answer the questions. Use sort - ing and functions such as COUNT and AVERAGE to investigate and answer. Download the spreadsheet here: bit.ly/Activity4_8 a. You are given an excerpt from a school database for Grades 7 and 8 with the following fields: Grade, Section, Student ID, and GPA. 1. How many students are in each grade? 2. If the school wants to recognize the top 3 students in each grade, who are they? List their student IDs. 3. If the school is offering support to students with a GPA below 2.00, how many students in each grade would qualify? 4. Looking at the number of students in each section, which section in each grade has the fewest students and which has the most? 5. If the school wants to recognize the teacher whose section has the highest average GPA, which section would win? Show the average GPA for each section to support your answer. b. You are given an excerpt from a logistics company’s delivery database showing: Order Number, Route, Day of Delivery, and Time En Route (minutes). 1. Which order was delivered the fastest, and which was the slowest? 2. For each delivery day, which order was delivered the fastest? 3. Deliveries that require more than 50 minutes are considered slow."
+        },
+        {
+          "mode": "practice",
+          "mode_type": "applied",
+          "title": "Your turn (Activity 4.9)",
+          "prompt": "Use the Insertion Sort algorithm to arrange the two given lists in ascending order. For each step, record the number of comparisons, shifts, and inserts you perform, and write the up - dated list. Keep a running total of the comparisons, shifts, inserts, and total operations at the bottom of the table. a. [C, D, A, B] Index Hold Compare Shift Insert List Total b. Index Hold Compare Shift Insert List Total"
+        },
+        {
+          "mode": "practice",
+          "mode_type": "applied",
+          "title": "Your turn (Activity 4.10)",
+          "prompt": "Use the Bubble Sort algorithm to arrange the two given lists in ascending order. For each pass through the list, record the number of comparisons and swaps you perform, and write the up - dated list. Keep a running total of the comparisons, swaps, and total operations at the bottom of the table. a. [B, C, D, A] Pass Compare Swap List Total b. Pass Compare Swap List Total START InsertionSort OPEN list SET hold_index (1) SET end_index (last index of list) REPEAT_UNTIL hold_index > end_index SET hold_data (data_item AT hold_index) SET compare_index (hold_index - 1. SET compare_data (data_item AT compare_index) AS_LONG_AS hold_data > compare_data SHIFT compare_data FROM compare_index TO compare_index + 1 RESET compare_index (compare_index - 1. RESET compare_data (data_item AT compare_index) INSERT hold_data TO compare_index RESET hold_index (hold_index + 1. PRINT “List is sorted!” END InsertionSort"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 4.11)",
+          "prompt": "Review the pseudocode program for Insertion Sort. Then answer the comprehension ques - tions provided. 1. Which two variables are declared in the initialization block? 2. What does this instruction do: RESET compare_index (compare_index - 1)? 3. What does this instruction do: REPEAT_UNTIL hold_index > end_index? 4. Which instruction moves the sorting to the next index in the list? 5. Which instruction would you change to sort the list in descending order? START BubbleSort OPEN list SET end_index (last index of list) SET swap_count (1) REPEAT_UNTIL swap_count (0) RESET swap_count (0) SET hold_index (1) REPEAT_UNTIL hold_index > end_index SET hold_data (data_item AT hold_index) SET compare_index (hold_index - 1. SET compare_data (data_item AT compare_index) IF compare_data > hold_data THEN SWAP_POSITIONS (compare_data, hold_data) RESET swap_count (swap_count + 1. RESET hold_index (hold_index + 1. PRINT “List is sorted!” END BubbleSort Model answers from the teacher edition — guide toward these, never read them out: 2) hold_index, end_index 3) This instruction moves the comparison one position to the left. 4) Ensures the program ends when it reaches the end of the list. 5) RESET hold_index (hold_index + 1) | Change the instruction to: AS_LONG_AS hold_data < compare_data"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 4.12)",
+          "prompt": "Review the pseudocode program for Bubble Sort. Then answer the comprehension questions provided. 1. Which two variables are declared in the initialization block? 2. What does this instruction do: REPEAT_UNTIL swap_count (0) 3. Which instruction moves the sorting to the next index in the list? 4. What happens in RESET swap_count (swap_count + 1)? 5. Which instruction would you change to sort the list in descending order? Model answers from the teacher edition — guide toward these, never read them out: 2) end_index, swap_count 3) Repeats passes through the list until no swaps occur. 4) RESET hold_index (hold_index + 1) 5) It increases the swap counter by one each time a swap is made."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does the inner loop in bubble sort do?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Shifts items forward"
+            },
+            {
+              "id": "b",
+              "text": "Swaps adjacent items if out of order"
+            },
+            {
+              "id": "c",
+              "text": "Holds an item for insertion"
+            },
+            {
+              "id": "d",
+              "text": "Divides the list in half"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does the outer loop in bubble sort do?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Moves through the list starting at the second item"
+            },
+            {
+              "id": "b",
+              "text": "Compares each item with all previous items"
+            },
+            {
+              "id": "c",
+              "text": "Repeats the inner loop until a pass completes with no swaps"
+            },
+            {
+              "id": "d",
+              "text": "Inserts items into the sorted section"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the basic strategy of bubble sort?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Compare, shift, insert"
+            },
+            {
+              "id": "b",
+              "text": "Merge, compare, shift"
+            },
+            {
+              "id": "c",
+              "text": "Pair, compare, swap"
+            },
+            {
+              "id": "d",
+              "text": "Select, swap, compare"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Why is insertion sort generally more efficient than bubble sort?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "It requires more swaps"
+            },
+            {
+              "id": "b",
+              "text": "It works only on small datasets"
+            },
+            {
+              "id": "c",
+              "text": "It requires fewer steps and less execution time"
+            },
+            {
+              "id": "d",
+              "text": "It avoids using loops"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is memory latency?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The speed of the processor"
+            },
+            {
+              "id": "b",
+              "text": "The delay between requesting data from memory and receiving it"
+            },
+            {
+              "id": "c",
+              "text": "The time taken to write a program"
+            },
+            {
+              "id": "d",
+              "text": "The order in which data is stored"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does scalability describe?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "How well an algorithm works on small datasets"
+            },
+            {
+              "id": "b",
+              "text": "How performance changes as dataset size increases"
+            },
+            {
+              "id": "c",
+              "text": "How memory is allocated in a program"
+            },
+            {
+              "id": "d",
+              "text": "How variables are declared"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is a worst-case scenario?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "A program without loops"
+            },
+            {
+              "id": "b",
+              "text": "The least challenging arrangement of data"
+            },
+            {
+              "id": "c",
+              "text": "The most challenging arrangement of data"
+            },
+            {
+              "id": "d",
+              "text": "A dataset with missing values"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which two measures are common for evaluating algorithm performance?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Order and criterion"
+            },
+            {
+              "id": "b",
+              "text": "Memory and variables"
+            },
+            {
+              "id": "c",
+              "text": "Flow and control"
+            },
+            {
+              "id": "d",
+              "text": "Step count and execution time"
+            }
+          ],
+          "correct_choice_id": "d"
+        }
+      ],
+      "assignment": {
+        "title": "Sorting Linear Data: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. Insertion Sort Program : Creates a list from all integers in a user-defined range (maximum 20 items). The list can be generated in worst-case (descending) or random order. The program shows the list after each completed insert (labeled by index) and reports totals for comparisons, shifts, and inserts. 2. Bubble Sort Program : Builds the same kind of list (worst-case or random). The program shows the list after each completed pass (labeled by pass number) and reports totals for comparisons and swaps. 3. Combined Sorting Program : This program includes both insertion and bubble sort. It generates a dataset from all integers in a user-defined range and runs both algorithms on the same list. • If the list size is 10,000 items or fewer, the program runs both algorithms and reports operation counts and execution time. • If the list size is larger than 10,000, the program offers a Theory Mode that displays the worst-case (reverse-sorted) operation counts without running the algorithms. Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: Insertion Sort Program : Creates a list from all integers in a user-defined rang",
+          "Answers: Bubble Sort Program : Builds the same kind of list (worst-case or random).",
+          "Answers: Combined Sorting Program : This program includes both insertion and bubble sort.",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a2-ch1-l4-p124",
+          "title": "Book page 124 — Performance",
+          "external_url": "/books/a2-ch1-l4/p124.jpg",
+          "step": 7,
+          "source_page": 124
+        },
+        {
+          "id": "itf-a2-ch1-l4-p125",
+          "title": "Book page 125 — Performance",
+          "external_url": "/books/a2-ch1-l4/p125.jpg",
+          "step": 7,
+          "source_page": 125
+        },
+        {
+          "id": "itf-a2-ch1-l4-p137",
+          "title": "Book page 137 — Performance",
+          "external_url": "/books/a2-ch1-l4/p137.jpg",
+          "step": 8,
+          "source_page": 137
+        },
+        {
+          "id": "itf-a2-ch1-l4-p138",
+          "title": "Book page 138 — Performance",
+          "external_url": "/books/a2-ch1-l4/p138.jpg",
+          "step": 8,
+          "source_page": 138
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a2-ch1-l4-pg124",
+          "idea_key": "performance",
+          "title": "Page 124 — Performance",
+          "caption": "",
+          "alt_text": "Page 124 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p124.jpg",
+          "source_page": 124
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg125",
+          "idea_key": "performance",
+          "title": "Page 125 — Performance",
+          "caption": "",
+          "alt_text": "Page 125 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p125.jpg",
+          "source_page": 125
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg137",
+          "idea_key": "performance",
+          "title": "Page 137 — Performance",
+          "caption": "",
+          "alt_text": "Page 137 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p137.jpg",
+          "source_page": 137
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg138",
+          "idea_key": "performance",
+          "title": "Page 138 — Performance",
+          "caption": "",
+          "alt_text": "Page 138 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p138.jpg",
+          "source_page": 138
+        }
+      ]
+    }
+  ]
+}

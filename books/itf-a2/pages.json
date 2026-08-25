@@ -1,0 +1,281 @@
+{
+  "book": "a2",
+  "lessons": {
+    "a2-ch1-l1": [
+      {
+        "page": 14,
+        "why": "raster",
+        "heading": "Visualizing Data"
+      },
+      {
+        "page": 15,
+        "why": "raster",
+        "heading": "Visualizing Data"
+      },
+      {
+        "page": 16,
+        "why": "text-cue",
+        "heading": "Visualizing Data"
+      },
+      {
+        "page": 23,
+        "why": "activity-cue",
+        "heading": "Career Tips"
+      },
+      {
+        "page": 24,
+        "why": "activity-cue",
+        "heading": "Career Tips"
+      },
+      {
+        "page": 25,
+        "why": "activity-cue",
+        "heading": "Career Tips"
+      },
+      {
+        "page": 28,
+        "why": "activity-cue",
+        "heading": "Career Tips"
+      },
+      {
+        "page": 29,
+        "why": "activity-cue",
+        "heading": "Career Tips"
+      }
+    ],
+    "a2-ch1-l2": [
+      {
+        "page": 31,
+        "why": "raster",
+        "heading": "Classifying Data Structures"
+      },
+      {
+        "page": 32,
+        "why": "raster",
+        "heading": "Classifying Data Structures"
+      },
+      {
+        "page": 34,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 35,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 39,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 40,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 41,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 42,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      }
+    ],
+    "a2-ch1-l3": [
+      {
+        "page": 73,
+        "why": "text-cue",
+        "heading": "Linear Search"
+      },
+      {
+        "page": 75,
+        "why": "raster",
+        "heading": "Binary Search"
+      }
+    ],
+    "a2-ch1-l4": [
+      {
+        "page": 124,
+        "why": "text-cue",
+        "heading": "Performance"
+      },
+      {
+        "page": 125,
+        "why": "raster",
+        "heading": "Performance"
+      },
+      {
+        "page": 130,
+        "why": "raster",
+        "heading": "Performance"
+      },
+      {
+        "page": 133,
+        "why": "raster",
+        "heading": "Performance"
+      },
+      {
+        "page": 134,
+        "why": "text-cue",
+        "heading": "Performance"
+      },
+      {
+        "page": 137,
+        "why": "raster",
+        "heading": "Performance"
+      },
+      {
+        "page": 138,
+        "why": "raster",
+        "heading": "Performance"
+      }
+    ],
+    "a2-ch2-l1": [
+      {
+        "page": 159,
+        "why": "raster",
+        "heading": "Machine Learning"
+      },
+      {
+        "page": 160,
+        "why": "raster",
+        "heading": "Machine Learning"
+      },
+      {
+        "page": 161,
+        "why": "raster",
+        "heading": "Machine Learning"
+      },
+      {
+        "page": 162,
+        "why": "text-cue",
+        "heading": "Machine Learning"
+      },
+      {
+        "page": 164,
+        "why": "raster",
+        "heading": "Machine Learning"
+      }
+    ],
+    "a2-ch2-l2": [
+      {
+        "page": 175,
+        "why": "raster",
+        "heading": "Prediction"
+      },
+      {
+        "page": 176,
+        "why": "raster",
+        "heading": "Prediction"
+      },
+      {
+        "page": 177,
+        "why": "raster",
+        "heading": "Prediction"
+      },
+      {
+        "page": 179,
+        "why": "raster",
+        "heading": "Prediction"
+      },
+      {
+        "page": 181,
+        "why": "raster",
+        "heading": "Prediction"
+      },
+      {
+        "page": 182,
+        "why": "raster",
+        "heading": "Prediction"
+      },
+      {
+        "page": 183,
+        "why": "raster",
+        "heading": "Prediction"
+      }
+    ],
+    "a2-ch2-l3": [
+      {
+        "page": 195,
+        "why": "raster",
+        "heading": "Reasoning"
+      },
+      {
+        "page": 196,
+        "why": "raster",
+        "heading": "Reasoning"
+      },
+      {
+        "page": 198,
+        "why": "raster",
+        "heading": "Reasoning"
+      },
+      {
+        "page": 199,
+        "why": "raster",
+        "heading": "Reasoning"
+      },
+      {
+        "page": 202,
+        "why": "raster",
+        "heading": "Reasoning"
+      },
+      {
+        "page": 203,
+        "why": "raster",
+        "heading": "Reasoning"
+      },
+      {
+        "page": 204,
+        "why": "raster",
+        "heading": "Reasoning"
+      }
+    ],
+    "a2-ch2-l4": [
+      {
+        "page": 218,
+        "why": "raster",
+        "heading": "Applications of AI"
+      },
+      {
+        "page": 219,
+        "why": "raster",
+        "heading": "Applications of AI"
+      },
+      {
+        "page": 220,
+        "why": "raster",
+        "heading": "Applications of AI"
+      },
+      {
+        "page": 221,
+        "why": "raster",
+        "heading": "Applications of AI"
+      },
+      {
+        "page": 222,
+        "why": "raster",
+        "heading": "Applications of AI"
+      },
+      {
+        "page": 224,
+        "why": "raster",
+        "heading": "Applications of AI"
+      },
+      {
+        "page": 226,
+        "why": "raster",
+        "heading": "Applications of AI"
+      },
+      {
+        "page": 228,
+        "why": "raster",
+        "heading": "Ethics and Responsibility"
+      }
+    ]
+  }
+}

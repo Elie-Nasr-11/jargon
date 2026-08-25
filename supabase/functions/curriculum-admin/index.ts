@@ -2747,6 +2747,7 @@ type ImportReport = {
   lessons: { created: number; updated: number; skipped: number };
   steps: { created: number; updated: number };
   figures: { created: number; updated: number; skipped: number };
+  materials: { created: number; updated: number; skipped: number };
   warnings: string[];
 };
 
@@ -2794,6 +2795,7 @@ async function importCurriculum(
     lessons: { created: 0, updated: 0, skipped: 0 },
     steps: { created: 0, updated: 0 },
     figures: { created: 0, updated: 0, skipped: 0 },
+    materials: { created: 0, updated: 0, skipped: 0 },
     warnings: [],
   };
   const now = new Date().toISOString();
@@ -3033,6 +3035,71 @@ async function importCurriculum(
       });
       if (existingFigure) report.figures.updated += 1;
       else report.figures.created += 1;
+    }
+
+    // --- materials (R61): page-image resources bound to steps ------------------
+    // lesson_resources.id is a uuid — idempotency keys on metadata.material_id
+    // instead (no import_key column, no migration). A step-bound external image
+    // auto-attaches on that step's presentation turn, which is how the book's
+    // diagram pages reach the student. Never deletes.
+    const materials = Array.isArray(lesson.materials) ? lesson.materials : [];
+    for (const [matIndex, matEntry] of materials.entries()) {
+      const material = matEntry && typeof matEntry === "object" ? (matEntry as DbRow) : {};
+      const materialId = cleanText(material.id) || `${lessonId}-m${matIndex + 1}`;
+      const externalUrl = cleanText(material.external_url);
+      const stepPos = Number(material.step);
+      if (!externalUrl) {
+        report.warnings.push(`${materialId} has no external_url — skipped.`);
+        report.materials.skipped += 1;
+        continue;
+      }
+      if (!Number.isInteger(stepPos) || stepPos < 1 || stepPos > steps.length) {
+        report.warnings.push(`${materialId}: step ${stepPos} is outside 1..${steps.length} — skipped.`);
+        report.materials.skipped += 1;
+        continue;
+      }
+      const existingMaterial = await selectFirst(
+        config,
+        `lesson_resources?lesson_id=eq.${enc(lessonId)}&metadata->>material_id=eq.${enc(materialId)}&select=id,metadata&limit=1`,
+      );
+      const existingMeta =
+        existingMaterial?.metadata && typeof existingMaterial.metadata === "object"
+          ? (existingMaterial.metadata as DbRow)
+          : {};
+      if (existingMaterial && cleanText(existingMeta.import_key) !== importKey) {
+        report.warnings.push(`${materialId} exists and is not owned by this import — left alone.`);
+        report.materials.skipped += 1;
+        continue;
+      }
+      const materialRow = {
+        organization_id: organizationId || null,
+        lesson_id: lessonId,
+        // Steps are keyed positionally — quiz/assignment steps are appended AFTER
+        // the authored steps, so position k here is always a teaching step.
+        activity_id: `${lessonId}-s${stepPos}`,
+        title: clampText(cleanText(material.title) || "Book page", 120),
+        description: clampText(cleanText(material.description), 400),
+        resource_type: "image",
+        source_type: "external_url",
+        external_url: externalUrl,
+        // Drafts flip to published with publish_lesson, like everything else.
+        status: "draft",
+        visibility: "org_private",
+        created_by: actorId,
+        metadata: {
+          import_key: importKey,
+          material_id: materialId,
+          source_page: Number(material.source_page) > 0 ? Number(material.source_page) : null,
+        },
+        updated_at: now,
+      };
+      if (existingMaterial) {
+        await patchRows(config, `lesson_resources?id=eq.${enc(String(existingMaterial.id))}`, materialRow);
+        report.materials.updated += 1;
+      } else {
+        await insertRow(config, "lesson_resources", materialRow);
+        report.materials.created += 1;
+      }
     }
   }
 

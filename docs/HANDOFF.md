@@ -11506,3 +11506,27 @@ unsaved count mitigates); the inline menus (create/add-step/add-lesson) share th
 pre-existing no-outside-click-dismiss pattern.
 Suggested next task: owner clicks through the deployed three-room console and the
 new editor; then back to the book pipeline (upload A1 ch1 through Content → Build).
+
+## Claude -> Codex / Human - 2026-08-25 12:10
+
+Status: Starting
+Task: R61 — build both IT Frontiers books fully into production (owner: "build A1
+and A2 fully"; approved: book-faithful composer + page-image fallback). Extractor
+v2 (three answer reds, structured activities, glossary split), compose.mjs, importer
+materials branch, page renderer, 4-chapter import + publish via pg_net.
+Files I expect to touch: tools/book-import/* (extract v2, compose, select-pages,
+render-pages, render.html, validate), supabase/functions/curriculum-admin/index.ts
+(materials branch), docs/CURRICULUM_IMPORT.md, books/**, frontend/public/books/**,
+tests/test_r61_book_build.py, docs.
+Notes: plan approved; one PR then live imports through execute_sql+pg_net.
+
+Update (12:55, pipeline finished): extractor v2 + composer + validator + page
+renderer + importer materials branch all built and green — 17 lessons composed
+(187 teaching steps, 126 red-backed quiz questions, 17 assignments incl. the two
+book projects, 35 page images, 2 glossaries), 1014 pins, deno gate 0. The
+validator caught six polluted options, a fused question with a WRONG letter, and
+the garble filter eating the second book project before anything shipped.
+Remaining: PR/merge/CI deploy, then the four imports + class links + 17 publishes
+via pg_net, then verification SQL. Boot-attach quirk noted: chat attaches
+resources[0] when a session boots on a step with no bound material — the earliest
+page image can show once out of context (pre-existing contract, not touched).

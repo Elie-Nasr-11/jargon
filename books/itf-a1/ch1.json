@@ -1,0 +1,1224 @@
+{
+  "import_key": "itf-a1",
+  "course": {
+    "id": "itf-adv-a1",
+    "title": "IT Frontiers Advanced — Book A1",
+    "subject": "IT Frontiers — Advanced Series",
+    "level": "Advanced"
+  },
+  "unit": {
+    "id": "itf-a1-ch1",
+    "title": "Chapter 1 · Computers",
+    "summary": "What computers are, what processing means, and how information is created, shared and stored.",
+    "position": 1
+  },
+  "lessons": [
+    {
+      "id": "itf-a1-ch1-l1",
+      "title": "Introducing Computers",
+      "level": "Advanced",
+      "objective": "Define a computer as a technology that processes information according to a stored program, and explain how computers create, share and store information.",
+      "tutor_prompt": "You are teaching Lesson 1 of Chapter 1 from IT Frontiers Advanced Book A1. Open by asking the student what they think a computer actually IS — most will say a laptop or a phone, and the lesson's job is to move them from naming objects to naming a purpose. Work through the book's own arc: technology has a purpose, processing is structured repeatable change, information is meaningful content, and a computer is the technology whose purpose is processing information according to a stored program. Use the book's examples (the pencil, the car, wheat into bread, Sarah's blindfolded guessing game, the school report card) rather than inventing your own. Never hand over a definition the student is one question away from reaching. Keep the language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Technology has a purpose",
+          "prompt": "Ask the student to name three technologies they used today. Then draw out what all of them have in common: every technology is a tool or machine that helps us perform a task, and each one is DESIGNED for a particular purpose. Use the book's pencil example — many kinds of pencils, one task: writing. Land the definition in their words: technology is the tools and machines we use to help us perform tasks, and every technology has a purpose."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Naming the purpose",
+          "prompt": "Give the student a short list — a ship, a freezer, a wind turbine, a laptop — and ask what purpose each one was designed for. Push for the PURPOSE (transport, cooling food, generating electrical energy, processing information), not a description of the object. If they answer with what it looks like, ask what task it exists to perform. Close by asking why knowing a technology's purpose is useful at all — the book's answer is that it tells you how to use it, whether it is useful to you, and what risks it carries."
+        },
+        {
+          "mode": "explanation",
+          "title": "What processing really means",
+          "prompt": "Establish that processing is not any old change — it is structured, follows a specific set of steps, and is repeatable: same starting materials and same steps give the same result every time. Walk the book's wheat-to-bread example through its steps (clean the grains, grind them, sift the flour, send it to the bakery, make dough, bake it) and ask what would happen if the steps were shuffled. Land the definition: a process is a series of steps that complete a particular task and can be replicated."
+        },
+        {
+          "mode": "practice",
+          "mode_type": "applied",
+          "title": "Write a process",
+          "prompt": "Ask the student to pick something ordinary they do — making a sandwich, getting ready for school, charging a phone — and write it as a numbered process. Then challenge it: could someone else follow those exact steps and get the same result? If a step is vague ('get ready'), ask them to break it down. The goal is for them to feel the difference between describing an activity and specifying a process."
+        },
+        {
+          "mode": "explanation",
+          "title": "Information, and how we process it",
+          "prompt": "Introduce information as anything meaningful that tells us something about ourselves or the world. Then use the book's example: Sarah is blindfolded and has to identify objects by touch and smell. Ask the student to trace what Sarah's brain actually does — gather information through the senses, compare it with information already in memory, find a match, name the object. Draw out that this is processing: information went in through the senses and came out as the object's name."
+        },
+        {
+          "mode": "practice",
+          "mode_type": "applied",
+          "title": "Information from the world",
+          "prompt": "Ask what information a driver gets from a red traffic light, and what information they get from an ambulance siren behind them. Then ask which sense delivered each one. Follow with a harder one: if they were blindfolded and asked whether the object in front of them was an ice cube, what information would they be hunting for? Push them to name properties — cold, wet, smooth — rather than saying 'I'd feel it'."
+        },
+        {
+          "mode": "explanation",
+          "title": "Computers create information",
+          "prompt": "Now define the computer: a technology designed for the purpose of processing information — creating it, sharing it and storing it. Start with creating. Typing a message, recording a video, capturing an image all create new information. So does calculation and analysis: use the book's report-card example, where teachers enter grades and the computer produces an average, then sorts the list to produce ranks. Ask the student what the NEW information is in each case — the average, and the rank."
+        },
+        {
+          "mode": "explanation",
+          "title": "Sharing information",
+          "prompt": "Explain that information becomes more valuable when shared, and that the Internet — a global network of telecommunication technologies — is what makes sharing possible. Introduce the Web as all the information reachable through the Internet, organised into files, each with a web address that locates it. Draw the private/public distinction: private information needs a password, public information does not, and use the school website versus the student portal as the example. Then introduce communication as sharing that goes both ways, and compare messaging (short, frequent) with email (longer, less frequent)."
+        },
+        {
+          "mode": "explanation",
+          "title": "Storing information, and the stored program",
+          "prompt": "Ask what would happen if information evaporated every time a computer was switched off — every message, essay and photo gone. Use that to establish storage as the permanent repository for information, held as files: each file has a filename that identifies it and an address that locates it, and can hold anything from one byte to gigabytes. Then introduce the stored program: ask the student to imagine their computer with no apps at all and what it could possibly do. Land it — a program is a set of instructions intended to perform a particular task, and a computer is a technology whose purpose is to process information according to a stored program."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Created, stored, shared",
+          "prompt": "Give the student a scenario and ask them to identify how information was created, stored and shared in it. Use the book's cases: Karl watching a YouTube video; Jenna sending a voice message from her phone; a teacher entering grades that parents later view as a report card. For each, make them name all three — what was created, where it was stored, how it reached the other person. Then ask them for a scenario of their own."
+        },
+        {
+          "mode": "revision",
+          "title": "Putting it together",
+          "prompt": "Ask the student to define a computer in one sentence, without repeating the book word for word. Listen for the three parts: it is a technology, its purpose is processing information, and it does so according to a stored program. Fill only the part they miss, then ask them to name the three things computers let us do with information — create, share, store."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following best describes a process?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "A random sequence of events"
+            },
+            {
+              "id": "b",
+              "text": "A type of machine used in manufacturing"
+            },
+            {
+              "id": "c",
+              "text": "A clear sequence of steps for completing a task"
+            },
+            {
+              "id": "d",
+              "text": "A finished product"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following is a characteristic of a well-defined process?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "It is constantly changing"
+            },
+            {
+              "id": "b",
+              "text": "It is repeatable and consistent"
+            },
+            {
+              "id": "c",
+              "text": "It does not have a clear beginning"
+            },
+            {
+              "id": "d",
+              "text": "It does not have clear steps to follow"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following is NOT an example of a process?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Baking a cake"
+            },
+            {
+              "id": "b",
+              "text": "Getting dressed"
+            },
+            {
+              "id": "c",
+              "text": "Watching a movie"
+            },
+            {
+              "id": "d",
+              "text": "Brushing teeth"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What information do drivers get when they see a red traffic light?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Go"
+            },
+            {
+              "id": "b",
+              "text": "Stop"
+            },
+            {
+              "id": "c",
+              "text": "Turn left"
+            },
+            {
+              "id": "d",
+              "text": "Turn right"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What information do you need to bake a cake?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Which ingredients go into making a cake"
+            },
+            {
+              "id": "b",
+              "text": "What steps need to be performed"
+            },
+            {
+              "id": "c",
+              "text": "Which utensils are required to perform the steps"
+            },
+            {
+              "id": "d",
+              "text": "All of the above"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What item of information would be useful for you to navigate your way out of your classroom?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The colour of the walls"
+            },
+            {
+              "id": "b",
+              "text": "The location of the exit"
+            },
+            {
+              "id": "c",
+              "text": "The names of the students"
+            },
+            {
+              "id": "d",
+              "text": "The number of open windows"
+            }
+          ],
+          "correct_choice_id": "b"
+        }
+      ],
+      "assignment": {
+        "title": "Create, store, share — your own example",
+        "instructions": "Describe your own example of using a computer to create, store and share information. Say clearly what information was created, where it was stored, and how it was shared with someone else. Then list at least three ways you will use computers to help you learn this year, and explain why each one helps.",
+        "success_criteria": [
+          "Names one specific piece of information and says how it was created",
+          "Says where that information was stored",
+          "Explains how it was shared, and with whom",
+          "Gives at least three distinct ways computers support their learning, each with a reason"
+        ]
+      }
+    },
+    {
+      "id": "itf-a1-ch1-l2",
+      "title": "Types of Computers",
+      "level": "Advanced",
+      "objective": "Work through \"Types of Computers\" from the book: general purpose, specific purpose.",
+      "tutor_prompt": "You are teaching Lesson 2 of Chapter 1 from IT Frontiers Advanced Book A1: \"Types of Computers\". Work through the book's own arc: General Purpose → Specific Purpose. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "General Purpose",
+          "prompt": "Teach the book's section \"General Purpose\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Desktop Laptop Tablet Smartphone Definitions to land in the student's own words: \"General-purpose computers are the most common and widely used computers. They are our personal computers: the desktop, laptop, tablet and smartphone. These computers are designed to run a wide variety of applications which allows them to perform a wide variety of tasks that depend on the needs of the user. So rather than being designed to perform one specific task or set of tasks, these general-purpose computers are designed to be highly flexible and to perform a wide variety of tasks. The choice of the task depends on the user and the availability of an application to perform the required task. Example 2.1 Karl has a laptop that he uses for many different purposes. Here is a list of some of the tasks he can perform using the various applications he has on his laptop. Personal computers are general-purpose computers.\" · \"– Writing assignments : Using a word processing application, such as MS Word, Karl can type essays, reports or other school projects. – Multimedia presentations : Using applications, such as MS PowerPoint, Karl can prepare slideshows with images and videos for his school projects."
+        },
+        {
+          "mode": "explanation",
+          "title": "Types of Computers (p30)",
+          "prompt": "Teach the book's section \"Types of Computers (p30)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"There are many types of computers. In general, computers can be classified based on their intended purpose into two broad categories: general-purpose and specific-purpose. Computers can be classified based on their purpose as general-purpose or specific-purpose .\""
+        },
+        {
+          "mode": "explanation",
+          "title": "Specific Purpose (cont.)",
+          "prompt": "Teach the book's section \"Specific Purpose (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Personal computers fall into the category of general-purpose; they are: desktops, laptops, tablets and smartphones. Personal computers are distinguished by portability and capability. Portability depends on the size, weight and power source. Capability is largely determined by computational power. The desktop ranks the lowest in portability but the highest in capability. The smartphone ranks the highest in portability but the lowest in capability, with the laptop and tablet ranking in between. Personal computers are designed to have reasonable capability, high flexibility, easy portability and affordability. Specific-purpose computers are designed to perform a specific set of functions or tasks. Supercomputers, servers and embedded computers are types of specific-purpose computers. Supercomputers are massive computers that are optimized for high performance regardless of the energy consumption and the high expenses required to own, run and maintain them."
+        },
+        {
+          "mode": "explanation",
+          "title": "Specific Purpose",
+          "prompt": "Teach the book's section \"Specific Purpose\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: A supercomputer focuses all its computational power on addressing one big task. The IBM Blue Gene/P supercomputer installation at the Argonne Leadership Angela Yang Computing Facility located in the Argonne National Laboratory in Lemont, Illinois, USA ? ? ? ? ? ? ? ? ? ? ? ? ? ? A server focuses all its computational power on handling as many requests as it can simultaneously. One of Google’s many data centers is located in St. Ghislain, Belgium. The servers in the data center run Google products such as Search, Gmail and YouTube, as well as provide support for Google users across Europe and around the world. The server at Jenna’s school can handle a few hundred to a few thousand requests per day, depending on the demand placed on it by the students, teachers and parents. Definitions to land in the student's own words: \"In contrast to general-purpose computers, specific-purpose computers are designed to perform a specific set of functions or tasks. These computers are often specialized and designed to run specific applications rather than a broad range of applications. Supercomputers The supercomputer is a type of computer that is designed to solve complex problems."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. General-purpose computers are designed to perform specific tasks. — F 2. Desktop computers are generally more powerful than laptops. — T 3. Size, weight and power supply are the three main factors that determine the portability of a computer. — T 4. Supercomputers can handle multiple complex tasks at the same time. — F 5. Servers can handle only one task at a time. — F 6. Portability is an important feature of servers. — F 7. Embedded computers are designed to be part of other devices. — T 8. Servers are typically more powerful than personal computers. — T 9. Embedded computers are optimized to be energy efficient, small in size and highly reliable. — T 10. There are different types of servers, each dedicated to a particular task. — T"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 2.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 4. What is the primary function of an embedded computer? a) To perform a wide range of tasks b) To provide resources or services to other computers on a network c) To perform a specific set of functions within a larger device or system [correct: c] 5. Which type of computer is designed for portability and convenience? a) Desktop b) Laptop c) Server [correct: b]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.4)",
+          "prompt": "Match each computer with the statement that best describes it. Desktop Server Smartphone Tablet Embedded computer 1. Constructing a map of the visible universe Supercomputer 2. Getting real-time directions for a destination 3. Playing an online video game 4. Controlling the doors of an elevator 5. Hosting websites for various clients 6. Drawing an illustration using a stylus Model answers from the teacher edition — guide toward these, never read them out: 3) Smartphone 4) Desktop 5) Embedded computer 6) Server"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.5)",
+          "prompt": "Match each computer with the task for which it is best optimized."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.6)",
+          "prompt": "Answer the questions below about personal computers. 1. Why are personal computers considered general-purpose? Personal computers are considered to be general-purpose because they are de 2. “Personal computers are designed for reasonable capability, high flexibility and easy portability at an affordable price.” Is this statement true? Explain. 1. How would you distinguish between the supercomputer and the server? 2. A security breach can happen with any computer system. Compare the impact of a security breach on a server and a supercomputer. Model answers from the teacher edition — guide toward these, never read them out: 2) signed to be flexible and to run a wide range of applications. This allows them to perform a wide variety of tasks, such as word processing, browsing the internet, playing games, watching videos and more. 1) This statement is true. Personal computers provide the capabilities needed by the average person. Personal computers are designed to be easy to use, even for those who are not computer experts. They are flexible, with a wide range of applications available that can be used for different purposes. They are priced to be affordable for the average consumer, although the cost can vary depending on the specific features and capabilities of the device."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.7)",
+          "prompt": "Answer the questions below about supercomputers and servers."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.9)",
+          "prompt": "Answer the questions below about reliability. For computers, reliability refers to the ability of a computer to perform its tasks consistently without failure."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.10)",
+          "prompt": "Describe a typical day for yourself and the various interactions with computers you may have. Include in your example supercomputers, servers, personal computers and embedded"
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the primary function of a server?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "To perform a wide range of tasks"
+            },
+            {
+              "id": "b",
+              "text": "To provide resources or services to other computers on a network"
+            },
+            {
+              "id": "c",
+              "text": "To control the engine of a car"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following is an example of a specific-purpose computer?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Laptop"
+            },
+            {
+              "id": "b",
+              "text": "Desktop"
+            },
+            {
+              "id": "c",
+              "text": "Supercomputer"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which type of computer is designed to perform a wide range of tasks?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Specific-purpose computer"
+            },
+            {
+              "id": "b",
+              "text": "General-purpose computer"
+            },
+            {
+              "id": "c",
+              "text": "Embedded computer"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which type of computer is optimized for high performance, reliability and security?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Supercomputer"
+            },
+            {
+              "id": "b",
+              "text": "Server"
+            },
+            {
+              "id": "c",
+              "text": "Embedded computer Smartphone Laptop Server"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which type of computer is designed to be small and energy efficient?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Desktop"
+            },
+            {
+              "id": "b",
+              "text": "Supercomputer"
+            },
+            {
+              "id": "c",
+              "text": "Embedded computer"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which type of computer is best suited for managing email accounts?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Database server"
+            },
+            {
+              "id": "b",
+              "text": "Email server"
+            },
+            {
+              "id": "c",
+              "text": "Game server"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which type of computer is designed to control the engine, monitor the fuel efficiency or manage the entertainment system in a car?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Smartphone"
+            },
+            {
+              "id": "b",
+              "text": "Server"
+            },
+            {
+              "id": "c",
+              "text": "Embedded computer"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which type of computer is optimized for advanced scientific and engineering simulations?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Embedded computer"
+            },
+            {
+              "id": "b",
+              "text": "Supercomputer"
+            },
+            {
+              "id": "c",
+              "text": "Server"
+            }
+          ],
+          "correct_choice_id": "b"
+        }
+      ],
+      "assignment": {
+        "title": "Types of Computers: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. List five common machines or devices in which embedded computers are found. 2. Choose one of the machines or devices you listed in Question 1, and describe the function of its embedded computer(s). 3. Compare and discuss the importance of reliability for the operation of a supercomputer used for scientific research, a server handling financial transactions and an embedded computer in an airplane. What would be the adverse consequences of failure? Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: List five common machines or devices in which embedded computers are found.",
+          "Answers: Choose one of the machines or devices you listed in Question 1, and describe the",
+          "Answers: Compare and discuss the importance of reliability for the operation of a superco",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a1-ch1-l2-p35",
+          "title": "Book page 35 — Specific Purpose",
+          "external_url": "/books/a1-ch1-l2/p35.jpg",
+          "step": 3,
+          "source_page": 35
+        },
+        {
+          "id": "itf-a1-ch1-l2-p37",
+          "title": "Book page 37 — Specific Purpose",
+          "external_url": "/books/a1-ch1-l2/p37.jpg",
+          "step": 3,
+          "source_page": 37
+        },
+        {
+          "id": "itf-a1-ch1-l2-p45",
+          "title": "Book page 45 — Specific Purpose",
+          "external_url": "/books/a1-ch1-l2/p45.jpg",
+          "step": 7,
+          "source_page": 45
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a1-ch1-l2-pg35",
+          "idea_key": "specific-purpose",
+          "title": "Page 35 — Specific Purpose",
+          "caption": "",
+          "alt_text": "Page 35 of Book A1, Types of Computers",
+          "image_url": "/books/a1-ch1-l2/p35.jpg",
+          "source_page": 35
+        },
+        {
+          "id": "itf-a1-ch1-l2-pg37",
+          "idea_key": "specific-purpose",
+          "title": "Page 37 — Specific Purpose",
+          "caption": "",
+          "alt_text": "Page 37 of Book A1, Types of Computers",
+          "image_url": "/books/a1-ch1-l2/p37.jpg",
+          "source_page": 37
+        },
+        {
+          "id": "itf-a1-ch1-l2-pg45",
+          "idea_key": "specific-purpose",
+          "title": "Page 45 — Specific Purpose",
+          "caption": "",
+          "alt_text": "Page 45 of Book A1, Types of Computers",
+          "image_url": "/books/a1-ch1-l2/p45.jpg",
+          "source_page": 45
+        }
+      ]
+    },
+    {
+      "id": "itf-a1-ch1-l3",
+      "title": "Systems & Interfaces",
+      "level": "Advanced",
+      "objective": "Work through \"Systems & Interfaces\" from the book: systems & signals, interfaces & translation, hardware & software, career tips.",
+      "tutor_prompt": "You are teaching Lesson 3 of Chapter 1 from IT Frontiers Advanced Book A1: \"Systems & Interfaces\". Work through the book's own arc: Systems & Signals → Interfaces & Translation → Hardware & Software → Career Tips → Usability → Directories. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Systems & Signals",
+          "prompt": "Teach the book's section \"Systems & Signals\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"A system is a set of interconnected components that work together to achieve a particular task or purpose. These parts or components interact with each other in a coordinated manner, allowing the system to function as a cohesive whole. A system is a set of interconnected components that work together as a whole, serving a particular purpose. In order for a system to work as a whole, all its parts must interact with each other and coordinate their functions and activities. In the case of systems that depend on information processing, such as humans and computers, this means that the individual parts of a system must be able to communicate with each other; they must be able to exchange information.\" Teacher note from the book: Humans are one example of a biological system capable of information processing. In fact, any living organism with a central nervous system qualifies to be described as an information processing biological system."
+        },
+        {
+          "mode": "explanation",
+          "title": "Systems & Interfaces (p52)",
+          "prompt": "Teach the book's section \"Systems & Interfaces (p52)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"The concept of a system is fundamental to our understanding of ourselves and the world around us. In this lesson, we will explore computers as technological systems and relate them to humans as biological systems, with the commonality being that they are both capable of information processing. The interaction that occurs between computers and humans underlies the technological developments that have led to the tremendous evolution in our way of life.\""
+        },
+        {
+          "mode": "explanation",
+          "title": "Interfaces & Translation",
+          "prompt": "Teach the book's section \"Interfaces & Translation\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Digital Electronic Signals Sound Signals Pressure Signals Light Signals Action Potential Signals Sound, pressure and light are commonly converted external signals by both computers and humans. The computer has various input devices, such as the microphone, camera, keyboard, mouse, touchpad and touchscreen, to convert sound, light and pressure into internal signals. In comparison, the human body has the ear, eye and skin, respectively. Definitions to land in the student's own words: \"The boundary of a system where it interacts with the outside world is called its interface. For information processing systems, interaction entails an exchange of signals. Signals going into the system are referred to as input, and in response, the signals that come out are output. The interface is the boundary at which a system interacts with the external world. Every information processing system has its own form of internal signals; humans use action potentials, and computers use digital electronic signals. These are the only signals they can use to communicate and process internally. External signals of the outside world are quite different from internal signals; they must be converted into internal signals."
+        },
+        {
+          "mode": "explanation",
+          "title": "Hardware & Software",
+          "prompt": "Teach the book's section \"Hardware & Software\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Last login: Wed Apr 15:35:52 on ttys001 computer-name:~ username$ The Terminal window on macOS showing a standard output typical display. The first line indicates the date and time of the last login. The second line displays the name of the computer (in this case, “computer-name”) followed by the username (in this case, “username”) and a dollar sign ($), indicating that the terminal is ready to accept commands. Desktop Laptop Tablet Smartphone Desktops and laptops have pointing devices, the mouse and touchpad, respectively. These hardware components are used to control a software component displayed on the screen, the pointer. Tablets and smartphones have touchscreens, a technology that allows pointing to be replaced by touching. Human Computer Interaction is a multidisciplinary field that combines principles from computer science, cognitive psychology, design and other fields to study how people interact with computers and how to best design user interfaces. Definitions to land in the student's own words: \"The human computer interface is not just a physical one: it is also a logical one."
+        },
+        {
+          "mode": "explanation",
+          "title": "Usability (cont.)",
+          "prompt": "Teach the book's section \"Usability (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: They both have windows, icons and menus, but the WIMP interface includes either a mouse or touchpad, which the touchscreen interface replaces with a touchscreen. Usability is the ease with which a device can be used to complete a particular task. A directory is a logical construct used by the filing system to organize files in a computer. A directory is used to hold files and, in many cases, other directories, referred to as subdirectories. The term directory is synonymous with “folder”."
+        },
+        {
+          "mode": "explanation",
+          "title": "Usability",
+          "prompt": "Teach the book's section \"Usability\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Summary A system is a set of interconnected components that work together as a whole, serving a particular purpose. Humans and computers are examples of information processing systems. A signal is a message carried in physical form. In an information processing system, signals ensure communication and coordination between the parts of the system. Every system has its own specific type of internal signal, e.g. humans have action potentials, and computers have digital electronic signals. The interface is the boundary at which a system interacts with other systems and the external world. Signals must be converted between external signals and internal signals. This conversion occurs at the interface and must preserve the integrity of the information carried by the signals. The interface of a system comprises both input and output devices. Input devices convert external signals into internal signals. Output devices convert internal signals into external signals. Definitions to land in the student's own words: \"Usability is a design feature that refers to how easy it is for users to interact with a computer in order to complete a particular task."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. A system is a set of interconnected components that work together to achieve a particular task or purpose. — T 2. Humans and computers do not share any common features as systems. — F 3. Signal conversion at the interface does not need to preserve the integrity of the message. — F 4. Input devices convert external signals into internal signals while preserving the information they carry. — T 5. Both humans and computers are capable of converting sound, pressure and light signals. — T 6. Actuators are only used in computers and not in other machines or devices. — F 7. The human-computer interface only includes hardware components. — F 8. Command-Line Interface (CLI) is the most user-friendly type of interface. — F 9. The Graphical User Interface (GUI) made computers more accessible by providing a more intuitive and visual interface. — T 10. The Voice User Interface (VUI) is a highly developed and mature interface technology. — F"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 3.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. What do computers and humans have in common as systems? a) They both use digital electronic signals. b) They are both capable of information processing. c) They both use action potentials. [correct: b] 2. What is the purpose of an interface in an information processing system? a) To store information b) To create new signals c) To convert external signals into internal signals [correct: c] 3. Which form of energy typically acts as a signal in computers? a) Thermal energy b) Electrical potential energy c) Kinetic energy [correct: b] 4. In the context of information processing systems, what is a signal? a) A physical form of a message b) A method of storing data c) A type of energy conversion [correct: c] 5. Signals going into an information processing system are referred to as: a) Output b) Input c) Interface [correct: b] 4. What type of output device is responsible for performing an action? a) Sensor b) Actuator c) Transducer [correct: b] 5. Which of the following is an example of an actuator in a printer? a) Ink cartridge b) Paper tray c) Printhead [correct: c]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.5)",
+          "prompt": "Answer the questions below about signal conversion at the interface. 1. What is the purpose of signal conversion at the interface of an information processing system? 2. Why is preserving the integrity of the message important during signal conversion at the interface? Model answers from the teacher edition — guide toward these, never read them out: 2) The purpose of signal conversion at the interface is to transform external signals from the outside world into internal signals while preserving the integrity of the message. This conversion allows the system to use and respond to the information it receives from the external environment."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.6)",
+          "prompt": "Answer the questions below about humans and computers. 1. State the similarities that exist between humans and computers. 2. “The ability to gather information from the environment adds functionality to a system and enhances its chances of success.” Comment and give an example. Model answers from the teacher edition — guide toward these, never read them out: 2) They are both systems. They both can process information. They both can sense and respond to their environment. They are both capable of signal conversion at their interface. They both use electrical potential energy for internal signaling."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.7)",
+          "prompt": "Answer the questions below about input and output devices. 1. What does the term “actuator” refer to in technology? Provide an example. 2. Identify and list the input devices on your personal computer. In this example, the directory structure shows the root directory and two levels of subdirectories. In addition, four example files are shown that appear in green with their file extensions. Model answers from the teacher edition — guide toward these, never read them out: 2) An actuator is an output device that converts internal digital electronic signals to movement. An example is the motor that drives the turntable of a microwave oven. | Windows: 1) Right-click on “Start”, 2) select “Power User Menu”, 3) select “Device Manager” and then search the listed hardware categories. macOS: 1) Click on the Apple logo, 2) select “About This Mac”, 3) select “System Report” or “More Info” and then search the listed hardware categories. Androids & iPhones: A third-party app, such as “Sensors Multitool” or “Sensors Toolbox” will provide device-sensor information. Teacher note from the book: Abstraction is a fundamental concept in many fields, including computer science, sciences, mathematics and philosophy. It allows us to focus on the essential characteristics of a concept or system without getting bogged down in irrelevant details and is, therefore, a key aspect o"
+        },
+        {
+          "mode": "explanation",
+          "title": "Directories",
+          "prompt": "Teach the book's section \"Directories\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"Any information stored in a computer is stored in the form of a file. All files are organized and managed by the computer’s filing system. The filing system uses the idea of a folder to organize files. A folder acts as a virtual container used to hold files and, in many cases, other folders, referred to as subfolders. A more technical term for folder is directory. To restate using this term, the filing system organizes files under directories. A directory is used to hold files and, in many cases, other directories, referred to as subdirectories. This organization of directories within other directories is referred to as a hierarchical structure.\""
+        },
+        {
+          "mode": "practice",
+          "mode_type": "applied",
+          "title": "Your turn (Activity 3.8)",
+          "prompt": "Use the command line interface to create a file in a specific folder. Then, find and add content to this file through the graphical user interface. Compare the two interfaces. 1. In the CLI, create a text file in the Documents directory and name it “My File” (see instructions). Add content, then save and close the file. 2. In the GUI, open “My File”, add additional content, then save and close the file. 3. Compare the two interfaces and their usability."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which two devices are responsible for converting sound signals?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Microphone - Keyboard"
+            },
+            {
+              "id": "b",
+              "text": "Mouse - Speaker"
+            },
+            {
+              "id": "c",
+              "text": "Microphone - Speaker"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What type of sensor is used to detect linear motion in smartphones?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Gyroscope"
+            },
+            {
+              "id": "b",
+              "text": "Accelerometer"
+            },
+            {
+              "id": "c",
+              "text": "Magnetometer"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the primary function of input devices?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Converting internal signals to external signals"
+            },
+            {
+              "id": "b",
+              "text": "Converting external signals to internal signals"
+            },
+            {
+              "id": "c",
+              "text": "Storing signals"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which interface is considered the most user-friendly for non-technical users?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Command-Line Interface (CLI)"
+            },
+            {
+              "id": "b",
+              "text": "Graphical User Interface (GUI)"
+            },
+            {
+              "id": "c",
+              "text": "Voice User Interface (VUI)"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "The term “usability” refers to:",
+          "choices": [
+            {
+              "id": "a",
+              "text": "How easy it is for users to interact with a computer"
+            },
+            {
+              "id": "b",
+              "text": "The amount of memory a computer has"
+            },
+            {
+              "id": "c",
+              "text": "The processing power of a computer"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which interface allows users to interact with devices using natural gestures?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "WIMP Interface"
+            },
+            {
+              "id": "b",
+              "text": "Touchscreen Interface"
+            },
+            {
+              "id": "c",
+              "text": "CLI Interface"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which type of interface uses elements such as windows, icons and menus?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Command-Line Interface"
+            },
+            {
+              "id": "b",
+              "text": "Voice User Interface"
+            },
+            {
+              "id": "c",
+              "text": "Graphical User Interface"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "The human-computer interface consists of:",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Both input and output devices"
+            },
+            {
+              "id": "b",
+              "text": "Only input devices"
+            },
+            {
+              "id": "c",
+              "text": "Only output devices"
+            }
+          ],
+          "correct_choice_id": "a"
+        }
+      ],
+      "assignment": {
+        "title": "Systems & Interfaces: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. In the CLI, create a new directory under Documents. Name the new directory My Backups and move a copy of the file you created in Activity 3.8 into this directory. 2. In the GUI, create another directory under Documents. Name the new directory My Backups 2 and move a copy of the file you created in Activity 3.8 into this directory. 3. Compare the two interfaces and their usability. Instructions for macOS Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: In the CLI, create a new directory under Documents.",
+          "Answers: In the GUI, create another directory under Documents.",
+          "Answers: Compare the two interfaces and their usability. Instructions for macOS",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a1-ch1-l3-p57",
+          "title": "Book page 57 — Interfaces & Translation",
+          "external_url": "/books/a1-ch1-l3/p57.jpg",
+          "step": 3,
+          "source_page": 57
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a1-ch1-l3-pg57",
+          "idea_key": "interfaces-translation",
+          "title": "Page 57 — Interfaces & Translation",
+          "caption": "",
+          "alt_text": "Page 57 of Book A1, Systems & Interfaces",
+          "image_url": "/books/a1-ch1-l3/p57.jpg",
+          "source_page": 57
+        }
+      ]
+    },
+    {
+      "id": "itf-a1-ch1-l4",
+      "title": "Behind the Interface",
+      "level": "Advanced",
+      "objective": "Work through \"Behind the Interface\" from the book: the processor.",
+      "tutor_prompt": "You are teaching Lesson 4 of Chapter 1 from IT Frontiers Advanced Book A1: \"Behind the Interface\". Work through the book's own arc: The Processor. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "The Processor (cont.)",
+          "prompt": "Teach the book's section \"The Processor (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Since the first signal is greater than the second, 0110 > 0001 , the comparator will output the signal for greater than, 1111 . 1111, 1001 0000 4-bit Comparator ADD 2,3 Teacher note from the book: Learning the concepts that underpin programming is more critical than learning the programming language itself. Pseudocode is used for that purpose. Written in English, it allows the student to focus on thought processes rather than syntax and semantics."
+        },
+        {
+          "mode": "explanation",
+          "title": "The Processor",
+          "prompt": "Teach the book's section \"The Processor\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: A typical desktop CPU package measures about 4-5 square centimeters. However, the size of the actual processor chip inside the package is much smaller, typically only a few square millimeters or less. This is an 8-bit sequence of signals with alternating high and low voltages. The byte can be represented in binary as a series of alternating 1’s and 0’s: 10101010 . High Voltage Low Voltage Logic Circuit Purpose Adder Adds 2 inputs Multiplier Multiplies 2 inputs Shifter Shifts the bits of 1 input by 1 or more places Comparator Compares 2 inputs as equal, less or greater than Multiplexer Selects 1 from several inputs 0110 0001 0111 4-bit Adder Two input signals, 0110 and 0001 , pass through an adder logic circuit. The circuit performs the addition operation and generates an output which is the sum, 0111 . Note that addition follows the same rules in binary as it does in decimal. + 4-bit Multiplier The same two input signals, 0110 and 0001 , pass through a multiplier logic circuit. Definitions to land in the student's own words: \"In order for a system to generate a response, it must be able to process the information it has gathered. The system must be able to change input to output. This is the task of the processor."
+        },
+        {
+          "mode": "explanation",
+          "title": "Behind the Interface (p74)",
+          "prompt": "Teach the book's section \"Behind the Interface (p74)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Definitions to land in the student's own words: \"At the interface of an information processing system, only the input and output are visible to the user, whereas the steps that occur inside the system are not. This is because the interface is designed as an abstraction, a simplification of the complex internal workings of the system. Such internal workings are the topic of interest in this lesson.\""
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. The processor is not involved in changing input to output. — F 2. The main units of a processor are the arithmetic logic circuits, control unit and register file. — T 3. A digital electronic signal is binary in nature. — T 4. In a 64-bit processor, a ‘word’ refers to a sequence of 64 bits. — T 5. The transistor is an important component of a logic circuit. — T 6. The configuration of components in a logic circuit does not affect the operation it performs. — F 7. The ALU is responsible for performing arithmetic operations. — T 8. The CU is responsible for sending control signals to input and output devices. — F 9. The opcode determines how the remaining signals in the instruction will be interpreted. — T 10. Fetch, decode and execute are the three stages of the instruction cycle. — T"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 4.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. Changing input to output is the responsibility of the __________ . a) memory b) processor c) network adapter [correct: b] 2. Performing arithmetic operations is the responsibility of the __________ . a) ALU b) CU c) Register file [correct: b] 3. Directing the flow of data is the responsibility of the __________ . a) ALU b) CU c) Register file 4. Which of the following is not true about the register file? a) The register file is a short-term memory unit. b) The register file is a very fast memory unit. c) The register file is located away from the processor. [correct: c] 5. Signals going into an information processing system are referred to as: a) decodefetch - execute b) fetchdecode - execute c) executedecode - fetch [correct: b]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 4.3)",
+          "prompt": "Study the digital electronic signals. Encode each in binary form using ones (1) and zeros (0). 1. 4. 3. 2."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 4.4)",
+          "prompt": "Perform an addition operation on the 4 pairs of binary numbers. Note that binary addition is similar to decimal addition, except that 1+1 = 10, which requires the 1 to carry forward. + 1. + 2. + 4. + 5. + 3. + 6."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 4.5)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 9. Write the instruction ADD R3: 4,5 in machine language. 6. Identify the machine language form of this instruction ADD R4: R1,R2 . a) 1001 0001 0010 0100 b) 1001 0100 0001 0010 c) 0001 0100 0001 0010 [correct: b] 7. Identify the machine language form of this instruction MULTIPLY R7: 6,7 . a) 0010 0110 0111 0111 b) 1010 0111 0110 0111 c) 0010 0111 0110 0111 [correct: c] 8. Write the instruction 1010 0110 0100 0101 in human-readable form."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 4.6)",
+          "prompt": "Use the information provided in the translation tables of Activity 4.5 to answer the questions. 1. In how many ways can the 4-bit binary sequence 1010 be interpreted? Explain. 2. What is the maximum number of integers that can be encoded using 4-bit binary sequences? Can we add more opcodes and registers to our hypothetical processor? Model answers from the teacher edition — guide toward these, never read them out: 2) It can be interpreted in 3 ways: as an opcode, number and register. If it is the first field in an instruction, it is interpreted as the opcode for multiply using addresses. If it is the second field, it is interpreted as the register number for the destination register. If it is the third or fourth field, its interpretation will depend on the opcode. An opcode for immediate operations will result in interpreting it as a number, while an opcode for address-related operations will result in interpreting it as a register number."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Identify the human-readable form of this instruction 0010 0010 0110 0001 .",
+          "choices": [
+            {
+              "id": "a",
+              "text": "MULTIPLY R2: 6,1"
+            },
+            {
+              "id": "b",
+              "text": "MULTIPLY R2: R6,R1"
+            },
+            {
+              "id": "c",
+              "text": "ADD R2: 6,1"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Identify the human-readable form of this instruction 1001 0111 0000 0010 .",
+          "choices": [
+            {
+              "id": "a",
+              "text": "ADD R4: R1,R2"
+            },
+            {
+              "id": "b",
+              "text": "MULTIPLY R7: 0,2"
+            },
+            {
+              "id": "c",
+              "text": "ADD R7: R0,R2"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which 4-bit binary sequence represents register R4?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "0001"
+            },
+            {
+              "id": "b",
+              "text": "0111"
+            },
+            {
+              "id": "c",
+              "text": "0100"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which instruction is missing both source and destination addresses?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "ADD R8: R1,R3"
+            },
+            {
+              "id": "b",
+              "text": "MULTIPLY R8: 4,5"
+            },
+            {
+              "id": "c",
+              "text": "ADD : 4,5"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which instruction is missing a source address?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "MULTIPLY R6: 0,7"
+            },
+            {
+              "id": "b",
+              "text": "MULTIPLY R3: R1"
+            },
+            {
+              "id": "c",
+              "text": "MULTIPLY R4: R1,R3"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which instruction is missing a destination address?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "ADD R8: 4,5"
+            },
+            {
+              "id": "b",
+              "text": "ADD 2,3"
+            },
+            {
+              "id": "c",
+              "text": "ADD R3: R1,R0"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which instruction multiplies data fetched from source addresses and places the product at a destination address?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "MULTIPLY R5: R4,R0"
+            },
+            {
+              "id": "b",
+              "text": "MULTIPLY R8: 4,5"
+            },
+            {
+              "id": "c",
+              "text": "ADD R8: R1,R3"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which instruction adds two immediates and places the sum in register R8?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "ADD R8: R1,R3"
+            },
+            {
+              "id": "b",
+              "text": "MULTIPLY R8: 4,5"
+            },
+            {
+              "id": "c",
+              "text": "ADD R8: 4,5"
+            }
+          ],
+          "correct_choice_id": "c"
+        }
+      ],
+      "assignment": {
+        "title": "Behind the Interface: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. “Instructions provide a context in which signals are interpreted.” Is this statement correct? Explain. 2. “I tried to open my Word document using the Excel application, but it didn’t open.” Explain why this statement is true. Does this apply to other applications and files? Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: “Instructions provide a context in which signals are interpreted.” Is this state",
+          "Answers: “I tried to open my Word document using the Excel application, but it didn’t ope",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      }
+    },
+    {
+      "id": "itf-a1-ch1-l5",
+      "title": "Design Optimizations",
+      "level": "Advanced",
+      "objective": "Work through \"Design Optimizations\" from the book: architecture.",
+      "tutor_prompt": "You are teaching Lesson 5 of Chapter 1 from IT Frontiers Advanced Book A1: \"Design Optimizations\". Work through the book's own arc: Architecture. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Architecture (cont.)",
+          "prompt": "Teach the book's section \"Architecture (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: The CPU attends to the operation of the whole computer, while the GPU focuses on processing graphics-related instructions. A B A Bus Memory Input Devices Output Devices Clock GPU CPU GPU Main Memory Storage CPU Cache Core Core The components of the memory system are the storage, main memory, cache and register file. The register file is not illustrated as it is considered part of the core. Each core has two separate caches: one for instructions and the other for data, labeled I-Cache and D-Cache, respectively. The CPU also has a shared cache for all cores on the chip. CPU Core I Cache D Cache Core I Cache D Cache Shared Cache Core I Cache D Cache Teacher note from the book: The principle of locality is fundamental to the operation of the computer. While not explicitly stated as a principle, the lesson clearly identifies both temporal and spatial locality as concepts."
+        },
+        {
+          "mode": "explanation",
+          "title": "Architecture",
+          "prompt": "Teach the book's section \"Architecture\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: The basic architecture of a computer includes a processor, memory components, input devices and output devices. In addition, the bus acts as a communication network connecting these components and a clock to ensure all activities are synchronized. Bus Memory Processor Input Devices Output Devices Clock Data bus The set of lines that transmit the actual data being transferred between components. It is bidirectional, meaning it can transmit data in both directions. Address bus The set of lines that transmit the addresses used to specify the source or destination of data. Control bus The set of lines that transmit bus control signals that are used to coordinate and control the operations of the components within the computer system. 1. User The user moves the mouse and clicks the left button. This generates signals inside the mouse, which are data signals. 2. Mouse The mouse prepares the data for transmission and places it on the data bus. It places the CPU address on the address bus. Definitions to land in the student's own words: \"All computer systems contain four basic components: input devices, output devices, a processor and a memory. Input devices and output devices allow the exchange of signals with the outside world."
+        },
+        {
+          "mode": "explanation",
+          "title": "Design Optimizations (p100)",
+          "prompt": "Teach the book's section \"Design Optimizations (p100)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Many considerations are taken when designing a system, all in an effort to design the computer to be fast, dependable, energy efficient, easy to use and affordable. Optimizations target design features, such as performance and dependability. This lesson will focus on the strategies used to optimize performance."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. The bus is a component of the computer system. — T 2. The clock sends out a timing signal to synchronize all components in the computer system. — T 3. Synchronization is not essential for the proper functioning of the computer.. — F 4. The data bus and the address bus are the only two bus lines. — F 5. The execution time is not a measure of performance. — F 6. Performing tasks simultaneously is referred to as parallelism. — T 7. The CPU and GPU work in parallel. — T 8. Placing the cache on the same chip as the processor is one implementation of the proximity principle. — T 9. Prediction is a fundamental concept in computing. — T 10. Prediction does not improve performance. — F"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 5.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 2. The clock cycle is the time duration between two __________ . a) frequencies b) instructions c) timing signals [correct: c] 3. The __________ is a measure of computer performance. a) instruction count b) execution time c) mean time to failure [correct: b] 4. The unit of clock frequency is the __________ . a) Second b) Giga c) Hertz [correct: c] 5. The unit of clock cycle is the __________ . a) Second b) Meter c) Hertz [correct: a]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 5.4)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 1. a) CPU b) CPU B c) CPU C : 2.7 GHz [correct: b] 2. Assuming the CPUs operate at the same clock frequency, which CPU is the fastest? a) CPU A : dual core b) CPU B c) CPU C : quad core"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 5.5)",
+          "prompt": "Answer the questions below. 2. List, in order, the memory components the processor checks when looking for data. Assume it has already checked the register file. 1. Write the name and specifications of your processor. 3. What is prefetching, and why does it work? Model answers from the teacher edition — guide toward these, never read them out: 1) D-cache, shared cache, main memory, storage 3) Name: Intel Core i5 Cores: Quad-Core Clock: 3 GHz"
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "The __________ is a system of lines that connects all computer components.",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Bus"
+            },
+            {
+              "id": "b",
+              "text": "Processor"
+            },
+            {
+              "id": "c",
+              "text": "Cache"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "The multi-core processor design is an implementation of which concept?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Parallelism"
+            },
+            {
+              "id": "b",
+              "text": "Proximity"
+            },
+            {
+              "id": "c",
+              "text": "Prediction"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "The separate I-cache and D-cache is an implementation of which concept?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Parallelism"
+            },
+            {
+              "id": "b",
+              "text": "Prediction"
+            },
+            {
+              "id": "c",
+              "text": "Synchronization"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "The cache is an implementation of which concept?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Parallelism"
+            },
+            {
+              "id": "b",
+              "text": "Proximity"
+            },
+            {
+              "id": "c",
+              "text": "Synchronization"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "The clock is an implementation of which concept?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Synchronization"
+            },
+            {
+              "id": "b",
+              "text": "Parallelism"
+            },
+            {
+              "id": "c",
+              "text": "Prediction"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "If the processor doesn’t find data in main memory, where will it look next?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Storage"
+            },
+            {
+              "id": "b",
+              "text": "Shared cache"
+            },
+            {
+              "id": "c",
+              "text": "Register file"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Where is the first place the processor will look for data?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Main memory"
+            },
+            {
+              "id": "b",
+              "text": "Shared cache"
+            },
+            {
+              "id": "c",
+              "text": "D-cache"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Where is the first place the processor will look for instructions?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "D-cache"
+            },
+            {
+              "id": "b",
+              "text": "I-cache"
+            },
+            {
+              "id": "c",
+              "text": "Shared cache"
+            }
+          ],
+          "correct_choice_id": "b"
+        }
+      ],
+      "assignment": {
+        "title": "Design Optimizations: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. Run the program for different ranges of numbers and document the execution time for each. import time Imports the time module. def cpu_intensive_task (): result = for i in range (1, 1000000): result = result + i return result Defines a function by the specified name. The function adds all the numbers in range between and 1,000,000. start_time = time.time() Starts the timer. result = cpu_intensive_task() Runs the function. end_time = time.time() Stops the timer. execution_time = end_time - start_time Calculates the execution time. print ( “Result:” , result) Prints the sum. print ( “Execution Time:” , execution_time, “seconds” ) Prints the execution time. Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: Run the program for different ranges of numbers and document the execution time",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a1-ch1-l5-p105",
+          "title": "Book page 105 — Architecture",
+          "external_url": "/books/a1-ch1-l5/p105.jpg",
+          "step": 1,
+          "source_page": 105
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a1-ch1-l5-pg105",
+          "idea_key": "architecture",
+          "title": "Page 105 — Architecture",
+          "caption": "",
+          "alt_text": "Page 105 of Book A1, Design Optimizations",
+          "image_url": "/books/a1-ch1-l5/p105.jpg",
+          "source_page": 105
+        }
+      ]
+    }
+  ]
+}

@@ -1714,3 +1714,69 @@ re-anchored "Open in Classwork" → "Open in Activity"; the r48 strip slice and 
 r52 nesting pin pass untouched). tsc + eslint clean. Offline harness: the full
 dirty cycle observed live — edit title → "1 unsaved change" → Save changes → "All
 changes saved".
+
+## R61 — both IT Frontiers books, built book-faithfully into production (2026-08-25)
+
+Owner: "Can you build A1 and A2 fully please?" Chose (AskUserQuestion): the
+**book-faithful build** — a mechanical composer over the extracted book text, no AI
+generation — with **page-image fallbacks** for diagrams (the books' art is mostly
+vector line work with no captions; whole-page renders bound to the right steps beat
+nothing, and true figure-cropping stays a follow-up).
+
+**Extractor v2** (tools/book-import/extract.mjs). The R58 extractor read ONE answer
+red; the books use THREE (#ff5739, #ff4227, #ff7657) and the AI chapter is set
+almost entirely in the second — 8 of 17 lessons were near-answerless until this.
+Red is now marked at the text-ITEM level: answers never enter student-facing text
+(leak-strip by construction) and each answer attaches to the question it follows in
+reading order, which makes the books' two-column scramble harmless — the answers
+ride WITH their questions, and questions are never re-sorted. Activities come out
+structured (tf | mcq | match | open | project) with options and answers attached;
+an MCQ's red run IS the correct option's text (letter recorded, option kept, text
+restored when trailing prose polluted it); T/F grid letters come from the op-level
+runs (item joins can merge two letters and shift the whole grid — caught when
+statement 4 of the very first grid came back F for T). The Appendix/glossary
+splits off each book's final lesson into books/itf-*/glossary.json (139 + 111
+terms, committed for future vocab work, not imported). The AI chapter's broken
+display font leaks "artifi ia al li i t t" shrapnel — filtered by token shape, and
+the filter learned the hard way that digit tokens and acronyms are not shrapnel
+(it ate "Activity 4.4 - Exploring AI" and with it the book's second project).
+
+**Composer** (compose.mjs). Sections become explanation steps carrying the book's
+own words (callout definitions verbatim); activities become inquiry/reflection/
+applied-practice steps with the teacher edition's model answers embedded as MENTOR
+guidance ("never read them out"); the graded quiz walks mcq activities in reverse
+book order taking ONLY red-backed questions (merged question buckets — a lost
+number glyph fuses two questions and the second red overwrites the first's letter —
+are recovered via the option-id-sequence restart or skipped, NEVER guessed); the
+two named projects (Activities 3.6, 4.4) become their lessons' assignments and the
+other 15 synthesize from the last open activity, the way lesson 1 was
+hand-authored. A1 ch1 lesson 1 splices in the authored exemplar verbatim
+(books/itf-a1/lesson-1-authored.json) — it is live in prod with those exact 18
+step ids, so re-import is a pure in-place update with zero orphan risk.
+
+**The quiz trap, pinned**: only lesson.quiz[] creates graded quiz_items rows; the
+composer never emits an assessment step; a bare practice step would silently
+become a CODE step, so applied practice always carries mode_type:"applied".
+
+**Importer materials branch** (curriculum-admin). lessons[].materials binds page
+images to steps as lesson_resources rows {resource_type image, source_type
+external_url, activity_id = <lessonId>-s<step>}: relative /books/<slug>/p<N>.jpg
+URLs resolve against the app's own origin (campus-wiring precedent), files live in
+frontend/public/books/ (62 pages, 8.6MB). lesson_resources.id is a generated uuid,
+so import idempotency keys on metadata.material_id + metadata.import_key —
+insert-or-patch, never delete, foreign rows left alone with a warning. Materials
+land as drafts; publish_lesson flips them. The same pages also land as
+lesson_figures with image_url for mentor [[figure:id]] recall.
+
+**Validator** (validate.mjs) refuses what the book does not back: every graded
+answer must trace to a red run, no assessment steps, applied practice explicit,
+no glossary text in prompts, materials in step range with files present, the
+spliced lesson byte-identical to the exemplar. It caught six polluted option
+texts, a fused two-question quiz item with the WRONG letter, and a one-choice
+"question" before any of them could reach production.
+
+Corpus landed in the four committed envelopes: 17 lessons, 187 teaching steps,
+126 graded red-backed quiz questions, 17 assignments (2 book projects), 35 bound
+page images, 2 glossaries. Verified: 1014 pins (29 new in test_r61_book_build —
+string pins on the pipeline plus DATA pins over the committed envelopes), deno
+gate 0 errors on curriculum-admin, r58 import pins untouched.

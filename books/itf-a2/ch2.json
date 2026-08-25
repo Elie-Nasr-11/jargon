@@ -1,0 +1,1160 @@
+{
+  "import_key": "itf-a2",
+  "course": {
+    "id": "itf-adv-a2",
+    "title": "IT Frontiers Advanced — Book A2",
+    "subject": "IT Frontiers — Advanced Series",
+    "level": "Advanced"
+  },
+  "unit": {
+    "id": "itf-a2-ch2",
+    "title": "Chapter 4 · Artificial Intelligence",
+    "summary": "What artificial intelligence is — machine learning, prediction, logic and reasoning, and AI in the real world.",
+    "position": 2
+  },
+  "lessons": [
+    {
+      "id": "itf-a2-ch2-l1",
+      "title": "Machine Learning",
+      "level": "Advanced",
+      "objective": "Work through \"Machine Learning\" from the book.",
+      "tutor_prompt": "You are teaching Lesson 1 of Chapter 4 from IT Frontiers Advanced Book A2: \"Machine Learning\". Work through the book's own arc: the book's own sequence of activities (pp. 158–173). Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Machine Learning (p158)",
+          "prompt": "Teach the book's section \"Machine Learning (p158)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: i tiit Through repetition, Maya recognized a pattern: whenever she heard the word ‘cup’, she received the cup itself. This formed an association in her mind between the word ‘cup’ and the object. She learned that the object’s name is ‘cup’. i tiit Shared Shape These images show cups of different sizes, colors, and details. By seeing many different examples, the computer begins to identify the shared shape that makes an object a cup, even when the style, color, or design changes. The ability to identify this shared shape is called pattern recognition. In unsupervised learning, similar objects are grouped together without being told their names. Later, labels such as ‘cups,’ ‘shoes,’ and ‘crayons’ can be added to each group. i tiit Recognized Pattern • Matches the shared shape. • Color does not matter. • Design does not matter. Associations • Label: Cup Model Cup This diagram shows a model of a cup. On the left are the recognized patterns that define a cup. Definitions to land in the student's own words: \"One of the fundamental attributes of an intelligent system is —the ability to acquire and use information. Learning involves creating internal links, or associations , between what is already known and new information."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (10 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. Learning is the ability to form and use new associations. — T 2. Pattern recognition allows a system to detect and respond to random or unrelated features. — F 3. Supervised learning uses labeled data. — T 4. Unsupervised learning means the system receives labels in advance and uses them to form associations. — F 5. A model is the internal system that holds the patterns and associations a computer has learned. — T 6. Once a model is created, it can no longer be changed or improved. — F 7. Training is the process of improving a model by using new data and correcting its mistakes. — T 8. Learning is a one-time event that stops once the initial model is built. — F 9. A well-trained model can generalize its learning to identify patterns it has never seen before. — T 10. Repetition helps reinforce associations and improve pattern recognition. tiit — T"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 1.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 9. What happens when a model makes a misclassification? a) It automatically deletes the data b) The model is tested on easier data c) It is retrained or refined to improve d) The model shuts down for safety [correct: c] 10. Which statement best reflects the idea of continuous learning? a) A model is fixed and never changes after being used b) Learning continues as the model encounters new data and errors c) Once trained, a model no longer needs updates d) Learning stops once the system is deployed artifi ia al li i t t aai i tiit [correct: b]"
+        },
+        {
+          "mode": "reflection",
+          "title": "Talk it through (Activity 1.3)",
+          "prompt": "Read the narrative and answer the questions below. 1. What type of learning is being used to teach the AI system to identify plants, and how do you know? 2. What features did the model learn to focus on, and which did it learn to ignore? 3. Why is it important to have the model tested on images it had never seen before? 4. Why did the model fail to recognize some of the roses? What was missing? 5. How did the model improve, and what process does this describe? Plant Learning A team of scientists is using machine learning to build a system that can identify different types of plants. At first, they collect thousands of plant images and label each one with its name (e.g., “rose,” “sunflower,” “tulip”). They use these labeled examples to teach the AI system what each plant looks like. Over time, the AI begins to recognize important patterns in the shape of the leaves and petals, while ignoring variations like background color or lighting. Once the model is built, it is tested on a new set of plant images it has never seen before. It correctly identifies many of them but fails to recognize some roses that were photographed from an unusual angle. The scientists examine these mistakes and add more examples showing roses from different angles. The system updates its model and improves its accuracy. Calls of the Wild Scientists are studying animal sounds recorded in a rainforest."
+        },
+        {
+          "mode": "practice",
+          "mode_type": "applied",
+          "title": "Your turn (Activity 1.5)",
+          "prompt": "In this activity, you’ll explore how to build, test, and use a machine learning model using an online platform. You’ll start by uploading sample images provided to you and then have the option to add your own examples. Choose a Platform Start by selecting a simple machine learning platform. Two recommended options are: • Teachable Machine by Google • Machine Learning for Kids Both platforms allow you to upload data, train a model, and test it — but Machine Learning for Kids also supports model refinement and feedback. Getting Started • Choose a platform. • Create a new image project. • Upload the provided images to build at least two classes (e.g., “cat” and “dog”). • Click Train Model. • Test your model using new images. • (Optional) If the model makes mistakes, add more examples and retrain. Sample Image Sets To help you get started, choose one of the following sets. Each contains enough examples to form two distinct classes: • Cats and Dogs: bit.ly/cats_dogs_ML • Flowers and Trees: bit.ly/flowers_trees_ML You may also create your own dataset by taking or drawing pictures and uploading them to the platform."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does it mean when a model can generalize?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "It copies exact answers from training data"
+            },
+            {
+              "id": "b",
+              "text": "It makes up patterns without learning"
+            },
+            {
+              "id": "c",
+              "text": "It erases data to free memory space"
+            },
+            {
+              "id": "d",
+              "text": "It applies learned patterns to new, unseen data"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is a model in machine learning?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "A database of all stored inputs"
+            },
+            {
+              "id": "b",
+              "text": "A system of memorized examples"
+            },
+            {
+              "id": "c",
+              "text": "A set of outputs from one training session"
+            },
+            {
+              "id": "d",
+              "text": "An internal system of learned patterns and associations"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which statement describes unsupervised learning?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The AI finds patterns without labels"
+            },
+            {
+              "id": "b",
+              "text": "The AI is told which output is correct"
+            },
+            {
+              "id": "c",
+              "text": "The AI memorizes all data examples"
+            },
+            {
+              "id": "d",
+              "text": "The AI ignores unknown patterns"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "In supervised learning, what is given to the AI system to help it learn?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Data with missing pieces"
+            },
+            {
+              "id": "b",
+              "text": "Data labeled with correct answers"
+            },
+            {
+              "id": "c",
+              "text": "Completely random patterns"
+            },
+            {
+              "id": "d",
+              "text": "Unlabeled examples from multiple sources Answer the questions below."
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "In pattern recognition, which kind of feature is most likely to be ignore?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The shared structure across examples"
+            },
+            {
+              "id": "b",
+              "text": "A recurring sound pattern"
+            },
+            {
+              "id": "c",
+              "text": "The repeated shape of an object"
+            },
+            {
+              "id": "d",
+              "text": "An irrelevant design variation"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does pattern recognition allow a system to do?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Respond only to labeled data"
+            },
+            {
+              "id": "b",
+              "text": "Detect recurring regularities in inputs"
+            },
+            {
+              "id": "c",
+              "text": "Ignore all differences in data"
+            },
+            {
+              "id": "d",
+              "text": "Randomly sort unrelated data"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following is NOT a fundamental attribute of machine learning?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Recognizing patterns"
+            },
+            {
+              "id": "b",
+              "text": "Repeating examples"
+            },
+            {
+              "id": "c",
+              "text": "Memorizing facts"
+            },
+            {
+              "id": "d",
+              "text": "Creating associations"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the best definition of learning?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The ability to remember everything perfectly"
+            },
+            {
+              "id": "b",
+              "text": "The ability to perform tasks without error"
+            },
+            {
+              "id": "c",
+              "text": "The ability to form and use new associations"
+            },
+            {
+              "id": "d",
+              "text": "The process of storing all inputs in memory"
+            }
+          ],
+          "correct_choice_id": "c"
+        }
+      ],
+      "assignment": {
+        "title": "Machine Learning: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. What kind of learning is the AI using in this scenario, and why? 2. What features of the sounds is the AI analyzing to group them? 3. Why doesn’t the AI label the sounds during the learning process? Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: What kind of learning is the AI using in this scenario, and why?",
+          "Answers: What features of the sounds is the AI analyzing to group them?",
+          "Answers: Why doesn’t the AI label the sounds during the learning process?",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a2-ch2-l1-p159",
+          "title": "Book page 159 — Machine Learning",
+          "external_url": "/books/a2-ch2-l1/p159.jpg",
+          "step": 1,
+          "source_page": 159
+        },
+        {
+          "id": "itf-a2-ch2-l1-p160",
+          "title": "Book page 160 — Machine Learning",
+          "external_url": "/books/a2-ch2-l1/p160.jpg",
+          "step": 1,
+          "source_page": 160
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a2-ch2-l1-pg159",
+          "idea_key": "machine-learning",
+          "title": "Page 159 — Machine Learning",
+          "caption": "",
+          "alt_text": "Page 159 of Book A2, Machine Learning",
+          "image_url": "/books/a2-ch2-l1/p159.jpg",
+          "source_page": 159
+        },
+        {
+          "id": "itf-a2-ch2-l1-pg160",
+          "idea_key": "machine-learning",
+          "title": "Page 160 — Machine Learning",
+          "caption": "",
+          "alt_text": "Page 160 of Book A2, Machine Learning",
+          "image_url": "/books/a2-ch2-l1/p160.jpg",
+          "source_page": 160
+        }
+      ]
+    },
+    {
+      "id": "itf-a2-ch2-l2",
+      "title": "Prediction",
+      "level": "Advanced",
+      "objective": "Work through \"Prediction\" from the book: prediction.",
+      "tutor_prompt": "You are teaching Lesson 2 of Chapter 4 from IT Frontiers Advanced Book A2: \"Prediction\". Work through the book's own arc: Prediction. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Prediction (cont.)",
+          "prompt": "Teach the book's section \"Prediction (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Price = 2.49 x Size + 0.14 i tiit This graph shows the expanded training dataset, consisting of 30 houses with sizes ranging from 61 to 190 square meters. Each green point represents one house, and the red dashed line is the best-fit line generated by the model to represent the relationship between house size and price. Size (sqm) Actual Price ($1,000) Predicted Price ($1,000) Error ($1,000) -37 -20 -6 This table shows the model’s predictions after retraining on a larger dataset. For each house, the predicted price is compared to the actual sale price, and the error is calculated. Positive errors indicate underestimation; negative errors indicate overestimation. Sum of absolute value of errors Total Predictions = 17.4 = MAE = This graph shows the best-fit line generated by the improved model, trained on a larger and more varied dataset. Teacher note from the book: Common Misconceptions • An error means a bad prediction: All models make errors. The goal is to minimize them, not eliminate them — errors help the model improve. • More data means a perfect model: More data helps, but only when it includes useful variety."
+        },
+        {
+          "mode": "explanation",
+          "title": "Prediction",
+          "prompt": "Teach the book's section \"Prediction\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Maya is learning to recognize cups. With each new example, her ability to recognize cups improves — increasing the probability that she will predict correctly, even when they look different. i tiit An AI-controlled robotic arm identifies and removes a plastic bottle from a moving conveyor belt at a recycling facility. Correct Predictions Total Predictions = 70% = 30 + 40 Accuracy = = Original Data Bottles it was trained on. Bottles Missed The model missed green bottles and crumpled bottles. Objects Misclassified The model misclassified objects that had similar shapes to bottles it was trained on. i tiit Correct Predictions Total Predictions = 90% = 45 + 45 Accuracy = = This figure shows the data used to teach the AI model how house size relates to price. The scatter plot displays the actual data points, while the red dashed line represents the best-fit line created by the model. The table lists the size and sale price of the ten houses used to train the model. Definitions to land in the student's own words: \"The answer to something is not always obvious. In many situations, the outcome isn’t clear, and we have to make a guess."
+        },
+        {
+          "mode": "explanation",
+          "title": "Prediction (p174)",
+          "prompt": "Teach the book's section \"Prediction (p174)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: i tiit Definitions to land in the student's own words: \"In the previous lesson, we explored how an AI system learns using machine learning. It analyzes data, identifies patterns, and builds a model that helps it understand and make sense of new inputs. For example, after studying many examples, the AI forms an internal model of what a 'cup' looks like. This model becomes the basis for making predictions when it encounters a new object. In this lesson, we will explore the basics of prediction and how Big Data helps AI make more accurate and reliable predictions.\" · \"is when an AI uses its model to estimate the most probable output.\""
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (11 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. AI models can make predictions using either categorical or continuous data. — T 2. Accuracy is the best way to measure how close a numerical prediction is to the actual value. — F 3. Mean Absolute Error (MAE) tells us the average distance between predicted and actual values. — T 4. A model that makes prediction errors is considered broken. — F 5. More data always makes a model perfect. — F 6. Volume refers to the total amount of training data available to the model. — T 7. Variety means training a model on examples that are all the same type. — F 8. A prediction model for continuous data will produce a number, not a label. — T 9. If a model has high accuracy, that means its MAE is also low. — F 10. Big Data helps improve AI performance by increasing both volume and variety of training data. — T 11. F i tiit — ?"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 2.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 9. What happens when a model is trained on a small, narrow dataset? a) It performs well on all tasks b) It automatically adjusts its error c) It always predicts perfectly d) It struggles to make accurate predictions on new data [correct: d] 10. Which of the following statements is true? a) Models only learn from correct predictions b) Models learn from both correct and incorrect predictions c) Models stop learning after one training cycle d) Models only learn from testing data artifi ia al li i t t aai i tiit [correct: b]"
+        },
+        {
+          "mode": "reflection",
+          "title": "Talk it through (Activity 2.3)",
+          "prompt": "Read the narrative and answer the questions below. 1. What type of learning was used to train the AI system to recognize languages, and how do you know? 2. What kind of prediction is this AI system performing? 3. Why did the AI model struggle with some user-submitted sentences? 4. How did the engineers improve the model? 5. Why is it important to train the model with a wide variety of examples? A software company is developing an AI system that can automatically detect the language of short text messages. To train the model, engineers collect thousands of short sentences labeled with the language they are written in — such as English, Spanish, Arabic, and French. The model learns to recognize specific features like vocabulary, accents, and sentence structure. Once trained, it is tested on new sentences submitted by users. It correctly identifies most languages, but it struggles with shorter messages or those that use informal spelling. After reviewing the errors, the engineers realize that the AI hadn’t been trained on enough casual or abbreviated text. They improve the model by adding more examples that include informal language, slang, and abbreviations. The system becomes more accurate and consistent in real-world use. A transportation company is building an AI system that can estimate how long a trip will take by car."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.4)",
+          "prompt": "Read the narrative and answer the questions below. 1. What kind of prediction is the AI model making in this scenario? Continuous prediction — it’s estimating a numerical value (travel time in 2. Why were the model’s early predictions inaccurate during rush hour? 3. How did the engineers improve the model’s performance? 4. What is one way to measure how far off the model’s predictions are? 5. Why is it important to include both volume and variety in training data? i tiit Model answers from the teacher edition — guide toward these, never read them out: 2) minutes). 3) Because the model had not been trained on examples that included traffic delays. 4) They added more varied training data from different times of day. 5) By calculating the Mean Absolute Error (MAE), which gives the average difference between predicted and actual travel times. | So the model can make accurate predictions across different conditions, such as heavy or light traffic."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 2.6)",
+          "prompt": "Read the scenario below, then answer the questions that follow. Use the provided spreadsheet to apply formulas and calculations—just like real data scientists do when they test AI models. Use the short link to access the spreadsheet: bit.ly/C4_AI_Activity2_6 Price ($) Actual Units Sold (units) Predicted Units Sold (units) Error (units) Error (Absolute value) 8.0 9.0 10.0 11.0 12.0 A company is testing an AI model to predict how many units of a product it will sell at different prices. Accurate predictions help the company plan inventory and revenue. The AI studied data and built the following best-fit line: Sales (units) = –12xPrice ($)+220 The company then tested the model at different prices between $8.00 and $12.50."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which best describes the difference between accuracy and MAE?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "MAE is used for text predictions; accuracy is used for numbers"
+            },
+            {
+              "id": "b",
+              "text": "Both are used for categorical predictions"
+            },
+            {
+              "id": "c",
+              "text": "Accuracy is used for categorical data; MAE is used for continuous data"
+            },
+            {
+              "id": "d",
+              "text": "Accuracy and MAE mean the same thing"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Why is \"variety\" in training data important for improving a model?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "It increases the speed of training"
+            },
+            {
+              "id": "b",
+              "text": "It reduces the cost of data collection"
+            },
+            {
+              "id": "c",
+              "text": "It prevents the use of continuous prediction"
+            },
+            {
+              "id": "d",
+              "text": "It helps the model generalize to different examples"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does the term \"volume\" refer to in the context of training data?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The total amount of data the model learns from"
+            },
+            {
+              "id": "b",
+              "text": "The range of model outputs"
+            },
+            {
+              "id": "c",
+              "text": "The number of times a model makes errors"
+            },
+            {
+              "id": "d",
+              "text": "The speed at which the data is processed"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "How is MAE calculated?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Percentage of correct predictions"
+            },
+            {
+              "id": "b",
+              "text": "Average of the absolute differences between predicted and actual values"
+            },
+            {
+              "id": "c",
+              "text": "Number of categories predicted correctly"
+            },
+            {
+              "id": "d",
+              "text": "The square root of total errors Answer the questions below."
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does a high MAE value tell us about a model’s predictions?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The model never makes mistakes"
+            },
+            {
+              "id": "b",
+              "text": "The model’s predictions are far from actual values"
+            },
+            {
+              "id": "c",
+              "text": "The model’s predictions are always correct"
+            },
+            {
+              "id": "d",
+              "text": "The model is overfitting"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which metric can be used to evaluate continuous predictions like temperature?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Accuracy"
+            },
+            {
+              "id": "b",
+              "text": "Precision"
+            },
+            {
+              "id": "c",
+              "text": "Recall"
+            },
+            {
+              "id": "d",
+              "text": "Mean Absolute Error (MAE)"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following is an example of a categorical prediction?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Estimating the temperature tomorrow"
+            },
+            {
+              "id": "b",
+              "text": "Predicting a student’s exam score"
+            },
+            {
+              "id": "c",
+              "text": "Determining if an object is a plastic bottle"
+            },
+            {
+              "id": "d",
+              "text": "Calculating total sales for a store"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is the goal of prediction in AI?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "To memorize all data exactly"
+            },
+            {
+              "id": "b",
+              "text": "To estimate the most likely outcome using learned patterns"
+            },
+            {
+              "id": "c",
+              "text": "To randomly guess based on probability"
+            },
+            {
+              "id": "d",
+              "text": "To classify only images"
+            }
+          ],
+          "correct_choice_id": "b"
+        }
+      ],
+      "assignment": {
+        "title": "Prediction: your own answer",
+        "instructions": "Write up your answers to these questions from the lesson, in your own words: 1. How many predictions were correct? 2. How many predictions were incorrect? 3. What was the model’s overall accuracy? Use at least three of the lesson's own terms and explain each as you use it.",
+        "success_criteria": [
+          "Answers: How many predictions were correct?",
+          "Answers: How many predictions were incorrect?",
+          "Answers: What was the model’s overall accuracy?",
+          "Uses the lesson's own vocabulary, each term explained",
+          "Explains the reasoning in the student's own words"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a2-ch2-l2-p175",
+          "title": "Book page 175 — Prediction",
+          "external_url": "/books/a2-ch2-l2/p175.jpg",
+          "step": 1,
+          "source_page": 175
+        },
+        {
+          "id": "itf-a2-ch2-l2-p176",
+          "title": "Book page 176 — Prediction",
+          "external_url": "/books/a2-ch2-l2/p176.jpg",
+          "step": 1,
+          "source_page": 176
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a2-ch2-l2-pg175",
+          "idea_key": "prediction",
+          "title": "Page 175 — Prediction",
+          "caption": "",
+          "alt_text": "Page 175 of Book A2, Prediction",
+          "image_url": "/books/a2-ch2-l2/p175.jpg",
+          "source_page": 175
+        },
+        {
+          "id": "itf-a2-ch2-l2-pg176",
+          "idea_key": "prediction",
+          "title": "Page 176 — Prediction",
+          "caption": "",
+          "alt_text": "Page 176 of Book A2, Prediction",
+          "image_url": "/books/a2-ch2-l2/p176.jpg",
+          "source_page": 176
+        }
+      ]
+    },
+    {
+      "id": "itf-a2-ch2-l3",
+      "title": "Logic & Reasoning",
+      "level": "Advanced",
+      "objective": "Work through \"Logic & Reasoning\" from the book: reasoning.",
+      "tutor_prompt": "You are teaching Lesson 3 of Chapter 4 from IT Frontiers Advanced Book A2: \"Logic & Reasoning\". Work through the book's own arc: Reasoning. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Reasoning (cont.)",
+          "prompt": "Teach the book's section \"Reasoning (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: General Rule 2: if a patient has allergies, then cough occurs but fever does not. Options Option 1: the cause might be flu. Option 2: the cause might be allergies. Observation: the patient has both fever and cough. Explanation Therefore: Since the patient has both fever and cough, the most probable explanation is flu. i tiit Teacher note from the book: Common Misconceptions • Reasoning outcomes are always certain if the system is well-designed. Even with perfect logic, uncertainty arises from incomplete knowledge, noisy data, or ambiguous premises. • Decision-making is just picking the highest probability outcome."
+        },
+        {
+          "mode": "explanation",
+          "title": "Reasoning",
+          "prompt": "Teach the book's section \"Reasoning\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: Premises General Rule: all birds have feathers. Observation: chickens have feathers. Inference Therefore : chickens are birds. i tiit Premises General Rule : viewers who watch videos about a topic will probably enjoy other videos on that same topic. Observation : the student watched basketball highlights. Inference Therefore : probably , the student would enjoy basketball training videos. i tiit Premises Preference: i don’t mind a little rain. Prediction: it is likely that my father will leave very early. Choices Choice 1: if i walk, then probably i will be slow and might get wet. Choice 2: if i bike, then probably i will arrive faster and risk only a little rain. Choice 3: if i ride with my father, then probably I will stay dry but arrive too early at school. Decision Therefore: i will ride my bike to school. Premises Rule 1: never harm humans. Rule 2: avoid collisions unless it contradicts rule 1. Choices Choice 1: if the car keeps driving, then the pedestrian will be harmed. Definitions to land in the student's own words: \"Reasoning is a structured way of thinking — or processing — that helps us uncover new information, make decisions, and make sense of our world."
+        },
+        {
+          "mode": "explanation",
+          "title": "Logic & Reasoning (p194)",
+          "prompt": "Teach the book's section \"Logic & Reasoning (p194)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: i tiit Definitions to land in the student's own words: \"So far, we’ve seen that AI can learn from data and predict outcomes. But there is more to intelligence — reasoning. We use reasoning all the time. Much of our everyday thinking is reasoning. It helps us understand what we observe, solve problems, and decide what to do. Reasoning, though we may not always notice it, is structured. There are rules to thinking that guide us toward conclusions. These conclusions, or outcomes of reasoning, may be an understanding, a new insight, a decision, or a plan. The rules that make reasoning work are referred to as logic. In this lesson, we will explore reasoning, its forms, and the framework in which it operates: logic.\""
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (11 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. Reasoning is a structured way of thinking that helps us discover new information, choose actions, or make sense of outcomes. — T 2. Premises are always absolute facts; observations and predictions cannot be used as premises. — F 3. The certainty of an inference depends on the certainty of its premises. — T 4. Inference involves a search among different possibilities before reaching a conclusion. — F 5. Decision-making is the process of selecting the option with the highest utility. — T 6. Utility means the usefulness, value, or goal-fit of an outcome. — T 7. Decision-making and explanation both involve a search strategy, while inference does not. — T 8. Explanation is reasoning backward from a given outcome to uncover possible conditions or reasons. — T 9. The plausibility of an explanation depends on how well its premises fit the observed outcome. — T 10. Explanations are always certain, because once the cause is found it cannot be replaced. — F 11. T T T T i tiit — ?"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 3.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 9. Explanation differs from inference mainly because: a) It moves forward from premises to outcomes b) It depends only on facts c) It guarantees certainty d) It reasons backward from a given outcome to possible conditions [correct: d] 10. The starting point of explanation is called: a) Premise b) Given c) Utility d) Hypothesis artifi ia al li i t t aai i tiit Answer the questions below. [correct: b] 11. The plausibility of an explanation depends on: a) The number of possible outcomes b) The premises that support it and how well they fit the observed outcome c) The search method used d) Whether the explanation is causal [correct: b] 12. Which of the following requires a search strategy? a) Inference only b) Decision-making and explanation c) Explanation only d) Inference, decision-making, and explanation [correct: b] 13. Which of the following best shows inference? a) Deciding which bus to take to school b) Explaining why the lawn is wet c) Linking a rule and an observation to reach a new conclusion d) Remembering a fact from memory [correct: c] 14."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.3)",
+          "prompt": "Read the narrative and answer the questions below. a. In science class, students were learning about photosynthesis. The teacher explained that all plants require sunlight to survive. She then instructed them to start an experiment by placing one plant (A) near the window and another plant (B) inside the closet. 1. Infer the outcome for Plant (A). 2. Infer the outcome for Plant (B). 3. What is the general rule you used to make this inference? 4. State your logic for inferring the outcome for Plant (B). b. An AI model was trained on thousands of cat images to recognize features of cats. From the training data, it learned the general rule that cats usually have pointed ears and whiskers. The model is then shown a new image, which it classifies as a cat. 1. What form of reasoning did the AI model use to make this prediction? 2. What general rule did it acquire from its training? 3. Would you consider this general rule one of certainty? i tiit Model answers from the teacher edition — guide toward these, never read them out: 2) Plant (A) will survive. 3) Plant (B) will not survive. 4) All plants require sunlight to survive. | Since all plants require sunlight to survive, and Plant (B) will not get any sunlight, therefore Plant (B) will not survive. 2) Inference 3) If an animal has pointed ears and whiskers, then it is probably a cat. | No, it is not 100% certain."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.4)",
+          "prompt": "Read the narrative and answer the questions below. a. Amir is deciding how to spend his evening. He has two options: study for his math test tomorrow or watch a movie and go to bed early. He knows that studying will help him do better on tomorrow’s test, but he also wants to relax after a long day. 1. What form of reasoning is Amir using? 2. What premises is Amir considering to make a choice? 3. What outcome does decision-making seek to produce? 4. If Amir chooses to study, what does this reveal about his values? b. A delivery drone approaches a tall building on its route. It must decide whether to fly over the building, or around it. Its rules are: (1) minimize delivery time, and (2) conserve battery when possible. The drone maps the routes and calculates that flying over the building will take less time but will require more energy, while flying around it will require more time but less energy. 1. What premises guide the drone’s reasoning? 2. What other information does the drone need to make its choice? 3. If the drone chooses to fly around the building, what does this tell you about its programmed priorities? Model answers from the teacher edition — guide toward these, never read them out: 2) Decision-making 3) His goal to do well on the test and his preference for relaxation. 4) The choice with the highest utility. | He values doing well on the test more than relaxation."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 3.5)",
+          "prompt": "Read the narrative and answer the questions below. a. Sara walks into the kitchen and sees that the cookie jar is empty. She considers two possibilities: her brother ate the cookies, or her mother gave them to the neighbors. Sara looks around for clues, she notices cookie crumbs on the table. 1. What form of reasoning is Sara using? 2. What is the given in this scenario? 3. What possible reasons does Sara consider? 4. Which explanation is most plausible, and why? b. A smart home system detects that the living room lights are on in the middle of the night. From past data, it considers two possibilities: someone is awake and moving around, or the timer system malfunctioned. It also detects motion in the living room. 1. What is the given in this scenario? 2. What possible reasons does the AI consider? 3. Which explanation is most plausible, and why? i tiit Model answers from the teacher edition — guide toward these, never read them out: 2) Explanation 3) The observation that the cookie jar is empty. 4) Her brother ate the cookies, or her mother gave them away. | The explanation that her brother ate them is most plausible, because the crumbs on the table support this outcome. 2) The observation that the living room lights are on in the middle of the night. 3) That a person is awake, or that the timer system malfunctioned."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "In decision-making, utility refers to:",
+          "choices": [
+            {
+              "id": "a",
+              "text": "How probable the outcome is"
+            },
+            {
+              "id": "b",
+              "text": "How useful, valuable, or goal-fitting an outcome is"
+            },
+            {
+              "id": "c",
+              "text": "How fast the decision can be made"
+            },
+            {
+              "id": "d",
+              "text": "How certain the premises are"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Decision-making is defined as:",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Selecting the option with the highest plausibility"
+            },
+            {
+              "id": "b",
+              "text": "Reasoning backward from an outcome to causes"
+            },
+            {
+              "id": "c",
+              "text": "Directly linking premises to conclusions"
+            },
+            {
+              "id": "d",
+              "text": "Selecting the option with the highest utility"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "The certainty of an inference depends on:",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The certainty of its premises"
+            },
+            {
+              "id": "b",
+              "text": "The number of options available"
+            },
+            {
+              "id": "c",
+              "text": "The directionality of reasoning"
+            },
+            {
+              "id": "d",
+              "text": "The search process used"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following can be premises in inference?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Facts"
+            },
+            {
+              "id": "b",
+              "text": "Observations"
+            },
+            {
+              "id": "c",
+              "text": "Predictions"
+            },
+            {
+              "id": "d",
+              "text": "All of the above"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Why is logic important in reasoning?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "It ensures all decisions are fast"
+            },
+            {
+              "id": "b",
+              "text": "It provides structure so conclusions follow consistently from premises"
+            },
+            {
+              "id": "c",
+              "text": "It allows us to guess without evidence"
+            },
+            {
+              "id": "d",
+              "text": "It reduces the number of premises needed"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "In reasoning, logic refers to:",
+          "choices": [
+            {
+              "id": "a",
+              "text": "The memory of facts and rules"
+            },
+            {
+              "id": "b",
+              "text": "The outcome of decision-making"
+            },
+            {
+              "id": "c",
+              "text": "The search among possible causes"
+            },
+            {
+              "id": "d",
+              "text": "The rules that guide reasoning from premises to conclusions"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "In the reasoning process, the starting points we use are called:",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Outcomes"
+            },
+            {
+              "id": "b",
+              "text": "Premises"
+            },
+            {
+              "id": "c",
+              "text": "Hypotheses"
+            },
+            {
+              "id": "d",
+              "text": "Causes"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Reasoning can best be described as:",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Guessing based on experience"
+            },
+            {
+              "id": "b",
+              "text": "Remembering facts from memory"
+            },
+            {
+              "id": "c",
+              "text": "A structured way of thinking that follows rules to reach conclusions"
+            },
+            {
+              "id": "d",
+              "text": "Choosing randomly when uncertain"
+            }
+          ],
+          "correct_choice_id": "c"
+        }
+      ],
+      "assignment": {
+        "title": "Practicing Reasoning with AI",
+        "instructions": "In this activity, you will interact with an AI which will act as a mentor, providing questions and explanations to deepen your understanding of the topics of the lesson. In the shared folder you will find five separate text documents, each containing the prompt you need for the activity, as well as the PDF of the lesson summary. Access the folder from: bit.ly/C4_AI_Activity3_6 a. Reasoning Scenarios In this part, you will practice three forms of reasoning: • Inference • Decision-Making • Explanation Each reasoning type has its own text file with a prompt. Steps to Follow: 1. Download the file from the shared Google folder and choose the prompt for the reasoning type you want to practice. 2. Copy the full prompt and paste it into ChatGPT (or another LLM). 3. The prompt will guide the AI to give you three scenarios. For each scenario, carefully read the setup. 4. Type your answer directly into the chat, always including: • Your answer: the outcome, action, or cause. • Your reason: why your answer follows from the given rule, priorities, or causes. 5. The AI will confirm if your answer is correct and evaluate whether your reasoning is sound. 6. Continue through the scenarios one at a time until you complete all three.",
+        "success_criteria": [
+          "Think about the structure of reasoning:",
+          "Is it predicting? (Inference)",
+          "Is it choosing? (Decision-making)",
+          "Is it explaining? (Explanation) Always explain your reasoning, even if unsure — that is what the AI will evaluate.",
+          "True/False Questions",
+          "Uses the lesson's own vocabulary, each term explained"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a2-ch2-l3-p195",
+          "title": "Book page 195 — Reasoning",
+          "external_url": "/books/a2-ch2-l3/p195.jpg",
+          "step": 1,
+          "source_page": 195
+        },
+        {
+          "id": "itf-a2-ch2-l3-p196",
+          "title": "Book page 196 — Reasoning",
+          "external_url": "/books/a2-ch2-l3/p196.jpg",
+          "step": 1,
+          "source_page": 196
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a2-ch2-l3-pg195",
+          "idea_key": "reasoning",
+          "title": "Page 195 — Reasoning",
+          "caption": "",
+          "alt_text": "Page 195 of Book A2, Logic & Reasoning",
+          "image_url": "/books/a2-ch2-l3/p195.jpg",
+          "source_page": 195
+        },
+        {
+          "id": "itf-a2-ch2-l3-pg196",
+          "idea_key": "reasoning",
+          "title": "Page 196 — Reasoning",
+          "caption": "",
+          "alt_text": "Page 196 of Book A2, Logic & Reasoning",
+          "image_url": "/books/a2-ch2-l3/p196.jpg",
+          "source_page": 196
+        }
+      ]
+    },
+    {
+      "id": "itf-a2-ch2-l4",
+      "title": "AI in the Real-World",
+      "level": "Advanced",
+      "objective": "Work through \"AI in the Real-World\" from the book: applications of ai, ethics and responsibility.",
+      "tutor_prompt": "You are teaching Lesson 4 of Chapter 4 from IT Frontiers Advanced Book A2: \"AI in the Real-World\". Work through the book's own arc: Applications of AI → Ethics and Responsibility. Use the book's own examples, definitions and activities — the steps carry them verbatim — rather than inventing your own. Where a step includes the book's marked answers, treat them as your marking guide, never as text to read out. Never hand over a definition or an answer the student is one question away from reaching. Keep language concrete and age-appropriate.",
+      "steps": [
+        {
+          "mode": "explanation",
+          "title": "Applications of AI",
+          "prompt": "Teach the book's section \"Applications of AI\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: ai in the real-world i tiit Examples of real-world applications: • Identifying faces in photos • Detecting objects in security footage • Reading handwriting • Analyzing X-rays, CT scans, and MRI images in medicine • Monitoring crop health with drones in agriculture • Tracking shopper movement in retail stores • Smartphone facial recognition for security ai in the real-world Examples of real-world applications: • Virtual assistants (Siri, Alexa, Google Assistant) • Automatic captioning tools for videos • Real-time translation apps i tiit ai in the real-world Examples of real-world applications: • Translation tools • Large language models • Content filtering on social media platforms • Sentiment analysis • Educational tools i tiit Examples of real-world applications: • Recommender systems to suggest videos and music • Logistics systems to calculate the most efficient route • Airlines to adjust ticket pricess • Game-playing AIs to choose the best moves ai in the real-world Definitions to land in the student's own words: \"AI technologies are designed to extend the very processes of intelligence we studied in earlier lessons. Teacher note from the book: Common Misconceptions • AI can think like humans."
+        },
+        {
+          "mode": "explanation",
+          "title": "AI in the Real-World (p216)",
+          "prompt": "Teach the book's section \"AI in the Real-World (p216)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: i tiit Definitions to land in the student's own words: \"Artificial Intelligence (AI) is no longer just a futuristic idea from science fiction. It is already part of our everyday lives, often in ways we do not even notice. From recommending what video to watch next to helping doctors detect diseases earlier, AI systems are shaping how people live, work, and learn. In this lesson, we will explore how AI is used in the real world, what challenges and limitations it faces, and why ethics and responsibility are central to its development. By the end, you should be able to explain examples of AI applications, recognize where AI might fail, and discuss the impact AI has on individuals and society.\" · \"Narrow AI systems are designed to perform one specific task or a limited set of tasks very effectively.\""
+        },
+        {
+          "mode": "explanation",
+          "title": "Ethics and Responsibility (cont.)",
+          "prompt": "Teach the book's section \"Ethics and Responsibility (cont.)\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: • Transparency and Accountability: “Black box” systems make it hard to explain or challenge decisions. • Dependence and Displacement: Overuse of AI can replace jobs and reduce human skills. • Why Ethics Matters: Ensures AI respects human rights, builds trust, and supports fairness, safety, and positive social change. ai in the real-world"
+        },
+        {
+          "mode": "explanation",
+          "title": "Ethics and Responsibility",
+          "prompt": "Teach the book's section \"Ethics and Responsibility\" in dialogue — never lecture more than a few sentences before asking something. Book content to work through: ai in the real-world i tiit Summary Narrow AI vs. General AI • Narrow AI: Current real-world AI; designed for specific tasks (e.g., translation, face recognition). Cannot transfer skills to new tasks. • General AI: A future goal; would learn and apply intelligence across many tasks like a human. Not yet achieved. Five Cognitive Categories of AI • Perception (Input stage): Converts raw data (images, sounds) into usable information. Examples: computer vision, speech recognition. • Language (Processing stage): Interprets and generates human language. Examples: translation tools, chatbots, content filtering. • Reasoning & Decision-Making (Choice stage): Evaluates options and selects actions. Examples: recommender systems, logistics planning, dynamic pricing. • Prediction & Forecasting (Future stage): Uses past data to estimate future outcomes. Examples: stock forecasts, weather models, education risk alerts. Definitions to land in the student's own words: \"As AI becomes more common in daily life, questions of ethics—what is right or wrong—become increasingly important. Ethical considerations guide how AI should be designed, used, and supervised so that it benefits society while avoiding harm."
+        },
+        {
+          "mode": "inquiry",
+          "title": "Quick check: true or false",
+          "prompt": "Run the book's true-or-false check (11 statements). Read each aloud and have the student commit to T or F before you confirm. Statements with the book's answers: 1. Narrow AI can only perform specific tasks and cannot transfer skills to other tasks. — T 2. General AI has already been achieved and is widely used in real-world applications. — F 3. Perception in AI refers to converting raw data like images and sounds into usable information. — T 4. Language AI is mainly about understanding human emotions through language. — F 5. Reasoning and Decision-Making AI evaluates options and selects actions, such as in recommender systems and logistics planning. — T 6. Prediction and Forecasting AI uses past data to estimate future outcomes, such as stock trends or weather forecasts. — T 7. Control and Robotics represents the input stage of AI, focusing on data collection from sensors. — F 8. One limitation of AI perception is fragility, meaning small changes in lighting or noise can cause errors. — T 9. AI systems are always transparent and easy to explain, which ensures accountability. — F 10. Ethical concerns include bias and fairness, privacy, transparency, and the risk of job displacement. — T 11. T i tiit — ?"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Check yourself (Activity 4.2)",
+          "prompt": "Ask the book's questions one at a time, options and all — the correct answer is marked for YOU; confirm only after the student commits. 9. Why is transparency and accountability an ethical concern? a) AI always explains its decisions b) AI systems are inexpensive and adaptable c) AI never makes mistakes if data is good d) “Black box” systems make it hard to explain or challenge outcomes [correct: d] 10. Which of the following is NOT listed as an ethical concern of AI? a) Bias and fairness b) Privacy c) Job displacement d) Faster internet speeds [correct: d]"
+        },
+        {
+          "mode": "inquiry",
+          "title": "Talk it through (Activity 4.3)",
+          "prompt": "Read the narrative and answer the questions below. a. A new security system at a train station uses AI cameras to detect suspicious items. One morning, a child leaves behind a toy water gun. The AI system quickly flags it as a potential weapon, causing the station to be evacuated. Later, officials realize it was only a harmless toy. 1. Which cognitive function of AI is being used in this scenario? 2. Why did the system mistake the toy water gun for a real weapon? 3. What limitation of AI perception does this scenario highlight? 4. How could human oversight have prevented the unnecessary evacuation? b. An international company uses an AI translation tool for customer support. One customer in America writes, “It’s raining cats and dogs here, will that make my delivery late?” The AI translates the phrase literally into Mandarin. The customer support person reads it and is confused: “How could it rain cats and dogs?!” 1. Which cognitive function of AI is being used in this scenario? 2. Why did the translation confuse the customer support person? 3. What limitation of AI language does this scenario highlight? 4. How could the company improve the accuracy of its translations? ai in the real-world Read the narrative and answer the questions below. c. A food delivery company uses AI to assign drivers to orders."
+        }
+      ],
+      "quiz": [
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which is a limitation of AI perception?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Errors in translation"
+            },
+            {
+              "id": "b",
+              "text": "Fragility to small changes"
+            },
+            {
+              "id": "c",
+              "text": "Hidden bias in hiring"
+            },
+            {
+              "id": "d",
+              "text": "Overconfidence in forecasts"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which example belongs to Control and Robotics?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Detecting faces in photos"
+            },
+            {
+              "id": "b",
+              "text": "Chatbots for customer service"
+            },
+            {
+              "id": "c",
+              "text": "Weather forecasting"
+            },
+            {
+              "id": "d",
+              "text": "Self-driving cars"
+            }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What does Prediction and Forecasting AI mainly do?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Uses past data to estimate future outcomes"
+            },
+            {
+              "id": "b",
+              "text": "Summarizes large documents"
+            },
+            {
+              "id": "c",
+              "text": "Converts sound waves into text"
+            },
+            {
+              "id": "d",
+              "text": "Decides which move to play in a game"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "AI used in recommender systems, logistics planning, and dynamic pricing belongs to which cognitive category?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Perception"
+            },
+            {
+              "id": "b",
+              "text": "Reasoning and Decision-Making"
+            },
+            {
+              "id": "c",
+              "text": "Control and Robotics"
+            },
+            {
+              "id": "d",
+              "text": "Language ai in the real-world Answer the questions below."
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which is an example of AI in Language processing?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Stock forecasting"
+            },
+            {
+              "id": "b",
+              "text": "Self-driving cars"
+            },
+            {
+              "id": "c",
+              "text": "Translation tools"
+            },
+            {
+              "id": "d",
+              "text": "Robotic surgery"
+            }
+          ],
+          "correct_choice_id": "c"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which cognitive category involves converting raw data like pixels and sound waves into usable information?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Perception"
+            },
+            {
+              "id": "b",
+              "text": "Prediction and Forecasting"
+            },
+            {
+              "id": "c",
+              "text": "Reasoning and Decision-Making"
+            },
+            {
+              "id": "d",
+              "text": "Language"
+            }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "What is General AI?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "Current real-world AI used in translation tools"
+            },
+            {
+              "id": "b",
+              "text": "A future AI that could learn and apply skills across many tasks"
+            },
+            {
+              "id": "c",
+              "text": "An AI limited to perception and prediction only"
+            },
+            {
+              "id": "d",
+              "text": "An AI already used in self-driving cars"
+            }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "question_type": "multiple_choice",
+          "prompt": "Which of the following best describes Narrow AI?",
+          "choices": [
+            {
+              "id": "a",
+              "text": "AI that can learn any task like a human"
+            },
+            {
+              "id": "b",
+              "text": "AI that can only perform specific tasks"
+            },
+            {
+              "id": "c",
+              "text": "AI that always understands meaning"
+            },
+            {
+              "id": "d",
+              "text": "AI that replaces human judgment completely"
+            }
+          ],
+          "correct_choice_id": "b"
+        }
+      ],
+      "assignment": {
+        "title": "Exploring AI in the Real World",
+        "instructions": "In this activity, you will interact with an AI which will act as a mentor, providing examples, questions, and explanations to deepen your understanding of AI applications, limitations, and ethics. In the shared folder you will find separate text documents, each containing the prompt you need for the activity, as well as the PDF of the lesson summary. Access the folder from: bit.ly/C4_AI_Activity4_4 a. Scenario Exploration In this part, you will practice identifying AI cognitive functions and their limitations through real-world scenarios. • Perception • Language • Reasoning & Decision-Making • Prediction & Forecasting • Control & Robotics Steps to Follow: 1. Open the shared folder and download the PDF of the lesson summary. 2. Attach the PDF in ChatGPT (or another LLM). 3. Open the Scenario Exploration file, then copy the full prompt and paste it into ChatGPT. 4. You will receive one short story scenario at a time, each showing a real-world application of AI in one of the five cognitive functions. 5. Each scenario hides a limitation or challenge for you to uncover. 6. After the scenario, you will be asked four comprehension questions, one at a time. Answer each question, and the AI will tell you if you are correct, explain briefly, and correct you if necessary. 7. At the end of each scenario, the AI will review the questions you got wrong, highlight key topics you struggled with, and suggest one follow-up exercise. 8.",
+        "success_criteria": [
+          "For True/False: think about why the statement is true or false before answering.",
+          "For Multiple Choice: read all four options carefully before choosing.",
+          "Use the AI’s feedback to focus on the concepts you find most difficult.",
+          "Repeat the activity for more practice — the AI can generate new sets of questions each time. ai in the real-world c.",
+          "There’s no single “right” answer. Focus on reasoning clearly.",
+          "Uses the lesson's own vocabulary, each term explained"
+        ]
+      },
+      "materials": [
+        {
+          "id": "itf-a2-ch2-l4-p218",
+          "title": "Book page 218 — Applications of AI",
+          "external_url": "/books/a2-ch2-l4/p218.jpg",
+          "step": 1,
+          "source_page": 218
+        },
+        {
+          "id": "itf-a2-ch2-l4-p219",
+          "title": "Book page 219 — Applications of AI",
+          "external_url": "/books/a2-ch2-l4/p219.jpg",
+          "step": 1,
+          "source_page": 219
+        },
+        {
+          "id": "itf-a2-ch2-l4-p226",
+          "title": "Book page 226 — Applications of AI",
+          "external_url": "/books/a2-ch2-l4/p226.jpg",
+          "step": 3,
+          "source_page": 226
+        },
+        {
+          "id": "itf-a2-ch2-l4-p228",
+          "title": "Book page 228 — Ethics and Responsibility",
+          "external_url": "/books/a2-ch2-l4/p228.jpg",
+          "step": 3,
+          "source_page": 228
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a2-ch2-l4-pg218",
+          "idea_key": "applications-of-ai",
+          "title": "Page 218 — Applications of AI",
+          "caption": "",
+          "alt_text": "Page 218 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p218.jpg",
+          "source_page": 218
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg219",
+          "idea_key": "applications-of-ai",
+          "title": "Page 219 — Applications of AI",
+          "caption": "",
+          "alt_text": "Page 219 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p219.jpg",
+          "source_page": 219
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg226",
+          "idea_key": "applications-of-ai",
+          "title": "Page 226 — Applications of AI",
+          "caption": "",
+          "alt_text": "Page 226 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p226.jpg",
+          "source_page": 226
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg228",
+          "idea_key": "ethics-and-responsibility",
+          "title": "Page 228 — Ethics and Responsibility",
+          "caption": "",
+          "alt_text": "Page 228 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p228.jpg",
+          "source_page": 228
+        }
+      ]
+    }
+  ]
+}
