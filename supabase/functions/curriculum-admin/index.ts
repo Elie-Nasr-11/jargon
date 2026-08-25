@@ -3047,18 +3047,27 @@ async function importCurriculum(
     // instead (no import_key column, no migration). A step-bound external image
     // auto-attaches on that step's presentation turn, which is how the book's
     // diagram pages reach the student. Never deletes.
-    const materials = Array.isArray(lesson.materials) ? lesson.materials : [];
+    // R62 widens the same contract: entries may carry type "pdf" (the book's own
+    // lesson/chapter/book PDFs render in-app), and step is optional — a step-less
+    // entry lands as a lesson-level row the student browses and the mentor can
+    // hand out on request. documents[] rides the identical loop.
+    const materials = [
+      ...(Array.isArray(lesson.materials) ? lesson.materials : []),
+      ...(Array.isArray(lesson.documents) ? lesson.documents : []),
+    ];
     for (const [matIndex, matEntry] of materials.entries()) {
       const material = matEntry && typeof matEntry === "object" ? (matEntry as DbRow) : {};
       const materialId = cleanText(material.id) || `${lessonId}-m${matIndex + 1}`;
       const externalUrl = cleanText(material.external_url);
+      const kind = cleanText(material.type) === "pdf" ? "pdf" : "image";
+      const hasStep = material.step !== undefined && material.step !== null;
       const stepPos = Number(material.step);
       if (!externalUrl) {
         report.warnings.push(`${materialId} has no external_url — skipped.`);
         report.materials.skipped += 1;
         continue;
       }
-      if (!Number.isInteger(stepPos) || stepPos < 1 || stepPos > steps.length) {
+      if (hasStep && (!Number.isInteger(stepPos) || stepPos < 1 || stepPos > steps.length)) {
         report.warnings.push(`${materialId}: step ${stepPos} is outside 1..${steps.length} — skipped.`);
         report.materials.skipped += 1;
         continue;
@@ -3081,12 +3090,14 @@ async function importCurriculum(
         lesson_id: lessonId,
         // Steps are keyed positionally — quiz/assignment steps are appended AFTER
         // the authored steps, so position k here is always a teaching step.
-        activity_id: `${lessonId}-s${stepPos}`,
+        activity_id: hasStep ? `${lessonId}-s${stepPos}` : null,
         title: clampText(cleanText(material.title) || "Book page", 120),
         description: clampText(cleanText(material.description), 400),
-        resource_type: "image",
+        student_instructions: clampText(cleanText(material.student_instructions), 400),
+        resource_type: kind,
         source_type: "external_url",
         external_url: externalUrl,
+        mime_type: kind === "pdf" ? "application/pdf" : null,
         // Drafts flip to published with publish_lesson, like everything else.
         status: "draft",
         visibility: "org_private",

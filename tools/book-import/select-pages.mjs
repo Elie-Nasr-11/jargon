@@ -3,29 +3,38 @@
 // The books' diagrams are mostly vector line art with no captions or figure
 // numbers, so nothing can be "extracted" — instead whole pages are rendered as
 // images (render-pages.mjs) and bound to the steps that teach them. This script
-// picks the pages: raster-image pages first, then pages whose own text points at a
-// visual, capped per lesson so the media stage stays a garnish, not a slideshow.
+// picks the pages: raster-image pages first, then vector-heavy pages (the line-art
+// diagrams a raster census cannot see — A1 has 7 raster pages but ~28 drawn ones),
+// then pages whose own text points at a visual, capped per lesson so the media
+// stage stays a garnish, not a slideshow.
 import { getDocument, OPS } from "../../frontend/node_modules/pdfjs-dist/legacy/build/pdf.mjs";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 
 const [file, outDirArg, manifestPath] = [process.argv[2], process.argv[3], process.argv[4]];
 const VISUAL_CUE =
   /\b(diagram|image below|image above|shown below|shown above|illustration|chart|graph|picture|figure below|as shown)\b/i;
-const MAX_PER_LESSON = 8;
+// A page whose content stream draws this many paths is line art (diagrams, flow
+// charts, plotted graphs), not prose — ordinary text pages sit far below it.
+const VECTOR_OPS_MIN = 40;
+const MAX_PER_LESSON = 12;
 
 const doc = await getDocument({
   data: new Uint8Array(await readFile(file)),
   useSystemFonts: true,
 }).promise;
 
-// Raster census + per-page text, one pass.
+// Raster + vector census + per-page text, one pass.
 const rasterPages = new Set();
+const vectorPages = new Set();
 const pageText = new Map();
 for (let n = 1; n <= doc.numPages; n += 1) {
   const page = await doc.getPage(n);
   const [content, ops] = await Promise.all([page.getTextContent(), page.getOperatorList()]);
   if (ops.fnArray.some((fn) => fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject)) {
     rasterPages.add(n);
+  }
+  if (ops.fnArray.filter((fn) => fn === OPS.constructPath).length >= VECTOR_OPS_MIN) {
+    vectorPages.add(n);
   }
   pageText.set(n, content.items.map((it) => it.str).join(" "));
 }
@@ -43,9 +52,10 @@ for (const row of index) {
     }
     return best || lessonDoc.lesson.title;
   };
-  const picks = new Map(); // page -> why (ranked: raster > activity-cue > text-cue)
+  const picks = new Map(); // page -> why (ranked: raster > vector > activity-cue > text-cue)
   for (let page = from + 1; page <= to; page += 1) {
     if (rasterPages.has(page)) picks.set(page, "raster");
+    else if (vectorPages.has(page)) picks.set(page, "vector");
   }
   for (const activity of lessonDoc.activities) {
     const activityText = `${activity.intro} ${activity.items.map((item) => item.stem).join(" ")}`;
@@ -57,7 +67,7 @@ for (const row of index) {
   for (let page = from + 1; page <= to; page += 1) {
     if (!picks.has(page) && VISUAL_CUE.test(pageText.get(page) ?? "")) picks.set(page, "text-cue");
   }
-  const rank = { raster: 0, "activity-cue": 1, "text-cue": 2 };
+  const rank = { raster: 0, vector: 1, "activity-cue": 2, "text-cue": 3 };
   const chosen = [...picks.entries()]
     .sort((a, b) => rank[a[1]] - rank[b[1]] || a[0] - b[0])
     .slice(0, MAX_PER_LESSON)

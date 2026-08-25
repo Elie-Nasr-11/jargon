@@ -138,15 +138,20 @@ for (const [bookDir, chapterFile, outDir, unitId, position] of CHAPTERS) {
     }
 
     const materials = lesson.materials ?? [];
-    if (materials.length > 8) fail(lw, `${materials.length} materials > 8`);
+    if (materials.length > 12) fail(lw, `${materials.length} page images > 12`);
     const perStep = new Map();
     for (const material of materials) {
       const mw = `${lw} material ${material.id}`;
-      if (!Number.isInteger(material.step) || material.step < 1 || material.step > lesson.steps.length) {
-        fail(mw, `step ${material.step} outside 1..${lesson.steps.length}`);
+      // step is optional (R62): a step-bound image auto-shows on that step's
+      // presentation turn; a step-less one is a lesson-level row the student
+      // browses and the mentor can hand out. A present-but-bad step still fails.
+      if (material.step !== undefined) {
+        if (!Number.isInteger(material.step) || material.step < 1 || material.step > lesson.steps.length) {
+          fail(mw, `step ${material.step} outside 1..${lesson.steps.length}`);
+        }
+        perStep.set(material.step, (perStep.get(material.step) ?? 0) + 1);
+        if (perStep.get(material.step) > 3) fail(mw, "more than 3 materials on one step");
       }
-      perStep.set(material.step, (perStep.get(material.step) ?? 0) + 1);
-      if (perStep.get(material.step) > 2) fail(mw, "more than 2 materials on one step");
       const slug = lesson.id.replace(/^itf-/, "");
       if (!new RegExp(`^/books/${slug}/p\\d+\\.jpg$`).test(material.external_url)) {
         fail(mw, `bad url ${material.external_url}`);
@@ -157,6 +162,36 @@ for (const [bookDir, chapterFile, outDir, unitId, position] of CHAPTERS) {
         fail(mw, `file missing for ${material.external_url}`);
       }
     }
+
+    // The book itself (R62): every lesson carries exactly three PDFs — its own
+    // pages, its chapter, the whole book — and the per-lesson row total stays
+    // under chat's 16-resource fetch cap.
+    const documents = lesson.documents ?? [];
+    if (documents.length !== 3) fail(lw, `${documents.length} documents != 3`);
+    const docSuffixes = documents.map((doc) => (doc.id ?? "").replace(lesson.id, ""));
+    for (const suffix of ["-doc-lesson", "-doc-chapter", "-doc-book"]) {
+      if (!docSuffixes.includes(suffix)) fail(lw, `missing document ${suffix}`);
+    }
+    for (const doc of documents) {
+      const dw = `${lw} document ${doc.id}`;
+      if (doc.type !== "pdf") fail(dw, `type ${doc.type} != pdf`);
+      if (doc.step !== undefined) fail(dw, "documents must be lesson-level (no step)");
+      if (!/^\/books\/pdf\/[a-z0-9-]+\.pdf$/.test(doc.external_url ?? "")) {
+        fail(dw, `bad url ${doc.external_url}`);
+      } else {
+        try {
+          await access(path.join(repoRoot, "frontend", "public", doc.external_url.slice(1)));
+        } catch {
+          fail(dw, `file missing for ${doc.external_url}`);
+        }
+      }
+      if (!doc.title?.trim() || !doc.student_instructions?.trim()) {
+        fail(dw, "empty title/student_instructions");
+      }
+    }
+    if (materials.length + documents.length > 15) {
+      fail(lw, `${materials.length + documents.length} resource rows > 15 (chat fetches 16)`);
+    }
     if ((lesson.figures ?? []).length > 12) fail(lw, "more than 12 figures");
 
     expected.push({
@@ -164,6 +199,7 @@ for (const [bookDir, chapterFile, outDir, unitId, position] of CHAPTERS) {
       steps: lesson.steps.length + quiz.length + (lesson.assignment ? 1 : 0),
       quiz: quiz.length,
       materials: materials.length,
+      documents: documents.length,
       figures: (lesson.figures ?? []).length,
     });
   }
@@ -174,7 +210,7 @@ if (lessonCount !== 17) fail("corpus", `${lessonCount} lessons != 17`);
 console.log("expected per-lesson landed counts (steps incl. quiz+assignment):");
 for (const row of expected) {
   console.log(
-    `  ${row.lesson.padEnd(16)} steps=${String(row.steps).padStart(2)}  quiz=${row.quiz}  materials=${row.materials}  figures=${row.figures}`,
+    `  ${row.lesson.padEnd(16)} steps=${String(row.steps).padStart(2)}  quiz=${row.quiz}  materials=${String(row.materials).padStart(2)}  docs=${row.documents}  figures=${String(row.figures).padStart(2)}`,
   );
 }
 if (failures.length) {

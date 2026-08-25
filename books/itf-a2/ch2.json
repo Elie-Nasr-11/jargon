@@ -258,6 +258,58 @@
           "external_url": "/books/a2-ch2-l1/p160.jpg",
           "step": 1,
           "source_page": 160
+        },
+        {
+          "id": "itf-a2-ch2-l1-p161",
+          "title": "Book page 161 — Machine Learning",
+          "external_url": "/books/a2-ch2-l1/p161.jpg",
+          "step": 1,
+          "source_page": 161
+        },
+        {
+          "id": "itf-a2-ch2-l1-p162",
+          "title": "Book page 162 — Machine Learning",
+          "external_url": "/books/a2-ch2-l1/p162.jpg",
+          "source_page": 162
+        },
+        {
+          "id": "itf-a2-ch2-l1-p164",
+          "title": "Book page 164 — Machine Learning",
+          "external_url": "/books/a2-ch2-l1/p164.jpg",
+          "source_page": 164
+        },
+        {
+          "id": "itf-a2-ch2-l1-p167",
+          "title": "Book page 167 — Machine Learning",
+          "external_url": "/books/a2-ch2-l1/p167.jpg",
+          "step": 2,
+          "source_page": 167
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a2-ch2-l1-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Machine Learning (book pp. 158–173)",
+          "external_url": "/books/pdf/a2-ch2-l1.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A2.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a2-ch2-l1-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 4 PDF — Artificial Intelligence (book pp. 158–256)",
+          "external_url": "/books/pdf/a2-ch2.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A2.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a2-ch2-l1-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A2 (Teacher Edition)",
+          "external_url": "/books/pdf/a2-book.pdf",
+          "description": "The complete Book A2, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
@@ -278,6 +330,42 @@
           "alt_text": "Page 160 of Book A2, Machine Learning",
           "image_url": "/books/a2-ch2-l1/p160.jpg",
           "source_page": 160
+        },
+        {
+          "id": "itf-a2-ch2-l1-pg161",
+          "idea_key": "machine-learning",
+          "title": "Page 161 — Machine Learning",
+          "caption": "",
+          "alt_text": "Page 161 of Book A2, Machine Learning",
+          "image_url": "/books/a2-ch2-l1/p161.jpg",
+          "source_page": 161
+        },
+        {
+          "id": "itf-a2-ch2-l1-pg162",
+          "idea_key": "machine-learning",
+          "title": "Page 162 — Machine Learning",
+          "caption": "",
+          "alt_text": "Page 162 of Book A2, Machine Learning",
+          "image_url": "/books/a2-ch2-l1/p162.jpg",
+          "source_page": 162
+        },
+        {
+          "id": "itf-a2-ch2-l1-pg164",
+          "idea_key": "machine-learning",
+          "title": "Page 164 — Machine Learning",
+          "caption": "",
+          "alt_text": "Page 164 of Book A2, Machine Learning",
+          "image_url": "/books/a2-ch2-l1/p164.jpg",
+          "source_page": 164
+        },
+        {
+          "id": "itf-a2-ch2-l1-pg167",
+          "idea_key": "machine-learning",
+          "title": "Page 167 — Machine Learning",
+          "caption": "",
+          "alt_text": "Page 167 of Book A2, Machine Learning",
+          "image_url": "/books/a2-ch2-l1/p167.jpg",
+          "source_page": 167
         }
       ]
     },
@@ -540,6 +628,70 @@
           "external_url": "/books/a2-ch2-l2/p176.jpg",
           "step": 1,
           "source_page": 176
+        },
+        {
+          "id": "itf-a2-ch2-l2-p177",
+          "title": "Book page 177 — Prediction",
+          "external_url": "/books/a2-ch2-l2/p177.jpg",
+          "step": 1,
+          "source_page": 177
+        },
+        {
+          "id": "itf-a2-ch2-l2-p179",
+          "title": "Book page 179 — Prediction",
+          "external_url": "/books/a2-ch2-l2/p179.jpg",
+          "source_page": 179
+        },
+        {
+          "id": "itf-a2-ch2-l2-p181",
+          "title": "Book page 181 — Prediction",
+          "external_url": "/books/a2-ch2-l2/p181.jpg",
+          "source_page": 181
+        },
+        {
+          "id": "itf-a2-ch2-l2-p182",
+          "title": "Book page 182 — Prediction",
+          "external_url": "/books/a2-ch2-l2/p182.jpg",
+          "source_page": 182
+        },
+        {
+          "id": "itf-a2-ch2-l2-p183",
+          "title": "Book page 183 — Prediction",
+          "external_url": "/books/a2-ch2-l2/p183.jpg",
+          "source_page": 183
+        },
+        {
+          "id": "itf-a2-ch2-l2-p185",
+          "title": "Book page 185 — Prediction",
+          "external_url": "/books/a2-ch2-l2/p185.jpg",
+          "step": 4,
+          "source_page": 185
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a2-ch2-l2-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Prediction (book pp. 174–193)",
+          "external_url": "/books/pdf/a2-ch2-l2.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A2.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a2-ch2-l2-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 4 PDF — Artificial Intelligence (book pp. 158–256)",
+          "external_url": "/books/pdf/a2-ch2.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A2.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a2-ch2-l2-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A2 (Teacher Edition)",
+          "external_url": "/books/pdf/a2-book.pdf",
+          "description": "The complete Book A2, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
@@ -560,6 +712,60 @@
           "alt_text": "Page 176 of Book A2, Prediction",
           "image_url": "/books/a2-ch2-l2/p176.jpg",
           "source_page": 176
+        },
+        {
+          "id": "itf-a2-ch2-l2-pg177",
+          "idea_key": "prediction",
+          "title": "Page 177 — Prediction",
+          "caption": "",
+          "alt_text": "Page 177 of Book A2, Prediction",
+          "image_url": "/books/a2-ch2-l2/p177.jpg",
+          "source_page": 177
+        },
+        {
+          "id": "itf-a2-ch2-l2-pg179",
+          "idea_key": "prediction",
+          "title": "Page 179 — Prediction",
+          "caption": "",
+          "alt_text": "Page 179 of Book A2, Prediction",
+          "image_url": "/books/a2-ch2-l2/p179.jpg",
+          "source_page": 179
+        },
+        {
+          "id": "itf-a2-ch2-l2-pg181",
+          "idea_key": "prediction",
+          "title": "Page 181 — Prediction",
+          "caption": "",
+          "alt_text": "Page 181 of Book A2, Prediction",
+          "image_url": "/books/a2-ch2-l2/p181.jpg",
+          "source_page": 181
+        },
+        {
+          "id": "itf-a2-ch2-l2-pg182",
+          "idea_key": "prediction",
+          "title": "Page 182 — Prediction",
+          "caption": "",
+          "alt_text": "Page 182 of Book A2, Prediction",
+          "image_url": "/books/a2-ch2-l2/p182.jpg",
+          "source_page": 182
+        },
+        {
+          "id": "itf-a2-ch2-l2-pg183",
+          "idea_key": "prediction",
+          "title": "Page 183 — Prediction",
+          "caption": "",
+          "alt_text": "Page 183 of Book A2, Prediction",
+          "image_url": "/books/a2-ch2-l2/p183.jpg",
+          "source_page": 183
+        },
+        {
+          "id": "itf-a2-ch2-l2-pg185",
+          "idea_key": "prediction",
+          "title": "Page 185 — Prediction",
+          "caption": "",
+          "alt_text": "Page 185 of Book A2, Prediction",
+          "image_url": "/books/a2-ch2-l2/p185.jpg",
+          "source_page": 185
         }
       ]
     },
@@ -823,6 +1029,70 @@
           "external_url": "/books/a2-ch2-l3/p196.jpg",
           "step": 1,
           "source_page": 196
+        },
+        {
+          "id": "itf-a2-ch2-l3-p198",
+          "title": "Book page 198 — Reasoning",
+          "external_url": "/books/a2-ch2-l3/p198.jpg",
+          "step": 1,
+          "source_page": 198
+        },
+        {
+          "id": "itf-a2-ch2-l3-p199",
+          "title": "Book page 199 — Reasoning",
+          "external_url": "/books/a2-ch2-l3/p199.jpg",
+          "source_page": 199
+        },
+        {
+          "id": "itf-a2-ch2-l3-p202",
+          "title": "Book page 202 — Reasoning",
+          "external_url": "/books/a2-ch2-l3/p202.jpg",
+          "source_page": 202
+        },
+        {
+          "id": "itf-a2-ch2-l3-p203",
+          "title": "Book page 203 — Reasoning",
+          "external_url": "/books/a2-ch2-l3/p203.jpg",
+          "source_page": 203
+        },
+        {
+          "id": "itf-a2-ch2-l3-p204",
+          "title": "Book page 204 — Reasoning",
+          "external_url": "/books/a2-ch2-l3/p204.jpg",
+          "source_page": 204
+        },
+        {
+          "id": "itf-a2-ch2-l3-p207",
+          "title": "Book page 207 — Reasoning",
+          "external_url": "/books/a2-ch2-l3/p207.jpg",
+          "step": 4,
+          "source_page": 207
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a2-ch2-l3-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Logic & Reasoning (book pp. 194–215)",
+          "external_url": "/books/pdf/a2-ch2-l3.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A2.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a2-ch2-l3-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 4 PDF — Artificial Intelligence (book pp. 158–256)",
+          "external_url": "/books/pdf/a2-ch2.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A2.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a2-ch2-l3-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A2 (Teacher Edition)",
+          "external_url": "/books/pdf/a2-book.pdf",
+          "description": "The complete Book A2, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
@@ -843,6 +1113,60 @@
           "alt_text": "Page 196 of Book A2, Logic & Reasoning",
           "image_url": "/books/a2-ch2-l3/p196.jpg",
           "source_page": 196
+        },
+        {
+          "id": "itf-a2-ch2-l3-pg198",
+          "idea_key": "reasoning",
+          "title": "Page 198 — Reasoning",
+          "caption": "",
+          "alt_text": "Page 198 of Book A2, Logic & Reasoning",
+          "image_url": "/books/a2-ch2-l3/p198.jpg",
+          "source_page": 198
+        },
+        {
+          "id": "itf-a2-ch2-l3-pg199",
+          "idea_key": "reasoning",
+          "title": "Page 199 — Reasoning",
+          "caption": "",
+          "alt_text": "Page 199 of Book A2, Logic & Reasoning",
+          "image_url": "/books/a2-ch2-l3/p199.jpg",
+          "source_page": 199
+        },
+        {
+          "id": "itf-a2-ch2-l3-pg202",
+          "idea_key": "reasoning",
+          "title": "Page 202 — Reasoning",
+          "caption": "",
+          "alt_text": "Page 202 of Book A2, Logic & Reasoning",
+          "image_url": "/books/a2-ch2-l3/p202.jpg",
+          "source_page": 202
+        },
+        {
+          "id": "itf-a2-ch2-l3-pg203",
+          "idea_key": "reasoning",
+          "title": "Page 203 — Reasoning",
+          "caption": "",
+          "alt_text": "Page 203 of Book A2, Logic & Reasoning",
+          "image_url": "/books/a2-ch2-l3/p203.jpg",
+          "source_page": 203
+        },
+        {
+          "id": "itf-a2-ch2-l3-pg204",
+          "idea_key": "reasoning",
+          "title": "Page 204 — Reasoning",
+          "caption": "",
+          "alt_text": "Page 204 of Book A2, Logic & Reasoning",
+          "image_url": "/books/a2-ch2-l3/p204.jpg",
+          "source_page": 204
+        },
+        {
+          "id": "itf-a2-ch2-l3-pg207",
+          "idea_key": "reasoning",
+          "title": "Page 207 — Reasoning",
+          "caption": "",
+          "alt_text": "Page 207 of Book A2, Logic & Reasoning",
+          "image_url": "/books/a2-ch2-l3/p207.jpg",
+          "source_page": 207
         }
       ]
     },
@@ -1103,6 +1427,31 @@
           "source_page": 219
         },
         {
+          "id": "itf-a2-ch2-l4-p220",
+          "title": "Book page 220 — Applications of AI",
+          "external_url": "/books/a2-ch2-l4/p220.jpg",
+          "step": 1,
+          "source_page": 220
+        },
+        {
+          "id": "itf-a2-ch2-l4-p221",
+          "title": "Book page 221 — Applications of AI",
+          "external_url": "/books/a2-ch2-l4/p221.jpg",
+          "source_page": 221
+        },
+        {
+          "id": "itf-a2-ch2-l4-p222",
+          "title": "Book page 222 — Applications of AI",
+          "external_url": "/books/a2-ch2-l4/p222.jpg",
+          "source_page": 222
+        },
+        {
+          "id": "itf-a2-ch2-l4-p224",
+          "title": "Book page 224 — Applications of AI",
+          "external_url": "/books/a2-ch2-l4/p224.jpg",
+          "source_page": 224
+        },
+        {
           "id": "itf-a2-ch2-l4-p226",
           "title": "Book page 226 — Applications of AI",
           "external_url": "/books/a2-ch2-l4/p226.jpg",
@@ -1115,6 +1464,59 @@
           "external_url": "/books/a2-ch2-l4/p228.jpg",
           "step": 3,
           "source_page": 228
+        },
+        {
+          "id": "itf-a2-ch2-l4-p229",
+          "title": "Book page 229 — Ethics and Responsibility",
+          "external_url": "/books/a2-ch2-l4/p229.jpg",
+          "step": 3,
+          "source_page": 229
+        },
+        {
+          "id": "itf-a2-ch2-l4-p231",
+          "title": "Book page 231 — Ethics and Responsibility",
+          "external_url": "/books/a2-ch2-l4/p231.jpg",
+          "source_page": 231
+        },
+        {
+          "id": "itf-a2-ch2-l4-p242",
+          "title": "Book page 242 — Ethics and Responsibility",
+          "external_url": "/books/a2-ch2-l4/p242.jpg",
+          "step": 7,
+          "source_page": 242
+        },
+        {
+          "id": "itf-a2-ch2-l4-p256",
+          "title": "Book page 256 — Ethics and Responsibility",
+          "external_url": "/books/a2-ch2-l4/p256.jpg",
+          "step": 7,
+          "source_page": 256
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a2-ch2-l4-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — AI in the Real-World (book pp. 216–256)",
+          "external_url": "/books/pdf/a2-ch2-l4.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A2.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a2-ch2-l4-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 4 PDF — Artificial Intelligence (book pp. 158–256)",
+          "external_url": "/books/pdf/a2-ch2.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A2.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a2-ch2-l4-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A2 (Teacher Edition)",
+          "external_url": "/books/pdf/a2-book.pdf",
+          "description": "The complete Book A2, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
@@ -1137,6 +1539,42 @@
           "source_page": 219
         },
         {
+          "id": "itf-a2-ch2-l4-pg220",
+          "idea_key": "applications-of-ai",
+          "title": "Page 220 — Applications of AI",
+          "caption": "",
+          "alt_text": "Page 220 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p220.jpg",
+          "source_page": 220
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg221",
+          "idea_key": "applications-of-ai",
+          "title": "Page 221 — Applications of AI",
+          "caption": "",
+          "alt_text": "Page 221 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p221.jpg",
+          "source_page": 221
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg222",
+          "idea_key": "applications-of-ai",
+          "title": "Page 222 — Applications of AI",
+          "caption": "",
+          "alt_text": "Page 222 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p222.jpg",
+          "source_page": 222
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg224",
+          "idea_key": "applications-of-ai",
+          "title": "Page 224 — Applications of AI",
+          "caption": "",
+          "alt_text": "Page 224 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p224.jpg",
+          "source_page": 224
+        },
+        {
           "id": "itf-a2-ch2-l4-pg226",
           "idea_key": "applications-of-ai",
           "title": "Page 226 — Applications of AI",
@@ -1153,6 +1591,42 @@
           "alt_text": "Page 228 of Book A2, AI in the Real-World",
           "image_url": "/books/a2-ch2-l4/p228.jpg",
           "source_page": 228
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg229",
+          "idea_key": "ethics-and-responsibility",
+          "title": "Page 229 — Ethics and Responsibility",
+          "caption": "",
+          "alt_text": "Page 229 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p229.jpg",
+          "source_page": 229
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg231",
+          "idea_key": "ethics-and-responsibility",
+          "title": "Page 231 — Ethics and Responsibility",
+          "caption": "",
+          "alt_text": "Page 231 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p231.jpg",
+          "source_page": 231
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg242",
+          "idea_key": "ethics-and-responsibility",
+          "title": "Page 242 — Ethics and Responsibility",
+          "caption": "",
+          "alt_text": "Page 242 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p242.jpg",
+          "source_page": 242
+        },
+        {
+          "id": "itf-a2-ch2-l4-pg256",
+          "idea_key": "ethics-and-responsibility",
+          "title": "Page 256 — Ethics and Responsibility",
+          "caption": "",
+          "alt_text": "Page 256 of Book A2, AI in the Real-World",
+          "image_url": "/books/a2-ch2-l4/p256.jpg",
+          "source_page": 256
         }
       ]
     }

@@ -263,6 +263,27 @@
       },
       "materials": [
         {
+          "id": "itf-a2-ch1-l1-p9",
+          "title": "Book page 9 — From Data to Information",
+          "external_url": "/books/a2-ch1-l1/p9.jpg",
+          "step": 1,
+          "source_page": 9
+        },
+        {
+          "id": "itf-a2-ch1-l1-p10",
+          "title": "Book page 10 — From Data to Information",
+          "external_url": "/books/a2-ch1-l1/p10.jpg",
+          "step": 1,
+          "source_page": 10
+        },
+        {
+          "id": "itf-a2-ch1-l1-p13",
+          "title": "Book page 13 — Organizing Data",
+          "external_url": "/books/a2-ch1-l1/p13.jpg",
+          "step": 2,
+          "source_page": 13
+        },
+        {
           "id": "itf-a2-ch1-l1-p14",
           "title": "Book page 14 — Visualizing Data",
           "external_url": "/books/a2-ch1-l1/p14.jpg",
@@ -277,11 +298,25 @@
           "source_page": 15
         },
         {
-          "id": "itf-a2-ch1-l1-p16",
-          "title": "Book page 16 — Visualizing Data",
-          "external_url": "/books/a2-ch1-l1/p16.jpg",
+          "id": "itf-a2-ch1-l1-p17",
+          "title": "Book page 17 — Visualizing Data",
+          "external_url": "/books/a2-ch1-l1/p17.jpg",
           "step": 4,
-          "source_page": 16
+          "source_page": 17
+        },
+        {
+          "id": "itf-a2-ch1-l1-p18",
+          "title": "Book page 18 — Visualizing Data",
+          "external_url": "/books/a2-ch1-l1/p18.jpg",
+          "step": 5,
+          "source_page": 18
+        },
+        {
+          "id": "itf-a2-ch1-l1-p19",
+          "title": "Book page 19 — Visualizing Data",
+          "external_url": "/books/a2-ch1-l1/p19.jpg",
+          "step": 5,
+          "source_page": 19
         },
         {
           "id": "itf-a2-ch1-l1-p23",
@@ -310,16 +345,62 @@
           "external_url": "/books/a2-ch1-l1/p28.jpg",
           "step": 11,
           "source_page": 28
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a2-ch1-l1-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — From Data to Information (book pp. 8–29)",
+          "external_url": "/books/pdf/a2-ch1-l1.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A2.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
         },
         {
-          "id": "itf-a2-ch1-l1-p29",
-          "title": "Book page 29 — Career Tips",
-          "external_url": "/books/a2-ch1-l1/p29.jpg",
-          "step": 11,
-          "source_page": 29
+          "id": "itf-a2-ch1-l1-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 3 PDF — Data & Information (book pp. 8–156)",
+          "external_url": "/books/pdf/a2-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A2.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a2-ch1-l1-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A2 (Teacher Edition)",
+          "external_url": "/books/pdf/a2-book.pdf",
+          "description": "The complete Book A2, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
+        {
+          "id": "itf-a2-ch1-l1-pg9",
+          "idea_key": "from-data-to-information",
+          "title": "Page 9 — From Data to Information",
+          "caption": "",
+          "alt_text": "Page 9 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p9.jpg",
+          "source_page": 9
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg10",
+          "idea_key": "from-data-to-information",
+          "title": "Page 10 — From Data to Information",
+          "caption": "",
+          "alt_text": "Page 10 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p10.jpg",
+          "source_page": 10
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg13",
+          "idea_key": "organizing-data",
+          "title": "Page 13 — Organizing Data",
+          "caption": "",
+          "alt_text": "Page 13 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p13.jpg",
+          "source_page": 13
+        },
         {
           "id": "itf-a2-ch1-l1-pg14",
           "idea_key": "visualizing-data",
@@ -339,13 +420,31 @@
           "source_page": 15
         },
         {
-          "id": "itf-a2-ch1-l1-pg16",
+          "id": "itf-a2-ch1-l1-pg17",
           "idea_key": "visualizing-data",
-          "title": "Page 16 — Visualizing Data",
+          "title": "Page 17 — Visualizing Data",
           "caption": "",
-          "alt_text": "Page 16 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p16.jpg",
-          "source_page": 16
+          "alt_text": "Page 17 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p17.jpg",
+          "source_page": 17
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg18",
+          "idea_key": "visualizing-data",
+          "title": "Page 18 — Visualizing Data",
+          "caption": "",
+          "alt_text": "Page 18 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p18.jpg",
+          "source_page": 18
+        },
+        {
+          "id": "itf-a2-ch1-l1-pg19",
+          "idea_key": "visualizing-data",
+          "title": "Page 19 — Visualizing Data",
+          "caption": "",
+          "alt_text": "Page 19 of Book A2, From Data to Information",
+          "image_url": "/books/a2-ch1-l1/p19.jpg",
+          "source_page": 19
         },
         {
           "id": "itf-a2-ch1-l1-pg23",
@@ -382,15 +481,6 @@
           "alt_text": "Page 28 of Book A2, From Data to Information",
           "image_url": "/books/a2-ch1-l1/p28.jpg",
           "source_page": 28
-        },
-        {
-          "id": "itf-a2-ch1-l1-pg29",
-          "idea_key": "career-tips",
-          "title": "Page 29 — Career Tips",
-          "caption": "",
-          "alt_text": "Page 29 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p29.jpg",
-          "source_page": 29
         }
       ]
     },
@@ -702,6 +792,82 @@
           "external_url": "/books/a2-ch1-l2/p35.jpg",
           "step": 3,
           "source_page": 35
+        },
+        {
+          "id": "itf-a2-ch1-l2-p39",
+          "title": "Book page 39 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p39.jpg",
+          "step": 3,
+          "source_page": 39
+        },
+        {
+          "id": "itf-a2-ch1-l2-p40",
+          "title": "Book page 40 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p40.jpg",
+          "source_page": 40
+        },
+        {
+          "id": "itf-a2-ch1-l2-p41",
+          "title": "Book page 41 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p41.jpg",
+          "source_page": 41
+        },
+        {
+          "id": "itf-a2-ch1-l2-p42",
+          "title": "Book page 42 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p42.jpg",
+          "source_page": 42
+        },
+        {
+          "id": "itf-a2-ch1-l2-p43",
+          "title": "Book page 43 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p43.jpg",
+          "source_page": 43
+        },
+        {
+          "id": "itf-a2-ch1-l2-p44",
+          "title": "Book page 44 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p44.jpg",
+          "source_page": 44
+        },
+        {
+          "id": "itf-a2-ch1-l2-p45",
+          "title": "Book page 45 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p45.jpg",
+          "source_page": 45
+        },
+        {
+          "id": "itf-a2-ch1-l2-p49",
+          "title": "Book page 49 — Algorithms & Data Structures",
+          "external_url": "/books/a2-ch1-l2/p49.jpg",
+          "step": 6,
+          "source_page": 49
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a2-ch1-l2-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Data Structures (book pp. 30–67)",
+          "external_url": "/books/pdf/a2-ch1-l2.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A2.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a2-ch1-l2-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 3 PDF — Data & Information (book pp. 8–156)",
+          "external_url": "/books/pdf/a2-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A2.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a2-ch1-l2-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A2 (Teacher Edition)",
+          "external_url": "/books/pdf/a2-book.pdf",
+          "description": "The complete Book A2, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
@@ -740,6 +906,78 @@
           "alt_text": "Page 35 of Book A2, Data Structures",
           "image_url": "/books/a2-ch1-l2/p35.jpg",
           "source_page": 35
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg39",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 39 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 39 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p39.jpg",
+          "source_page": 39
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg40",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 40 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 40 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p40.jpg",
+          "source_page": 40
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg41",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 41 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 41 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p41.jpg",
+          "source_page": 41
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg42",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 42 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 42 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p42.jpg",
+          "source_page": 42
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg43",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 43 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 43 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p43.jpg",
+          "source_page": 43
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg44",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 44 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 44 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p44.jpg",
+          "source_page": 44
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg45",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 45 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 45 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p45.jpg",
+          "source_page": 45
+        },
+        {
+          "id": "itf-a2-ch1-l2-pg49",
+          "idea_key": "algorithms-data-structures",
+          "title": "Page 49 — Algorithms & Data Structures",
+          "caption": "",
+          "alt_text": "Page 49 of Book A2, Data Structures",
+          "image_url": "/books/a2-ch1-l2/p49.jpg",
+          "source_page": 49
         }
       ]
     },
@@ -1005,6 +1243,13 @@
       },
       "materials": [
         {
+          "id": "itf-a2-ch1-l3-p72",
+          "title": "Book page 72 — Linear Search",
+          "external_url": "/books/a2-ch1-l3/p72.jpg",
+          "step": 1,
+          "source_page": 72
+        },
+        {
           "id": "itf-a2-ch1-l3-p73",
           "title": "Book page 73 — Linear Search",
           "external_url": "/books/a2-ch1-l3/p73.jpg",
@@ -1017,9 +1262,71 @@
           "external_url": "/books/a2-ch1-l3/p75.jpg",
           "step": 4,
           "source_page": 75
+        },
+        {
+          "id": "itf-a2-ch1-l3-p76",
+          "title": "Book page 76 — Binary Search",
+          "external_url": "/books/a2-ch1-l3/p76.jpg",
+          "step": 4,
+          "source_page": 76
+        },
+        {
+          "id": "itf-a2-ch1-l3-p77",
+          "title": "Book page 77 — Binary Search",
+          "external_url": "/books/a2-ch1-l3/p77.jpg",
+          "step": 4,
+          "source_page": 77
+        },
+        {
+          "id": "itf-a2-ch1-l3-p81",
+          "title": "Book page 81 — Binary Search",
+          "external_url": "/books/a2-ch1-l3/p81.jpg",
+          "source_page": 81
+        },
+        {
+          "id": "itf-a2-ch1-l3-p84",
+          "title": "Book page 84 — Binary Search",
+          "external_url": "/books/a2-ch1-l3/p84.jpg",
+          "step": 5,
+          "source_page": 84
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a2-ch1-l3-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Searching Linear Data (book pp. 68–93)",
+          "external_url": "/books/pdf/a2-ch1-l3.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A2.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a2-ch1-l3-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 3 PDF — Data & Information (book pp. 8–156)",
+          "external_url": "/books/pdf/a2-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A2.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a2-ch1-l3-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A2 (Teacher Edition)",
+          "external_url": "/books/pdf/a2-book.pdf",
+          "description": "The complete Book A2, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
+        {
+          "id": "itf-a2-ch1-l3-pg72",
+          "idea_key": "linear-search",
+          "title": "Page 72 — Linear Search",
+          "caption": "",
+          "alt_text": "Page 72 of Book A2, Searching Linear Data",
+          "image_url": "/books/a2-ch1-l3/p72.jpg",
+          "source_page": 72
+        },
         {
           "id": "itf-a2-ch1-l3-pg73",
           "idea_key": "linear-search",
@@ -1037,6 +1344,42 @@
           "alt_text": "Page 75 of Book A2, Searching Linear Data",
           "image_url": "/books/a2-ch1-l3/p75.jpg",
           "source_page": 75
+        },
+        {
+          "id": "itf-a2-ch1-l3-pg76",
+          "idea_key": "binary-search",
+          "title": "Page 76 — Binary Search",
+          "caption": "",
+          "alt_text": "Page 76 of Book A2, Searching Linear Data",
+          "image_url": "/books/a2-ch1-l3/p76.jpg",
+          "source_page": 76
+        },
+        {
+          "id": "itf-a2-ch1-l3-pg77",
+          "idea_key": "binary-search",
+          "title": "Page 77 — Binary Search",
+          "caption": "",
+          "alt_text": "Page 77 of Book A2, Searching Linear Data",
+          "image_url": "/books/a2-ch1-l3/p77.jpg",
+          "source_page": 77
+        },
+        {
+          "id": "itf-a2-ch1-l3-pg81",
+          "idea_key": "binary-search",
+          "title": "Page 81 — Binary Search",
+          "caption": "",
+          "alt_text": "Page 81 of Book A2, Searching Linear Data",
+          "image_url": "/books/a2-ch1-l3/p81.jpg",
+          "source_page": 81
+        },
+        {
+          "id": "itf-a2-ch1-l3-pg84",
+          "idea_key": "binary-search",
+          "title": "Page 84 — Binary Search",
+          "caption": "",
+          "alt_text": "Page 84 of Book A2, Searching Linear Data",
+          "image_url": "/books/a2-ch1-l3/p84.jpg",
+          "source_page": 84
         }
       ]
     },
@@ -1339,11 +1682,52 @@
       },
       "materials": [
         {
-          "id": "itf-a2-ch1-l4-p124",
-          "title": "Book page 124 — Performance",
-          "external_url": "/books/a2-ch1-l4/p124.jpg",
-          "step": 7,
-          "source_page": 124
+          "id": "itf-a2-ch1-l4-p96",
+          "title": "Book page 96 — Order & Criteria",
+          "external_url": "/books/a2-ch1-l4/p96.jpg",
+          "step": 2,
+          "source_page": 96
+        },
+        {
+          "id": "itf-a2-ch1-l4-p97",
+          "title": "Book page 97 — Order & Criteria",
+          "external_url": "/books/a2-ch1-l4/p97.jpg",
+          "step": 2,
+          "source_page": 97
+        },
+        {
+          "id": "itf-a2-ch1-l4-p98",
+          "title": "Book page 98 — Order & Criteria",
+          "external_url": "/books/a2-ch1-l4/p98.jpg",
+          "step": 2,
+          "source_page": 98
+        },
+        {
+          "id": "itf-a2-ch1-l4-p100",
+          "title": "Book page 100 — Sorting Algorithms",
+          "external_url": "/books/a2-ch1-l4/p100.jpg",
+          "step": 3,
+          "source_page": 100
+        },
+        {
+          "id": "itf-a2-ch1-l4-p101",
+          "title": "Book page 101 — Sorting Algorithms",
+          "external_url": "/books/a2-ch1-l4/p101.jpg",
+          "step": 3,
+          "source_page": 101
+        },
+        {
+          "id": "itf-a2-ch1-l4-p102",
+          "title": "Book page 102 — Sorting Algorithms",
+          "external_url": "/books/a2-ch1-l4/p102.jpg",
+          "step": 3,
+          "source_page": 102
+        },
+        {
+          "id": "itf-a2-ch1-l4-p106",
+          "title": "Book page 106 — Sorting Algorithms",
+          "external_url": "/books/a2-ch1-l4/p106.jpg",
+          "source_page": 106
         },
         {
           "id": "itf-a2-ch1-l4-p125",
@@ -1351,6 +1735,20 @@
           "external_url": "/books/a2-ch1-l4/p125.jpg",
           "step": 7,
           "source_page": 125
+        },
+        {
+          "id": "itf-a2-ch1-l4-p130",
+          "title": "Book page 130 — Performance",
+          "external_url": "/books/a2-ch1-l4/p130.jpg",
+          "step": 7,
+          "source_page": 130
+        },
+        {
+          "id": "itf-a2-ch1-l4-p133",
+          "title": "Book page 133 — Performance",
+          "external_url": "/books/a2-ch1-l4/p133.jpg",
+          "step": 7,
+          "source_page": 133
         },
         {
           "id": "itf-a2-ch1-l4-p137",
@@ -1367,15 +1765,95 @@
           "source_page": 138
         }
       ],
+      "documents": [
+        {
+          "id": "itf-a2-ch1-l4-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Sorting Linear Data (book pp. 94–156)",
+          "external_url": "/books/pdf/a2-ch1-l4.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A2.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a2-ch1-l4-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 3 PDF — Data & Information (book pp. 8–156)",
+          "external_url": "/books/pdf/a2-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A2.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a2-ch1-l4-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A2 (Teacher Edition)",
+          "external_url": "/books/pdf/a2-book.pdf",
+          "description": "The complete Book A2, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
       "figures": [
         {
-          "id": "itf-a2-ch1-l4-pg124",
-          "idea_key": "performance",
-          "title": "Page 124 — Performance",
+          "id": "itf-a2-ch1-l4-pg96",
+          "idea_key": "order-criteria",
+          "title": "Page 96 — Order & Criteria",
           "caption": "",
-          "alt_text": "Page 124 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p124.jpg",
-          "source_page": 124
+          "alt_text": "Page 96 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p96.jpg",
+          "source_page": 96
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg97",
+          "idea_key": "order-criteria",
+          "title": "Page 97 — Order & Criteria",
+          "caption": "",
+          "alt_text": "Page 97 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p97.jpg",
+          "source_page": 97
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg98",
+          "idea_key": "order-criteria",
+          "title": "Page 98 — Order & Criteria",
+          "caption": "",
+          "alt_text": "Page 98 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p98.jpg",
+          "source_page": 98
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg100",
+          "idea_key": "sorting-algorithms",
+          "title": "Page 100 — Sorting Algorithms",
+          "caption": "",
+          "alt_text": "Page 100 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p100.jpg",
+          "source_page": 100
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg101",
+          "idea_key": "sorting-algorithms",
+          "title": "Page 101 — Sorting Algorithms",
+          "caption": "",
+          "alt_text": "Page 101 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p101.jpg",
+          "source_page": 101
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg102",
+          "idea_key": "sorting-algorithms",
+          "title": "Page 102 — Sorting Algorithms",
+          "caption": "",
+          "alt_text": "Page 102 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p102.jpg",
+          "source_page": 102
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg106",
+          "idea_key": "sorting-algorithms",
+          "title": "Page 106 — Sorting Algorithms",
+          "caption": "",
+          "alt_text": "Page 106 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p106.jpg",
+          "source_page": 106
         },
         {
           "id": "itf-a2-ch1-l4-pg125",
@@ -1385,6 +1863,24 @@
           "alt_text": "Page 125 of Book A2, Sorting Linear Data",
           "image_url": "/books/a2-ch1-l4/p125.jpg",
           "source_page": 125
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg130",
+          "idea_key": "performance",
+          "title": "Page 130 — Performance",
+          "caption": "",
+          "alt_text": "Page 130 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p130.jpg",
+          "source_page": 130
+        },
+        {
+          "id": "itf-a2-ch1-l4-pg133",
+          "idea_key": "performance",
+          "title": "Page 133 — Performance",
+          "caption": "",
+          "alt_text": "Page 133 of Book A2, Sorting Linear Data",
+          "image_url": "/books/a2-ch1-l4/p133.jpg",
+          "source_page": 133
         },
         {
           "id": "itf-a2-ch1-l4-pg137",

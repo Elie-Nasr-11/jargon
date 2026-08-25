@@ -16,10 +16,18 @@ this directory — the symlink is gitignored):
 node tools/book-import/extract.mjs "IT Frontiers - Advanced - Book A1 - Teacher Edition.pdf" a1 /tmp/out-a1
 node tools/book-import/extract.mjs "IT Frontiers - Advanced - Book A2 - Teacher Edition.pdf" a2 /tmp/out-a2
 
-# 2. Pick + render the diagram pages.
+# 2. Pick + render the visual pages (raster census + vector line-art census —
+#    A1's diagrams are drawn, not rastered; cap 12 per lesson).
 node tools/book-import/select-pages.mjs "<A1 pdf>" /tmp/out-a1 books/itf-a1/pages.json
 node tools/book-import/render-pages.mjs "<A1 pdf>" books/itf-a1/pages.json frontend/public
 #    (repeat for a2)
+
+# 2b. The book PDFs themselves (R62) live in frontend/public/books/pdf/:
+#     <slug>.pdf per lesson, a1-ch1.pdf etc. per chapter (both from split.mjs),
+#     a1-book.pdf / a2-book.pdf (copies of the repo-root Teacher Editions).
+#     Regenerate the splits with:
+#       node tools/book-import/split.mjs "<A1 pdf>" /tmp/out-a1/index.json <outRoot> a1
+#     then copy chapters/lessons into frontend/public/books/pdf/ under those names.
 
 # 3. Compose the four chapter envelopes (splices books/itf-a1/lesson-1-authored.json
 #    verbatim as A1 ch1 lesson 1 — it is live in prod; --raw emits the mechanical

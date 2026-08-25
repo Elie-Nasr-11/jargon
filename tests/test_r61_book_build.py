@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXTRACT = (ROOT / "tools" / "book-import" / "extract.mjs").read_text(encoding="utf-8")
 COMPOSE = (ROOT / "tools" / "book-import" / "compose.mjs").read_text(encoding="utf-8")
 RENDER = (ROOT / "tools" / "book-import" / "render-pages.mjs").read_text(encoding="utf-8")
+SELECT = (ROOT / "tools" / "book-import" / "select-pages.mjs").read_text(encoding="utf-8")
 VALIDATE = (ROOT / "tools" / "book-import" / "validate.mjs").read_text(encoding="utf-8")
 ADMIN = (ROOT / "supabase" / "functions" / "curriculum-admin" / "index.ts").read_text(
     encoding="utf-8"
@@ -104,10 +105,18 @@ class ComposerTests(unittest.TestCase):
 class ImporterMaterialsTests(unittest.TestCase):
     IMPORTER = ADMIN.split("async function importCurriculum(", 1)[1].split("\nasync function ", 1)[0]
 
-    def test_materials_land_as_step_bound_external_images(self):
-        self.assertIn('resource_type: "image"', self.IMPORTER)
+    def test_materials_land_as_external_rows_image_or_pdf(self):
+        # R62: type is entry-driven ("pdf" for the book PDFs, image otherwise) and
+        # step is optional — a step-less entry is a lesson-level row.
+        self.assertIn('cleanText(material.type) === "pdf" ? "pdf" : "image"', self.IMPORTER)
+        self.assertIn("resource_type: kind", self.IMPORTER)
         self.assertIn('source_type: "external_url"', self.IMPORTER)
-        self.assertIn("activity_id: `${lessonId}-s${stepPos}`", self.IMPORTER)
+        self.assertIn("activity_id: hasStep ? `${lessonId}-s${stepPos}` : null", self.IMPORTER)
+        self.assertIn('mime_type: kind === "pdf" ? "application/pdf" : null', self.IMPORTER)
+
+    def test_documents_ride_the_materials_loop(self):
+        # One loop, one idempotency scheme — documents[] is just more materials.
+        self.assertIn("lesson.documents", self.IMPORTER)
 
     def test_idempotency_rides_metadata_not_a_migration(self):
         # lesson_resources.id is a generated uuid — ownership keys on
@@ -158,6 +167,19 @@ class RendererTests(unittest.TestCase):
         self.assertIn('quality: 70', RENDER)
         self.assertIn("books", RENDER)
         self.assertIn("frontend/node_modules/pdfjs-dist", RENDER)
+
+
+class SelectorTests(unittest.TestCase):
+    def test_vector_line_art_pages_are_seen(self):
+        # A1's diagrams are drawn, not rastered — a raster-only census finds 7
+        # of its ~35 visual pages. The vector tier is what covers the books.
+        self.assertIn("VECTOR_OPS_MIN", SELECT)
+        self.assertIn("OPS.constructPath", SELECT)
+        self.assertIn('"vector"', SELECT)
+
+    def test_the_lesson_cap_is_twelve(self):
+        # 12 images + 3 PDFs = 15 rows, under chat's 16-per-lesson fetch cap.
+        self.assertIn("MAX_PER_LESSON = 12", SELECT)
 
 
 class ComposedDataTests(unittest.TestCase):
@@ -214,16 +236,59 @@ class ComposedDataTests(unittest.TestCase):
     def test_materials_bind_in_range_to_existing_files(self):
         for lesson in LESSONS:
             slug = lesson["id"].replace("itf-", "")
+            step_load = {}
             for material in lesson.get("materials", []):
-                self.assertTrue(
-                    1 <= material["step"] <= len(lesson["steps"]),
-                    f"{material['id']} step out of range",
-                )
+                if "step" in material:
+                    self.assertTrue(
+                        1 <= material["step"] <= len(lesson["steps"]),
+                        f"{material['id']} step out of range",
+                    )
+                    step_load[material["step"]] = step_load.get(material["step"], 0) + 1
                 self.assertRegex(material["external_url"], rf"^/books/{slug}/p\d+\.jpg$")
                 self.assertTrue(
                     (ROOT / "frontend" / "public" / material["external_url"].lstrip("/")).exists(),
                     material["external_url"],
                 )
+            self.assertLessEqual(len(lesson.get("materials", [])), 12, lesson["id"])
+            for step, load in step_load.items():
+                self.assertLessEqual(load, 3, f"{lesson['id']} step {step}")
+
+    def test_every_rendered_page_is_referenced(self):
+        # The R61 gap in reverse: no orphan JPEGs. Every committed page image is
+        # a material of its lesson, and every material's file exists (above).
+        referenced = {
+            material["external_url"]
+            for lesson in LESSONS
+            for material in lesson.get("materials", [])
+        }
+        on_disk = {
+            f"/{p.relative_to(ROOT / 'frontend' / 'public')}"
+            for p in (ROOT / "frontend" / "public" / "books").glob("*/p*.jpg")
+        }
+        self.assertEqual(on_disk, referenced)
+
+    def test_every_lesson_carries_the_three_book_pdfs(self):
+        for lesson in LESSONS:
+            docs = lesson.get("documents", [])
+            self.assertEqual(len(docs), 3, lesson["id"])
+            suffixes = {doc["id"].replace(lesson["id"], "") for doc in docs}
+            self.assertEqual(suffixes, {"-doc-lesson", "-doc-chapter", "-doc-book"}, lesson["id"])
+            for doc in docs:
+                self.assertEqual(doc["type"], "pdf", doc["id"])
+                self.assertNotIn("step", doc, doc["id"])
+                self.assertRegex(doc["external_url"], r"^/books/pdf/[a-z0-9-]+\.pdf$")
+                self.assertTrue(
+                    (ROOT / "frontend" / "public" / doc["external_url"].lstrip("/")).exists(),
+                    doc["external_url"],
+                )
+                self.assertTrue(doc["student_instructions"].strip(), doc["id"])
+
+    def test_row_totals_stay_under_the_chat_fetch_cap(self):
+        # chat fetches lesson_resources with limit=16 — a lesson past that hides
+        # rows from the mentor entirely.
+        for lesson in LESSONS:
+            total = len(lesson.get("materials", [])) + len(lesson.get("documents", []))
+            self.assertLessEqual(total, 15, lesson["id"])
 
     def test_figures_stay_under_the_load_cap(self):
         for lesson in LESSONS:
