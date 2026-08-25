@@ -1674,3 +1674,43 @@ authoring-studio/r56 re-anchored; 13 new pins in test_r60_three_room_console; r4
 r48/r50/r52/r53/r57 untouched and passing). tsc + eslint clean. Offline harness:
 screenshots of all three rooms; `?tab=classwork&unit=…` observed normalizing to
 `?tab=content`; `?tab=live` observed landing on Activity.
+
+## R60b — the lesson editor a lazy teacher can use (2026-08-25)
+
+Second half of R60 ("we should also simplify the lesson building view"). Before: ~90
+controls on one scrolling page — a 14-field basics form, 8 add-step chips, ~25
+controls per expanded step, five generative entry points, and THREE independent Save
+buttons whose unsaved state was invisible.
+
+**Quiet by default.** Lesson basics shows Title + Objective; the other twelve fields
+(level, type, mentor prompt, skill keys, answer modes, the whole tutor-behavior
+group) fold under one "Advanced settings" collapsible — folded, not removed, so
+nothing is lost, and the R52 hairline-group structure inside survives byte-for-byte.
+The 8 add-step chips became ONE "+ Add step" grouped menu (Teach / Practice /
+Assess), still driven by MODE_META so the mode vocabulary stays single-sourced. An
+expanded step reads as title + prompt (+ choices) + the R48 Step-work strip; the
+mode selects, code fields, attached materials, mentor-built activities, the artifact
+generator and Delete step all fold under a per-step "Advanced". The strip stays OUT
+of Advanced deliberately — linked work is the step's contract, not a setting.
+KnowledgeCard collapses to its header (the eager load survives: the "N to review"
+badge IS the summary). Publish/Archive/Move/Delete consolidate into the lesson
+header (status chip + Publish + an overflow menu); the footer blocks are gone.
+
+**One save.** A dirty registry in LessonDetail: each child registers
+(id, dirty, flush) — no child state moves, each keeps its fields and its save body
+(flush = the old save() minus the setOpen(false) that would slam N cards shut on a
+batch save). A sticky bottom bar shows "N unsaved changes" and saves everything;
+steps flush before meta; Publish calls saveAll() first so a teacher never publishes
+stale text. Two structural guards against the flush race: saveLessonMeta goes
+OPTIMISTIC when the milestone row already exists (no refetch to clobber the
+optimistic step writes landing in the same tick; only the first save, needing the
+server-assigned milestone id, still reloads), and the temp-id → server-id step swap
+unregisters the old id so it can never linger dirty. Deliberate trade, documented:
+no auto-flush on unmount (teardown writes misfire) — the always-visible unsaved
+count is the mitigation.
+
+Verified: 985 pins green (12 new in test_r60b_lesson_editor; one r48 literal
+re-anchored "Open in Classwork" → "Open in Activity"; the r48 strip slice and the
+r52 nesting pin pass untouched). tsc + eslint clean. Offline harness: the full
+dirty cycle observed live — edit title → "1 unsaved change" → Save changes → "All
+changes saved".

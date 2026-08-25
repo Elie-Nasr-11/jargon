@@ -192,8 +192,9 @@ class StudioTests(unittest.TestCase):
 
     def test_step_work_strip_states(self):
         strip = _slice(STUDIO, "R48: assignment/assessment steps run on a REAL work item", "P8: mentor-built activities")
-        # Linked → open the work view where grading lives; unlinked → create pre-bound.
-        self.assertIn("Open in Classwork", strip)
+        # Linked → open the work view where grading lives (in the Activity room since
+        # R60); unlinked → create pre-bound.
+        self.assertIn("Open in Activity", strip)
         self.assertIn("Create the assignment for this step", strip)
         self.assertIn("Create the quiz for this step", strip)
         # Gated on the SAVED mode and on the temp-id swap (same rule as materials).

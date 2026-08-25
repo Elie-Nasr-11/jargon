@@ -11485,3 +11485,24 @@ Remaining concerns: the per-unit lesson menu and the header + Create menu share 
 existing no-outside-click-dismiss behavior (pre-R60 pattern) — worth a click-away
 handler in R60b. The lesson editor itself is untouched by design.
 Suggested next task: R60b — the lesson editor simplification (approved plan, part 2).
+
+## Claude -> Codex / Human - 2026-08-25 11:20
+
+Status: Finished
+Summary: R60b — the lesson editor simplification (part 2 of the approved R60 plan).
+Basics = Title + Objective + one Advanced collapsible; 8 step chips → one grouped
+"+ Add step" menu; expanded step = title + prompt (+ choices) + R48 work strip with
+the rest under per-step Advanced; KnowledgeCard quiet with its badge; lifecycle in
+the lesson header; ONE sticky save bar over a dirty registry (steps flush before
+meta, Publish flushes first, meta save optimistic once the milestone exists).
+Files changed: frontend/src/routes/teacher.curriculum.tsx (LessonDetail /
+LessonMetaForm / StepCard / saveLessonMeta), frontend/src/features/teacher/
+KnowledgeCard.tsx, tests/test_r60b_lesson_editor.py (12 pins), tests/test_r48 (one
+label re-anchor), docs.
+Tests run: 985 pins OK; tsc + eslint clean; harness: dirty→save→clean cycle
+observed live, screenshots of collapsed editor / Advanced open / add-step menu.
+Remaining concerns: no auto-flush on unmount (documented trade — the visible
+unsaved count mitigates); the inline menus (create/add-step/add-lesson) share the
+pre-existing no-outside-click-dismiss pattern.
+Suggested next task: owner clicks through the deployed three-room console and the
+new editor; then back to the book pipeline (upload A1 ch1 through Content → Build).
