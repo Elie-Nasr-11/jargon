@@ -71,9 +71,12 @@ class ClassScopedStudioTests(unittest.TestCase):
         self.assertIn("subject.organization_id === null", STUDIO)
 
     def test_created_course_auto_links_to_the_class(self):
-        self.assertIn("Array.from(new Set([...mine, createdId]))", STUDIO)
+        # R60: course creation lives in ensureBackingCourse (shared by "New unit" and the
+        # course-from-material build) — the auto-link contract rides along.
+        self.assertIn("Array.from(new Set([...mine, courseId]))", STUDIO)
         # Never write links from an unknown baseline (set_class_courses REPLACES the set).
-        self.assertIn("if (createdId && links) {", STUDIO)
+        self.assertIn("if (links) {", STUDIO)
+        self.assertIn("const ensureBackingCourse = async (", STUDIO)
 
     def test_shared_courses_are_visibly_shared(self):
         self.assertIn("peerClassNames", STUDIO)

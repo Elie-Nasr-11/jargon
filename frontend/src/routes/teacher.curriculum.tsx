@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { OverflowMenu } from "@/components/OverflowMenu";
 import { Collapsible } from "@/components/Collapsible";
 import { RouteLoader } from "@/components/RouteLoader";
 import { ArtifactFrame } from "@/components/ArtifactFrame";
@@ -180,7 +181,7 @@ function CurriculumPage() {
           navigate({
             to: "/teacher/class/$classId",
             params: { classId: first.id },
-            search: { tab: "classwork", ...search },
+            search: { tab: "content", ...(search.lesson ? { lesson: search.lesson } : {}) },
             replace: true,
           });
         } else {
@@ -253,6 +254,12 @@ export function CurriculumStudio({
   const [busy, setBusy] = useState(false);
   // R45: the books/shared-content drawer is advanced machinery — collapsed by default.
   const [booksOpen, setBooksOpen] = useState(false);
+  // R60: outline-face state — a just-created unit sits with its name in edit; a unit's
+  // "Build from material" opens the R56 panel; the course-from-material entry opens the
+  // R57 outline panel (mutually exclusive with the unit panel).
+  const [renamingUnitId, setRenamingUnitId] = useState<string | null>(null);
+  const [buildForUnitId, setBuildForUnitId] = useState<string | null>(null);
+  const [buildCourseId, setBuildCourseId] = useState<string | null>(null);
   const undoable = useUndoable();
   // Deferred-undo ops (delete/publish) hold their optimistic change here so a
   // background refetch (from a create/AI-apply) doesn't resurrect a row that's
@@ -266,15 +273,21 @@ export function CurriculumStudio({
     return next;
   }, []);
 
-  const selection: Selection = search.lesson
-    ? { type: "lesson", id: search.lesson }
-    : search.unit
-      ? { type: "unit", id: search.unit }
-      : search.course
-        ? { type: "course", id: search.course }
-        : search.subject
-          ? { type: "subject", id: search.subject }
-          : null;
+  // R60: only lessons open an editor — the subject/course/unit panes (the pre-R47
+  // StructureDetail chrome) are gone. Stale pane URLs normalize below.
+  const selection: Selection = search.lesson ? { type: "lesson", id: search.lesson } : null;
+
+  useEffect(() => {
+    if (!search.lesson && (search.subject || search.course || search.unit)) {
+      navigate({
+        to: "/teacher/class/$classId",
+        params: { classId },
+        search: { tab: "content" },
+        replace: true,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.subject, search.course, search.unit, search.lesson, classId]);
 
   const loadData = useCallback(async () => {
     try {
@@ -475,7 +488,7 @@ export function CurriculumStudio({
       navigate({
         to: "/teacher/class/$classId",
         params: { classId },
-        search: { tab: "classwork", [type]: id },
+        search: { tab: "content", [type]: id },
       });
     },
     [navigate, classId],
@@ -485,7 +498,7 @@ export function CurriculumStudio({
     navigate({
       to: "/teacher/class/$classId",
       params: { classId },
-      search: { tab: "classwork" },
+      search: { tab: "content" },
     });
   }, [navigate, classId]);
 
@@ -539,6 +552,7 @@ export function CurriculumStudio({
       opts?: {
         successMessage?: string;
         select?: (result: unknown) => { type: CurriculumNodeType; id: string } | null;
+        onDone?: (result: unknown) => void;
       },
     ) => {
       if (!selectedClass) return;
@@ -552,6 +566,7 @@ export function CurriculumStudio({
           setData(applyPending(await fetchCurriculumAuthoringData(session.user.id)));
           const sel = opts?.select?.(result);
           if (sel) selectNode(sel.type, sel.id);
+          opts?.onDone?.(result);
           if (opts?.successMessage) setMessage(opts.successMessage);
         } catch (error) {
           setMessage((error as Error).message || "Could not update curriculum.");
@@ -571,92 +586,71 @@ export function CurriculumStudio({
       return id ? { type, id } : null;
     };
 
-  const addCourse = (subjectId: string) =>
-    reloading(
-      async (accessToken, targetClassId) => {
-        const created = await createCurriculumCourse({
-          accessToken,
-          classId: targetClassId,
-          subjectId,
-          title: "New course",
-        });
-        // R43: a course born inside a class belongs to it — link it immediately so the
-        // scoped outline (and this class's students, once published) can see it. Only
-        // when the current link set is known: set_class_courses REPLACES the whole set,
-        // so writing from an unknown baseline could wipe existing links.
-        const createdId = (created as { id?: string } | null)?.id;
-        const links = classLinksRef.current;
-        if (createdId && links) {
-          const mine = links
-            .filter((row) => row.class_id === targetClassId)
-            .map((row) => row.course_id);
-          await setClassCourses({
-            accessToken,
-            classId: targetClassId,
-            courseIds: Array.from(new Set([...mine, createdId])),
-          });
-          setClassLinks([...links, { class_id: targetClassId, course_id: createdId }]);
-        }
-        return created;
-      },
-      { select: selectFromId("course") },
-    );
-
-  // R45 consolidated: "New unit" needs a home course, but courses are invisible now.
-  // The class's backing course = the first linked course OWNED by this org (a fork or a
+  // R45 consolidated: units need a home course, but courses are invisible now. The
+  // class's backing course = the first linked course OWNED by this org (a fork or a
   // previously auto-created one). If none exists, create subject + course named after
-  // the class and link it (guarded on a known link baseline, like addCourse).
+  // the class and link it (guarded on a known link baseline). R60: extracted so the
+  // course-from-material build shares the same resolution as "New unit".
+  const ensureBackingCourse = async (
+    accessToken: string,
+    targetClassId: string,
+  ): Promise<{ courseId: string; versionId: string }> => {
+    let backing: CurriculumCourse | null = null;
+    for (const subject of orgSubjects) {
+      for (const course of coursesForSubject(subject.id)) {
+        if (
+          course.organization_id === selectedClass!.organization_id &&
+          linkedCourseIds?.has(course.id)
+        ) {
+          backing = course;
+          break;
+        }
+      }
+      if (backing) break;
+    }
+    if (backing) {
+      const versionId = currentVersionForCourse(backing.id)?.id ?? null;
+      if (!versionId) throw new Error("The class course has no version to add a unit to.");
+      return { courseId: backing.id, versionId };
+    }
+    const subject = await createCurriculumSubject({
+      accessToken,
+      classId: targetClassId,
+      organizationId: selectedClass!.organization_id,
+      title: selectedClass!.name,
+    });
+    const subjectId = (subject as { id?: string } | null)?.id;
+    if (!subjectId) throw new Error("Could not create the class curriculum home.");
+    const course = await createCurriculumCourse({
+      accessToken,
+      classId: targetClassId,
+      subjectId,
+      title: selectedClass!.name,
+    });
+    const courseId = (course as { id?: string } | null)?.id;
+    const versionId = (course as { course_version_id?: string } | null)?.course_version_id ?? null;
+    if (!courseId || !versionId) {
+      throw new Error("Could not create the class curriculum home.");
+    }
+    const links = classLinksRef.current;
+    if (links) {
+      const mine = links
+        .filter((row) => row.class_id === targetClassId)
+        .map((row) => row.course_id);
+      await setClassCourses({
+        accessToken,
+        classId: targetClassId,
+        courseIds: Array.from(new Set([...mine, courseId])),
+      });
+      setClassLinks([...links, { class_id: targetClassId, course_id: courseId }]);
+    }
+    return { courseId, versionId };
+  };
+
   const addUnitToClass = () =>
     reloading(
       async (accessToken, targetClassId) => {
-        let backing: CurriculumCourse | null = null;
-        for (const subject of orgSubjects) {
-          for (const course of coursesForSubject(subject.id)) {
-            if (
-              course.organization_id === selectedClass!.organization_id &&
-              linkedCourseIds?.has(course.id)
-            ) {
-              backing = course;
-              break;
-            }
-          }
-          if (backing) break;
-        }
-        let versionId = backing ? (currentVersionForCourse(backing.id)?.id ?? null) : null;
-        if (!backing) {
-          const subject = await createCurriculumSubject({
-            accessToken,
-            classId: targetClassId,
-            organizationId: selectedClass!.organization_id,
-            title: selectedClass!.name,
-          });
-          const subjectId = (subject as { id?: string } | null)?.id;
-          if (!subjectId) throw new Error("Could not create the class curriculum home.");
-          const course = await createCurriculumCourse({
-            accessToken,
-            classId: targetClassId,
-            subjectId,
-            title: selectedClass!.name,
-          });
-          const courseId = (course as { id?: string } | null)?.id;
-          versionId = (course as { course_version_id?: string } | null)?.course_version_id ?? null;
-          if (!courseId || !versionId) {
-            throw new Error("Could not create the class curriculum home.");
-          }
-          const links = classLinksRef.current;
-          if (links) {
-            const mine = links
-              .filter((row) => row.class_id === targetClassId)
-              .map((row) => row.course_id);
-            await setClassCourses({
-              accessToken,
-              classId: targetClassId,
-              courseIds: Array.from(new Set([...mine, courseId])),
-            });
-            setClassLinks([...links, { class_id: targetClassId, course_id: courseId }]);
-          }
-        }
-        if (!versionId) throw new Error("The class course has no version to add a unit to.");
+        const { versionId } = await ensureBackingCourse(accessToken, targetClassId);
         return createCurriculumUnit({
           accessToken,
           classId: targetClassId,
@@ -664,22 +658,30 @@ export function CurriculumStudio({
           title: "New unit",
         });
       },
-      { select: selectFromId("unit") },
+      {
+        // R60: no unit pane to land on — the new unit appears in the outline with its
+        // name already in edit, so "New unit" -> type the name -> Enter is the flow.
+        onDone: (result) => {
+          const id = (result as { id?: string } | null)?.id;
+          if (id) setRenamingUnitId(id);
+        },
+      },
     );
 
-  const addUnit = (courseId: string) =>
+  // R60: the course-from-material build (R57) finally gets a door — resolve (or
+  // create) the class's backing course, then open the outline panel at the root.
+  const openCourseBuild = () =>
     reloading(
-      (accessToken, classId) => {
-        const version = currentVersionForCourse(courseId);
-        if (!version) throw new Error("This course has no version to add a unit to.");
-        return createCurriculumUnit({
-          accessToken,
-          classId,
-          courseVersionId: version.id,
-          title: "New unit",
-        });
+      async (accessToken, targetClassId) => ensureBackingCourse(accessToken, targetClassId),
+      {
+        onDone: (result) => {
+          const courseId = (result as { courseId?: string } | null)?.courseId;
+          if (courseId) {
+            setBuildCourseId(courseId);
+            setBuildForUnitId(null);
+          }
+        },
       },
-      { select: selectFromId("unit") },
     );
 
   const addLesson = (unitId: string) =>
@@ -707,12 +709,6 @@ export function CurriculumStudio({
       (accessToken, classId) =>
         renameCurriculumNode({ accessToken, classId, nodeType, id, title, description }),
       { successMessage: "Saved." },
-    );
-
-  const archiveNode = (nodeType: CurriculumNodeType, id: string) =>
-    reloading(
-      (accessToken, classId) => archiveCurriculumNode({ accessToken, classId, nodeType, id }),
-      { successMessage: "Archived." },
     );
 
   const deleteNode = (nodeType: CurriculumNodeType, id: string) => {
@@ -1304,8 +1300,14 @@ export function CurriculumStudio({
   // The selected node's course, when other classes also link it → the honesty strip
   // above the editor ("changes here also reach …") with the fork-on-demand action.
   const sharedNotice = useMemo(() => {
-    if (!selection || !data) return null;
-    const course = nodePath(selection, data).course;
+    if (!data) return null;
+    // R60: with the node panes gone the fork affordance must live on the outline too —
+    // a class linked to a shared/global book still needs its "duplicate first" button.
+    const course = selection
+      ? nodePath(selection, data).course
+      : (classUnits.find(
+          ({ course: c }) => c && (!c.organization_id || peerClassNames(c.id).length),
+        )?.course ?? null);
     if (!course) return null;
     const peers = peerClassNames(course.id);
     // R50: a GLOBAL book (no owning organization) can never be edited directly, so the
@@ -1316,7 +1318,7 @@ export function CurriculumStudio({
       ? { courseId: course.id, names: peers.join(", "), isGlobal }
       : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection?.type, selection?.id, data, peerClassNames]);
+  }, [selection?.type, selection?.id, data, peerClassNames, classUnits]);
 
   // R44 fork-on-demand: copy the shared course for THIS class and swap the class's link
   // to the copy. The link refresh happens inside the run so the scoped outline flips to
@@ -1337,7 +1339,8 @@ export function CurriculumStudio({
         return result;
       },
       {
-        select: selectFromId("course"),
+        // R60: no course pane to land on — stay on the outline; the banner's message
+        // tells the story.
         successMessage:
           "This class now edits its own copy — other classes keep the original. Past student work stays with the original lessons.",
       },
@@ -1355,9 +1358,18 @@ export function CurriculumStudio({
         <div className="flex flex-wrap items-center gap-2">
           {selection ? (
             <button type="button" onClick={clearSelection} className="btn btn-secondary btn-sm">
-              ← Classwork
+              ← Content
             </button>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              onClick={openCourseBuild}
+              disabled={busy}
+              className="btn btn-secondary btn-sm"
+            >
+              Build a course from material
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void loadData()}
@@ -1406,57 +1418,112 @@ export function CurriculumStudio({
           </div>
         </section>
       ) : data ? (
-        // R47: no aside, no tree. The list IS the surface (units as topic headings with
-        // lessons + work items beneath); a selection swaps the whole width to the editor.
+        // R47: no aside, no tree — the list IS the surface. R60: the list is the ONLY
+        // structural surface (units + lessons + materials); a selection means a lesson
+        // and swaps the whole width to the lesson editor. Work items live in Activity.
         selection === null ? (
-          <ClassworkList
-            units={outlineUnits}
-            lessonsForUnit={lessonsForUnit}
-            emptyHint="No units yet — create one to start this class's classwork, or open Books & shared content below to bring in existing material."
-            workItems={workItems}
-            busy={busy}
-            onSelectLesson={(id) => selectNode("lesson", id)}
-            onSelectUnit={(id) => selectNode("unit", id)}
-            onOpenItem={onOpenItem}
-            onCreate={onCreate}
-            onAddUnit={addUnitToClass}
-            onAddLesson={addLesson}
-            onReorder={reorder}
-          />
+          <div className="min-w-0">
+            {sharedNotice ? (
+              <SharedCourseNotice
+                notice={sharedNotice}
+                busy={busy}
+                onDuplicate={() => duplicateSharedCourse(sharedNotice.courseId)}
+              />
+            ) : null}
+            {buildCourseId ? (
+              <div className="mb-3 rounded-card border border-border bg-depth-card p-4 shadow-card">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-body font-medium text-foreground">
+                    Build a course from material
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setBuildCourseId(null)}
+                    className="text-meta text-muted-foreground/70 hover:text-foreground"
+                  >
+                    Close
+                  </button>
+                </div>
+                <AiOutlinePanel
+                  busy={busy}
+                  resources={data.resources}
+                  onGenerate={(args) => generateOutline(buildCourseId, args)}
+                  onApply={(outline) => {
+                    applyOutline(buildCourseId, outline);
+                    setBuildCourseId(null);
+                  }}
+                  onBuild={(outline, material) => {
+                    startCourseBuild(buildCourseId, outline, {
+                      material,
+                      includeQuiz: true,
+                      includeAssignment: true,
+                    });
+                    setBuildCourseId(null);
+                  }}
+                />
+              </div>
+            ) : null}
+            <ClassworkList
+              units={outlineUnits}
+              lessonsForUnit={lessonsForUnit}
+              emptyHint="No units yet — upload a chapter with “Build a course from material”, create a unit, or open Books & shared content below to bring in existing material."
+              workItems={workItems.filter((entry) => entry.kind === "material")}
+              busy={busy}
+              renamingUnitId={renamingUnitId}
+              onRenameUnit={(id, title) => {
+                setRenamingUnitId(null);
+                const current = data.units.find((unit) => unit.id === id);
+                if (title && current && title !== current.title) renameNode("unit", id, title);
+              }}
+              onRenameStart={(id) => setRenamingUnitId(id)}
+              canDeleteUnit={(id) => lessonsForUnit(id).length === 0}
+              onDeleteUnit={(id) => deleteNode("unit", id)}
+              onBuildLesson={(unitId) => {
+                setBuildCourseId(null);
+                setBuildForUnitId(unitId);
+              }}
+              onSelectLesson={(id) => selectNode("lesson", id)}
+              onOpenItem={onOpenItem}
+              onCreate={onCreate}
+              onAddUnit={addUnitToClass}
+              onAddLesson={addLesson}
+              onReorder={reorder}
+            />
+            {buildForUnitId ? (
+              <div className="mt-3 rounded-card border border-border bg-depth-card p-4 shadow-card">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-body font-medium text-foreground">
+                    Build a lesson in “
+                    {data.units.find((unit) => unit.id === buildForUnitId)?.title ?? "this unit"}”
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setBuildForUnitId(null)}
+                    className="text-meta text-muted-foreground/70 hover:text-foreground"
+                  >
+                    Close
+                  </button>
+                </div>
+                <BuildFromMaterialPanel
+                  busy={busy}
+                  resources={data.resources}
+                  onGenerate={(args) => generatePackage({ ...args, unitId: buildForUnitId })}
+                  onApply={(pkg) => {
+                    applyPackage(buildForUnitId, pkg);
+                    setBuildForUnitId(null);
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
         ) : (
           <div className="min-w-0">
             {sharedNotice ? (
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-border bg-depth-sub px-3.5 py-2.5 text-meta text-muted-foreground">
-                <BookOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
-                <span className="min-w-0 flex-1">
-                  {sharedNotice.isGlobal ? (
-                    <>
-                      This is a shared book — duplicate it to edit or add lessons
-                      {sharedNotice.names ? (
-                        <>
-                          {" "}
-                          (also used by{" "}
-                          <span className="text-foreground">{sharedNotice.names}</span>)
-                        </>
-                      ) : null}
-                      .
-                    </>
-                  ) : (
-                    <>
-                      This course is shared — changes here also reach{" "}
-                      <span className="text-foreground">{sharedNotice.names}</span>.
-                    </>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => duplicateSharedCourse(sharedNotice.courseId)}
-                  className="btn btn-secondary btn-sm shrink-0"
-                >
-                  Duplicate for this class
-                </button>
-              </div>
+              <SharedCourseNotice
+                notice={sharedNotice}
+                busy={busy}
+                onDuplicate={() => duplicateSharedCourse(sharedNotice.courseId)}
+              />
             ) : null}
             <DetailPane
               key={selection ? `${selection.type}:${selection.id}` : "empty"}
@@ -1469,42 +1536,20 @@ export function CurriculumStudio({
               orgUnits={orgUnits}
               resources={data.resources}
               busy={busy}
-              onAddSubject={addUnitToClass}
-              onRename={renameNode}
-              onArchive={archiveNode}
-              onDelete={deleteNode}
-              onAddCourse={addCourse}
-              onAddUnit={addUnit}
-              onAddLesson={addLesson}
               onMoveLesson={moveLesson}
               onSaveLessonMeta={saveLessonMeta}
               onUpsertStep={upsertStep}
               onReorderSteps={reorderSteps}
               onDeleteStep={deleteStep}
+              onDelete={deleteNode}
               onBindResource={bindResource}
               onShareResource={shareArtifact}
               onGenerateArtifact={generateArtifact}
               onApproveArtifact={approveArtifact}
               onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
               onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
-              onGenerateOutline={generateOutline}
-              onApplyOutline={applyOutline}
-              onBuildCourse={(courseId, outline, material) =>
-                startCourseBuild(courseId, outline, {
-                  material,
-                  includeQuiz: true,
-                  includeAssignment: true,
-                })
-              }
               onGenerateSteps={generateSteps}
               onApplySteps={applyStepDrafts}
-              onGeneratePackage={generatePackage}
-              onApplyPackage={applyPackage}
-              counts={{
-                coursesForSubject: (id) => classCoursesForSubject(id).length,
-                unitsForCourse: (id) => unitsForCourse(id).length,
-                lessonsForUnit: (id) => lessonsForUnit(id).length,
-              }}
             />
           </div>
         )
@@ -1550,12 +1595,98 @@ export function CurriculumStudio({
   );
 }
 
+// R44/R50 shared-content honesty, one banner for both faces (R60): the outline and the
+// lesson editor both announce when the class is looking at a shared course, and carry
+// the fork button the server's "duplicate first" refusal points at.
+function SharedCourseNotice({
+  notice,
+  busy,
+  onDuplicate,
+}: {
+  notice: { courseId: string; names: string; isGlobal: boolean };
+  busy: boolean;
+  onDuplicate: () => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-border bg-depth-sub px-3.5 py-2.5 text-meta text-muted-foreground">
+      <BookOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
+      <span className="min-w-0 flex-1">
+        {notice.isGlobal ? (
+          <>
+            This is a shared book — duplicate it to edit or add lessons
+            {notice.names ? (
+              <>
+                {" "}
+                (also used by <span className="text-foreground">{notice.names}</span>)
+              </>
+            ) : null}
+            .
+          </>
+        ) : (
+          <>
+            This course is shared — changes here also reach{" "}
+            <span className="text-foreground">{notice.names}</span>.
+          </>
+        )}
+      </span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onDuplicate}
+        className="btn btn-secondary btn-sm shrink-0"
+      >
+        Duplicate for this class
+      </button>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Classwork list — the full-width face of the Classwork tab (R47). Units are topic
 // headings (always expanded, Classroom-style); beneath each: lesson rows, then the
 // work items (assignments / quizzes / materials) attached to those lessons. ONE
 // "+ Create" menu makes everything; per-unit "+ Lesson" adds in place.
 // ---------------------------------------------------------------------------
+
+// R60: the unit name edits in place — commit on Enter or blur (a no-op when the title
+// is unchanged or emptied), Escape cancels. A just-created unit mounts straight into
+// this input so "New unit" -> type -> Enter is the whole flow.
+function UnitRenameInput({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  onCommit: (title: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const done = useRef(false);
+  const commit = () => {
+    if (done.current) return;
+    done.current = true;
+    onCommit(value.trim());
+  };
+  return (
+    <div className="flex items-center gap-2 py-0.5 pl-1.5 pr-1">
+      <input
+        autoFocus
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") commit();
+          if (event.key === "Escape") {
+            done.current = true;
+            onCancel();
+          }
+        }}
+        aria-label="Unit name"
+        className="jargon-input flex-1 !py-1.5 text-meta font-medium"
+      />
+    </div>
+  );
+}
 
 // R45 consolidated (still true here): the class curriculum is ONE flat list of units —
 // subject/course stay invisible plumbing (each unit knows its backing course, which
@@ -1567,8 +1698,13 @@ function ClassworkList({
   emptyHint,
   workItems,
   busy,
+  renamingUnitId,
+  onRenameUnit,
+  onRenameStart,
+  canDeleteUnit,
+  onDeleteUnit,
+  onBuildLesson,
   onSelectLesson,
-  onSelectUnit,
   onOpenItem,
   onCreate,
   onAddUnit,
@@ -1580,8 +1716,16 @@ function ClassworkList({
   emptyHint?: string;
   workItems: ClassworkItem[];
   busy: boolean;
+  // R60: units are managed inline — click the name (or Rename) to edit it in place,
+  // delete from the row menu once its lessons are gone. No unit pane exists.
+  renamingUnitId: string | null;
+  onRenameUnit: (id: string, title: string) => void;
+  onRenameStart: (id: string) => void;
+  canDeleteUnit: (id: string) => boolean;
+  onDeleteUnit: (id: string) => void;
+  // R60: "+ Lesson" leads with the material path — Build from material / Start blank.
+  onBuildLesson: (unitId: string) => void;
   onSelectLesson: (id: string) => void;
-  onSelectUnit: (id: string) => void;
   onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
   onCreate?: (kind: "assignment" | "assessment" | "material") => void;
   onAddUnit: () => void;
@@ -1589,6 +1733,7 @@ function ClassworkList({
   onReorder: (type: CurriculumNodeType, orderedIds: string[]) => void;
 }) {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [lessonMenuFor, setLessonMenuFor] = useState<string | null>(null);
 
   // Work items grouped under the unit their lesson belongs to; anything whose lesson
   // isn't in this class's outline falls into a trailing "Other classwork" bucket so
@@ -1641,7 +1786,7 @@ function ClassworkList({
       <div className="p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-2">
           <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-            Classwork
+            Content
           </span>
           <div className="relative flex items-center gap-1">
             <button
@@ -1660,13 +1805,9 @@ function ClassworkList({
                 role="menu"
                 className="absolute right-0 top-full z-20 mt-1 w-44 rounded-card border border-border bg-depth-card p-1 shadow-card"
               >
-                {(
-                  [
-                    { kind: "assignment", label: "Assignment" },
-                    { kind: "assessment", label: "Quiz" },
-                    { kind: "material", label: "Material" },
-                  ] as const
-                ).map((option) => (
+                {/* R60: assignments and quizzes are created in Activity — Content
+                    creates the things students learn from. */}
+                {([{ kind: "material", label: "Material" }] as const).map((option) => (
                   <button
                     key={option.kind}
                     type="button"
@@ -1707,24 +1848,82 @@ function ClassworkList({
               const unitItems = itemsByUnit.get(unit.id) ?? [];
               return (
                 <div key={unit.id} className="min-w-0">
-                  <OutlineRow
-                    depth={0}
-                    label={unit.title}
-                    meta={[
-                      `${lessons.length} lesson${lessons.length === 1 ? "" : "s"}`,
-                      annotation ? "shared" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                    metaTitle={annotation ?? undefined}
-                    hasChildren={false}
-                    selected={false}
-                    onSelect={() => onSelectUnit(unit.id)}
-                    onAdd={() => onAddLesson(unit.id)}
-                    addLabel="Add lesson"
-                    dragging={false}
-                    showGrip={false}
-                  />
+                  {renamingUnitId === unit.id ? (
+                    <UnitRenameInput
+                      initial={unit.title}
+                      onCommit={(title) => onRenameUnit(unit.id, title)}
+                      onCancel={() => onRenameUnit(unit.id, "")}
+                    />
+                  ) : (
+                    <div className="relative">
+                      <OutlineRow
+                        depth={0}
+                        label={unit.title}
+                        meta={[
+                          `${lessons.length} lesson${lessons.length === 1 ? "" : "s"}`,
+                          annotation ? "shared" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        metaTitle={annotation ?? undefined}
+                        hasChildren={false}
+                        selected={false}
+                        onSelect={() => onRenameStart(unit.id)}
+                        onAdd={() =>
+                          setLessonMenuFor((value) => (value === unit.id ? null : unit.id))
+                        }
+                        addLabel="Add lesson"
+                        dragging={false}
+                        showGrip={false}
+                        trailing={
+                          <OverflowMenu
+                            label="Unit actions"
+                            actions={[
+                              { label: "Rename", onClick: () => onRenameStart(unit.id) },
+                              {
+                                label: "Delete unit",
+                                tone: "danger",
+                                disabled: busy || !canDeleteUnit(unit.id),
+                                onClick: () => onDeleteUnit(unit.id),
+                              },
+                            ]}
+                          />
+                        }
+                      />
+                      {lessonMenuFor === unit.id ? (
+                        <div
+                          role="menu"
+                          className="absolute right-1 top-full z-20 mt-1 w-56 rounded-card border border-border bg-depth-card p-1 shadow-card"
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setLessonMenuFor(null);
+                              onBuildLesson(unit.id);
+                            }}
+                            className="block w-full rounded-control px-3 py-1.5 text-left text-meta text-foreground transition-colors hover:bg-muted"
+                          >
+                            Build from material
+                            <span className="block text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                              Upload pages — steps, quiz and assignment are drafted for you
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setLessonMenuFor(null);
+                              onAddLesson(unit.id);
+                            }}
+                            className="block w-full rounded-control px-3 py-1.5 text-left text-meta text-foreground transition-colors hover:bg-muted"
+                          >
+                            Start blank
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                   <div className="mt-0.5 grid min-w-0 gap-0.5">
                     <ReorderList
                       items={lessons}
@@ -1783,6 +1982,7 @@ function OutlineRow({
   dragging,
   showGrip = true,
   metaTitle,
+  trailing,
 }: {
   depth: number;
   label: string;
@@ -1799,6 +1999,8 @@ function OutlineRow({
   showGrip?: boolean;
   // Tooltip for the meta chip (e.g. the full "also in …" class list behind "shared").
   metaTitle?: string;
+  // R60: unit rows carry an overflow menu (Rename / Delete) after the add button.
+  trailing?: ReactNode;
 }) {
   return (
     <div
@@ -1869,6 +2071,7 @@ function OutlineRow({
           <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
         </button>
       ) : null}
+      {trailing ?? null}
     </div>
   );
 }
@@ -1954,36 +2157,26 @@ function DetailPane({
   orgUnits,
   resources,
   busy,
-  onAddSubject,
-  onRename,
-  onArchive,
-  onDelete,
-  onAddCourse,
-  onAddUnit,
-  onAddLesson,
   onMoveLesson,
   onSaveLessonMeta,
   onUpsertStep,
   onReorderSteps,
   onDeleteStep,
+  onDelete,
   onBindResource,
   onShareResource,
   onGenerateArtifact,
   onApproveArtifact,
   onPublishLesson,
   onArchiveLesson,
-  onGenerateOutline,
-  onApplyOutline,
-  onBuildCourse,
   onGenerateSteps,
   onApplySteps,
-  onGeneratePackage,
-  onApplyPackage,
   workItems,
   onOpenItem,
   onCreateForStep,
-  counts,
 }: {
+  // R60: the only selectable node is a lesson — the subject/course/unit panes (the
+  // pre-R47 StructureDetail chrome) are retired; units are managed inline on the list.
   selection: Selection;
   data: CurriculumAuthoringData;
   lessonsById: Map<string, Lesson>;
@@ -1998,13 +2191,7 @@ function DetailPane({
     kind: "assignment" | "assessment",
     ctx: { lessonId: string; activityId: string },
   ) => void;
-  onAddSubject: () => void;
-  onRename: (type: CurriculumNodeType, id: string, title: string, description?: string) => void;
-  onArchive: (type: CurriculumNodeType, id: string) => void;
   onDelete: (type: CurriculumNodeType, id: string) => void;
-  onAddCourse: (subjectId: string) => void;
-  onAddUnit: (courseId: string) => void;
-  onAddLesson: (unitId: string) => void;
   onMoveLesson: (lessonId: string, targetUnitId: string) => void;
   onSaveLessonMeta: (
     lessonId: string,
@@ -2027,133 +2214,10 @@ function DetailPane({
   ) => void;
   onPublishLesson: (lessonId: string) => void;
   onArchiveLesson: (lessonId: string) => void;
-  // R56: build a whole lesson from teacher material (unit-level).
-  onGeneratePackage?: (args: {
-    unitId: string;
-    prompt: string;
-    referenceText: string;
-    includeQuiz: boolean;
-    includeAssignment: boolean;
-  }) => Promise<CurriculumLessonPackage | null>;
-  onApplyPackage?: (unitId: string, pkg: CurriculumLessonPackage) => void;
-  onGenerateOutline: (
-    courseId: string,
-    args: OutlineGenArgs,
-  ) => Promise<CurriculumOutlineDraft | null>;
-  onApplyOutline: (courseId: string, outline: CurriculumOutlineDraft) => void;
-  onBuildCourse: (courseId: string, outline: CurriculumOutlineDraft, material: string) => void;
   onGenerateSteps: (lessonId: string, args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
   onApplySteps: (lessonId: string, drafts: CurriculumStepDraft[]) => void;
-  counts: {
-    coursesForSubject: (id: string) => number;
-    unitsForCourse: (id: string) => number;
-    lessonsForUnit: (id: string) => number;
-  };
 }) {
-  if (!selection) {
-    return (
-      <section className="rounded-card border border-border bg-depth-card shadow-card">
-        <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-          <Layers3 className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
-          <div className="text-body text-foreground">Select a unit or lesson to edit it.</div>
-          <p className="max-w-md text-meta leading-relaxed text-muted-foreground">
-            This is your class's curriculum — units of lessons, written for this class. Pick one
-            from the outline, or create a unit to get started.
-          </p>
-          <button
-            type="button"
-            onClick={onAddSubject}
-            disabled={busy}
-            className="btn btn-secondary"
-          >
-            <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
-            New unit
-          </button>
-        </div>
-      </section>
-    );
-  }
-
-  if (selection.type === "subject") {
-    const subject = data.subjects.find((item) => item.id === selection.id);
-    if (!subject) return <MissingNode />;
-    const childCount = counts.coursesForSubject(subject.id);
-    return (
-      <StructureDetail
-        kind="Subject"
-        node={subject}
-        status={subject.status}
-        busy={busy}
-        addLabel="New course"
-        showArchive
-        canDelete={childCount === 0}
-        deleteHint="Remove its courses first to delete this subject."
-        onSave={(title, description) => onRename("subject", subject.id, title, description)}
-        onAddChild={() => onAddCourse(subject.id)}
-        onArchive={() => onArchive("subject", subject.id)}
-        onDelete={() => onDelete("subject", subject.id)}
-      />
-    );
-  }
-
-  if (selection.type === "course") {
-    const course = data.courses.find((item) => item.id === selection.id);
-    if (!course) return <MissingNode />;
-    const childCount = counts.unitsForCourse(course.id);
-    return (
-      <StructureDetail
-        kind="Course"
-        node={course}
-        status={course.status}
-        busy={busy}
-        addLabel="New unit"
-        showArchive
-        canDelete={childCount === 0}
-        deleteHint="Remove its units first to delete this course."
-        onSave={(title, description) => onRename("course", course.id, title, description)}
-        onAddChild={() => onAddUnit(course.id)}
-        onArchive={() => onArchive("course", course.id)}
-        onDelete={() => onDelete("course", course.id)}
-        ai={{
-          resources,
-          onGenerate: (args) => onGenerateOutline(course.id, args),
-          onApply: (outline) => onApplyOutline(course.id, outline),
-          onBuild: (outline, material) => onBuildCourse(course.id, outline, material),
-        }}
-      />
-    );
-  }
-
-  if (selection.type === "unit") {
-    const unit = data.units.find((item) => item.id === selection.id);
-    if (!unit) return <MissingNode />;
-    const childCount = counts.lessonsForUnit(unit.id);
-    return (
-      <StructureDetail
-        kind="Unit"
-        node={unit}
-        busy={busy}
-        addLabel="New lesson"
-        showArchive={false}
-        canDelete={childCount === 0}
-        deleteHint="Remove its lessons first to delete this unit."
-        onSave={(title, description) => onRename("unit", unit.id, title, description)}
-        onAddChild={() => onAddLesson(unit.id)}
-        onDelete={() => onDelete("unit", unit.id)}
-        buildFromMaterial={
-          onGeneratePackage && onApplyPackage
-            ? {
-                resources: data.resources,
-                onGenerate: (args) => onGeneratePackage({ ...args, unitId: unit.id }),
-                onApply: (pkg) => onApplyPackage(unit.id, pkg),
-              }
-            : undefined
-        }
-      />
-    );
-  }
-
-  // lesson
+  if (selection?.type !== "lesson") return <MissingNode />;
   const lesson = lessonsById.get(selection.id);
   if (!lesson) return <MissingNode />;
   return (
@@ -2310,180 +2374,6 @@ function MissingNode() {
     <section className="rounded-card border border-border bg-depth-card shadow-card">
       <div className="p-6 text-body text-muted-foreground">
         That item is no longer available. Pick another from the outline.
-      </div>
-    </section>
-  );
-}
-
-function StructureDetail({
-  kind,
-  node,
-  status,
-  busy,
-  addLabel,
-  showArchive,
-  canDelete,
-  deleteHint,
-  onSave,
-  onAddChild,
-  onArchive,
-  onDelete,
-  ai,
-  buildFromMaterial,
-}: {
-  kind: string;
-  node: { id: string; title: string; description?: string };
-  status?: string;
-  busy: boolean;
-  addLabel: string;
-  showArchive: boolean;
-  canDelete: boolean;
-  deleteHint: string;
-  onSave: (title: string, description: string) => void;
-  onAddChild: () => void;
-  onArchive?: () => void;
-  onDelete: () => void;
-  ai?: {
-    resources: LessonResource[];
-    onGenerate: (args: OutlineGenArgs) => Promise<CurriculumOutlineDraft | null>;
-    onApply: (outline: CurriculumOutlineDraft) => void;
-    onBuild: (outline: CurriculumOutlineDraft, material: string) => void;
-  };
-  // R56: on a UNIT, the studio can build a whole lesson from the teacher's material.
-  buildFromMaterial?: {
-    resources: LessonResource[];
-    onGenerate: (args: {
-      prompt: string;
-      referenceText: string;
-      includeQuiz: boolean;
-      includeAssignment: boolean;
-    }) => Promise<CurriculumLessonPackage | null>;
-    onApply: (pkg: CurriculumLessonPackage) => void;
-  };
-}) {
-  const [title, setTitle] = useState(node.title);
-  const [description, setDescription] = useState(node.description ?? "");
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const dirty = title.trim() !== node.title || (description ?? "") !== (node.description ?? "");
-
-  return (
-    <section className="rounded-card border border-border bg-depth-card shadow-card">
-      <div className="p-4 sm:p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-              {kind}
-            </div>
-            <h2 className="mt-1 font-serif text-display text-foreground">{node.title}</h2>
-          </div>
-          {status ? (
-            <span className="rounded-full border border-border px-3 py-1 text-meta text-muted-foreground">
-              {status}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="grid gap-3">
-          <TextInput label={`${kind} title`} value={title} onChange={setTitle} />
-          <TextArea label="Description" value={description} onChange={setDescription} />
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onSave(title.trim(), description.trim())}
-              disabled={busy || !title.trim() || !dirty}
-              className="btn btn-secondary"
-            >
-              <Pencil className="h-3.5 w-3.5" strokeWidth={1.7} />
-              {busy ? "Saving..." : "Save changes"}
-            </button>
-            <button
-              type="button"
-              onClick={onAddChild}
-              disabled={busy}
-              className="btn btn-secondary"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
-              {addLabel}
-            </button>
-          </div>
-        </div>
-
-        {ai ? (
-          <div className="mt-5">
-            <AiOutlinePanel
-              busy={busy}
-              resources={ai.resources}
-              onGenerate={ai.onGenerate}
-              onApply={ai.onApply}
-              onBuild={ai.onBuild}
-            />
-          </div>
-        ) : null}
-
-        {buildFromMaterial ? (
-          <div className="mt-5">
-            <BuildFromMaterialPanel
-              busy={busy}
-              resources={buildFromMaterial.resources}
-              onGenerate={buildFromMaterial.onGenerate}
-              onApply={buildFromMaterial.onApply}
-            />
-          </div>
-        ) : null}
-
-        <div className="mt-6 border-t border-border pt-4">
-          <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-            Lifecycle
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {showArchive && onArchive ? (
-              <button
-                type="button"
-                onClick={onArchive}
-                disabled={busy}
-                className="btn btn-secondary"
-              >
-                <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
-                Archive
-              </button>
-            ) : null}
-            {confirmDelete ? (
-              <div className="inline-flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-2 text-meta text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                  Confirm delete
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  className="text-meta text-muted-foreground hover:text-foreground"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(true)}
-                disabled={busy || !canDelete}
-                title={canDelete ? undefined : deleteHint}
-                className="btn btn-secondary"
-              >
-                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                Delete
-              </button>
-            )}
-            {!canDelete ? (
-              <span className="text-meta text-muted-foreground">{deleteHint}</span>
-            ) : null}
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -5422,17 +5312,16 @@ function buildBreadcrumb({
   // Rooted at the class's Curriculum section — the studio has no page of its own anymore,
   // so the crumb encodes only the content path (subject → … → lesson) within this class.
   const segments: Array<{ label: string; onClick?: () => void }> = [
-    { label: "Classwork", onClick: goRoot },
+    { label: "Content", onClick: goRoot },
   ];
   if (!selection || !data) return segments;
 
   const path = nodePath(selection, data);
-  const go = goNode;
+  void goNode; // R60: no unit pane — the unit crumb is a label, not a link.
 
   // R45 consolidated: subject/course are invisible plumbing — the crumb shows only the
   // levels the teacher actually navigates (unit → lesson).
-  if (path.unit)
-    segments.push({ label: path.unit.title, onClick: () => go("unit", path.unit!.id) });
+  if (path.unit) segments.push({ label: path.unit.title });
   if (path.lesson) segments.push({ label: path.lesson.title });
   return segments;
 }
