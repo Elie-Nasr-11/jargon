@@ -11530,3 +11530,13 @@ Remaining: PR/merge/CI deploy, then the four imports + class links + 17 publishe
 via pg_net, then verification SQL. Boot-attach quirk noted: chat attaches
 resources[0] when a session boots on a step with no bound material — the earliest
 page image can show once out of context (pre-existing contract, not touched).
+
+Update (13:40, live-import bug): the FIRST real import threw 500 —
+`invalid input syntax for type uuid: "itf-a1-ch1-l2-pg35"`. `lesson_figures.id`
+is a database-generated uuid; the R58 figures path upserted a composed TEXT id
+into it and was latently broken (no import before this one carried a figure).
+Fix: figures now follow the materials pattern — never send `id`; select the
+existing row by (lesson_id, import_key, position) and insert-or-patch by the
+row's own uuid. The envelope's figure id stays an import-time handle (runtime
+[[figure:...]] markers carry the row id, so nothing downstream ever needed it).
+Contract doc updated; 3 new pins (ImporterFiguresTests); 1017 green; deno 0.

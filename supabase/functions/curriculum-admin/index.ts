@@ -3007,17 +3007,17 @@ async function importCurriculum(
         report.figures.skipped += 1;
         continue;
       }
+      // lesson_figures.id is a generated uuid — the envelope's figure id is only an
+      // import-time handle (the runtime lists figures per lesson; the mentor's
+      // [[figure:...]] markers carry the row's own id). Idempotency keys on the
+      // row's real columns instead: this import's figure at this position. Rows
+      // outside this import_key (teacher-extracted drafts, legacy statics) never
+      // match the filter, so they are never touched.
       const existingFigure = await selectFirst(
         config,
-        `lesson_figures?id=eq.${enc(figureId)}&select=id,import_key&limit=1`,
+        `lesson_figures?lesson_id=eq.${enc(lessonId)}&import_key=eq.${enc(importKey)}&position=eq.${figIndex + 1}&select=id&limit=1`,
       );
-      if (!ownedByImport(existingFigure, importKey)) {
-        report.warnings.push(`${figureId} exists and is not owned by this import — left alone.`);
-        report.figures.skipped += 1;
-        continue;
-      }
-      await upsertByConflict(config, "lesson_figures", "id", {
-        id: figureId,
+      const figureRow = {
         lesson_id: lessonId,
         idea_key: cleanText(figure.idea_key) || null,
         title: cleanText(figure.title) || "Figure",
@@ -3032,9 +3032,14 @@ async function importCurriculum(
         status: "published",
         created_by: actorId,
         import_key: importKey,
-      });
-      if (existingFigure) report.figures.updated += 1;
-      else report.figures.created += 1;
+      };
+      if (existingFigure) {
+        await patchRows(config, `lesson_figures?id=eq.${enc(String(existingFigure.id))}`, figureRow);
+        report.figures.updated += 1;
+      } else {
+        await insertRow(config, "lesson_figures", figureRow);
+        report.figures.created += 1;
+      }
     }
 
     // --- materials (R61): page-image resources bound to steps ------------------

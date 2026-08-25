@@ -124,6 +124,35 @@ class ImporterMaterialsTests(unittest.TestCase):
         self.assertIn("report.materials", self.IMPORTER)
 
 
+class ImporterFiguresTests(unittest.TestCase):
+    """lesson_figures.id is a database-generated uuid. The first live import proved
+    it: sending the composed text id threw `invalid input syntax for type uuid`.
+    The envelope's figure id is an import-time handle only — row identity is
+    (lesson_id, import_key, position)."""
+
+    FIGURES = (
+        ADMIN.split("async function importCurriculum(", 1)[1]
+        .split("\nasync function ", 1)[0]
+        .split("--- figures", 1)[1]
+        .split("--- materials", 1)[0]
+    )
+
+    def test_the_importer_never_sends_a_figure_id(self):
+        self.assertNotIn("id: figureId", self.FIGURES)
+        self.assertNotIn('upsertByConflict(config, "lesson_figures"', self.FIGURES)
+
+    def test_row_identity_is_lesson_import_position(self):
+        self.assertIn("import_key=eq.", self.FIGURES)
+        self.assertIn("position=eq.", self.FIGURES)
+        self.assertIn("import-time handle", self.FIGURES)
+
+    def test_other_owners_rows_stay_invisible_to_the_filter(self):
+        # Teacher-extracted drafts and legacy static figures carry a different
+        # (or no) import_key — the scoped filter can never select, and so never
+        # patch, someone else's row.
+        self.assertIn("never touched", self.FIGURES)
+
+
 class RendererTests(unittest.TestCase):
     def test_pages_render_to_the_public_books_dir(self):
         self.assertIn('quality: 70', RENDER)
