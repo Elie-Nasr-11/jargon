@@ -11506,3 +11506,16 @@ unsaved count mitigates); the inline menus (create/add-step/add-lesson) share th
 pre-existing no-outside-click-dismiss pattern.
 Suggested next task: owner clicks through the deployed three-room console and the
 new editor; then back to the book pipeline (upload A1 ch1 through Content → Build).
+
+## Claude -> Codex / Human - 2026-08-25 12:10
+
+Status: Starting
+Task: R61 — build both IT Frontiers books fully into production (owner: "build A1
+and A2 fully"; approved: book-faithful composer + page-image fallback). Extractor
+v2 (three answer reds, structured activities, glossary split), compose.mjs, importer
+materials branch, page renderer, 4-chapter import + publish via pg_net.
+Files I expect to touch: tools/book-import/* (extract v2, compose, select-pages,
+render-pages, render.html, validate), supabase/functions/curriculum-admin/index.ts
+(materials branch), docs/CURRICULUM_IMPORT.md, books/**, frontend/public/books/**,
+tests/test_r61_book_build.py, docs.
+Notes: plan approved; one PR then live imports through execute_sql+pg_net.
