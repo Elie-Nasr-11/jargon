@@ -123,6 +123,37 @@ The CLI signs in as a teacher or admin (the same credentials the app uses — no
 service-role key on a laptop), uploads that chapter's figures, posts the document,
 and prints what it created, updated, and skipped. Re-run it as often as you like.
 
+## Materials (R61): page images bound to steps
+
+A lesson may carry `materials` — images shown to the student when a given step
+opens (the media-stage path). The importer writes them as `lesson_resources` rows
+bound to the step's activity:
+
+```json
+"materials": [
+  {
+    "id": "itf-a2-ch2-l1-p160",
+    "title": "Book page 160 — Types of Learning",
+    "external_url": "/books/a2-ch2-l1/p160.jpg",
+    "step": 1,
+    "source_page": 160
+  }
+]
+```
+
+- `external_url` is required — a relative URL resolves against the app's own
+  origin (the page files live in `frontend/public/books/`), an absolute URL is
+  passed through untouched. No storage upload is involved.
+- `step` is the 1-based position among the lesson's authored `steps[]` — quiz and
+  assignment steps are appended after them, so a materials binding always lands on
+  a teaching step. Out-of-range bindings are skipped with a warning.
+- Idempotency: `lesson_resources.id` is a generated uuid, so ownership rides in
+  `metadata.material_id` + `metadata.import_key`. A resource someone else created
+  is left alone with a warning; re-imports patch in place. Nothing is deleted —
+  a re-import that drops a material leaves the old row behind (archive it in the
+  studio if it should go).
+- Materials land as drafts and publish with `publish_lesson`, like everything else.
+
 ## What the importer will refuse
 
 - A lesson with no steps (an empty lesson is worse than no lesson).

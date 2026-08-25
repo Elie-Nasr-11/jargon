@@ -1,0 +1,16 @@
+<!doctype html><body style="margin:0"><canvas id="c"></canvas>
+<script type="module">
+import * as pdfjs from "./lib/pdf.mjs";
+pdfjs.GlobalWorkerOptions.workerSrc = "./lib/pdf.worker.mjs";
+const docs = {};
+window.__render = async (url, pageNo, scale) => {
+  docs[url] = docs[url] || await pdfjs.getDocument({ url }).promise;
+  const page = await docs[url].getPage(pageNo);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.getElementById("c");
+  canvas.width = viewport.width; canvas.height = viewport.height;
+  await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+  return [viewport.width, viewport.height];
+};
+window.__ready = true;
+</script></body>
