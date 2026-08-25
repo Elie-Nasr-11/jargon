@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrainCircuit, Check, RefreshCw, Sparkles, X } from "lucide-react";
+import { BrainCircuit, Check, ChevronRight, RefreshCw, Sparkles, X } from "lucide-react";
 import {
   extractLessonKnowledge,
   getSession,
@@ -46,6 +46,9 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // R60b: quiet by default — the header (with its "N to review" badge) stays; the body
+  // opens on demand. The load stays eager because the badge IS the summary.
+  const [bodyOpen, setBodyOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,7 +129,12 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
   return (
     <section className="rounded-card border border-border bg-depth-sub p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-title font-medium text-foreground">
+        <button
+          type="button"
+          onClick={() => setBodyOpen((value) => !value)}
+          aria-expanded={bodyOpen}
+          className="flex items-center gap-2 rounded-control text-title font-medium text-foreground transition-colors hover:opacity-80"
+        >
           <BrainCircuit className="h-4 w-4" strokeWidth={1.7} />
           Knowledge
           {draftCount > 0 ? (
@@ -134,7 +142,11 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
               {draftCount} to review
             </span>
           ) : null}
-        </div>
+          <ChevronRight
+            className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${bodyOpen ? "rotate-90" : ""}`}
+            strokeWidth={1.7}
+          />
+        </button>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -161,96 +173,100 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
         </div>
       </div>
 
-      <p className="mb-3 text-meta text-muted-foreground">
-        The mentor teaches from what is published here: ideas become trackable strengths, vocab gets
-        defined on tap, links connect lessons, practice items are used verbatim before anything
-        generated, and figures are shown to students while the idea they illustrate is being taught.
-        Nothing on this card reaches a student until you publish it.
-      </p>
+      {bodyOpen ? (
+        <>
+          <p className="mb-3 text-meta text-muted-foreground">
+            The mentor teaches from what is published here: ideas become trackable strengths, vocab
+            gets defined on tap, links connect lessons, practice items are used verbatim before
+            anything generated, and figures are shown to students while the idea they illustrate is
+            being taught. Nothing on this card reaches a student until you publish it.
+          </p>
 
-      {error ? <p className="mb-3 text-meta text-destructive">{error}</p> : null}
-      {notice ? <p className="mb-3 text-meta text-muted-foreground">{notice}</p> : null}
+          {error ? <p className="mb-3 text-meta text-destructive">{error}</p> : null}
+          {notice ? <p className="mb-3 text-meta text-muted-foreground">{notice}</p> : null}
 
-      {loaded && total === 0 && !loading ? (
-        <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
-          Nothing here yet. Draft knowledge reads the steps and approved resources, then proposes
-          ideas, vocab, links, and practice for review. Figures are added when a lesson&rsquo;s
-          source material is processed.
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          <KnowledgeGroup
-            label="Ideas"
-            count={rows.ideas.length}
-            rows={rows.ideas.map((row) => ({
-              id: row.id,
-              status: row.status,
-              title: row.title,
-              detail: row.one_liner || row.key,
-              mono: row.key,
-            }))}
-            kind="idea"
-            busyId={busyId}
-            onReview={onReview}
-          />
-          <KnowledgeGroup
-            label="Vocabulary"
-            count={rows.vocab.length}
-            rows={rows.vocab.map((row) => ({
-              id: row.id,
-              status: row.status,
-              title: row.term,
-              detail: row.definition,
-            }))}
-            kind="vocab"
-            busyId={busyId}
-            onReview={onReview}
-          />
-          <KnowledgeGroup
-            label="Links"
-            count={rows.links.length}
-            rows={rows.links.map((row) => ({
-              id: row.id,
-              status: row.status,
-              title: `${row.from_key} → ${row.to_key}`,
-              detail: row.note || row.kind,
-              mono: row.kind,
-            }))}
-            kind="link"
-            busyId={busyId}
-            onReview={onReview}
-          />
-          <KnowledgeGroup
-            label="Figures"
-            count={rows.figures.length}
-            rows={rows.figures.map((row) => ({
-              id: row.id,
-              status: row.status,
-              title: row.title,
-              detail: row.caption || row.image_url,
-              mono: row.idea_key || undefined,
-              thumb: row.image_url,
-            }))}
-            kind="figure"
-            busyId={busyId}
-            onReview={onReview}
-          />
-          <KnowledgeGroup
-            label="Practice"
-            count={rows.practice.length}
-            rows={rows.practice.map((row) => ({
-              id: row.id,
-              status: row.status,
-              title: row.prompt,
-              detail: row.expected ? `Expects: ${row.expected}` : row.idea_key,
-              mono: row.difficulty,
-            }))}
-            kind="practice"
-            busyId={busyId}
-            onReview={onReview}
-          />
-        </div>
-      )}
+          {loaded && total === 0 && !loading ? (
+            <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
+              Nothing here yet. Draft knowledge reads the steps and approved resources, then
+              proposes ideas, vocab, links, and practice for review. Figures are added when a
+              lesson&rsquo;s source material is processed.
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              <KnowledgeGroup
+                label="Ideas"
+                count={rows.ideas.length}
+                rows={rows.ideas.map((row) => ({
+                  id: row.id,
+                  status: row.status,
+                  title: row.title,
+                  detail: row.one_liner || row.key,
+                  mono: row.key,
+                }))}
+                kind="idea"
+                busyId={busyId}
+                onReview={onReview}
+              />
+              <KnowledgeGroup
+                label="Vocabulary"
+                count={rows.vocab.length}
+                rows={rows.vocab.map((row) => ({
+                  id: row.id,
+                  status: row.status,
+                  title: row.term,
+                  detail: row.definition,
+                }))}
+                kind="vocab"
+                busyId={busyId}
+                onReview={onReview}
+              />
+              <KnowledgeGroup
+                label="Links"
+                count={rows.links.length}
+                rows={rows.links.map((row) => ({
+                  id: row.id,
+                  status: row.status,
+                  title: `${row.from_key} → ${row.to_key}`,
+                  detail: row.note || row.kind,
+                  mono: row.kind,
+                }))}
+                kind="link"
+                busyId={busyId}
+                onReview={onReview}
+              />
+              <KnowledgeGroup
+                label="Figures"
+                count={rows.figures.length}
+                rows={rows.figures.map((row) => ({
+                  id: row.id,
+                  status: row.status,
+                  title: row.title,
+                  detail: row.caption || row.image_url,
+                  mono: row.idea_key || undefined,
+                  thumb: row.image_url,
+                }))}
+                kind="figure"
+                busyId={busyId}
+                onReview={onReview}
+              />
+              <KnowledgeGroup
+                label="Practice"
+                count={rows.practice.length}
+                rows={rows.practice.map((row) => ({
+                  id: row.id,
+                  status: row.status,
+                  title: row.prompt,
+                  detail: row.expected ? `Expects: ${row.expected}` : row.idea_key,
+                  mono: row.difficulty,
+                }))}
+                kind="practice"
+                busyId={busyId}
+                onReview={onReview}
+              />
+            </div>
+          )}
+        </>
+      ) : null}
     </section>
   );
 }

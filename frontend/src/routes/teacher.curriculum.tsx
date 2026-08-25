@@ -768,12 +768,58 @@ export function CurriculumStudio({
     lessonId: string,
     meta: CurriculumLessonMetaInput,
     milestone: CurriculumMilestoneInput,
-  ) =>
-    reloading(
+  ) => {
+    // R60b: when the milestone row already exists this is a pure patch, so it goes the
+    // optimistic route — instant, and (crucially) no full refetch racing the optimistic
+    // step writes the sticky save bar flushes in the same tick. Only a FIRST save (no
+    // milestone yet — the server assigns its id) still takes the reloading path.
+    const existing = data?.milestones.find((row) => row.lesson_id === lessonId) ?? null;
+    if (!existing) {
+      reloading(
+        (accessToken, classId) =>
+          saveCurriculumLessonMeta({ accessToken, classId, lessonId, meta, milestone }),
+        { successMessage: "Lesson saved." },
+      );
+      return;
+    }
+    optimistic(
+      (d) => ({
+        ...d,
+        lessons: d.lessons.map((l) =>
+          l.id === lessonId
+            ? {
+                ...l,
+                title: meta.title,
+                level: meta.level,
+                tutor_prompt: meta.tutor_prompt,
+                help_ceiling: meta.help_ceiling ?? l.help_ceiling,
+                require_attempt_first: meta.require_attempt_first,
+                final_answer_policy: meta.final_answer_policy ?? l.final_answer_policy,
+                tutor_tone: meta.tutor_tone,
+                tutor_pace: meta.tutor_pace,
+                grade_band: meta.grade_band,
+                allow_live_artifacts: meta.allow_live_artifacts,
+              }
+            : l,
+        ),
+        milestones: d.milestones.map((row) =>
+          row.id === existing.id
+            ? {
+                ...row,
+                title: meta.title,
+                objective: milestone.objective,
+                level: meta.level,
+                skill_keys: milestone.skill_keys,
+                allowed_response_modes: milestone.allowed_response_modes,
+              }
+            : row,
+        ),
+      }),
       (accessToken, classId) =>
         saveCurriculumLessonMeta({ accessToken, classId, lessonId, meta, milestone }),
       { successMessage: "Lesson saved." },
     );
+  };
 
   const upsertStep = (lessonId: string, step: CurriculumStepInput) => {
     if (step.id) {
@@ -2795,6 +2841,38 @@ function LessonDetail({
 }) {
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [movingOpen, setMovingOpen] = useState(false);
+  const [addStepOpen, setAddStepOpen] = useState(false);
+
+  // R60b: ONE save. Children register their dirty state and a flush; the sticky bar
+  // saves everything at once, and Publish flushes first so a teacher never publishes
+  // stale text. No child state moves — each keeps its own fields and its save body.
+  const flushers = useRef(new Map<string, () => void>());
+  const [dirtyIds, setDirtyIds] = useState<ReadonlySet<string>>(new Set());
+  const registerDirty = useCallback((id: string, dirty: boolean, flush: () => void) => {
+    flushers.current.set(id, flush);
+    setDirtyIds((prev) => {
+      if (prev.has(id) === dirty) return prev;
+      const next = new Set(prev);
+      if (dirty) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  const unregisterDirty = useCallback((id: string) => {
+    flushers.current.delete(id);
+    setDirtyIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+  const saveAll = useCallback(() => {
+    // Steps first, meta last — the meta path may refetch and must not race a step write.
+    for (const id of dirtyIds) if (id !== "meta") flushers.current.get(id)?.();
+    if (dirtyIds.has("meta")) flushers.current.get("meta")?.();
+  }, [dirtyIds]);
 
   const steps = useMemo(
     () =>
@@ -2831,21 +2909,130 @@ function LessonDetail({
               {lesson.title}
             </h2>
           </div>
-          <div className="flex items-center gap-1 rounded-full border border-border p-0.5">
-            <ViewToggle active={view === "edit"} onClick={() => setView("edit")} label="Edit" />
-            <ViewToggle
-              active={view === "preview"}
-              onClick={() => setView("preview")}
-              label="Preview"
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2.5 py-0.5 text-overline uppercase tracking-[0.08em] ${
+                lesson.publication_status === "published"
+                  ? "border-success/35 text-success"
+                  : "border-border text-muted-foreground"
+              }`}
+            >
+              {lesson.publication_status || "published"}
+            </span>
+            <div className="flex items-center gap-1 rounded-full border border-border p-0.5">
+              <ViewToggle active={view === "edit"} onClick={() => setView("edit")} label="Edit" />
+              <ViewToggle
+                active={view === "preview"}
+                onClick={() => setView("preview")}
+                label="Preview"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                saveAll();
+                onPublish();
+              }}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-meta text-success transition-colors hover:bg-success/10 disabled:opacity-50"
+            >
+              <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
+              Publish
+            </button>
+            <OverflowMenu
+              label="Lesson actions"
+              actions={[
+                {
+                  label: "Archive",
+                  icon: Archive,
+                  disabled: busy,
+                  onClick: onArchiveLesson,
+                },
+                {
+                  label: "Move to unit…",
+                  disabled: busy,
+                  onClick: () => setMovingOpen(true),
+                },
+                {
+                  label: "Delete lesson",
+                  icon: Trash2,
+                  tone: "danger",
+                  disabled: busy,
+                  separatorBefore: true,
+                  onClick: () => setConfirmDelete(true),
+                },
+              ]}
             />
           </div>
         </div>
+
+        {movingOpen ? (
+          <div className="mb-4 flex flex-wrap items-end gap-3 rounded-card border border-border bg-depth-sub px-4 py-3">
+            <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Move to unit
+              <select
+                value={lesson.unit_id || ""}
+                onChange={(event) => {
+                  if (event.target.value && event.target.value !== lesson.unit_id) {
+                    onMove(event.target.value);
+                  }
+                  setMovingOpen(false);
+                }}
+                disabled={busy}
+                className="jargon-input normal-case tracking-normal"
+              >
+                {orgUnits.map(({ unit, courseTitle }) => (
+                  <option key={unit.id} value={unit.id}>
+                    {courseTitle} / {unit.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setMovingOpen(false)}
+              className="text-meta text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {confirmDelete ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-card border border-destructive/30 bg-depth-sub px-4 py-3">
+            <span className="min-w-0 flex-1 text-meta text-muted-foreground">
+              Delete this lesson? Lessons with learner activity can be archived but not deleted.
+            </span>
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-2 text-meta text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+              Confirm delete
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              className="text-meta text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
 
         {view === "preview" ? (
           <LessonPreview lesson={lesson} milestone={milestone} steps={steps} quizFor={quizFor} />
         ) : (
           <div className="grid gap-5">
-            <LessonMetaForm lesson={lesson} milestone={milestone} busy={busy} onSave={onSaveMeta} />
+            <LessonMetaForm
+              lesson={lesson}
+              milestone={milestone}
+              busy={busy}
+              onSave={onSaveMeta}
+              onDirtyState={registerDirty}
+              onUnregister={unregisterDirty}
+            />
 
             <KnowledgeCard lessonId={lesson.id} />
 
@@ -2890,6 +3077,8 @@ function LessonDetail({
                           onApproveArtifact={onApproveArtifact}
                           onSave={onUpsertStep}
                           onDelete={() => onDeleteStep(activity.id)}
+                          onDirtyState={registerDirty}
+                          onUnregister={unregisterDirty}
                         />
                       </div>
                     )}
@@ -2897,20 +3086,61 @@ function LessonDetail({
                 </div>
               )}
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {MODE_META.map((meta) => (
-                  <button
-                    key={meta.mode}
-                    type="button"
-                    onClick={() => onUpsertStep(defaultStepForMode(meta.mode))}
-                    disabled={busy}
-                    style={modeAccentStyle(meta.mode)}
-                    className="mode-chip inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-meta text-foreground disabled:opacity-50"
+              {/* R60b: one door instead of eight chips — a grouped menu, still driven by
+                  MODE_META so the mode vocabulary stays single-sourced. */}
+              <div className="relative mt-3">
+                <button
+                  type="button"
+                  onClick={() => setAddStepOpen((value) => !value)}
+                  disabled={busy}
+                  aria-haspopup="menu"
+                  aria-expanded={addStepOpen}
+                  className="btn btn-secondary btn-sm gap-1"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  Add step
+                </button>
+                {addStepOpen ? (
+                  <div
+                    role="menu"
+                    className="absolute left-0 top-full z-20 mt-1 w-64 rounded-card border border-border bg-depth-card p-1 shadow-card"
                   >
-                    {stepKindConfig(meta.kind).icon}
-                    {meta.label}
-                  </button>
-                ))}
+                    {(
+                      [
+                        { group: "Teach", modes: ["explanation", "media"] },
+                        {
+                          group: "Practice",
+                          modes: ["practice", "reflection", "inquiry", "revision"],
+                        },
+                        { group: "Assess", modes: ["assessment", "assignment"] },
+                      ] as const
+                    ).map(({ group, modes }) => (
+                      <div key={group}>
+                        <div className="px-3 pb-0.5 pt-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                          {group}
+                        </div>
+                        {MODE_META.filter((meta) =>
+                          (modes as readonly string[]).includes(meta.mode),
+                        ).map((meta) => (
+                          <button
+                            key={meta.mode}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setAddStepOpen(false);
+                              onUpsertStep(defaultStepForMode(meta.mode));
+                            }}
+                            style={modeAccentStyle(meta.mode)}
+                            className="mode-chip flex w-full items-center gap-1.5 rounded-control px-3 py-1.5 text-left text-meta text-foreground transition-colors hover:bg-muted"
+                          >
+                            {stepKindConfig(meta.kind).icon}
+                            {meta.label}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-4 border-t border-border pt-4">
@@ -2923,79 +3153,21 @@ function LessonDetail({
               </div>
             </section>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-depth-card/95 px-4 py-2.5 backdrop-blur sm:-mx-5 sm:px-5">
+              <span className="text-meta text-muted-foreground">
+                {dirtyIds.size
+                  ? `${dirtyIds.size} unsaved change${dirtyIds.size === 1 ? "" : "s"}`
+                  : "All changes saved"}
+              </span>
               <button
                 type="button"
-                onClick={onPublish}
-                className="inline-flex items-center gap-2 rounded-full border border-success/35 px-4 py-2 text-meta text-success transition-colors hover:bg-success/10"
+                onClick={saveAll}
+                disabled={busy || !dirtyIds.size}
+                className="btn btn-primary btn-sm"
               >
-                <Check className="h-3.5 w-3.5" strokeWidth={1.7} />
-                Publish
+                <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
+                Save changes
               </button>
-              <button type="button" onClick={onArchiveLesson} className="btn btn-secondary">
-                <Archive className="h-3.5 w-3.5" strokeWidth={1.7} />
-                Archive
-              </button>
-            </div>
-
-            <div className="border-t border-border pt-4">
-              <div className="mb-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Organize
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  Move to unit
-                  <select
-                    value={lesson.unit_id || ""}
-                    onChange={(event) => {
-                      if (event.target.value && event.target.value !== lesson.unit_id) {
-                        onMove(event.target.value);
-                      }
-                    }}
-                    disabled={busy}
-                    className="jargon-input normal-case tracking-normal"
-                  >
-                    {orgUnits.map(({ unit, courseTitle }) => (
-                      <option key={unit.id} value={unit.id}>
-                        {courseTitle} / {unit.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {confirmDelete ? (
-                  <div className="inline-flex items-center gap-2 self-end">
-                    <button
-                      type="button"
-                      onClick={onDelete}
-                      disabled={busy}
-                      className="inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-2 text-meta text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                      Confirm delete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDelete(false)}
-                      className="text-meta text-muted-foreground hover:text-foreground"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(true)}
-                    disabled={busy}
-                    className="btn btn-secondary self-end"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    Delete
-                  </button>
-                )}
-              </div>
-              <p className="mt-2 text-meta text-muted-foreground">
-                Lessons with learner activity can be archived but not deleted.
-              </p>
             </div>
           </div>
         )}
@@ -3009,13 +3181,20 @@ function LessonMetaForm({
   milestone,
   busy,
   onSave,
+  onDirtyState,
+  onUnregister,
 }: {
   lesson: Lesson;
   milestone: CurriculumAuthoringData["milestones"][number] | null;
   busy: boolean;
   onSave: (meta: CurriculumLessonMetaInput, milestone: CurriculumMilestoneInput) => void;
+  // R60b: the lesson's single save bar — this form registers as "meta".
+  onDirtyState: (id: string, dirty: boolean, flush: () => void) => void;
+  onUnregister: (id: string) => void;
 }) {
   const initialType = parseLessonKind(lesson.curriculum_metadata?.lesson_type) || "discussion";
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [touched, setTouched] = useState(false);
   const [title, setTitle] = useState(lesson.title);
   const [level, setLevel] = useState(lesson.level || "Any level");
   const [lessonType, setLessonType] = useState<LessonKind>(initialType);
@@ -3042,6 +3221,7 @@ function LessonMetaForm({
   );
 
   const toggleMode = (mode: ResponseMode) => {
+    setTouched(true);
     setAllowedModes((current) => {
       const next = current.includes(mode)
         ? current.filter((item) => item !== mode)
@@ -3049,6 +3229,14 @@ function LessonMetaForm({
       return next.length ? next : ["text"];
     });
   };
+
+  // Any field edit marks the form dirty; the wrapper keeps the field setters as-is.
+  const touch =
+    <A,>(set: (value: A) => void) =>
+    (value: A) => {
+      set(value);
+      setTouched(true);
+    };
 
   const save = () => {
     onSave(
@@ -3074,7 +3262,15 @@ function LessonMetaForm({
         allowed_response_modes: allowedModes,
       },
     );
+    setTouched(false);
   };
+  const flushRef = useRef<() => void>(() => {});
+  flushRef.current = save;
+  useEffect(() => {
+    onDirtyState("meta", touched, () => flushRef.current());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [touched]);
+  useEffect(() => () => onUnregister("meta"), [onUnregister]);
 
   return (
     <section className="rounded-card border border-border bg-depth-sub p-4">
@@ -3083,120 +3279,145 @@ function LessonMetaForm({
         Lesson basics
       </div>
       <div className="grid gap-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextInput label="Lesson title" value={title} onChange={setTitle} />
-          <TextInput label="Level" value={level} onChange={setLevel} />
-          <SelectInput
-            label="Lesson type"
-            value={lessonType}
-            options={["discussion", "code", "reflection", "multiple_choice", "file"]}
-            onChange={(value) => setLessonType(value as LessonKind)}
-          />
-        </div>
-        <TextArea label="Mentor prompt" value={tutorPrompt} onChange={setTutorPrompt} />
-        <TextArea label="Lesson objective" value={objective} onChange={setObjective} />
-        <TextInput label="Skill keys (comma separated)" value={skillKeys} onChange={setSkillKeys} />
-        <div className="grid gap-2">
-          <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-            Allowed answer modes
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(["text", "code", "multiple_choice", "file"] as ResponseMode[]).map((mode) => (
+        {/* R60b: two fields carry a lesson — title and objective. Everything else is a
+            default a lazy teacher never has to see, folded under Advanced settings. */}
+        <TextInput label="Lesson title" value={title} onChange={touch(setTitle)} />
+        <TextArea label="Lesson objective" value={objective} onChange={touch(setObjective)} />
+        <Collapsible
+          open={advancedOpen}
+          onToggle={() => setAdvancedOpen((value) => !value)}
+          title={<span className="text-body font-medium text-foreground">Advanced settings</span>}
+          meta={
+            <span className="shrink-0 text-meta text-muted-foreground">
+              level · type · mentor prompt · tutor behavior
+            </span>
+          }
+          headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+          bodyClassName="pt-2"
+        >
+          <div className="grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextInput label="Level" value={level} onChange={touch(setLevel)} />
+              <SelectInput
+                label="Lesson type"
+                value={lessonType}
+                options={["discussion", "code", "reflection", "multiple_choice", "file"]}
+                onChange={touch((value: string) => setLessonType(value as LessonKind))}
+              />
+            </div>
+            <TextArea label="Mentor prompt" value={tutorPrompt} onChange={touch(setTutorPrompt)} />
+            <TextInput
+              label="Skill keys (comma separated)"
+              value={skillKeys}
+              onChange={touch(setSkillKeys)}
+            />
+            <div className="grid gap-2">
+              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                Allowed answer modes
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(["text", "code", "multiple_choice", "file"] as ResponseMode[]).map((mode) => (
+                  <button
+                    type="button"
+                    key={mode}
+                    onClick={() => toggleMode(mode)}
+                    className={`rounded-full border px-3 py-1.5 text-meta transition-colors ${
+                      allowedModes.includes(mode)
+                        ? "border-primary/25 bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* R52: a flat hairline group, not a third tier of nested card chrome — the
+                editor keeps ONE inset level (this Lesson basics card) and separates
+                sub-groups with rules instead of boxes-in-boxes. */}
+            <div className="grid gap-3 border-t border-border/60 pt-4">
+              <div>
+                <div className="text-body font-medium text-foreground">Tutor behavior</div>
+                <p className="mt-0.5 text-meta text-muted-foreground">
+                  Govern how much help the mentor may give and whether it must see an attempt first.
+                  The student's chosen mode can ask for help only up to the ceiling.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SelectInput
+                  label="Help ceiling"
+                  value={helpCeiling}
+                  options={["clarify", "hints", "guided", "worked_example", "feedback", "study"]}
+                  onChange={touch(setHelpCeiling)}
+                />
+                <SelectInput
+                  label="Final answer"
+                  value={finalAnswerPolicy}
+                  options={["never", "after_attempt", "allowed"]}
+                  onChange={touch(setFinalAnswerPolicy)}
+                />
+                <SelectInput
+                  label="Grade band"
+                  value={gradeBand || "auto"}
+                  options={["auto", "lower", "middle", "upper"]}
+                  onChange={touch((value: string) => setGradeBand(value === "auto" ? "" : value))}
+                />
+                <SelectInput
+                  label="Default tone"
+                  value={tutorTone || "default"}
+                  options={["default", "encouraging", "neutral", "direct"]}
+                  onChange={touch((value: string) =>
+                    setTutorTone(value === "default" ? "" : value),
+                  )}
+                />
+                <SelectInput
+                  label="Default pace"
+                  value={tutorPace || "default"}
+                  options={["default", "brief", "balanced", "guided"]}
+                  onChange={touch((value: string) =>
+                    setTutorPace(value === "default" ? "" : value),
+                  )}
+                />
+              </div>
               <button
                 type="button"
-                key={mode}
-                onClick={() => toggleMode(mode)}
-                className={`rounded-full border px-3 py-1.5 text-meta transition-colors ${
-                  allowedModes.includes(mode)
+                onClick={() => {
+                  setTouched(true);
+                  setRequireAttemptFirst((current) => !current);
+                }}
+                className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors ${
+                  requireAttemptFirst
                     ? "border-primary/25 bg-primary text-primary-foreground"
                     : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
-                {mode}
+                {requireAttemptFirst ? <Check className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
+                Require an attempt before the mentor helps
               </button>
-            ))}
+              <div className="grid gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTouched(true);
+                    setAllowLiveArtifacts((current) => !current);
+                  }}
+                  className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors ${
+                    allowLiveArtifacts
+                      ? "border-primary/25 bg-primary text-primary-foreground"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {allowLiveArtifacts ? <Check className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
+                  Live mentor-built activities
+                </button>
+                <p className="text-meta text-muted-foreground">
+                  Lets the mentor offer to build a one-off interactive activity for a struggling
+                  student — private to that student until you share it.
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-        {/* R52: a flat hairline group, not a third tier of nested card chrome — the
-            editor keeps ONE inset level (this Lesson basics card) and separates
-            sub-groups with rules instead of boxes-in-boxes. */}
-        <div className="grid gap-3 border-t border-border/60 pt-4">
-          <div>
-            <div className="text-body font-medium text-foreground">Tutor behavior</div>
-            <p className="mt-0.5 text-meta text-muted-foreground">
-              Govern how much help the mentor may give and whether it must see an attempt first. The
-              student's chosen mode can ask for help only up to the ceiling.
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <SelectInput
-              label="Help ceiling"
-              value={helpCeiling}
-              options={["clarify", "hints", "guided", "worked_example", "feedback", "study"]}
-              onChange={setHelpCeiling}
-            />
-            <SelectInput
-              label="Final answer"
-              value={finalAnswerPolicy}
-              options={["never", "after_attempt", "allowed"]}
-              onChange={setFinalAnswerPolicy}
-            />
-            <SelectInput
-              label="Grade band"
-              value={gradeBand || "auto"}
-              options={["auto", "lower", "middle", "upper"]}
-              onChange={(value) => setGradeBand(value === "auto" ? "" : value)}
-            />
-            <SelectInput
-              label="Default tone"
-              value={tutorTone || "default"}
-              options={["default", "encouraging", "neutral", "direct"]}
-              onChange={(value) => setTutorTone(value === "default" ? "" : value)}
-            />
-            <SelectInput
-              label="Default pace"
-              value={tutorPace || "default"}
-              options={["default", "brief", "balanced", "guided"]}
-              onChange={(value) => setTutorPace(value === "default" ? "" : value)}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setRequireAttemptFirst((current) => !current)}
-            className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors ${
-              requireAttemptFirst
-                ? "border-primary/25 bg-primary text-primary-foreground"
-                : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            {requireAttemptFirst ? <Check className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
-            Require an attempt before the mentor helps
-          </button>
-          <div className="grid gap-1">
-            <button
-              type="button"
-              onClick={() => setAllowLiveArtifacts((current) => !current)}
-              className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-meta transition-colors ${
-                allowLiveArtifacts
-                  ? "border-primary/25 bg-primary text-primary-foreground"
-                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              {allowLiveArtifacts ? <Check className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
-              Live mentor-built activities
-            </button>
-            <p className="text-meta text-muted-foreground">
-              Lets the mentor offer to build a one-off interactive activity for a struggling student
-              — private to that student until you share it.
-            </p>
-          </div>
-        </div>
-        <div>
-          <button type="button" onClick={save} disabled={busy} className="btn btn-secondary">
-            <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
-            {busy ? "Saving..." : "Save lesson basics"}
-          </button>
-        </div>
+        </Collapsible>
       </div>
     </section>
   );
@@ -3219,6 +3440,8 @@ function StepCard({
   onApproveArtifact,
   onSave,
   onDelete,
+  onDirtyState,
+  onUnregister,
 }: {
   activity: LessonActivity;
   index: number;
@@ -3244,8 +3467,13 @@ function StepCard({
   onApproveArtifact: (activityId: string, payload: ArtifactApprovePayload) => void;
   onSave: (step: CurriculumStepInput) => void;
   onDelete: () => void;
+  // R60b: the lesson's single save bar — each card registers under its activity id.
+  onDirtyState: (id: string, dirty: boolean, flush: () => void) => void;
+  onUnregister: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [touched, setTouched] = useState(false);
   const [title, setTitle] = useState(activity.title);
   const [prompt, setPrompt] = useState(activity.prompt);
   // v4 mode: existing steps keep their stored mode; "legacy" preserves pre-mode behavior
@@ -3295,10 +3523,19 @@ function StepCard({
     quiz?.correct_choice_ids?.[0] || choices[0]?.id || "a",
   );
 
-  const updateChoice = (i: number, patch: Partial<{ id: string; text: string }>) =>
+  const touch =
+    <A,>(set: (value: A) => void) =>
+    (value: A) => {
+      set(value);
+      setTouched(true);
+    };
+
+  const updateChoice = (i: number, patch: Partial<{ id: string; text: string }>) => {
+    setTouched(true);
     setChoices((current) =>
       current.map((choice, idx) => (idx === i ? { ...choice, ...patch } : choice)),
     );
+  };
 
   // P5 attach controls: a just-created step carries a temp id until the server swap —
   // binding to it would violate the resource's FK, so the controls wait it out.
@@ -3358,8 +3595,16 @@ function StepCard({
         : undefined,
     };
     onSave(step);
-    setOpen(false);
+    setTouched(false);
   };
+  const flushRef = useRef<() => void>(() => {});
+  flushRef.current = save;
+  useEffect(() => {
+    onDirtyState(activity.id, touched, () => flushRef.current());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [touched, activity.id]);
+  // Covers unmount AND the temp-id → server-id swap (the old id must not linger dirty).
+  useEffect(() => () => onUnregister(activity.id), [activity.id, onUnregister]);
 
   return (
     <div
@@ -3396,71 +3641,8 @@ function StepCard({
 
       {open ? (
         <div className="grid gap-3 border-t border-border p-3">
-          <TextInput label="Step title" value={title} onChange={setTitle} />
-
-          <SelectInput
-            label="Learning mode"
-            value={stepMode}
-            options={["legacy", ...MODE_META.map((meta) => meta.mode)]}
-            optionLabels={{
-              legacy: "Legacy (pre-mode step)",
-              explanation: "Explanation — teach it outright",
-              media: "Media — study attached material",
-              reflection: "Reflection — student explains it",
-              practice: "Practice — use the idea",
-              assignment: "Assignment — frame docked task",
-              inquiry: "Inquiry — invite questions",
-              assessment: "Assessment — evaluate grasp",
-              revision: "Revision — recall prior skills",
-            }}
-            onChange={(value) => {
-              const next = value as LearningMode | "legacy";
-              setStepMode(next);
-              if (next !== "legacy") setStepModeType(modeMeta(next).defaultType);
-            }}
-          />
-
-          {stepMode === "practice" ? (
-            <SelectInput
-              label="Practice type"
-              value={stepModeType || "code"}
-              options={["code", "applied"]}
-              optionLabels={{ code: "Code — run it", applied: "Applied — use it in words" }}
-              onChange={setStepModeType}
-            />
-          ) : null}
-
-          {stepMode === "assessment" ? (
-            <SelectInput
-              label="Assessment type"
-              value={stepModeType || "mcq"}
-              options={["mcq", "open_ended"]}
-              optionLabels={{ mcq: "Multiple choice", open_ended: "Open-ended (graded, no hints)" }}
-              onChange={setStepModeType}
-            />
-          ) : null}
-
-          <TextArea label={config.promptLabel} value={prompt} onChange={setPrompt} />
-
-          {stepMode === "legacy" && kind === "practice" ? (
-            <SelectInput
-              label="Answer mode"
-              value={practiceMode}
-              options={["text", "code"]}
-              onChange={(value) => setPracticeMode(value as ResponseMode)}
-            />
-          ) : null}
-
-          {showCodeFields ? (
-            <>
-              <TextArea label="Starter code" value={starterCode} onChange={setStarterCode} />
-              <TextArea
-                label="Expected output"
-                value={expectedOutput}
-                onChange={setExpectedOutput}
-              />
-            </>
-          ) : null}
+          <TextInput label="Step title" value={title} onChange={touch(setTitle)} />
+          <TextArea label={config.promptLabel} value={prompt} onChange={touch(setPrompt)} />
 
           {showChoices ? (
             <div className="grid gap-2">
@@ -3481,7 +3663,7 @@ function StepCard({
                   />
                   <button
                     type="button"
-                    onClick={() => setCorrectId(choice.id)}
+                    onClick={() => touch(setCorrectId)(choice.id)}
                     className={`rounded-full border px-3 py-1.5 text-meta ${
                       correctId === choice.id
                         ? "border-success/35 text-success"
@@ -3494,94 +3676,19 @@ function StepCard({
               ))}
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  setTouched(true);
                   setChoices((current) => [
                     ...current,
                     { id: String.fromCharCode(97 + current.length), text: "" },
-                  ])
-                }
+                  ]);
+                }}
                 className="justify-self-start text-meta text-muted-foreground hover:text-foreground"
               >
                 + Add choice
               </button>
             </div>
           ) : null}
-
-          {/* P5: per-step materials. The chat runtime attaches these on the step's
-              presentation turn (all bound, up to 3) — the fix that makes Media steps
-              actually show their material. Binding saves immediately, outside Save step. */}
-          <div className="grid gap-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Attached materials
-              </div>
-              <span className="text-meta text-muted-foreground/70">
-                Saves immediately · the mentor presents up to 3
-              </span>
-            </div>
-            {attached.map((resource) => (
-              <div
-                key={resource.id}
-                className="flex items-center gap-2 rounded-card border border-border bg-depth-sub px-3 py-2"
-              >
-                <Paperclip
-                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                  strokeWidth={1.7}
-                />
-                <span className="min-w-0 flex-1 truncate text-meta text-foreground">
-                  {resource.title}
-                </span>
-                <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
-                  {resource.resource_type}
-                </span>
-                {resource.status !== "published" ? (
-                  <span
-                    title="Drafts never reach students — the mentor only presents published materials."
-                    className="shrink-0 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-overline uppercase tracking-[0.06em] text-warning"
-                  >
-                    draft
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => onBind(resource.id, null)}
-                  disabled={busy || !bindable}
-                  title="Detach from this step"
-                  className="shrink-0 rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                >
-                  <X className="h-3 w-3" strokeWidth={2} />
-                </button>
-              </div>
-            ))}
-            {attached.length === 0 && stepMode === "media" ? (
-              <div className="rounded-card border border-dashed border-border px-3 py-2 text-meta text-muted-foreground">
-                {resources.length === 0
-                  ? "No lesson materials yet — add them in the class console's Resources tab, then attach them here."
-                  : "Media steps present their attached materials when the step opens — attach one below."}
-              </div>
-            ) : null}
-            {attachable.length > 0 ? (
-              <select
-                value=""
-                disabled={busy || !bindable}
-                onChange={(event) => {
-                  if (event.target.value) onBind(event.target.value, activity.id);
-                  event.target.value = "";
-                }}
-                title={bindable ? undefined : "Save the new step first, then attach materials."}
-                className="jargon-input text-muted-foreground disabled:opacity-50"
-              >
-                <option value="">Attach a material…</option>
-                {attachable.map((resource) => (
-                  <option key={resource.id} value={resource.id}>
-                    {resource.title}
-                    {resource.status !== "published" ? " (draft)" : ""}
-                    {resource.activity_id ? " — attached to another step" : ""}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-          </div>
 
           {/* R48: assignment/assessment steps run on a REAL work item — an assignments/
               assessments row whose activity_id points at this step. The chat runtime holds
@@ -3623,7 +3730,7 @@ function StepCard({
                       onClick={() => onOpenItem(workItem.kind, workItem.id)}
                       className="shrink-0 rounded-full border border-border px-3 py-1.5 text-meta text-muted-foreground transition-colors hover:text-foreground"
                     >
-                      Open in Classwork
+                      Open in Activity
                     </button>
                   ) : null}
                 </div>
@@ -3652,70 +3759,228 @@ function StepCard({
             </div>
           ) : null}
 
-          {/* P8: mentor-built activities for this step (live-generated for one student).
-              Oversight list: the teacher can share one with the class — after the promote
-              it becomes an ordinary attachable material. */}
-          {mentorBuilt.length ? (
-            <div className="grid gap-1.5">
-              <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                Mentor-built activities
+          {/* R60b: everything below is machinery most lessons never need — folded away so
+              a step reads as title + prompt (+ choices). The R48 strip above stays out,
+              because linked work is the step's contract, not a setting. */}
+          <Collapsible
+            open={advancedOpen}
+            onToggle={() => setAdvancedOpen((value) => !value)}
+            title={<span className="text-body font-medium text-foreground">Advanced</span>}
+            meta={
+              <span className="shrink-0 text-meta text-muted-foreground">
+                mode · materials · activities
+              </span>
+            }
+            headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+            bodyClassName="grid gap-3 pt-2"
+          >
+            <SelectInput
+              label="Learning mode"
+              value={stepMode}
+              options={["legacy", ...MODE_META.map((meta) => meta.mode)]}
+              optionLabels={{
+                legacy: "Legacy (pre-mode step)",
+                explanation: "Explanation — teach it outright",
+                media: "Media — study attached material",
+                reflection: "Reflection — student explains it",
+                practice: "Practice — use the idea",
+                assignment: "Assignment — frame docked task",
+                inquiry: "Inquiry — invite questions",
+                assessment: "Assessment — evaluate grasp",
+                revision: "Revision — recall prior skills",
+              }}
+              onChange={(value) => {
+                const next = value as LearningMode | "legacy";
+                setTouched(true);
+                setStepMode(next);
+                if (next !== "legacy") setStepModeType(modeMeta(next).defaultType);
+              }}
+            />
+
+            {stepMode === "practice" ? (
+              <SelectInput
+                label="Practice type"
+                value={stepModeType || "code"}
+                options={["code", "applied"]}
+                optionLabels={{ code: "Code — run it", applied: "Applied — use it in words" }}
+                onChange={touch(setStepModeType)}
+              />
+            ) : null}
+
+            {stepMode === "assessment" ? (
+              <SelectInput
+                label="Assessment type"
+                value={stepModeType || "mcq"}
+                options={["mcq", "open_ended"]}
+                optionLabels={{
+                  mcq: "Multiple choice",
+                  open_ended: "Open-ended (graded, no hints)",
+                }}
+                onChange={touch(setStepModeType)}
+              />
+            ) : null}
+
+            {stepMode === "legacy" && kind === "practice" ? (
+              <SelectInput
+                label="Answer mode"
+                value={practiceMode}
+                options={["text", "code"]}
+                onChange={touch((value: string) => setPracticeMode(value as ResponseMode))}
+              />
+            ) : null}
+
+            {showCodeFields ? (
+              <>
+                <TextArea
+                  label="Starter code"
+                  value={starterCode}
+                  onChange={touch(setStarterCode)}
+                />
+                <TextArea
+                  label="Expected output"
+                  value={expectedOutput}
+                  onChange={touch(setExpectedOutput)}
+                />
+              </>
+            ) : null}
+
+            {/* P5: per-step materials. The chat runtime attaches these on the step's
+              presentation turn (all bound, up to 3) — the fix that makes Media steps
+              actually show their material. Binding saves immediately, outside Save step. */}
+            <div className="grid gap-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  Attached materials
+                </div>
+                <span className="text-meta text-muted-foreground/70">
+                  Saves immediately · the mentor presents up to 3
+                </span>
               </div>
-              {mentorBuilt.map((resource) => (
+              {attached.map((resource) => (
                 <div
                   key={resource.id}
-                  className="flex items-center gap-2 rounded-card border border-border bg-depth-field px-3 py-2"
+                  className="flex items-center gap-2 rounded-card border border-border bg-depth-sub px-3 py-2"
                 >
-                  <Sparkles
+                  <Paperclip
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     strokeWidth={1.7}
                   />
                   <span className="min-w-0 flex-1 truncate text-meta text-foreground">
                     {resource.title}
                   </span>
-                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-overline uppercase tracking-[0.06em] text-muted-foreground">
-                    {resource.visibility === "student_private" ? "student-private" : "shared"}
+                  <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                    {resource.resource_type}
                   </span>
-                  {resource.visibility === "student_private" ? (
-                    <button
-                      type="button"
-                      onClick={() => onShare(resource.id)}
-                      disabled={busy}
-                      title="Make this activity visible to the whole class"
-                      className="shrink-0 rounded-full border border-border px-2.5 py-1 text-meta text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  {resource.status !== "published" ? (
+                    <span
+                      title="Drafts never reach students — the mentor only presents published materials."
+                      className="shrink-0 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-overline uppercase tracking-[0.06em] text-warning"
                     >
-                      Share with class
-                    </button>
+                      draft
+                    </span>
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onBind(resource.id, null)}
+                    disabled={busy || !bindable}
+                    title="Detach from this step"
+                    className="shrink-0 rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  >
+                    <X className="h-3 w-3" strokeWidth={2} />
+                  </button>
                 </div>
               ))}
+              {attached.length === 0 && stepMode === "media" ? (
+                <div className="rounded-card border border-dashed border-border px-3 py-2 text-meta text-muted-foreground">
+                  {resources.length === 0
+                    ? "No lesson materials yet — add them in the class console's Resources tab, then attach them here."
+                    : "Media steps present their attached materials when the step opens — attach one below."}
+                </div>
+              ) : null}
+              {attachable.length > 0 ? (
+                <select
+                  value=""
+                  disabled={busy || !bindable}
+                  onChange={(event) => {
+                    if (event.target.value) onBind(event.target.value, activity.id);
+                    event.target.value = "";
+                  }}
+                  title={bindable ? undefined : "Save the new step first, then attach materials."}
+                  className="jargon-input text-muted-foreground disabled:opacity-50"
+                >
+                  <option value="">Attach a material…</option>
+                  {attachable.map((resource) => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.title}
+                      {resource.status !== "published" ? " (draft)" : ""}
+                      {resource.activity_id ? " — attached to another step" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
             </div>
-          ) : null}
 
-          {/* P7: generate an interactive activity (sim / deck), preview it, approve → it
+            {/* P8: mentor-built activities for this step (live-generated for one student).
+              Oversight list: the teacher can share one with the class — after the promote
+              it becomes an ordinary attachable material. */}
+            {mentorBuilt.length ? (
+              <div className="grid gap-1.5">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  Mentor-built activities
+                </div>
+                {mentorBuilt.map((resource) => (
+                  <div
+                    key={resource.id}
+                    className="flex items-center gap-2 rounded-card border border-border bg-depth-field px-3 py-2"
+                  >
+                    <Sparkles
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      strokeWidth={1.7}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-meta text-foreground">
+                      {resource.title}
+                    </span>
+                    <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-overline uppercase tracking-[0.06em] text-muted-foreground">
+                      {resource.visibility === "student_private" ? "student-private" : "shared"}
+                    </span>
+                    {resource.visibility === "student_private" ? (
+                      <button
+                        type="button"
+                        onClick={() => onShare(resource.id)}
+                        disabled={busy}
+                        title="Make this activity visible to the whole class"
+                        className="shrink-0 rounded-full border border-border px-2.5 py-1 text-meta text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                      >
+                        Share with class
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {/* P7: generate an interactive activity (sim / deck), preview it, approve → it
               becomes a published material bound to THIS step. Gated on a saved step id. */}
-          <ArtifactGeneratePanel
-            busy={busy}
-            bindable={bindable}
-            onGenerate={onGenerateArtifact}
-            onApprove={(payload) => onApproveArtifact(activity.id, payload)}
-          />
+            <ArtifactGeneratePanel
+              busy={busy}
+              bindable={bindable}
+              onGenerate={onGenerateArtifact}
+              onApprove={(payload) => onApproveArtifact(activity.id, payload)}
+            />
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={save} disabled={busy} className="btn btn-secondary">
-              <Save className="h-3.5 w-3.5" strokeWidth={1.7} />
-              {busy ? "Saving..." : "Save step"}
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={busy || !canDelete}
-              title={canDelete ? undefined : "A lesson needs at least one step."}
-              className="btn btn-secondary"
-            >
-              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
-              Delete step
-            </button>
-          </div>
+            <div>
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={busy || !canDelete}
+                title={canDelete ? undefined : "A lesson needs at least one step."}
+                className="btn btn-secondary"
+              >
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                Delete step
+              </button>
+            </div>
+          </Collapsible>
         </div>
       ) : null}
     </div>
