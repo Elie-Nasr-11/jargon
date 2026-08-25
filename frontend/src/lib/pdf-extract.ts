@@ -54,17 +54,26 @@ function normalizeText(text: string): string {
 //   #69c675      96%    177        13   running header
 //   #ff4227      12%    124         9   accent scraps
 //
-// Page furniture is on nearly EVERY page in SHORT runs; body ink carries most of
-// the words; a key is a sliver of text on a minority of pages in long runs. So the
-// decision needs the whole document, not one page — hence a stats pass first.
-// Measured on that chapter this picks #ff5739 (the key, 255 runs over 37 pages) and
-// the Notes-sidebar ink, and drops both body inks, both running heads and every
+// Page furniture is on most pages in SHORT runs; body ink carries most of the
+// words; a key is a sliver of text on a minority of pages in long runs. So the
+// decision needs the whole document, not one page — hence a stats pass first. Run
+// over all four chapter PDFs of the two books, these four tests pick the key (and
+// the Notes-sidebar ink) and drop both body inks, both running heads and every
 // decorative scrap. No hue is hardcoded, so any book that colours its key (or its
 // vocabulary) benefits, and books that colour nothing lose nothing.
 const MARK_MAX_TEXT_SHARE = 0.15; // carries the bulk of the words ⇒ body ink
-const MARK_MAX_PAGE_SHARE = 0.85; // on ~every page ⇒ running furniture
+const MARK_MAX_PAGE_SHARE = 0.5; // on over half the pages ⇒ structural, not a mark
 const MARK_MIN_AVG_CHARS = 12; // short runs are labels and captions
 const MARK_MIN_PAGES = 3; // one-off decoration is not a system
+
+// …and one test that is about the TEXT rather than the colour. A running head says
+// the same thing on page after page; an answer says something different every time.
+// Chapter 2 of book A1 sets its running title in a colour it also uses for section
+// names, so no colour rule can separate them — but "computers & beyond" repeating on
+// 43 of 105 pages gives itself away. Stripping those runs cut that chapter's marks
+// from 83 pages to 34 without touching the other three.
+const REPEAT_PAGE_SHARE = 0.1;
+const REPEAT_MIN_PAGES = 3;
 
 type ColourRun = { fill: string; text: string };
 
@@ -88,6 +97,23 @@ function runsWithColour(ops: { fnArray: number[]; argsArray: unknown[] }): Colou
     }
   }
   return runs;
+}
+
+/** Runs whose exact text recurs across many pages — i.e. running heads. */
+function withoutRunningFurniture(pages: ColourRun[][]): ColourRun[][] {
+  const pagesForText = new Map<string, Set<number>>();
+  pages.forEach((runs, index) => {
+    for (const run of runs) {
+      const key = run.text.toLowerCase();
+      const seen = pagesForText.get(key) || new Set<number>();
+      seen.add(index);
+      pagesForText.set(key, seen);
+    }
+  });
+  const limit = Math.max(REPEAT_MIN_PAGES, pages.length * REPEAT_PAGE_SHARE);
+  return pages.map((runs) =>
+    runs.filter((run) => (pagesForText.get(run.text.toLowerCase())?.size ?? 0) <= limit),
+  );
 }
 
 /** Colours that behave like a mark rather than like page furniture. */
@@ -188,10 +214,14 @@ export async function extractPdfTextChunksFromUrl(url: string): Promise<Extracte
     }
   }
 
+  // The colours are judged on the RAW runs — stripping furniture first would shrink
+  // a running head's page count and let it back in — and the furniture-free runs are
+  // what actually gets written onto the page.
   const markColours = markColoursFor(pageRuns);
+  const contentRuns = withoutRunningFurniture(pageRuns);
   for (let i = 0; i < pageTexts.length; i += 1) {
     const marked = markColours.size
-      ? pageRuns[i]
+      ? contentRuns[i]
           .filter((run) => markColours.has(run.fill) && run.text.length > 3)
           .map((r) => r.text)
       : [];

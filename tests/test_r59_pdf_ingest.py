@@ -76,6 +76,7 @@ class ColourAwareExtractionTests(unittest.TestCase):
         # sliced per lesson.
         self.assertIn("Marked in the source", PDF)
         self.assertIn("markColours.has(run.fill)", PDF)
+        self.assertIn("contentRuns[i]", PDF)
         appended = PDF.split("const withMarks", 1)[1].split(";", 1)[0]
         self.assertIn("pageTexts[i]", appended)
 
@@ -91,6 +92,29 @@ class ColourAwareExtractionTests(unittest.TestCase):
         self.assertIn("stat.pages / pages.length > MARK_MAX_PAGE_SHARE", PDF)
         self.assertIn("stat.chars / stat.runs < MARK_MIN_AVG_CHARS", PDF)
         self.assertIn("stat.pages < MARK_MIN_PAGES", PDF)
+
+    def test_a_mark_lives_on_a_minority_of_pages(self):
+        # A colour on more than half the pages is structure, not a mark. Measured
+        # over all four chapter PDFs, every real key sits at or under a quarter.
+        share = float(PDF.split("const MARK_MAX_PAGE_SHARE = ", 1)[1].split(";", 1)[0])
+        self.assertLessEqual(share, 0.5)
+
+    def test_repeated_text_is_furniture_whatever_colour_it_wears(self):
+        # Book A1 chapter 2 sets its running title in a colour it also uses for
+        # section names, so no COLOUR rule separates them — but the same string on
+        # 43 of 105 pages gives itself away.
+        self.assertIn("function withoutRunningFurniture(pages: ColourRun[][])", PDF)
+        self.assertIn("REPEAT_PAGE_SHARE", PDF)
+        self.assertIn("REPEAT_MIN_PAGES", PDF)
+        self.assertIn("const contentRuns = withoutRunningFurniture(pageRuns);", PDF)
+
+    def test_colours_are_judged_before_furniture_is_stripped(self):
+        # Order matters: stripping first shrinks a running head's page count and
+        # walks it straight back through the page-share test.
+        judged = PDF.index("const markColours = markColoursFor(pageRuns);")
+        stripped = PDF.index("const contentRuns = withoutRunningFurniture(pageRuns);")
+        self.assertLess(judged, stripped)
+        self.assertIn("would shrink", PDF)
 
     def test_the_decision_is_document_level(self):
         # A single page cannot tell a key from a running head; only the document can.
