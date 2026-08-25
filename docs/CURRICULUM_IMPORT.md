@@ -109,6 +109,12 @@ would make re-imports re-upload every image.
 Legacy figures that use a static `image_url` keep working — `storage_path` simply
 wins when both are present.
 
+A figure's `id` in the document is an import-time handle only: `lesson_figures.id`
+is a database-generated uuid, and the runtime's `[[figure:...]]` markers carry the
+row's own id, never the document's. Re-imports find their rows by
+`(lesson_id, import_key, position)` — the document's figure order is the identity,
+so keep it stable across re-imports of the same chapter.
+
 ## Running it
 
 ```bash
