@@ -11419,3 +11419,39 @@ over 180k chars is ~45k input tokens per chapter — fine, but worth watching if
 someone uploads a whole book.
 Suggested next task: owner uploads a chapter through the studio and we judge the
 result; then figures.
+
+## Claude -> Codex / Human - 2026-08-25 09:20
+
+Status: Finished
+Summary: R59a — the colour-mark rule, corrected by measurement. I ran the shipped
+extractor over the real 111-page chapter instead of trusting it, and it marked 965
+runs across 100 pages: the "not the dominant ink" test was catching every heading
+and running title, and the document-level version failed too because the book sets
+body copy in TWO inks. markColoursFor now judges by SHARE OF CHARACTERS (body ink
+carries the bulk of the words; a key carries a sliver) plus page-share, run-length
+and minimum-pages guards. On the real chapter it now picks exactly the red key (255
+runs / 37 pages) and the Notes sidebar, and the Activity pages carry precisely their
+four correct answers.
+Then I ran it over ALL FOUR chapter PDFs instead of one, and chapter 2 of A1 still
+came back with 83 marked pages: it sets its running title in the same colour it uses
+for section names, so no colour rule can separate them. The TEXT can — "computers &
+beyond" repeats on 43 of 105 pages and an answer never does — so a second test drops
+runs whose exact text recurs on more than 10% of pages. That chapter fell to 34
+marked pages and the other three were untouched. Colours are still judged on the raw
+runs (stripping first would shrink a running head's page count and walk it back in);
+only what gets written to the page is furniture-free. Page-share cutoff tightened
+0.85 → 0.5 on the same evidence: every real key sits at or under a quarter of pages.
+Files changed: frontend/src/lib/pdf-extract.ts, tests/test_r59_pdf_ingest.py,
+docs/DECISIONS.md.
+Tests run: 953 pins OK; tsc + eslint clean. Spot-checked against the printed book:
+A1 Activity 1.2 and 1.3 give exactly their five correct options each, and A2 Activity
+1.3 captures the OPEN-ENDED model answers too. A check confirms the measurement
+harness reads the same constants the app ships, so the numbers can't drift. Three R59 pins re-anchored to the
+measured algorithm — the publisher-specific pin now strips comments before
+searching, so the measured colour table survives as the record of the measurement
+while the executable lines stay hue-free (verified non-vacuous: the hex is present
+in the file and absent from the code).
+Remaining concerns: unchanged — figures are still not extracted from PDFs (A2 has
+~108 raster images; A1's diagrams are vector line art needing page-region crops).
+Suggested next task: owner uploads a chapter through the studio and we judge the
+built lessons; figures after that.

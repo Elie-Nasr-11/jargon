@@ -44,27 +44,50 @@ function normalizeText(text: string): string {
 // teacher edition used to hand us the questions and hide the answers, leaving the
 // generator to GUESS a key the book was already telling us.
 //
-// So walk the operator list alongside the text: track the fill colour in force, and
-// collect the runs drawn in anything other than the page's dominant ink. Those runs
-// are appended to the page as a labelled line the generator can act on. This is
-// deliberately generic — no hardcoded hue, no publisher-specific rule — so it also
-// picks up highlighted key terms in any other book. Headings come along too; that is
-// harmless, because the note says these are marked, not that they are answers.
-async function markedRunsForPage(page: PDFPageProxy): Promise<string[]> {
-  let ops;
-  try {
-    ops = await page.getOperatorList();
-  } catch {
-    return []; // colour is a bonus; never fail an extraction over it
-  }
+// Which colour is the key, though? Measured over a real 111-page chapter:
+//
+//   colour     pages   runs   avg len   what it is
+//   #65666b      59%   1494        45   body ink
+//   #43454b      68%   1438        22   body ink
+//   #102694      96%    454        13   running header + headings
+//   #ff5739      24%    260        42   THE ANSWER KEY
+//   #69c675      96%    177        13   running header
+//   #ff4227      12%    124         9   accent scraps
+//
+// Page furniture is on most pages in SHORT runs; body ink carries most of the
+// words; a key is a sliver of text on a minority of pages in long runs. So the
+// decision needs the whole document, not one page — hence a stats pass first. Run
+// over all four chapter PDFs of the two books, these four tests pick the key (and
+// the Notes-sidebar ink) and drop both body inks, both running heads and every
+// decorative scrap. No hue is hardcoded, so any book that colours its key (or its
+// vocabulary) benefits, and books that colour nothing lose nothing.
+const MARK_MAX_TEXT_SHARE = 0.15; // carries the bulk of the words ⇒ body ink
+const MARK_MAX_PAGE_SHARE = 0.5; // on over half the pages ⇒ structural, not a mark
+const MARK_MIN_AVG_CHARS = 12; // short runs are labels and captions
+const MARK_MIN_PAGES = 3; // one-off decoration is not a system
+
+// …and one test that is about the TEXT rather than the colour. A running head says
+// the same thing on page after page; an answer says something different every time.
+// Chapter 2 of book A1 sets its running title in a colour it also uses for section
+// names, so no colour rule can separate them — but "computers & beyond" repeating on
+// 43 of 105 pages gives itself away. Stripping those runs cut that chapter's marks
+// from 83 pages to 34 without touching the other three.
+const REPEAT_PAGE_SHARE = 0.1;
+const REPEAT_MIN_PAGES = 3;
+
+type ColourRun = { fill: string; text: string };
+
+function runsWithColour(ops: { fnArray: number[]; argsArray: unknown[] }): ColourRun[] {
   let fill = "";
-  const runs: Array<{ fill: string; text: string }> = [];
+  const runs: ColourRun[] = [];
   for (let i = 0; i < ops.fnArray.length; i += 1) {
     if (ops.fnArray[i] === OPS.setFillRGBColor) {
-      const arg = ops.argsArray[i]?.[0];
+      const args = ops.argsArray[i] as unknown[] | undefined;
+      const arg = args?.[0];
       fill = typeof arg === "string" ? arg.toLowerCase() : "";
     } else if (ops.fnArray[i] === OPS.showText) {
-      const glyphs = ops.argsArray[i]?.[0];
+      const args = ops.argsArray[i] as unknown[] | undefined;
+      const glyphs = args?.[0];
       if (!Array.isArray(glyphs)) continue;
       const text = glyphs
         .map((g) => (g && typeof g === "object" && "unicode" in g ? String(g.unicode ?? "") : ""))
@@ -73,16 +96,57 @@ async function markedRunsForPage(page: PDFPageProxy): Promise<string[]> {
       if (text) runs.push({ fill, text });
     }
   }
-  if (runs.length < 4) return [];
+  return runs;
+}
 
-  const counts = new Map<string, number>();
-  for (const run of runs) counts.set(run.fill, (counts.get(run.fill) || 0) + 1);
-  const [dominant] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  // A colour used for MOST of the page is body ink, not a mark.
-  const marked = runs.filter((run) => run.fill !== dominant && run.text.length > 3);
-  // If almost everything is "marked", the page is decorative — trust nothing.
-  if (marked.length > runs.length * 0.5) return [];
-  return marked.map((run) => run.text);
+/** Runs whose exact text recurs across many pages — i.e. running heads. */
+function withoutRunningFurniture(pages: ColourRun[][]): ColourRun[][] {
+  const pagesForText = new Map<string, Set<number>>();
+  pages.forEach((runs, index) => {
+    for (const run of runs) {
+      const key = run.text.toLowerCase();
+      const seen = pagesForText.get(key) || new Set<number>();
+      seen.add(index);
+      pagesForText.set(key, seen);
+    }
+  });
+  const limit = Math.max(REPEAT_MIN_PAGES, pages.length * REPEAT_PAGE_SHARE);
+  return pages.map((runs) =>
+    runs.filter((run) => (pagesForText.get(run.text.toLowerCase())?.size ?? 0) <= limit),
+  );
+}
+
+/** Colours that behave like a mark rather than like page furniture. */
+function markColoursFor(pages: ColourRun[][]): Set<string> {
+  const stats = new Map<string, { pages: number; runs: number; chars: number }>();
+  for (const runs of pages) {
+    const seen = new Set<string>();
+    for (const run of runs) {
+      const stat = stats.get(run.fill) || { pages: 0, runs: 0, chars: 0 };
+      if (!seen.has(run.fill)) {
+        stat.pages += 1;
+        seen.add(run.fill);
+      }
+      stat.runs += 1;
+      stat.chars += run.text.length;
+      stats.set(run.fill, stat);
+    }
+  }
+  if (!stats.size) return new Set();
+  // NOT "everything but the most-used colour": these books set body copy in TWO
+  // inks, so single-dominant let one of them through and half the chapter came back
+  // "marked". Share of the total TEXT is the honest test — body ink carries the
+  // bulk of the words, a key carries a sliver of them.
+  const totalChars = [...stats.values()].reduce((sum, stat) => sum + stat.chars, 0) || 1;
+  const marks = new Set<string>();
+  for (const [fill, stat] of stats) {
+    if (stat.chars / totalChars > MARK_MAX_TEXT_SHARE) continue; // body ink
+    if (stat.pages / pages.length > MARK_MAX_PAGE_SHARE) continue; // furniture
+    if (stat.chars / stat.runs < MARK_MIN_AVG_CHARS) continue; // scraps
+    if (stat.pages < MARK_MIN_PAGES) continue; // one-off decoration
+    marks.add(fill);
+  }
+  return marks;
 }
 
 function splitPageText(text: string, pageNumber: number): ExtractedPdfChunk[] {
@@ -135,17 +199,38 @@ export async function extractPdfTextChunksFromUrl(url: string): Promise<Extracte
   const pdf = await getDocument({ data: bytes }).promise;
   const chunks: ExtractedPdfChunk[] = [];
 
+  const pageTexts: string[] = [];
+  const pageRuns: ColourRun[][] = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
-    const pageText = content.items.map(textFromItem).filter(Boolean).join(" ");
-    const marked = await markedRunsForPage(page);
+    pageTexts.push(content.items.map(textFromItem).filter(Boolean).join(" "));
+    // Colour is a bonus on top of the text; a PDF that refuses an operator list
+    // must still extract.
+    try {
+      pageRuns.push(runsWithColour(await page.getOperatorList()));
+    } catch {
+      pageRuns.push([]);
+    }
+  }
+
+  // The colours are judged on the RAW runs — stripping furniture first would shrink
+  // a running head's page count and let it back in — and the furniture-free runs are
+  // what actually gets written onto the page.
+  const markColours = markColoursFor(pageRuns);
+  const contentRuns = withoutRunningFurniture(pageRuns);
+  for (let i = 0; i < pageTexts.length; i += 1) {
+    const marked = markColours.size
+      ? contentRuns[i]
+          .filter((run) => markColours.has(run.fill) && run.text.length > 3)
+          .map((r) => r.text)
+      : [];
     // The marks ride WITH their page, so a question and its key stay together no
     // matter how the material is later sliced per lesson.
     const withMarks = marked.length
-      ? `${pageText}\n[Marked in the source (in a teacher edition these are usually the answers): ${marked.join(" | ")}]`
-      : pageText;
-    chunks.push(...splitPageText(withMarks, pageNumber));
+      ? `${pageTexts[i]}\n[Marked in the source (in a teacher edition these are usually the answers): ${marked.join(" | ")}]`
+      : pageTexts[i];
+    chunks.push(...splitPageText(withMarks, i + 1));
   }
 
   return chunks;
