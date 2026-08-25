@@ -1,11 +1,47 @@
 {
   "book": "a1",
   "lessons": {
-    "a1-ch1-l1": [],
+    "a1-ch1-l1": [
+      {
+        "page": 10,
+        "why": "vector",
+        "heading": "Information"
+      },
+      {
+        "page": 11,
+        "why": "vector",
+        "heading": "Information"
+      },
+      {
+        "page": 12,
+        "why": "vector",
+        "heading": "Information"
+      },
+      {
+        "page": 20,
+        "why": "vector",
+        "heading": "Computers"
+      }
+    ],
     "a1-ch1-l2": [
+      {
+        "page": 31,
+        "why": "vector",
+        "heading": "General Purpose"
+      },
+      {
+        "page": 34,
+        "why": "vector",
+        "heading": "Specific Purpose"
+      },
       {
         "page": 35,
         "why": "raster",
+        "heading": "Specific Purpose"
+      },
+      {
+        "page": 36,
+        "why": "vector",
         "heading": "Specific Purpose"
       },
       {
@@ -19,6 +55,11 @@
         "heading": "Specific Purpose"
       },
       {
+        "page": 42,
+        "why": "vector",
+        "heading": "Specific Purpose"
+      },
+      {
         "page": 45,
         "why": "activity-cue",
         "heading": "Specific Purpose"
@@ -26,24 +67,111 @@
     ],
     "a1-ch1-l3": [
       {
+        "page": 55,
+        "why": "vector",
+        "heading": "Interfaces & Translation"
+      },
+      {
         "page": 57,
         "why": "raster",
         "heading": "Interfaces & Translation"
+      },
+      {
+        "page": 60,
+        "why": "vector",
+        "heading": "Hardware & Software"
+      },
+      {
+        "page": 64,
+        "why": "vector",
+        "heading": "Usability"
+      },
+      {
+        "page": 71,
+        "why": "vector",
+        "heading": "Directories"
       }
     ],
-    "a1-ch1-l4": [],
+    "a1-ch1-l4": [
+      {
+        "page": 84,
+        "why": "vector",
+        "heading": "The Processor"
+      },
+      {
+        "page": 85,
+        "why": "vector",
+        "heading": "The Processor"
+      },
+      {
+        "page": 87,
+        "why": "vector",
+        "heading": "The Processor"
+      },
+      {
+        "page": 88,
+        "why": "vector",
+        "heading": "The Processor"
+      },
+      {
+        "page": 91,
+        "why": "vector",
+        "heading": "The Processor"
+      },
+      {
+        "page": 93,
+        "why": "vector",
+        "heading": "The Processor"
+      }
+    ],
     "a1-ch1-l5": [
       {
         "page": 105,
         "why": "text-cue",
         "heading": "Architecture"
+      },
+      {
+        "page": 111,
+        "why": "vector",
+        "heading": "Architecture"
       }
     ],
-    "a1-ch2-l1": [],
+    "a1-ch2-l1": [
+      {
+        "page": 121,
+        "why": "vector",
+        "heading": "Human-Computer Interface"
+      },
+      {
+        "page": 130,
+        "why": "vector",
+        "heading": "Career Tips"
+      }
+    ],
     "a1-ch2-l2": [
       {
+        "page": 145,
+        "why": "vector",
+        "heading": "Best Route"
+      },
+      {
+        "page": 146,
+        "why": "vector",
+        "heading": "Best Route"
+      },
+      {
+        "page": 150,
+        "why": "vector",
+        "heading": "Trust"
+      },
+      {
+        "page": 155,
+        "why": "vector",
+        "heading": "Career Tips"
+      },
+      {
         "page": 162,
-        "why": "activity-cue",
+        "why": "vector",
         "heading": "Career Tips"
       },
       {
@@ -54,12 +182,22 @@
     ],
     "a1-ch2-l3": [
       {
+        "page": 181,
+        "why": "vector",
+        "heading": "Career Tips"
+      },
+      {
         "page": 188,
         "why": "activity-cue",
         "heading": "Career Tips"
       }
     ],
     "a1-ch2-l4": [
+      {
+        "page": 199,
+        "why": "vector",
+        "heading": "Career Tips"
+      },
       {
         "page": 224,
         "why": "raster",

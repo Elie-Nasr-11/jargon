@@ -150,9 +150,23 @@ bound to the step's activity:
 - `external_url` is required — a relative URL resolves against the app's own
   origin (the page files live in `frontend/public/books/`), an absolute URL is
   passed through untouched. No storage upload is involved.
-- `step` is the 1-based position among the lesson's authored `steps[]` — quiz and
-  assignment steps are appended after them, so a materials binding always lands on
-  a teaching step. Out-of-range bindings are skipped with a warning.
+- `step` is **optional** (R62). When present it is the 1-based position among the
+  lesson's authored `steps[]` — quiz and assignment steps are appended after
+  them, so a step binding always lands on a teaching step, and out-of-range
+  bindings are skipped with a warning. When absent the row is **lesson-level**
+  (no `activity_id`): it never auto-shows on a step, but the student browses it
+  in the Resources panel and the mentor can hand it out on request.
+- `type` is **optional** (R62): `"pdf"` makes the row a PDF (`resource_type
+  'pdf'`, `mime_type application/pdf` — renders in-app in an iframe); anything
+  else is an image. `student_instructions` passes through (clamped to 400).
+- A lesson may also carry `documents` — the same entry shape, processed by the
+  same loop with the same idempotency. The convention (R62) is three PDFs per
+  lesson: the lesson's own pages, its chapter, and the whole book
+  (`<lessonId>-doc-lesson|-doc-chapter|-doc-book`, files under
+  `frontend/public/books/pdf/`).
+- Keep a lesson's total rows (materials + documents) at **15 or fewer** — the
+  chat runtime fetches at most 16 resources per lesson, and rows past that are
+  invisible to the mentor.
 - Idempotency: `lesson_resources.id` is a generated uuid, so ownership rides in
   `metadata.material_id` + `metadata.import_key`. A resource someone else created
   is left alone with a warning; re-imports patch in place. Nothing is deleted —

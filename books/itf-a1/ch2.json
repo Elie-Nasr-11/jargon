@@ -235,7 +235,69 @@
           "Uses the lesson's own vocabulary, each term explained",
           "Explains the reasoning in the student's own words"
         ]
-      }
+      },
+      "materials": [
+        {
+          "id": "itf-a1-ch2-l1-p121",
+          "title": "Book page 121 — Human-Computer Interface",
+          "external_url": "/books/a1-ch2-l1/p121.jpg",
+          "step": 1,
+          "source_page": 121
+        },
+        {
+          "id": "itf-a1-ch2-l1-p130",
+          "title": "Book page 130 — Career Tips",
+          "external_url": "/books/a1-ch2-l1/p130.jpg",
+          "step": 6,
+          "source_page": 130
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a1-ch2-l1-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Human-Computer Interaction (book pp. 120–137)",
+          "external_url": "/books/pdf/a1-ch2-l1.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch2-l1-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 2 PDF — Computers & Beyond (book pp. 120–224)",
+          "external_url": "/books/pdf/a1-ch2.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch2-l1-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a1-ch2-l1-pg121",
+          "idea_key": "human-computer-interface",
+          "title": "Page 121 — Human-Computer Interface",
+          "caption": "",
+          "alt_text": "Page 121 of Book A1, Human-Computer Interaction",
+          "image_url": "/books/a1-ch2-l1/p121.jpg",
+          "source_page": 121
+        },
+        {
+          "id": "itf-a1-ch2-l1-pg130",
+          "idea_key": "career-tips",
+          "title": "Page 130 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 130 of Book A1, Human-Computer Interaction",
+          "image_url": "/books/a1-ch2-l1/p130.jpg",
+          "source_page": 130
+        }
+      ]
     },
     {
       "id": "itf-a1-ch2-l2",
@@ -497,6 +559,34 @@
       },
       "materials": [
         {
+          "id": "itf-a1-ch2-l2-p145",
+          "title": "Book page 145 — Best Route",
+          "external_url": "/books/a1-ch2-l2/p145.jpg",
+          "step": 4,
+          "source_page": 145
+        },
+        {
+          "id": "itf-a1-ch2-l2-p146",
+          "title": "Book page 146 — Best Route",
+          "external_url": "/books/a1-ch2-l2/p146.jpg",
+          "step": 4,
+          "source_page": 146
+        },
+        {
+          "id": "itf-a1-ch2-l2-p150",
+          "title": "Book page 150 — Trust",
+          "external_url": "/books/a1-ch2-l2/p150.jpg",
+          "step": 5,
+          "source_page": 150
+        },
+        {
+          "id": "itf-a1-ch2-l2-p155",
+          "title": "Book page 155 — Career Tips",
+          "external_url": "/books/a1-ch2-l2/p155.jpg",
+          "step": 8,
+          "source_page": 155
+        },
+        {
           "id": "itf-a1-ch2-l2-p162",
           "title": "Book page 162 — Career Tips",
           "external_url": "/books/a1-ch2-l2/p162.jpg",
@@ -511,7 +601,69 @@
           "source_page": 163
         }
       ],
+      "documents": [
+        {
+          "id": "itf-a1-ch2-l2-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Computer Interaction (book pp. 138–167)",
+          "external_url": "/books/pdf/a1-ch2-l2.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch2-l2-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 2 PDF — Computers & Beyond (book pp. 120–224)",
+          "external_url": "/books/pdf/a1-ch2.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch2-l2-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
       "figures": [
+        {
+          "id": "itf-a1-ch2-l2-pg145",
+          "idea_key": "best-route",
+          "title": "Page 145 — Best Route",
+          "caption": "",
+          "alt_text": "Page 145 of Book A1, Computer Interaction",
+          "image_url": "/books/a1-ch2-l2/p145.jpg",
+          "source_page": 145
+        },
+        {
+          "id": "itf-a1-ch2-l2-pg146",
+          "idea_key": "best-route",
+          "title": "Page 146 — Best Route",
+          "caption": "",
+          "alt_text": "Page 146 of Book A1, Computer Interaction",
+          "image_url": "/books/a1-ch2-l2/p146.jpg",
+          "source_page": 146
+        },
+        {
+          "id": "itf-a1-ch2-l2-pg150",
+          "idea_key": "trust",
+          "title": "Page 150 — Trust",
+          "caption": "",
+          "alt_text": "Page 150 of Book A1, Computer Interaction",
+          "image_url": "/books/a1-ch2-l2/p150.jpg",
+          "source_page": 150
+        },
+        {
+          "id": "itf-a1-ch2-l2-pg155",
+          "idea_key": "career-tips",
+          "title": "Page 155 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 155 of Book A1, Computer Interaction",
+          "image_url": "/books/a1-ch2-l2/p155.jpg",
+          "source_page": 155
+        },
         {
           "id": "itf-a1-ch2-l2-pg162",
           "idea_key": "career-tips",
@@ -785,6 +937,13 @@
       },
       "materials": [
         {
+          "id": "itf-a1-ch2-l3-p181",
+          "title": "Book page 181 — Career Tips",
+          "external_url": "/books/a1-ch2-l3/p181.jpg",
+          "step": 7,
+          "source_page": 181
+        },
+        {
           "id": "itf-a1-ch2-l3-p188",
           "title": "Book page 188 — Career Tips",
           "external_url": "/books/a1-ch2-l3/p188.jpg",
@@ -792,7 +951,42 @@
           "source_page": 188
         }
       ],
+      "documents": [
+        {
+          "id": "itf-a1-ch2-l3-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Clouds & Things (book pp. 168–189)",
+          "external_url": "/books/pdf/a1-ch2-l3.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch2-l3-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 2 PDF — Computers & Beyond (book pp. 120–224)",
+          "external_url": "/books/pdf/a1-ch2.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch2-l3-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
       "figures": [
+        {
+          "id": "itf-a1-ch2-l3-pg181",
+          "idea_key": "career-tips",
+          "title": "Page 181 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 181 of Book A1, Clouds & Things",
+          "image_url": "/books/a1-ch2-l3/p181.jpg",
+          "source_page": 181
+        },
         {
           "id": "itf-a1-ch2-l3-pg188",
           "idea_key": "career-tips",
@@ -1026,6 +1220,13 @@
       },
       "materials": [
         {
+          "id": "itf-a1-ch2-l4-p199",
+          "title": "Book page 199 — Career Tips",
+          "external_url": "/books/a1-ch2-l4/p199.jpg",
+          "step": 2,
+          "source_page": 199
+        },
+        {
           "id": "itf-a1-ch2-l4-p224",
           "title": "Book page 224 — Career Tips",
           "external_url": "/books/a1-ch2-l4/p224.jpg",
@@ -1033,7 +1234,42 @@
           "source_page": 224
         }
       ],
+      "documents": [
+        {
+          "id": "itf-a1-ch2-l4-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Information Systems (book pp. 190–224)",
+          "external_url": "/books/pdf/a1-ch2-l4.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch2-l4-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 2 PDF — Computers & Beyond (book pp. 120–224)",
+          "external_url": "/books/pdf/a1-ch2.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch2-l4-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
       "figures": [
+        {
+          "id": "itf-a1-ch2-l4-pg199",
+          "idea_key": "career-tips",
+          "title": "Page 199 — Career Tips",
+          "caption": "",
+          "alt_text": "Page 199 of Book A1, Information Systems",
+          "image_url": "/books/a1-ch2-l4/p199.jpg",
+          "source_page": 199
+        },
         {
           "id": "itf-a1-ch2-l4-pg224",
           "idea_key": "career-tips",

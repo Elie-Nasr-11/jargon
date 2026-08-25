@@ -386,7 +386,7 @@ function buildAssignment(lessonDoc, activities) {
 // Lesson assembly
 // ---------------------------------------------------------------------------
 
-function composeLesson(lessonDoc, book, pagesForLesson) {
+function composeLesson(lessonDoc, book, pagesForLesson, chapterPages) {
   const slug = lessonDoc.slug;
   const lessonId = `itf-${slug}`;
   const activities = lessonDoc.activities;
@@ -477,14 +477,15 @@ function composeLesson(lessonDoc, book, pagesForLesson) {
       });
     }
     if (index === -1) continue;
+    // At most 3 images auto-show on one step; the overflow still lands, as
+    // lesson-level rows (no step) the student browses and the mentor can hand out.
     const bound = materials.filter((material) => material.step === index + 1).length;
-    if (bound >= 2) continue;
     const url = `/books/${slug}/p${entry.page}.jpg`;
     materials.push({
       id: `${lessonId}-p${entry.page}`,
       title: `Book page ${entry.page} — ${entry.heading}`,
       external_url: url,
-      step: index + 1,
+      ...(bound < 3 ? { step: index + 1 } : {}),
       source_page: entry.page,
     });
     figures.push({
@@ -515,6 +516,41 @@ function composeLesson(lessonDoc, book, pagesForLesson) {
     ? `Work through "${lessonDoc.lesson.title}" from the book: ${sectionTitles.slice(0, 4).map((t) => t.toLowerCase()).join(", ")}.`
     : `Work through "${lessonDoc.lesson.title}" from the book.`;
 
+  // The book itself, three zoom levels per lesson (R62): the lesson's own pages,
+  // its chapter, the whole book — every graph, diagram and page not shown inline
+  // is reachable through these. All three render in-app (resource_type pdf).
+  const chapterSlug = slug.replace(/-l\d$/, "");
+  const chapterTitleBare = lessonDoc.chapter.title.replace(/^\d+\s*/, "").trim();
+  const documents = [
+    {
+      id: `${lessonId}-doc-lesson`,
+      type: "pdf",
+      title: `Lesson PDF — ${lessonDoc.lesson.title} (book pp. ${lessonDoc.pages[0]}–${lessonDoc.pages[1]})`,
+      external_url: `/books/pdf/${slug}.pdf`,
+      description: `This lesson exactly as printed in IT Frontiers Advanced Book ${book.bookLabel}.`,
+      student_instructions:
+        "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages.",
+    },
+    {
+      id: `${lessonId}-doc-chapter`,
+      type: "pdf",
+      title: `Chapter ${printedChapter} PDF — ${chapterTitleBare} (book pp. ${chapterPages[0]}–${chapterPages[1]})`,
+      external_url: `/books/pdf/${chapterSlug}.pdf`,
+      description: `The whole chapter this lesson belongs to, as printed in Book ${book.bookLabel}.`,
+      student_instructions:
+        "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book.",
+    },
+    {
+      id: `${lessonId}-doc-book`,
+      type: "pdf",
+      title: `Book PDF — IT Frontiers Advanced ${book.bookLabel} (Teacher Edition)`,
+      external_url: `/books/pdf/${slug.slice(0, 2)}-book.pdf`,
+      description: `The complete Book ${book.bookLabel}, both chapters, as one PDF.`,
+      student_instructions:
+        "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter.",
+    },
+  ];
+
   return {
     id: lessonId,
     title: lessonDoc.lesson.title,
@@ -525,6 +561,7 @@ function composeLesson(lessonDoc, book, pagesForLesson) {
     quiz,
     ...(assignment ? { assignment } : {}),
     ...(materials.length ? { materials } : {}),
+    documents,
     ...(figures.length ? { figures } : {}),
   };
 }
@@ -550,9 +587,15 @@ for (const [bookKey, book] of Object.entries(BOOKS)) {
   for (const [chapterNo, lessonDocs] of [...byChapter.entries()].sort((a, b) => a[0] - b[0])) {
     const chapter = book.chapters[chapterNo];
     if (!chapter) throw new Error(`no chapter config for ${bookKey} chapter ${chapterNo}`);
+    const chapterPages = [
+      Math.min(...lessonDocs.map((d) => d.pages[0])),
+      Math.max(...lessonDocs.map((d) => d.pages[1])),
+    ];
     let lessons = lessonDocs
       .sort((a, b) => a.lesson.number - b.lesson.number)
-      .map((lessonDoc) => composeLesson(lessonDoc, book, pagesManifest.lessons[lessonDoc.slug] ?? []));
+      .map((lessonDoc) =>
+        composeLesson(lessonDoc, book, pagesManifest.lessons[lessonDoc.slug] ?? [], chapterPages),
+      );
 
     // Lesson 1 of A1 chapter 1 is already live, hand-authored and owner-approved —
     // splice it verbatim so re-import is a pure in-place update (same 18 step ids,
@@ -584,7 +627,7 @@ for (const [bookKey, book] of Object.entries(BOOKS)) {
     );
     for (const lesson of lessons) {
       console.log(
-        `    ${lesson.id.padEnd(16)} ${String(lesson.steps.length).padStart(2)} teach + ${String(lesson.quiz?.length ?? 0)} quiz + ${lesson.assignment ? 1 : 0} assign  (${lesson.materials?.length ?? 0} materials, ${lesson.figures?.length ?? 0} figures)`,
+        `    ${lesson.id.padEnd(16)} ${String(lesson.steps.length).padStart(2)} teach + ${String(lesson.quiz?.length ?? 0)} quiz + ${lesson.assignment ? 1 : 0} assign  (${lesson.materials?.length ?? 0} materials, ${lesson.documents?.length ?? 0} docs, ${lesson.figures?.length ?? 0} figures)`,
       );
     }
   }

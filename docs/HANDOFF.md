@@ -11577,3 +11577,21 @@ Stale-import cleanup recipe for future recomposes lives in CURRICULUM_IMPORT.md.
 Suggested next task: owner clicks through both classes as demo-teacher (Content
 -> any lesson -> Preview; page images on the bound steps), then task #45 (real
 figure cropping) or the compute upgrade decision.
+
+## Claude -> Codex / Human - 2026-08-25 15:30
+
+Status: Starting
+Task: R62 — all book resources into the classes (owner: "all of the graphs,
+images, diagrams, and PDFs, including the chapter PDFs and full book PDFs, all
+to be referenced throughout the chapters and lessons"; approved: PDFs visible to
+students too, full vector-aware visual census). Lesson/chapter/book PDFs under
+frontend/public/books/pdf/ as 3 lesson_resources rows per lesson; page-image
+selection extended (raster + vector-heavy census, cap 12/lesson, ≤3/step,
+total ≤15 rows/lesson to stay under chat's 16 fetch cap); importer materials
+branch widened (optional type "pdf", optional step → lesson-level rows).
+Files I expect to touch: frontend/public/books/pdf/** (new), tools/book-import/
+{select-pages,compose,validate}.mjs + README, books/** (envelopes + pages.json +
+lesson-1-authored.json), supabase/functions/curriculum-admin/index.ts,
+tests/test_r61_book_build.py, docs/CURRICULUM_IMPORT.md, docs.
+Notes: then re-import x4 + re-publish x17 via pg_net, class_id backfill for the
+ClassSummary surface, verification SQL + deployed-site PDF probes.

@@ -3,6 +3,21 @@
   "lessons": {
     "a2-ch1-l1": [
       {
+        "page": 9,
+        "why": "vector",
+        "heading": "From Data to Information"
+      },
+      {
+        "page": 10,
+        "why": "vector",
+        "heading": "From Data to Information"
+      },
+      {
+        "page": 13,
+        "why": "vector",
+        "heading": "Organizing Data"
+      },
+      {
         "page": 14,
         "why": "raster",
         "heading": "Visualizing Data"
@@ -13,13 +28,23 @@
         "heading": "Visualizing Data"
       },
       {
-        "page": 16,
-        "why": "text-cue",
+        "page": 17,
+        "why": "vector",
+        "heading": "Visualizing Data"
+      },
+      {
+        "page": 18,
+        "why": "vector",
+        "heading": "Visualizing Data"
+      },
+      {
+        "page": 19,
+        "why": "vector",
         "heading": "Visualizing Data"
       },
       {
         "page": 23,
-        "why": "activity-cue",
+        "why": "vector",
         "heading": "Career Tips"
       },
       {
@@ -34,11 +59,6 @@
       },
       {
         "page": 28,
-        "why": "activity-cue",
-        "heading": "Career Tips"
-      },
-      {
-        "page": 29,
         "why": "activity-cue",
         "heading": "Career Tips"
       }
@@ -83,9 +103,34 @@
         "page": 42,
         "why": "raster",
         "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 43,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 44,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 45,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
+      },
+      {
+        "page": 49,
+        "why": "raster",
+        "heading": "Algorithms & Data Structures"
       }
     ],
     "a2-ch1-l3": [
+      {
+        "page": 72,
+        "why": "vector",
+        "heading": "Linear Search"
+      },
       {
         "page": 73,
         "why": "text-cue",
@@ -95,13 +140,63 @@
         "page": 75,
         "why": "raster",
         "heading": "Binary Search"
+      },
+      {
+        "page": 76,
+        "why": "vector",
+        "heading": "Binary Search"
+      },
+      {
+        "page": 77,
+        "why": "vector",
+        "heading": "Binary Search"
+      },
+      {
+        "page": 81,
+        "why": "vector",
+        "heading": "Binary Search"
+      },
+      {
+        "page": 84,
+        "why": "vector",
+        "heading": "Binary Search"
       }
     ],
     "a2-ch1-l4": [
       {
-        "page": 124,
-        "why": "text-cue",
-        "heading": "Performance"
+        "page": 96,
+        "why": "vector",
+        "heading": "Order & Criteria"
+      },
+      {
+        "page": 97,
+        "why": "vector",
+        "heading": "Order & Criteria"
+      },
+      {
+        "page": 98,
+        "why": "vector",
+        "heading": "Order & Criteria"
+      },
+      {
+        "page": 100,
+        "why": "vector",
+        "heading": "Sorting Algorithms"
+      },
+      {
+        "page": 101,
+        "why": "vector",
+        "heading": "Sorting Algorithms"
+      },
+      {
+        "page": 102,
+        "why": "vector",
+        "heading": "Sorting Algorithms"
+      },
+      {
+        "page": 106,
+        "why": "vector",
+        "heading": "Sorting Algorithms"
       },
       {
         "page": 125,
@@ -116,11 +211,6 @@
       {
         "page": 133,
         "why": "raster",
-        "heading": "Performance"
-      },
-      {
-        "page": 134,
-        "why": "text-cue",
         "heading": "Performance"
       },
       {
@@ -159,6 +249,11 @@
         "page": 164,
         "why": "raster",
         "heading": "Machine Learning"
+      },
+      {
+        "page": 167,
+        "why": "vector",
+        "heading": "Machine Learning"
       }
     ],
     "a2-ch2-l2": [
@@ -196,6 +291,11 @@
         "page": 183,
         "why": "raster",
         "heading": "Prediction"
+      },
+      {
+        "page": 185,
+        "why": "vector",
+        "heading": "Prediction"
       }
     ],
     "a2-ch2-l3": [
@@ -232,6 +332,11 @@
       {
         "page": 204,
         "why": "raster",
+        "heading": "Reasoning"
+      },
+      {
+        "page": 207,
+        "why": "vector",
         "heading": "Reasoning"
       }
     ],
@@ -273,6 +378,26 @@
       },
       {
         "page": 228,
+        "why": "raster",
+        "heading": "Ethics and Responsibility"
+      },
+      {
+        "page": 229,
+        "why": "raster",
+        "heading": "Ethics and Responsibility"
+      },
+      {
+        "page": 231,
+        "why": "vector",
+        "heading": "Ethics and Responsibility"
+      },
+      {
+        "page": 242,
+        "why": "text-cue",
+        "heading": "Ethics and Responsibility"
+      },
+      {
+        "page": 256,
         "why": "raster",
         "heading": "Ethics and Responsibility"
       }

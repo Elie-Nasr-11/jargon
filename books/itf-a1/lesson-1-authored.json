@@ -1,6 +1,11 @@
 {
   "import_key": "itf-a1",
-  "course": { "id": "itf-adv-a1", "title": "IT Frontiers Advanced — Book A1", "subject": "IT Frontiers — Advanced Series", "level": "Advanced" },
+  "course": {
+    "id": "itf-adv-a1",
+    "title": "IT Frontiers Advanced — Book A1",
+    "subject": "IT Frontiers — Advanced Series",
+    "level": "Advanced"
+  },
   "unit": {
     "id": "itf-a1-ch1",
     "title": "Chapter 1 · Computers",
@@ -78,10 +83,22 @@
           "question_type": "multiple_choice",
           "prompt": "Which of the following best describes a process?",
           "choices": [
-            { "id": "a", "text": "A random sequence of events" },
-            { "id": "b", "text": "A type of machine used in manufacturing" },
-            { "id": "c", "text": "A clear sequence of steps for completing a task" },
-            { "id": "d", "text": "A finished product" }
+            {
+              "id": "a",
+              "text": "A random sequence of events"
+            },
+            {
+              "id": "b",
+              "text": "A type of machine used in manufacturing"
+            },
+            {
+              "id": "c",
+              "text": "A clear sequence of steps for completing a task"
+            },
+            {
+              "id": "d",
+              "text": "A finished product"
+            }
           ],
           "correct_choice_id": "c"
         },
@@ -89,10 +106,22 @@
           "question_type": "multiple_choice",
           "prompt": "Which of the following is a characteristic of a well-defined process?",
           "choices": [
-            { "id": "a", "text": "It is constantly changing" },
-            { "id": "b", "text": "It is repeatable and consistent" },
-            { "id": "c", "text": "It does not have a clear beginning" },
-            { "id": "d", "text": "It does not have clear steps to follow" }
+            {
+              "id": "a",
+              "text": "It is constantly changing"
+            },
+            {
+              "id": "b",
+              "text": "It is repeatable and consistent"
+            },
+            {
+              "id": "c",
+              "text": "It does not have a clear beginning"
+            },
+            {
+              "id": "d",
+              "text": "It does not have clear steps to follow"
+            }
           ],
           "correct_choice_id": "b"
         },
@@ -100,10 +129,22 @@
           "question_type": "multiple_choice",
           "prompt": "Which of the following is NOT an example of a process?",
           "choices": [
-            { "id": "a", "text": "Baking a cake" },
-            { "id": "b", "text": "Getting dressed" },
-            { "id": "c", "text": "Watching a movie" },
-            { "id": "d", "text": "Brushing teeth" }
+            {
+              "id": "a",
+              "text": "Baking a cake"
+            },
+            {
+              "id": "b",
+              "text": "Getting dressed"
+            },
+            {
+              "id": "c",
+              "text": "Watching a movie"
+            },
+            {
+              "id": "d",
+              "text": "Brushing teeth"
+            }
           ],
           "correct_choice_id": "c"
         },
@@ -111,10 +152,22 @@
           "question_type": "multiple_choice",
           "prompt": "What information do drivers get when they see a red traffic light?",
           "choices": [
-            { "id": "a", "text": "Go" },
-            { "id": "b", "text": "Stop" },
-            { "id": "c", "text": "Turn left" },
-            { "id": "d", "text": "Turn right" }
+            {
+              "id": "a",
+              "text": "Go"
+            },
+            {
+              "id": "b",
+              "text": "Stop"
+            },
+            {
+              "id": "c",
+              "text": "Turn left"
+            },
+            {
+              "id": "d",
+              "text": "Turn right"
+            }
           ],
           "correct_choice_id": "b"
         },
@@ -122,10 +175,22 @@
           "question_type": "multiple_choice",
           "prompt": "What information do you need to bake a cake?",
           "choices": [
-            { "id": "a", "text": "Which ingredients go into making a cake" },
-            { "id": "b", "text": "What steps need to be performed" },
-            { "id": "c", "text": "Which utensils are required to perform the steps" },
-            { "id": "d", "text": "All of the above" }
+            {
+              "id": "a",
+              "text": "Which ingredients go into making a cake"
+            },
+            {
+              "id": "b",
+              "text": "What steps need to be performed"
+            },
+            {
+              "id": "c",
+              "text": "Which utensils are required to perform the steps"
+            },
+            {
+              "id": "d",
+              "text": "All of the above"
+            }
           ],
           "correct_choice_id": "d"
         },
@@ -133,10 +198,22 @@
           "question_type": "multiple_choice",
           "prompt": "What item of information would be useful for you to navigate your way out of your classroom?",
           "choices": [
-            { "id": "a", "text": "The colour of the walls" },
-            { "id": "b", "text": "The location of the exit" },
-            { "id": "c", "text": "The names of the students" },
-            { "id": "d", "text": "The number of open windows" }
+            {
+              "id": "a",
+              "text": "The colour of the walls"
+            },
+            {
+              "id": "b",
+              "text": "The location of the exit"
+            },
+            {
+              "id": "c",
+              "text": "The names of the students"
+            },
+            {
+              "id": "d",
+              "text": "The number of open windows"
+            }
           ],
           "correct_choice_id": "b"
         }
@@ -150,7 +227,97 @@
           "Explains how it was shared, and with whom",
           "Gives at least three distinct ways computers support their learning, each with a reason"
         ]
-      }
+      },
+      "materials": [
+        {
+          "id": "itf-a1-ch1-l1-p10",
+          "title": "Book page 10 — Information",
+          "external_url": "/books/a1-ch1-l1/p10.jpg",
+          "source_page": 10
+        },
+        {
+          "id": "itf-a1-ch1-l1-p11",
+          "title": "Book page 11 — Information",
+          "external_url": "/books/a1-ch1-l1/p11.jpg",
+          "source_page": 11
+        },
+        {
+          "id": "itf-a1-ch1-l1-p12",
+          "title": "Book page 12 — Information",
+          "external_url": "/books/a1-ch1-l1/p12.jpg",
+          "source_page": 12
+        },
+        {
+          "id": "itf-a1-ch1-l1-p20",
+          "title": "Book page 20 — Computers",
+          "external_url": "/books/a1-ch1-l1/p20.jpg",
+          "source_page": 20
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a1-ch1-l1-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Introducing Computers (book pp. 8–29)",
+          "external_url": "/books/pdf/a1-ch1-l1.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch1-l1-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 1 PDF — Computers (book pp. 8–118)",
+          "external_url": "/books/pdf/a1-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch1-l1-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a1-ch1-l1-pg10",
+          "idea_key": "information",
+          "title": "Page 10 — Information",
+          "caption": "",
+          "alt_text": "Page 10 of Book A1, Introducing Computers",
+          "image_url": "/books/a1-ch1-l1/p10.jpg",
+          "source_page": 10
+        },
+        {
+          "id": "itf-a1-ch1-l1-pg11",
+          "idea_key": "information",
+          "title": "Page 11 — Information",
+          "caption": "",
+          "alt_text": "Page 11 of Book A1, Introducing Computers",
+          "image_url": "/books/a1-ch1-l1/p11.jpg",
+          "source_page": 11
+        },
+        {
+          "id": "itf-a1-ch1-l1-pg12",
+          "idea_key": "information",
+          "title": "Page 12 — Information",
+          "caption": "",
+          "alt_text": "Page 12 of Book A1, Introducing Computers",
+          "image_url": "/books/a1-ch1-l1/p12.jpg",
+          "source_page": 12
+        },
+        {
+          "id": "itf-a1-ch1-l1-pg20",
+          "idea_key": "computers",
+          "title": "Page 20 — Computers",
+          "caption": "",
+          "alt_text": "Page 20 of Book A1, Introducing Computers",
+          "image_url": "/books/a1-ch1-l1/p20.jpg",
+          "source_page": 20
+        }
+      ]
     }
   ]
 }

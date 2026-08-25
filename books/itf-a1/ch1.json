@@ -227,7 +227,97 @@
           "Explains how it was shared, and with whom",
           "Gives at least three distinct ways computers support their learning, each with a reason"
         ]
-      }
+      },
+      "materials": [
+        {
+          "id": "itf-a1-ch1-l1-p10",
+          "title": "Book page 10 — Information",
+          "external_url": "/books/a1-ch1-l1/p10.jpg",
+          "source_page": 10
+        },
+        {
+          "id": "itf-a1-ch1-l1-p11",
+          "title": "Book page 11 — Information",
+          "external_url": "/books/a1-ch1-l1/p11.jpg",
+          "source_page": 11
+        },
+        {
+          "id": "itf-a1-ch1-l1-p12",
+          "title": "Book page 12 — Information",
+          "external_url": "/books/a1-ch1-l1/p12.jpg",
+          "source_page": 12
+        },
+        {
+          "id": "itf-a1-ch1-l1-p20",
+          "title": "Book page 20 — Computers",
+          "external_url": "/books/a1-ch1-l1/p20.jpg",
+          "source_page": 20
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a1-ch1-l1-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Introducing Computers (book pp. 8–29)",
+          "external_url": "/books/pdf/a1-ch1-l1.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch1-l1-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 1 PDF — Computers (book pp. 8–118)",
+          "external_url": "/books/pdf/a1-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch1-l1-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a1-ch1-l1-pg10",
+          "idea_key": "information",
+          "title": "Page 10 — Information",
+          "caption": "",
+          "alt_text": "Page 10 of Book A1, Introducing Computers",
+          "image_url": "/books/a1-ch1-l1/p10.jpg",
+          "source_page": 10
+        },
+        {
+          "id": "itf-a1-ch1-l1-pg11",
+          "idea_key": "information",
+          "title": "Page 11 — Information",
+          "caption": "",
+          "alt_text": "Page 11 of Book A1, Introducing Computers",
+          "image_url": "/books/a1-ch1-l1/p11.jpg",
+          "source_page": 11
+        },
+        {
+          "id": "itf-a1-ch1-l1-pg12",
+          "idea_key": "information",
+          "title": "Page 12 — Information",
+          "caption": "",
+          "alt_text": "Page 12 of Book A1, Introducing Computers",
+          "image_url": "/books/a1-ch1-l1/p12.jpg",
+          "source_page": 12
+        },
+        {
+          "id": "itf-a1-ch1-l1-pg20",
+          "idea_key": "computers",
+          "title": "Page 20 — Computers",
+          "caption": "",
+          "alt_text": "Page 20 of Book A1, Introducing Computers",
+          "image_url": "/books/a1-ch1-l1/p20.jpg",
+          "source_page": 20
+        }
+      ]
     },
     {
       "id": "itf-a1-ch1-l2",
@@ -464,6 +554,20 @@
       },
       "materials": [
         {
+          "id": "itf-a1-ch1-l2-p31",
+          "title": "Book page 31 — General Purpose",
+          "external_url": "/books/a1-ch1-l2/p31.jpg",
+          "step": 1,
+          "source_page": 31
+        },
+        {
+          "id": "itf-a1-ch1-l2-p34",
+          "title": "Book page 34 — Specific Purpose",
+          "external_url": "/books/a1-ch1-l2/p34.jpg",
+          "step": 3,
+          "source_page": 34
+        },
+        {
           "id": "itf-a1-ch1-l2-p35",
           "title": "Book page 35 — Specific Purpose",
           "external_url": "/books/a1-ch1-l2/p35.jpg",
@@ -471,11 +575,30 @@
           "source_page": 35
         },
         {
+          "id": "itf-a1-ch1-l2-p36",
+          "title": "Book page 36 — Specific Purpose",
+          "external_url": "/books/a1-ch1-l2/p36.jpg",
+          "step": 3,
+          "source_page": 36
+        },
+        {
           "id": "itf-a1-ch1-l2-p37",
           "title": "Book page 37 — Specific Purpose",
           "external_url": "/books/a1-ch1-l2/p37.jpg",
-          "step": 3,
           "source_page": 37
+        },
+        {
+          "id": "itf-a1-ch1-l2-p38",
+          "title": "Book page 38 — Specific Purpose",
+          "external_url": "/books/a1-ch1-l2/p38.jpg",
+          "source_page": 38
+        },
+        {
+          "id": "itf-a1-ch1-l2-p42",
+          "title": "Book page 42 — Specific Purpose",
+          "external_url": "/books/a1-ch1-l2/p42.jpg",
+          "step": 5,
+          "source_page": 42
         },
         {
           "id": "itf-a1-ch1-l2-p45",
@@ -485,7 +608,51 @@
           "source_page": 45
         }
       ],
+      "documents": [
+        {
+          "id": "itf-a1-ch1-l2-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Types of Computers (book pp. 30–51)",
+          "external_url": "/books/pdf/a1-ch1-l2.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch1-l2-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 1 PDF — Computers (book pp. 8–118)",
+          "external_url": "/books/pdf/a1-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch1-l2-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
       "figures": [
+        {
+          "id": "itf-a1-ch1-l2-pg31",
+          "idea_key": "general-purpose",
+          "title": "Page 31 — General Purpose",
+          "caption": "",
+          "alt_text": "Page 31 of Book A1, Types of Computers",
+          "image_url": "/books/a1-ch1-l2/p31.jpg",
+          "source_page": 31
+        },
+        {
+          "id": "itf-a1-ch1-l2-pg34",
+          "idea_key": "specific-purpose",
+          "title": "Page 34 — Specific Purpose",
+          "caption": "",
+          "alt_text": "Page 34 of Book A1, Types of Computers",
+          "image_url": "/books/a1-ch1-l2/p34.jpg",
+          "source_page": 34
+        },
         {
           "id": "itf-a1-ch1-l2-pg35",
           "idea_key": "specific-purpose",
@@ -496,6 +663,15 @@
           "source_page": 35
         },
         {
+          "id": "itf-a1-ch1-l2-pg36",
+          "idea_key": "specific-purpose",
+          "title": "Page 36 — Specific Purpose",
+          "caption": "",
+          "alt_text": "Page 36 of Book A1, Types of Computers",
+          "image_url": "/books/a1-ch1-l2/p36.jpg",
+          "source_page": 36
+        },
+        {
           "id": "itf-a1-ch1-l2-pg37",
           "idea_key": "specific-purpose",
           "title": "Page 37 — Specific Purpose",
@@ -503,6 +679,24 @@
           "alt_text": "Page 37 of Book A1, Types of Computers",
           "image_url": "/books/a1-ch1-l2/p37.jpg",
           "source_page": 37
+        },
+        {
+          "id": "itf-a1-ch1-l2-pg38",
+          "idea_key": "specific-purpose",
+          "title": "Page 38 — Specific Purpose",
+          "caption": "",
+          "alt_text": "Page 38 of Book A1, Types of Computers",
+          "image_url": "/books/a1-ch1-l2/p38.jpg",
+          "source_page": 38
+        },
+        {
+          "id": "itf-a1-ch1-l2-pg42",
+          "idea_key": "specific-purpose",
+          "title": "Page 42 — Specific Purpose",
+          "caption": "",
+          "alt_text": "Page 42 of Book A1, Types of Computers",
+          "image_url": "/books/a1-ch1-l2/p42.jpg",
+          "source_page": 42
         },
         {
           "id": "itf-a1-ch1-l2-pg45",
@@ -756,14 +950,77 @@
       },
       "materials": [
         {
+          "id": "itf-a1-ch1-l3-p55",
+          "title": "Book page 55 — Interfaces & Translation",
+          "external_url": "/books/a1-ch1-l3/p55.jpg",
+          "step": 3,
+          "source_page": 55
+        },
+        {
           "id": "itf-a1-ch1-l3-p57",
           "title": "Book page 57 — Interfaces & Translation",
           "external_url": "/books/a1-ch1-l3/p57.jpg",
           "step": 3,
           "source_page": 57
+        },
+        {
+          "id": "itf-a1-ch1-l3-p60",
+          "title": "Book page 60 — Hardware & Software",
+          "external_url": "/books/a1-ch1-l3/p60.jpg",
+          "step": 4,
+          "source_page": 60
+        },
+        {
+          "id": "itf-a1-ch1-l3-p64",
+          "title": "Book page 64 — Usability",
+          "external_url": "/books/a1-ch1-l3/p64.jpg",
+          "step": 7,
+          "source_page": 64
+        },
+        {
+          "id": "itf-a1-ch1-l3-p71",
+          "title": "Book page 71 — Directories",
+          "external_url": "/books/a1-ch1-l3/p71.jpg",
+          "step": 11,
+          "source_page": 71
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a1-ch1-l3-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Systems & Interfaces (book pp. 52–73)",
+          "external_url": "/books/pdf/a1-ch1-l3.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch1-l3-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 1 PDF — Computers (book pp. 8–118)",
+          "external_url": "/books/pdf/a1-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch1-l3-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
+        {
+          "id": "itf-a1-ch1-l3-pg55",
+          "idea_key": "interfaces-translation",
+          "title": "Page 55 — Interfaces & Translation",
+          "caption": "",
+          "alt_text": "Page 55 of Book A1, Systems & Interfaces",
+          "image_url": "/books/a1-ch1-l3/p55.jpg",
+          "source_page": 55
+        },
         {
           "id": "itf-a1-ch1-l3-pg57",
           "idea_key": "interfaces-translation",
@@ -772,6 +1029,33 @@
           "alt_text": "Page 57 of Book A1, Systems & Interfaces",
           "image_url": "/books/a1-ch1-l3/p57.jpg",
           "source_page": 57
+        },
+        {
+          "id": "itf-a1-ch1-l3-pg60",
+          "idea_key": "hardware-software",
+          "title": "Page 60 — Hardware & Software",
+          "caption": "",
+          "alt_text": "Page 60 of Book A1, Systems & Interfaces",
+          "image_url": "/books/a1-ch1-l3/p60.jpg",
+          "source_page": 60
+        },
+        {
+          "id": "itf-a1-ch1-l3-pg64",
+          "idea_key": "usability",
+          "title": "Page 64 — Usability",
+          "caption": "",
+          "alt_text": "Page 64 of Book A1, Systems & Interfaces",
+          "image_url": "/books/a1-ch1-l3/p64.jpg",
+          "source_page": 64
+        },
+        {
+          "id": "itf-a1-ch1-l3-pg71",
+          "idea_key": "directories",
+          "title": "Page 71 — Directories",
+          "caption": "",
+          "alt_text": "Page 71 of Book A1, Systems & Interfaces",
+          "image_url": "/books/a1-ch1-l3/p71.jpg",
+          "source_page": 71
         }
       ]
     },
@@ -991,7 +1275,133 @@
           "Uses the lesson's own vocabulary, each term explained",
           "Explains the reasoning in the student's own words"
         ]
-      }
+      },
+      "materials": [
+        {
+          "id": "itf-a1-ch1-l4-p84",
+          "title": "Book page 84 — The Processor",
+          "external_url": "/books/a1-ch1-l4/p84.jpg",
+          "step": 1,
+          "source_page": 84
+        },
+        {
+          "id": "itf-a1-ch1-l4-p85",
+          "title": "Book page 85 — The Processor",
+          "external_url": "/books/a1-ch1-l4/p85.jpg",
+          "step": 1,
+          "source_page": 85
+        },
+        {
+          "id": "itf-a1-ch1-l4-p87",
+          "title": "Book page 87 — The Processor",
+          "external_url": "/books/a1-ch1-l4/p87.jpg",
+          "step": 4,
+          "source_page": 87
+        },
+        {
+          "id": "itf-a1-ch1-l4-p88",
+          "title": "Book page 88 — The Processor",
+          "external_url": "/books/a1-ch1-l4/p88.jpg",
+          "step": 4,
+          "source_page": 88
+        },
+        {
+          "id": "itf-a1-ch1-l4-p91",
+          "title": "Book page 91 — The Processor",
+          "external_url": "/books/a1-ch1-l4/p91.jpg",
+          "step": 4,
+          "source_page": 91
+        },
+        {
+          "id": "itf-a1-ch1-l4-p93",
+          "title": "Book page 93 — The Processor",
+          "external_url": "/books/a1-ch1-l4/p93.jpg",
+          "step": 6,
+          "source_page": 93
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a1-ch1-l4-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Behind the Interface (book pp. 74–99)",
+          "external_url": "/books/pdf/a1-ch1-l4.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch1-l4-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 1 PDF — Computers (book pp. 8–118)",
+          "external_url": "/books/pdf/a1-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch1-l4-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
+        }
+      ],
+      "figures": [
+        {
+          "id": "itf-a1-ch1-l4-pg84",
+          "idea_key": "the-processor",
+          "title": "Page 84 — The Processor",
+          "caption": "",
+          "alt_text": "Page 84 of Book A1, Behind the Interface",
+          "image_url": "/books/a1-ch1-l4/p84.jpg",
+          "source_page": 84
+        },
+        {
+          "id": "itf-a1-ch1-l4-pg85",
+          "idea_key": "the-processor",
+          "title": "Page 85 — The Processor",
+          "caption": "",
+          "alt_text": "Page 85 of Book A1, Behind the Interface",
+          "image_url": "/books/a1-ch1-l4/p85.jpg",
+          "source_page": 85
+        },
+        {
+          "id": "itf-a1-ch1-l4-pg87",
+          "idea_key": "the-processor",
+          "title": "Page 87 — The Processor",
+          "caption": "",
+          "alt_text": "Page 87 of Book A1, Behind the Interface",
+          "image_url": "/books/a1-ch1-l4/p87.jpg",
+          "source_page": 87
+        },
+        {
+          "id": "itf-a1-ch1-l4-pg88",
+          "idea_key": "the-processor",
+          "title": "Page 88 — The Processor",
+          "caption": "",
+          "alt_text": "Page 88 of Book A1, Behind the Interface",
+          "image_url": "/books/a1-ch1-l4/p88.jpg",
+          "source_page": 88
+        },
+        {
+          "id": "itf-a1-ch1-l4-pg91",
+          "idea_key": "the-processor",
+          "title": "Page 91 — The Processor",
+          "caption": "",
+          "alt_text": "Page 91 of Book A1, Behind the Interface",
+          "image_url": "/books/a1-ch1-l4/p91.jpg",
+          "source_page": 91
+        },
+        {
+          "id": "itf-a1-ch1-l4-pg93",
+          "idea_key": "the-processor",
+          "title": "Page 93 — The Processor",
+          "caption": "",
+          "alt_text": "Page 93 of Book A1, Behind the Interface",
+          "image_url": "/books/a1-ch1-l4/p93.jpg",
+          "source_page": 93
+        }
+      ]
     },
     {
       "id": "itf-a1-ch1-l5",
@@ -1206,6 +1616,39 @@
           "external_url": "/books/a1-ch1-l5/p105.jpg",
           "step": 1,
           "source_page": 105
+        },
+        {
+          "id": "itf-a1-ch1-l5-p111",
+          "title": "Book page 111 — Architecture",
+          "external_url": "/books/a1-ch1-l5/p111.jpg",
+          "step": 4,
+          "source_page": 111
+        }
+      ],
+      "documents": [
+        {
+          "id": "itf-a1-ch1-l5-doc-lesson",
+          "type": "pdf",
+          "title": "Lesson PDF — Design Optimizations (book pp. 100–118)",
+          "external_url": "/books/pdf/a1-ch1-l5.pdf",
+          "description": "This lesson exactly as printed in IT Frontiers Advanced Book A1.",
+          "student_instructions": "Open this to read the lesson straight from the book — every diagram, chart and activity is on these pages."
+        },
+        {
+          "id": "itf-a1-ch1-l5-doc-chapter",
+          "type": "pdf",
+          "title": "Chapter 1 PDF — Computers (book pp. 8–118)",
+          "external_url": "/books/pdf/a1-ch1.pdf",
+          "description": "The whole chapter this lesson belongs to, as printed in Book A1.",
+          "student_instructions": "Use this to look back at earlier lessons in the chapter or read ahead — the full chapter, straight from the book."
+        },
+        {
+          "id": "itf-a1-ch1-l5-doc-book",
+          "type": "pdf",
+          "title": "Book PDF — IT Frontiers Advanced A1 (Teacher Edition)",
+          "external_url": "/books/pdf/a1-book.pdf",
+          "description": "The complete Book A1, both chapters, as one PDF.",
+          "student_instructions": "The whole book in one file — handy for the contents pages, the glossary and anything outside this chapter."
         }
       ],
       "figures": [
@@ -1217,6 +1660,15 @@
           "alt_text": "Page 105 of Book A1, Design Optimizations",
           "image_url": "/books/a1-ch1-l5/p105.jpg",
           "source_page": 105
+        },
+        {
+          "id": "itf-a1-ch1-l5-pg111",
+          "idea_key": "architecture",
+          "title": "Page 111 — Architecture",
+          "caption": "",
+          "alt_text": "Page 111 of Book A1, Design Optimizations",
+          "image_url": "/books/a1-ch1-l5/p111.jpg",
+          "source_page": 111
         }
       ]
     }
