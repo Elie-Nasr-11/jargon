@@ -788,6 +788,12 @@ export function TeacherConsole() {
     }
   };
 
+  // R60: an open work item always lives in Activity, whatever the URL's ?tab says — old
+  // bookmarks and notification emails carry ?tab=classwork&assignment=…, and grading must
+  // never strand behind a renamed tab.
+  const effectiveSection: ClassSection =
+    search.assignment || search.assessment ? "activity" : normalizeClassSection(search.tab);
+
   if (!authChecked) {
     return <RouteLoader label="Loading…" />;
   }
@@ -798,9 +804,7 @@ export function TeacherConsole() {
       classes={dashboard?.classes ?? []}
       activeView={selectedClassId || selectedStudentId ? "class" : "home"}
       activeClassId={selectedClassId}
-      activeSection={
-        selectedStudentId ? "live" : selectedClassId ? normalizeClassSection(search.tab) : null
-      }
+      activeSection={selectedStudentId ? "students" : selectedClassId ? effectiveSection : null}
     >
       {/* Keyed per navigation level so the page's entrance fade + focus handoff re-run on
           landing → class → student moves, like the student views. */}
@@ -813,8 +817,8 @@ export function TeacherConsole() {
                 navigate({
                   to: "/teacher/class/$classId",
                   params: { classId: selectedClassId ?? "" },
-                  // The drill-down opens from Live (and People) — land back on the landing tab.
-                  search: { tab: "live" },
+                  // The drill-down opens from Students (and Activity) — land back on the landing tab.
+                  search: { tab: "students" },
                 })
             : selectedClassId
               ? () => navigate({ to: "/teacher" })
@@ -883,8 +887,8 @@ export function TeacherConsole() {
                         params: { classId: row.classId },
                         search:
                           row.kind === "assignment"
-                            ? { tab: "classwork", assignment: row.itemId }
-                            : { tab: "classwork", assessment: row.itemId },
+                            ? { tab: "activity", assignment: row.itemId }
+                            : { tab: "activity", assessment: row.itemId },
                       })
                     }
                   />
@@ -925,7 +929,7 @@ export function TeacherConsole() {
                           params: { classId: selectedClass.id, studentId },
                         })
                       }
-                      section={normalizeClassSection(search.tab)}
+                      section={effectiveSection}
                       openAssignmentId={search.assignment ?? null}
                       openAssessmentId={search.assessment ?? null}
                       onSetSection={(studentId, sectionLabel) =>
@@ -1279,6 +1283,19 @@ function ClassDetail({
     return map;
   }, [dashboard.sessions]);
   const signals = useMemo(() => classSignals(dashboard, item.id), [dashboard, item.id]);
+  // R60 Students: per-student grade rollup for the roster chips, one pass per snapshot.
+  const gradeSummaries = useMemo(
+    () => gradeSummariesForClass(dashboard, item.id),
+    [dashboard, item.id],
+  );
+  // R60 Activity: this class's slice of the review queue (materials belong to Content).
+  const reviewRows = useMemo(
+    () =>
+      globalReviewRows(dashboard, profilesById, lessonsById).filter(
+        (row) => row.classId === item.id,
+      ),
+    [dashboard, profilesById, lessonsById, item.id],
+  );
   // Live tab rows: this class's students with an unfinished session, most recent first.
   const liveStudents = useMemo(
     () =>
@@ -1363,6 +1380,19 @@ function ClassDetail({
     dashboard.assignmentSubmissions,
     dashboard.assessmentAttempts,
   ]);
+  const activityItems = useMemo(
+    () =>
+      workItems
+        .filter((entry) => entry.kind !== "material")
+        .slice()
+        .sort(
+          (a, b) =>
+            b.needsReviewCount - a.needsReviewCount ||
+            (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999"),
+        ),
+    [workItems],
+  );
+  const [studentsView, setStudentsView] = useState<"roster" | "gradebook">("roster");
 
   const openAssignment = openAssignmentId
     ? (assignments.find((assignment) => assignment.id === openAssignmentId) ?? null)
@@ -1373,11 +1403,11 @@ function ClassDetail({
   const editingResource = editingResourceId
     ? (resources.find((resource) => resource.id === editingResourceId) ?? null)
     : null;
-  const backToClasswork = () =>
+  const backToActivity = () =>
     navigate({
       to: "/teacher/class/$classId",
       params: { classId: item.id },
-      search: { tab: "classwork" },
+      search: { tab: "activity" },
     });
 
   const changeSection = async (studentId: string, value: string) => {
@@ -1402,8 +1432,8 @@ function ClassDetail({
           tablet widths instead of scrolling inside .table-scroll (R52). */}
       <section className="min-w-0 rounded-card border border-border bg-depth-card shadow-card">
         <div className="p-4 sm:p-5">
-          {/* R47 header: the class name and the four fixed tabs — Live, Classwork, People,
-              Grades. Rendered FROM CLASS_SECTIONS so the pills and the sidebar sub-rows can
+          {/* R60 header: the class name and the three fixed tabs — Students, Activity,
+              Content. Rendered FROM CLASS_SECTIONS so the pills and the sidebar sub-rows can
               never disagree; tabs never appear or disappear (principle P2: no hidden rooms). */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-serif text-display text-foreground">{item.name}</h2>
@@ -1431,189 +1461,320 @@ function ClassDetail({
             </div>
           </div>
 
-          {/* One room per teacher question (R47). Live = what's happening right now —
-              SchoolAI's Mission Control scoped to this class. The landing tab. */}
-          {section === "live" ? (
-            <div className="panel-fade mt-4">
-              <h3 className="sr-only">Live now</h3>
-              {liveStudents.length ? (
-                <div className="grid gap-3">
-                  {liveStudents.map((studentId) => {
-                    const profile = profilesById.get(studentId) || null;
-                    const live = liveByStudent.get(studentId)!;
-                    return (
-                      // R52: ONE row container owns the chrome; the open-student hit
-                      // area and the Watch action both live INSIDE it (previously two
-                      // detached pills side by side).
-                      <div
-                        key={studentId}
-                        className="flex items-center gap-3 rounded-card border border-border bg-depth-sub py-2 pl-4 pr-2"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => onSelectStudent(studentId)}
-                          className="flex min-w-0 flex-1 items-center gap-3 rounded-control py-1 text-left transition-colors hover:opacity-80"
-                        >
-                          <span className="relative flex h-2.5 w-2.5 shrink-0">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
-                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
-                          </span>
-                          <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
-                            {displayName(profile, studentId)}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                            {lessonName(lessonsById, live.lesson_id)}
-                            {live.stage ? ` · ${live.stage}` : ""} ·{" "}
-                            {relTime(live.updated_at, nowMs)}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigate({
-                              to: "/teacher/class/$classId/student/$studentId",
-                              params: { classId: item.id, studentId },
-                              search: { tab: "overview", session: live.id },
-                            })
-                          }
-                          className="btn btn-secondary btn-sm shrink-0"
-                        >
-                          Watch
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  <p className="text-body text-muted-foreground">
-                    No one is live right now. Recent activity:
-                  </p>
-                  <div className="grid gap-2">
-                    {studentIds.map((studentId) => {
-                      const profile = profilesById.get(studentId) || null;
-                      const latest = latestSessionFor(dashboard.sessions, studentId);
-                      const completedCount = completedLessonNamesFor(
-                        dashboard.sessions,
-                        studentId,
-                        lessonsById,
-                      ).length;
-                      const lessonsDone = `${completedCount} lesson${completedCount === 1 ? "" : "s"} done`;
-                      const context = latest
-                        ? `last active ${relTime(latest.updated_at, nowMs)} · ${lessonsDone}`
-                        : "no sessions yet";
-                      return (
-                        <button
-                          key={studentId}
-                          type="button"
-                          onClick={() => onSelectStudent(studentId)}
-                          className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
-                        >
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-border" />
-                          <span className="min-w-[140px] shrink-0 truncate text-body text-foreground">
-                            {displayName(profile, studentId)}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                            {context}
-                          </span>
-                        </button>
-                      );
-                    })}
-                    {studentIds.length === 0 ? (
-                      <p className="text-meta text-muted-foreground">
-                        No students in this class yet — add them under People.
-                      </p>
-                    ) : null}
+          {/* Activity = what's happening and what's out for work (R60: the old Live room
+              plus every quiz and assignment, one door). An open work item takes the room —
+              rendered outside the card, below. */}
+          {section === "activity" && !openAssignmentId && !openAssessmentId ? (
+            <div className="panel-fade mt-4 grid gap-6">
+              <h3 className="sr-only">Activity</h3>
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                    Live now
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCreateOpen("assignment")}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      New assignment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateOpen("assessment")}
+                      className="btn btn-primary btn-sm"
+                    >
+                      New quiz
+                    </button>
                   </div>
                 </div>
-              )}
+                {liveStudents.length ? (
+                  <div className="grid gap-3">
+                    {liveStudents.map((studentId) => {
+                      const profile = profilesById.get(studentId) || null;
+                      const live = liveByStudent.get(studentId)!;
+                      return (
+                        // R52: ONE row container owns the chrome; the open-student hit
+                        // area and the Watch action both live INSIDE it (previously two
+                        // detached pills side by side).
+                        <div
+                          key={studentId}
+                          className="flex items-center gap-3 rounded-card border border-border bg-depth-sub py-2 pl-4 pr-2"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onSelectStudent(studentId)}
+                            className="flex min-w-0 flex-1 items-center gap-3 rounded-control py-1 text-left transition-colors hover:opacity-80"
+                          >
+                            <span className="relative flex h-2.5 w-2.5 shrink-0">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
+                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
+                            </span>
+                            <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
+                              {displayName(profile, studentId)}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                              {lessonName(lessonsById, live.lesson_id)}
+                              {live.stage ? ` · ${live.stage}` : ""} ·{" "}
+                              {relTime(live.updated_at, nowMs)}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate({
+                                to: "/teacher/class/$classId/student/$studentId",
+                                params: { classId: item.id, studentId },
+                                search: { tab: "overview", session: live.id },
+                              })
+                            }
+                            className="btn btn-secondary btn-sm shrink-0"
+                          >
+                            Watch
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-meta text-muted-foreground">
+                    No one is live right now — students appear here the moment they start a lesson.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  To review
+                </span>
+                {reviewRows.length ? (
+                  <div className="mt-2 grid gap-2">
+                    {reviewRows.map((row) => (
+                      <button
+                        key={`${row.kind}:${row.itemId}:${row.studentName}:${row.at}`}
+                        type="button"
+                        onClick={() =>
+                          navigate({
+                            to: "/teacher/class/$classId",
+                            params: { classId: item.id },
+                            search:
+                              row.kind === "assignment"
+                                ? { tab: "activity", assignment: row.itemId }
+                                : { tab: "activity", assessment: row.itemId },
+                          })
+                        }
+                        className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-warning" />
+                        <span className="min-w-0 flex-1 truncate text-body text-foreground">
+                          {row.studentName}
+                          <span className="text-muted-foreground"> · {row.itemTitle}</span>
+                        </span>
+                        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-meta text-muted-foreground">
+                          {row.kind === "assignment" ? "assignment" : "quiz"}
+                        </span>
+                        <span className="shrink-0 text-meta text-muted-foreground">
+                          {relTime(row.at, nowMs)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-meta text-muted-foreground">
+                    Nothing waiting on you — submitted work lands here the moment it arrives.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  Quizzes &amp; assignments
+                </span>
+                {activityItems.length ? (
+                  <div className="mt-2 grid gap-2">
+                    {activityItems.map((entry) => (
+                      <button
+                        key={`${entry.kind}:${entry.id}`}
+                        type="button"
+                        onClick={() =>
+                          navigate({
+                            to: "/teacher/class/$classId",
+                            params: { classId: item.id },
+                            search:
+                              entry.kind === "assignment"
+                                ? { tab: "activity", assignment: entry.id }
+                                : { tab: "activity", assessment: entry.id },
+                          })
+                        }
+                        className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
+                      >
+                        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-meta text-muted-foreground">
+                          {entry.kind === "assignment" ? "assignment" : "quiz"}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-body text-foreground">
+                          {entry.title}
+                        </span>
+                        {entry.needsReviewCount > 0 ? (
+                          <span className="shrink-0 rounded-full border border-warning/40 bg-warning/12 px-2 py-0.5 text-meta text-warning">
+                            {entry.needsReviewCount} to review
+                          </span>
+                        ) : null}
+                        <span className="shrink-0 text-meta text-muted-foreground">
+                          {entry.status}
+                          {entry.dueAt
+                            ? ` · due ${new Date(entry.dueAt).toLocaleDateString()}`
+                            : ""}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-meta text-muted-foreground">
+                    No quizzes or assignments yet — create one above, or add a quiz step inside a
+                    lesson under Content.
+                  </p>
+                )}
+              </div>
             </div>
           ) : null}
 
-          {/* People = who's in the class — the roster, sections, enrolment. Admin only;
-              activity lives in Live (R47 split of the old Students tab). */}
-          {section === "people" ? (
+          {/* Students = who's in the class and how they're doing — the roster with
+              sections and enrolment, each row carrying its own signals (live dot, last
+              activity, grade average), and the full gradebook one toggle away (R60 merge
+              of the old People + Grades rooms). The landing tab. */}
+          {section === "students" ? (
             <div className="panel-fade mt-4">
-              <h3 className="sr-only">People</h3>
+              <h3 className="sr-only">Students</h3>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-meta text-muted-foreground">
                   {studentIds.length} student{studentIds.length === 1 ? "" : "s"}
                   {signals.sections.length ? ` · sections ${signals.sections.join(" · ")}` : ""}
                 </span>
-                <button type="button" onClick={openEnroll} className="btn btn-secondary btn-sm">
-                  Add students
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1 rounded-full border border-border p-0.5">
+                    {(["roster", "gradebook"] as const).map((view) => (
+                      <button
+                        key={view}
+                        type="button"
+                        onClick={() => setStudentsView(view)}
+                        className={`rounded-full px-3 py-1 text-meta transition-colors ${
+                          studentsView === view
+                            ? "bg-primary font-medium text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {view === "roster" ? "Roster" : "Gradebook"}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={openEnroll} className="btn btn-secondary btn-sm">
+                    Add students
+                  </button>
+                </div>
               </div>
               {rosterError ? <p className="mb-2 text-meta text-danger">{rosterError}</p> : null}
-              <div className="grid gap-4">
-                {sectionGroups.length ? (
-                  sectionGroups.map((group) => (
-                    <div key={group.label ?? "__none__"}>
-                      {sectionGroups.length > 1 || group.label ? (
-                        <div className="mb-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                          {group.label ? `Section ${group.label}` : "No section"} ·{" "}
-                          {group.students.length}
-                        </div>
-                      ) : null}
-                      <div className="grid gap-3">
-                        {group.students.map((studentId) => {
-                          const profile = profilesById.get(studentId) || null;
-                          return (
-                            // R52: one row container; the section picker lives inside
-                            // the row instead of floating next to it. Row fill stays
-                            // distinct from field chrome so rows never read as inputs.
-                            <div
-                              key={studentId}
-                              className={`flex items-center gap-3 rounded-card border py-2 pl-4 pr-2 transition-colors ${
-                                selectedStudentId === studentId
-                                  ? "border-primary/45 bg-depth-card"
-                                  : "border-border bg-depth-sub"
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => onSelectStudent(studentId)}
-                                className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left transition-colors hover:opacity-80"
+              {studentsView === "gradebook" ? (
+                <GradebookTable
+                  lessons={lessons}
+                  lessonsById={lessonsById}
+                  studentIds={studentIds}
+                  dashboard={dashboard}
+                  profilesById={profilesById}
+                  selectedLessonId={selectedLessonId}
+                  selectedStudentId={selectedStudentId}
+                  onSelectLesson={onSelectLesson}
+                  onSelectStudent={onSelectStudent}
+                />
+              ) : (
+                <div className="grid gap-4">
+                  {sectionGroups.length ? (
+                    sectionGroups.map((group) => (
+                      <div key={group.label ?? "__none__"}>
+                        {sectionGroups.length > 1 || group.label ? (
+                          <div className="mb-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                            {group.label ? `Section ${group.label}` : "No section"} ·{" "}
+                            {group.students.length}
+                          </div>
+                        ) : null}
+                        <div className="grid gap-3">
+                          {group.students.map((studentId) => {
+                            const profile = profilesById.get(studentId) || null;
+                            return (
+                              // R52: one row container; the section picker lives inside
+                              // the row instead of floating next to it. Row fill stays
+                              // distinct from field chrome so rows never read as inputs.
+                              <div
+                                key={studentId}
+                                className={`flex items-center gap-3 rounded-card border py-2 pl-4 pr-2 transition-colors ${
+                                  selectedStudentId === studentId
+                                    ? "border-primary/45 bg-depth-card"
+                                    : "border-border bg-depth-sub"
+                                }`}
                               >
-                                <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
-                                  {displayName(profile, studentId)}
-                                </span>
-                                <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                                  {profile?.grade ? `Grade ${profile.grade}` : ""}
-                                </span>
-                              </button>
-                              <label className="flex shrink-0 items-center">
-                                <span className="sr-only">
-                                  Section for {displayName(profile, studentId)}
-                                </span>
-                                <select
-                                  value={sectionByStudent.get(studentId) ?? ""}
-                                  onChange={(event) =>
-                                    void changeSection(studentId, event.target.value)
-                                  }
-                                  className="jargon-input !w-auto"
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectStudent(studentId)}
+                                  className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left transition-colors hover:opacity-80"
                                 >
-                                  <option value="">No section</option>
-                                  {sectionNames.map((name) => (
-                                    <option key={name} value={name}>
-                                      {name}
-                                    </option>
-                                  ))}
-                                  <option value="__new__">New section…</option>
-                                </select>
-                              </label>
-                            </div>
-                          );
-                        })}
+                                  {liveByStudent.has(studentId) ? (
+                                    <span className="relative flex h-2.5 w-2.5 shrink-0">
+                                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
+                                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
+                                    </span>
+                                  ) : (
+                                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-border" />
+                                  )}
+                                  <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
+                                    {displayName(profile, studentId)}
+                                  </span>
+                                  <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                                    {studentContextLine(
+                                      profile,
+                                      dashboard.sessions,
+                                      studentId,
+                                      lessonsById,
+                                      nowMs,
+                                    )}
+                                  </span>
+                                  <span className="shrink-0 rounded-full border border-border px-2.5 py-0.5 text-meta text-muted-foreground">
+                                    {gradeChipLabel(gradeSummaries.get(studentId))}
+                                  </span>
+                                </button>
+                                <label className="flex shrink-0 items-center">
+                                  <span className="sr-only">
+                                    Section for {displayName(profile, studentId)}
+                                  </span>
+                                  <select
+                                    value={sectionByStudent.get(studentId) ?? ""}
+                                    onChange={(event) =>
+                                      void changeSection(studentId, event.target.value)
+                                    }
+                                    className="jargon-input !w-auto"
+                                  >
+                                    <option value="">No section</option>
+                                    {sectionNames.map((name) => (
+                                      <option key={name} value={name}>
+                                        {name}
+                                      </option>
+                                    ))}
+                                    <option value="__new__">New section…</option>
+                                  </select>
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
+                      No students in this class yet — add your students and group them into
+                      sections.
                     </div>
-                  ))
-                ) : (
-                  <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
-                    No students in this class yet — add your students and group them into sections.
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
                 <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[480px]">
@@ -1693,34 +1854,15 @@ function ClassDetail({
               </Dialog>
             </div>
           ) : null}
-
-          {/* Grades = the rollup. A visible tab, not a drawer (R47) — the matrix is the
-              same data the work items grade, aggregated. */}
-          {section === "grades" ? (
-            <div className="panel-fade mt-4">
-              <h3 className="sr-only">Grades</h3>
-              <GradebookTable
-                lessons={lessons}
-                lessonsById={lessonsById}
-                studentIds={studentIds}
-                dashboard={dashboard}
-                profilesById={profilesById}
-                selectedLessonId={selectedLessonId}
-                selectedStudentId={selectedStudentId}
-                onSelectLesson={onSelectLesson}
-                onSelectStudent={onSelectStudent}
-              />
-            </div>
-          ) : null}
         </div>
       </section>
 
-      {/* R47 Classwork: everything the class works on, in one place, rendered OUTSIDE
-          the header card so the surface gets the full page width. Precedence: an open
-          assignment or quiz (student-work view) wins over the studio (list + editors). */}
-      {section === "classwork" ? (
+      {/* R60 Activity, grading face: an open assignment or quiz (student-work view)
+          takes the whole room — rendered OUTSIDE the header card so grading gets the
+          full page width (the R47 precedence contract, now scoped to Activity). */}
+      {section === "activity" && (openAssignmentId || openAssessmentId) ? (
         <div className="panel-fade flex flex-col gap-4">
-          <h3 className="sr-only">Classwork</h3>
+          <h3 className="sr-only">Student work</h3>
           {openAssignment ? (
             <AssignmentWorkView
               assignment={openAssignment}
@@ -1737,7 +1879,7 @@ function ClassDetail({
               lessons={lessons}
               onReviewSubmission={onReviewSubmission}
               onSetStatus={(status) => onSetAssignmentStatus(openAssignment.id, status)}
-              onBack={backToClasswork}
+              onBack={backToActivity}
             />
           ) : openAssessment ? (
             <AssessmentWorkView
@@ -1758,54 +1900,61 @@ function ClassDetail({
               onReviewAssessmentItem={onReviewAssessmentItem}
               onReturnAssessment={onReturnAssessment}
               onSetStatus={(status) => onSetAssessmentStatus(openAssessment.id, status)}
-              onBack={backToClasswork}
+              onBack={backToActivity}
             />
-          ) : openAssignmentId || openAssessmentId ? (
+          ) : (
             <div className="rounded-card border border-border bg-depth-card p-6 shadow-card">
               <p className="text-body text-muted-foreground">
-                That piece of classwork isn't here any more — it may have been archived.
+                That piece of work isn't here any more — it may have been archived.
               </p>
               <button
                 type="button"
-                onClick={backToClasswork}
+                onClick={backToActivity}
                 className="btn btn-secondary btn-sm mt-3"
               >
-                ← Classwork
+                ← Activity
               </button>
             </div>
-          ) : (
-            <Suspense
-              fallback={
-                <section className="rounded-card border border-border bg-depth-card shadow-card">
-                  <div className="p-6 text-body text-muted-foreground">Loading classwork...</div>
-                </section>
-              }
-            >
-              <CurriculumStudio
-                classId={item.id}
-                workItems={workItems}
-                onOpenItem={(kind, id) => {
-                  if (kind === "material") {
-                    setEditingResourceId(id);
-                    return;
-                  }
-                  navigate({
-                    to: "/teacher/class/$classId",
-                    params: { classId: item.id },
-                    search:
-                      kind === "assignment"
-                        ? { tab: "classwork", assignment: id }
-                        : { tab: "classwork", assessment: id },
-                  });
-                }}
-                onCreate={(kind) => setCreateOpen(kind)}
-                onCreateForStep={(kind, ctx) => {
-                  setCreateContext(ctx);
-                  setCreateOpen(kind);
-                }}
-              />
-            </Suspense>
           )}
+        </div>
+      ) : null}
+
+      {/* R60 Content: the units and lessons — the studio, full width. Work items live in
+          Activity now; opening one from a lesson's step navigates there. */}
+      {section === "content" ? (
+        <div className="panel-fade flex flex-col gap-4">
+          <h3 className="sr-only">Content</h3>
+          <Suspense
+            fallback={
+              <section className="rounded-card border border-border bg-depth-card shadow-card">
+                <div className="p-6 text-body text-muted-foreground">Loading content...</div>
+              </section>
+            }
+          >
+            <CurriculumStudio
+              classId={item.id}
+              workItems={workItems}
+              onOpenItem={(kind, id) => {
+                if (kind === "material") {
+                  setEditingResourceId(id);
+                  return;
+                }
+                navigate({
+                  to: "/teacher/class/$classId",
+                  params: { classId: item.id },
+                  search:
+                    kind === "assignment"
+                      ? { tab: "activity", assignment: id }
+                      : { tab: "activity", assessment: id },
+                });
+              }}
+              onCreate={(kind) => setCreateOpen(kind)}
+              onCreateForStep={(kind, ctx) => {
+                setCreateContext(ctx);
+                setCreateOpen(kind);
+              }}
+            />
+          </Suspense>
         </div>
       ) : null}
 
@@ -4213,6 +4362,82 @@ function summarizeStudent(dashboard: TeacherDashboardData, studentId: string): S
     quizAttempts: dashboard.quizAttempts.filter((item) => item.user_id === studentId).length,
     evidence: dashboard.evidence.filter((item) => item.user_id === studentId).length,
   };
+}
+
+// R60 Students roster: the per-student grade rollup behind the row chip. Mirrors
+// fetchStudentGrades exactly — released statuses only, final_score ?? score — so the
+// teacher's chip and the student's own grades list can never disagree.
+type StudentGradeSummary = { avg: number | null; graded: number; waiting: number; overdue: number };
+
+function gradeSummariesForClass(
+  dashboard: TeacherDashboardData,
+  classId: string,
+): Map<string, StudentGradeSummary> {
+  const released = new Set(["complete", "returned", "graded"]);
+  const checkpointsById = new Map(
+    dashboard.checkpoints
+      .filter((checkpoint) => checkpoint.class_id === classId && checkpoint.status !== "archived")
+      .map((checkpoint) => [checkpoint.id, checkpoint]),
+  );
+  const nowMs = Date.now();
+  const totals = new Map<
+    string,
+    { sum: number; graded: number; waiting: number; overdue: number }
+  >();
+  for (const recipient of dashboard.checkpointRecipients) {
+    const checkpoint = checkpointsById.get(recipient.checkpoint_id);
+    if (!checkpoint) continue;
+    const entry = totals.get(recipient.user_id) ?? { sum: 0, graded: 0, waiting: 0, overdue: 0 };
+    const rawScore = recipient.final_score ?? recipient.score;
+    if (released.has(recipient.status) && rawScore != null) {
+      entry.sum += Number(rawScore);
+      entry.graded += 1;
+    } else if (recipient.submitted_at) {
+      entry.waiting += 1;
+    } else if (checkpoint.due_at && Date.parse(checkpoint.due_at) < nowMs) {
+      entry.overdue += 1;
+    }
+    totals.set(recipient.user_id, entry);
+  }
+  const summaries = new Map<string, StudentGradeSummary>();
+  for (const [studentId, entry] of totals) {
+    summaries.set(studentId, {
+      avg: entry.graded ? entry.sum / entry.graded : null,
+      graded: entry.graded,
+      waiting: entry.waiting,
+      overdue: entry.overdue,
+    });
+  }
+  return summaries;
+}
+
+function gradeChipLabel(summary: StudentGradeSummary | undefined): string {
+  if (!summary || (!summary.graded && !summary.overdue)) return "No grades yet";
+  const parts: string[] = [];
+  if (summary.graded) parts.push(`Avg ${formatScore(summary.avg)}`);
+  if (summary.overdue) parts.push(`${summary.overdue} overdue`);
+  return parts.join(" · ");
+}
+
+// The roster row's one-line story: profile grade, recency, lessons finished.
+function studentContextLine(
+  profile: Profile | null,
+  sessions: LearningSession[],
+  studentId: string,
+  lessonsById: Map<string, Lesson>,
+  nowMs: number,
+): string {
+  const parts: string[] = [];
+  if (profile?.grade) parts.push(`Grade ${profile.grade}`);
+  const latest = latestSessionFor(sessions, studentId);
+  if (latest) {
+    parts.push(`last active ${relTime(latest.updated_at, nowMs)}`);
+    const completedCount = completedLessonNamesFor(sessions, studentId, lessonsById).length;
+    parts.push(`${completedCount} lesson${completedCount === 1 ? "" : "s"} done`);
+  } else {
+    parts.push("no sessions yet");
+  }
+  return parts.join(" · ");
 }
 
 function latestSessionFor(sessions: LearningSession[], studentId: string) {

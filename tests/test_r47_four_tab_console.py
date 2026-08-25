@@ -1,23 +1,22 @@
-"""R47 — the four-tab teacher console (owner-approved synthesis "Steal These Flows").
+"""The teacher console spine — R47's fixed-room contract, carried by R60's three rooms.
 
-The recipe: Google Classroom's skeleton + SchoolAI's live layer. A class is exactly
-four fixed rooms, each answering one teacher question:
+R47 established the shape (fixed rooms rendered FROM CLASS_SECTIONS, work-item views
+that take precedence, grading that never hides). R60 folded the four rooms into three
+after the owner's directive ("students, activity, and content — we keep things super
+simple"):
 
-- **Live** (landing) — what's happening right now: this class's unfinished sessions,
-  Watch straight into one; quiet state lists recent activity.
-- **Classwork** — what's the work: ONE list (units as topic headings; lessons,
-  assignments, quizzes, materials beneath), ONE + Create menu; a lesson click opens
-  the editor full-width, a work-item click opens its student-work view where grading
-  happens ON the work.
-- **People** — who's in it: roster, sections, enrolment. Admin only, no activity.
-- **Grades** — how are they doing: the gradebook matrix as a visible tab (a rollup).
+- **Students** (landing) — who's in the class and how they're doing: the roster with
+  sections and enrolment, each row carrying a live dot, last activity and a grade
+  chip; the full gradebook one toggle away.
+- **Activity** — what's happening and what's out for work: live students with Watch,
+  the class To-review queue, every quiz and assignment in one list; an open work item
+  takes the room full-width (the R47 precedence contract, scoped to the tab).
+- **Content** — what gets taught: the studio (units + lessons + materials).
 
-Plus: Home carries a global cross-class To-review queue, and notification deep links
-land on the item's student-work view (grading never hides).
-
-Principles pinned here: tabs render FROM CLASS_SECTIONS (pills and sidebar can't
-disagree); no hidden rooms (no state-dependent sections); one + Create; hierarchy is
-metadata, not navigation (no outline tree, no aside).
+Principles that survive from R47 verbatim: tabs render FROM CLASS_SECTIONS (pills and
+sidebar can't disagree); no hidden rooms; grading never hides — notification deep
+links land on the item's student-work view, and an open ?assignment/?assessment wins
+over the URL's ?tab so old links keep working.
 """
 from pathlib import Path
 import unittest
@@ -50,92 +49,138 @@ class TabSpineTests(unittest.TestCase):
         # ONE source of truth: the header pills map CLASS_SECTIONS (as the sidebar does),
         # so a new tab can never exist in one place and not the other.
         self.assertIn("CLASS_SECTIONS.map((tabItem)", CONSOLE)
-        header = _slice(CONSOLE, "R47 header", '{section === "live" ? (')
+        header = _slice(CONSOLE, "R60 header", '{section === "activity" ? (')
         self.assertIn("search: { tab: tabItem.value }", header)
 
     def test_no_hidden_rooms(self):
-        # Every section the console renders is a CLASS_SECTIONS value — the old
-        # state-dependent rooms (review behind a strip, resources behind a button) are gone.
+        # Every section the console renders is a CLASS_SECTIONS value. The R47 rooms are
+        # retired section values now (their content moved, not hidden).
         for retired in (
-            '{section === "students" ? (',
+            '{section === "live" ? (',
+            '{section === "classwork" ? (',
+            '{section === "people" ? (',
+            '{section === "grades" ? (',
             '{section === "review" ? (',
             '{section === "curriculum" ? (',
             "resourcesView",
-            "to review — open Review",
-            "Review & assign work",
         ):
             with self.subTest(retired=retired):
                 self.assertNotIn(retired, CONSOLE)
-        for room in ("live", "classwork", "people", "grades"):
-            with self.subTest(room=room):
-                self.assertIn(f'{{section === "{room}" ? (', CONSOLE)
+        self.assertIn('{section === "students" ? (', CONSOLE)
+        self.assertIn('{section === "content" ? (', CONSOLE)
+        # Activity renders twice by design — the in-card body and the full-width
+        # work-view face — both gated on the same section value.
+        self.assertIn('{section === "activity" && !openAssignmentId && !openAssessmentId ? (', CONSOLE)
+        self.assertIn('{section === "activity" && (openAssignmentId || openAssessmentId) ? (', CONSOLE)
+
+    def test_open_work_overrides_a_stale_tab(self):
+        # R60: old bookmarks and notification emails carry ?tab=classwork&assignment=… —
+        # the work-item params, not the tab name, decide the room. Grading never hides.
+        self.assertIn(
+            'search.assignment || search.assessment ? "activity" : normalizeClassSection(search.tab)',
+            CONSOLE,
+        )
 
 
-class LiveTests(unittest.TestCase):
-    LIVE = _slice(CONSOLE, '{section === "live" ? (', '{section === "people" ? (')
+class StudentsTests(unittest.TestCase):
+    STUDENTS = _slice(CONSOLE, '{section === "students" ? (', '{section === "activity" ? (')
 
-    def test_live_lists_unfinished_sessions_with_watch(self):
-        self.assertIn("liveStudents.map", self.LIVE)
-        self.assertIn("Watch", self.LIVE)
-        self.assertIn('search: { tab: "overview", session: live.id }', self.LIVE)
+    def test_students_is_the_landing_room(self):
+        self.assertIn('return "students";', NAV)
+        # And the student drill-down's back pill returns there.
+        self.assertIn('search: { tab: "students" }', CONSOLE)
 
-    def test_quiet_state_shows_recent_activity(self):
-        self.assertIn("No one is live right now", self.LIVE)
-        self.assertIn("last active ${relTime(", self.LIVE)
-        self.assertIn('"no sessions yet"', self.LIVE)
+    def test_roster_admin_survives_the_merge(self):
+        self.assertIn("Add students", self.STUDENTS)
+        self.assertIn('<option value="__new__">New section…</option>', self.STUDENTS)
 
-    def test_live_is_the_landing_room(self):
-        # Unknown/absent ?tab= lands on Live (normalizeClassSection default).
-        self.assertIn('return "live";', NAV)
-        # And the student page's back pill returns there.
-        self.assertIn('search: { tab: "live" }', CONSOLE)
+    def test_rows_carry_grades_and_activity(self):
+        # The owner's ask verbatim: "students shows a list of students … with their info
+        # like grades and activity."
+        self.assertIn("gradeChipLabel(gradeSummaries.get(studentId))", self.STUDENTS)
+        self.assertIn("studentContextLine(", self.STUDENTS)
+        self.assertIn("liveByStudent.has(studentId)", self.STUDENTS)
 
+    def test_gradebook_is_one_toggle_away(self):
+        self.assertIn('studentsView === "gradebook"', self.STUDENTS)
+        self.assertIn("<GradebookTable", self.STUDENTS)
+        self.assertIn("Roster", self.STUDENTS)
 
-class PeopleTests(unittest.TestCase):
-    PEOPLE = _slice(CONSOLE, '{section === "people" ? (', '{section === "grades" ? (')
-
-    def test_people_is_roster_admin_only(self):
-        self.assertIn("Add students", self.PEOPLE)
-        self.assertIn('<option value="__new__">New section…</option>', self.PEOPLE)
-        # Activity context lives in Live now — People rows carry none of it.
-        self.assertNotIn("live now", self.PEOPLE)
-        self.assertNotIn("Watch", self.PEOPLE)
-        self.assertNotIn("relTime(", self.PEOPLE)
-
-
-class GradesTests(unittest.TestCase):
-    def test_gradebook_is_a_visible_tab_not_a_drawer(self):
-        grades = _slice(CONSOLE, '{section === "grades" ? (', "</section>")
-        self.assertIn("<GradebookTable", grades)
-        self.assertNotIn("<Collapsible", grades)
+    def test_grade_chip_mirrors_the_student_grades_contract(self):
+        # Same released set and score precedence as fetchStudentGrades — the teacher's
+        # chip and the student's own grades list can never disagree.
+        helper = _slice(CONSOLE, "function gradeSummariesForClass(", "function gradeChipLabel(")
+        self.assertIn('new Set(["complete", "returned", "graded"])', helper)
+        self.assertIn("recipient.final_score ?? recipient.score", helper)
 
 
-class ClassworkTests(unittest.TestCase):
-    CLASSWORK = CONSOLE.split('{section === "classwork" ? (')[1]
+class ActivityTests(unittest.TestCase):
+    ACTIVITY = _slice(
+        CONSOLE,
+        '{section === "activity" && !openAssignmentId && !openAssessmentId ? (',
+        '{section === "students" ? (',
+    )
 
-    def test_work_item_views_take_precedence_over_the_studio(self):
-        # Render order: open assignment → open quiz → the studio (list + editors).
-        a = self.CLASSWORK.index("<AssignmentWorkView")
-        b = self.CLASSWORK.index("<AssessmentWorkView")
-        c = self.CLASSWORK.index("<CurriculumStudio")
-        self.assertTrue(a < b < c)
-        self.assertIn("{openAssignment ? (", self.CLASSWORK)
-        self.assertIn(") : openAssessment ? (", self.CLASSWORK)
+    def test_live_strip_with_watch(self):
+        self.assertIn("liveStudents.map", self.ACTIVITY)
+        self.assertIn("Watch", self.ACTIVITY)
+        self.assertIn('search: { tab: "overview", session: live.id }', self.ACTIVITY)
+        self.assertIn("No one is live right now", self.ACTIVITY)
+
+    def test_class_review_queue(self):
+        self.assertIn("reviewRows.map", self.ACTIVITY)
+        self.assertIn("To review", self.ACTIVITY)
+
+    def test_work_list_is_quizzes_and_assignments_only(self):
+        self.assertIn("activityItems.map", self.ACTIVITY)
+        # Materials belong to Content — the memo filters them out.
+        self.assertIn('.filter((entry) => entry.kind !== "material")', CONSOLE)
+
+    def test_create_buttons_live_here(self):
+        self.assertIn("New assignment", self.ACTIVITY)
+        self.assertIn("New quiz", self.ACTIVITY)
+        self.assertIn('setCreateOpen("assignment")', self.ACTIVITY)
+        self.assertIn('setCreateOpen("assessment")', self.ACTIVITY)
+
+    def test_work_item_views_take_the_room(self):
+        work = _slice(
+            CONSOLE,
+            '{section === "activity" && (openAssignmentId || openAssessmentId) ? (',
+            '{section === "content" ? (',
+        )
+        a = work.index("<AssignmentWorkView")
+        b = work.index("<AssessmentWorkView")
+        self.assertTrue(a < b)
+        self.assertIn("{openAssignment ? (", work)
+        self.assertIn(") : openAssessment ? (", work)
+        self.assertIn("← Activity", work)
+
+
+class ContentTests(unittest.TestCase):
+    CONTENT = CONSOLE.split('{section === "content" ? (')[1]
 
     def test_console_hands_work_items_to_the_studio(self):
-        self.assertIn("workItems={workItems}", self.CLASSWORK)
-        self.assertIn("onOpenItem={(kind, id)", self.CLASSWORK)
-        self.assertIn("onCreate={(kind) => setCreateOpen(kind)}", self.CLASSWORK)
+        self.assertIn("<CurriculumStudio", self.CONTENT)
+        self.assertIn("workItems={workItems}", self.CONTENT)
+        self.assertIn("onOpenItem={(kind, id)", self.CONTENT)
+        self.assertIn("onCreate={(kind) => setCreateOpen(kind)}", self.CONTENT)
 
-    def test_one_create_menu_with_three_dialogs(self):
+    def test_opening_a_work_item_from_content_lands_in_activity(self):
+        self.assertIn('? { tab: "activity", assignment: id }', self.CONTENT)
+        self.assertIn(': { tab: "activity", assessment: id }', self.CONTENT)
+
+    def test_three_create_dialogs_survive(self):
         self.assertIn('createOpen === "assignment"', CONSOLE)
         self.assertIn('createOpen === "assessment"', CONSOLE)
         self.assertIn('createOpen === "material"', CONSOLE)
-        # The studio's list carries the single + Create menu.
+
+    def test_content_list_creates_content_not_work(self):
+        # Assignments and quizzes are created in Activity; the studio's + Create menu
+        # offers only the things students learn from.
         menu = _slice(STUDIO, "function ClassworkList({", "function OutlineRow(")
-        for label in ('{ kind: "assignment", label: "Assignment" }', '{ kind: "assessment", label: "Quiz" }', '{ kind: "material", label: "Material" }'):
-            with self.subTest(label=label):
-                self.assertIn(label, menu)
+        self.assertIn('{ kind: "material", label: "Material" }', menu)
+        self.assertNotIn('{ kind: "assignment", label: "Assignment" }', menu)
+        self.assertNotIn('{ kind: "assessment", label: "Quiz" }', menu)
         self.assertIn("onAddUnit()", menu)
 
     def test_studio_list_replaced_the_outline_tree(self):
@@ -143,19 +188,16 @@ class ClassworkTests(unittest.TestCase):
         self.assertNotIn("function Outline({", STUDIO)
         self.assertNotIn("outlineOpen", STUDIO)
         self.assertNotIn("<aside", STUDIO)
-        # Units group the work items via their lesson; strays never vanish.
         self.assertIn("Other classwork", STUDIO)
         self.assertIn("units={outlineUnits}", STUDIO)
 
     def test_work_views_live_in_the_grading_files(self):
         self.assertIn("export function AssignmentWorkView({", ASSIGNMENT_VIEW)
         self.assertIn("export function AssessmentWorkView({", ASSESSMENT_VIEW)
-        # Grading stays on the work: score + return controls, and the quiz view keeps
-        # its per-item review + final return (pinned strings shared with older suites).
         self.assertIn("Mark complete", ASSIGNMENT_VIEW)
         self.assertIn("Return result", ASSESSMENT_VIEW)
-        self.assertIn("← Classwork", ASSIGNMENT_VIEW)
-        self.assertIn("← Classwork", ASSESSMENT_VIEW)
+        self.assertIn("← Activity", ASSIGNMENT_VIEW)
+        self.assertIn("← Activity", ASSESSMENT_VIEW)
 
 
 class RoutingTests(unittest.TestCase):
@@ -171,12 +213,10 @@ class RoutingTests(unittest.TestCase):
         self.assertNotIn("view", CLASS_ROUTE)
 
     def test_notifications_deep_link_to_the_work_item(self):
-        # ref carries assignment_id / assessment_id (stamped by the notification writers);
-        # parse defensively and fall back to the Classwork list.
         self.assertIn('typeof ref.assignment_id === "string"', NOTIFICATIONS)
         self.assertIn('typeof ref.assessment_id === "string"', NOTIFICATIONS)
-        self.assertIn('{ tab: "classwork", assignment: assignmentId }', NOTIFICATIONS)
-        self.assertIn('{ tab: "classwork", assessment: assessmentId }', NOTIFICATIONS)
+        self.assertIn('{ tab: "activity", assignment: assignmentId }', NOTIFICATIONS)
+        self.assertIn('{ tab: "activity", assessment: assessmentId }', NOTIFICATIONS)
 
 
 class HomeQueueTests(unittest.TestCase):
@@ -184,9 +224,8 @@ class HomeQueueTests(unittest.TestCase):
         self.assertIn("function globalReviewRows(", CONSOLE)
         self.assertIn("<GlobalReviewQueue", CONSOLE)
         self.assertIn("To review", CONSOLE)
-        # Rows deep-link into the item's student-work view in its class.
-        self.assertIn('? { tab: "classwork", assignment: row.itemId }', CONSOLE)
-        self.assertIn(': { tab: "classwork", assessment: row.itemId }', CONSOLE)
+        self.assertIn('? { tab: "activity", assignment: row.itemId }', CONSOLE)
+        self.assertIn(': { tab: "activity", assessment: row.itemId }', CONSOLE)
 
 
 if __name__ == "__main__":

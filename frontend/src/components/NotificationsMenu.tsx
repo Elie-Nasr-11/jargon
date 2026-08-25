@@ -140,10 +140,10 @@ export function NotificationsMenu() {
         to: "/teacher/class/$classId",
         params: { classId: n.class_id },
         search: assignmentId
-          ? { tab: "classwork", assignment: assignmentId }
+          ? { tab: "activity", assignment: assignmentId }
           : assessmentId
-            ? { tab: "classwork", assessment: assessmentId }
-            : { tab: "classwork" },
+            ? { tab: "activity", assessment: assessmentId }
+            : { tab: "activity" },
       });
     } else if (n.kind === "mentor_recommendation" && n.class_id && n.related_student_id) {
       navigate({
@@ -161,7 +161,7 @@ export function NotificationsMenu() {
       navigate({
         to: "/teacher/class/$classId",
         params: { classId: n.class_id },
-        search: { tab: "classwork" },
+        search: { tab: "activity" },
       });
     }
   };

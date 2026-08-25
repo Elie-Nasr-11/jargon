@@ -1,43 +1,42 @@
 // Nav-level derivations shared by the teacher shell (sidebar) and TeacherConsole (landing class
 // picker). Living here — not in TeacherConsole — avoids a console ↔ sidebar import cycle.
 
-// R47 four-tab console ("Steal These Flows" synthesis): a class workspace is exactly four
-// fixed rooms, each answering one teacher question — Live (what's happening right now),
-// Classwork (what's the work — lessons, assignments, quizzes, materials in one list),
-// People (who's in it), Grades (how are they doing). Tabs never appear or disappear.
-export type ClassSection = "live" | "classwork" | "people" | "grades";
+// R60 three-room console: a class workspace is exactly three fixed rooms, each answering one
+// teacher question — Students (who's in it and how are they doing), Activity (what's happening
+// and what work is out — live students, quizzes, assignments, what needs review), Content
+// (what gets taught — units and lessons, editable and previewable). Tabs never appear or
+// disappear. R47's four rooms folded down: People+Grades → Students, Live+work items →
+// Activity, the curriculum studio → Content.
+export type ClassSection = "students" | "activity" | "content";
 
 export const CLASS_SECTIONS: ReadonlyArray<{ value: ClassSection; label: string }> = [
-  { value: "live", label: "Live" },
-  { value: "classwork", label: "Classwork" },
-  { value: "people", label: "People" },
-  { value: "grades", label: "Grades" },
+  { value: "students", label: "Students" },
+  { value: "activity", label: "Activity" },
+  { value: "content", label: "Content" },
 ];
 
 // Legacy ?tab= values (old bookmarks, stale notification deep links) map onto the room that
-// now owns their content: content-shaped values (the old Curriculum/Structure sections, the
-// builder and resources deep links) → classwork; grading-shaped values (the old Review
-// section, the gradebook drawer) → grades; the old Students tab's landing face was activity →
-// live, which is also the default landing for unknown/absent values.
+// now owns their content: happening/work-shaped values (the old Live tab, assignment and
+// assessment deep links, the old Review section) → activity; content-shaped values (the old
+// Classwork/Curriculum/Structure sections, builder and resources deep links) → content;
+// people/grades-shaped values and anything unknown → students, the default landing.
 export function normalizeClassSection(tab: string | undefined): ClassSection {
   switch (tab) {
+    case "activity":
+    case "live":
+    case "assignments":
+    case "assessments":
+    case "review":
+      return "activity";
+    case "content":
     case "classwork":
     case "curriculum":
     case "structure":
     case "lessons":
     case "resources":
-    case "assignments":
-    case "assessments":
-      return "classwork";
-    case "grades":
-    case "review":
-    case "gradebook":
-      return "grades";
-    case "people":
-    case "roster":
-      return "people";
+      return "content";
     default:
-      return "live";
+      return "students";
   }
 }
 

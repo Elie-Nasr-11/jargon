@@ -84,17 +84,18 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         self.assertIn("invokeCurriculumAdmin", self.api)
         self.assertIn("fetchCurriculumAuthoringData", self.api)
         self.assertIn('createFileRoute("/teacher/curriculum")', self.route)
-        # R42 class-first (renamed by R47): the studio mounts inside a class workspace;
-        # its breadcrumb is rooted at the class's Classwork section (clearing the
-        # selection), not at a standalone studio page.
-        self.assertIn('{ label: "Classwork", onClick: goRoot }', self.route)
+        # R42 class-first (renamed by R47, again by R60): the studio mounts inside a
+        # class workspace; its breadcrumb is rooted at the class's Content section
+        # (clearing the selection), not at a standalone studio page.
+        self.assertIn('{ label: "Content", onClick: goRoot }', self.route)
         self.assertIn("/teacher/curriculum", self.route_tree)
-        # R42 class-first (renamed by R47): the sidebar has no global Curriculum
-        # destination anymore — the studio is reached through a class's Classwork
-        # section row. The legacy route stays only as a redirect for old bookmarks.
+        # R42 class-first (renamed by R47, again by R60): the sidebar has no global
+        # Curriculum destination anymore — the studio is reached through a class's
+        # Content section row. The legacy route stays only as a redirect for old
+        # bookmarks.
         self.assertNotIn('navigate({ to: "/teacher/curriculum" })', self.teacher_sidebar)
         self.assertIn(
-            '{ value: "classwork", label: "Classwork" }', TEACHER_NAV.read_text(encoding="utf-8")
+            '{ value: "content", label: "Content" }', TEACHER_NAV.read_text(encoding="utf-8")
         )
 
     def test_authoring_types_cover_blueprint_contract(self):

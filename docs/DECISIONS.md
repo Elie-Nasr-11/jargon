@@ -1618,3 +1618,59 @@ hue-free); tsc, eslint, deno gate all clean. The mark thresholds were verified b
 running the shipped extractor over all four real chapter PDFs — 111, 105, 149 and 99
 pages — not by inspection, and a check confirms the harness reads the same constants
 the app ships.
+
+## R60 — the three-room teacher console (2026-08-25)
+
+Owner, annoyed: "why is the old curriculum builder back?? … lets just have the teachers
+view have students, activity, and content … we keep things super simple. remember, the
+users are lazy and not tech savvy."
+
+**What was actually back.** Nothing had returned — the pre-R47 `StructureDetail`
+node-editor pane (SUBJECT/COURSE/UNIT overline, title/description/Save changes,
+Lifecycle) had survived inside the studio as the DetailPane for non-lesson selections,
+and R56/R57 hung their AI panels on it. So the moment a teacher clicked a unit — which
+was the ONLY way to reach "Build from material" — the clean R47 list swapped out for
+the old builder chrome. Worse: "Duplicate for this class" auto-selected the course
+node, so the old builder appeared unbidden; and the R57 whole-course build lived on a
+course pane with NO in-app link at all — it shipped unreachable.
+
+**The cure: three rooms, and the panes die.**
+
+- `ClassSection` = `students | activity | content` (teacherNav.ts), Students the
+  default landing. Legacy ?tab= values fold in (live/assignments/assessments/review →
+  activity; classwork/curriculum/structure/lessons/resources → content; the rest →
+  students), and an open `?assignment/?assessment` OVERRIDES a stale ?tab so old
+  notification links still land on their work view (grading never hides).
+- **Students** = People + Grades. Roster rows grow a live-now dot, "Grade 7 · last
+  active 2h ago · N lessons done", and a grade chip from `gradeSummariesForClass` —
+  which mirrors `fetchStudentGrades` exactly (released statuses, `final_score ??
+  score`) so teacher chip and student list can never disagree. The full GradebookTable
+  is one Roster|Gradebook toggle away, markup untouched.
+- **Activity** = Live + the work items. Live strip with Watch, the class's slice of
+  the review queue, every quiz/assignment in one list (needs-review first), New
+  assignment / New quiz buttons, and the R47 precedence contract scoped to the tab:
+  an open work item takes the room full-width.
+- **Content** = the studio, re-scoped to units + lessons + materials. Only a LESSON
+  opens an editor. `StructureDetail` is deleted; stale ?unit/?course/?subject URLs
+  replace-navigate to plain Content. Units are managed inline: click the name (or the
+  row's ⋯ menu) to rename in place — commit on Enter/blur, no-op when unchanged —
+  and Delete keeps the lessons-empty gate. "New unit" arms the inline rename so
+  create→type→Enter is the whole flow. Per-unit "+ Lesson" is a two-item menu:
+  **Build from material** (leads) / Start blank. The R57 course build finally has a
+  door — "Build a course from material" on the toolbar — resolving the class's
+  backing course through `ensureBackingCourse`, the SAME helper "New unit" uses
+  (extracted, R45's auto-link contract preserved), so there is one course-creation
+  path, not two. The R50 fork banner now renders at the outline root too, so the
+  server's "duplicate first" refusal always points at a button that exists; the fork
+  lands back on the outline, not a pane.
+- `fetchClassCourseLinks` joins the surfaceCache (it ran uncached on every studio
+  mount); any curriculum-admin write invalidates it alongside the authoring snapshot.
+
+Deliberately NOT done here: the lesson editor simplification is R60b (next PR), so
+this diff stays reviewable.
+
+Verified: 973 pins green (test_r47 rewritten as the three-room spine; r42/r43/
+authoring-studio/r56 re-anchored; 13 new pins in test_r60_three_room_console; r45/
+r48/r50/r52/r53/r57 untouched and passing). tsc + eslint clean. Offline harness:
+screenshots of all three rooms; `?tab=classwork&unit=…` observed normalizing to
+`?tab=content`; `?tab=live` observed landing on Activity.

@@ -591,14 +591,19 @@ export async function fetchClassCourseLinks(
   classIds: string[],
 ): Promise<Array<{ class_id: string; course_id: string }>> {
   if (!classIds.length) return [];
-  const { data, error } = await supabase
-    .from("class_courses")
-    .select("class_id,course_id")
-    .in("class_id", classIds);
-  if (error) throw error;
-  return ((data || []) as Array<{ class_id: string | null; course_id: string | null }>).filter(
-    (row): row is { class_id: string; course_id: string } => Boolean(row.class_id && row.course_id),
-  );
+  // R60: cached like the authoring snapshot — this ran uncached on every studio mount.
+  // Any curriculum-admin write (set_class_courses, duplicate_course, …) invalidates it.
+  return cached(`classLinks:${classIds.slice().sort().join(",")}`, 60_000, async () => {
+    const { data, error } = await supabase
+      .from("class_courses")
+      .select("class_id,course_id")
+      .in("class_id", classIds);
+    if (error) throw error;
+    return ((data || []) as Array<{ class_id: string | null; course_id: string | null }>).filter(
+      (row): row is { class_id: string; course_id: string } =>
+        Boolean(row.class_id && row.course_id),
+    );
+  });
 }
 
 // --- v4.0 Phase 3a: student self-read stats for the profile popup --------------------------
@@ -1391,6 +1396,7 @@ async function callCurriculumAdmin(
   }
   // R48: any authoring write makes the cached studio snapshot stale.
   invalidateSurface("authoring:");
+  invalidateSurface("classLinks:");
   return data;
 }
 

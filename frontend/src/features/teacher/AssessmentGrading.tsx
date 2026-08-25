@@ -151,7 +151,7 @@ export function AssessmentWorkView({
           <AssessmentStatusChip status={assessment.status} />
         </div>
         <button type="button" onClick={onBack} className="btn btn-secondary btn-sm">
-          ← Classwork
+          ← Activity
         </button>
       </div>
       <div className="text-meta text-muted-foreground">

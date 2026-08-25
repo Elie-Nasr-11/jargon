@@ -11458,12 +11458,30 @@ built lessons; figures after that.
 
 ## Claude -> Codex / Human - 2026-08-25 10:40
 
-Status: Starting
-Task: R60a — three-room teacher console (Students / Activity / Content). Kill the
-pre-R47 StructureDetail pane, make the R57 course build reachable, merge People+Grades
-into Students (rows gain grades + activity), merge Live+work items into Activity.
-Files I expect to touch: frontend/src/features/teacher/shell/teacherNav.ts,
+Status: Finished
+Summary: R60a — the three-room teacher console. Students (roster rows now carry live
+dot + last-active + lessons-done + a grade chip mirroring fetchStudentGrades; the
+gradebook is a Roster|Gradebook toggle), Activity (live strip + class review queue +
+quizzes/assignments list + create buttons + the full-width work views), Content (the
+studio scoped to units/lessons/materials; StructureDetail DELETED — units rename
+inline and delete from a row menu; "+ Lesson" = Build from material / Start blank;
+"Build a course from material" finally exposes R57 via the shared ensureBackingCourse
+resolution; the R50 fork banner reaches the outline root; stale pane URLs normalize).
+An open ?assignment/?assessment overrides a stale ?tab so old grading links keep
+working; notification deep links now target tab=activity.
+Files changed: frontend/src/features/teacher/shell/teacherNav.ts,
 frontend/src/features/teacher/TeacherConsole.tsx,
-frontend/src/routes/teacher.curriculum.tsx, frontend/src/components/NotificationsMenu.tsx,
-frontend/src/lib/api.ts, tests (r42/r46/r47/r56 re-anchors + new test_r60), docs.
-Notes: plan reviewed and approved; two PRs (R60a rooms, R60b lesson editor).
+frontend/src/routes/teacher.curriculum.tsx (DetailPane lesson-only, StructureDetail/
+addCourse/addUnit/archiveNode deleted, ensureBackingCourse extracted, UnitRenameInput
++ SharedCourseNotice added), frontend/src/components/NotificationsMenu.tsx,
+frontend/src/features/teacher/AssignmentGrading.tsx + AssessmentGrading.tsx (back
+labels), frontend/src/lib/api.ts (fetchClassCourseLinks cached + invalidated),
+tests (test_r47 rewritten as the three-room spine; r42/r43/authoring/r56 re-anchored;
+new test_r60_three_room_console with 13 pins), docs.
+Tests run: 973 pins OK; tsc + eslint clean; offline harness screenshots of all three
+rooms; deep-link normalization observed live (?tab=classwork&unit=… → ?tab=content;
+?tab=live → Activity pill active).
+Remaining concerns: the per-unit lesson menu and the header + Create menu share the
+existing no-outside-click-dismiss behavior (pre-R60 pattern) — worth a click-away
+handler in R60b. The lesson editor itself is untouched by design.
+Suggested next task: R60b — the lesson editor simplification (approved plan, part 2).
