@@ -11519,3 +11519,14 @@ render-pages, render.html, validate), supabase/functions/curriculum-admin/index.
 (materials branch), docs/CURRICULUM_IMPORT.md, books/**, frontend/public/books/**,
 tests/test_r61_book_build.py, docs.
 Notes: plan approved; one PR then live imports through execute_sql+pg_net.
+
+Update (12:55, pipeline finished): extractor v2 + composer + validator + page
+renderer + importer materials branch all built and green — 17 lessons composed
+(187 teaching steps, 126 red-backed quiz questions, 17 assignments incl. the two
+book projects, 35 page images, 2 glossaries), 1014 pins, deno gate 0. The
+validator caught six polluted options, a fused question with a WRONG letter, and
+the garble filter eating the second book project before anything shipped.
+Remaining: PR/merge/CI deploy, then the four imports + class links + 17 publishes
+via pg_net, then verification SQL. Boot-attach quirk noted: chat attaches
+resources[0] when a session boots on a step with no bound material — the earliest
+page image can show once out of context (pre-existing contract, not touched).
