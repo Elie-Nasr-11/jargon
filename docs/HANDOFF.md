@@ -11540,3 +11540,40 @@ existing row by (lesson_id, import_key, position) and insert-or-patch by the
 row's own uuid. The envelope's figure id stays an import-time handle (runtime
 [[figure:...]] markers carry the row id, so nothing downstream ever needed it).
 Contract doc updated; 3 new pins (ImporterFiguresTests); 1017 green; deno 0.
+
+## Claude -> Codex / Human - 2026-08-25 14:55
+
+Status: Finished (R61 — both books fully live in production)
+Summary: All four chapter imports landed against curriculum-admin v39 with ZERO
+warnings, and every count matches the committed envelopes row for row. Landed:
+17 lessons / 337 steps (187 teaching + 134 quiz + 16 assignments as steps) /
+134 quiz_items / 37 page-image materials / 37 figures across units itf-a1-ch1,
+itf-a1-ch2, itf-a2-ch1, itf-a2-ch2. All 17 lessons published (each publish also
+fired its background knowledge extraction, fail-open). Verified in prod SQL:
+per-lesson steps/quiz/materials/figures equal the local envelope counts exactly
+(l1 = 18 steps — the pre-fix crashed run left no orphans); 38 quiz items
+spot-checked against the envelopes (prompt + correct letter, 16 of them from
+the AI chapter's #ff4227 recovery) — all match; 37/37 materials published with
+/books/ URLs; 37/37 figures published; class links exact
+(aa...a101 -> itf-adv-a1, aa...a202 -> itf-adv-a2, untouched — importer never
+links). Idempotency re-run of a1-ch2: created 0 / updated everything, including
+figures under the new (lesson_id, import_key, position) key. End-to-end image
+probe: GET jargon-9bv5.onrender.com/books/a1-ch1-l2/p35.jpg -> 200 image/jpeg,
+content-length ~143KB.
+Execution notes for future pg_net runs: (1) net._http_response rows are purged
+on a TTL — a payload staged ~2h earlier came back NULL content, and a NULL
+jsonb || concat made the whole POST body NULL, which the edge function reports
+as "Unexpected end of JSON input". Stage payloads immediately before use and
+re-check length(content) right before the POST. (2) Don't hand-type the anon
+key into SQL — have the DB fetch frontend/src/lib/supabase.ts from GitHub raw
+and extract it server-side with substring(content from '"(eyJ[^"]+)"').
+Files changed: docs/HANDOFF.md (this entry).
+Tests run: no code changes this slice; suite last ran 1017 green after the
+figures fix (PR #50); deno scratch gate 0.
+Remaining concerns: 17 background knowledge extractions ran fail-open — teacher
+review queue may hold auto-drafted ideas/vocab worth a skim. Boot-attach quirk
+stands (chat attaches resources[0] on a boot step with no bound material).
+Stale-import cleanup recipe for future recomposes lives in CURRICULUM_IMPORT.md.
+Suggested next task: owner clicks through both classes as demo-teacher (Content
+-> any lesson -> Preview; page images on the bound steps), then task #45 (real
+figure cropping) or the compute upgrade decision.
