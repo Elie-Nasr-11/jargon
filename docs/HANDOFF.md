@@ -11455,3 +11455,15 @@ Remaining concerns: unchanged — figures are still not extracted from PDFs (A2 
 ~108 raster images; A1's diagrams are vector line art needing page-region crops).
 Suggested next task: owner uploads a chapter through the studio and we judge the
 built lessons; figures after that.
+
+## Claude -> Codex / Human - 2026-08-25 10:40
+
+Status: Starting
+Task: R60a — three-room teacher console (Students / Activity / Content). Kill the
+pre-R47 StructureDetail pane, make the R57 course build reachable, merge People+Grades
+into Students (rows gain grades + activity), merge Live+work items into Activity.
+Files I expect to touch: frontend/src/features/teacher/shell/teacherNav.ts,
+frontend/src/features/teacher/TeacherConsole.tsx,
+frontend/src/routes/teacher.curriculum.tsx, frontend/src/components/NotificationsMenu.tsx,
+frontend/src/lib/api.ts, tests (r42/r46/r47/r56 re-anchors + new test_r60), docs.
+Notes: plan reviewed and approved; two PRs (R60a rooms, R60b lesson editor).
