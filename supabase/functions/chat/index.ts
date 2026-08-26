@@ -108,9 +108,11 @@ CONVERSATION CRAFT — every turn:
   it and change tactic. A breakthrough ("oh, I get it") -> affirm briefly and move on.
 - If they say something incorrect, correct that specific point clearly and kindly. If a known misconception
   from student.misconceptions resurfaces, correct it directly.
-- Shape on ATTEMPT turns (the directive names grading/attempt situations): acknowledge their message ->
+- Shape on ATTEMPT turns (they worked the step's task — your own "student_action" verdict and any
+  graded result in the directive name these): acknowledge their message ->
   do this step's work -> situate in the arc when it helps -> end with exactly ONE clear next action.
-- Shape on CONVERSATION turns (questions, tangents, discussion — the directive names these too): reply
+- Shape on CONVERSATION turns (questions, tangents, discussion — everything your "student_action"
+  verdict reads as not an attempt): reply
   like a person, not a lesson plan. Multiple beats are fine; answer fully first; you do NOT need to end
   with a question or next action every time — the step's own task is still on screen.
 - NEVER OPEN WITH PRAISE YOU HAVE NOT CHECKED. Decide whether the answer is right BEFORE you write
@@ -222,7 +224,8 @@ them. The types:
   student-produces-the-conclusion rule does not apply here); invite their questions and thoughts.
   The step is owed only their go-ahead: once they have engaged,
   close by ASKING whether to move on — their reply is what advances the lesson.
-- "reflection" (and text-mode "practice") — the STUDENT must articulate the step's idea in their own
+- "reflection" (and text-mode "practice", and legacy "text" steps) — the STUDENT must articulate the
+  step's idea in their own
   words; every explanation/reflection rule above applies. The grader credits ONLY what their latest
   message contains by itself, so when only a piece is missing, ask them to put the WHOLE idea
   together in one message — fragments spread across turns never pass.
@@ -335,8 +338,9 @@ GOVERNANCE:
 - "resources": when the directive says card(s) are attached below your reply, tell the student to tap Open on
   the card — never say you can't share it. Never claim a resource was viewed unless resource_interactions
   proves it. Cite document chunks by resource title/page and audio/video chunks by title/time range.
-CLOSING A STEP: when flow.owed reads "nothing" on a presented step and the directive carries no
-other event — or when a directive itself says the step is ending — THIS reply ENDS the step. (A
+CLOSING A STEP: when flow.room announces "This reply ENDS the step" — or a directive itself says
+the step is ending — it does: close it here. (flow.owed reading "nothing" on a presented step is
+the same truth seen mechanically; and a
 revisit never ends anything.) FIRST serve the ask: if the student's latest message asked for
 anything — a list, a rephrasing, an example, a question about the material — DO THAT FULLY before
 you close. Never wrap up over an unanswered request; if serving it takes the whole reply, serve it
@@ -7136,11 +7140,38 @@ async function handleTypedRequest(
       }
       // (The dwell counter the escalation rules read is flow.attempts, not a room
       // sentence — numbers beat prose for facts the model must compare.)
+      // R64.1: the CLOSE is announced, never inferred. When this turn's draft fold
+      // left the step owed nothing and no event rung fired, say outright that this
+      // reply ends the step — the earlier "directive looks empty" inference misread
+      // closes that happened to carry a resource clause or the no-button note.
+      // (Post-model closes the mentor itself decides — movement — are covered by
+      // the movement contract; deterministic closes carry the handoff pointer.)
+      if (
+        directive.key === "brief" &&
+        !quizLive &&
+        presentedBefore &&
+        ((requirements.acknowledge &&
+          !stepStateBefore.acknowledged_at &&
+          Boolean(draftState.acknowledged_at)) ||
+          (requirements.understanding &&
+            !stepStateBefore.understanding_at &&
+            Boolean(draftState.understanding_at)))
+      ) {
+        flowRoom.push(
+          skipShapedTurn
+            ? "This reply ENDS the step, and they asked to move on — CLOSING A STEP's skip exception: ONE short sentence, no recap, no new question."
+            : 'This reply ENDS the step — follow CLOSING A STEP: serve anything they asked first, then close in a sentence or two ending with a fresh "Shall we continue?" variant.',
+        );
+      }
       // R31e: the ceiling refused to ADVANCE — rightly — but the reply must answer
       // the ask instead of pretending they said nothing.
       if (advanceAskedButCeilinged && !quizLive) {
         flowRoom.push(
-          `They just asked to move on, but they are in ${declaredMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${declaredMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. Offer the way back INLINE, in your own sentence, as [[action:lesson|back to Lesson mode]] (or your own natural wording inside those brackets) — it renders as clickable text. Do not name any other control.`,
+          `They just asked to move on, but they are in ${declaredMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${declaredMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. Offer the way back INLINE, in your own sentence, as [[action:lesson|back to Lesson mode]] (or your own natural wording inside those brackets) — it renders as clickable text. Do not name any other control.${
+            declaredMode === "practice"
+              ? " Skip the next exercise this turn — the way back IS this reply's one ask (EXACTLY ONE ASK)."
+              : ""
+          }`,
         );
       }
       // R32c: they ANSWERED in a register that cannot mark it — respond to the
@@ -7674,7 +7705,6 @@ async function handleTypedRequest(
             source: "orchestrator",
           }
         : null;
-    const assessment = effectiveOrchestratorAssessment ?? understandingAssessment;
     // The dedicated grader is authoritative for text completion (it hard-gates the loop);
     // the mentor's self-reported understanding is only the fallback when no grader ran.
     const understanding =
@@ -7711,6 +7741,23 @@ async function handleTypedRequest(
             ? applyModeCeiling(declaredMode, mentorActionRaw)
             : null;
     const foldKind: RoutedKind | null = mentorAction ?? routedKind;
+    // R64.1: the mentor's classification is authoritative for the RECORD too. The
+    // open-ended miss was inferred PRE-model from the heuristic draft kind; when the
+    // mentor — with the whole conversation in view — says the message was NOT an
+    // attempt, that miss is dropped from everything that persists (the fold,
+    // graded_fails, the attempt row, needs_retry status, the envelope grade).
+    // Reference equality pins this to exactly the heuristic miss object:
+    // deterministic quiz/code grades and real submissions can never match it.
+    // The pre-model surfaces (the assessment_miss directive, turn.grade) already
+    // spoke — the mentor overrode them knowingly; the record follows its judgment.
+    const missOverridden =
+      openEndedMiss !== null &&
+      effectiveOrchestratorAssessment === openEndedMiss &&
+      mentorAction !== null &&
+      mentorAction !== "answer_attempt";
+    const assessment =
+      (missOverridden ? null : effectiveOrchestratorAssessment) ??
+      understandingAssessment;
     // R64 slice 2: the mentor's own rewrite of the session's running summary —
     // sanitized to plain clamped text here, persisted after the batched session
     // patch below (storeMentorFlowSummary). Empty when omitted or non-string, which
@@ -8190,9 +8237,12 @@ async function handleTypedRequest(
     }
 
     // A deterministic grade failed this turn (orchestrator-sourced only, so a mentor's
-    // free-form assessment can never bump the teacher-facing counters).
+    // free-form assessment can never bump the teacher-facing counters; R64.1 — a
+    // mentor-overridden heuristic miss doesn't either).
     const gradedFail =
-      Boolean(answer) && effectiveOrchestratorAssessment?.passed === false;
+      Boolean(answer) &&
+      !missOverridden &&
+      effectiveOrchestratorAssessment?.passed === false;
     const retryIncrement = gradedFail ? 1 : 0;
     const finalGradedFails = finalState.graded_fails;
     // Gate the status: complete only when activities AND required checkpoints are confidently

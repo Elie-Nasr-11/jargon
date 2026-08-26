@@ -45,7 +45,7 @@ class MentorClassificationTests(unittest.TestCase):
     def test_the_mentor_verdict_is_authoritative_with_heuristic_fallback(self):
         self.assertIn("const foldKind: RoutedKind | null = mentorAction ?? routedKind;", CHAT)
         # The persisted fold consumes foldKind, not the draft kind.
-        fold_site = CHAT.split("const foldKind", 1)[1][:1400]
+        fold_site = CHAT.split("const foldKind", 1)[1][:2600]
         self.assertIn("foldKind,\n      mentorMovement,", fold_site)
 
     def test_the_same_guards_as_the_draft_path_apply(self):
@@ -156,11 +156,26 @@ class WorldBriefTests(unittest.TestCase):
         )
         self.assertIn("when flow.presented is false and no directive event says otherwise, THIS reply presents", CHAT)
 
-    def test_closing_a_step_triggers_on_owed_nothing(self):
-        self.assertIn('when flow.owed reads "nothing" on a presented step', CHAT)
+    def test_closing_a_step_is_announced_not_inferred(self):
+        # R64.1: the brief-turn close is an explicit room fact (the "directive looks
+        # empty" inference misread closes that carried a resource clause), with the
+        # owed-nothing mechanical truth still stated beside it.
+        self.assertIn('when flow.room announces "This reply ENDS the step"', CHAT)
+        self.assertIn('flow.owed reading "nothing" on a presented step is\nthe same truth', CHAT)
+        self.assertNotIn("carries no\nother event", CHAT)
+        fact_site = CHAT.index("This reply ENDS the step — follow CLOSING A STEP")
+        self.assertIn("flowRoom.push(", CHAT[fact_site - 400 : fact_site])
+        # The announcing guard mirrors the dissolved closes exactly: a newly stamped
+        # pacing gate on a brief turn with no live quiz.
+        guard = CHAT.split("R64.1: the CLOSE is announced", 1)[1][:1600]
+        self.assertIn('directive.key === "brief"', guard)
+        self.assertIn("!quizLive", guard)
+        self.assertIn("!stepStateBefore.acknowledged_at", guard)
+        self.assertIn("!stepStateBefore.understanding_at", guard)
         # The skip-shaped exception survives R63 verbatim in spirit: one line, no
         # new question, never re-asking "Shall we continue?" at someone who said go.
         self.assertIn("SKIP EXCEPTION", CHAT)
+        self.assertIn("CLOSING A STEP's skip exception", CHAT)
 
     def test_revisits_present_a_quiet_brief(self):
         # Revisit turns hand the mentor nothing-owed and no room facts — the revisit
@@ -168,12 +183,52 @@ class WorldBriefTests(unittest.TestCase):
         # down ("A revisit never ends anything").
         self.assertIn("const flowOwed = inRevisit\n      ? \"nothing\"", CHAT)
         self.assertIn("if (!inRevisit) {", CHAT)
-        self.assertIn("A\nrevisit never ends anything.", CHAT)
+        self.assertIn("revisit never ends anything.", CHAT)
 
     def test_pace_rides_the_brief_not_directive_mutations(self):
         self.assertIn("const paceBrisk = briskPace(context.recentTurns);", CHAT)
         self.assertIn('flow.pace reads "brisk"', CHAT)
         self.assertNotIn("PACE: this student has repeatedly asked to move faster — be brisk.", CHAT)
+
+
+class RecordFollowsTheMentorTests(unittest.TestCase):
+    """R64.1 (owner: "please revise"): coherence pass over the shipped architecture —
+    the mentor's judgment governs the RECORD too, and no prompt rule waits for a
+    directive label that no longer comes."""
+
+    def test_the_heuristic_miss_is_droppable_by_the_mentor(self):
+        # The one surface where a keyword heuristic could still MARK a student: the
+        # pre-model open-ended miss. When the mentor's student_action says the
+        # message was not an attempt, the miss leaves everything that persists.
+        self.assertIn("const missOverridden =", CHAT)
+        block = CHAT.split("const missOverridden =", 1)[1][:400]
+        self.assertIn("effectiveOrchestratorAssessment === openEndedMiss", block)
+        self.assertIn('mentorAction !== "answer_attempt"', block)
+        # Both persisting consumers are gated; the pre-model surfaces (directive,
+        # turn.grade) deliberately are not — the mentor overrode them knowingly.
+        self.assertIn(
+            "(missOverridden ? null : effectiveOrchestratorAssessment) ??\n      understandingAssessment",
+            CHAT,
+        )
+        self.assertIn(
+            "!missOverridden &&\n      effectiveOrchestratorAssessment?.passed === false",
+            CHAT,
+        )
+
+    def test_the_shape_rule_keys_off_the_mentors_own_verdict(self):
+        # Pre-R64.1 these lines promised "the directive names these" — a label the
+        # dissolved ladder never sends. The model's own classification is the key.
+        self.assertIn('your own "student_action" verdict', CHAT)
+        self.assertNotIn("the directive names these too", CHAT)
+        self.assertNotIn("the directive names grading/attempt situations", CHAT)
+
+    def test_practice_advance_fact_owns_the_single_ask(self):
+        # The R31e room fact + practice_register rung would otherwise stack two
+        # asks (way-back AND next exercise), violating EXACTLY ONE ASK.
+        self.assertIn(
+            "Skip the next exercise this turn — the way back IS this reply's one ask",
+            CHAT,
+        )
 
 
 if __name__ == "__main__":

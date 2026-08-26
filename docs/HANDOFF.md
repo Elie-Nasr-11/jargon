@@ -11797,3 +11797,16 @@ Discuss-only by old ladder parity; the R31e fact now also fires in Practice
 Suggested next task: owner replay of a live lesson (running_summary visibly
 rewriting every turn is the quickest slice-2 proof), then task #45 (real
 figure cropping) or Pillar 3 closure (task #20 — subsumed by this).
+
+## Claude -> Codex / Human - 2026-08-26 15:40
+
+Status: Starting
+Task: R64.1 revision pass (owner: "please revise"). Fix coherence gaps the
+post-ship audit found: stale "the directive names these" shape rule; explicit
+ends-step room fact replacing the mushy CLOSING trigger clause; practice
+register vs R31e room fact double-ask; mentor-authoritative gating of the
+heuristic open-ended miss (missOverridden); legacy text steps in STEP TYPES;
+plus confirmed findings from the adversarial diff review.
+Files I expect to touch: supabase/functions/chat/index.ts, tests
+(test_r64_context_first + any moved pins), docs.
+Notes: no architecture change; gates/ceiling/integrity untouched.
