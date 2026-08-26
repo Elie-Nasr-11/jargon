@@ -1408,16 +1408,22 @@ async function upsertRows(
 
 // Best-effort background work (telemetry) runs OFF the critical path: on the Supabase
 // edge runtime, waitUntil keeps the isolate alive past the response; elsewhere the
-// promise simply runs un-awaited. Callers must pass self-catching promises
-// (recordRuntimeEvent/recordModelUsage swallow their own errors).
+// promise simply runs un-awaited. Callers should pass self-catching promises
+// (recordRuntimeEvent/recordModelUsage swallow their own errors) — but R66 makes
+// that a guarantee instead of a convention: an unhandled rejection inside waitUntil
+// can kill the whole isolate, turning one background hiccup into a dead student
+// turn, so every scheduled task is defensively caught and logged here.
 function scheduleBackground(task: Promise<unknown>): void {
+  const safe = task.catch((err) =>
+    console.error("background_task_failed", errorMessage(err)),
+  );
   const runtime = (
     globalThis as {
       EdgeRuntime?: { waitUntil?: (task: Promise<unknown>) => void };
     }
   ).EdgeRuntime;
   if (runtime && typeof runtime.waitUntil === "function") {
-    runtime.waitUntil(task);
+    runtime.waitUntil(safe);
   }
 }
 
@@ -4540,19 +4546,23 @@ async function loadContext(
     loadMany(
       config,
       `student_mastery?user_id=eq.${encodeURIComponent(userId)}&select=skill_key,level,score`,
-    ),
+      // R66: optional — a mastery hiccup must not kill the turn (empty = no tiers).
+    ).catch(() => [] as DbRow[]),
     loadMany(
       config,
       `lesson_resources?lesson_id=eq.${encodeURIComponent(lessonId)}&status=eq.published&order=created_at.asc&limit=16&select=id,title,description,resource_type,source_type,storage_bucket,storage_path,external_url,thumbnail_path,student_instructions,metadata,activity_id`,
-    ),
+      // R66: optional — a turn without resource cards beats no turn at all.
+    ).catch(() => [] as DbRow[]),
     loadMany(
       config,
       `resource_interactions?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&order=created_at.desc&limit=20&select=resource_id,event_type,progress_seconds,progress_percent,created_at`,
-    ),
+      // R66: optional telemetry-derived context.
+    ).catch(() => [] as DbRow[]),
     loadFirst(
       config,
       `profiles?id=eq.${encodeURIComponent(userId)}&select=name,grade,preferred_name,mentor_instructions&limit=1`,
-    ),
+      // R66: optional — an unnamed student still gets their turn.
+    ).catch(() => null),
     // Memory v1 (both best-effort — absent on any failure, never blocks the turn).
     loadFirst(
       config,
@@ -4637,7 +4647,7 @@ async function loadContext(
   // skills resolve in this same wave; empty → unfiltered, and the prompt caps at 3).
   const [milestone, activityQuiz, fallbackQuiz, misconceptions, resourceChunks, stepWork] =
     await Promise.all([
-      milestoneId
+      (milestoneId
         ? loadFirst(
             config,
             `milestones?id=eq.${encodeURIComponent(milestoneId)}&select=*`,
@@ -4645,7 +4655,9 @@ async function loadContext(
         : loadFirst(
             config,
             `milestones?lesson_id=eq.${encodeURIComponent(lessonId)}&order=position.asc&limit=1&select=*`,
-          ),
+          )
+      // R66: optional — the step prompt still carries the task without the objective.
+      ).catch(() => null),
       activity?.id
         ? loadFirst(
             config,
@@ -4661,12 +4673,14 @@ async function loadContext(
       loadMany(
         config,
         `student_misconceptions?user_id=eq.${encodeURIComponent(userId)}&status=eq.active${activitySkills.length ? `&skill_key=${inFilter(activitySkills)}` : ""}&order=last_seen_at.desc&limit=8&select=skill_key,pattern,hint,occurrences`,
-      ),
+        // R66: optional coaching context.
+      ).catch(() => [] as DbRow[]),
       resourceIds.length
         ? loadMany(
             config,
             `resource_text_chunks?resource_id=${inFilter(resourceIds)}&status=eq.approved&order=source_kind.asc,start_seconds.asc,page_number.asc,chunk_index.asc&limit=18&select=resource_id,page_number,chunk_index,chunk_text,status,source_kind,start_seconds,end_seconds`,
-          )
+            // R66: optional — teaching proceeds from the step prompt without chunks.
+          ).catch(() => [] as DbRow[])
         : Promise.resolve([] as DbRow[]),
       loadStepWork(config, userId, activity),
     ]);

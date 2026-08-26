@@ -1837,7 +1837,6 @@ Verified: 19 deno flow tests run live (kept-rung witnesses, a dissolved-shapes-
 fall-to-brief net that fails if any rung grows back, Elissar's four verbatim
 messages, movement/integrity properties, 2500-vector fuzz); 1055 python pins;
 deno-check signature parity with HEAD (the 8 pre-existing errors, none new).
-<<<<<<< HEAD
 
 ## R64.1 — revision pass: the record follows the mentor, and no rule waits for a ghost label (2026-08-26)
 
@@ -1886,8 +1885,6 @@ own branch), and a correct quiz tap on a quiz-bearing revision step was
 narrated as a stuck cap (now falls through to quiz_passed).
 
 Verified after round two: suite 1062 green, deno flow 21/21, parity exact.
-=======
->>>>>>> origin/main
 
 ## R65 — the recurring bubble had two stacked causes: a fatal stale pointer, and RLS-silenced evidence (2026-08-26)
 
@@ -1920,3 +1917,39 @@ Fixes (chat only, no schema):
 Verified: suite 1068 green (new test_r65_session_selfheal pins: no fatal branch,
 heal scoped to empty reads, recorded recurrence, no null-identity recorder
 calls, posture intact); deno flow 21/21; deno-check parity.
+
+## R66 — launch hardening: degrade, don't die; verify the LIVE path, not just the source (2026-08-26)
+
+Owner: schools launch in days — "why does it keep breaking? we can't have this
+happen at all later." The honest answer, recorded: every recent breakage lived
+in the seams the static suite is blind to by construction (RLS policies, live
+auth, session state, client caches, the model API), because everything ships
+straight to the production function with no live verification — and until R65
+the one generic student-safe bubble plus a broken failure recorder made every
+distinct failure look like the same recurring bug. Three layers close this:
+
+- scheduleBackground now defensively catches every task (an unhandled rejection
+  inside waitUntil can kill the isolate — one background hiccup must never cost
+  a student turn). Self-catching callers were a convention; now a guarantee.
+- Optional context reads are fail-soft (mastery, resources, interactions,
+  profile, milestone, misconceptions, chunks): a transient read costs that
+  garnish, never the turn. Integrity/correctness reads stay hard on purpose —
+  lesson, activities, recentTurns (idempotent replay), quiz rows (a transiently
+  "missing" quiz must never silently drop a quiz gate), stepWork (fail-closed).
+- A LIVE smoke test (scripts/smoke-live-turn.mjs + .github/workflows/
+  smoke-live.yml) signs in as a dedicated smoke STUDENT and drives real turns
+  against the DEPLOYED function after every deploy and on a 2-hour heartbeat:
+  password auth, the R65 stale-pointer self-heal, and a resume turn with a
+  non-empty mentor reply. A broken student path turns the workflow red (GitHub
+  emails the owner) instead of surfacing in a classroom. Needs SMOKE_EMAIL /
+  SMOKE_PASSWORD repo secrets (skips green with a loud warning until set).
+
+Standing recommendation, adopted: FEATURE FREEZE on the conversation engine
+until launch — R64 completed the architecture; remaining days are hardening
+and bug fixes only. The achievable launch standard (zero failures is not a
+real thing on networks and model APIs): failures are rare, invisible to
+students when they happen (self-heal or a retryable calm line), and visible
+to us with reasons (runtime_events now receives evidence — R65).
+
+Verified: suite 1073 green (new test_r66_launch_hardening), deno flow 21/21,
+deno-check parity.
