@@ -11797,6 +11797,7 @@ Discuss-only by old ladder parity; the R31e fact now also fires in Practice
 Suggested next task: owner replay of a live lesson (running_summary visibly
 rewriting every turn is the quickest slice-2 proof), then task #45 (real
 figure cropping) or Pillar 3 closure (task #20 — subsumed by this).
+<<<<<<< HEAD
 
 ## Claude -> Codex / Human - 2026-08-26 15:40
 
@@ -11845,3 +11846,5 @@ sessions past 500 student turns never re-arm it (unreachable in practice).
 unpresented — watch that mentors returning to Lesson re-present rather than
 assuming coverage (flow.presented false makes this explicit).
 Suggested next task: owner live replay; then task #45 (figure cropping).
+=======
+>>>>>>> origin/main
