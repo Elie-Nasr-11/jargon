@@ -11630,3 +11630,58 @@ student-visible inside the PDFs (owner accepted explicitly).
 Suggested next task: owner opens a lesson as a student — Resources panel shows
 the page images + 3 book PDFs; ask the mentor to "open the chapter pdf". Then
 task #45 (real figure cropping) or the compute upgrade decision.
+
+## Claude -> Codex / Human - 2026-08-26 10:05
+
+Status: Starting
+Task: R63 — mentor-steered pacing (owner: fix "breaking with simple spoken
+language" after Elissar's session; approved direction B of the brainstorm).
+Split the flow gates: PACING gates (teaching steps' acknowledge/uptake) obey a
+structured movement decision returned by the mentor model itself (full
+conversational context, no keyword taxonomy); INTEGRITY gates (graded quiz,
+assignment) stay machine-owned and refuse OUT LOUD. Widened continue/skip
+recognizers remain as router-outage fallback. Pace memory: repeated skip
+requests flip the session brisk (content-first, no ritual check-ins). Elissar's
+four verbatim messages become permanent fixtures.
+Files I expect to touch: supabase/functions/chat/index.ts (router taxonomy,
+recognizers, flow core applyTurn/deriveTurn/requirementsFor/turnDirective,
+mentor output contract, directives), tests/flow_core.test.ts,
+tests/test_r63_*.py (new), existing flow pins as needed, docs.
+Notes: found via prod transcript (session 689bd990) + code trace; router prompt
+literally filed "frustration" under meta. Deploy = chat function bump via CI.
+
+## Claude -> Codex / Human - 2026-08-26 11:20
+
+Status: Finished (R63 code — deploy + live verification tracked below)
+Summary: Mentor-steered pacing. The model now decides what the student meant;
+the machine only decides what the rules allow. (1) The mentor's output contract
+gains "movement": it judges skip/advance intent from full conversational
+context, and applyTurn honors it on PACING gates only (acknowledge +
+understanding) — code/quiz/linked-work gates are untouchable by construction
+and stepDone still holds the step. Movement passes the same register ceiling as
+a routed continue_signal and never fires in revisits. (2) The router taxonomy
+no longer files movement-demanding frustration under meta, and a new
+isSkipRequest recognizer (negation-led "no can we move on", polite-question
+"can we move on", demand restatements, elongated "gooooo", mashed "YESYES…",
+with refusal/interrogative vetoes) covers the router-outage fallback. (3)
+Integrity gates refuse OUT LOUD (quiz skip ask -> "this checkpoint can't be
+skipped — one tap and we move"); skip-shaped concludes drop the "Shall we
+continue?" ritual ("they already said go"). (4) Pace memory: briskPace() reads
+the last 8 turns (mentor movement verdicts + skip-shaped student rows, no
+schema) and flips teaching directives brisk — content first, no questions-
+window, one short ask max. (5) WHAT'S NEXT narration is bound to arc.next/
+arc.upcoming titles (Elissar was promised "processing" while the real next
+step was "Naming the purpose").
+Files changed: supabase/functions/chat/index.ts, tests/flow_core.test.ts (4 new
+deno tests; Elissar's four verbatim messages are permanent fixtures),
+tests/test_r63_mentor_pacing.py (14 pins), tests/test_turn_modes.py (ceiling
+count re-anchored 2->3 — the movement guard is a deliberate second call site).
+Tests run: deno flow suite 17/17 live; full suite 1037 OK; deno scratch check
+parity with HEAD (same 8 pre-existing chat errors, none new).
+Remaining concerns: live verification after deploy — boot a session as the demo
+student on itf-a1-ch1-l1 and send "no can we move on now"; expect step_advanced
+in the envelope flow. The mentor-movement path depends on the model honoring
+the new contract; the deterministic fallbacks (widened router taxonomy +
+isSkipRequest) both fire even if it doesn't.
+Suggested next task: owner replays Elissar's script end-to-end; then consider
+surfacing pace ("brisk") to the teacher live view.

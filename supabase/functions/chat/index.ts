@@ -347,7 +347,8 @@ stays invisible until the whole object lands):
   "inquiry": null,
   "link": null,
   "new_idea": null,
-  "mode_offer": null
+  "mode_offer": null,
+  "movement": null
 }
 Set understanding.demonstrated=true ONLY when the student's own words in the LATEST message are essentially
 correct and complete for THIS step's objective. When you spot a recurring conceptual error worth remembering,
@@ -373,7 +374,17 @@ Set "mode_offer" to { "mode": "practice" | "discuss", "topic": "<what to work on
 2-4 words like 'Practice this idea'>" } ONLY when a content beat just wrapped and one more rep (practice)
 or an open conversation (discuss) would genuinely serve THIS student on THIS topic. When you set it, the
 PILL carries the action — never also write the "try practicing X" / "think of three more Y" sentence in
-your prose; close short and let the button speak. Null on most turns.`;
+your prose; close short and let the button speak. Null on most turns.
+Set "movement" to "advance" when the student's LATEST message asks to move on, skip, or go faster — in ANY
+register: calm ("ok", "next", "ready"), impatient ("no can we move on now", "I said move on", "gooooo next
+fast"), or exasperated ("YESYESYES"). Setting it MOVES THE LESSON THIS TURN on teaching steps, so your reply
+must be a brief handoff: one or two sentences, NO new question about this step, no recap ritual — they said
+go, so go. Movement can never skip graded work: if a quiz choice, code run, or a submission is still owed on
+this step, leave movement null and SAY PLAINLY that this one piece needs doing before the lesson moves — never
+agree to move and then ask another question. Movement is about pace, not correctness: it does not mark
+anything right. Null on every other turn.
+WHAT'S NEXT: when you describe what is coming, use lesson.arc (arc.next and arc.upcoming carry the REAL next
+step titles, in order) — never guess, reorder, or promise a topic the arc doesn't show next.`;
 
 type Stage =
   | "intro"
@@ -495,6 +506,10 @@ type Envelope = {
   // established no flow fact (and on every envelope stored before the log existed);
   // the client falls back to inference for those.
   flow?: FlowEvent[];
+  // R63: the mentor's own movement decision for this turn ("advance" when it judged
+  // the student asked to move on). Rides the persisted payload so pace derivation
+  // and audits can see it; clients ignore it.
+  movement?: "advance" | null;
 };
 
 type EnvelopeSession = {
@@ -783,6 +798,8 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
       typeof partial.turn_kind === "string" ? partial.turn_kind : undefined,
     router_disagreement:
       partial.router_disagreement === true ? true : undefined,
+    // R63: the mentor's movement decision, persisted for pace derivation + audit.
+    movement: partial.movement === "advance" ? "advance" : undefined,
     artifact_offer:
       partial.artifact_offer &&
       typeof (partial.artifact_offer as { label?: unknown }).label === "string"
@@ -2288,10 +2305,13 @@ async function assessTurn(
     "TASK 1 — CLASSIFY the student\'s latest message. Kinds: " +
     '"answer_attempt" (they are answering/attempting the current step\'s task), ' +
     '"question" (they are asking the tutor something — clarification, curiosity, help), ' +
-    '"continue_signal" (they clearly signal readiness to move on: "ok", "next", "got it"), ' +
+    '"continue_signal" (they want the lesson to MOVE ON — in ANY register: calm readiness ("ok", "next", ' +
+    '"got it") and equally impatient or frustrated demands to advance, skip, or go faster ("no can we move ' +
+    'on now", "I said move on", "gooooo next fast", "YESYESYES", "skip this"). A message that both complains ' +
+    "and demands forward motion is continue_signal, not meta), " +
     '"navigate_back" (they want to RETURN to an earlier step: "can we go back to…", "redo the last part"), ' +
     '"tangent" (related-but-off-step exploration or chatter), ' +
-    '"meta" (about the lesson/process itself: summaries, frustration, logistics). ' +
+    '"meta" (about the lesson/process itself: summaries, logistics, or frustration WITHOUT a demand to move on). ' +
     "A message can contain both an attempt and a question — prefer answer_attempt when a " +
     "substantive attempt is present. ";
   // Grade the LATEST message only: crediting things said in earlier turns is exactly the
@@ -2552,6 +2572,84 @@ export const CONTINUE_SIGNAL_RE =
 export const CONTINUE_PHRASE_RE =
   /^(ok(ay)?|yes|yep|yeah|sure|got it|ready|alright|i'?m ready)?[\s,!.…—–-]*(please\s+)?(next( part| step| one| section)?|continue|move (on|forward)|keep going|go (on|ahead)|onward|let'?s (go|continue|move on|keep going|do it|head (there|over|on))|(head|take me) (there|over|to the next( part| step| one)?)|on to the next( part| step| one)?)[\s!.…]*$/i;
 
+// R63 (Elissar's session, live prod transcript): impatience doesn't look like
+// readiness. Every recognizer above is anchored for polite, affirmative-led
+// single clauses — and a frustrated student produces exactly the opposite
+// shapes: negation-led ("no can we move on now" — answering "ready?" while
+// demanding the skip), the polite-question form ("can we move on"), demand
+// restatements ("I said move on… next part od the lesson"), elongated verbs
+// ("gooooo next fast") and mashed affirmatives ("YESYESYEYSEYSYY…"). All four
+// of her verbatim messages are pinned fixtures in tests/flow_core.test.ts.
+// This recognizer is the router-outage fallback and the applyTurn legacy path;
+// the primary understanding lives with the LLM router + the mentor's own
+// movement signal. False-positive stance: only ever consulted on short
+// question-mark-free messages, and a wrong advance is recoverable (revisit),
+// while an unheard "move on" provably is not.
+// The motion vocabulary. Bare "go" is deliberately absent from the tail rule —
+// short ANSWERS end in it ("green means go"); the elongated form still lands
+// because "gooooo next fast" collapses to a "next … fast" tail.
+const SKIP_MOTION =
+  "(move on|next( part| step| one| section)?( o[fd] the lesson)?|skip( this| it| ahead)?|go (on|ahead|next)|keep going|continue|hurry( up)?|advance|proceed)";
+const SKIP_TRAILERS = "(( |,)?(please|now|fast|already|quickly))*";
+const SKIP_LEAD_RE = new RegExp(
+  `^no+[\\s,.!…]+(please\\s+)?((can|could|may)\\s+(we|i)\\s+|(let'?s|lets)\\s+|just\\s+)?(please\\s+)?(move on|skip|go|continue|next|keep going|advance|proceed)\\b`,
+  "i",
+);
+const SKIP_ASK_RE = new RegExp(
+  `^(please\\s+)?(can|could|may)\\s+(we|i)\\s+(please\\s+)?(just\\s+)?${SKIP_MOTION}\\b`,
+  "i",
+);
+// "i said …" restatement: the motion word must not itself be negated
+// ("i said don't move on" is the opposite instruction).
+const SKIP_DEMAND_RE =
+  /\bi (said|told you)\b[\s\S]{0,60}?(?<!don'?t )(?<!do not )(?<!not )\b(move on|next|skip|continue|keep going)\b/i;
+const SKIP_TAIL_RE = new RegExp(
+  `(?:^|[\\s,.!…—–-])${SKIP_MOTION}${SKIP_TRAILERS}[\\s!.…]*$`,
+  "i",
+);
+// Vetoes for the loose tail rule only: negated wishes and question-shaped
+// sentences typed without their question mark must never advance anything.
+const SKIP_NEGATION_RE = /\b(don'?t|do not|not|never|stop|wait|hold|won'?t|can'?t|cannot)\b/i;
+const SKIP_INTERROGATIVE_RE = /^(what|when|where|which|who|how|why|is|are|does|do you|tell me|can you|could you|would you|will you|should)\b/i;
+export function isSkipRequest(rawText: string): boolean {
+  const trimmed = (rawText || "").trim();
+  if (!trimmed || trimmed.length > 120 || trimmed.includes("?")) return false;
+  // Collapse letter runs of 3+ so "gooooo" reads as "go" and "yessss" as "yes".
+  const collapsed = trimmed.toLowerCase().replace(/([a-z])\1{2,}/g, "$1");
+  const lettersOnly = collapsed.replace(/[^a-z]/g, "");
+  // A message made ENTIRELY of mashed y/e/s letters is an exasperated yes.
+  if (lettersOnly.length >= 5 && /^[yes]+$/.test(lettersOnly)) return true;
+  if (SKIP_LEAD_RE.test(collapsed)) return true;
+  if (SKIP_ASK_RE.test(collapsed)) return true;
+  if (SKIP_DEMAND_RE.test(collapsed)) return true;
+  return (
+    collapsed.length <= 40 &&
+    !SKIP_NEGATION_RE.test(collapsed) &&
+    !SKIP_INTERROGATIVE_RE.test(collapsed) &&
+    SKIP_TAIL_RE.test(collapsed)
+  );
+}
+
+// R63: pace memory. Derived from the last few persisted turns — mentor movement
+// verdicts plus skip-shaped student messages — so it needs no schema and cools
+// off naturally as the spree ages out of the window. recentTurns is newest-first.
+export function briskPace(recentTurns: DbRow[]): boolean {
+  let signals = 0;
+  for (const turn of (recentTurns || []).slice(0, 8)) {
+    const role = String(turn?.role || "");
+    if (role === "mentor") {
+      const payload =
+        turn.payload && typeof turn.payload === "object" && !Array.isArray(turn.payload)
+          ? (turn.payload as DbRow)
+          : null;
+      if (payload && payload.movement === "advance") signals += 1;
+    } else if (role === "student" && isSkipRequest(String(turn?.content || ""))) {
+      signals += 1;
+    }
+  }
+  return signals >= 2;
+}
+
 // "Take me back to the loops step" — a navigation WISH, not a movement command: the
 // mentor points at the clickable stepper (movement stays on explicit control turns).
 // Deliberately narrow ("get back"/"be back" are idioms, not navigation) — this is only
@@ -2564,8 +2662,11 @@ const NAVIGATE_BACK_RE =
 export function heuristicKind(text: string): RouterVerdict {
   const trimmed = (text || "").trim();
   if (
-    trimmed.length <= 48 &&
-    (CONTINUE_SIGNAL_RE.test(trimmed) || CONTINUE_PHRASE_RE.test(trimmed))
+    (trimmed.length <= 48 &&
+      (CONTINUE_SIGNAL_RE.test(trimmed) || CONTINUE_PHRASE_RE.test(trimmed))) ||
+    // R63: the impatient register ("no can we move on now", "gooooo next fast")
+    // is a continue signal too — isSkipRequest carries its own guards.
+    isSkipRequest(trimmed)
   ) {
     return { kind: "continue_signal", confidence: 0.4 };
   }
@@ -3476,6 +3577,12 @@ export function applyTurn(
   // Flow v3: how the turn was routed. null = router unavailable → legacy behavior.
   // Code/MCQ turns are answer_attempt by construction (set by the caller).
   routedKind: RoutedKind | null = null,
+  // R63: the mentor model's own movement decision, made with full conversational
+  // context while writing the reply. "advance" discharges PACING gates only
+  // (acknowledge + understanding) — code, quiz, and linked-work gates are
+  // integrity and never move on anyone's say-so. The caller passes null when
+  // the register or a revisit forbids movement.
+  mentorMovement: "advance" | null = null,
 ): StepState {
   if (!before.presented_at) {
     // Round 22i (Portability transcript): presentation is what the MENTOR does, not what
@@ -3507,7 +3614,10 @@ export function applyTurn(
         answerContent(answer) &&
         (answer.mode === "text" || answer.mode === "file"),
     );
-    if (routedKind === "continue_signal") {
+    if (routedKind === "continue_signal" || mentorMovement === "advance") {
+      // R63: the mentor's movement verdict discharges a pacing gate even when the
+      // router filed the words elsewhere — "no can we move on now" was routed meta
+      // in the wild while the mentor understood it perfectly.
       after.acknowledged_at = nowIso;
     } else if (routedKind === "question" && stepMode === "inquiry") {
       // Inquiry steps track questions explicitly — the mentor answers, step stays open.
@@ -3516,16 +3626,32 @@ export function applyTurn(
       // Phase A (owner): Continue is THE advance verb; typed readiness presses it, and
       // nothing else typed ever advances a content step. The router-outage fallback
       // narrows accordingly — only a readiness-shaped message acknowledges; ordinary
-      // sentences leave the step open even with the router down.
+      // sentences leave the step open even with the router down. R63 adds the
+      // impatient register to the readiness shapes.
       const asksQuestion =
         stepMode === "inquiry" && isQuestionShaped(String(answer?.text || ""));
       if (asksQuestion) {
         after.question_count = before.question_count + 1;
-      } else if (CONTINUE_SIGNAL_RE.test(String(answer?.text || "").trim())) {
+      } else if (
+        CONTINUE_SIGNAL_RE.test(String(answer?.text || "").trim()) ||
+        isSkipRequest(String(answer?.text || ""))
+      ) {
         after.acknowledged_at = nowIso;
       }
     }
     // Routed question/tangent/meta/answer_attempt on content steps: stay open.
+  }
+  // R63: a mentor-judged advance also discharges the UNDERSTANDING pacing gate
+  // (reflection/revision/applied-practice) — the step wraps without a demonstrated
+  // pass, exactly like the stuck cap, because the student asked to move. Integrity
+  // gates (code, quiz, linked work) are untouched by design: stepDone still holds
+  // the step until they are genuinely met, so movement can never skip graded work.
+  if (
+    req.understanding &&
+    !after.understanding_at &&
+    mentorMovement === "advance"
+  ) {
+    after.understanding_at = nowIso;
   }
   // Deterministically graded failure (orchestrator source only — a mentor's free-form
   // assessment must never look like a failed graded attempt).
@@ -3699,6 +3825,9 @@ export function turnDirective(args: {
     figure: { id: string; title: string } | null;
     practiceBank: { prompt: string; expected: string } | null;
   };
+  // R63: pace memory — true when the recent turns show repeated asks to move
+  // faster. Optional so existing callers and tests stay valid.
+  briskPace?: boolean;
 }): TurnDirective {
   const {
     currentStage,
@@ -3727,6 +3856,11 @@ export function turnDirective(args: {
     brainHints,
   } = args;
   const stepWork = args.stepWork ?? null;
+  const brisk = args.briskPace ?? false;
+  // R63: this very message is a skip request ("no can we move on now") — concluding
+  // directives drop their closing-question ritual, and integrity holds say so plainly.
+  const skipShaped =
+    answer?.mode === "text" && isSkipRequest(String(answer?.text || ""));
 
   const quizActive = draftFlow.nextAction === "choose";
   const textStep = activityMode === "text" && requirements.understanding;
@@ -4015,6 +4149,16 @@ export function turnDirective(args: {
       Boolean(draftState.acknowledged_at) &&
       !quizActive
     ) {
+      // R63: a skip-shaped message already IS the answer to "shall we continue?" —
+      // closing with that question again is the agree-then-ask loop that trapped a
+      // real student for eight minutes. Honor it: one short close, zero new asks.
+      if (skipShaped) {
+        return {
+          key: `${stepMode}_concluded`,
+          text:
+            "They asked to move on — honor it. Close in ONE short sentence (no recap, no new question, no \"Shall we continue?\" — they already said go). If their message also asked for something concrete, serve that first, briefly.",
+        };
+      }
       const closing =
         stepMode === "media"
           ? "Respond briefly to what they said about the material, then conclude the step."
@@ -4111,7 +4255,13 @@ export function turnDirective(args: {
     if (quizActive && answer && answer.mode !== "multiple_choice") {
       return {
         key: "quiz_active_chat",
-        text: "The quiz options are already on screen and the student sent a chat message instead of tapping one. Respond to their message, then steer them back to tapping an answer — do not re-read or re-narrate the options.",
+        text:
+          "The quiz options are already on screen and the student sent a chat message instead of tapping one. Respond to their message, then steer them back to tapping an answer — do not re-read or re-narrate the options." +
+          // R63: an integrity gate refuses OUT LOUD — silence here is what reads as
+          // the mentor agreeing to move and then not moving.
+          (skipShaped
+            ? " They asked to SKIP: say plainly, in one friendly sentence, that this checkpoint is the one thing that can't be skipped — one tap on an answer and the lesson moves on immediately. Do not apologize at length or re-teach."
+            : ""),
       };
     }
     if (answer?.mode === "code" && assessment?.passed === false) {
@@ -4237,6 +4387,24 @@ export function turnDirective(args: {
   };
 
   const directive = pick();
+  // R63: pace memory. Once a student has repeatedly asked to move faster, every
+  // teaching-shaped directive carries the brisk contract — minimal framing, no
+  // ritual check-ins, no optional side-questions. Applied to the conversational
+  // and presenting branches only; graded branches keep their own rules.
+  if (
+    brisk &&
+    (directive.key === "present_step" ||
+      directive.key === "present_step_preempted" ||
+      directive.key === "content_discuss" ||
+      directive.key === "content_nudge" ||
+      directive.key === "explanation_pending" ||
+      directive.key === "meta_reply" ||
+      directive.key === "question_answer" ||
+      directive.key === "converse")
+  ) {
+    directive.text +=
+      " PACE: this student has repeatedly asked to move faster — be brisk. Two to three tight sentences, content first, no warm-up ritual, no optional side-question, no questions-window; if the step needs something from them, ask for exactly one thing in one short line.";
+  }
   // Round 22c (teen gauntlet): on GATED steps (code/quiz/understanding — anything that is
   // not acknowledge-gated) there is no Continue button, yet the mentor kept offering one
   // ("tap Continue if you'd like to move on" on a code-practice step, live). The
@@ -6961,6 +7129,7 @@ async function handleTypedRequest(
               topic: String(control.topic || "this idea").slice(0, 120),
             }
           : null,
+      briskPace: briskPace(context.recentTurns),
     });
     // Round 22i: conversation turns no longer stamp presented_at in applyTurn — the
     // stamp belongs to the turn whose directive ACTUALLY presents the step's material.
@@ -7573,6 +7742,17 @@ async function handleTypedRequest(
     // the mentor's self-reported understanding is only the fallback when no grader ran.
     const understanding =
       effectiveUnderstanding ?? parsedUnderstanding(parsed.understanding);
+    // R63: the mentor's movement decision, honored under the same rules as a routed
+    // continue_signal — never inside a revisit, and never in a register the ceiling
+    // wouldn't let advance (Discuss/Practice don't move lessons; the directive
+    // already answers those asks honestly). Integrity gates are enforced INSIDE
+    // applyTurn/stepDone, so this can only ever discharge pacing gates.
+    const mentorMovement: "advance" | null =
+      parsed.movement === "advance" &&
+      !inRevisit &&
+      applyModeCeiling(declaredMode, "continue_signal") === "continue_signal"
+        ? "advance"
+        : null;
     const finalState = applyTurn(
       stepStateBefore,
       requirements,
@@ -7582,6 +7762,7 @@ async function handleTypedRequest(
       turnStartedIso,
       stepMode,
       routedKind,
+      mentorMovement,
     );
     // Round 22i: the directive presented the step this turn (see presentsThisTurn) —
     // record it, since conversation-kind turns no longer stamp it inside applyTurn.
