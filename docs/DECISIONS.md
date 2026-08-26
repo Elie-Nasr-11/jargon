@@ -1864,3 +1864,24 @@ text/machinery; all fixed, no architecture change:
 - Legacy "text" steps are now named in the STEP TYPES reflection bullet.
 
 Verified: suite 1058 green (3 new pins), deno flow 19/19, deno-check parity.
+
+Second round (adversarial diff review, same day): the presented_at stamp now
+matches what the reply is TOLD to do — Discuss and artifact_ready turns never
+present, so neither stamps (the Round 22i hole the brief default had quietly
+reopened), and the presentation room facts ride the same guard; artifact turns
+carry an honest directive key ("artifact_ready"); flow.owed names only an
+ELIGIBLE quiz (an acknowledge-gated quiz step owed "an acknowledgement" first —
+the old wording deadlocked movement against options not yet on screen);
+flow.step.kind restores the response-mode axis so a code-mode practice step
+reads the code contract, not reflection; the no-button denial moved off the
+directive tail into flow.room, making a brief directive genuinely EMPTY; the
+summary refresher re-checks summarized_turns before patching (no clobbering a
+fresher mentor summary) and the mentor's rewrite is stored even on the
+completing turn; the dead router_disagreement wire field is deleted end-to-end;
+a page of router-era comments now tell the truth about heuristicKind being the
+only pre-model draft. Two pre-existing bugs fixed on the way: the R31e
+way-back pill's accept turn fell into the DISCUSS script (lesson now has its
+own branch), and a correct quiz tap on a quiz-bearing revision step was
+narrated as a stuck cap (now falls through to quiz_passed).
+
+Verified after round two: suite 1062 green, deno flow 21/21, parity exact.

@@ -1287,7 +1287,6 @@ export type TypedChatEnvelope = {
     status: string;
   } | null;
   turn_kind?: string;
-  router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for this student. Live-turn only
   // (never replayed on reload).
   artifact_offer?: { label: string; kind: "html_sim" | "deck"; activity_id: string } | null;

@@ -11810,3 +11810,38 @@ plus confirmed findings from the adversarial diff review.
 Files I expect to touch: supabase/functions/chat/index.ts, tests
 (test_r64_context_first + any moved pins), docs.
 Notes: no architecture change; gates/ceiling/integrity untouched.
+
+## Claude -> Codex / Human - 2026-08-26 16:20
+
+Status: Finished
+Summary: R64.1 — two-round revision of the shipped context-first
+architecture. Round one (self-audit): shape rule re-keyed off student_action
+(the directive no longer names conversation turns); closes ANNOUNCED via a
+flow.room fact instead of inferred from an "empty" directive; practice
+way-back fact owns the single ask; missOverridden drops the heuristic
+open-ended miss from the persisted record when the mentor classified a
+non-attempt; legacy text steps named in STEP TYPES. Round two (adversarial
+diff review, all confirmed): presented_at stamp + presentation room facts
+gated to LESSON register and non-artifact turns (Round 22i hole); artifact
+override sets key "artifact_ready"; flow.owed uses quizEligible (ack-gated
+quiz deadlock); flow.step.kind restores the response-mode axis (code-mode
+practice != reflection); no-button denial moved to flow.room (brief directive
+now genuinely empty); refreshRunningSummary re-checks summarized_turns before
+patching + mentor summary stored on the completing turn; router_disagreement
+wire field deleted (server type, makeEnvelope, frontend types.ts);
+router-era comments rewritten to the heuristic-draft truth; pre-existing
+fixes: mode_offer_accept "lesson" branch, revision_stuck MCQ-pass guard.
+Files changed: supabase/functions/chat/index.ts, frontend/src/lib/types.ts,
+tests/flow_core.test.ts (21 tests), tests/test_r64_context_first.py, docs.
+Tests run: python 1062 passed / 4 skipped; deno flow 21/21 via harness;
+deno-check signature parity with HEAD (8 pre-existing, none new).
+Remaining concerns: (1) declined as benign/pre-existing, documented here:
+mentorAction coerces code turns to answer_attempt without the register
+ceiling (inert in applyTurn's code branch; telemetry-only skew) and lacks an
+!inRevisit guard (transient churn on a throwaway revisit state row that
+resume overwrites); the fallback summarizer's limit=500 count cap means
+sessions past 500 student turns never re-arm it (unreachable in practice).
+(2) In Discuss on an unpresented step the material now correctly stays
+unpresented — watch that mentors returning to Lesson re-present rather than
+assuming coverage (flow.presented false makes this explicit).
+Suggested next task: owner live replay; then task #45 (figure cropping).
