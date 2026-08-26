@@ -483,16 +483,32 @@ Deno.test("directive: every dissolved shape now yields the brief default", () =>
     mutate(args);
     const got = turnDirective(args);
     eq(got.key, "brief", `dissolved '${old}' must fall to brief, selected '${got.key}'`);
-    // The brief default carries no SCRIPT — at most the mechanical no-button clause
-    // (gated steps) that every rung shares. Anything else is a rung growing back.
-    const residue = got.text
-      .replace(
-        " (There is NO Continue button on this step — never tell the student to tap Continue or say they can move on with a button; this step only advances when the work it asks for passes.)",
-        "",
-      )
-      .trim();
-    eq(residue, "", `brief carries no script (dissolved '${old}')`);
+    // R64.1: the brief default is genuinely EMPTY — the no-button denial moved to a
+    // flow.room fact at the call site. Any text here is a rung growing back.
+    eq(got.text, "", `brief carries no script (dissolved '${old}')`);
   }
+});
+
+Deno.test("R64.1: a correct quiz tap on a quiz-bearing revision step is a pass, not a stuck cap", () => {
+  const args = baseArgs();
+  args.stepMode = "revision" as never;
+  args.requirements = req({ quiz: true, quizChoices: [{ id: "a" }] as never });
+  args.answer = { mode: "multiple_choice", choice_id: "a" } as never;
+  args.assessment = { score: 1, passed: true, feedback: "", source: "orchestrator" } as never;
+  args.draftState.quiz_passed_at = T0;
+  args.stepStateBefore.quiz_presented_at = T0;
+  args.draftFlow = { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
+  const got = turnDirective(args);
+  eq(got.key, "quiz_passed", "the pass owns the conclusion — never revision_stuck");
+});
+
+Deno.test("R64.1: the lesson way-back pill gets its own script, not the discuss one", () => {
+  const args = baseArgs();
+  args.modeOfferAccept = { mode: "lesson", topic: "pick the lesson back up" } as never;
+  const got = turnDirective(args);
+  eq(got.key, "mode_offer_accept", "the accept rung owns the tap");
+  ok(got.text.includes("way BACK to the lesson"), "the lesson branch speaks");
+  ok(!got.text.includes("discuss pill"), "the discuss script must not claim the lesson tap");
 });
 
 // The retired keys must never be minted again — by the fuzz (below, via KNOWN_KEYS)

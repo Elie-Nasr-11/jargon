@@ -1837,3 +1837,54 @@ Verified: 19 deno flow tests run live (kept-rung witnesses, a dissolved-shapes-
 fall-to-brief net that fails if any rung grows back, Elissar's four verbatim
 messages, movement/integrity properties, 2500-vector fuzz); 1055 python pins;
 deno-check signature parity with HEAD (the 8 pre-existing errors, none new).
+<<<<<<< HEAD
+
+## R64.1 — revision pass: the record follows the mentor, and no rule waits for a ghost label (2026-08-26)
+
+Owner: "please revise", straight after R64 shipped. A fresh audit of the live prompt
+and code found four coherence gaps between the new regime's promises and leftover
+text/machinery; all fixed, no architecture change:
+
+- The CONVERSATION CRAFT shape rule still said "the directive names these" — a label
+  the dissolved ladder never sends. Both shape lines now key off the mentor's own
+  student_action verdict.
+- Brief-turn closes triggered on "flow.owed nothing AND the directive carries no
+  other event" — mushy when a close coincided with a resource clause or the
+  no-button note (the R34 voice-behind-record family). The close is now ANNOUNCED:
+  a flow.room fact ("This reply ENDS the step…", with the skip-shaped one-liner
+  variant) fires exactly when a pacing gate newly stamped on a brief turn with no
+  live quiz; CLOSING A STEP keys off the announcement.
+- In Practice, the R31e way-back room fact and the practice_register rung stacked
+  two asks; the fact now overrides the next exercise for that turn (EXACTLY ONE ASK).
+- missOverridden: the pre-model open-ended miss (heuristic answer_attempt + grader
+  not-passed) was the one surface where a keyword heuristic could still MARK a
+  student. When the mentor's student_action says the message was not an attempt,
+  the miss is dropped from everything that persists (fold, graded_fails, attempt
+  row, needs_retry, envelope grade) — completing "the mentor is authoritative";
+  deterministic quiz/code grades can never match the gate (reference equality).
+- Legacy "text" steps are now named in the STEP TYPES reflection bullet.
+
+Verified: suite 1058 green (3 new pins), deno flow 19/19, deno-check parity.
+
+Second round (adversarial diff review, same day): the presented_at stamp now
+matches what the reply is TOLD to do — Discuss and artifact_ready turns never
+present, so neither stamps (the Round 22i hole the brief default had quietly
+reopened), and the presentation room facts ride the same guard; artifact turns
+carry an honest directive key ("artifact_ready"); flow.owed names only an
+ELIGIBLE quiz (an acknowledge-gated quiz step owed "an acknowledgement" first —
+the old wording deadlocked movement against options not yet on screen);
+flow.step.kind restores the response-mode axis so a code-mode practice step
+reads the code contract, not reflection; the no-button denial moved off the
+directive tail into flow.room, making a brief directive genuinely EMPTY; the
+summary refresher re-checks summarized_turns before patching (no clobbering a
+fresher mentor summary) and the mentor's rewrite is stored even on the
+completing turn; the dead router_disagreement wire field is deleted end-to-end;
+a page of router-era comments now tell the truth about heuristicKind being the
+only pre-model draft. Two pre-existing bugs fixed on the way: the R31e
+way-back pill's accept turn fell into the DISCUSS script (lesson now has its
+own branch), and a correct quiz tap on a quiz-bearing revision step was
+narrated as a stuck cap (now falls through to quiz_passed).
+
+Verified after round two: suite 1062 green, deno flow 21/21, parity exact.
+=======
+>>>>>>> origin/main

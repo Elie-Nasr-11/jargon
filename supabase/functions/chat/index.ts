@@ -108,9 +108,11 @@ CONVERSATION CRAFT — every turn:
   it and change tactic. A breakthrough ("oh, I get it") -> affirm briefly and move on.
 - If they say something incorrect, correct that specific point clearly and kindly. If a known misconception
   from student.misconceptions resurfaces, correct it directly.
-- Shape on ATTEMPT turns (the directive names grading/attempt situations): acknowledge their message ->
+- Shape on ATTEMPT turns (they worked the step's task — your own "student_action" verdict and any
+  graded result in the directive name these): acknowledge their message ->
   do this step's work -> situate in the arc when it helps -> end with exactly ONE clear next action.
-- Shape on CONVERSATION turns (questions, tangents, discussion — the directive names these too): reply
+- Shape on CONVERSATION turns (questions, tangents, discussion — everything your "student_action"
+  verdict reads as not an attempt): reply
   like a person, not a lesson plan. Multiple beats are fine; answer fully first; you do NOT need to end
   with a question or next action every time — the step's own task is still on screen.
 - NEVER OPEN WITH PRAISE YOU HAVE NOT CHECKED. Decide whether the answer is right BEFORE you write
@@ -210,8 +212,11 @@ quiz steps are unaffected — keep giving brief targeted feedback on why a wrong
 as the quiz rules say.
 
 STEP TYPES — flow.step.type says what kind of step you are on; each type has its own contract.
-PRESENTING: when flow.presented is false and no directive event says otherwise, THIS reply presents
-the step (serve anything their message asked FIRST, then present). SIZE: keep a presentation to about
+PRESENTING: when flow.presented is false, the register is LESSON, and no directive event says
+otherwise, THIS reply presents
+the step (serve anything their message asked FIRST, then present). (In PRACTICE or DISCUSS an
+unpresented step stays unpresented — explore or drill per that register; the material is taught
+when they return to the lesson.) SIZE: keep a presentation to about
 60-80 words — one idea, not a summary of the whole topic — and close by asking them for something
 specific they must produce (an example, their own wording, a prediction). Never close a presentation
 with "does that make sense", "any questions", or an invitation to tap anything. When the step centers
@@ -222,7 +227,8 @@ them. The types:
   student-produces-the-conclusion rule does not apply here); invite their questions and thoughts.
   The step is owed only their go-ahead: once they have engaged,
   close by ASKING whether to move on — their reply is what advances the lesson.
-- "reflection" (and text-mode "practice") — the STUDENT must articulate the step's idea in their own
+- "reflection" (and text-mode "practice", and legacy "text" steps) — the STUDENT must articulate the
+  step's idea in their own
   words; every explanation/reflection rule above applies. The grader credits ONLY what their latest
   message contains by itself, so when only a piece is missing, ask them to put the WHOLE idea
   together in one message — fragments spread across turns never pass.
@@ -249,7 +255,9 @@ them. The types:
   never re-teach or hand them the answer before they try.
 - "assessment" — EVALUATION, not teaching: the no-teaching rule above, in both presentation and
   feedback.
-- code steps — the directive carries each run's verdict; the code rules below apply.
+- code steps — flow.step.kind reads "code" (whatever the type says: a "practice" step whose work is
+  a code run is a code step, never a reflection): the directive carries each run's verdict; the code
+  rules below apply, and the articulate-in-their-own-words contract does not.
 
 PROJECT ASSIST: when the student wants to PREPARE something from the lesson — a presentation, an
 essay, a speech, a poster — help them build it without doing it for them. First ask what they're
@@ -335,8 +343,10 @@ GOVERNANCE:
 - "resources": when the directive says card(s) are attached below your reply, tell the student to tap Open on
   the card — never say you can't share it. Never claim a resource was viewed unless resource_interactions
   proves it. Cite document chunks by resource title/page and audio/video chunks by title/time range.
-CLOSING A STEP: when flow.owed reads "nothing" on a presented step and the directive carries no
-other event — or when a directive itself says the step is ending — THIS reply ENDS the step. (A
+
+CLOSING A STEP: when flow.room announces "This reply ENDS the step" — or a directive itself says
+the step is ending — it does: close it here. (flow.owed reading "nothing" on a presented step is
+the same truth seen mechanically; and a
 revisit never ends anything.) FIRST serve the ask: if the student's latest message asked for
 anything — a list, a rephrasing, an example, a question about the material — DO THAT FULLY before
 you close. Never wrap up over an unanswered request; if serving it takes the whole reply, serve it
@@ -356,6 +366,7 @@ never announce completion mechanically (no "that completes…", no "step N of M 
 recite the next part's title — the interface marks the change with a divider. If one more rep or an open
 conversation would genuinely serve them here, set mode_offer (the pill carries that action — never
 also write it as a sentence).
+
 CLOSING A LESSON: before you wrap the LESSON up (not an individual step), the student must have
 (a) met the lesson's stated objective and (b) shown they know the new vocabulary this lesson
 introduced. Check both in the closing exchange: ask them to state the objective's idea in their own
@@ -585,9 +596,10 @@ type Envelope = {
     note: string;
   }[];
   idea_events?: { key: string; title: string; one_liner: string; subject: string }[];
-  // Flow v3 (all optional — old clients ignore them, old stored payloads replay fine):
-  // the router's verdict for this turn and the router-vs-grader disagreement flag
-  // (tuning telemetry). Pillar 5: continue_offer left the wire — R31b removed the
+  // Flow v3 (all optional — old clients ignore them, old stored payloads replay fine).
+  // turn_kind: the kind that actually drove the persisted fold (R64: the mentor's
+  // ceilinged student_action, or the heuristic draft when it was omitted).
+  // Pillar 5: continue_offer left the wire — R31b removed the
   // Continue button, the surface never rendered the offer again, and a contract with
   // no consumer is exactly what this rebuild retires. Old stored payloads keep the
   // key at rest; makeEnvelope simply no longer copies it. The `continue` CONTROL is
@@ -597,7 +609,6 @@ type Envelope = {
   // replay unchanged; the client hides a pill it has no signal for rather than guessing.
   available?: { quiz: boolean; homework: boolean; resources: boolean };
   turn_kind?: string;
-  router_disagreement?: boolean;
   // P8: consent-first offer to build a live activity for THIS student (never
   // auto-build). Tri-state: a value offers, null clears, absent leaves client state.
   artifact_offer?: { label: string; kind: "html_sim" | "deck"; activity_id: string } | null;
@@ -631,9 +642,9 @@ type Envelope = {
   // the student asked to move on). Rides the persisted payload so pace derivation
   // and audits can see it; clients ignore it.
   movement?: "advance" | null;
-  // R64 slice 1: the mentor's own classification of what the student's message DID.
-  // Authoritative for the persisted state fold (turn_kind keeps the router's verdict,
-  // so a disagreement is visible in the stored payload); clients ignore it.
+  // R64: the mentor's own classification of what the student's message DID — the
+  // RAW claim, persisted beside the ceilinged turn_kind so a register-capped or
+  // guarded verdict stays auditable from the stored payload; clients ignore it.
   student_action?: string;
 };
 
@@ -921,12 +932,10 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
     // wire and the client dropped it with the button.)
     turn_kind:
       typeof partial.turn_kind === "string" ? partial.turn_kind : undefined,
-    router_disagreement:
-      partial.router_disagreement === true ? true : undefined,
     // R63: the mentor's movement decision, persisted for pace derivation + audit.
     movement: partial.movement === "advance" ? "advance" : undefined,
-    // R64: the mentor's turn classification, persisted next to the router's
-    // turn_kind so disagreements are auditable from the stored payload alone.
+    // R64: the mentor's RAW turn classification, persisted next to the ceilinged
+    // turn_kind so a capped or guarded verdict is auditable from the payload alone.
     student_action:
       typeof partial.student_action === "string" &&
       ROUTED_KINDS.has(partial.student_action)
@@ -2575,13 +2584,15 @@ async function checkCodeObjective(
   }
 }
 
-// --- Turn router (Flow v3) ---------------------------------------------------
-// Classifies every free-text student turn so questions/tangents route to CONVERSATION
-// (they never grade and never acknowledge a content step) while genuine attempts keep
-// feeding the deterministic gates. The router runs IN PARALLEL with the graders — its
-// verdict MASKS grader output downstream instead of gating the calls upstream, so it
-// adds zero serial latency. Any router error degrades to heuristicKind(), which
-// reproduces the pre-router behavior exactly: an outage can never brick a lesson.
+// --- Turn kinds (Flow v3 -> R64) ----------------------------------------------
+// A turn's KIND decides what it may touch: questions/tangents are CONVERSATION (they
+// never grade and never acknowledge a content step) while attempts feed the
+// deterministic gates. R64 deleted the LLM router that once assigned kinds pre-model:
+// heuristicKind() below drafts a kind for the pre-model machinery (directive rungs,
+// the world brief, the draft fold), and the MENTOR's own student_action — judged with
+// the whole conversation in view — supersedes it at the persisted fold. The kind
+// MASKS grader output downstream instead of gating calls upstream, so a misdraft can
+// never brick a lesson.
 
 export type RoutedKind =
   | "answer_attempt"
@@ -2599,10 +2610,11 @@ type RouterVerdict = { kind: RoutedKind; confidence: number };
 // lesson_activities.mode, which is a property of the STEP ("what finishes this step?").
 // The eight authored step types are untouched by this.
 //
-// The declared mode sets a CEILING on what a turn may discharge; the router still
-// classifies WITHIN that ceiling. That distinction matters: if declaring "practice"
-// forced every message to be an answer_attempt, asking a question mid-practice would
-// count as a graded failure. Declared mode restricts, it never relabels.
+// The declared mode sets a CEILING on what a turn may discharge; the kind (heuristic
+// draft and mentor verdict alike) is still judged WITHIN that ceiling. That
+// distinction matters: if declaring "practice" forced every message to be an
+// answer_attempt, asking a question mid-practice would count as a graded failure.
+// Declared mode restricts, it never relabels.
 //
 // 'checkpoints' is deliberately absent — it is a view-only surface that opens the work
 // dock and never sends a turn.
@@ -2673,9 +2685,9 @@ export const CONTINUE_PHRASE_RE =
 // restatements ("I said move on… next part od the lesson"), elongated verbs
 // ("gooooo next fast") and mashed affirmatives ("YESYESYEYSEYSYY…"). All four
 // of her verbatim messages are pinned fixtures in tests/flow_core.test.ts.
-// This recognizer is the router-outage fallback and the applyTurn legacy path;
-// the primary understanding lives with the LLM router + the mentor's own
-// movement signal. False-positive stance: only ever consulted on short
+// This recognizer is the deterministic pre-model draft and the applyTurn legacy
+// path; the primary understanding lives with the mentor's own movement +
+// student_action verdicts. False-positive stance: only ever consulted on short
 // question-mark-free messages, and a wrong advance is recoverable (revisit),
 // while an unheard "move on" provably is not.
 // The motion vocabulary. Bare "go" is deliberately absent from the tail rule —
@@ -2745,13 +2757,15 @@ export function briskPace(recentTurns: DbRow[]): boolean {
 
 // "Take me back to the loops step" — a navigation WISH, not a movement command: the
 // mentor points at the clickable stepper (movement stays on explicit control turns).
-// Deliberately narrow ("get back"/"be back" are idioms, not navigation) — this is only
-// the router-outage fallback; the LLM router owns the nuanced cases.
+// Deliberately narrow ("get back"/"be back" are idioms, not navigation) — this only
+// drafts the pre-model kind; the mentor's student_action owns the nuanced cases.
 const NAVIGATE_BACK_RE =
   /\b(go|going|take me|jump|head) back\b|\bredo (the|that|an?) (earlier|last|previous)\b|\brevisit\b/i;
 
-// The pre-router heuristics, composed. Used when the router call fails or is skipped —
-// its classifications intentionally mirror what the old code paths keyed on.
+// The deterministic kind DRAFT, composed. R64: this is the ONLY pre-model classifier
+// (the LLM router is gone) — it shapes the kept directive rungs, the world brief and
+// the draft fold on every free-text turn, and its fall-through default is
+// answer_attempt. The mentor's student_action supersedes it at the persisted fold.
 export function heuristicKind(text: string): RouterVerdict {
   const trimmed = (text || "").trim();
   if (
@@ -3667,8 +3681,10 @@ export function applyTurn(
   understanding: Understanding | null,
   nowIso: string,
   stepMode: LearningMode | null = null,
-  // Flow v3: how the turn was routed. null = router unavailable → legacy behavior.
-  // Code/MCQ turns are answer_attempt by construction (set by the caller).
+  // Flow v3 -> R64: the turn's kind (the caller passes the heuristic draft for the
+  // pre-model fold and the mentor-superseded foldKind for the persisted one).
+  // null = no kind derivable → legacy behavior. Code/MCQ turns are answer_attempt
+  // by construction (set by the caller).
   routedKind: RoutedKind | null = null,
   // R63: the mentor model's own movement decision, made with full conversational
   // context while writing the reply. "advance" discharges PACING gates only
@@ -3699,8 +3715,8 @@ export function applyTurn(
   // readiness signal routed as continue_signal. Questions, discussion, and tangents keep
   // the step open so the student can actually converse with the material (the mentor
   // nudges toward Continue after a long dwell via the directive, never via the gate).
-  // Legacy fallback (router unavailable): any non-question contentful text acknowledges,
-  // matching pre-router behavior so a router outage can't trap anyone.
+  // Legacy fallback (kind null — e.g. file answers): only readiness-shaped text
+  // acknowledges, so a missing kind can't trap anyone or advance on ordinary prose.
   if (req.acknowledge && !after.acknowledged_at) {
     const contentfulText = Boolean(
       answer &&
@@ -4007,14 +4023,19 @@ export function turnDirective(args: {
       };
     }
     // Phase A: the student tapped a mode hand-off pill — start that register NOW, on
-    // that topic. Wins over the general register branches; grades nothing.
+    // that topic. Wins over the general register branches; grades nothing. R64.1
+    // (review): "lesson" gets its own branch — the R31e way-back pill used to fall
+    // into the DISCUSS script, telling the mentor "nothing here grades or advances"
+    // on the very tap whose whole point was returning to the spine.
     if (modeOfferAccept) {
       return {
         key: "mode_offer_accept",
         text:
           modeOfferAccept.mode === "practice"
             ? `They tapped the practice pill for "${modeOfferAccept.topic}". Start PRACTICE on it NOW: one sentence of framing at most, then pose ONE exercise on that topic and wait for their attempt. No recap, no list of questions.`
-            : `They tapped the discuss pill for "${modeOfferAccept.topic}". Open the conversation NOW with ONE inviting question about it — explore freely, follow their thinking; nothing here grades or advances.`,
+            : modeOfferAccept.mode === "lesson"
+              ? "They tapped the way BACK to the lesson. Pick the spine up NOW: in one or two lines, restate this step's open task or question plainly and carry on teaching — no recap of the detour, no new pleasantries. This tap itself grades nothing; the lesson moves when the step's work does."
+              : `They tapped the discuss pill for "${modeOfferAccept.topic}". Open the conversation NOW with ONE inviting question about it — explore freely, follow their thinking; nothing here grades or advances.`,
       };
     }
     // Phase A: PRACTICE owns its register. The mode ceiling already keeps lesson gates
@@ -4080,7 +4101,11 @@ export function turnDirective(args: {
       presentedBefore &&
       !quizActive &&
       stepConcluding &&
-      !gradedUnderstanding?.demonstrated
+      !gradedUnderstanding?.demonstrated &&
+      // R64.1 (review, pre-existing): a CORRECT quiz tap on a quiz-bearing revision
+      // step also arrives here concluding with no text verdict — that's a pass, not
+      // a stuck cap; let it fall through to quiz_passed.
+      answer?.mode !== "multiple_choice"
     ) {
       return {
         key: "revision_stuck",
@@ -4214,22 +4239,9 @@ export function turnDirective(args: {
 
   const directive = pick();
   // (R63 pace memory now rides flow.pace — the SYSTEM prompt's BRISK rule reads it
-  // every turn, scripted rung or brief, so no per-key mutation is needed here.)
-  // Round 22c (teen gauntlet): on GATED steps (code/quiz/understanding — anything that is
-  // not acknowledge-gated) there is no Continue button, yet the mentor kept offering one
-  // ("tap Continue if you'd like to move on" on a code-practice step, live). The
-  // acknowledge-step directives describe the button when it exists; this is the mirror —
-  // an explicit denial whenever it doesn't. Skipped for revisit frames (their button is
-  // "Return to where you were") and completed lessons (post_completion carries its own line).
-  if (
-    !requirements.acknowledge &&
-    !inRevisit &&
-    navAction !== "revisit" &&
-    currentStage !== "complete"
-  ) {
-    directive.text +=
-      " (There is NO Continue button on this step — never tell the student to tap Continue or say they can move on with a button; this step only advances when the work it asks for passes.)";
-  }
+  // every turn, scripted rung or brief, so no per-key mutation is needed here. The
+  // Round 22c no-Continue-button denial for gated steps moved to a flow.room fact at
+  // the call site for the same reason: a brief directive is now genuinely EMPTY.)
   if (attachedResources.length) {
     const titles = attachedResources
       .map((resource) => `"${resource.title}"`)
@@ -5665,6 +5677,15 @@ async function refreshRunningSummary(
     );
     const summary = String(result.content || "").trim().slice(0, 1200);
     if (!summary) return;
+    // R64.1 (review): this task blocked on a model call between reading
+    // summarized_turns and patching — a mentor flow_summary landing meanwhile
+    // (storeMentorFlowSummary) must not be clobbered by this staler merge, nor
+    // summarized_turns rolled backwards. Re-read and stand down if it moved.
+    const latest = await loadFirst(
+      config,
+      `learning_sessions?id=eq.${encodeURIComponent(sessionId)}&select=summarized_turns`,
+    );
+    if (latest && Number(latest.summarized_turns || 0) !== summarized) return;
     await patchRows(config, `learning_sessions?id=eq.${encodeURIComponent(sessionId)}`, {
       running_summary: summary,
       summarized_turns: studentCount,
@@ -6756,9 +6777,10 @@ async function handleTypedRequest(
     // mode. Their ANSWER was being read back to them as a QUESTION.
     const attemptCeilinged =
       routedKindRaw === "answer_attempt" && routedKind !== "answer_attempt";
-    // (R64: router_disagreement telemetry retired with the router itself — the stored
-    // payload now carries turn_kind (the fold that actually happened) next to
-    // student_action, so disagreements between draft and mentor stay queryable.)
+    // (R64: the old router-vs-grader disagreement telemetry retired with the router
+    // itself, wire field included in R64.1 — the stored payload carries turn_kind
+    // (the ceilinged fold that happened) next to the RAW student_action instead, so
+    // capped or guarded verdicts stay queryable.)
     // --- Flow v3 P4: pre-emption notes ---------------------------------------
     // The grader may flag that this message ALSO covered upcoming step objectives.
     // Recorded as NOTES only — when the step arrives it's delivered compressed (credit
@@ -6967,9 +6989,18 @@ async function handleTypedRequest(
     // R64: the brief default presents whenever the step hasn't been shown (STEP TYPES:
     // "when flow.presented is false, THIS reply presents"), so it stamps too; kept
     // event rungs on unpresented steps (a live quiz, a mode pill) do not present.
+    // R64.1 (review): the stamp must match what the reply is TOLD to do — Discuss
+    // replies never present the lesson step (the register note says exploration, and
+    // stamping here re-opened the Round 22i hole: a Discuss chat "presenting" a step
+    // whose material was never shown), and an artifact_ready reply is explicitly
+    // forbidden to re-teach. Practice can't reach brief-on-unpresented (its register
+    // rung owns those turns); legacy-null clients keep lesson semantics.
     const presentsThisTurn =
       directive.key === "present_step" ||
-      (directive.key === "brief" && !presentedBefore);
+      (directive.key === "brief" &&
+        !presentedBefore &&
+        !artifactReadyResource &&
+        (declaredMode === null || declaredMode === "lesson"));
     // P4: on the turn that DETECTED pre-emption, let the mentor nod at it without
     // teaching ahead — the credit is delivered when the pre-empted step arrives.
     if (preemptedHits.length) {
@@ -7008,8 +7039,11 @@ async function handleTypedRequest(
     }
     // P8: the student just accepted the build offer and artifact-live finished — this
     // turn PRESENTS the card. Full override: the composed directive would otherwise
-    // read this empty-text control turn as ordinary conversation.
+    // read this empty-text control turn as ordinary conversation. R64.1: the key is
+    // overridden too, so teaching_move records the honest label and presentsThisTurn
+    // (computed above, artifact-guarded) never mistakes this for a step presentation.
     if (artifactReadyResource) {
+      directive.key = "artifact_ready";
       directive.text =
         "You just built a small interactive activity for this student — the card is " +
         "attached below your reply. In one or two short lines, invite them to tap Run " +
@@ -7098,7 +7132,11 @@ async function handleTypedRequest(
         ? "a submission"
         : requirements.code && !draftState.code_passed_at
           ? "a code run"
-          : requirements.quiz && !draftState.quiz_passed_at
+          : // R64.1 (review): only an ELIGIBLE quiz is owed — on an acknowledge-gated
+            // quiz step the options are not on screen until the go-ahead lands, and
+            // naming "a quiz tap" there pointed the mentor (and the movement rule) at
+            // a control that doesn't exist yet, deadlocking the acknowledge gate.
+            requirements.quiz && quizEligible(draftState, requirements)
             ? "a quiz tap"
             : requirements.understanding && !draftState.understanding_at
               ? "their own words"
@@ -7107,7 +7145,9 @@ async function handleTypedRequest(
                 : "nothing";
     const flowRoom: string[] = [];
     if (!inRevisit) {
-      if (directive.key === "brief" && !presentedBefore) {
+      // Presentation facts ride only when this reply actually presents (same guard
+      // as the presented_at stamp — Discuss/artifact turns get neither).
+      if (presentsThisTurn && directive.key === "brief") {
         const openEndedHere =
           stepMode === "assessment" && stepModeType === "open_ended";
         // P4 pre-emption credit — delivered compressed, never skipped. Suppressed on
@@ -7136,11 +7176,38 @@ async function handleTypedRequest(
       }
       // (The dwell counter the escalation rules read is flow.attempts, not a room
       // sentence — numbers beat prose for facts the model must compare.)
+      // R64.1: the CLOSE is announced, never inferred. When this turn's draft fold
+      // left the step owed nothing and no event rung fired, say outright that this
+      // reply ends the step — the earlier "directive looks empty" inference misread
+      // closes that happened to carry a resource clause or the no-button note.
+      // (Post-model closes the mentor itself decides — movement — are covered by
+      // the movement contract; deterministic closes carry the handoff pointer.)
+      if (
+        directive.key === "brief" &&
+        !quizLive &&
+        presentedBefore &&
+        ((requirements.acknowledge &&
+          !stepStateBefore.acknowledged_at &&
+          Boolean(draftState.acknowledged_at)) ||
+          (requirements.understanding &&
+            !stepStateBefore.understanding_at &&
+            Boolean(draftState.understanding_at)))
+      ) {
+        flowRoom.push(
+          skipShapedTurn
+            ? "This reply ENDS the step, and they asked to move on — CLOSING A STEP's skip exception: ONE short sentence, no recap, no new question."
+            : 'This reply ENDS the step — follow CLOSING A STEP: serve anything they asked first, then close in a sentence or two ending with a fresh "Shall we continue?" variant.',
+        );
+      }
       // R31e: the ceiling refused to ADVANCE — rightly — but the reply must answer
       // the ask instead of pretending they said nothing.
       if (advanceAskedButCeilinged && !quizLive) {
         flowRoom.push(
-          `They just asked to move on, but they are in ${declaredMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${declaredMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. Offer the way back INLINE, in your own sentence, as [[action:lesson|back to Lesson mode]] (or your own natural wording inside those brackets) — it renders as clickable text. Do not name any other control.`,
+          `They just asked to move on, but they are in ${declaredMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${declaredMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. Offer the way back INLINE, in your own sentence, as [[action:lesson|back to Lesson mode]] (or your own natural wording inside those brackets) — it renders as clickable text. Do not name any other control.${
+            declaredMode === "practice"
+              ? " Skip the next exercise this turn — the way back IS this reply's one ask (EXACTLY ONE ASK)."
+              : ""
+          }`,
         );
       }
       // R32c: they ANSWERED in a register that cannot mark it — respond to the
@@ -7156,6 +7223,22 @@ async function handleTypedRequest(
       if (skipShapedTurn && flowOwed === "a code run") {
         flowRoom.push(
           "They asked to skip, but this step's code run is graded work the lesson can't move without — say plainly, in one friendly sentence, that this one piece can't be skipped, and help them get the run passing.",
+        );
+      }
+      // Round 22c (teen gauntlet), moved here in R64.1 so a brief directive is
+      // genuinely EMPTY: on GATED steps (code/quiz/understanding — anything that is
+      // not acknowledge-gated) there is no Continue button, yet the mentor kept
+      // offering one ("tap Continue if you'd like to move on" on a code-practice
+      // step, live). Same words, same guard, new carrier. Skipped for revisit
+      // frames (their button is "Return to where you were" — the !inRevisit block
+      // covers it) and completed lessons (post_completion carries its own line).
+      if (
+        !requirements.acknowledge &&
+        navAction !== "revisit" &&
+        currentStage !== "complete"
+      ) {
+        flowRoom.push(
+          "(There is NO Continue button on this step — never tell the student to tap Continue or say they can move on with a button; this step only advances when the work it asks for passes.)",
         );
       }
     }
@@ -7491,6 +7574,10 @@ async function handleTypedRequest(
               // v4 learning mode when set; the response mode names legacy steps.
               type: stepMode ?? activityMode,
               mode_type: stepModeType || null,
+              // R64.1 (review): the response-mode axis, kept SEPARATE from type — a
+              // v4 "practice" step whose work is a code run must read the code
+              // contract, not the reflection one; "kind" is what says so.
+              kind: activityMode,
             },
             presented: inRevisit ? true : presentedBefore,
             owed: flowOwed,
@@ -7674,7 +7761,6 @@ async function handleTypedRequest(
             source: "orchestrator",
           }
         : null;
-    const assessment = effectiveOrchestratorAssessment ?? understandingAssessment;
     // The dedicated grader is authoritative for text completion (it hard-gates the loop);
     // the mentor's self-reported understanding is only the fallback when no grader ran.
     const understanding =
@@ -7711,6 +7797,23 @@ async function handleTypedRequest(
             ? applyModeCeiling(declaredMode, mentorActionRaw)
             : null;
     const foldKind: RoutedKind | null = mentorAction ?? routedKind;
+    // R64.1: the mentor's classification is authoritative for the RECORD too. The
+    // open-ended miss was inferred PRE-model from the heuristic draft kind; when the
+    // mentor — with the whole conversation in view — says the message was NOT an
+    // attempt, that miss is dropped from everything that persists (the fold,
+    // graded_fails, the attempt row, needs_retry status, the envelope grade).
+    // Reference equality pins this to exactly the heuristic miss object:
+    // deterministic quiz/code grades and real submissions can never match it.
+    // The pre-model surfaces (the assessment_miss directive, turn.grade) already
+    // spoke — the mentor overrode them knowingly; the record follows its judgment.
+    const missOverridden =
+      openEndedMiss !== null &&
+      effectiveOrchestratorAssessment === openEndedMiss &&
+      mentorAction !== null &&
+      mentorAction !== "answer_attempt";
+    const assessment =
+      (missOverridden ? null : effectiveOrchestratorAssessment) ??
+      understandingAssessment;
     // R64 slice 2: the mentor's own rewrite of the session's running summary —
     // sanitized to plain clamped text here, persisted after the batched session
     // patch below (storeMentorFlowSummary). Empty when omitted or non-string, which
@@ -8190,9 +8293,12 @@ async function handleTypedRequest(
     }
 
     // A deterministic grade failed this turn (orchestrator-sourced only, so a mentor's
-    // free-form assessment can never bump the teacher-facing counters).
+    // free-form assessment can never bump the teacher-facing counters; R64.1 — a
+    // mentor-overridden heuristic miss doesn't either).
     const gradedFail =
-      Boolean(answer) && effectiveOrchestratorAssessment?.passed === false;
+      Boolean(answer) &&
+      !missOverridden &&
+      effectiveOrchestratorAssessment?.passed === false;
     const retryIncrement = gradedFail ? 1 : 0;
     const finalGradedFails = finalState.graded_fails;
     // Gate the status: complete only when activities AND required checkpoints are confidently
@@ -8602,14 +8708,17 @@ async function handleTypedRequest(
       );
     }
     // Chat-flow Phase 3 + R64 slice 2: keep the rolling mid-session summary fresh.
-    // When the mentor rewrote it this turn (flow_summary), store THAT; otherwise fall
-    // back to the cheap-model refresher, whose early-exit only fires it after
-    // RUNNING_SUMMARY_EVERY mentor-less student turns accumulate.
-    if (nextStatus !== "complete") {
+    // When the mentor rewrote it this turn (flow_summary), store THAT — even on the
+    // completing turn (a plain patch, and post-completion chat still reads
+    // conversation_so_far). The cheap-model refresher stays the live-turns-only
+    // fallback, firing only after RUNNING_SUMMARY_EVERY mentor-less student turns.
+    if (mentorFlowSummary) {
       scheduleBackground(
-        mentorFlowSummary
-          ? storeMentorFlowSummary(config, sessionId, mentorFlowSummary)
-          : refreshRunningSummary(config, userId, sessionId, lessonId),
+        storeMentorFlowSummary(config, sessionId, mentorFlowSummary),
+      );
+    } else if (nextStatus !== "complete") {
+      scheduleBackground(
+        refreshRunningSummary(config, userId, sessionId, lessonId),
       );
     }
 
