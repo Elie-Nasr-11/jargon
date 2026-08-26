@@ -348,7 +348,8 @@ stays invisible until the whole object lands):
   "link": null,
   "new_idea": null,
   "mode_offer": null,
-  "movement": null
+  "movement": null,
+  "student_action": "meta"
 }
 Set understanding.demonstrated=true ONLY when the student's own words in the LATEST message are essentially
 correct and complete for THIS step's objective. When you spot a recurring conceptual error worth remembering,
@@ -383,6 +384,13 @@ go, so go. Movement can never skip graded work: if a quiz choice, code run, or a
 this step, leave movement null and SAY PLAINLY that this one piece needs doing before the lesson moves — never
 agree to move and then ask another question. Movement is about pace, not correctness: it does not mark
 anything right. Null on every other turn.
+Set "student_action" to what the student's LATEST message actually DID — exactly one of: "answer_attempt"
+(they attempted this step's task), "question" (they asked you something), "continue_signal" (they want the
+lesson to move on — any register, like movement), "tangent" (related-but-off-step exploration or chatter),
+"meta" (about the lesson or process itself, with no demand to move on). This is bookkeeping, not style: the
+lesson's state machine folds YOUR judgment of the turn into the step's progress, because you read the whole
+conversation and a keyword list does not. Report what the message did even when your reply already handled
+it; when nothing fits, use "meta". It usually agrees with "movement" ("advance" pairs with "continue_signal").
 WHAT'S NEXT: when you describe what is coming, use lesson.arc (arc.next and arc.upcoming carry the REAL next
 step titles, in order) — never guess, reorder, or promise a topic the arc doesn't show next.`;
 
@@ -510,6 +518,10 @@ type Envelope = {
   // the student asked to move on). Rides the persisted payload so pace derivation
   // and audits can see it; clients ignore it.
   movement?: "advance" | null;
+  // R64 slice 1: the mentor's own classification of what the student's message DID.
+  // Authoritative for the persisted state fold (turn_kind keeps the router's verdict,
+  // so a disagreement is visible in the stored payload); clients ignore it.
+  student_action?: string;
 };
 
 type EnvelopeSession = {
@@ -800,6 +812,13 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
       partial.router_disagreement === true ? true : undefined,
     // R63: the mentor's movement decision, persisted for pace derivation + audit.
     movement: partial.movement === "advance" ? "advance" : undefined,
+    // R64: the mentor's turn classification, persisted next to the router's
+    // turn_kind so disagreements are auditable from the stored payload alone.
+    student_action:
+      typeof partial.student_action === "string" &&
+      ROUTED_KINDS.has(partial.student_action)
+        ? partial.student_action
+        : undefined,
     artifact_offer:
       partial.artifact_offer &&
       typeof (partial.artifact_offer as { label?: unknown }).label === "string"
@@ -7753,6 +7772,27 @@ async function handleTypedRequest(
       applyModeCeiling(declaredMode, "continue_signal") === "continue_signal"
         ? "advance"
         : null;
+    // R64 slice 1: the mentor's own classification — made with the full conversation
+    // in view — is authoritative for the PERSISTED fold. The thin-context router
+    // verdict keeps exactly two jobs: selecting the pre-model directive (its last
+    // one, until the ladder dissolves) and the fallback here when the mentor omits
+    // the field. Same guards as the router path: control turns carry no student
+    // message to classify, code/MCQ turns are answer_attempt by construction, and
+    // the register ceiling still caps what may discharge a gate.
+    const mentorActionRaw =
+      typeof parsed.student_action === "string" &&
+      ROUTED_KINDS.has(parsed.student_action)
+        ? (parsed.student_action as RoutedKind)
+        : null;
+    const mentorAction: RoutedKind | null =
+      !answer || !content
+        ? null
+        : answer.mode === "code" || answer.mode === "multiple_choice"
+          ? "answer_attempt"
+          : mentorActionRaw
+            ? applyModeCeiling(declaredMode, mentorActionRaw)
+            : null;
+    const foldKind: RoutedKind | null = mentorAction ?? routedKind;
     const finalState = applyTurn(
       stepStateBefore,
       requirements,
@@ -7761,7 +7801,7 @@ async function handleTypedRequest(
       understanding,
       turnStartedIso,
       stepMode,
-      routedKind,
+      foldKind,
       mentorMovement,
     );
     // Round 22i: the directive presented the step this turn (see presentsThisTurn) —
