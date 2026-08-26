@@ -1421,6 +1421,14 @@ function scheduleBackground(task: Promise<unknown>): void {
   }
 }
 
+// R65: this function runs ENTIRELY under the caller's JWT (the P8 posture: chat
+// never holds the service key), so telemetry rows must satisfy the runtime_events
+// insert policy — user_id = auth.uid(), or staff. The live failure recorded its
+// evidence as user_id NULL and RLS rejected it: every setup failure since R32 left
+// a 403 where its reason should have been. The fix is IDENTITY, not privilege:
+// callers pass the authenticated user's id whenever auth has resolved
+// (authedUserId below). Pre-auth failures remain unrecordable here by design —
+// they surface as 401s in the gateway logs instead.
 async function recordRuntimeEvent(
   config: SupabaseConfig,
   row: {
@@ -1564,8 +1572,31 @@ async function loadOrCreateSession(
       config,
       `learning_sessions?id=eq.${encodeURIComponent(sessionId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&select=*`,
     );
-    if (!session) throw new Error("Learning session was not found.");
-    return session;
+    if (session) return session;
+    // R65 (live, 2026-08-26): a STALE session pointer must never brick the lesson.
+    // The select SUCCEEDED and found nothing this account may see under RLS for
+    // this lesson — a deleted row, another account's session cached client-side,
+    // or a cross-lesson pairing. Throwing here looped the student-safe error
+    // forever, because the client re-sends the same dead id on every "Try again"
+    // (three identical live retries: auth 200 → session select 200-empty → 500).
+    // Self-heal instead: resume this user's newest session for the lesson, or
+    // start a fresh one. A TRANSPORT failure still throws out of loadFirst above
+    // — self-healing only ever replaces a confirmed-empty read, never an outage.
+    scheduleBackground(
+      recordRuntimeEvent(config, {
+        userId,
+        sessionId: null,
+        lessonId,
+        eventType: "controlled_error",
+        status: "ok",
+        payload: { reason: "stale_session_pointer", requested_session_id: sessionId },
+      }),
+    );
+    const latest = await loadFirst(
+      config,
+      `learning_sessions?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&order=updated_at.desc&limit=1&select=*`,
+    );
+    if (latest) return latest;
   }
 
   return await insertRow(config, "learning_sessions", {
@@ -5976,10 +6007,15 @@ async function handleTypedRequest(
   // event, and nothing anywhere recorded why. `phase` names the step so the next one is
   // answerable from the table alone.
   let setupPhase: "config" | "auth" | "session" | "context" = "config";
+  // R65: the failure recorder needs the identity once auth has resolved — recording
+  // with user_id null was itself RLS-rejected (see telemetryConfig), so every
+  // post-auth setup failure went unrecorded.
+  let authedUserId: string | null = null;
   try {
     config = restConfig(req);
     setupPhase = "auth";
     user = await fetchCurrentUser(config);
+    authedUserId = typeof user.id === "string" ? user.id : String(user.id || "") || null;
     setupPhase = "session";
     session = await loadOrCreateSession(
       config,
@@ -5998,7 +6034,7 @@ async function handleTypedRequest(
       try {
         scheduleBackground(
           recordRuntimeEvent(config!, {
-            userId: null,
+            userId: authedUserId,
             sessionId: null,
             lessonId,
             eventType: "chat_failure",
