@@ -63,12 +63,13 @@ class DeclaredTurnMode(unittest.TestCase):
 
     def test_ceiling_is_applied_before_the_gates_see_it(self):
         # routedKind must be capped at its single definition site, upstream of every
-        # consumer — not re-derived anywhere later. R63 adds ONE more call site by
-        # design: the mentor's movement decision passes the same ceiling check
-        # before it may discharge a pacing gate, so Discuss/Practice still never
-        # advance a lesson no matter who judged the intent.
-        self.assertEqual(CHAT.count("applyModeCeiling("), 3)  # definition + two call sites
+        # consumer — not re-derived anywhere later. R63 and R64 each add ONE more
+        # call site by design: the mentor's movement decision and its student_action
+        # classification both pass the SAME ceiling before they may touch a gate, so
+        # Discuss/Practice still never advance a lesson no matter who judged intent.
+        self.assertEqual(CHAT.count("applyModeCeiling("), 4)  # definition + three call sites
         self.assertIn('applyModeCeiling(declaredMode, "continue_signal") === "continue_signal"', CHAT)
+        self.assertIn("applyModeCeiling(declaredMode, mentorActionRaw)", CHAT)
 
     def test_gate_timestamps_have_exactly_two_writers(self):
         # applyTurn (the turn path) and loadStepState (the documented one-time v2 backfill).

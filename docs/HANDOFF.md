@@ -11685,3 +11685,37 @@ the new contract; the deterministic fallbacks (widened router taxonomy +
 isSkipRequest) both fire even if it doesn't.
 Suggested next task: owner replays Elissar's script end-to-end; then consider
 surfacing pace ("brisk") to the teacher live view.
+
+## Claude -> Codex / Human - 2026-08-26 12:30
+
+Status: Finished (R64 slice 1 — context-first architecture, phase 1 of 3)
+Summary: Owner's direction: stop accumulating watch-lists; build a system that
+understands conversational flow. Target architecture: ONE BRAIN PER TURN, FULLY
+BRIEFED — the machine is a ledger and a validator, never an interpreter. Slice 1
+makes the mentor's own turn classification authoritative: the output contract
+gains "student_action" (answer_attempt/question/continue_signal/tangent/meta,
+judged from the full 16-turn window + rolling summary), and the PERSISTED state
+fold consumes it (foldKind = mentorAction ?? routedKind). The thin-context
+router — the brain that misfiled Elissar's messages from 200-char slices —
+keeps exactly two jobs: selecting the pre-model directive (its last job, gone
+when the ladder dissolves in slice 3) and the fallback when the mentor omits
+the field. Same guards as ever: control turns carry no message to classify,
+code/MCQ turns are answer_attempt by construction, and the register ceiling
+caps every discharge regardless of who judged intent (applyModeCeiling count
+pin re-anchored 3->4, deliberate). turn_kind still records the ROUTER verdict
+while student_action rides beside it in the stored payload — disagreements are
+auditable from one row.
+Slices remaining: 2 = flow-aware living summary (promises made, unresolved
+asks, pace temperature — model-maintained, machine-validated); 3 = directive
+ladder dissolves into a declarative world brief + standing principles, and the
+router call's classification half is DELETED. Phased on purpose: observe each
+slice live before the next.
+Files changed: supabase/functions/chat/index.ts, tests/test_r64_context_first.py
+(new, 5 pins), tests/test_turn_modes.py (ceiling count re-anchor).
+Tests run: full suite 1042 OK; deno scratch parity (same 8 pre-existing chat
+errors, none new).
+Remaining concerns: same live-verification note as R63 — the session's DB tool
+is stuck on approval, so the replay is the owner's click or the next session.
+Suggested next task: observe a few live sessions (student_action vs turn_kind
+disagreement rate tells us how often the router was wrong all along), then
+slice 2.
