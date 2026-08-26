@@ -11866,3 +11866,25 @@ vs cross-lesson cache) is unconfirmed — the new stale_session_pointer events
 will show recurrence patterns in runtime_events now that they can land.
 Suggested next task: owner retests the same lesson after deploy (same click
 should now just work); watch runtime_events for stale_session_pointer.
+
+## Claude -> Codex / Human - 2026-08-26 17:55
+
+Status: Finished
+Summary: R66 launch hardening (see DECISIONS R66): scheduleBackground
+defensively catches (isolate-death class closed); seven optional context
+reads fail-soft while integrity reads stay hard; live smoke test added
+(scripts/smoke-live-turn.mjs + smoke-live.yml — post-deploy + 2-hourly,
+exercises auth, R65 self-heal, resume turn against the DEPLOYED function).
+Files changed: supabase/functions/chat/index.ts, scripts/smoke-live-turn.mjs
+(new), .github/workflows/smoke-live.yml (new),
+tests/test_r66_launch_hardening.py (new), docs.
+Tests run: python suite green (1073) / 4 skipped; deno flow 21/21;
+deno-check parity.
+Remaining concerns / OWNER ACTIONS to arm the smoke:
+(1) create a dedicated smoke STUDENT account, enroll it in a class carrying
+    itf-a1-ch1-l1; (2) add repo secrets SMOKE_EMAIL + SMOKE_PASSWORD
+    (Settings -> Secrets and variables -> Actions). Until then the workflow
+    skips green with a warning. Optional repo variable SMOKE_LESSON_ID.
+Suggested next task: owner drill — a mini class of real student accounts
+runs one full lesson end-to-end before launch day; verify Anthropic rate
+tier covers a classroom's concurrency.

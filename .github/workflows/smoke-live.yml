@@ -1,0 +1,36 @@
+# R66 — live smoke: drive a REAL student turn against the DEPLOYED chat function.
+# Runs after every backend deploy and on a 2-hour heartbeat, so a broken student
+# path is discovered by this workflow going red (GitHub emails the owner on
+# failed runs) — never by a student in a classroom.
+#
+# Needs two repository secrets before it does anything (it SKIPS green with a
+# warning until they exist):
+#   SMOKE_EMAIL / SMOKE_PASSWORD — a dedicated smoke-test STUDENT account,
+#   enrolled in a class that carries the smoke lesson (default itf-a1-ch1-l1).
+name: Live smoke (student turn)
+
+on:
+  workflow_run:
+    workflows: ["Deploy backend (Supabase)"]
+    types: [completed]
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    # After a deploy: only smoke a deploy that succeeded (a failed deploy is
+    # already red on its own). Schedule/manual runs always proceed.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run a live student turn
+        env:
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_LESSON_ID: ${{ vars.SMOKE_LESSON_ID }}
+        run: node scripts/smoke-live-turn.mjs
