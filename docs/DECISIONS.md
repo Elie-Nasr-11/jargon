@@ -1837,7 +1837,6 @@ Verified: 19 deno flow tests run live (kept-rung witnesses, a dissolved-shapes-
 fall-to-brief net that fails if any rung grows back, Elissar's four verbatim
 messages, movement/integrity properties, 2500-vector fuzz); 1055 python pins;
 deno-check signature parity with HEAD (the 8 pre-existing errors, none new).
-<<<<<<< HEAD
 
 ## R64.1 — revision pass: the record follows the mentor, and no rule waits for a ghost label (2026-08-26)
 
@@ -1886,8 +1885,6 @@ own branch), and a correct quiz tap on a quiz-bearing revision step was
 narrated as a stuck cap (now falls through to quiz_passed).
 
 Verified after round two: suite 1062 green, deno flow 21/21, parity exact.
-=======
->>>>>>> origin/main
 
 ## R65 — the recurring bubble had two stacked causes: a fatal stale pointer, and RLS-silenced evidence (2026-08-26)
 
