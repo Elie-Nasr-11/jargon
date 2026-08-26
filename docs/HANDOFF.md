@@ -11719,3 +11719,81 @@ is stuck on approval, so the replay is the owner's click or the next session.
 Suggested next task: observe a few live sessions (student_action vs turn_kind
 disagreement rate tells us how often the router was wrong all along), then
 slice 2.
+
+## Claude -> Codex / Human - 2026-08-26 14:10
+
+Status: Starting
+Task: R64 completion (owner: "revise slice one and go for slice 2 and 3").
+Slice 2: the mentor maintains the rolling conversation summary itself
+(flow_summary output field -> learning_sessions.running_summary each turn;
+background summarizer demoted to fallback). Slice 3: the directive ladder's
+conversational rungs dissolve into a declarative `flow` world brief + standing
+system-prompt principles; assessTurn loses its CLASSIFY task (grade-only, and
+only called when a text step needs grading); heuristics become the only
+pre-model hint; slice-1 scaffolding folds into the end state (turn_kind =
+foldKind). Machine stays ledger + validator: gates/ceiling/integrity untouched.
+Files I expect to touch: supabase/functions/chat/index.ts (system prompt,
+brief, ladder, assessTurn, persistence), tests/flow_core.test.ts (witness
+rewrite), ~11 python pin suites re-anchored per the relocation map in the
+plan, docs (DECISIONS addendum, CHAT_FLOW_SCOPE).
+Notes: teaching_move has zero runtime consumers (verified) — key vocabulary
+may collapse. Every pinned incident string relocates with its rule.
+
+## Claude -> Codex / Human - 2026-08-26 15:12
+
+Status: Finished
+Summary: R64 slices 2+3 + slice-1 revision, one change-set (see DECISIONS
+"R63/R64 — context-first conversation"). The mentor is now the only
+interpreter of student meaning; the machine stays ledger + validator.
+- SYSTEM_PROMPT: payload paragraph rewritten around the new `flow` world
+  brief + usually-empty directive; new STEP TYPES, CONVERSATION FLOW,
+  CLOSING A STEP (incl. R63 skip exception) and BRISK blocks absorb the
+  dissolved rung scripts verbatim-ish; OUTPUT gains flow_summary; movement/
+  student_action contracts tightened (taxonomy sentences moved in from the
+  deleted router prompt).
+- turnDirective: only mechanical rungs remain (nav frames, quiz/code/work
+  events, assessment family, stuck caps, practice register, post_completion,
+  runtime_timeout, mode pill) + empty "brief" default. CONCLUDE_HANDOFF is
+  now a pointer to CLOSING A STEP on the five deterministic closes.
+  Dissolved: question_answer, meta_reply, tangent_engage, content_discuss/
+  nudge, readiness_ack, explanation_pending, understanding_demonstrated,
+  inquiry_answer, revision_practice/concluded, {mode}_concluded family,
+  content present_step variants, present_step_preempted,
+  advance_needs_lesson_mode, attempt_not_graded_here, converse. R31e/R32c
+  honesty + pre-emption/compression/recall/figure moved to flow.room facts.
+- `flow` payload key absorbs step_contract (one brief: step/type, presented,
+  owed, per-gate map, attempts, quiz screen state, preempted_note, pace,
+  register+note, room), placed just before directive. presentsThisTurn =
+  present_step | (brief && !presentedBefore). Brisk directive mutation
+  deleted (flow.pace + prompt BRISK rule).
+- assessTurn: grade-only (TASK 1 CLASSIFY deleted), called only when
+  isTextExplanation; routedKindRaw sources heuristicKind; routerResult +
+  router_disagreement emission removed; turn_kind now persists foldKind
+  (what actually drove the fold) next to raw student_action.
+- Slice 2: parsed.flow_summary (whitespace-collapsed, 1200 clamp) ->
+  storeMentorFlowSummary (running_summary + summarized_turns = true student
+  count) scheduled instead of refreshRunningSummary when present; the
+  refresher stays as dormant fallback. Zero schema.
+Files changed: supabase/functions/chat/index.ts; tests/flow_core.test.ts
+(witnesses rewritten: 22 kept-rung vectors incl. work-card pair, DISSOLVED->
+brief net with no-script residue check, quiz/work skip-refusal tests, fuzz
+now couples stepWork); tests/test_r64_context_first.py (rewritten, 3 slices);
+pins re-anchored in test_phase_e_performance, test_flow_v3_router,
+test_r31e_discuss_deadend, test_transcript_smoothing,
+test_conversation_smoothness_r33, test_supabase_chat_function,
+test_chat_continuity (+ prompt reflows keep test_r63/test_r30/test_p5/
+test_turn_modes pins verbatim); docs/DECISIONS.md, docs/CHAT_FLOW_SCOPE.md.
+Tests run: python suite 1055 passed / 4 skipped (was 1042); deno flow suite
+19/19 via the pillar-4 harness; deno-check signature parity with HEAD (8
+pre-existing chat errors, none new).
+Remaining concerns: (1) reply-shape regressions are now prompt-rule
+regressions — watch first live sessions; the reversible lever is adding a
+room fact back. (2) openEndedMiss now gates on the heuristic kind
+(pre-model); grader+help/confusion guards unchanged, but a misfiled fail is
+possible where the old LLM router would have filed meta — acceptable,
+monitored via stored turn_kind vs student_action. (3) The R32c room fact is
+Discuss-only by old ladder parity; the R31e fact now also fires in Practice
+(deliberate: a practice student asking to move on gets the honest way back).
+Suggested next task: owner replay of a live lesson (running_summary visibly
+rewriting every turn is the quickest slice-2 proof), then task #45 (real
+figure cropping) or Pillar 3 closure (task #20 — subsumed by this).

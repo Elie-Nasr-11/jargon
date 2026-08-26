@@ -38,7 +38,10 @@ class ChatContinuityStaticTests(unittest.TestCase):
             "async function refreshRunningSummary(",
             # Prompt-fed ahead of the verbatim history window, absent until written.
             "conversation_so_far:",
-            '"conversation_so_far" (when present) summarizes the earlier',
+            # R64 slice 2: the mentor itself maintains the summary (flow_summary);
+            # the cheap-model refresher is the dormant fallback.
+            '"conversation_so_far" (when\npresent) is the running summary',
+            "storeMentorFlowSummary(config, sessionId, mentorFlowSummary)",
             # Scheduled on live turns only; the completing turn runs the memory writer.
             "refreshRunningSummary(config, userId, sessionId, lessonId)",
         ):

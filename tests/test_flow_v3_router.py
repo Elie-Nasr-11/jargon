@@ -69,19 +69,25 @@ class FlowV3RouterInvariants(unittest.TestCase):
         self.assertIn("body.control", CHAT)
         self.assertIn('controlType === "continue"', CHAT)
 
-    def test_new_directives_present(self):
+    def test_conversation_shapes_dissolved_into_standing_rules(self):
+        # R64: the routed-conversation rungs are principles now (CONVERSATION FLOW in
+        # the SYSTEM prompt) keyed off the `flow` world brief; the directive default is
+        # the empty "brief". The retired keys must never be minted again.
         for key in ("question_answer", "content_discuss", "content_nudge", "meta_reply"):
-            self.assertIn(f'key: "{key}"', CHAT)
+            self.assertNotIn(f'key: "{key}"', CHAT)
+        self.assertIn('key: "brief"', CHAT)
+        self.assertIn("CONVERSATION FLOW — how a step breathes between its gates", CHAT)
 
-    def test_router_runs_parallel_with_graders(self):
-        # Phase E: classification+grading are ONE call (assessTurn), batched with the code
-        # judge and the student-turn insert — zero serial pre-mentor latency.
+    def test_grader_runs_parallel_with_graders(self):
+        # R64: the pre-model call is grade-only and fires only on explanation-grading
+        # turns, still batched with the code judge and the student-turn insert — zero
+        # serial pre-mentor latency, and most turns make no pre-model call at all.
         batch = re.search(
-            r"const \[assessed, gradedCode\] = await Promise\.all",
+            r"const \[gradedUnderstanding, gradedCode\] = await Promise\.all",
             CHAT,
         )
         self.assertIsNotNone(batch)
-        self.assertIn("routerEligible || isTextExplanation", CHAT)
+        self.assertIn("isTextExplanation\n        ? assessTurn(", CHAT)
 
     def test_client_model_no_longer_carries_the_continue_offer(self):
         # Pillar 5: the transcript model dropped the field with the wire contract — a
@@ -144,7 +150,8 @@ class FlowV3PromptLoosening(unittest.TestCase):
 
     def test_tangent_budget_replaces_wall(self):
         self.assertIn("Tangents get a budget, not a wall", CHAT)
-        self.assertIn('key: "tangent_engage"', CHAT)
+        # R64: the tangent rung dissolved into the CONVERSATION FLOW rule.
+        self.assertIn("They went on a related tangent: engage with it genuinely", CHAT)
 
     def test_question_carveout(self):
         self.assertIn("when the student asks YOU a question", CHAT)
@@ -243,8 +250,10 @@ class FlowV3Preemption(unittest.TestCase):
         self.assertIsNotNone(requirements_fn)
         self.assertNotIn("preempted", requirements_fn.group(0))
 
-    def test_compressed_delivery_directive(self):
-        self.assertIn('key: "present_step_preempted"', CHAT)
+    def test_compressed_delivery_rides_the_world_brief(self):
+        # R64: the compressed-delivery instruction is a flow.room fact on the
+        # presenting turn; the data field rides flow.preempted_note.
+        self.assertIn("Deliver this step COMPRESSED", CHAT)
         self.assertIn("preempted_note", CHAT)
 
     def test_preempted_merged_never_replaced(self):

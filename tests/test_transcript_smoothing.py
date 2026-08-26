@@ -33,8 +33,13 @@ class TranscriptSmoothingStaticTests(unittest.TestCase):
         self.assertIn("gradedUnderstanding: effectiveUnderstanding,", self.chat_fn)
 
     def test_question_answered_before_step_presentation(self):
+        # R64: the questionFirst rung prefix became STEP TYPES' presentation rule +
+        # the CONVERSATION FLOW question rule — same order guarantee, standing form.
         self.assertIn(
-            "The student's message asks a QUESTION — answer it fully and helpfully FIRST",
+            "serve anything their message asked FIRST, then present", self.chat_fn
+        )
+        self.assertIn(
+            "answer it fully and directly FIRST — a real answer, not a\n  redirect",
             self.chat_fn,
         )
 
@@ -174,20 +179,19 @@ class PresentationIntegrityStaticTests(unittest.TestCase):
     def test_continue_copy_honest_on_unpresented_steps(self):
         # R31e: the honest copy no longer names a button (there is none) — but it must
         # still never imply that moving on SKIPS material that was never taught.
-        self.assertIn("This step's material has NOT been taught yet", self.chat_fn)
+        # (R64 home: the CONVERSATION FLOW question rule, keyed off flow.presented.)
+        self.assertIn("material has NOT been taught yet (flow.presented false)", self.chat_fn)
         self.assertIn("never imply that moving on skips the material", self.chat_fn)
 
     def test_pending_articulation_never_writes_the_answers(self):
         # The live transcript showed one partial attempt earning the mentor's full
-        # comparison list — copy-bait the echo gate then rejects.
+        # comparison list — copy-bait the echo gate then rejects. (R64 home: the
+        # STEP TYPES reflection contract.)
         self.assertIn(
             "NEVER write out the completed answer, list, or comparisons yourself",
             self.chat_fn,
         )
-        self.assertIn(
-            "If their message ALSO asked a question — even folded into an answer — answer it briefly FIRST",
-            self.chat_fn,
-        )
+        self.assertIn("that turns the step into\n  copy-bait", self.chat_fn)
 
 
 class StreamingProseStaticTests(unittest.TestCase):
@@ -314,14 +318,20 @@ class TransitionKinksStaticTests(unittest.TestCase):
         )
 
     def test_concluding_turns_carry_the_handoff_rule(self):
-        self.assertIn("const CONCLUDE_HANDOFF =", self.chat_fn)
+        # R64: the full close ritual lives ONCE, in the SYSTEM prompt's CLOSING A STEP
+        # block (brief closes read it directly); CONCLUDE_HANDOFF survives as the
+        # pointer the kept deterministic-close rungs append so an event instruction
+        # can never disagree with the standing rule.
+        self.assertIn("CLOSING A STEP:", self.chat_fn)
         self.assertIn("Never name the Continue button or any button", self.chat_fn)
         # R31 (demo feedback): a step closes by ASKING, and never over an unanswered request.
-        self.assertIn('END WITH \\"Shall we continue?\\"', self.chat_fn)
+        self.assertIn('END WITH "Shall we continue?"', self.chat_fn)
         self.assertIn("Never wrap up over an unanswered request", self.chat_fn)
-        # Every concluding directive appends it — declaration + 8 concatenations.
-        self.assertGreaterEqual(self.chat_fn.count("CONCLUDE_HANDOFF"), 9)
-        self.assertIn("closing + CONCLUDE_HANDOFF", self.chat_fn)
+        self.assertIn("const CONCLUDE_HANDOFF =", self.chat_fn)
+        self.assertIn("follow your CLOSING A STEP rules", self.chat_fn)
+        # Declaration + the five kept deterministic closes (quiz/code passes, the
+        # three stuck caps) — dissolved closes need no pointer, the prompt rules bind.
+        self.assertEqual(self.chat_fn.count("CONCLUDE_HANDOFF"), 6)
 
     def test_continue_tap_never_credits_unshown_thinking(self):
         self.assertIn(
@@ -330,13 +340,13 @@ class TransitionKinksStaticTests(unittest.TestCase):
         )
 
     def test_bare_readiness_gets_one_line_not_a_reask(self):
-        self.assertIn("const bareReadiness =", self.chat_fn)
-        self.assertIn('key: "readiness_ack",', self.chat_fn)
+        # R64: readiness_ack dissolved into the CONVERSATION FLOW bare-readiness rule.
+        # It binds by SHAPE of the message, not by routed kind — so a meta-routed
+        # "ready" cannot fall into summarize/reassure either.
+        self.assertIn("Bare readiness (", self.chat_fn)
+        self.assertIn("is a signal to PROCEED, not an answer and not a\n  question", self.chat_fn)
         self.assertIn("do NOT restate, rephrase, or re-explain any part of it", self.chat_fn)
-        # A meta-routed "ready" must not fall into summarize/reassure either.
-        self.assertIn(
-            'routedKind === "meta" && !quizActive && !bareReadiness', self.chat_fn
-        )
+        self.assertIn("asks\n  directly for the thing flow.owed names", self.chat_fn)
 
     def test_grader_enforces_named_criterion(self):
         self.assertIn("NAMED-CRITERION RULE:", self.chat_fn)

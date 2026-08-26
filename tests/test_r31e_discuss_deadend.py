@@ -77,8 +77,10 @@ class NoDirectivePointsAtTheDeletedButton(unittest.TestCase):
             )
             self.assertTrue(comment or forbids, f"live button instruction: {line.strip()!r}")
 
-    def test_the_present_step_directives_ask_instead(self):
+    def test_the_present_step_rules_ask_instead(self):
         # The replacement for each: the mentor's own question is the advance verb.
+        # (R64 moved these from present_step rung texts into the STEP TYPES block —
+        # same words, standing rule instead of per-turn script.)
         self.assertIn("close by ASKING whether to move on", CHAT)
         self.assertIn("that is what moves the lesson on", CHAT)
 
@@ -107,20 +109,24 @@ class AdvanceRequestSurvivesTheModeCeiling(unittest.TestCase):
             'routedKindRaw === "continue_signal" && routedKind !== "continue_signal"', CHAT
         )
 
-    def test_it_reaches_the_directive_builder(self):
-        # Declared on the input type, destructured, and passed at the call site — all
-        # three, or the flag is dead weight that type-checks fine.
-        self.assertIn("  advanceAskedButCeilinged: boolean;", CHAT)
-        self.assertEqual(CHAT.count("advanceAskedButCeilinged"), 6)
+    def test_it_reaches_the_world_brief(self):
+        # R64: the honesty rides flow.room now (a turn FACT the mentor must fold in),
+        # not a directive rung. Computed, then pushed — both, or the flag is dead
+        # weight that type-checks fine.
+        self.assertIn("const advanceAskedButCeilinged =", CHAT)
+        self.assertIn("if (advanceAskedButCeilinged && !quizLive) {", CHAT)
+        room_fact = CHAT.split("if (advanceAskedButCeilinged && !quizLive) {", 1)[1][:900]
+        self.assertIn("flowRoom.push(", room_fact)
 
-    def test_it_gets_its_own_directive_ahead_of_the_question_branch(self):
-        # Order matters: the question branch is what looped, so this must win first.
-        advance = CHAT.index("if (advanceAskedButCeilinged && !quizActive)")
-        question = CHAT.index('if (routedKind === "question" && !quizActive')
-        self.assertLess(advance, question)
-        self.assertIn("advance_needs_lesson_mode", CHAT)
+    def test_the_question_branch_that_swallowed_it_is_gone(self):
+        # R64 deleted the question_answer rung outright — there is no branch left to
+        # misread a ceilinged advance as an ordinary question. The room fact answers
+        # the ask; the ceiling itself stays untouched.
+        self.assertNotIn('if (routedKind === "question" && !quizActive', CHAT)
+        self.assertNotIn('key: "advance_needs_lesson_mode"', CHAT)
+        self.assertIn("They just asked to move on, but they are in", CHAT)
 
-    def test_the_directive_refuses_to_re_teach(self):
+    def test_the_room_fact_refuses_to_re_teach(self):
         # Re-teaching the same step is exactly what the student saw five times.
         self.assertIn("Do NOT re-teach or re-summarize the step", CHAT)
         self.assertIn("never advances the lesson", CHAT)
@@ -416,19 +422,22 @@ class AnAttemptIsNotAQuestion(unittest.TestCase):
             'routedKindRaw === "answer_attempt" && routedKind !== "answer_attempt"', CHAT
         )
 
-    def test_it_reaches_the_directive_builder(self):
-        # Declared, destructured, passed — all three, or it type-checks and does nothing.
-        self.assertIn("  attemptCeilinged: boolean;", CHAT)
-        self.assertEqual(CHAT.count("attemptCeilinged"), 5)
+    def test_it_reaches_the_world_brief(self):
+        # R64: the honesty is a flow.room FACT (Discuss only — in Practice the
+        # practice_register rung owns the loop, exactly as the old ladder order did).
+        self.assertIn("const attemptCeilinged =", CHAT)
+        self.assertIn(
+            'if (attemptCeilinged && !quizLive && declaredMode === "discuss") {', CHAT
+        )
 
-    def test_it_wins_before_the_branch_that_misread_it(self):
-        attempt = CHAT.index("if (attemptCeilinged && !quizActive)")
-        question = CHAT.index('if (routedKind === "question" && !quizActive')
-        self.assertLess(attempt, question)
-        self.assertIn("attempt_not_graded_here", CHAT)
+    def test_the_branch_that_misread_it_is_gone(self):
+        # R64 deleted the question_answer rung — nothing is left to read an answer
+        # back as a question. The room fact speaks instead.
+        self.assertNotIn('key: "question_answer"', CHAT)
+        self.assertNotIn('key: "attempt_not_graded_here"', CHAT)
 
-    def test_the_directive_answers_the_answer_and_breaks_the_chain(self):
-        block = CHAT[CHAT.index("attempt_not_graded_here") :][:900]
+    def test_the_room_fact_answers_the_answer_and_breaks_the_chain(self):
+        block = CHAT[CHAT.index("The student ANSWERED — they did not ask you anything") :][:900]
         self.assertIn("they did not ask you anything", block)
         self.assertIn("does not grade", block)
         # The loop itself: one more question of the same shape, forever.

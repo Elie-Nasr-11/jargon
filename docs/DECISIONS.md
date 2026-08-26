@@ -1780,3 +1780,60 @@ Corpus landed in the four committed envelopes: 17 lessons, 187 teaching steps,
 page images, 2 glossaries. Verified: 1014 pins (29 new in test_r61_book_build —
 string pins on the pipeline plus DATA pins over the committed envelopes), deno
 gate 0 errors on curriculum-admin, r58 import pins untouched.
+
+## R63/R64 — context-first conversation: the model decides meaning, the machine decides law (2026-08-26)
+
+Decision (owner, after reviewing Elissar's live session 689bd990, where three plain
+skip requests and a shouted YESYES never moved the lesson while the mentor verbally
+agreed each time): "I don't want to create just a list of things to watch out for.
+We should create a system that understands the flow of the conversation and can
+adapt to it… since it's an API, we have to find a smart way to give context in the
+conversation as well as keep context up to date with the flow of the lesson."
+
+The architecture that shipped, in three slices on top of R63's mentor movement:
+
+- **One brain per turn, fully briefed.** The mentor model is the only interpreter of
+  what a student message MEANS. Its structured verdicts — `movement` (R63),
+  `student_action` (the turn's kind, authoritative for the persisted state fold),
+  `flow_summary` — are validated and executed by the state machine, which keeps
+  exclusive authority over what the rules ALLOW: gates, ceilings, integrity
+  (quiz/code/submission can never be talked open), grades.
+- **The world brief.** A `flow` payload key (absorbing the old `step_contract`)
+  rides the live block just ahead of the directive every turn: step identity + type,
+  presented, `owed` (the single headline of what stands between the student and the
+  next step), per-gate statuses, attempts, quiz screen state, pace (briskPace),
+  register + ceiling honesty, and `room` — turn-specific facts (R31e/R32c ceiling
+  honesty, pre-emption credit, mastery compression, recall openers, the approved
+  figure, spoken integrity refusals) that used to be whole directive rungs.
+- **The ladder dissolved into standing law.** `turnDirective` keeps only mechanical
+  rungs — navigation frames, deterministic grades (quiz/code/work), stuck-cap
+  conclusions, attached UI — plus an EMPTY "brief" default for every conversational
+  shape. The scripts those rungs carried moved verbatim-ish into the SYSTEM prompt
+  as STEP TYPES (per-type presentation/mid/close contracts), CONVERSATION FLOW
+  (readiness, questions-first, tangents, dwell escalation), CLOSING A STEP (the
+  close ritual + R63's skip exception), and BRISK — cached once instead of
+  recomposed per turn. `teaching_move` now records "brief" on dissolved shapes (no
+  runtime consumers; the key remains the audit label).
+- **The classify task is deleted.** assessTurn is grade-only and runs ONLY when a
+  hard understanding gate needs a verdict before the mentor speaks
+  (isTextExplanation); most turns reach the mentor with zero pre-model calls.
+  heuristicKind (incl. R63's skip recognizers) drafts the pre-model kind;
+  `turn_kind` persists what actually drove the fold, `student_action` beside it
+  raw; `router_disagreement` telemetry retired.
+- **The summary writes itself.** The mentor rewrites the session's running summary
+  every turn (`flow_summary`, 3-6 sentences: taught/attempted, struggles, PROMISES
+  made, UNRESOLVED asks, pace/mood) → learning_sessions.running_summary, read back
+  as conversation_so_far. The cheap-model refresher stays as a dormant fallback
+  (its ≥6-turn early-exit only fires when the mentor stops maintaining it). Zero
+  schema change.
+
+Reason: the ladder scripted ~40 conversational shapes from thin per-turn state and
+had to be patched shape by shape (R31e, R32c, R63…) every time a real student's
+words fell between rungs. Giving the full-context model the interpretation job and
+the machine the law job removes the class of bug instead of the instances — and
+drops a pre-model model call from most turns while shrinking the per-turn payload.
+
+Verified: 19 deno flow tests run live (kept-rung witnesses, a dissolved-shapes-
+fall-to-brief net that fails if any rung grows back, Elissar's four verbatim
+messages, movement/integrity properties, 2500-vector fuzz); 1055 python pins;
+deno-check signature parity with HEAD (the 8 pre-existing errors, none new).
