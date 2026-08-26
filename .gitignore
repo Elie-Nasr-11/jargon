@@ -13,3 +13,4 @@ __pycache__/
 # Local visual-harness build (compiled against the mock backend; never ship)
 frontend/dist-visual/
 tools/book-import/node_modules
+.claude/settings.local.json
