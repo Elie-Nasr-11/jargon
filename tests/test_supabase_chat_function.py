@@ -77,9 +77,11 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
         self.assertIn("back-and-forth conversation", self.source)
         self.assertIn("natural speech -> baby Jargon -> Jargon pseudocode -> Python bridge", self.source)
         self.assertIn("guardrail", self.source)
-        # v2.0: the per-turn instruction is one composed directive from a priority ladder.
+        # v2.0 -> R64: the per-turn instruction is one composed directive from a
+        # priority ladder of MECHANICAL rungs; conversational turns get the empty
+        # "brief" default (the flow world-brief + standing prompt rules carry them).
         self.assertIn("function turnDirective", self.source)
-        for key in ("post_completion", "runtime_timeout", "present_step", "converse"):
+        for key in ("post_completion", "runtime_timeout", "present_step", "brief"):
             self.assertIn(f'"{key}"', self.source)
 
     def test_orchestrator_loads_lesson_context_before_prompting(self):
@@ -210,13 +212,14 @@ class SupabaseChatFunctionStaticTests(unittest.TestCase):
         # directive branch (mid-step + conclusion) and a SYSTEM_PROMPT block, targeting the
         # student's weakest skills by tier with a hallucination guard (skills/tiers only,
         # never raw transcript). Gating stays reflection-shaped (understanding + stuck cap).
+        # R64: mid-step retrieval practice and the demonstrated conclusion dissolved
+        # into the STEP TYPES revision contract + CLOSING A STEP; only the stuck cap
+        # stays a rung, because praising recall it never saw is the failure to pin.
         for fragment in (
-            'key: "revision_practice"',
-            'key: "revision_concluded"',
-            # The stuck-cap conclusion must NOT praise recall it never saw (split from concluded).
+            '"revision" — RETRIEVAL PRACTICE (the Revision rules below)',
             'key: "revision_stuck"',
-            "gradedUnderstanding?.demonstrated",
-            'stepMode === "revision" && presentedBefore && !quizActive',
+            "!gradedUnderstanding?.demonstrated",
+            'stepMode === "revision" &&\n      presentedBefore &&\n      !quizActive &&',
             "Revision steps are RETRIEVAL PRACTICE",
             # The weak-tier targeting + hallucination guard phrasing.
             "never invent or claim",

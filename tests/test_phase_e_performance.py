@@ -12,21 +12,32 @@ TREE = (ROOT / "frontend" / "src" / "student" / "LessonTree.tsx").read_text(enco
 
 
 class AssessTurnMerge(unittest.TestCase):
-    def test_router_and_grader_are_one_call(self):
+    """Phase E merged router+grader into one call; R64 then DELETED the classify task.
+    assessTurn is grade-only, called only when a hard understanding gate needs a
+    verdict before the mentor speaks — most turns reach the mentor with zero
+    pre-model calls."""
+
+    def test_grader_is_the_only_premodel_call(self):
         self.assertIn("async function assessTurn(", CHAT)
-        # The two old separate calls are gone.
+        # The old separate calls stay gone, and the classify task never returns.
         self.assertNotIn("function classifyTurn(", CHAT)
         self.assertNotIn("function checkUnderstanding(", CHAT)
-        self.assertIn("routerEligible || isTextExplanation", CHAT)
+        self.assertNotIn("TASK 1 — CLASSIFY", CHAT)
+        # Called ONLY on explanation-grading turns; the heuristic draft (no model)
+        # covers kind for everything else.
+        self.assertIn("isTextExplanation\n        ? assessTurn(", CHAT)
+        self.assertNotIn("routerEligible", CHAT)
+        self.assertIn("const heuristicEligible =", CHAT)
+        self.assertIn("? heuristicKind(content).kind", CHAT)
 
     def test_verdict_semantics_preserved(self):
-        # Strict grading rules, named criterion, pre-emption, and the closed kind set all
-        # survive the merge; the echo gate stays code-side.
+        # Strict grading rules, named criterion, pre-emption all survive; the echo
+        # gate stays code-side.
         for fragment in (
             "NEVER evidence",
             "NAMED-CRITERION RULE",
             '"preempted"',
-            "TASK 1 — CLASSIFY",
+            "You grade ONE student message",
             "function isEchoOfMentor(",
             "function heuristicKind(",
         ):
@@ -37,7 +48,7 @@ class AssessTurnMerge(unittest.TestCase):
         fn = CHAT[CHAT.index("async function assessTurn(") :]
         fn = fn[: fn.index("\n// Semantic grader for CODE activities:")]
         self.assertEqual(fn.count("recordModelUsage("), 1)
-        self.assertIn('gradeExplanation ? "grading" : "routing"', fn)
+        self.assertIn('result, "grading"', fn)
 
 
 class SurfaceCache(unittest.TestCase):

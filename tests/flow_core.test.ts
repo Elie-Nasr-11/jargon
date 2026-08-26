@@ -299,18 +299,18 @@ function baseArgs(): DirectiveArgs {
     routedKind: null,
     inRevisit: false,
     navAction: null,
-    preemptedNote: null,
     studentMode: "lesson",
-    advanceAskedButCeilinged: false,
-    attemptCeilinged: false,
     modeOfferAccept: null,
     brainHints: { ...BRAIN_NONE },
   } as never;
 }
 
-// One witness vector per rung of the ladder — executable documentation that every
-// branch is reachable, in the ladder's own order. A rung nothing can reach is dead
-// code; a changed key is a contract change. Both should fail loudly here.
+// One witness vector per rung of the R64 ladder — executable documentation that every
+// KEPT branch is reachable, in the ladder's own order. A rung nothing can reach is
+// dead code; a changed key is a contract change. Both should fail loudly here. The
+// dissolved conversational rungs have their own test below: their old trigger shapes
+// must now yield the "brief" default (the flow world-brief + SYSTEM prompt carry
+// those turns), and must NEVER mint their retired keys again.
 const WITNESSES: Array<[string, (a: DirectiveArgs) => void]> = [
   ["revisit_open", (a) => {
     a.navAction = "revisit";
@@ -337,56 +337,27 @@ const WITNESSES: Array<[string, (a: DirectiveArgs) => void]> = [
   ["practice_register", (a) => {
     a.studentMode = "practice" as never;
   }],
-  ["advance_needs_lesson_mode", (a) => {
-    a.studentMode = "discuss" as never;
-    a.advanceAskedButCeilinged = true;
+  ["present_step", (a) => {
+    a.presentedBefore = false;
+    a.stepStateBefore.presented_at = null;
+    a.stepMode = "assignment" as never;
+    a.requirements = req({ acknowledge: true, work: true });
+    (a as never as { stepWork: unknown }).stepWork = {
+      kind: "assignment",
+      title: "Label the computer parts",
+    };
   }],
-  ["attempt_not_graded_here", (a) => {
-    a.studentMode = "discuss" as never;
-    a.attemptCeilinged = true;
-  }],
-  ["question_answer", (a) => {
-    a.routedKind = "question" as never;
-  }],
-  ["meta_reply", (a) => {
-    a.routedKind = "meta" as never;
-  }],
-  ["tangent_engage", (a) => {
-    a.routedKind = "tangent" as never;
-  }],
-  ["content_discuss", (a) => {
-    a.requirements = req({ acknowledge: true });
-    a.routedKind = "answer_attempt" as never;
-  }],
-  ["content_nudge", (a) => {
-    a.requirements = req({ acknowledge: true });
-    a.routedKind = "answer_attempt" as never;
-    a.draftState.attempts = 4;
-  }],
-  ["revision_practice", (a) => {
-    a.stepMode = "revision" as never;
-  }],
-  ["revision_concluded", (a) => {
-    a.stepMode = "revision" as never;
-    a.draftFlow = { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
-    a.gradedUnderstanding = { demonstrated: true, level: "solid", note: "" } as never;
+  ["await_step_work", (a) => {
+    a.stepMode = "assignment" as never;
+    a.requirements = req({ acknowledge: true, work: true });
+    (a as never as { stepWork: unknown }).stepWork = {
+      kind: "assignment",
+      title: "Label the computer parts",
+    };
   }],
   ["revision_stuck", (a) => {
     a.stepMode = "revision" as never;
     a.draftFlow = { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
-  }],
-  ["understanding_demonstrated", (a) => {
-    a.gradedUnderstanding = { demonstrated: true, level: "solid", note: "" } as never;
-  }],
-  ["inquiry_answer", (a) => {
-    a.stepMode = "inquiry" as never;
-    a.requirements = req({ acknowledge: true });
-    a.draftState.question_count = 1;
-  }],
-  ["explanation_concluded", (a) => {
-    a.stepMode = "explanation" as never;
-    a.requirements = req({ acknowledge: true });
-    a.draftState.acknowledged_at = T0;
   }],
   ["assessment_concluded", (a) => {
     a.stepMode = "assessment" as never;
@@ -427,28 +398,14 @@ const WITNESSES: Array<[string, (a: DirectiveArgs) => void]> = [
     a.answer = { mode: "code", code: "print(1)" };
     a.assessment = { score: 0, passed: false, feedback: "", source: "orchestrator" } as never;
   }],
-  ["readiness_ack", (a) => {
-    a.answer = { mode: "text", text: "ready" };
-  }],
   ["assessment_pending", (a) => {
     a.stepMode = "assessment" as never;
     a.stepModeType = "open_ended";
   }],
-  ["explanation_pending", (a) => {
-    a.requirements = req({ understanding: true });
-  }],
-  ["present_step_preempted", (a) => {
-    a.presentedBefore = false;
-    a.preemptedNote = "they spotted the purpose idea on step one";
-  }],
-  ["present_step", (a) => {
-    a.presentedBefore = false;
-    a.stepMode = "explanation" as never;
-  }],
-  ["converse", (_a) => {}],
+  ["brief", (_a) => {}],
 ];
 
-Deno.test("directive: every rung of the ladder is reachable and keyed as documented", () => {
+Deno.test("directive: every kept rung of the ladder is reachable and keyed as documented", () => {
   for (const [key, mutate] of WITNESSES) {
     const args = baseArgs();
     mutate(args);
@@ -457,15 +414,90 @@ Deno.test("directive: every rung of the ladder is reachable and keyed as documen
   }
 });
 
-// The `${stepMode}_concluded` template can only mint keys for modes that actually
-// carry the acknowledge gate (requirementsFor is the coupling — the fuzz below derives
-// requirements through it, so a phantom like "practice_concluded" would fail here).
-const KNOWN_KEYS = new Set<string>([
-  ...WITNESSES.map(([k]) => k),
-  "media_concluded",
-  "assignment_concluded",
-  "inquiry_concluded",
-]);
+// R64 dissolution: each retired rung's old trigger shape, verbatim from the pre-R64
+// witness list, must now fall through to the "brief" default — the flow brief plus
+// the SYSTEM prompt's STEP TYPES / CONVERSATION FLOW / CLOSING A STEP rules carry
+// those turns. If any of these ever selects its old key again, the ladder has grown
+// a script back.
+const DISSOLVED: Array<[string, (a: DirectiveArgs) => void]> = [
+  ["question_answer", (a) => {
+    a.routedKind = "question" as never;
+  }],
+  ["meta_reply", (a) => {
+    a.routedKind = "meta" as never;
+  }],
+  ["tangent_engage", (a) => {
+    a.routedKind = "tangent" as never;
+  }],
+  ["content_discuss", (a) => {
+    a.requirements = req({ acknowledge: true });
+    a.routedKind = "answer_attempt" as never;
+  }],
+  ["content_nudge", (a) => {
+    a.requirements = req({ acknowledge: true });
+    a.routedKind = "answer_attempt" as never;
+    a.draftState.attempts = 4;
+  }],
+  ["revision_practice", (a) => {
+    a.stepMode = "revision" as never;
+  }],
+  ["revision_concluded", (a) => {
+    a.stepMode = "revision" as never;
+    a.draftFlow = { stage: "complete", responseMode: "text", nextAction: "complete", choices: [] };
+    a.gradedUnderstanding = { demonstrated: true, level: "solid", note: "" } as never;
+  }],
+  ["understanding_demonstrated", (a) => {
+    a.gradedUnderstanding = { demonstrated: true, level: "solid", note: "" } as never;
+  }],
+  ["inquiry_answer", (a) => {
+    a.stepMode = "inquiry" as never;
+    a.requirements = req({ acknowledge: true });
+    a.draftState.question_count = 1;
+  }],
+  ["explanation_concluded", (a) => {
+    a.stepMode = "explanation" as never;
+    a.requirements = req({ acknowledge: true });
+    a.draftState.acknowledged_at = T0;
+  }],
+  ["readiness_ack", (a) => {
+    a.answer = { mode: "text", text: "ready" };
+  }],
+  ["explanation_pending", (a) => {
+    a.requirements = req({ understanding: true });
+  }],
+  ["present_step_preempted", (a) => {
+    a.presentedBefore = false;
+    a.stepStateBefore.presented_at = null;
+  }],
+  ["present_step_content", (a) => {
+    a.presentedBefore = false;
+    a.stepStateBefore.presented_at = null;
+    a.stepMode = "explanation" as never;
+  }],
+  ["converse", (_a) => {}],
+];
+
+Deno.test("directive: every dissolved shape now yields the brief default", () => {
+  for (const [old, mutate] of DISSOLVED) {
+    const args = baseArgs();
+    mutate(args);
+    const got = turnDirective(args);
+    eq(got.key, "brief", `dissolved '${old}' must fall to brief, selected '${got.key}'`);
+    // The brief default carries no SCRIPT — at most the mechanical no-button clause
+    // (gated steps) that every rung shares. Anything else is a rung growing back.
+    const residue = got.text
+      .replace(
+        " (There is NO Continue button on this step — never tell the student to tap Continue or say they can move on with a button; this step only advances when the work it asks for passes.)",
+        "",
+      )
+      .trim();
+    eq(residue, "", `brief carries no script (dissolved '${old}')`);
+  }
+});
+
+// The retired keys must never be minted again — by the fuzz (below, via KNOWN_KEYS)
+// and by name here, so a partial revert fails loudly.
+const KNOWN_KEYS = new Set<string>([...WITNESSES.map(([k]) => k)]);
 
 Deno.test("directive: fuzzing never leaves the known key set, and precedence holds", () => {
   const r = rng(0xd1c7);
@@ -501,9 +533,16 @@ Deno.test("directive: fuzzing never leaves the known key set, and precedence hol
     a.runtimeTimedOut = r() < 0.05;
     a.inRevisit = r() < 0.1;
     a.navAction = a.inRevisit ? (r() < 0.5 ? "revisit" : null) : r() < 0.05 ? "resume" : null;
-    a.advanceAskedButCeilinged = r() < 0.1;
-    a.attemptCeilinged = r() < 0.1;
     a.modeOfferAccept = r() < 0.08 ? { mode: "discuss", topic: "energy" } : null;
+    // R48 linked work rides the fuzz too, coupled the way the loader couples it: only
+    // work-mode steps carry stepWork, and requirements must agree (work: true).
+    if ((a.stepMode === "assignment" || a.stepMode === "assessment") && r() < 0.3) {
+      (a as never as { stepWork: unknown }).stepWork = {
+        kind: a.stepMode === "assessment" ? "assessment" : "assignment",
+        title: "Linked work item",
+      };
+      a.requirements = { ...req({ acknowledge: true }), work: true };
+    }
     a.gradedUnderstanding =
       r() < 0.2 ? ({ demonstrated: r() < 0.5, level: "partial", note: "" } as never) : null;
     a.draftState.attempts = Math.floor(r() * 6);
@@ -651,10 +690,7 @@ Deno.test("R48: the await_step_work rung fires only after presentation, on held 
     routedKind: "answer_attempt" as never,
     inRevisit: false,
     navAction: null,
-    preemptedNote: null,
     studentMode: null,
-    advanceAskedButCeilinged: false,
-    attemptCeilinged: false,
     modeOfferAccept: null,
     stepWork: { kind: "assignment" as const, title: "Label the computer parts" },
     brainHints: {
@@ -675,6 +711,15 @@ Deno.test("R48: the await_step_work rung fires only after presentation, on held 
   const held = turnDirective({ ...baseArgs, presentedBefore: true } as never);
   eq(held.key, "await_step_work", "held turns use the await rung");
   ok(held.text.includes("never collect answers in chat"), "await rung forbids chat collection");
+  // R63/R64: an integrity gate refuses OUT LOUD — a skip-shaped message against held
+  // work makes the await rung say plainly that submitting can't be skipped.
+  const skipped = turnDirective({
+    ...baseArgs,
+    presentedBefore: true,
+    answer: { mode: "text", text: "no can we move on now" },
+  } as never);
+  eq(skipped.key, "await_step_work", "a skip against held work stays on the await rung");
+  ok(skipped.text.includes("can't be skipped"), "the refusal is spoken, not silent");
 });
 
 // ---- R63: mentor-steered pacing ----------------------------------------------------
@@ -802,6 +847,16 @@ Deno.test("R63: the router-outage fallback hears the impatient register too", ()
     null,
   );
   eq(refuse.acknowledged_at, null, "a refusal must never acknowledge");
+});
+
+Deno.test("R63: a skip against live quiz options gets the spoken refusal", () => {
+  const args = baseArgs();
+  args.stepStateBefore.quiz_presented_at = T0;
+  args.draftFlow = { stage: "assessment", responseMode: "multiple_choice", nextAction: "choose", choices: [] };
+  args.answer = { mode: "text", text: "no can we move on now" } as never;
+  const out = turnDirective(args);
+  eq(out.key, "quiz_active_chat", "chat during a live quiz stays on the quiz rung");
+  ok(out.text.includes("can't be skipped"), "the integrity refusal is spoken");
 });
 
 Deno.test("R63: briskPace trips on repeated skips and stays quiet otherwise", () => {

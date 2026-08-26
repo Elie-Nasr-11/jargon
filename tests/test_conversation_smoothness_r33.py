@@ -182,8 +182,10 @@ class MentorPromptDataHooks(unittest.TestCase):
 
     def test_explanation_pending_escalates(self):
         # The flat re-ask: byte-identical coaching on attempt 1 and attempt 4 is gone.
-        self.assertIn("const escalation =", self.chat)
-        self.assertIn("draftState.attempts >= 2", self.chat)
+        # R64 home: the STEP TYPES reflection contract escalates off flow.attempts.
+        self.assertIn("Escalate across attempts (flow.attempts counts\n  them)", self.chat)
+        self.assertIn("do NOT repeat your previous move", self.chat)
+        self.assertIn("attempts: draftState.attempts", self.chat)
 
     def test_reply_first_is_stated_not_implied(self):
         # The streaming extractor hard-depends on `reply` being the first key; the

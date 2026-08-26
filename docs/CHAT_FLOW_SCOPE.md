@@ -4,6 +4,14 @@ Status: scoping document, 2026-08-02. Code-verified inventory of the student cha
 as it exists on `claude/project-scope-mvp-o7ox0y`, the gaps in it, and a phased proposal.
 Implementation starts after the owner picks from §5.
 
+> **Superseded in part (2026-08-26, R64 — see DECISIONS "context-first conversation").**
+> The §1 inventory below is historical: the 30-branch directive ladder has since been
+> dissolved to mechanical rungs + an empty "brief" default (standing SYSTEM-prompt rules
+> keyed off a per-turn `flow` world brief carry conversational turns), the LLM router's
+> classify task is deleted (the mentor's own `student_action` drives the persisted fold;
+> assessTurn is grade-only), and the mentor maintains the running summary itself
+> (`flow_summary`).
+
 ## 1. What exists today (verified, with receipts)
 
 The flow is far more complete than folklore suggests. The load-bearing pieces:
