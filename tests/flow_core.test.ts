@@ -9,10 +9,12 @@
 import {
   applyModeCeiling,
   applyTurn,
+  briskPace,
   CONTINUE_PHRASE_RE,
   CONTINUE_SIGNAL_RE,
   deriveTurn,
   emptyStepState,
+  isSkipRequest,
   requirementsFor,
   stepDone,
   turnDirective,
@@ -673,4 +675,155 @@ Deno.test("R48: the await_step_work rung fires only after presentation, on held 
   const held = turnDirective({ ...baseArgs, presentedBefore: true } as never);
   eq(held.key, "await_step_work", "held turns use the await rung");
   ok(held.text.includes("never collect answers in chat"), "await rung forbids chat collection");
+});
+
+// ---- R63: mentor-steered pacing ----------------------------------------------------
+// Elissar's session (prod transcript 689bd990, 2026-08-26): four verbatim skip
+// requests never discharged a pacing gate. They are permanent fixtures — if one of
+// these stops matching, her session happens again.
+const ELISSAR_SKIPS = [
+  "no can we move on now",
+  "I said move on I dont want to name anything now. next part od the lesson",
+  "gooooo next fast",
+  "YESYESYEYSEYSYYSYSYSYSS",
+] as const;
+const NOT_SKIPS = [
+  "no",
+  "not yet",
+  "no I'm not ready",
+  "no I don't want to move on",
+  "wait",
+  "hold on",
+  "green means go",
+  "what comes next",
+  "tell me what's next",
+  "how about phone car backpack?",
+  "I said no",
+  "the purpose is to move people and things",
+  "is this the entire lesson????",
+  "I said don't move on",
+] as const;
+
+Deno.test("R63: every Elissar fixture reads as a skip request; refusals and answers never do", () => {
+  for (const text of ELISSAR_SKIPS) {
+    ok(isSkipRequest(text), `fixture must match: "${text}"`);
+  }
+  for (const text of NOT_SKIPS) {
+    ok(!isSkipRequest(text), `must NOT match: "${text}"`);
+  }
+  // The polite-question form is a skip request even without a leading "no".
+  ok(isSkipRequest("can we move on now"), "polite-question skip");
+  ok(isSkipRequest("could we just skip this please"), "polite skip with please");
+});
+
+Deno.test("R63: mentor movement discharges pacing gates only — never code, quiz, or work", () => {
+  const presented: StepState = { ...emptyStepState("a1"), presented_at: T0 };
+  // Acknowledge gate: movement opens it even when the router filed the words as meta.
+  const ack = applyTurn(
+    presented,
+    req({ acknowledge: true }),
+    { mode: "text", text: "no can we move on now" } as never,
+    null,
+    null,
+    T0,
+    null,
+    "meta" as never,
+    "advance",
+  );
+  ok(Boolean(ack.acknowledged_at), "movement discharges the acknowledge gate over a meta routing");
+  // Understanding gate: movement wraps the step like the stuck cap does.
+  const und = applyTurn(
+    presented,
+    req({ understanding: true }),
+    { mode: "text", text: "gooooo next fast" } as never,
+    null,
+    null,
+    T0,
+    null,
+    "meta" as never,
+    "advance",
+  );
+  ok(Boolean(und.understanding_at), "movement discharges the understanding gate");
+  // Integrity gates: movement alone can never make the step done.
+  for (const integrity of [req({ code: true }), req({ quiz: true, quizChoices: [{ id: "a" }] as never })]) {
+    const out = applyTurn(
+      presented,
+      integrity,
+      { mode: "text", text: "skip this" } as never,
+      null,
+      null,
+      T0,
+      null,
+      "continue_signal" as never,
+      "advance",
+    );
+    ok(!stepDone(out, integrity), "movement must not complete a code/quiz-gated step");
+    eq(out.code_passed_at, null, "movement never passes code");
+    eq(out.quiz_passed_at, null, "movement never passes a quiz");
+  }
+  const workReq: StepRequirements = { ...req({ acknowledge: true }), work: true };
+  const work = applyTurn(
+    presented,
+    workReq,
+    { mode: "text", text: "I said move on" } as never,
+    null,
+    null,
+    T0,
+    null,
+    null,
+    "advance",
+  );
+  ok(!stepDone(work, workReq), "movement must not complete a linked-work step");
+});
+
+Deno.test("R63: the router-outage fallback hears the impatient register too", () => {
+  const presented: StepState = { ...emptyStepState("a1"), presented_at: T0 };
+  for (const text of ELISSAR_SKIPS) {
+    const out = applyTurn(
+      presented,
+      req({ acknowledge: true }),
+      { mode: "text", text } as never,
+      null,
+      null,
+      T0,
+      null,
+      null,
+    );
+    ok(Boolean(out.acknowledged_at), `router-null fallback must acknowledge: "${text}"`);
+  }
+  const refuse = applyTurn(
+    presented,
+    req({ acknowledge: true }),
+    { mode: "text", text: "no I don't want to move on" } as never,
+    null,
+    null,
+    T0,
+    null,
+    null,
+  );
+  eq(refuse.acknowledged_at, null, "a refusal must never acknowledge");
+});
+
+Deno.test("R63: briskPace trips on repeated skips and stays quiet otherwise", () => {
+  const student = (content: string) => ({ role: "student", content, payload: {} });
+  const mentor = (movement: string | null) => ({
+    role: "mentor",
+    content: "…",
+    payload: movement ? { movement } : {},
+  });
+  ok(
+    briskPace([mentor("advance"), student("gooooo next fast"), mentor(null)] as never),
+    "two signals in the window are brisk",
+  );
+  ok(
+    !briskPace([student("what does purpose mean"), mentor(null), student("ok")] as never),
+    "ordinary conversation is not brisk",
+  );
+  ok(!briskPace([student("no can we move on now")] as never), "one signal alone is not brisk");
+  // Signals age out: past the 8-turn window they stop counting.
+  const old = Array.from({ length: 8 }, () => student("what about this part"));
+  ok(
+    !briskPace([...old, mentor("advance"), mentor("advance")] as never),
+    "signals beyond the window no longer count",
+  );
 });
