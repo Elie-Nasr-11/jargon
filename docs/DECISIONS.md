@@ -1888,3 +1888,35 @@ narrated as a stuck cap (now falls through to quiz_passed).
 Verified after round two: suite 1062 green, deno flow 21/21, parity exact.
 =======
 >>>>>>> origin/main
+
+## R65 — the recurring bubble had two stacked causes: a fatal stale pointer, and RLS-silenced evidence (2026-08-26)
+
+Owner hit "Something went wrong on our side" again after v110 and pasted gateway
+logs — the first time this failure has ever arrived with its evidence attached.
+Diagnosis, confirmed line-by-line: the client re-sends a pinned session_id the
+account cannot see under RLS (learning_sessions is own-rows-only; the row was
+deleted, another account's, or paired to the wrong lesson) → loadOrCreateSession
+threw "Learning session was not found." → typedError masked it with the student-
+safe bubble → "Try again" replays the identical dead pointer forever. And the R32
+setup-failure recorder — built to make exactly this diagnosable — inserted its
+evidence with user_id NULL under the caller's JWT, which the runtime_events
+insert policy (user_id = auth.uid() or staff) rejects: every setup failure since
+R32 left a 403 where its reason should have been. One mask, invisible causes —
+which is why "the old error" kept "coming back": each recurrence was a different
+bug wearing the same bubble.
+
+Fixes (chat only, no schema):
+- Self-healing resume: a CONFIRMED-EMPTY session lookup falls through to the
+  user's newest session for the lesson, or creates a fresh one — recorded as a
+  stale_session_pointer controlled_error. Transport failures still throw
+  (loadFirst returns null only on an empty 200), so healing never masks an
+  outage. Fresh-open semantics unchanged.
+- Identity, not privilege: the setup recorder now carries the authenticated
+  user's id (authedUserId), so post-auth failures satisfy the existing insert
+  policy. The P8 posture stands — chat still never holds the service key; the
+  reverted alternative (service-role telemetry) was rejected against the pinned
+  posture. Pre-auth failures remain gateway-log-only by design.
+
+Verified: suite 1068 green (new test_r65_session_selfheal pins: no fatal branch,
+heal scoped to empty reads, recorded recurrence, no null-identity recorder
+calls, posture intact); deno flow 21/21; deno-check parity.

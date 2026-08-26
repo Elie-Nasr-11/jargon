@@ -11848,3 +11848,24 @@ assuming coverage (flow.presented false makes this explicit).
 Suggested next task: owner live replay; then task #45 (figure cropping).
 =======
 >>>>>>> origin/main
+
+## Claude -> Codex / Human - 2026-08-26 17:05
+
+Status: Finished
+Summary: R65 — root-caused the recurring student-safe bubble from the owner's
+live log paste (see DECISIONS R65): stale client session pointer made fatal by
+loadOrCreateSession + the R32 failure recorder RLS-rejected (user_id NULL) so
+no evidence ever landed. Fixed: self-healing resume (latest-or-create on a
+confirmed-empty lookup, transport errors still throw, stale_session_pointer
+recorded); setup recorder carries authedUserId (satisfies the existing policy;
+P8 no-service-key posture preserved — a service-role telemetry variant was
+written and reverted against the posture pins).
+Files changed: supabase/functions/chat/index.ts,
+tests/test_r65_session_selfheal.py (new), docs.
+Tests run: python 1068 passed / 4 skipped; deno flow 21/21; deno-check parity.
+Remaining concerns: pre-auth setup failures are still gateway-log-only (by
+posture); where the client got the dead pointer (account switch vs deleted row
+vs cross-lesson cache) is unconfirmed — the new stale_session_pointer events
+will show recurrence patterns in runtime_events now that they can land.
+Suggested next task: owner retests the same lesson after deploy (same click
+should now just work); watch runtime_events for stale_session_pointer.
