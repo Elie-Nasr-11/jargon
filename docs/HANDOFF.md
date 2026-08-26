@@ -11595,3 +11595,38 @@ lesson-1-authored.json), supabase/functions/curriculum-admin/index.ts,
 tests/test_r61_book_build.py, docs/CURRICULUM_IMPORT.md, docs.
 Notes: then re-import x4 + re-publish x17 via pg_net, class_id backfill for the
 ClassSummary surface, verification SQL + deployed-site PDF probes.
+
+## Claude -> Codex / Human - 2026-08-25 17:35
+
+Status: Finished (R62 — every book resource live in both classes)
+Summary: All four chapters re-imported against curriculum-admin v40 with ZERO
+warnings, and the resource layer now carries the whole book. Landed per lesson:
+its page images (full visual census — raster + vector line-art detection; A1's
+drawn diagrams were invisible to the old raster-only pass) plus THREE PDFs (the
+lesson's own pages, its chapter, the whole book), all rendering in-app. Totals:
+165 published lesson_resources = 114 page images + 51 PDFs (23 distinct files
+under frontend/public/books/pdf/ — 17 lesson, 4 chapter, 2 full Teacher
+Editions), 114 published figures, all 17 lessons published. Verified in prod
+SQL row-for-row against the validator table (images 4/8/5/6/2, 2/6/2/2,
+12/12/7/12, 6/8/8/12; docs 3 everywhere; figures mirror images); deployed-site
+probes: /books/pdf/a1-ch1.pdf 200 application/pdf byte-identical to source,
+/books/pdf/a2-book.pdf 200 (7.4MB), new image 200. The 3 stale rows from pages
+the new selection dropped (a2-ch1-l1 p16/p29, a2-ch1-l4 p124) are archived.
+class_id backfilled on all 165 rows (A1 class 64, A2 class 101) so the student
+Class-summary surface lists them; importer stays class-agnostic (patches never
+send class_id).
+Execution notes: publish batch 4 hit 403 Forbidden — the demo-teacher JWT aged
+out mid-run (~35 min; expiry looks like ~30 min, shorter than the assumed 1h).
+Fresh sign-in + retry fixed it. For long pg_net runs: re-sign-in per phase, not
+per session.
+Files changed: docs/HANDOFF.md (this entry).
+Tests run: no code changes this slice; suite last at 1023 green (PR #52); deno
+gate 0.
+Remaining concerns: 17 more background knowledge extractions ran on publish
+(review queue worth a skim). The per-lesson row budget is 15 of chat's 16 —
+a teacher hand-adding materials to a book lesson can push rows out of the
+mentor's fetch; noted in CURRICULUM_IMPORT.md. Teacher-edition red answers are
+student-visible inside the PDFs (owner accepted explicitly).
+Suggested next task: owner opens a lesson as a student — Resources panel shows
+the page images + 3 book PDFs; ask the mentor to "open the chapter pdf". Then
+task #45 (real figure cropping) or the compute upgrade decision.
