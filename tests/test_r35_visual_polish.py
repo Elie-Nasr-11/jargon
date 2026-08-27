@@ -39,11 +39,15 @@ class PhoneOverflowIsStructurallyImpossible(unittest.TestCase):
 
 class PendingHandoffPillSurvivesReload(unittest.TestCase):
     def test_turn_to_message_restores_the_offer(self):
-        self.assertIn("modeOffer:\n        payload.mode_offer &&", MESSAGES)
+        # R67: an applied register shift suppresses the pill on both paths.
+        self.assertIn("!payload.register_shift &&\n        payload.mode_offer", MESSAGES)
         self.assertIn('["practice", "discuss", "lesson"].includes(', MESSAGES)
 
     def test_the_live_envelope_path_still_maps_it(self):
-        self.assertIn("modeOffer: envelope.mode_offer ?? undefined,", MESSAGES)
+        self.assertIn(
+            "modeOffer: envelope.register_shift ? undefined : (envelope.mode_offer ?? undefined),",
+            MESSAGES,
+        )
 
 
 if __name__ == "__main__":

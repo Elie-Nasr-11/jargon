@@ -70,7 +70,7 @@ import {
 // conversation register — the client half of PLATFORM §12.3's invariant. Anything not
 // on this list (an envelope arriving, a retry, a lesson reload mid-session) must NOT
 // change the register; retry sends in its one-shot override without touching it.
-export type RegisterCause = "picker" | "offer" | "suggestion" | "lesson_open";
+export type RegisterCause = "picker" | "offer" | "suggestion" | "lesson_open" | "shift";
 
 // The turn loop for the v6 student surface: resolve a lesson, resume (or create) its session,
 // load the transcript, and send turns carrying the student's declared TurnMode.
@@ -400,6 +400,18 @@ export function useConversation() {
       }
       // Server-authoritative hold: a turn submitted while paused comes back held → re-lock.
       if (envelope.held) setHeldState(true);
+      // R67: the mentor shifted the register on the student's own ask ("give me
+      // exercises" sent in Discuss). The picker follows — applied after the stream
+      // settles, so it lands together with the reply that announces it, and the
+      // picker stays live for the student to shift right back.
+      if (
+        envelope.register_shift &&
+        (envelope.register_shift.to === "lesson" ||
+          envelope.register_shift.to === "practice" ||
+          envelope.register_shift.to === "discuss")
+      ) {
+        setRegister(envelope.register_shift.to, "shift");
+      }
       // Learning framework: this turn's knowledge events become toasts. applyEnvelope
       // runs after the stream settles, so the timing decision (owner: notify after the
       // reply finishes) holds by construction. Queue capped so a backlog can't stack.
@@ -430,7 +442,7 @@ export function useConversation() {
         setKnowledgeToasts((current) => [...current, ...toasts].slice(-3));
       }
     },
-    [setHeldState],
+    [setHeldState, setRegister],
   );
 
   // Point the conversation at a lesson: resume its existing session or create one, then load

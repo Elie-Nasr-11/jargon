@@ -1287,6 +1287,9 @@ export type TypedChatEnvelope = {
     status: string;
   } | null;
   turn_kind?: string;
+  // R67: mentor-driven register shift — the chatbox picker follows it (visible in
+  // the reply's own words, reversible at the picker). One-shot event; absent = none.
+  register_shift?: { to: "lesson" | "practice" | "discuss"; reason: string } | null;
   // P8: consent-first offer to build a live activity for this student. Live-turn only
   // (never replayed on reload).
   artifact_offer?: { label: string; kind: "html_sim" | "deck"; activity_id: string } | null;
