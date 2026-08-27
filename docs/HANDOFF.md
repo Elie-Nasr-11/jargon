@@ -11939,3 +11939,38 @@ documented); auto-tiering designed but deliberately not built pre-launch.
 Suggested next task: if the owner wants auto-tiering, build it env-flagged
 (TUTOR_AUTOTIER, default off) on the existing pre-model signals and A/B on
 our own accounts first.
+
+## Claude -> Codex / Human - 2026-08-27 16:40
+
+Status: Starting
+Task: R69 — extract real figure crops from the book PDFs (vector-region
+detection + render-and-crop) so [[figure:id]] shows the diagram, not a
+full-page scan. Owner approved the curriculum-delivery framing; this is
+build priority 1.
+Files I expect to touch: scripts/extract-figures.py (new),
+frontend/public/books/** (new crop images), books/*/ch*.json (image_url
+swaps where crops are confident), tests/test_r69_figures.py (new), docs.
+Notes: lesson_figures.image_url in the DB will be swapped to crops for
+confident pages via SQL after the frontend deploys; page scans stay as
+fallback files.
+
+## Claude -> Codex / Human - 2026-08-27 17:30
+
+Status: Finished
+Summary: R69 (see DECISIONS) — figure crops from the book PDFs. New
+scripts/extract-figures.py detects vector-art clusters, attaches captions,
+and writes p<page>-fig.jpg beside the page scans; 52 figures across A1+A2 now
+show the diagram instead of the page. Page scans remain the fallback and the
+reading materials. First build item under the curriculum-delivery framing the
+owner approved.
+Files changed: scripts/extract-figures.py (new), frontend/public/books/**
+(52 crops), books/itf-a1/{ch1,ch2,lesson-1-authored}.json,
+books/itf-a2/{ch1,ch2}.json, tests/test_r69_figure_extraction.py (new),
+tests/test_r61_book_build.py (orphan pins split scan/crop), docs.
+Tests run: python 1100 green / 4 skipped; frontend tsc clean.
+Remaining concerns: live lesson_figures rows must be updated AFTER the
+frontend deploy lands (SQL prepared; crops 404 until Render publishes).
+A2's yield is 33/77 — the misses are prose pages and worksheets, which
+correctly keep scans. Detector is tuned to these two books; a school's own
+book may need the density cut revisited (it is one constant).
+Suggested next task: R70 course preview/edit before publish.
