@@ -2139,3 +2139,35 @@ session and evidence row through it; a class with no course linked reports
 no_curriculum rather than a misleading zero.
 
 Pinned in tests/test_r71_class_digest.py.
+
+## R72 — the margin levers: auto-tiering + the context diet (2026-08-27)
+
+The Opus 5 pricing benchmark settled that per-turn routing is not an
+optimization but a PRECONDITION of the price sheet: Opus on literally every
+turn costs $195-391 per student-year to serve, so a defensible 2x quote
+($391-781) exceeds a school's entire textbook budget for 6-8 subjects.
+Together these two levers take Intensive-band serve cost from $504 to $225.
+
+- AUTO-TIERING (worth ~34-42%). A new "mechanical" ModelRoute, defaulting to
+  Haiku 4.5 (TUTOR_MODEL_MECHANICAL), sits beside the benchmark lane. The
+  routing is one-directional and computed from signals the engine ALREADY has
+  before the model call — no extra call, no new classifier. Cheap only for:
+  a quiz tap the server already graded (and only once the quiz is settled), an
+  explicit control press, or a bare move-on in prose. Benchmark for everything
+  else, and specifically for: presenting new material, grading prose, revisits,
+  help requests, questions, attempts, and anything unrecognised. Unsure routes
+  UP. The asymmetry is deliberate — being wrong toward the benchmark costs
+  money, being wrong toward the cheap lane costs a student their lesson.
+- CONTEXT DIET (worth ~22%, no quality trade). The replayed history is about
+  half of every turn's fresh input and is re-sent turn after turn. The diet
+  tapers turns 7-16 from 1200 to 400 chars, and ONLY when a running summary
+  exists to carry that ground (R64). The most recent 6 turns keep their full
+  length, so the R30 fix this could have regressed — the mentor forgetting what
+  it just said — is untouched. The window itself stays 16; the diet shortens
+  text, never drops turns.
+- BOTH ARE ENV-FLAGGED, DEFAULT OFF (TUTOR_AUTOTIER, TUTOR_CONTEXT_DIET). This
+  ships dark: with the flags unset the function behaves exactly as before.
+  Turn on and A/B on our own accounts before any school sees it.
+
+Pinned in tests/test_r72_margin_levers.py (wiring + defaults) and executably in
+tests/flow_core.test.ts (the real autoTierRoute over every guard shape, 22/22).

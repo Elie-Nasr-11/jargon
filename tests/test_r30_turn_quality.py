@@ -30,7 +30,12 @@ class ConversationMemoryWindow(unittest.TestCase):
         # Was 8 turns x 400 chars — the mentor forgot mid-explanation, which testers
         # reported as choppy discourse.
         self.assertIn(".slice(0, 16)", CHAT)
-        self.assertIn('String(turn.content || "").slice(0, 1200)', CHAT)
+        # R72: the context diet may taper OLDER turns back toward 400 when a running
+        # summary exists to carry them, but the R30 guarantee this test defends — the
+        # immediate thread arrives whole — is untouched: the recent turns keep 1200,
+        # and the taper cannot reach them (index >= 6).
+        self.assertIn("index >= 6 ? 400 : 1200", CHAT)
+        self.assertIn("hasRunningSummary", CHAT)
 
     def test_query_fetches_enough_rows_to_fill_it(self):
         self.assertIn("order=created_at.desc&limit=20&select=role,stage", CHAT)
