@@ -2025,3 +2025,32 @@ A1+A2) was delivered as an artifact — measured baseline 16.4k cached block /
 tiers Haiku/Sonnet 5/Opus 5/Fable 5 plus two auto-tier blends; per-turn model
 routing designed on existing pre-model signals (mechanical ~40% of turns →
 cheap tier) but NOT built — env-flagged R-task for after launch if wanted.
+
+## R69 — a figure is the figure, not the page (2026-08-27)
+
+Under the curriculum-delivery framing the book's own visuals ARE the product,
+and a lesson figure was a full-page scan: tap a diagram, get a picture of page
+34 with headers and page number. The mentor prompt tells the model to point at
+what is IN the figure ("the stacked layers labelled B") — nonsense against a
+whole page.
+
+- The books are VECTOR-drawn (zero embedded raster images), so a figure is a
+  cluster of drawing operations. scripts/extract-figures.py clusters them,
+  keeps the ones that are art, attaches the caption below (and a short label
+  above), and renders a tight crop as p<page>-fig.jpg.
+- Crops never replace scans: a page with no confident figure keeps its scan, so
+  a bad detection degrades to yesterday's behaviour, never to a blank. Scans
+  also remain the lesson's reading MATERIALS; crops are its FIGURES.
+- Three rules earned by the books themselves: (a) a lone bordered text box is
+  one of the key-fact banners, never a figure — but a text panel standing
+  BESIDE art belongs to it (the wheat/steps/bread illustration); (b)
+  zero-thickness strokes are real drawings, and treating their empty bounding
+  rect as "nothing" hid every grid line in A2's drawn data tables (34 figures);
+  (c) the activity worksheets are big ruled tables of sentences, separated from
+  illustrations by DENSITY — measured across both books they sit at 9-10 ops
+  per unit area against 21 for the thinnest real figure, so the cut is 15.
+- Yield: 52 crops (A1 19/37, A2 33/77); the rest keep page scans. Chapter docs
+  and the pinned exemplar point at crops where they exist, and the live
+  lesson_figures rows are updated to match after the frontend deploys.
+- Pinned in tests/test_r69_figure_extraction.py (incl. real detection against
+  the committed PDFs) plus the R61 orphan-image pins, now split scan/crop.

@@ -380,7 +380,7 @@
           "title": "Page 9 — From Data to Information",
           "caption": "",
           "alt_text": "Page 9 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p9.jpg",
+          "image_url": "/books/a2-ch1-l1/p9-fig.jpg",
           "source_page": 9
         },
         {
@@ -389,7 +389,7 @@
           "title": "Page 10 — From Data to Information",
           "caption": "",
           "alt_text": "Page 10 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p10.jpg",
+          "image_url": "/books/a2-ch1-l1/p10-fig.jpg",
           "source_page": 10
         },
         {
@@ -398,7 +398,7 @@
           "title": "Page 13 — Organizing Data",
           "caption": "",
           "alt_text": "Page 13 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p13.jpg",
+          "image_url": "/books/a2-ch1-l1/p13-fig.jpg",
           "source_page": 13
         },
         {
@@ -416,7 +416,7 @@
           "title": "Page 15 — Visualizing Data",
           "caption": "",
           "alt_text": "Page 15 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p15.jpg",
+          "image_url": "/books/a2-ch1-l1/p15-fig.jpg",
           "source_page": 15
         },
         {
@@ -425,7 +425,7 @@
           "title": "Page 17 — Visualizing Data",
           "caption": "",
           "alt_text": "Page 17 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p17.jpg",
+          "image_url": "/books/a2-ch1-l1/p17-fig.jpg",
           "source_page": 17
         },
         {
@@ -434,7 +434,7 @@
           "title": "Page 18 — Visualizing Data",
           "caption": "",
           "alt_text": "Page 18 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p18.jpg",
+          "image_url": "/books/a2-ch1-l1/p18-fig.jpg",
           "source_page": 18
         },
         {
@@ -443,7 +443,7 @@
           "title": "Page 19 — Visualizing Data",
           "caption": "",
           "alt_text": "Page 19 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p19.jpg",
+          "image_url": "/books/a2-ch1-l1/p19-fig.jpg",
           "source_page": 19
         },
         {
@@ -479,7 +479,7 @@
           "title": "Page 28 — Career Tips",
           "caption": "",
           "alt_text": "Page 28 of Book A2, From Data to Information",
-          "image_url": "/books/a2-ch1-l1/p28.jpg",
+          "image_url": "/books/a2-ch1-l1/p28-fig.jpg",
           "source_page": 28
         }
       ]
@@ -877,7 +877,7 @@
           "title": "Page 31 — Classifying Data Structures",
           "caption": "",
           "alt_text": "Page 31 of Book A2, Data Structures",
-          "image_url": "/books/a2-ch1-l2/p31.jpg",
+          "image_url": "/books/a2-ch1-l2/p31-fig.jpg",
           "source_page": 31
         },
         {
@@ -886,7 +886,7 @@
           "title": "Page 32 — Classifying Data Structures",
           "caption": "",
           "alt_text": "Page 32 of Book A2, Data Structures",
-          "image_url": "/books/a2-ch1-l2/p32.jpg",
+          "image_url": "/books/a2-ch1-l2/p32-fig.jpg",
           "source_page": 32
         },
         {
@@ -913,7 +913,7 @@
           "title": "Page 39 — Algorithms & Data Structures",
           "caption": "",
           "alt_text": "Page 39 of Book A2, Data Structures",
-          "image_url": "/books/a2-ch1-l2/p39.jpg",
+          "image_url": "/books/a2-ch1-l2/p39-fig.jpg",
           "source_page": 39
         },
         {
@@ -940,7 +940,7 @@
           "title": "Page 42 — Algorithms & Data Structures",
           "caption": "",
           "alt_text": "Page 42 of Book A2, Data Structures",
-          "image_url": "/books/a2-ch1-l2/p42.jpg",
+          "image_url": "/books/a2-ch1-l2/p42-fig.jpg",
           "source_page": 42
         },
         {
@@ -967,7 +967,7 @@
           "title": "Page 45 — Algorithms & Data Structures",
           "caption": "",
           "alt_text": "Page 45 of Book A2, Data Structures",
-          "image_url": "/books/a2-ch1-l2/p45.jpg",
+          "image_url": "/books/a2-ch1-l2/p45-fig.jpg",
           "source_page": 45
         },
         {
@@ -976,7 +976,7 @@
           "title": "Page 49 — Algorithms & Data Structures",
           "caption": "",
           "alt_text": "Page 49 of Book A2, Data Structures",
-          "image_url": "/books/a2-ch1-l2/p49.jpg",
+          "image_url": "/books/a2-ch1-l2/p49-fig.jpg",
           "source_page": 49
         }
       ]
@@ -1324,7 +1324,7 @@
           "title": "Page 72 — Linear Search",
           "caption": "",
           "alt_text": "Page 72 of Book A2, Searching Linear Data",
-          "image_url": "/books/a2-ch1-l3/p72.jpg",
+          "image_url": "/books/a2-ch1-l3/p72-fig.jpg",
           "source_page": 72
         },
         {
@@ -1333,7 +1333,7 @@
           "title": "Page 73 — Linear Search",
           "caption": "",
           "alt_text": "Page 73 of Book A2, Searching Linear Data",
-          "image_url": "/books/a2-ch1-l3/p73.jpg",
+          "image_url": "/books/a2-ch1-l3/p73-fig.jpg",
           "source_page": 73
         },
         {
@@ -1351,7 +1351,7 @@
           "title": "Page 76 — Binary Search",
           "caption": "",
           "alt_text": "Page 76 of Book A2, Searching Linear Data",
-          "image_url": "/books/a2-ch1-l3/p76.jpg",
+          "image_url": "/books/a2-ch1-l3/p76-fig.jpg",
           "source_page": 76
         },
         {
@@ -1360,7 +1360,7 @@
           "title": "Page 77 — Binary Search",
           "caption": "",
           "alt_text": "Page 77 of Book A2, Searching Linear Data",
-          "image_url": "/books/a2-ch1-l3/p77.jpg",
+          "image_url": "/books/a2-ch1-l3/p77-fig.jpg",
           "source_page": 77
         },
         {
@@ -1369,7 +1369,7 @@
           "title": "Page 81 — Binary Search",
           "caption": "",
           "alt_text": "Page 81 of Book A2, Searching Linear Data",
-          "image_url": "/books/a2-ch1-l3/p81.jpg",
+          "image_url": "/books/a2-ch1-l3/p81-fig.jpg",
           "source_page": 81
         },
         {
@@ -1798,7 +1798,7 @@
           "title": "Page 96 — Order & Criteria",
           "caption": "",
           "alt_text": "Page 96 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p96.jpg",
+          "image_url": "/books/a2-ch1-l4/p96-fig.jpg",
           "source_page": 96
         },
         {
@@ -1807,7 +1807,7 @@
           "title": "Page 97 — Order & Criteria",
           "caption": "",
           "alt_text": "Page 97 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p97.jpg",
+          "image_url": "/books/a2-ch1-l4/p97-fig.jpg",
           "source_page": 97
         },
         {
@@ -1816,7 +1816,7 @@
           "title": "Page 98 — Order & Criteria",
           "caption": "",
           "alt_text": "Page 98 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p98.jpg",
+          "image_url": "/books/a2-ch1-l4/p98-fig.jpg",
           "source_page": 98
         },
         {
@@ -1825,7 +1825,7 @@
           "title": "Page 100 — Sorting Algorithms",
           "caption": "",
           "alt_text": "Page 100 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p100.jpg",
+          "image_url": "/books/a2-ch1-l4/p100-fig.jpg",
           "source_page": 100
         },
         {
@@ -1834,7 +1834,7 @@
           "title": "Page 101 — Sorting Algorithms",
           "caption": "",
           "alt_text": "Page 101 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p101.jpg",
+          "image_url": "/books/a2-ch1-l4/p101-fig.jpg",
           "source_page": 101
         },
         {
@@ -1843,7 +1843,7 @@
           "title": "Page 102 — Sorting Algorithms",
           "caption": "",
           "alt_text": "Page 102 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p102.jpg",
+          "image_url": "/books/a2-ch1-l4/p102-fig.jpg",
           "source_page": 102
         },
         {
@@ -1852,7 +1852,7 @@
           "title": "Page 106 — Sorting Algorithms",
           "caption": "",
           "alt_text": "Page 106 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p106.jpg",
+          "image_url": "/books/a2-ch1-l4/p106-fig.jpg",
           "source_page": 106
         },
         {
@@ -1870,7 +1870,7 @@
           "title": "Page 130 — Performance",
           "caption": "",
           "alt_text": "Page 130 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p130.jpg",
+          "image_url": "/books/a2-ch1-l4/p130-fig.jpg",
           "source_page": 130
         },
         {
@@ -1879,7 +1879,7 @@
           "title": "Page 133 — Performance",
           "caption": "",
           "alt_text": "Page 133 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p133.jpg",
+          "image_url": "/books/a2-ch1-l4/p133-fig.jpg",
           "source_page": 133
         },
         {
@@ -1888,7 +1888,7 @@
           "title": "Page 137 — Performance",
           "caption": "",
           "alt_text": "Page 137 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p137.jpg",
+          "image_url": "/books/a2-ch1-l4/p137-fig.jpg",
           "source_page": 137
         },
         {
@@ -1897,7 +1897,7 @@
           "title": "Page 138 — Performance",
           "caption": "",
           "alt_text": "Page 138 of Book A2, Sorting Linear Data",
-          "image_url": "/books/a2-ch1-l4/p138.jpg",
+          "image_url": "/books/a2-ch1-l4/p138-fig.jpg",
           "source_page": 138
         }
       ]

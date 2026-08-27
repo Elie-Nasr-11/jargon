@@ -256,6 +256,9 @@ class ComposedDataTests(unittest.TestCase):
     def test_every_rendered_page_is_referenced(self):
         # The R61 gap in reverse: no orphan JPEGs. Every committed page image is
         # a material of its lesson, and every material's file exists (above).
+        # R69 added a second kind of image beside the page scans — p<n>-fig.jpg,
+        # the cropped figure — which a lesson references as a FIGURE, not as
+        # reading material, so each kind is checked against its own referrer.
         referenced = {
             material["external_url"]
             for lesson in LESSONS
@@ -264,8 +267,26 @@ class ComposedDataTests(unittest.TestCase):
         on_disk = {
             f"/{p.relative_to(ROOT / 'frontend' / 'public')}"
             for p in (ROOT / "frontend" / "public" / "books").glob("*/p*.jpg")
+            if not p.name.endswith("-fig.jpg")
         }
         self.assertEqual(on_disk, referenced)
+
+    def test_every_cropped_figure_is_referenced(self):
+        figures = {
+            figure["image_url"]
+            for lesson in LESSONS
+            for figure in lesson.get("figures", [])
+        }
+        crops = {
+            f"/{p.relative_to(ROOT / 'frontend' / 'public')}"
+            for p in (ROOT / "frontend" / "public" / "books").glob("*/p*-fig.jpg")
+        }
+        self.assertEqual(crops, {url for url in figures if url.endswith("-fig.jpg")})
+        # The page scan a crop came from is never deleted — it stays the
+        # fallback, and stays reading material.
+        for crop in crops:
+            scan = crop.replace("-fig.jpg", ".jpg")
+            self.assertTrue((ROOT / "frontend" / "public" / scan.lstrip("/")).exists(), scan)
 
     def test_every_lesson_carries_the_three_book_pdfs(self):
         for lesson in LESSONS:

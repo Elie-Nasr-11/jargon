@@ -287,7 +287,7 @@
           "title": "Page 10 — Information",
           "caption": "",
           "alt_text": "Page 10 of Book A1, Introducing Computers",
-          "image_url": "/books/a1-ch1-l1/p10.jpg",
+          "image_url": "/books/a1-ch1-l1/p10-fig.jpg",
           "source_page": 10
         },
         {
@@ -296,7 +296,7 @@
           "title": "Page 11 — Information",
           "caption": "",
           "alt_text": "Page 11 of Book A1, Introducing Computers",
-          "image_url": "/books/a1-ch1-l1/p11.jpg",
+          "image_url": "/books/a1-ch1-l1/p11-fig.jpg",
           "source_page": 11
         },
         {
@@ -305,7 +305,7 @@
           "title": "Page 12 — Information",
           "caption": "",
           "alt_text": "Page 12 of Book A1, Introducing Computers",
-          "image_url": "/books/a1-ch1-l1/p12.jpg",
+          "image_url": "/books/a1-ch1-l1/p12-fig.jpg",
           "source_page": 12
         },
         {

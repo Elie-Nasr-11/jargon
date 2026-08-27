@@ -287,7 +287,7 @@
           "title": "Page 10 — Information",
           "caption": "",
           "alt_text": "Page 10 of Book A1, Introducing Computers",
-          "image_url": "/books/a1-ch1-l1/p10.jpg",
+          "image_url": "/books/a1-ch1-l1/p10-fig.jpg",
           "source_page": 10
         },
         {
@@ -296,7 +296,7 @@
           "title": "Page 11 — Information",
           "caption": "",
           "alt_text": "Page 11 of Book A1, Introducing Computers",
-          "image_url": "/books/a1-ch1-l1/p11.jpg",
+          "image_url": "/books/a1-ch1-l1/p11-fig.jpg",
           "source_page": 11
         },
         {
@@ -305,7 +305,7 @@
           "title": "Page 12 — Information",
           "caption": "",
           "alt_text": "Page 12 of Book A1, Introducing Computers",
-          "image_url": "/books/a1-ch1-l1/p12.jpg",
+          "image_url": "/books/a1-ch1-l1/p12-fig.jpg",
           "source_page": 12
         },
         {
@@ -641,7 +641,7 @@
           "title": "Page 31 — General Purpose",
           "caption": "",
           "alt_text": "Page 31 of Book A1, Types of Computers",
-          "image_url": "/books/a1-ch1-l2/p31.jpg",
+          "image_url": "/books/a1-ch1-l2/p31-fig.jpg",
           "source_page": 31
         },
         {
@@ -650,7 +650,7 @@
           "title": "Page 34 — Specific Purpose",
           "caption": "",
           "alt_text": "Page 34 of Book A1, Types of Computers",
-          "image_url": "/books/a1-ch1-l2/p34.jpg",
+          "image_url": "/books/a1-ch1-l2/p34-fig.jpg",
           "source_page": 34
         },
         {
@@ -668,7 +668,7 @@
           "title": "Page 36 — Specific Purpose",
           "caption": "",
           "alt_text": "Page 36 of Book A1, Types of Computers",
-          "image_url": "/books/a1-ch1-l2/p36.jpg",
+          "image_url": "/books/a1-ch1-l2/p36-fig.jpg",
           "source_page": 36
         },
         {
@@ -1018,7 +1018,7 @@
           "title": "Page 55 — Interfaces & Translation",
           "caption": "",
           "alt_text": "Page 55 of Book A1, Systems & Interfaces",
-          "image_url": "/books/a1-ch1-l3/p55.jpg",
+          "image_url": "/books/a1-ch1-l3/p55-fig.jpg",
           "source_page": 55
         },
         {
@@ -1036,7 +1036,7 @@
           "title": "Page 60 — Hardware & Software",
           "caption": "",
           "alt_text": "Page 60 of Book A1, Systems & Interfaces",
-          "image_url": "/books/a1-ch1-l3/p60.jpg",
+          "image_url": "/books/a1-ch1-l3/p60-fig.jpg",
           "source_page": 60
         },
         {
@@ -1054,7 +1054,7 @@
           "title": "Page 71 — Directories",
           "caption": "",
           "alt_text": "Page 71 of Book A1, Systems & Interfaces",
-          "image_url": "/books/a1-ch1-l3/p71.jpg",
+          "image_url": "/books/a1-ch1-l3/p71-fig.jpg",
           "source_page": 71
         }
       ]
@@ -1353,7 +1353,7 @@
           "title": "Page 84 — The Processor",
           "caption": "",
           "alt_text": "Page 84 of Book A1, Behind the Interface",
-          "image_url": "/books/a1-ch1-l4/p84.jpg",
+          "image_url": "/books/a1-ch1-l4/p84-fig.jpg",
           "source_page": 84
         },
         {
@@ -1362,7 +1362,7 @@
           "title": "Page 85 — The Processor",
           "caption": "",
           "alt_text": "Page 85 of Book A1, Behind the Interface",
-          "image_url": "/books/a1-ch1-l4/p85.jpg",
+          "image_url": "/books/a1-ch1-l4/p85-fig.jpg",
           "source_page": 85
         },
         {
@@ -1371,7 +1371,7 @@
           "title": "Page 87 — The Processor",
           "caption": "",
           "alt_text": "Page 87 of Book A1, Behind the Interface",
-          "image_url": "/books/a1-ch1-l4/p87.jpg",
+          "image_url": "/books/a1-ch1-l4/p87-fig.jpg",
           "source_page": 87
         },
         {
@@ -1380,7 +1380,7 @@
           "title": "Page 88 — The Processor",
           "caption": "",
           "alt_text": "Page 88 of Book A1, Behind the Interface",
-          "image_url": "/books/a1-ch1-l4/p88.jpg",
+          "image_url": "/books/a1-ch1-l4/p88-fig.jpg",
           "source_page": 88
         },
         {
