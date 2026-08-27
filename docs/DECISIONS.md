@@ -2171,3 +2171,39 @@ Together these two levers take Intensive-band serve cost from $504 to $225.
 
 Pinned in tests/test_r72_margin_levers.py (wiring + defaults) and executably in
 tests/flow_core.test.ts (the real autoTierRoute over every guard shape, 22/22).
+
+## R73 — realigning the teacher console on the frame (2026-08-27)
+
+The console was built as a general-purpose LMS: subjects -> courses -> units ->
+lessons, "build from material" tucked inside a "+ Lesson" menu, and NOTHING
+anywhere naming which book a lesson came from. But the claim this product is
+sold on — and the only thing a competitor cannot copy without content deals —
+is that the school's OWN book becomes a taught course, and that the medium
+reports back who is learning what. The console did not say either.
+
+Owner chose to realign INSIDE the existing three rooms rather than restructure
+them days before a school launch: same rooms, same URLs, same deep links and
+legacy ?tab= mappings — reframed around the book.
+
+- SOURCE IDENTITY. lessons.import_key (already fetched, never typed or shown)
+  now marks a lesson as a BOOK lesson, and lesson_figures.source_page gives the
+  page range. Both the outline row and the lesson header name the book and its
+  pages, so a teacher can check a lesson against the copy on their desk. A
+  hand-authored lesson claims no source — the console must never imply one that
+  does not exist — and pages are omitted rather than guessed when no figure
+  carried a page number. Draft status still leads the outline meta: that is the
+  thing a teacher must act on.
+- THE BOOK LEADS. Content opens with a books panel above the generic tree: per
+  book, chapters and lessons loaded and how many drafts are awaiting review. It
+  reports what is THERE and never a completion percentage — we have only seen
+  the part of the book that was imported.
+- THE REVIEW GATE IS STANDING. R70 was reachable only from a just-finished
+  build; a book with drafts now offers "Review & publish" at any time.
+- THE LANDING REPORTS BACK. The R71 digest moves from inside Activity to the
+  top of Students, the room a teacher lands in, so the first thing they see is
+  what the class learned. Activity keeps answering "who needs me right now".
+
+Deliberately NOT done: no new rooms, no nav changes, no URL changes. The
+curriculum studio keeps every generic authoring path it had.
+
+Pinned in tests/test_r73_teacher_realignment.py.

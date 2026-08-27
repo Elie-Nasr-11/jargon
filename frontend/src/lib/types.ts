@@ -29,6 +29,18 @@ export type Lesson = {
   grade_band?: string | null;
   // P8: per-lesson opt-in for live mentor-built activities.
   allow_live_artifacts?: boolean | null;
+  // R73: set when this lesson came from an imported book (the import's key). Its
+  // presence is what makes a lesson a BOOK lesson rather than a hand-authored one,
+  // which is the distinction the teacher's console now leads with.
+  import_key?: string | null;
+};
+
+// R73: where a lesson came from in the school's own book — the fact the whole
+// curriculum-delivery pitch rests on, and which the teacher console never showed.
+export type LessonBookSource = {
+  book: string;
+  firstPage: number | null;
+  lastPage: number | null;
 };
 
 // v4.0 learning modes (docs/PLATFORM.md). A step with mode null is a legacy step whose
@@ -154,6 +166,9 @@ export type CurriculumAuthoringData = {
   activities: LessonActivity[];
   quizzes: CurriculumQuizItem[];
   resources: LessonResource[];
+  // R73: min/max book page per lesson, derived from the figures the importer cropped.
+  // Keyed by lesson id; absent for hand-authored lessons.
+  bookPages: Record<string, { first: number; last: number }>;
 };
 
 export type CurriculumBlueprint = {

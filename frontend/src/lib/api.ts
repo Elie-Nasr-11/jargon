@@ -2,6 +2,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { functionUrl, supabase, supabaseAnonKey } from "@/lib/supabase";
 import { cached, invalidateSurface, warm } from "@/lib/surfaceCache";
 import { parseArtifactConfig } from "@/lib/artifact-schema";
+import { pageRangesFromFigures } from "@/features/teacher/bookSource";
 import type { DeckSpec } from "@/lib/artifact-schema";
 import type {
   Assignment,
@@ -1352,6 +1353,7 @@ async function fetchCurriculumAuthoringDataUncached(
     activitiesResult,
     quizzesResult,
     resourcesResult,
+    figurePagesResult,
   ] = await Promise.all([
     supabase.from("subjects").select("*").order("title", { ascending: true }),
     supabase.from("courses").select("*").order("title", { ascending: true }),
@@ -1366,6 +1368,10 @@ async function fetchCurriculumAuthoringDataUncached(
       .neq("status", "archived")
       .order("updated_at", { ascending: false })
       .limit(300),
+    // R73: page numbers so the console can say WHICH pages of the book a lesson
+    // covers. Two columns only — this rides alongside a load that already pulls
+    // every activity and quiz row.
+    supabase.from("lesson_figures").select("lesson_id,source_page").limit(4000),
   ]);
 
   for (const result of [
@@ -1392,6 +1398,18 @@ async function fetchCurriculumAuthoringDataUncached(
     activities: (activitiesResult.data || []) as LessonActivity[],
     quizzes: (quizzesResult.data || []) as CurriculumQuizItem[],
     resources: (resourcesResult.data || []) as LessonResource[],
+    // R73: a figure-page read that fails must never cost a teacher their curriculum
+    // tree — the page range is a nicety, the outline is the room.
+    bookPages: figurePagesResult.error
+      ? {}
+      : Object.fromEntries(
+          pageRangesFromFigures(
+            (figurePagesResult.data || []) as {
+              lesson_id?: string | null;
+              source_page?: number | null;
+            }[],
+          ),
+        ),
   };
 }
 
