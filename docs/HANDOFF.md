@@ -12035,3 +12035,25 @@ first and compare model_usage_events before quoting the savings to anyone.
 Suggested next task: owner A/B (set TUTOR_CONTEXT_DIET=on first — no quality
 trade — then TUTOR_AUTOTIER=on and read a week of transcripts); smoke secrets
 still pending.
+
+## Claude -> Codex / Human - 2026-08-27 21:40
+
+Status: Finished
+Summary: R73 teacher-end realignment (see DECISIONS). New bookSource.ts helper
+and BooksPanel.tsx; Lesson gains import_key; the authoring loader carries
+bookPages (min/max figure page per lesson, best-effort). Content room leads
+with the books panel + standing review gate; outline rows and the lesson
+header name book and pages; the weekly digest moved to the top of Students.
+Files changed: frontend/src/lib/types.ts, frontend/src/lib/api.ts,
+frontend/src/features/teacher/bookSource.ts (new),
+frontend/src/features/teacher/BooksPanel.tsx (new),
+frontend/src/routes/teacher.curriculum.tsx,
+frontend/src/features/teacher/TeacherConsole.tsx,
+tests/test_r73_teacher_realignment.py (new, 14 pins), docs.
+Tests run: python 1152 green / 4 skipped; tsc clean; vite build succeeds.
+Remaining concerns: page ranges come from FIGURES, so a book lesson with no
+cropped figure shows its book but no pages — correct but uneven. The books
+panel counts what was imported, not what the book contains; if a teacher wants
+"chapter 4 of 9 loaded" we need the source PDF's own chapter count.
+Suggested next task: owner walks the Content room on a real class and says
+whether the books panel is the right front door before any further IA work.

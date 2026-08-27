@@ -64,6 +64,8 @@ import {
   readUrlMaterial,
 } from "@/lib/api";
 import type { LessonReview } from "@/lib/api";
+import { bookSourceFor, bookSourceLabel } from "@/features/teacher/bookSource";
+import { BooksPanel, summarizeBooks } from "@/features/teacher/BooksPanel";
 import {
   extractDocxText,
   extractPptxText,
@@ -387,6 +389,13 @@ export function CurriculumStudio({
     [data, currentVersionForCourse],
   );
 
+  // R73: page ranges arrive as a plain object on the authoring payload; the outline
+  // and the editor both want a Map.
+  const bookPages = useMemo(
+    () => new Map(Object.entries(data?.bookPages || {})),
+    [data?.bookPages],
+  );
+
   const lessonsForUnit = useCallback(
     (unitId: string) =>
       (data?.lessons || [])
@@ -476,6 +485,12 @@ export function CurriculumStudio({
         return { unit, annotation: peers.length ? `also in ${peers.join(", ")}` : null };
       }),
     [classUnits, peerClassNames],
+  );
+
+  // R73: the books this class actually teaches, derived from the outline itself.
+  const books = useMemo(
+    () => summarizeBooks(outlineUnits.map((entry) => entry.unit), lessonsForUnit),
+    [outlineUnits, lessonsForUnit],
   );
 
   // Every org course (with its subject for context) — the options list for the
@@ -1637,9 +1652,14 @@ export function CurriculumStudio({
                 />
               </div>
             ) : null}
+            {/* R73: the book leads the Content room. What was built from the school's
+                own material, and what is still an unreviewed draft, before any generic
+                curriculum tree. */}
+            <BooksPanel books={books} onReview={openReview} />
             <ClassworkList
               units={outlineUnits}
               lessonsForUnit={lessonsForUnit}
+              bookPages={bookPages}
               emptyHint="No units yet — upload a chapter with “Build a course from material”, create a unit, or open Books & shared content below to bring in existing material."
               workItems={workItems.filter((entry) => entry.kind === "material")}
               busy={busy}
@@ -1866,9 +1886,28 @@ function UnitRenameInput({
 // subject/course stay invisible plumbing (each unit knows its backing course, which
 // powers the shared-content annotation). Unit drag-reorder stays off (adjacent units
 // can live in different backing courses); lessons still drag within their unit.
+// R73: what a lesson row says about itself. Draft state leads when there is one —
+// that is what a teacher must act on — and a book lesson then names its pages, so the
+// outline can be checked against the physical copy on the desk.
+function outlineLessonMeta(
+  lesson: Lesson,
+  bookPages: Map<string, { first: number; last: number }>,
+): string {
+  const status = lesson.publication_status || "published";
+  const source = bookSourceFor(lesson, bookPages, lesson.id);
+  const pages = source?.firstPage
+    ? source.lastPage && source.lastPage !== source.firstPage
+      ? `pp. ${source.firstPage}–${source.lastPage}`
+      : `p. ${source.firstPage}`
+    : "";
+  if (status !== "published") return pages ? `${status} · ${pages}` : status;
+  return pages || status;
+}
+
 function ClassworkList({
   units,
   lessonsForUnit,
+  bookPages,
   emptyHint,
   workItems,
   busy,
@@ -1887,6 +1926,8 @@ function ClassworkList({
 }: {
   units: Array<{ unit: CurriculumUnit; annotation: string | null }>;
   lessonsForUnit: (unitId: string) => Lesson[];
+  // R73: min/max book page per lesson, for the source line on each row.
+  bookPages: Map<string, { first: number; last: number }>;
   emptyHint?: string;
   workItems: ClassworkItem[];
   busy: boolean;
@@ -2109,7 +2150,12 @@ function ClassworkList({
                           <OutlineRow
                             depth={1}
                             label={lesson.title}
-                            meta={lesson.publication_status || "published"}
+                            // R73: a book lesson says which pages it covers, so a
+                            // teacher can check it against the copy on their desk.
+                            // Draft state still leads when there is one — that is the
+                            // thing they must act on.
+                            meta={outlineLessonMeta(lesson, bookPages)}
+                            metaTitle={bookSourceLabel(bookSourceFor(lesson, bookPages, lesson.id))}
                             hasChildren={false}
                             selected={false}
                             onSelect={() => onSelectLesson(lesson.id)}
@@ -3128,6 +3174,13 @@ function LessonDetail({
   onGenerateSteps: (args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
   onApplySteps: (drafts: CurriculumStepDraft[]) => void;
 }) {
+  // R73: the book page ranges ride the authoring payload as a plain object; this room
+  // wants a Map so the lesson header can name its source pages.
+  const lessonBookPages = useMemo(
+    () => new Map(Object.entries(data.bookPages || {})),
+    [data.bookPages],
+  );
+
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [movingOpen, setMovingOpen] = useState(false);
@@ -3311,7 +3364,13 @@ function LessonDetail({
         ) : null}
 
         {view === "preview" ? (
-          <LessonPreview lesson={lesson} milestone={milestone} steps={steps} quizFor={quizFor} />
+          <LessonPreview
+            lesson={lesson}
+            milestone={milestone}
+            steps={steps}
+            quizFor={quizFor}
+            bookPages={lessonBookPages}
+          />
         ) : (
           <div className="grid gap-5">
             <LessonMetaForm
@@ -4281,11 +4340,13 @@ function LessonPreview({
   milestone,
   steps,
   quizFor,
+  bookPages,
 }: {
   lesson: Lesson;
   milestone: CurriculumAuthoringData["milestones"][number] | null;
   steps: LessonActivity[];
   quizFor: (activityId: string) => CurriculumAuthoringData["quizzes"][number] | null;
+  bookPages: Map<string, { first: number; last: number }>;
 }) {
   return (
     <div className="grid gap-4">
@@ -4295,6 +4356,15 @@ function LessonPreview({
       </div>
       <div>
         <h2 className="font-serif text-display leading-tight text-foreground">{lesson.title}</h2>
+        {/* R73: name the book and pages this lesson was built from. The whole product
+            claim is that this is THEIR book taught one-on-one — a teacher has to be
+            able to see it, and check it against their own copy. */}
+        {bookSourceLabel(bookSourceFor(lesson, bookPages, lesson.id)) ? (
+          <p className="mt-1 flex items-center gap-1.5 text-meta text-muted-foreground">
+            <BookOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
+            {bookSourceLabel(bookSourceFor(lesson, bookPages, lesson.id))}
+          </p>
+        ) : null}
         <p className="mt-2 text-body leading-relaxed text-muted-foreground">
           {milestone?.objective || "Add a lesson objective to preview the target."}
         </p>
