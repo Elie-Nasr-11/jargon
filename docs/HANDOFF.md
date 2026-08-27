@@ -11995,3 +11995,22 @@ student-eye preview yet — the panel reports contents, it does not render the
 lesson as a student meets it.
 Suggested next task: R71 (teacher weekly evidence digest), then R72 margin
 levers.
+
+## Claude -> Codex / Human - 2026-08-27 19:20
+
+Status: Finished
+Summary: R71 weekly evidence digest (see DECISIONS). New teacher-scoped
+admin-ops action teacher_class_digest + ClassDigestCard in the Activity room:
+lessons finished, steps, study time, what to teach again (2+ students only),
+who moved, who did nothing. Read-only, no new tables. Caught and fixed a
+cross-class counting bug against live data (Biology 10 would have shown 111
+turns instead of 0).
+Files changed: supabase/functions/admin-ops/index.ts, frontend (types.ts,
+api.ts, features/teacher/ClassDigestCard.tsx [new], TeacherConsole.tsx),
+tests/test_r71_class_digest.py (new, 15 pins), docs.
+Tests run: python 1127 green / 4 skipped; frontend tsc clean; deno check on
+admin-ops at HEAD parity (2 pre-existing errors, unchanged).
+Remaining concerns: the digest is on-screen only — no email/push yet, which is
+what would make it a true weekly rhythm (needs mail infra). Study minutes are
+inferred from turn spacing, not measured.
+Suggested next task: R72 margin levers (auto-tier routing + context diet).

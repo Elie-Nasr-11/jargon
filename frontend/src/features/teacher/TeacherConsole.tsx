@@ -66,6 +66,7 @@ import {
   normalizeClassSection,
   type ClassSection,
 } from "@/features/teacher/shell/teacherNav";
+import { ClassDigestCard } from "@/features/teacher/ClassDigestCard";
 import { RouteLoader } from "@/components/RouteLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { OverflowMenu } from "@/components/OverflowMenu";
@@ -1467,6 +1468,10 @@ function ClassDetail({
           {section === "activity" && !openAssignmentId && !openAssessmentId ? (
             <div className="panel-fade mt-4 grid gap-6">
               <h3 className="sr-only">Activity</h3>
+              {/* R71: what the class actually learned this week, and what to teach
+                  again — the question a teacher carries into Monday, above the
+                  live-now feed that answers "who needs me right this second". */}
+              <ClassDigestCard classId={item.id} />
               <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
