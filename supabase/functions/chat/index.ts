@@ -1502,6 +1502,8 @@ async function recordRuntimeEvent(
 // Chat-flow Phase 4: estimated cost from a small per-model price table (USD per 1M
 // tokens; cached input billed at the provider's discount). Prefix-matched longest-first
 // so "gpt-4o-mini" wins over "gpt-4o". Unknown models record null, never a guess.
+// Contract (R68): inputTokens is the TOTAL prompt INCLUDING the cached share — both
+// adapters normalize to this, so subtracting cachedTokens leaves the full-price share.
 const MODEL_PRICES: [string, { input: number; cachedInput: number; output: number }][] = [
   ["gpt-4o-mini", { input: 0.15, cachedInput: 0.075, output: 0.6 }],
   ["gpt-4o", { input: 2.5, cachedInput: 1.25, output: 10 }],
@@ -1509,6 +1511,9 @@ const MODEL_PRICES: [string, { input: number; cachedInput: number; output: numbe
   ["gpt-4.1", { input: 2, cachedInput: 0.5, output: 8 }],
   ["claude-3-5-haiku", { input: 0.8, cachedInput: 0.08, output: 4 }],
   ["claude-haiku-4-5", { input: 1, cachedInput: 0.1, output: 5 }],
+  // Sonnet 5 launched at $2/$10 and the scheduled Sept-2026 rise was cancelled;
+  // the longer prefix outranks the generic sonnet row below.
+  ["claude-sonnet-5", { input: 2, cachedInput: 0.2, output: 10 }],
   ["claude-sonnet", { input: 3, cachedInput: 0.3, output: 15 }],
   ["claude-opus", { input: 5, cachedInput: 0.5, output: 25 }],
   ["claude-fable", { input: 10, cachedInput: 1, output: 50 }],
@@ -1972,11 +1977,15 @@ async function callAnthropic(
     model: typeof data?.model === "string" ? data.model : model,
     route,
     provider: "anthropic",
-    // Cache WRITES are ordinary input work (billed at 1.25x — the premium is not
-    // modeled in the price table), so they count into inputTokens; cache READS are
-    // the discounted lane and ride cachedTokens.
+    // R68: inputTokens is the TOTAL prompt (fresh + cache writes + cache reads) —
+    // the estimator subtracts cachedTokens to find the full-price share, so reads
+    // must be inside the total or steady turns clamp fresh to zero and the ledger
+    // understates real spend ~2x. Cache writes ride the full-price lane (their
+    // 1.25x premium is not modeled — a ~2%/turn undercount, noted in DECISIONS).
     inputTokens:
-      Number(usage.input_tokens || 0) + Number(usage.cache_creation_input_tokens || 0),
+      Number(usage.input_tokens || 0) +
+      Number(usage.cache_creation_input_tokens || 0) +
+      Number(usage.cache_read_input_tokens || 0),
     outputTokens: Number(usage.output_tokens || 0),
     cachedTokens: Number(usage.cache_read_input_tokens || 0),
     latencyMs: Date.now() - startedAt,
@@ -2178,10 +2187,12 @@ async function callAnthropicStream(
     if (parsed.type === "message_start") {
       const message = (parsed.message || {}) as DbRow;
       const usage = (message.usage || {}) as DbRow;
-      // Cache writes count as input work; cache reads ride the discounted lane.
+      // R68: total prompt = fresh + cache writes + cache reads (see the
+      // non-streaming site for why reads must be inside the total).
       inputTokens =
         Number(usage.input_tokens || 0) +
-        Number(usage.cache_creation_input_tokens || 0);
+        Number(usage.cache_creation_input_tokens || 0) +
+        Number(usage.cache_read_input_tokens || 0);
       cachedTokens = Number(usage.cache_read_input_tokens || 0);
       if (typeof message.model === "string") resolvedModel = message.model;
     } else if (parsed.type === "content_block_delta") {

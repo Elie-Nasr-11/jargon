@@ -1997,3 +1997,31 @@ morning session — zero chat_failures in 48h of runtime_events.
 Verified: suite 1086 green (new test_r67_register_shift; pillar-2 cause union
 and R35 pill pins consciously widened), frontend tsc clean, deno flow 21/21,
 deno-check parity.
+
+## R68 — honest cost accounting + Sonnet 5 pricing (2026-08-27)
+
+Found while building the launch price sheet from model_usage_events: the
+Anthropic adapters reported inputTokens WITHOUT the cache-read share, while
+estimatedCostUsd assumes the OpenAI shape (prompt total INCLUDES the cached
+share) and subtracts cachedTokens. On steady cached turns the ~16.4k read
+block exceeded the ~4k fresh input, the subtraction clamped fresh to zero,
+and the fresh prompt was billed at the 10% cache rate — the ledger understated
+real Anthropic spend ~2x (Carl's completed ch1-l1 recorded $0.25; true ~$0.54).
+
+- Both Anthropic usage sites now report inputTokens as the TOTAL prompt
+  (fresh + cache writes + cache reads); cachedTokens stays the read lane. The
+  estimator's one contract is stated at the definition. Historical rows are
+  left as written — the raw token columns were always correct.
+- Deliberately unmodeled: the 1.25x cache-write premium (~2%/turn undercount).
+  Adding a creation column is not worth the schema churn at this spend.
+- Sonnet 5 priced explicitly ($2/$10 launch price made permanent per the
+  official pricing docs, 2026-08-27; the scheduled Sept rise was cancelled);
+  the longest-prefix sort lets it beat the generic $3/$15 sonnet row.
+- Pinned in tests/test_r68_cost_accounting.py.
+
+Also this session: the owner's price sheet itself (30 students, 3 lessons/day,
+A1+A2) was delivered as an artifact — measured baseline 16.4k cached block /
+~3.8k fresh / ~525 out per turn, 14-28 turns per lesson, 17 published lessons;
+tiers Haiku/Sonnet 5/Opus 5/Fable 5 plus two auto-tier blends; per-turn model
+routing designed on existing pre-model signals (mechanical ~40% of turns →
+cheap tier) but NOT built — env-flagged R-task for after launch if wanted.
