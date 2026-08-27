@@ -2105,3 +2105,37 @@ it breaks the core promise, so the gate is the safety valve.
 - The panel pre-ticks everything publishable — the common case is "this all
   looks right" — and never pre-ticks a blocked lesson.
 - Pinned in tests/test_r70_review_gate.py.
+
+## R71 — the weekly evidence digest (2026-08-27)
+
+Jargon is sold on one line: "the book never told you who's stuck — this one
+does." That is only true if the teacher is TOLD, on a rhythm, without going
+looking. The hotlist answers "who needs me right now"; the progress report
+answers "how is this child doing, for their parents". Neither answers the
+question a teacher carries into Monday: what did my class learn last week, and
+what must I teach again? This is the renewal engine.
+
+- New teacher-scoped admin-ops action teacher_class_digest, authorized through
+  class_memberships (NOT admin access), read-only and computed on demand over a
+  1-60 day window (default 7). No new table, no scheduled job, nothing to
+  migrate. Rendered as ClassDigestCard at the top of the Activity room.
+- Honest reporting is the whole design. A skill only reaches "worth teaching
+  again" when TWO OR MORE students missed it, so one child's bad afternoon is
+  never shown as a class-wide gap. Study minutes count only gaps under ten
+  minutes between a student's own turns, so the number under-states rather than
+  flatters. Resolved misconceptions are excluded; only evidence scoring under
+  half marks counts as a miss.
+- Silence is reported: every enrolled student with zero turns in the window is
+  named. That is the signal no live dashboard shows and the one teachers most
+  need.
+
+Bug found against production data while building it (and pinned): counting a
+student's turns WITHOUT scoping to this class's own lessons showed every class
+the same 111 turns, because students here are enrolled in six classes each.
+Biology 10 would have reported 111 turns of activity when the true answer was
+ZERO. The digest now resolves the class's lessons through
+class_courses -> course_versions -> units -> lessons and filters every turn,
+session and evidence row through it; a class with no course linked reports
+no_curriculum rather than a misleading zero.
+
+Pinned in tests/test_r71_class_digest.py.
