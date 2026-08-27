@@ -12014,3 +12014,24 @@ Remaining concerns: the digest is on-screen only — no email/push yet, which is
 what would make it a true weekly rhythm (needs mail infra). Study minutes are
 inferred from turn spacing, not measured.
 Suggested next task: R72 margin levers (auto-tier routing + context diet).
+
+## Claude -> Codex / Human - 2026-08-27 20:30
+
+Status: Finished
+Summary: R72 margin levers (see DECISIONS). New "mechanical" model route
+(Haiku) chosen per turn by autoTierRoute from existing pre-model signals, and
+a context diet that tapers older replayed turns when a running summary exists.
+Both env-flagged and DEFAULT OFF — nothing changes until TUTOR_AUTOTIER /
+TUTOR_CONTEXT_DIET are set to "on".
+Files changed: supabase/functions/chat/index.ts, tests/flow_core.test.ts,
+tests/test_r72_margin_levers.py (new), tests/test_chat_streaming.py and
+tests/test_r30_turn_quality.py (pins re-stated against the new wiring, not
+weakened), docs.
+Tests run: python 1138 green / 4 skipped; deno flow 22/22; deno-check parity
+with HEAD (8 pre-existing errors, unchanged).
+Remaining concerns: the levers are UNMEASURED in production — the ~34-42% and
+~22% figures are modeled, not observed. Turn them on for our own accounts
+first and compare model_usage_events before quoting the savings to anyone.
+Suggested next task: owner A/B (set TUTOR_CONTEXT_DIET=on first — no quality
+trade — then TUTOR_AUTOTIER=on and read a week of transcripts); smoke secrets
+still pending.

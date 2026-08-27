@@ -55,7 +55,9 @@ class ChatStreamingStaticTests(unittest.TestCase):
             "? await callModelStream(",
             "makeReplyExtractor((text) => {",
             "streamedReply += text;",
-            ": await callModel(messages, true, \"default\")",
+            # R72: the mentor lane is chosen per turn (auto-tiering); with the flag
+            # off mentorRoute is "default", the benchmark, exactly as before.
+            ": await callModel(messages, true, mentorRoute)",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.chat_fn)

@@ -9,6 +9,7 @@
 import {
   applyModeCeiling,
   applyTurn,
+  autoTierRoute,
   briskPace,
   CONTINUE_PHRASE_RE,
   CONTINUE_SIGNAL_RE,
@@ -896,5 +897,85 @@ Deno.test("R63: briskPace trips on repeated skips and stays quiet otherwise", ()
   ok(
     !briskPace([...old, mentor("advance"), mentor("advance")] as never),
     "signals beyond the window no longer count",
+  );
+});
+
+
+// R72: auto-tiering. The asymmetry is the whole safety argument — being wrong toward
+// the benchmark costs money, being wrong toward the cheap lane costs a student their
+// lesson. These pin that the cheap lane opens ONLY for turns the machine already
+// decided, and that every teaching or judging shape stays on the benchmark.
+Deno.test("R72: only machine-decided turns take the cheap lane", () => {
+  const base = {
+    presentsThisTurn: false,
+    routedKind: null as string | null,
+    answerMode: null as string | null,
+    controlType: null as string | null,
+    isTextExplanation: false,
+    quizLive: false,
+    inRevisit: false,
+    helpRequest: false,
+  };
+
+  // --- the cheap lane, and only these ---
+  eq(
+    autoTierRoute({ ...base, answerMode: "multiple_choice" }),
+    "mechanical",
+    "a quiz tap the server already graded is mechanical",
+  );
+  eq(
+    autoTierRoute({ ...base, controlType: "continue" }),
+    "mechanical",
+    "an explicit control press is mechanical",
+  );
+  eq(
+    autoTierRoute({ ...base, routedKind: "continue_signal" }),
+    "mechanical",
+    "a plain move-on in prose is mechanical",
+  );
+
+  // --- teaching and judgment never go cheap ---
+  eq(
+    autoTierRoute({ ...base, presentsThisTurn: true, controlType: "continue" }),
+    "default",
+    "presenting new material outranks every mechanical signal",
+  );
+  eq(
+    autoTierRoute({ ...base, isTextExplanation: true, routedKind: "continue_signal" }),
+    "default",
+    "grading prose outranks a continue signal",
+  );
+  eq(
+    autoTierRoute({ ...base, inRevisit: true, answerMode: "multiple_choice" }),
+    "default",
+    "a revisit is re-teaching, never cheap",
+  );
+  eq(
+    autoTierRoute({ ...base, helpRequest: true, controlType: "continue" }),
+    "default",
+    "a student saying they are lost is never answered by the cheap lane",
+  );
+  eq(
+    autoTierRoute({ ...base, answerMode: "multiple_choice", quizLive: true }),
+    "default",
+    "a tap while a quiz is still live is not a settled grade",
+  );
+
+  // --- anything unrecognised routes UP ---
+  eq(autoTierRoute(base), "default", "an unrecognised turn stays on the benchmark");
+  eq(
+    autoTierRoute({ ...base, routedKind: "question" }),
+    "default",
+    "a question is the benchmark's job",
+  );
+  eq(
+    autoTierRoute({ ...base, routedKind: "answer_attempt", answerMode: "text" }),
+    "default",
+    "a typed attempt is judgment",
+  );
+  eq(
+    autoTierRoute({ ...base, routedKind: "continue_signal", answerMode: "code" }),
+    "default",
+    "a continue signal carrying code is not a bare move-on",
   );
 });

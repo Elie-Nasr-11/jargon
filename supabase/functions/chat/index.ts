@@ -731,7 +731,10 @@ type OpenAIResult = {
   latencyMs: number;
 };
 
-type ModelRoute = "default" | "understanding";
+// R72: "mechanical" is the auto-tier lane — turns whose reply the machine already
+// scripts (a quiz tap, "next", a control acknowledgement). The mentor's VOICE lane
+// stays "default" (the Opus 5 benchmark) for every turn that teaches or judges.
+type ModelRoute = "default" | "understanding" | "mechanical";
 type ModelUsageTaskType = "mentor_turn" | "grading" | "routing" | "summarization";
 
 type Assessment = {
@@ -1689,10 +1692,12 @@ function resolveProvider(): "anthropic" | "openai" {
 const ANTHROPIC_MODEL_DEFAULTS: Record<ModelRoute, string> = {
   default: "claude-opus-5",
   understanding: "claude-haiku-4-5",
+  mechanical: "claude-haiku-4-5",
 };
 const OPENAI_MODEL_DEFAULTS: Record<ModelRoute, string> = {
   default: "gpt-4o",
   understanding: "gpt-4o-mini",
+  mechanical: "gpt-4o-mini",
 };
 
 function modelFor(route: ModelRoute, provider: "anthropic" | "openai"): string {
@@ -1703,10 +1708,12 @@ function modelFor(route: ModelRoute, provider: "anthropic" | "openai"): string {
   const configured =
     route === "understanding"
       ? envText("TUTOR_MODEL_UNDERSTANDING", fallback)
-      : envText(
-          "TUTOR_MODEL_CONVERSATION",
-          envText("TUTOR_MODEL_DEFAULT", envText("OPENAI_MODEL_DEFAULT", fallback)),
-        );
+      : route === "mechanical"
+        ? envText("TUTOR_MODEL_MECHANICAL", fallback)
+        : envText(
+            "TUTOR_MODEL_CONVERSATION",
+            envText("TUTOR_MODEL_DEFAULT", envText("OPENAI_MODEL_DEFAULT", fallback)),
+          );
   const looksAnthropic = configured.toLowerCase().startsWith("claude");
   if (provider === "anthropic" && !looksAnthropic) return fallback;
   if (provider === "openai" && looksAnthropic) return fallback;
@@ -1716,7 +1723,7 @@ function modelFor(route: ModelRoute, provider: "anthropic" | "openai"): string {
 function temperatureFor(route: ModelRoute): number {
   // OpenAI path only (current Claude models reject sampling params). Conversation wants
   // variety (a key fix for the flat re-asking); grading wants determinism.
-  if (route === "understanding") return 0.2;
+  if (route === "understanding" || route === "mechanical") return 0.2;
   const raw = Number(envText("TUTOR_TEMPERATURE_DEFAULT", "0.6"));
   return Number.isFinite(raw) ? Math.max(0, Math.min(1.2, raw)) : 0.6;
 }
@@ -1729,13 +1736,68 @@ function effortFor(route: ModelRoute, model: string): string | null {
   if (name.startsWith("claude-haiku") || name.startsWith("claude-sonnet-4-5")) {
     return null;
   }
+  const cheapLane = route === "understanding" || route === "mechanical";
   const configured = envText(
-    route === "understanding" ? "TUTOR_EFFORT_UNDERSTANDING" : "TUTOR_EFFORT_CONVERSATION",
-    route === "understanding" ? "low" : "medium",
+    cheapLane ? "TUTOR_EFFORT_UNDERSTANDING" : "TUTOR_EFFORT_CONVERSATION",
+    cheapLane ? "low" : "medium",
   ).toLowerCase();
   return ["low", "medium", "high", "xhigh", "max"].includes(configured)
     ? configured
     : null;
+}
+
+// R72: AUTO-TIERING. The benchmark (Opus 5) is what a student gets whenever the reply
+// carries teaching or judgment. But a large share of turns are ones the machine has
+// already decided: a quiz tap whose grade the server computed, a "next" whose movement
+// is machine law, a control acknowledgement whose text is scripted. Paying benchmark
+// prices for those is what makes Opus quality unsellable at school scale (see
+// DECISIONS, the Opus 5 pricing benchmark).
+//
+// The rule is one-directional: a turn goes cheap only when EVERY condition says it is
+// mechanical. Anything unrecognised, ambiguous, or teaching-shaped stays on the
+// benchmark. Being wrong toward the benchmark costs money; being wrong toward the cheap
+// lane costs a student their lesson — so the asymmetry is deliberate.
+//
+// Off by default (TUTOR_AUTOTIER), so this changes nothing until it is switched on and
+// A/B'd on our own accounts.
+export function autoTierRoute(signals: {
+  presentsThisTurn: boolean;
+  routedKind: string | null;
+  answerMode: string | null;
+  controlType: string | null;
+  isTextExplanation: boolean;
+  quizLive: boolean;
+  inRevisit: boolean;
+  helpRequest: boolean;
+}): ModelRoute {
+  // Teaching is never cheap: if this reply puts new material in front of the student,
+  // it is the benchmark's job, full stop.
+  if (signals.presentsThisTurn) return "default";
+  // Grading prose is judgment — the one place a weaker model shows immediately.
+  if (signals.isTextExplanation) return "default";
+  // A revisit is re-teaching, and a help request is a student saying they are lost.
+  if (signals.inRevisit || signals.helpRequest) return "default";
+
+  // A tap on options the SERVER put on screen: the grade is already computed, and the
+  // reply is an acknowledgement plus the next move.
+  if (signals.answerMode === "multiple_choice" && !signals.quizLive) return "mechanical";
+  // Explicit control presses — Continue, a mode pill, a built card handed over.
+  if (signals.controlType) return "mechanical";
+  // A plain "next"/"go on" in prose: movement is machine law, the reply is a handoff.
+  if (signals.routedKind === "continue_signal" && signals.answerMode === null) {
+    return "mechanical";
+  }
+  // Everything else — questions, attempts, tangents, anything unrecognised — is the
+  // benchmark's. Unsure always routes UP.
+  return "default";
+}
+
+function autoTierEnabled(): boolean {
+  return envText("TUTOR_AUTOTIER", "off").toLowerCase() === "on";
+}
+
+function contextDietEnabled(): boolean {
+  return envText("TUTOR_CONTEXT_DIET", "off").toLowerCase() === "on";
 }
 
 function maxOutputTokensFor(): number {
@@ -7406,6 +7468,10 @@ async function handleTypedRequest(
     // of a step; everything per-turn rides the live block — with `directive` at the
     // very end, closest to generation. On OpenAI the order still feeds their implicit
     // prefix cache.
+    // R72: the diet only tapers older turns when the living summary is there to carry
+    // what the taper drops.
+    const hasRunningSummary =
+      typeof session.running_summary === "string" && session.running_summary.length > 0;
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
       {
@@ -7648,11 +7714,23 @@ async function handleTypedRequest(
           // what it had just said — the conversation read as disjointed. Widened to 16 x
           // 1200. Cost is contained: this payload is prompt-cache-stable, and the rolling
           // summary still covers anything older than the verbatim window.
+          // R72 CONTEXT DIET: the replayed window is ~half of every turn's fresh input
+          // cost, and it is the same text re-sent turn after turn. The diet tapers the
+          // OLDER half of the window (1200 -> 400 chars, the pre-R30 length) while the
+          // most recent 6 turns stay verbatim, because immediate continuity is what R30
+          // was fixing — the mentor forgetting what it just said.
+          //
+          // It only engages when a running summary EXISTS: that summary is what covers
+          // the older ground (R64), so without one there is nothing carrying the context
+          // the taper drops, and the full window is kept. Off by default (TUTOR_CONTEXT_DIET).
           history: context.recentTurns
             .slice(0, 16)
-            .map((turn) => ({
+            .map((turn, index) => ({
               role: turn.role,
-              content: String(turn.content || "").slice(0, 1200),
+              content: String(turn.content || "").slice(
+                0,
+                contextDietEnabled() && hasRunningSummary && index >= 6 ? 400 : 1200,
+              ),
             }))
             .reverse(),
           turn: {
@@ -7793,16 +7871,30 @@ async function handleTypedRequest(
     // malformed, the prose the student already watched arrive IS the reply — salvage
     // it instead of yanking it away and showing an error bubble.
     let streamedReply = "";
+    // R72: which lane this turn rides. Off by default — with TUTOR_AUTOTIER unset this
+    // is always "default", the Opus 5 benchmark, exactly as before.
+    const mentorRoute: ModelRoute = autoTierEnabled()
+      ? autoTierRoute({
+          presentsThisTurn,
+          routedKind,
+          answerMode: answer?.mode ? String(answer.mode) : null,
+          controlType: controlType || null,
+          isTextExplanation,
+          quizLive,
+          inRevisit,
+          helpRequest: Boolean(helpRequest),
+        })
+      : "default";
     const openAIResult = onReplyDelta
       ? await callModelStream(
           messages,
-          "default",
+          mentorRoute,
           makeReplyExtractor((text) => {
             streamedReply += text;
             onReplyDelta(text);
           }),
         )
-      : await callModel(messages, true, "default");
+      : await callModel(messages, true, mentorRoute);
     scheduleBackground(
       recordModelUsage(
         config,
