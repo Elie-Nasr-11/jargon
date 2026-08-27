@@ -6,6 +6,7 @@ import {
   BookOpen,
   Check,
   ChevronRight,
+  ClipboardCheck,
   Eye,
   GripVertical,
   Layers3,
@@ -35,6 +36,8 @@ import type { DeckSpec } from "@/lib/artifact-schema";
 import { lintArtifactHtml } from "@/lib/artifact-lint";
 import {
   archiveCurriculumNode,
+  publishLessons,
+  reviewUnit,
   createArtifactResource,
   createCurriculumCourse,
   createCurriculumLessonStub,
@@ -60,6 +63,7 @@ import {
   readImageMaterial,
   readUrlMaterial,
 } from "@/lib/api";
+import type { LessonReview } from "@/lib/api";
 import {
   extractDocxText,
   extractPptxText,
@@ -260,6 +264,13 @@ export function CurriculumStudio({
   const [renamingUnitId, setRenamingUnitId] = useState<string | null>(null);
   const [buildForUnitId, setBuildForUnitId] = useState<string | null>(null);
   const [buildCourseId, setBuildCourseId] = useState<string | null>(null);
+  // R70: the review gate over one unit's drafts — what the machine wrote, and which
+  // lessons the teacher has ticked to publish.
+  const [reviewUnitId, setReviewUnitId] = useState<string | null>(null);
+  const [reviewRows, setReviewRows] = useState<LessonReview[]>([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewPicked, setReviewPicked] = useState<Set<string>>(() => new Set());
+  const [reviewPublishing, setReviewPublishing] = useState(false);
   const undoable = useUndoable();
   // Deferred-undo ops (delete/publish) hold their optimistic change here so a
   // background refetch (from a create/AI-apply) doesn't resurrect a row that's
@@ -1296,6 +1307,84 @@ export function CurriculumStudio({
       { successMessage: "Activity added to the step." },
     );
 
+  // R70: open the gate on a unit. Read-only — it reports what the build actually
+  // wrote; nothing is published until the teacher ticks lessons and presses publish.
+  const openReview = useCallback(
+    (unitId: string) => {
+      if (!selectedClass || !unitId) return;
+      setReviewUnitId(unitId);
+      setReviewRows([]);
+      setReviewPicked(new Set());
+      setReviewLoading(true);
+      void (async () => {
+        try {
+          const session = await getSession();
+          if (!session) throw new Error("Sign in to review lessons.");
+          const result = await reviewUnit({
+            accessToken: session.access_token,
+            unitId,
+            organizationId: selectedClass.organization_id,
+            classId: selectedClass.id,
+          });
+          setReviewRows(result.lessons);
+          // Pre-tick everything publishable: the common case is "this all looks right",
+          // and a teacher who disagrees unticks. Blocked lessons are never pre-ticked.
+          setReviewPicked(
+            new Set(
+              result.lessons
+                .filter((row) => row.ready && row.publication_status !== "published")
+                .map((row) => row.lesson_id),
+            ),
+          );
+        } catch (error) {
+          setMessage((error as Error).message || "Could not read the lessons for review.");
+          setReviewUnitId(null);
+        } finally {
+          setReviewLoading(false);
+        }
+      })();
+    },
+    [selectedClass],
+  );
+
+  const publishReviewed = useCallback(() => {
+    if (!selectedClass || !reviewPicked.size) return;
+    const ids = [...reviewPicked];
+    setReviewPublishing(true);
+    void (async () => {
+      try {
+        const session = await getSession();
+        if (!session) throw new Error("Sign in to publish lessons.");
+        const result = await publishLessons({
+          accessToken: session.access_token,
+          lessonIds: ids,
+          organizationId: selectedClass.organization_id,
+          classId: selectedClass.id,
+        });
+        setMessage(
+          result.failed
+            ? `${result.published} published, ${result.failed} could not be — open those and try again.`
+            : `${result.published} ${result.published === 1 ? "lesson is" : "lessons are"} live for students.`,
+        );
+        // Keep the gate open on whatever did not land, so the failures stay visible.
+        const landed = new Set(
+          result.results.filter((row) => row.status === "published").map((row) => row.lesson_id),
+        );
+        setReviewRows((rows) =>
+          rows.map((row) =>
+            landed.has(row.lesson_id) ? { ...row, publication_status: "published" } : row,
+          ),
+        );
+        setReviewPicked((picked) => new Set([...picked].filter((id) => !landed.has(id))));
+        await refresh();
+      } catch (error) {
+        setMessage((error as Error).message || "Could not publish those lessons.");
+      } finally {
+        setReviewPublishing(false);
+      }
+    })();
+  }, [selectedClass, reviewPicked, refresh]);
+
   const setPublication = (action: "publish_lesson" | "archive_lesson", lessonId: string) => {
     if (!selectedClass || !lessonId || !data) return;
     const organizationId = selectedClass.organization_id;
@@ -1450,6 +1539,45 @@ export function CurriculumStudio({
           onResume={resumeCourseBuild}
           onRetry={retryBuildItem}
           onDismiss={() => setBuild(null)}
+          onReview={
+            build.items.find((item) => item.status === "done")?.unitId
+              ? () => {
+                  const unitId = build.items.find((item) => item.status === "done")?.unitId;
+                  if (unitId) openReview(unitId);
+                }
+              : undefined
+          }
+        />
+      ) : null}
+
+      {reviewUnitId ? (
+        <CourseReviewPanel
+          review={reviewRows}
+          loading={reviewLoading}
+          selected={reviewPicked}
+          publishing={reviewPublishing}
+          onToggle={(lessonId) =>
+            setReviewPicked((picked) => {
+              const next = new Set(picked);
+              if (next.has(lessonId)) next.delete(lessonId);
+              else next.add(lessonId);
+              return next;
+            })
+          }
+          onSelectAll={(next) =>
+            setReviewPicked(
+              next
+                ? new Set(
+                    reviewRows
+                      .filter((row) => row.ready && row.publication_status !== "published")
+                      .map((row) => row.lesson_id),
+                  )
+                : new Set(),
+            )
+          }
+          onPublish={publishReviewed}
+          onOpenLesson={(lessonId) => selectNode("lesson", lessonId)}
+          onClose={() => setReviewUnitId(null)}
         />
       ) : null}
 
@@ -2297,6 +2425,160 @@ function DetailPane({
 // R57: the whole-course build's face. A run is minutes long and made of many model
 // calls, so the teacher gets a live per-lesson ledger — not a spinner: what is being
 // written now, what landed, what failed and why (with a retry that re-queues only
+// R70: the review gate. A course built from a book lands as twenty-odd drafts, and
+// before this the only way to know what the machine wrote was to open every lesson —
+// so in practice the first reader of an AI-written lesson was a student. This panel
+// reports what is actually IN each draft (steps, what teaches, what checks, figures)
+// and flags what is missing or broken, then publishes the set the teacher ticked.
+//
+// It deliberately shows no quality score. Blocking flags mean broken-as-data (no steps;
+// a multiple-choice step with nothing to choose) and hold that ONE lesson back; every
+// other flag is a note the teacher can publish straight past. Judgment stays theirs.
+function CourseReviewPanel({
+  review,
+  loading,
+  selected,
+  publishing,
+  onToggle,
+  onSelectAll,
+  onPublish,
+  onOpenLesson,
+  onClose,
+}: {
+  review: LessonReview[];
+  loading: boolean;
+  selected: Set<string>;
+  publishing: boolean;
+  onToggle: (lessonId: string) => void;
+  onSelectAll: (next: boolean) => void;
+  onPublish: () => void;
+  onOpenLesson: (lessonId: string) => void;
+  onClose: () => void;
+}) {
+  const drafts = review.filter((item) => item.publication_status !== "published");
+  const publishable = drafts.filter((item) => item.ready);
+  const allSelected = publishable.length > 0 && publishable.every((item) => selected.has(item.lesson_id));
+  const blocked = drafts.filter((item) => !item.ready);
+
+  return (
+    <section className="rounded-card border border-border bg-depth-card shadow-card">
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-title font-medium text-foreground">
+              <ClipboardCheck className="h-4 w-4" strokeWidth={1.7} />
+              Review before students see it
+            </div>
+            <p className="mt-1 text-meta text-muted-foreground">
+              {loading
+                ? "Reading what was written…"
+                : drafts.length
+                  ? `${drafts.length} draft ${drafts.length === 1 ? "lesson" : "lessons"} — check what each one contains, then publish the ones you are happy with.`
+                  : "Every lesson in this chapter is already published."}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {publishable.length ? (
+              <button
+                type="button"
+                onClick={() => onSelectAll(!allSelected)}
+                className="btn btn-secondary btn-sm"
+              >
+                {allSelected ? "Clear all" : "Select all"}
+              </button>
+            ) : null}
+            <button type="button" onClick={onClose} className="btn btn-ghost btn-sm">
+              Close
+            </button>
+          </div>
+        </div>
+
+        {drafts.length ? (
+          <div className="mt-3 grid max-h-[420px] gap-1.5 overflow-y-auto">
+            {drafts.map((item) => {
+              const checked = selected.has(item.lesson_id);
+              return (
+                <div
+                  key={item.lesson_id}
+                  className="rounded-control border border-border/70 bg-depth-sub px-3 py-2.5"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                      checked={checked}
+                      disabled={!item.ready || publishing}
+                      onChange={() => onToggle(item.lesson_id)}
+                      aria-label={`Publish ${item.title}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => onOpenLesson(item.lesson_id)}
+                        className="block max-w-full truncate text-left text-meta font-medium text-foreground hover:underline"
+                      >
+                        {item.title || "Untitled lesson"}
+                      </button>
+                      <div className="mt-0.5 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                        {item.counts.steps} steps · {item.counts.teaching} teach ·{" "}
+                        {item.counts.checks} check · {item.counts.figures} figures
+                      </div>
+                      {item.flags.length ? (
+                        <ul className="mt-1.5 grid gap-1">
+                          {item.flags.map((flag) => (
+                            <li
+                              key={flag.code}
+                              className={`flex items-start gap-1.5 text-meta ${
+                                flag.level === "blocking" ? "text-danger" : "text-muted-foreground"
+                              }`}
+                            >
+                              {flag.level === "blocking" ? (
+                                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                              ) : (
+                                <span className="mt-1.5 inline-block h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" />
+                              )}
+                              <span>{flag.text}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-meta text-success">
+                          <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                          Nothing missing.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {drafts.length ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-meta text-muted-foreground">
+              {blocked.length
+                ? `${blocked.length} ${blocked.length === 1 ? "lesson needs" : "lessons need"} fixing before ${blocked.length === 1 ? "it" : "they"} can go out.`
+                : "Nothing is blocked."}
+            </p>
+            <button
+              type="button"
+              onClick={onPublish}
+              disabled={!selected.size || publishing}
+              className="btn btn-primary btn-sm"
+            >
+              {publishing
+                ? "Publishing…"
+                : `Publish ${selected.size || 0} ${selected.size === 1 ? "lesson" : "lessons"}`}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 // that lesson), and a Stop that takes effect between lessons.
 function CourseBuildProgress({
   build,
@@ -2304,12 +2586,14 @@ function CourseBuildProgress({
   onResume,
   onRetry,
   onDismiss,
+  onReview,
 }: {
   build: CourseBuild;
   onCancel: () => void;
   onResume: () => void;
   onRetry: (index: number) => void;
   onDismiss: () => void;
+  onReview?: () => void;
 }) {
   const done = build.items.filter((item) => item.status === "done").length;
   const failed = build.items.filter((item) => item.status === "failed").length;
@@ -2348,6 +2632,11 @@ function CourseBuildProgress({
                 {done + failed < total || failed ? (
                   <button type="button" onClick={onResume} className="btn btn-secondary btn-sm">
                     Resume
+                  </button>
+                ) : null}
+                {onReview && done ? (
+                  <button type="button" onClick={onReview} className="btn btn-primary btn-sm">
+                    Review &amp; publish
                   </button>
                 ) : null}
                 <button type="button" onClick={onDismiss} className="btn btn-ghost btn-sm">
