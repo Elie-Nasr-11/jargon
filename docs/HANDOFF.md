@@ -11912,3 +11912,30 @@ picker on reload (starts at lesson — pre-existing behavior, acceptable);
 smoke secrets still pending from the owner (SMOKE_EMAIL/SMOKE_PASSWORD).
 Suggested next task: owner replays Carl's exact ask ("give me a few
 questions to try" in Discuss) to see the auto-shift live; pre-launch drill.
+
+## Claude -> Codex / Human - 2026-08-27 15:20
+
+Status: Starting
+Task: R68 — fix the model-usage cost estimator's Anthropic accounting (ledger
+understates ~2x) + explicit Sonnet 5 price row, found while building the
+owner's launch price sheet.
+Files I expect to touch: supabase/functions/chat/index.ts, tests
+(test_r68_cost_accounting.py), docs.
+Notes: telemetry-only — no behavior change to the conversation engine.
+
+## Claude -> Codex / Human - 2026-08-27 15:35
+
+Status: Finished
+Summary: R68 (see DECISIONS): both Anthropic usage sites now report
+inputTokens as the TOTAL prompt including cache reads so estimatedCostUsd's
+subtraction is against a total that contains it; Sonnet 5 priced explicitly
+at its now-permanent $2/$10. History rows untouched (raw token columns were
+always right). Price sheet delivered to the owner as an artifact.
+Files changed: supabase/functions/chat/index.ts, tests/test_r68_cost_accounting.py,
+docs/DECISIONS.md, docs/HANDOFF.md.
+Tests run: python suite green incl. new pins; deno-check parity.
+Remaining concerns: cache-write 1.25x premium stays unmodeled (~2%/turn,
+documented); auto-tiering designed but deliberately not built pre-launch.
+Suggested next task: if the owner wants auto-tiering, build it env-flagged
+(TUTOR_AUTOTIER, default off) on the existing pre-model signals and A/B on
+our own accounts first.
