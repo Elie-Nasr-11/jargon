@@ -11974,3 +11974,24 @@ A2's yield is 33/77 — the misses are prose pages and worksheets, which
 correctly keep scans. Detector is tuned to these two books; a school's own
 book may need the density cut revisited (it is one constant).
 Suggested next task: R70 course preview/edit before publish.
+
+## Claude -> Codex / Human - 2026-08-27 18:05
+
+Status: Finished
+Summary: R70 review gate (see DECISIONS). New curriculum-admin actions
+review_unit (read-only readiness report over a unit's drafts) and
+publish_lessons (bulk publish of the approved set); publishLesson refactored
+so both share applyLessonPublish. New CourseReviewPanel in the teacher
+curriculum route, reachable from the finished course build ("Review &
+publish"), showing per-lesson counts and flags with tick-to-publish.
+Files changed: supabase/functions/curriculum-admin/index.ts,
+frontend/src/lib/api.ts, frontend/src/routes/teacher.curriculum.tsx,
+tests/test_r70_review_gate.py (new), docs.
+Tests run: python 1112 green / 4 skipped (12 new pins); frontend tsc clean;
+deno check on curriculum-admin clean (HEAD parity).
+Remaining concerns: the gate is reachable from a finished build; a standalone
+entry point from a unit's own menu is worth adding once teachers use it. No
+student-eye preview yet — the panel reports contents, it does not render the
+lesson as a student meets it.
+Suggested next task: R71 (teacher weekly evidence digest), then R72 margin
+levers.

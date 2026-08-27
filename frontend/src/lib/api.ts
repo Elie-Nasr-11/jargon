@@ -1417,6 +1417,69 @@ export async function invokeCurriculumAdmin(input: {
   });
 }
 
+// --- R70: the review gate ------------------------------------------------
+// A course built from a book arrives as twenty-odd drafts. review_unit reports what
+// the machine actually wrote into each lesson — counts, and flags for what is missing
+// or structurally broken — and publish_lessons publishes the set the teacher approved
+// through the same server path a single publish uses. Neither invents a quality score:
+// the teacher judges, the server only reports and writes.
+
+export type LessonReviewFlag = {
+  code: string;
+  level: "blocking" | "note";
+  text: string;
+};
+
+export type LessonReview = {
+  lesson_id: string;
+  title: string;
+  position: number;
+  publication_status: string;
+  counts: { steps: number; teaching: number; checks: number; quiz: number; figures: number };
+  flags: LessonReviewFlag[];
+  ready: boolean;
+};
+
+export async function reviewUnit(input: {
+  accessToken: string;
+  unitId: string;
+  organizationId: string;
+  classId?: string | null;
+}): Promise<{ unit_id: string; course_id?: string; lessons: LessonReview[] }> {
+  const data = await callCurriculumAdmin(input.accessToken, {
+    action: "review_unit",
+    unit_id: input.unitId,
+    organization_id: input.organizationId,
+    class_id: input.classId || undefined,
+  });
+  const payload = data as unknown as { unit_id: string; course_id?: string; lessons?: unknown };
+  const lessons = Array.isArray(payload?.lessons) ? (payload.lessons as LessonReview[]) : [];
+  return { unit_id: payload?.unit_id, course_id: payload?.course_id, lessons };
+}
+
+export async function publishLessons(input: {
+  accessToken: string;
+  lessonIds: string[];
+  organizationId: string;
+  classId?: string | null;
+}): Promise<{
+  published: number;
+  failed: number;
+  results: { lesson_id: string; status: string; error?: string }[];
+}> {
+  const data = await callCurriculumAdmin(input.accessToken, {
+    action: "publish_lessons",
+    lesson_ids: input.lessonIds,
+    organization_id: input.organizationId,
+    class_id: input.classId || undefined,
+  });
+  return data as unknown as {
+    published: number;
+    failed: number;
+    results: { lesson_id: string; status: string; error?: string }[];
+  };
+}
+
 // --- Lesson knowledge intake (brain-first Phase D) ------------------------
 // extract_knowledge drafts ideas/vocab/links/practice from lesson content and
 // approved resources; list/review power the studio-lite Knowledge card. All

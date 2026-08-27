@@ -2076,3 +2076,32 @@ school's entire textbook budget for 6-8 subjects. The blends keep Opus on every
 JUDGMENT turn (teaching, prose grading, practice, discuss; ambiguity routes up)
 and pay Haiku prices only for turns whose replies the machine already scripts —
 which is what makes benchmark quality sellable at $189/$299.
+
+## R70 — the review gate over AI-built courses (2026-08-27)
+
+Build priority 1 under the curriculum-delivery framing: a course built from a
+book lands as twenty-odd draft lessons, and the only way to know what the
+machine wrote was to open each one and publish them individually — so in
+practice nobody checked and the first reader of an AI-written lesson was a
+student. Under this framing a badly built course does not disappoint a feature,
+it breaks the core promise, so the gate is the safety valve.
+
+- review_unit (read-only) reports what is THERE per draft lesson — steps,
+  teaching steps, checking steps, figures — plus flags. It deliberately
+  computes no quality score: a machine cannot tell a teacher whether a lesson
+  teaches well, only what it contains.
+- BLOCKING flags are reserved for broken-as-data: no steps at all, or a
+  multiple-choice step with nothing to choose. Thin, unillustrated,
+  nothing-checked and placeholder-prompt lessons are NOTES the teacher can
+  publish straight past. Blocking holds back that one lesson, never the batch.
+- publish_lessons publishes the ticked set; a failure is reported per lesson
+  and the rest still land, because a half-built course must never block the
+  twelve lessons that are fine. Author checks are cached per organization+class
+  so a twenty-lesson publish is not twenty membership round trips.
+- Single and bulk publish now share ONE write path (applyLessonPublish), so a
+  lesson published from the gate is byte-identical in outcome to one published
+  from the editor. Background knowledge extraction is scheduled by the
+  dispatcher for both (autoExtractKnowledgeAfterPublish is scoped there).
+- The panel pre-ticks everything publishable — the common case is "this all
+  looks right" — and never pre-ticks a blocked lesson.
+- Pinned in tests/test_r70_review_gate.py.

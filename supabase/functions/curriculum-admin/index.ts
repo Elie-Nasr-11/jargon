@@ -656,15 +656,14 @@ function scheduleBackground(task: Promise<unknown>): void {
   }
 }
 
-async function publishLesson(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const lessonId = cleanText(body.lesson_id);
-  const classId = cleanText(body.class_id);
-  if (!lessonId) throw new Error("lesson_id is required.");
-  const scope = await courseScopeForLesson(config, lessonId);
-  const organizationId = cleanText(body.organization_id) || scope.organizationId;
-  if (organizationId !== scope.organizationId) throw new Error("organization_id does not match the lesson.");
-  await assertCanAuthor(config, actorId, organizationId, classId);
-
+// R70: the ONE write path that makes a lesson live. publish_lesson and the bulk
+// publish_lessons both call this, so a lesson published from the review gate and a
+// lesson published from the editor land in exactly the same state.
+async function applyLessonPublish(
+  config: Config,
+  scope: { subjectId: string; courseId: string; courseVersionId: string; unitId: string },
+  lessonId: string,
+): Promise<void> {
   const now = new Date().toISOString();
   await patchRows(config, `subjects?id=eq.${encodeURIComponent(scope.subjectId)}`, {
     status: "published",
@@ -691,6 +690,18 @@ async function publishLesson(config: Config, actorId: string, body: DbRow): Prom
     status: "published",
     updated_at: now,
   });
+}
+
+async function publishLesson(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const lessonId = cleanText(body.lesson_id);
+  const classId = cleanText(body.class_id);
+  if (!lessonId) throw new Error("lesson_id is required.");
+  const scope = await courseScopeForLesson(config, lessonId);
+  const organizationId = cleanText(body.organization_id) || scope.organizationId;
+  if (organizationId !== scope.organizationId) throw new Error("organization_id does not match the lesson.");
+  await assertCanAuthor(config, actorId, organizationId, classId);
+
+  await applyLessonPublish(config, scope, lessonId);
 
   return json({
     status: "ok",
@@ -698,6 +709,210 @@ async function publishLesson(config: Config, actorId: string, body: DbRow): Prom
     subject_id: scope.subjectId,
     course_id: scope.courseId,
     unit_id: scope.unitId,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// R70: the REVIEW GATE.
+//
+// A whole course built from a book lands as twenty-odd draft lessons. Before this,
+// the only way to know what the machine actually wrote was to open each lesson and
+// read it, then publish them one at a time — so in practice nobody checked, and the
+// first reader of an AI-written lesson was a student. That is the wrong first reader.
+//
+// The gate is deliberately NOT a quality score. A machine cannot tell a teacher
+// whether a lesson teaches well; it can only report what is THERE — how many steps,
+// whether anything checks understanding, whether a step is structurally broken — and
+// let the teacher judge the rest. Blocking flags are reserved for things that are
+// broken as data (no steps at all; a multiple-choice step with nothing to choose),
+// never for things that are merely thin. Everything else is a note the teacher can
+// publish straight past.
+//
+// The gate never writes. Publishing stays the teacher's explicit act, one lesson or
+// many, through the same applyLessonPublish path the editor uses.
+
+type LessonReviewFlag = { code: string; level: "blocking" | "note"; text: string };
+
+const PLACEHOLDER_OBJECTIVE = "Describe what the learner should be able to do.";
+const PLACEHOLDER_PROMPT = "Introduce this lesson and guide the learner step by step.";
+
+function reviewLesson(
+  lesson: DbRow,
+  steps: DbRow[],
+  figureCount: number,
+  objectives: string[],
+): { flags: LessonReviewFlag[]; counts: DbRow } {
+  const flags: LessonReviewFlag[] = [];
+  const modeOf = (step: DbRow) => cleanText(step.mode) || "";
+  const teaching = steps.filter((s) => ["explanation", "inquiry", "media"].includes(modeOf(s)));
+  const checks = steps.filter((s) => ["assessment", "practice", "assignment", "revision"].includes(modeOf(s)));
+  const mcq = steps.filter((s) => cleanText(s.mode_type) === "mcq");
+  const brokenMcq = mcq.filter((s) => !Array.isArray(s.choices) || s.choices.length < 2);
+
+  if (!steps.length) {
+    flags.push({ code: "no_steps", level: "blocking", text: "No steps — there is nothing to teach yet." });
+  }
+  if (brokenMcq.length) {
+    flags.push({
+      code: "mcq_without_choices",
+      level: "blocking",
+      text: `${brokenMcq.length} multiple-choice ${brokenMcq.length === 1 ? "step has" : "steps have"} no answers to choose from.`,
+    });
+  }
+  if (steps.length && !checks.length) {
+    flags.push({
+      code: "nothing_checked",
+      level: "note",
+      text: "Nothing checks understanding — no quiz, practice or assignment step.",
+    });
+  }
+  if (steps.length && !teaching.length) {
+    flags.push({
+      code: "nothing_taught",
+      level: "note",
+      text: "No teaching steps — the lesson only tests.",
+    });
+  }
+  if (steps.length && steps.length < 5) {
+    flags.push({ code: "thin", level: "note", text: `Only ${steps.length} steps — thin for a full lesson.` });
+  }
+  if (steps.length > 30) {
+    flags.push({ code: "long", level: "note", text: `${steps.length} steps — long enough to split.` });
+  }
+  if (!figureCount) {
+    flags.push({ code: "no_figures", level: "note", text: "No figures from the book are attached." });
+  }
+  if (cleanText(lesson.tutor_prompt) === PLACEHOLDER_PROMPT) {
+    flags.push({ code: "placeholder_prompt", level: "note", text: "The lesson prompt is still the default text." });
+  }
+  if (objectives.some((text) => text === PLACEHOLDER_OBJECTIVE)) {
+    flags.push({ code: "placeholder_objective", level: "note", text: "An objective is still the default text." });
+  }
+
+  return {
+    flags,
+    counts: {
+      steps: steps.length,
+      teaching: teaching.length,
+      checks: checks.length,
+      quiz: mcq.length,
+      figures: figureCount,
+    },
+  };
+}
+
+// Read-only: what did the machine actually write into this unit?
+async function reviewUnit(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const unitId = cleanText(body.unit_id);
+  const classId = cleanText(body.class_id);
+  if (!unitId) throw new Error("unit_id is required.");
+
+  const lessons = (await serviceFetch(
+    config,
+    `/rest/v1/lessons?unit_id=eq.${enc(unitId)}&publication_status=neq.archived` +
+      `&order=unit_position.asc&select=id,title,unit_position,publication_status,tutor_prompt`,
+  )) as DbRow[];
+  if (!Array.isArray(lessons) || !lessons.length) {
+    return json({ status: "ok", unit_id: unitId, lessons: [] });
+  }
+
+  // Authorization follows the unit's own course scope, exactly like publish does.
+  const scope = await courseScopeForLesson(config, cleanText(lessons[0].id));
+  const organizationId = cleanText(body.organization_id) || scope.organizationId;
+  if (organizationId !== scope.organizationId) throw new Error("organization_id does not match the unit.");
+  await assertCanAuthor(config, actorId, organizationId, classId);
+
+  const ids = lessons.map((lesson) => cleanText(lesson.id)).filter(Boolean);
+  const inList = `(${ids.map((id) => `"${id}"`).join(",")})`;
+  const [steps, figures, milestones] = await Promise.all([
+    serviceFetch(config, `/rest/v1/lesson_activities?lesson_id=in.${inList}&select=lesson_id,mode,mode_type,choices`),
+    serviceFetch(config, `/rest/v1/lesson_figures?lesson_id=in.${inList}&select=lesson_id`),
+    serviceFetch(config, `/rest/v1/milestones?lesson_id=in.${inList}&select=lesson_id,objective`),
+  ]);
+
+  const bucket = <T extends DbRow>(rows: unknown): Map<string, T[]> => {
+    const map = new Map<string, T[]>();
+    for (const row of Array.isArray(rows) ? (rows as T[]) : []) {
+      const key = cleanText((row as DbRow).lesson_id);
+      const list = map.get(key);
+      if (list) list.push(row);
+      else map.set(key, [row]);
+    }
+    return map;
+  };
+  const stepsBy = bucket(steps);
+  const figuresBy = bucket(figures);
+  const milestonesBy = bucket(milestones);
+
+  const reviewed = lessons.map((lesson) => {
+    const id = cleanText(lesson.id);
+    const { flags, counts } = reviewLesson(
+      lesson,
+      stepsBy.get(id) || [],
+      (figuresBy.get(id) || []).length,
+      (milestonesBy.get(id) || []).map((row) => cleanText(row.objective)),
+    );
+    return {
+      lesson_id: id,
+      title: cleanText(lesson.title),
+      position: Number(lesson.unit_position) || 0,
+      publication_status: cleanText(lesson.publication_status) || "draft",
+      counts,
+      flags,
+      ready: !flags.some((flag) => flag.level === "blocking"),
+    };
+  });
+
+  return json({
+    status: "ok",
+    unit_id: unitId,
+    course_id: scope.courseId,
+    lessons: reviewed,
+  });
+}
+
+// Publish the set the teacher approved. Every lesson goes through the same scope and
+// author checks as a single publish; a lesson that fails is reported and the rest still
+// land, because a half-built course must never block the twelve lessons that are fine.
+async function publishLessons(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const ids = Array.isArray(body.lesson_ids)
+    ? body.lesson_ids.map((value) => cleanText(value)).filter(Boolean)
+    : [];
+  const classId = cleanText(body.class_id);
+  if (!ids.length) throw new Error("lesson_ids is required.");
+  if (ids.length > 60) throw new Error("Publish at most 60 lessons at a time.");
+
+  const results: DbRow[] = [];
+  const authorized = new Set<string>();
+  for (const lessonId of ids) {
+    try {
+      const scope = await courseScopeForLesson(config, lessonId);
+      const organizationId = cleanText(body.organization_id) || scope.organizationId;
+      if (organizationId !== scope.organizationId) {
+        throw new Error("organization_id does not match the lesson.");
+      }
+      // One author check per organization+class pair, not per lesson: a twenty-lesson
+      // publish should not cost twenty membership round trips.
+      const authKey = `${organizationId}|${classId}`;
+      if (!authorized.has(authKey)) {
+        await assertCanAuthor(config, actorId, organizationId, classId);
+        authorized.add(authKey);
+      }
+      await applyLessonPublish(config, scope, lessonId);
+      results.push({ lesson_id: lessonId, status: "published" });
+    } catch (error) {
+      results.push({ lesson_id: lessonId, status: "failed", error: errorMessage(error) });
+    }
+  }
+
+  const published = results.filter((row) => row.status === "published").map((row) => cleanText(row.lesson_id));
+  // Objectives + vocab are drafted in the background by the dispatcher, which is the
+  // scope autoExtractKnowledgeAfterPublish lives in — same path a single publish takes.
+  return json({
+    status: "ok",
+    published: published.length,
+    failed: results.length - published.length,
+    results,
   });
 }
 
@@ -3401,6 +3616,31 @@ Deno.serve(async (req: Request) => {
         autoExtractKnowledgeAfterPublish(config, actorId, record).catch((err) => {
           console.warn("auto extract_knowledge on publish failed:", errorMessage(err));
         }),
+      );
+      return response;
+    }
+    if (action === "review_unit") return await reviewUnit(config, actorId, record);
+    if (action === "publish_lessons") {
+      const response = await publishLessons(config, actorId, record);
+      // Every lesson that landed gets the same background knowledge draft a single
+      // publish gets — read back off a clone so the teacher's response is untouched.
+      scheduleBackground(
+        response
+          .clone()
+          .json()
+          .then(async (payload: DbRow) => {
+            const rows = Array.isArray(payload?.results) ? (payload.results as DbRow[]) : [];
+            for (const row of rows) {
+              if (cleanText(row.status) !== "published") continue;
+              await autoExtractKnowledgeAfterPublish(config, actorId, {
+                ...record,
+                lesson_id: cleanText(row.lesson_id),
+              });
+            }
+          })
+          .catch((err: unknown) => {
+            console.warn("auto extract_knowledge on bulk publish failed:", errorMessage(err));
+          }),
       );
       return response;
     }
