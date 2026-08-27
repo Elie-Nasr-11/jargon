@@ -459,6 +459,7 @@ stays invisible until the whole object lands):
   "link": null,
   "new_idea": null,
   "mode_offer": null,
+  "register_shift": null,
   "movement": null,
   "student_action": "meta",
   "flow_summary": ""
@@ -484,10 +485,22 @@ ONE per reply; the label is the natural continuation of your sentence, never a b
 mid-prose ("[[action:practice|Practice This Idea]]" is wrong); and never claim a control exists that
 you have not written this way.
 Set "mode_offer" to { "mode": "practice" | "discuss", "topic": "<what to work on>", "label": "<pill text,
-2-4 words like 'Practice this idea'>" } ONLY when a content beat just wrapped and one more rep (practice)
-or an open conversation (discuss) would genuinely serve THIS student on THIS topic. When you set it, the
-PILL carries the action — never also write the "try practicing X" / "think of three more Y" sentence in
-your prose; close short and let the button speak. Null on most turns.
+2-4 words like 'Practice this idea'>" } when a content beat just wrapped and one more rep (practice)
+or an open conversation (discuss) would genuinely serve THIS student on THIS topic — or mid-step, when
+the conversation's own flow shows the register no longer fits (repeated struggle that wants drilling;
+a curiosity thread that wants open discussion) and flow.room does not say a register suggestion or
+shift appeared recently. When you set it, the PILL carries the action — never also write the "try
+practicing X" / "think of three more Y" sentence in your prose; close short and let the button speak.
+Null on most turns.
+Set "register_shift" to { "to": "lesson" | "practice" | "discuss", "reason": "<a few words>" } ONLY
+when the student's LATEST message explicitly asks for what another register IS: "give me exercises /
+questions to try / quiz me" -> "practice"; "can we just talk about this / I want to explore" ->
+"discuss"; "back to the lesson" or a demand to move on from Practice/Discuss -> "lesson". The switch
+happens FOR them — the chatbox register moves with your reply — so announce it in one natural clause
+("switching you to practice —") and act in the new register IMMEDIATELY: shifting to practice, pose
+the first exercise now; shifting to lesson, restate the step's open ask in one line. A shift serves
+their STATED ask, never your own plan — when the idea is yours, use mode_offer instead. It cannot
+skip graded work and never fires while quiz options are on screen. Null on almost every turn.
 Set "movement" to "advance" when the student's LATEST message asks to move on, skip, or go faster —
 in ANY register: calm ("ok", "next", "ready"), impatient ("no can we move on now", "I said move on",
 "gooooo next fast"), or exasperated ("YESYESYES"). A message that both complains and demands forward
@@ -620,6 +633,11 @@ type Envelope = {
   // design (applyModeCeiling); without this pill the only exit was the mode picker,
   // which the demo showed nobody finds.
   mode_offer?: { mode: "practice" | "discuss" | "lesson"; topic: string; label: string } | null;
+  // R67: the mentor-driven register shift — the chatbox picker follows it on the
+  // client (visible in the reply's own words, reversible at the picker). A value
+  // shifts; ABSENT means nothing happened. One-shot event, not client state: there
+  // are no null-clearing semantics to replay.
+  register_shift?: { to: "lesson" | "practice" | "discuss"; reason: string } | null;
   // R48: the current step IS a real work item (linked assignment/quiz) the student
   // hasn't submitted — the client renders a hand-off card that opens the matching
   // surface. Same tri-state contract as mode_offer: a value offers, null clears
@@ -976,6 +994,18 @@ function makeEnvelope(partial: Partial<Envelope> = {}): Envelope {
           topic: raw.topic.slice(0, 120),
           label: raw.label.slice(0, 60),
         };
+      }
+      return undefined;
+    })(),
+    // R67: shape-validated passthrough so a dedup replay of a stored envelope
+    // re-applies its shift (the shift belongs to that turn); malformed → absent.
+    register_shift: (() => {
+      const raw = partial.register_shift as { to?: unknown; reason?: unknown } | null | undefined;
+      if (
+        raw &&
+        (raw.to === "lesson" || raw.to === "practice" || raw.to === "discuss")
+      ) {
+        return { to: raw.to, reason: String(raw.reason || "").slice(0, 80) };
       }
       return undefined;
     })(),
@@ -7176,6 +7206,26 @@ async function handleTypedRequest(
     const quizLive = draftFlow.nextAction === "choose";
     const skipShapedTurn =
       answer?.mode === "text" && isSkipRequest(String(answer?.text || ""));
+    // R67: register-move memory, derived from the persisted mentor payloads like
+    // briskPace — no schema. Shifts are counted over a tighter window (anti-flap:
+    // the picker must never ping-pong) than suggestions (pill fatigue).
+    const recentRegisterMoves = (() => {
+      let shifts = 0;
+      let offers = 0;
+      let mentorTurns = 0;
+      for (const turn of context.recentTurns || []) {
+        if (String(turn?.role) !== "mentor") continue;
+        mentorTurns += 1;
+        if (mentorTurns > 6) break;
+        const payload =
+          turn.payload && typeof turn.payload === "object" && !Array.isArray(turn.payload)
+            ? (turn.payload as DbRow)
+            : null;
+        if (payload?.register_shift && mentorTurns <= 4) shifts += 1;
+        if (payload?.mode_offer) offers += 1;
+      }
+      return { shifts, offers };
+    })();
     const flowOwed = inRevisit
       ? "nothing"
       : requirements.work === true
@@ -7249,15 +7299,25 @@ async function handleTypedRequest(
             : 'This reply ENDS the step — follow CLOSING A STEP: serve anything they asked first, then close in a sentence or two ending with a fresh "Shall we continue?" variant.',
         );
       }
-      // R31e: the ceiling refused to ADVANCE — rightly — but the reply must answer
-      // the ask instead of pretending they said nothing.
+      // R31e -> R67: the ceiling refused to ADVANCE — rightly — but the reply must
+      // answer the ask instead of pretending they said nothing. The register is now
+      // switched back to Lesson automatically (the deterministic belt below emits
+      // register_shift even when the model omits it); the way-back pill still
+      // attaches for older clients, so the prose never needs to name a control.
       if (advanceAskedButCeilinged && !quizLive) {
         flowRoom.push(
-          `They just asked to move on, but they are in ${declaredMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. In one or two sentences: tell them plainly that this mode is for ${declaredMode === "practice" ? "extra reps" : "exploring"} and doesn't move the lesson forward, and that switching back to Lesson mode is what picks the steps back up. Offer the way back INLINE, in your own sentence, as [[action:lesson|back to Lesson mode]] (or your own natural wording inside those brackets) — it renders as clickable text. Do not name any other control.${
+          `They just asked to move on, but they are in ${declaredMode === "practice" ? "Practice" : "Discuss"} mode, which never advances the lesson. Do NOT re-teach or re-summarize the step — they have heard it. The register is being switched back to Lesson for them with this reply: say so plainly in one or two sentences ("taking you back to the lesson —") and tell them their next go-ahead moves it forward. Do not name any other control.${
             declaredMode === "practice"
               ? " Skip the next exercise this turn — the way back IS this reply's one ask (EXACTLY ONE ASK)."
               : ""
           }`,
+        );
+      }
+      // R67: cooldown honesty — the server will strip a rapid second suggestion or
+      // shift anyway; telling the model keeps prose and chrome from disagreeing.
+      if (recentRegisterMoves.offers > 0 || recentRegisterMoves.shifts > 0) {
+        flowRoom.push(
+          "A register suggestion or shift appeared within the last few turns — do not set mode_offer or register_shift this turn.",
         );
       }
       // R32c: they ANSWERED in a register that cannot mark it — respond to the
@@ -8135,17 +8195,58 @@ async function handleTypedRequest(
     // student_action, or the draft kind when it was omitted) — next to the raw
     // student_action passthrough, so a register-ceilinged claim stays auditable.
     envelope.turn_kind = foldKind ?? undefined;
-    // Phase A: the mode hand-off pill rides only a turn that CLOSED a beat — an advancing
-    // turn or the step/lesson concluding — and never alongside live quiz options or a
-    // revisit frame. Anything else the model proposed is dropped here.
+    // R67: AUTO REGISTER SHIFT. The mentor may move the chatbox register when the
+    // student's own words asked for what another register IS (Carl, live 2026-08-27:
+    // "Can you give me a few questions to try?" sent in Discuss got an ungraded
+    // shadow-drill, and he had to find the mode picker himself and re-send). The
+    // model decides the MEANING; the machine enforces the LAW: a shift is visible
+    // (the reply announces it) and reversible (the picker stays live), it changes
+    // only what the client sends NEXT turn (gates and ceilings are untouched — this
+    // turn folded under the register it arrived in), it never fires in a revisit or
+    // over live quiz options, never OUT of Lesson while graded work is owed, and
+    // never twice in quick succession (anti-flap window).
+    const shiftRaw =
+      parsed.register_shift && typeof parsed.register_shift === "object"
+        ? (parsed.register_shift as DbRow)
+        : null;
+    const shiftTo: StudentTurnMode | null =
+      shiftRaw &&
+      (shiftRaw.to === "lesson" || shiftRaw.to === "practice" || shiftRaw.to === "discuss")
+        ? (shiftRaw.to as StudentTurnMode)
+        : null;
+    const integrityOwed =
+      flowOwed === "a quiz tap" || flowOwed === "a code run" || flowOwed === "a submission";
+    const shiftLegal =
+      !inRevisit &&
+      finalFlow.nextAction !== "choose" &&
+      recentRegisterMoves.shifts === 0;
+    const registerShift: { to: StudentTurnMode; reason: string } | null =
+      shiftTo &&
+      shiftTo !== (declaredMode ?? "lesson") &&
+      shiftLegal &&
+      (shiftTo === "lesson" || !integrityOwed)
+        ? { to: shiftTo, reason: String(shiftRaw?.reason || "").slice(0, 80) }
+        : // Deterministic belt (R31e -> R67): an advance-demand in a ceilinged
+          // register goes back to Lesson even when the model omitted the field —
+          // the way-back pill below still covers older clients.
+          advanceAskedButCeilinged && shiftLegal
+          ? { to: "lesson", reason: "you asked to move on" }
+          : null;
+    if (registerShift) envelope.register_shift = registerShift;
+    // Phase A -> R67: the mode hand-off pill rides a beat-closing turn as before, and
+    // now also a mid-step turn when the flow calls for it — but never alongside live
+    // quiz options, a revisit frame, an auto-shift this same turn, or within the
+    // suggestion cooldown (pill fatigue is how chrome gets ignored).
     const beatClosed =
       advancing ||
       finalFlow.stage === "complete" ||
       finalFlow.nextAction === "complete";
     if (
-      !beatClosed ||
       inRevisit ||
-      (envelope.choices && envelope.choices.length)
+      (envelope.choices && envelope.choices.length) ||
+      registerShift !== null ||
+      (!beatClosed &&
+        (recentRegisterMoves.offers > 0 || recentRegisterMoves.shifts > 0))
     ) {
       envelope.mode_offer = null;
     }

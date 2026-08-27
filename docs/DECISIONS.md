@@ -1953,3 +1953,47 @@ to us with reasons (runtime_events now receives evidence — R65).
 
 Verified: suite 1073 green (new test_r66_launch_hardening), deno flow 21/21,
 deno-check parity.
+
+## R67 — students speak in intent, not register names: auto shift + flow-driven suggestions (2026-08-27)
+
+Owner: "lets also add auto mode shift and shift suggestions based on conversation
+flow" — and the live case arrived the same morning. Carl, in Discuss, typed "Can
+you give me a few questions to try?"; the mentor obliged with an ungraded
+shadow-drill in the wrong register (no mastery targeting, no teacher banks, no
+grading), and Carl had to discover the mode picker himself and re-send the same
+words in Practice. The register system worked exactly as built — and still made
+the student do the machine's job.
+
+The context-first split extends one field further:
+- The MENTOR decides meaning: a new output field `register_shift` ({to, reason}),
+  set only when the student's own words asked for what another register IS
+  ("give me exercises / quiz me" → practice; "can we just talk about this" →
+  discuss; "back to the lesson" / a move-on demand from Practice/Discuss →
+  lesson). The reply announces the switch in a natural clause and acts in the
+  new register immediately.
+- The MACHINE decides law: a shift is visible and reversible (the client picker
+  follows after the stream settles and stays live); it changes only what the
+  client sends NEXT turn — this turn folded under the register it arrived in,
+  so gates/ceilings are byte-untouched (applyModeCeiling count still 4); never
+  in a revisit, never over live quiz options, never OUT of Lesson while graded
+  work is owed (flow.owed integrity items), never twice within the anti-flap
+  window (derived from persisted mentor payloads, like briskPace — no schema).
+- The R31e dead-end closes for good: an advance-demand in a ceilinged register
+  now emits the lesson-ward shift DETERMINISTICALLY even when the model omits
+  the field; the way-back pill still attaches for older clients, and a client
+  that applied the shift suppresses the now-redundant pill (both mapping paths).
+- Suggestions widen: mode_offer may now ride mid-step when the conversation's
+  own flow shows the register no longer fits — behind a cooldown (no offer or
+  shift in the recent window), never over live options/revisits, and a
+  flow.room fact tells the model when the cooldown is active so prose and
+  chrome never disagree.
+
+Also this session: reviewed every chat from today + yesterday (Carl ×2, Elie
+×3; Elissar previously). R63 movement verified live ("Yes go on to that" → a
+one-line handoff), the practice drills are strong (varied shapes, honest
+escalation), and R65's self-heal fired 4× including minutes before Carl's
+morning session — zero chat_failures in 48h of runtime_events.
+
+Verified: suite 1086 green (new test_r67_register_shift; pillar-2 cause union
+and R35 pill pins consciously widened), frontend tsc clean, deno flow 21/21,
+deno-check parity.

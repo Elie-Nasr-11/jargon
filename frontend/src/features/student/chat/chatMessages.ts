@@ -223,6 +223,11 @@ export function turnToMessage(turn: LearningTurn): Msg | null {
       // pill was built to close. The transcript renders offers only on the latest
       // mentor message, so accepted/stale offers stay retired.
       modeOffer:
+        // R67: an auto register shift supersedes the pill — the server keeps
+        // attaching the way-back pill for OLDER clients, but a client that applied
+        // the shift must not also render a button pointing at the register the
+        // student is already in.
+        !payload.register_shift &&
         payload.mode_offer &&
         typeof payload.mode_offer === "object" &&
         ["practice", "discuss", "lesson"].includes(
@@ -314,7 +319,10 @@ export function envelopeMessage(envelope: TypedChatEnvelope, turnMode?: string):
     resources: envelope.resources?.length ? envelope.resources : undefined,
     // R30: figures this reply showed, rendered inline where its [[figure:id]] marker sits.
     figures: envelope.figures?.length ? envelope.figures : undefined,
-    modeOffer: envelope.mode_offer ?? undefined,
+    // R67: an applied register shift supersedes the way-back pill (same rule as the
+    // replay path below — the picker already moved, so the button would point at
+    // the register the student is now in).
+    modeOffer: envelope.register_shift ? undefined : (envelope.mode_offer ?? undefined),
     artifactOffer: envelope.artifact_offer ?? undefined,
     workOffer: envelope.work_offer ?? undefined,
     turnMode,

@@ -11888,3 +11888,27 @@ Remaining concerns / OWNER ACTIONS to arm the smoke:
 Suggested next task: owner drill — a mini class of real student accounts
 runs one full lesson end-to-end before launch day; verify Anthropic rate
 tier covers a classroom's concurrency.
+
+## Claude -> Codex / Human - 2026-08-27 14:30
+
+Status: Finished
+Summary: R67 auto register shift + flow-driven suggestions (see DECISIONS
+R67), built from the live transcript review the owner requested (Carl today:
+asked for exercises in Discuss, had to find the picker himself). Mentor
+output gains register_shift; server enforces visibility/reversibility/
+next-turn-only/no-revisit/no-live-quiz/no-integrity-outbound/anti-flap; the
+R31e advance-demand belt emits the lesson-ward shift deterministically (pill
+kept for old clients, suppressed on new ones); mode_offer widened mid-step
+behind a cooldown with a room-fact honesty line. Transcript review findings
+recorded in DECISIONS (R63 movement + R65 self-heal verified live; drills
+strong; zero failures in 48h).
+Files changed: supabase/functions/chat/index.ts, frontend (types.ts,
+useConversation.ts, chatMessages.ts), tests (new test_r67_register_shift;
+pillar-2 + r35 pins widened), docs.
+Tests run: python 1086 green / 4 skipped; frontend tsc clean; deno flow
+21/21; deno-check parity.
+Remaining concerns: rehydrate does not replay historical shifts into the
+picker on reload (starts at lesson — pre-existing behavior, acceptable);
+smoke secrets still pending from the owner (SMOKE_EMAIL/SMOKE_PASSWORD).
+Suggested next task: owner replays Carl's exact ask ("give me a few
+questions to try" in Discuss) to see the auto-shift live; pre-launch drill.

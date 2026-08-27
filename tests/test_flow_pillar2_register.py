@@ -48,11 +48,11 @@ class TheRegisterHasOneOwner(unittest.TestCase):
 
 
 class EveryChangeNamesItsCause(unittest.TestCase):
-    ALLOWED = {'"picker"', '"offer"', '"suggestion"', '"lesson_open"'}
+    ALLOWED = {'"picker"', '"offer"', '"suggestion"', '"lesson_open"', '"shift"'}
 
     def test_the_cause_union_is_closed(self):
         self.assertIn(
-            'export type RegisterCause = "picker" | "offer" | "suggestion" | "lesson_open";',
+            'export type RegisterCause = "picker" | "offer" | "suggestion" | "lesson_open" | "shift";',
             HOOK,
         )
 
@@ -66,8 +66,10 @@ class EveryChangeNamesItsCause(unittest.TestCase):
             with self.subTest(call=f"{where}: setRegister({args})"):
                 cause = args.split(",")[-1].strip()
                 self.assertIn(cause, self.ALLOWED)
-        # The four causes are all real: picker (composer), offer (hand-off pill),
-        # suggestion (welcome/re-entry rows), lesson_open (reset to the spine).
+        # The five causes are all real: picker (composer), offer (hand-off pill),
+        # suggestion (welcome/re-entry rows), lesson_open (reset to the spine),
+        # shift (R67: the mentor moved the register on the student's own ask — the
+        # reply announces it, so the change is still gesture-visible).
         self.assertEqual({args.split(",")[-1].strip() for _, args in calls}, self.ALLOWED)
 
     def test_opening_a_lesson_resets_to_the_spine_inside_the_hook(self):
