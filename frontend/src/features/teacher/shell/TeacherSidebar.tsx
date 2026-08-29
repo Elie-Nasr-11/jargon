@@ -16,7 +16,7 @@ import { useTheme } from "@/lib/theme";
 import { useCampusLiveLink } from "@/hooks/useCampusLiveLink";
 import { signOut } from "@/lib/api";
 import type { TeacherClassSummary } from "@/lib/types";
-import { CLASS_SECTIONS, type ClassSection } from "./teacherNav";
+import { type ClassSection } from "./teacherNav";
 
 // The teacher shell's left column — the teacher sibling of the student AppSidebar, same anatomy:
 // wordmark, a Home row, a scrollable classes list (grouped by org when the teacher spans
@@ -158,35 +158,6 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
         >
           <span className="min-w-0 flex-1 truncate">{cls.name}</span>
         </button>
-        {active ? (
-          <div
-            role="group"
-            aria-label={`${cls.name} sections`}
-            className="mb-1 ml-3 border-l border-border/60 pl-1.5"
-          >
-            {CLASS_SECTIONS.map((section) => (
-              <button
-                key={section.value}
-                type="button"
-                onClick={go(() =>
-                  navigate({
-                    to: "/teacher/class/$classId",
-                    params: { classId: cls.id },
-                    search: { tab: section.value },
-                  }),
-                )}
-                aria-current={activeSection === section.value ? "page" : undefined}
-                className={`flex w-full items-center rounded-control px-2.5 py-1.5 text-left text-body transition-colors duration-(--dur-fast) ${
-                  activeSection === section.value
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                }`}
-              >
-                <span className="min-w-0 flex-1 truncate">{section.label}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
     );
   };

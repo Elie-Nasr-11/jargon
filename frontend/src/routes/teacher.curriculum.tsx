@@ -1675,6 +1675,17 @@ export function CurriculumStudio({
                 own material, and what is still an unreviewed draft, before any generic
                 curriculum tree. */}
             <BooksPanel books={books} onReview={openReview} />
+            {/* R75: the rare-but-real cross-class linking, one click away instead of an
+                always-open drawer under the curriculum. */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setBooksOpen((value) => !value)}
+                className="btn btn-ghost btn-sm"
+              >
+                {booksOpen ? "Hide linked content" : "Linked content"}
+              </button>
+            </div>
             <ClassworkList
               units={outlineUnits}
               lessonsForUnit={lessonsForUnit}
@@ -1769,27 +1780,22 @@ export function CurriculumStudio({
         )
       ) : null}
 
-      {/* R45 consolidated: the class curriculum reads as the teacher's own — the books
-          machinery (linking shared content in/out) is demoted to an advanced drawer,
-          collapsed by default. It stays the only surface that can trim what students see. */}
-      {!booting && data && selectedClass ? (
+      {/* R75: the always-open "Books & shared content" drawer is gone. Linking a course
+          in or out of a class is real (it is the only surface that trims what students
+          see) but rare — it now opens from the outline's Linked content button instead of
+          sitting on the page competing with the curriculum itself. */}
+      {!booting && data && selectedClass && booksOpen ? (
         <div className="rounded-card border border-border bg-depth-card p-4 shadow-card">
-          <Collapsible
-            open={booksOpen}
-            onToggle={() => setBooksOpen((value) => !value)}
-            title={
-              <span className="text-body font-medium text-foreground">
-                Books &amp; shared content
-              </span>
-            }
-            meta={
-              <span className="shrink-0 text-meta text-muted-foreground">
-                {linkedCourseIds ? `${linkedCourseIds.size} in this class` : "…"}
-              </span>
-            }
-            headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
-            bodyClassName="pt-2"
-          >
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <span className="text-body font-medium text-foreground">Linked content</span>
+            <button
+              type="button"
+              onClick={() => setBooksOpen(false)}
+              className="btn btn-ghost btn-sm"
+            >
+              Close
+            </button>
+          </div>
             <LinkedCoursesPanel
               classId={classId}
               courses={orgCourseOptions}
@@ -1802,7 +1808,6 @@ export function CurriculumStudio({
                 ])
               }
             />
-          </Collapsible>
         </div>
       ) : null}
     </div>
@@ -1965,7 +1970,8 @@ function ClassworkList({
   onRenameStart: (id: string) => void;
   canDeleteUnit: (id: string) => boolean;
   onDeleteUnit: (id: string) => void;
-  // R60: "+ Lesson" leads with the material path — Build from material / Start blank.
+  // R75: "+ Lesson" opens the ONE builder; whether to work from reference material is
+  // a choice inside it, not a fork before it.
   onBuildLesson: (unitId: string) => void;
   onSelectLesson: (id: string) => void;
   onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
@@ -1975,7 +1981,6 @@ function ClassworkList({
   onReorder: (type: CurriculumNodeType, orderedIds: string[]) => void;
 }) {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
-  const [lessonMenuFor, setLessonMenuFor] = useState<string | null>(null);
 
   // Work items grouped under the unit their lesson belongs to; anything whose lesson
   // isn't in this class's outline falls into a trailing "Other classwork" bucket so
@@ -2111,9 +2116,10 @@ function ClassworkList({
                         hasChildren={false}
                         selected={false}
                         onSelect={() => onRenameStart(unit.id)}
-                        onAdd={() =>
-                          setLessonMenuFor((value) => (value === unit.id ? null : unit.id))
-                        }
+                        // R75: one door. The new-lesson builder itself asks whether to
+                        // work from reference material, so there is no menu to pick a
+                        // build STYLE before you have decided what the lesson is.
+                        onAdd={() => onBuildLesson(unit.id)}
                         addLabel="Add lesson"
                         dragging={false}
                         showGrip={false}
@@ -2132,38 +2138,11 @@ function ClassworkList({
                           />
                         }
                       />
-                      {lessonMenuFor === unit.id ? (
-                        <div
-                          role="menu"
-                          className="absolute right-1 top-full z-20 mt-1 w-56 rounded-card border border-border bg-depth-card p-1 shadow-card"
-                        >
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setLessonMenuFor(null);
-                              onBuildLesson(unit.id);
-                            }}
-                            className="block w-full rounded-control px-3 py-1.5 text-left text-meta text-foreground transition-colors hover:bg-muted"
-                          >
-                            Build from material
-                            <span className="block text-overline uppercase tracking-[0.08em] text-muted-foreground">
-                              Upload pages — steps, quiz and assignment are drafted for you
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setLessonMenuFor(null);
-                              onAddLesson(unit.id);
-                            }}
-                            className="block w-full rounded-control px-3 py-1.5 text-left text-meta text-foreground transition-colors hover:bg-muted"
-                          >
-                            Start blank
-                          </button>
-                        </div>
-                      ) : null}
+                      {/* R75: there is no longer a fork between "build from material"
+                          and "start blank". A lesson is a lesson; the ONE new-lesson
+                          dialog offers reference material as an option inside it, which
+                          is where the choice belongs — you decide what to build from
+                          while you are building, not before you have started. */}
                     </div>
                   )}
                   <div className="mt-0.5 grid min-w-0 gap-0.5">
@@ -3259,6 +3238,8 @@ function LessonDetail({
     () => data.milestones.find((item) => item.lesson_id === lesson.id) || null,
     [data.milestones, lesson.id],
   );
+  // R75: the derived knowledge graph opens on demand, not on arrival.
+  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   // R74: the lesson's own inventory. Assignments come from the work items the console
   // already hands down, so this counts what genuinely exists rather than re-querying.
   const inventory = useMemo(
@@ -3436,7 +3417,30 @@ function LessonDetail({
               onUnregister={unregisterDirty}
             />
 
-            <KnowledgeCard lessonId={lesson.id} />
+            {/* R75: the knowledge graph (ideas, vocab, links) is NOT an authoring step —
+                it is drafted from the lesson automatically when the lesson is published,
+                and it feeds the student's brain map, My Jargon and the mentor's sense of
+                what is fading. It matters, but it is a BY-PRODUCT of building a lesson,
+                so it no longer sits open competing with the steps: it opens when a
+                teacher wants to check what the machine derived. */}
+            <Collapsible
+              open={knowledgeOpen}
+              onToggle={() => setKnowledgeOpen((value) => !value)}
+              title={
+                <span className="text-body font-medium text-foreground">
+                  Ideas &amp; vocabulary
+                </span>
+              }
+              meta={
+                <span className="shrink-0 text-meta text-muted-foreground">
+                  drafted from this lesson
+                </span>
+              }
+              headerClassName="rounded-control px-1.5 py-2 transition-colors hover:bg-muted/60"
+              bodyClassName="pt-2"
+            >
+              {knowledgeOpen ? <KnowledgeCard lessonId={lesson.id} /> : null}
+            </Collapsible>
 
             {/* R74: the lesson's own classwork. Assignments and quizzes bind to a lesson
                 and carry per-student recipients — the capability was always there, but the
