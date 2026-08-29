@@ -16,10 +16,12 @@ What this pins:
   pages it covers, in the outline and in the lesson header, so a teacher can
   check it against the copy on their desk. A hand-authored lesson claims no
   source — the console must never imply one that does not exist.
-- THE BOOK LEADS. The Content room opens with the books panel (what was built
-  from your material, what is still an unreviewed draft) above the generic tree.
+- THE BOOK LEADS. R73 put a books panel above the tree to say what was built and
+  what was still an unreviewed draft. R80 dissolved the panel INTO the outline:
+  every lesson row names its own pages and state, and the drafts speak for
+  themselves in a review banner. Same two guarantees, one surface instead of two.
 - THE REVIEW GATE IS STANDING. R70 was reachable only from a just-finished
-  build; a book with drafts now offers "Review & publish" any time.
+  build; drafts now offer their review from the banner at any time.
 - THE LANDING REPORTS BACK. The weekly digest moves from inside Activity to the
   top of Students, the room a teacher lands in.
 """
@@ -30,7 +32,6 @@ from tests.teacher_sources import authoring_source, console_source
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "frontend" / "src" / "features" / "teacher" / "bookSource.ts").read_text(encoding="utf-8")
-BOOKS = (ROOT / "frontend" / "src" / "features" / "teacher" / "BooksPanel.tsx").read_text(encoding="utf-8")
 ROUTE = authoring_source()
 CONSOLE = console_source()
 TYPES = (ROOT / "frontend" / "src" / "lib" / "types.ts").read_text(encoding="utf-8")
@@ -65,32 +66,38 @@ class SourceIdentityTests(unittest.TestCase):
 
 
 class BookLeadsTests(unittest.TestCase):
-    def test_the_books_panel_leads_the_content_room(self):
-        self.assertIn("<BooksPanel books={books} onReview={openReview} />", ROUTE)
-        # It sits ABOVE the generic curriculum tree.
-        self.assertLess(ROUTE.index("<BooksPanel"), ROUTE.index("<ClassworkList"))
+    def test_the_drafts_lead_the_course_room(self):
+        # The banner is the first thing on the screen, above the outline, and it says
+        # the consequence rather than a count in the abstract.
+        face = ROUTE.split("export function CourseScreen(", 1)[1]
+        self.assertLess(face.index("waiting for your review"), face.index("<CourseOutline"))
+        self.assertIn("students cannot see", face)
 
-    def test_hand_authored_lessons_are_never_counted_into_a_book(self):
-        body = BOOKS.split("export function summarizeBooks(", 1)[1].split("\n}", 1)[0]
-        self.assertIn("if (!key) continue;", body)
+    def test_hand_authored_lessons_are_never_counted_as_book_lessons(self):
+        # The page range comes from the book source, which is null without an import key.
+        body = SOURCE.split("export function bookSourceFor(", 1)[1].split("\n}", 1)[0]
+        self.assertIn("if (!lesson.import_key) return null;", body)
 
-    def test_the_panel_reports_what_is_there_not_a_completion_score(self):
-        panel = BOOKS.split("export function BooksPanel(", 1)[1]
-        self.assertIn("awaiting review", panel)
+    def test_the_room_reports_what_is_there_not_a_completion_score(self):
         # Counts of what is actually loaded — never a completion percentage, which
         # would be a claim about a book we have only seen part of.
-        self.assertNotIn("%", panel)
+        # Scoped to the banner and what sits above the outline: a build IN FLIGHT does
+        # report its own progress as a percentage, which is a fact about the run rather
+        # than a claim about how much of the book is in.
+        face = ROUTE.split("export function CourseScreen(", 1)[1].split("<CourseOutline", 1)[0]
+        self.assertNotIn("%", face)
+        self.assertIn("course.drafts.length", face)
 
     def test_the_review_gate_is_standing(self):
-        self.assertIn("Review &amp; publish", BOOKS)
-        self.assertIn("book.drafts && book.firstDraftUnitId", BOOKS)
+        self.assertIn("Review {course.drafts.length === 1 ?", ROUTE)
+        self.assertIn("build.openReview(draftUnitIds)", ROUTE)
 
     def test_a_lesson_row_names_its_pages(self):
-        # R74 added a step count to the same call; the page-naming guarantee is unchanged.
-        self.assertIn("meta={outlineLessonMeta(lesson, bookPages, stepCountFor(lesson.id))}", ROUTE)
-        body = ROUTE.split("function outlineLessonMeta(", 1)[1].split("\n}", 1)[0]
+        self.assertIn("lessonStateLine(lesson, bookPages, stepCountFor(lesson.id))", ROUTE)
+        body = ROUTE.split("export function lessonStateLine(", 1)[1].split("\n}", 1)[0]
         # Draft state still leads — that is what a teacher must act on.
-        self.assertIn('if (status !== "published") return pages ? `${status} · ${pages}` : status;', body)
+        self.assertIn('if (status !== "published") parts.push(status);', body)
+        self.assertIn("pp. ${source.firstPage}", body)
 
     def test_the_lesson_header_names_its_book(self):
         self.assertIn("bookSourceLabel(bookSourceFor(lesson, bookPages, lesson.id))", ROUTE)

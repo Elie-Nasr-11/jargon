@@ -77,6 +77,9 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
   const [createOpen, setCreateOpen] = useState<"assignment" | "assessment" | "material" | null>(
     null,
   );
+  // R48: work can BE a step. When it is created from one, the step id rides into the
+  // dialog — otherwise the quiz a teacher made on step 4 would come back unattached.
+  const [createForStep, setCreateForStep] = useState<string | null>(null);
 
   // Steps register their own dirty state and a flush; the header's Save runs them
   // all, then the lesson's own fields. One Save, whatever is open.
@@ -299,7 +302,10 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
             onOpenItem={(kind, id) => {
               if (kind !== "material") openWork(kind, id);
             }}
-            onCreateForStep={(kind) => setCreateOpen(kind)}
+            onCreateForStep={(kind, ctx) => {
+              setCreateForStep(ctx.activityId);
+              setCreateOpen(kind);
+            }}
           />
 
           <LessonWork
@@ -429,7 +435,11 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
         <>
           <Dialog
             open={createOpen === "assignment"}
-            onOpenChange={(open) => (open ? null : setCreateOpen(null))}
+            onOpenChange={(open) => {
+              if (open) return;
+              setCreateOpen(null);
+              setCreateForStep(null);
+            }}
           >
             <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[600px]">
               <DialogHeader>
@@ -442,7 +452,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
                 studentIds={studentIds}
                 profilesById={profilesById}
                 saving={authoring.busy}
-                context={{ lessonId, activityId: null }}
+                context={{ lessonId, activityId: createForStep }}
                 onSaveAssignment={async (input: AssignmentFormValues) => {
                   try {
                     const session = await getSession();
@@ -463,6 +473,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
                     });
                     await refreshDashboard();
                     setCreateOpen(null);
+                    setCreateForStep(null);
                   } catch (error) {
                     notifyErr(error, "Could not create the assignment.");
                   }
@@ -473,7 +484,11 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
 
           <Dialog
             open={createOpen === "assessment"}
-            onOpenChange={(open) => (open ? null : setCreateOpen(null))}
+            onOpenChange={(open) => {
+              if (open) return;
+              setCreateOpen(null);
+              setCreateForStep(null);
+            }}
           >
             <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[640px]">
               <DialogHeader>
@@ -486,7 +501,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
                 studentIds={studentIds}
                 profilesById={profilesById}
                 saving={authoring.busy}
-                context={{ lessonId, activityId: null }}
+                context={{ lessonId, activityId: createForStep }}
                 onSaveAssessment={async (input: AssessmentFormValues) => {
                   try {
                     if (!(await getSession())) throw new Error("Sign in to set work.");
@@ -508,6 +523,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
                     });
                     await refreshDashboard();
                     setCreateOpen(null);
+                    setCreateForStep(null);
                   } catch (error) {
                     notifyErr(error, "Could not create the quiz.");
                   }

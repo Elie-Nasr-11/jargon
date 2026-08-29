@@ -53,8 +53,13 @@ class NoStaleStringsTests(unittest.TestCase):
         self.assertNotIn("Books & shared content", STUDIO)
 
     def test_the_empty_state_names_a_control_that_exists(self):
-        hint = STUDIO.split("emptyHint=", 1)[1][:220]
-        self.assertIn("Add units &amp; lessons", hint)
+        # R77 fixed a hint pointing at a deleted drawer. R80 replaced the hint with an
+        # empty state that offers the two real doors — and both are on the same screen.
+        empty = STUDIO.split("This class has no course yet.", 1)[1][:900]
+        self.assertIn("Build the course from a book", empty)
+        self.assertIn("or add a unit yourself", empty)
+        self.assertIn("onBuildCourse", empty)
+        self.assertIn("onAddUnit", empty)
 
     def test_the_deleted_lesson_fork_left_no_prose_behind(self):
         # R75 deleted it; R77 checks the comments went with it.

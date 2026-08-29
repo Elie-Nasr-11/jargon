@@ -160,15 +160,18 @@ class ActivityTests(unittest.TestCase):
 class ContentTests(unittest.TestCase):
     CONTENT = CONSOLE.split('{section === "content" ? (')[1]
 
-    def test_console_hands_work_items_to_the_studio(self):
-        self.assertIn("<CurriculumStudio", self.CONTENT)
-        self.assertIn("workItems={workItems}", self.CONTENT)
-        self.assertIn("onOpenItem={(kind, id)", self.CONTENT)
-        self.assertIn("onCreate={(kind) => setCreateOpen(kind)}", self.CONTENT)
+    def test_the_content_room_is_the_course_screen(self):
+        # R47 handed the studio the class's work items so the outline could list them.
+        # R80: work belongs to the lesson that carries it, so the Course screen takes
+        # the class id and nothing else — the room is one hierarchy again.
+        self.assertIn("<CourseScreen", self.CONTENT)
+        self.assertIn("classId={item.id}", self.CONTENT)
+        self.assertNotIn("workItems={workItems}", self.CONTENT)
 
-    def test_opening_a_work_item_from_content_lands_in_activity(self):
-        self.assertIn('? { tab: "activity", assignment: id }', self.CONTENT)
-        self.assertIn(': { tab: "activity", assessment: id }', self.CONTENT)
+    def test_class_wide_material_keeps_a_door(self):
+        # Material that belongs to no single lesson is rare; the class owns the dialog
+        # and the Course screen's menu opens it.
+        self.assertIn('onAddMaterial={() => setCreateOpen("material")}', self.CONTENT)
 
     def test_three_create_dialogs_survive(self):
         self.assertIn('createOpen === "assignment"', CONSOLE)
@@ -178,19 +181,17 @@ class ContentTests(unittest.TestCase):
     def test_content_list_creates_content_not_work(self):
         # Assignments and quizzes are created in Activity; the studio's + Create menu
         # offers only the things students learn from.
-        menu = _slice(STUDIO, "function ClassworkList({", "function OutlineRow(")
-        self.assertIn('{ kind: "material", label: "Material" }', menu)
-        self.assertNotIn('{ kind: "assignment", label: "Assignment" }', menu)
-        self.assertNotIn('{ kind: "assessment", label: "Quiz" }', menu)
-        self.assertIn("onAddUnit()", menu)
+        outline = _slice(STUDIO, "export function CourseOutline({", "function UnitBlock(")
+        self.assertIn("Add a unit", outline)
+        self.assertNotIn("Assignment", outline)
+        self.assertNotIn("Quiz", outline)
 
-    def test_studio_list_replaced_the_outline_tree(self):
-        self.assertIn("function ClassworkList({", STUDIO)
+    def test_the_list_replaced_the_outline_tree(self):
+        self.assertIn("export function CourseOutline({", STUDIO)
         self.assertNotIn("function Outline({", STUDIO)
         self.assertNotIn("outlineOpen", STUDIO)
         self.assertNotIn("<aside", STUDIO)
-        self.assertIn("Other classwork", STUDIO)
-        self.assertIn("units={outlineUnits}", STUDIO)
+        self.assertIn("units={course.outlineUnits}", STUDIO)
 
     def test_work_views_live_in_the_grading_files(self):
         self.assertIn("export function AssignmentWorkView({", ASSIGNMENT_VIEW)

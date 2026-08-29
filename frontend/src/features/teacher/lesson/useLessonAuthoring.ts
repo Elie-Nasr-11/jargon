@@ -8,13 +8,12 @@
  * failure. Structural work that we cannot reconstruct locally (a bulk step
  * apply, a lesson move) runs and refetches.
  */
-import { useCallback, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createArtifactResource,
   deleteCurriculumNode,
   deleteCurriculumStep,
-  fetchCurriculumAuthoringData,
   generateCurriculumDraft,
   getSession,
   invokeCurriculumAdmin,
@@ -26,6 +25,7 @@ import {
 } from "@/lib/api";
 import { notifyErr } from "@/lib/feedback";
 import { useUndoable } from "@/hooks/useUndoable";
+import { useAuthoringData } from "@/features/teacher/authoring/useAuthoringData";
 import {
   insertStepLocal,
   patchResourceLocal,
@@ -53,76 +53,17 @@ export type LessonAuthoring = ReturnType<typeof useLessonAuthoring>;
 export function useLessonAuthoring(classId: string, lessonId: string) {
   const queryClient = useQueryClient();
   const undoable = useUndoable();
-  const [busy, setBusy] = useState(false);
-
-  const sessionQuery = useQuery({
-    queryKey: ["session"],
-    queryFn: getSession,
-    staleTime: 5 * 60 * 1000,
-  });
-  const teacherId = sessionQuery.data?.user.id ?? null;
-
-  const key = useMemo(() => ["curriculumAuthoring", teacherId] as const, [teacherId]);
-  const dataQuery = useQuery({
-    queryKey: key,
-    queryFn: () => fetchCurriculumAuthoringData(teacherId as string),
-    enabled: Boolean(teacherId),
-    staleTime: 60 * 1000,
-  });
-  const data = dataQuery.data ?? null;
-
-  /** Apply a pure transform to the cached payload — the optimistic half of a write. */
-  const patch = useCallback(
-    (apply: (current: CurriculumAuthoringData) => CurriculumAuthoringData) => {
-      queryClient.setQueryData<CurriculumAuthoringData>(key, (current) =>
-        current ? apply(current) : current,
-      );
-    },
-    [queryClient, key],
+  const authoring = useAuthoringData(classId);
+  const { data, patch, resync, optimistic, classSummary } = authoring;
+  const key = useMemo(
+    () => ["curriculumAuthoring", authoring.teacherId] as const,
+    [authoring.teacherId],
   );
-  const resync = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: key });
-  }, [queryClient, key]);
-
-  /** Instant: change it here, persist behind, roll back to server truth on failure. */
-  const optimistic = useCallback(
-    (
-      apply: (current: CurriculumAuthoringData) => CurriculumAuthoringData,
-      run: (accessToken: string) => Promise<unknown>,
-      opts?: { onSuccess?: (result: unknown) => void; failure?: string },
-    ) => {
-      patch(apply);
-      void (async () => {
-        try {
-          const session = await getSession();
-          if (!session) throw new Error("Sign in to edit this lesson.");
-          opts?.onSuccess?.(await run(session.access_token));
-        } catch (error) {
-          notifyErr(error, opts?.failure || "Could not save that change.");
-          await resync();
-        }
-      })();
-    },
-    [patch, resync],
-  );
-
-  /** For writes we cannot reconstruct locally: run, then refetch. */
+  // The lesson's own writes report through the shared runner.
   const reloading = useCallback(
-    async (run: (accessToken: string) => Promise<unknown>, failure: string) => {
-      setBusy(true);
-      try {
-        const session = await getSession();
-        if (!session) throw new Error("Sign in to edit this lesson.");
-        await run(session.access_token);
-        await resync();
-      } catch (error) {
-        notifyErr(error, failure);
-        await resync();
-      } finally {
-        setBusy(false);
-      }
-    },
-    [resync],
+    (run: (accessToken: string) => Promise<unknown>, failure: string) =>
+      authoring.reloading(run, failure),
+    [authoring],
   );
 
   const lesson = useMemo(
@@ -150,10 +91,6 @@ export function useLessonAuthoring(classId: string, lessonId: string) {
   const unit = useMemo(
     () => data?.units.find((row) => row.id === lesson?.unit_id) ?? null,
     [data, lesson],
-  );
-  const classSummary = useMemo(
-    () => data?.classes.find((row) => row.id === classId) ?? null,
-    [data, classId],
   );
   const bookPages = useMemo(
     () => new Map(Object.entries(data?.bookPages || {})),
@@ -458,10 +395,10 @@ export function useLessonAuthoring(classId: string, lessonId: string) {
   );
 
   return {
-    loading: sessionQuery.isPending || dataQuery.isPending,
+    loading: authoring.loading,
     missing: Boolean(data) && !lesson,
-    busy,
-    teacherId,
+    busy: authoring.busy,
+    teacherId: authoring.teacherId,
     data,
     lesson,
     milestone,

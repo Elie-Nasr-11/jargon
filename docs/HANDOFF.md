@@ -12209,3 +12209,29 @@ Anthropic default; the brief's Part 5 says to unify. Mechanisms A, C and D
 Suggested next task: step 4 — build the Course screen new (outline only, one Add
 per level, review banner) and delete the books panel, the builder panels and the
 drawer it replaces.
+
+## Claude -> Codex / Human - 2026-08-29 19:30
+
+Status: Finished
+Summary: R80 (see DECISIONS) — step 4 of the rebuild brief. The Content room is
+now the Course screen: one outline, one Add per level, a review banner, and
+every panel moved into a dialog that opens over it. CurriculumStudio and the
+books panel are deleted; the studio route is a redirect. Two regressions found
+by older pins (the class-course link baseline, and R79's dropped step id on
+work creation) are fixed here.
+Files changed: new frontend/src/features/teacher/course/ (5 modules) +
+authoring/useAuthoringData.ts; deletions (BooksPanel, authoring/Outline,
+CurriculumStudio); routes/teacher.curriculum.tsx cut to a 72-line redirect;
+ClassDetail mounts CourseScreen; tests (new R80 file; R42–R57, R60, R73–R78 pins
+re-pointed at the new home).
+Tests run: python 1233 green / 4 skipped; tsc clean; vite build succeeds; eslint
+210 → 94 errors in the teacher surface (all pre-existing prettier); walked in a
+real browser against the offline fixture backend (screenshots in r80/).
+Remaining concerns: the Content room needs ~15s to first paint on fixtures (62
+requests) — not a regression (the old studio was 14.4s) but the authoring
+payload is plainly over-fetched and deserves its own release. The review gate
+could not be exercised end to end because the fixture backend does not implement
+review_unit. Steps 5-9 remain: Today, People + Settings, admin, the AI
+mechanisms, and deleting what they replace.
+Suggested next task: step 5 — build Today (digest + needs-me) and make it the
+landing, retiring the hotlist duplication.

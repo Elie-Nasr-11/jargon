@@ -82,7 +82,7 @@ class MaterialSlicingTests(unittest.TestCase):
 
 class BuildRunnerTests(unittest.TestCase):
     def test_run_is_sequential_and_cancellable(self):
-        body = STUDIO.split("const runCourseBuild = async (plan: CourseBuild) => {", 1)[1]
+        body = STUDIO.split("const runCourseBuild = useCallback(", 1)[1]
         head = body[:2600]
         self.assertIn("for (let i = 0; i < plan.items.length; i += 1) {", head)
         self.assertIn("if (buildCancel.current) {", head)
@@ -92,7 +92,7 @@ class BuildRunnerTests(unittest.TestCase):
         self.assertIn('if (item.status !== "queued") continue;', STUDIO)
 
     def test_failures_are_captured_per_lesson_not_fatal(self):
-        self.assertIn('patch(i, { status: "failed", error:', STUDIO)
+        self.assertIn('patchItem(i, {\n            status: "failed",', STUDIO)
         # Inside a run, per-lesson errors do not stomp the studio banner.
         self.assertIn("if (args.quiet) throw error;", STUDIO)
 
@@ -111,7 +111,7 @@ class BuildRunnerTests(unittest.TestCase):
     def test_cancelled_run_leaves_no_empty_shells(self):
         # Units are created up front; each package write creates its own lesson, so a
         # stopped run leaves real lessons and no stubs.
-        self.assertIn("lessons are NOT stubbed here", STUDIO)
+        self.assertIn("lessons are not stubbed —", STUDIO)
 
 
 class ReviewFirstTests(unittest.TestCase):

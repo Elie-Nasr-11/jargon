@@ -2450,3 +2450,61 @@ backend before shipping, and the walk found three defects the 1,215 pins did
 not: the header repeated the back link, content ghosted through the gap under
 the sticky band, and the two assist buttons read as standing AI chrome. All
 three are fixed above.
+
+## R80 — step 4 of the rebuild brief: the Course screen, built new (2026-08-29)
+
+Jobs 1 and 2: get the book in, check what was written. The brief's step 4 is
+"outline only, one Add per level, review banner" — and it retires the books
+panel, the builder panels and the drawer.
+
+THE OUTLINE IS THE SCREEN. Units → lessons, and nothing standing beside them.
+Every lesson row says what it is in the words a teacher would use — "6 steps",
+"draft · empty", "pp. 31–45" — and both levels drag to reorder. One Add per
+level, naming its target: "Add a unit" on the course, "Add a lesson" on the
+unit. The outline no longer carries material rows: material belongs to the
+lesson that shows it, which is where R79 put it.
+
+A REVIEW BANNER, in the consequence rather than a count: "1 lesson is waiting
+for your review — students cannot see it yet." It opens the R70 gate across
+EVERY unit that has drafts, not just the one a build happened to finish in,
+which is what made the gate reachable only right after a build before.
+
+NO PANELS. Building a course from a book, drafting a lesson inside a unit,
+reviewing, and choosing which courses the class teaches all open over the
+outline and close again. A build in flight still reports itself lesson by
+lesson, because that IS the work in progress.
+
+THE EMPTY STATES CARRY THE PRODUCT CLAIM. A class with no course says so and
+offers the book: "Build the course from a book" or "add a unit yourself". A unit
+with no lessons offers "Draft one from your material" or "add an empty one".
+That is the R57/R56 build path — the same code, no longer a panel sitting open.
+
+DELETED (Law 6): CurriculumStudio (1,538 lines) and with it the studio route,
+which is now a 72-line redirect; the books panel; the old ClassworkList/
+OutlineRow outline; the R60 selection state. R79 had already left the studio's
+lesson-editing half dead — ~350 lines of it — and this release removes that too.
+
+TWO REGRESSIONS THE OLD PINS CAUGHT WHILE THIS WAS BUILT, both real and both
+fixed rather than pinned away:
+- THE LINK BASELINE (R43). My first draft of ensureBackingCourse saved the
+  class's course links from `classLinks || []` — so if the link read had failed,
+  creating a course would have silently dropped every other course the class
+  teaches. Restored to the original guard: link only from a known baseline.
+- STEP-LINKED WORK (R48). R79's lesson screen dropped the step id on the way
+  into the create dialog, so a quiz made on step 4 came back attached to the
+  lesson but not the step. The context now rides through.
+
+Both screens now share one payload and one write discipline
+(authoring/useAuthoringData.ts): one React Query entry, optimistic for edits we
+can reconstruct locally, refetch for the ones we cannot. Walking from the
+outline into a lesson and back is 2.1s / 1.5s in the fixture environment.
+
+WALKED, and it found four things the 1,233 pins did not: the course menu floated
+in dead space above the outline; row state SHOUTED in uppercase; lesson rows gave
+no sign they could be dragged; and the review panel still said "in this chapter"
+while also drawing its own title and Close inside a dialog that already had both.
+
+ONE HONEST NUMBER: the Content room takes ~15s to first paint against the
+offline fixture backend (62 requests, none slower than 110ms). That is NOT a
+regression — the old studio measured 14.4s on the same fixtures — but it says
+the authoring payload is over-fetched. Worth its own release.
