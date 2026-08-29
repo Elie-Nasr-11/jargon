@@ -3456,6 +3456,20 @@ function LessonDetail({
               onCreate={onCreateForLesson}
             />
 
+            {/* R74: the lesson's own classwork. Assignments and quizzes bind to a lesson
+                and carry per-student recipients — the capability was always there, but the
+                only way in was a generic "+ Create" that made you pick the lesson again
+                afterwards. Creating it HERE means the place is never a question, and the
+                student picker in the dialog answers "for whom". */}
+            <LessonClasswork
+              lessonId={lesson.id}
+              items={workItems.filter(
+                (item) => item.lessonId === lesson.id && item.kind !== "material",
+              )}
+              onOpenItem={onOpenItem}
+              onCreate={onCreateForLesson}
+            />
+
             <section className="rounded-card border border-border bg-depth-sub p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-title font-medium text-foreground">
