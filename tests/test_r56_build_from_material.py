@@ -162,13 +162,13 @@ class WiringTests(unittest.TestCase):
         )
 
     def test_panel_is_reachable_from_a_unit(self):
-        # R60: the unit pane is gone — the panel opens from the per-unit "+ Lesson"
-        # menu ("Build from material" leads; "Start blank" is the fallback) and mounts
-        # at the outline root against the chosen unit.
+        # R75: the "+ Lesson" menu is gone with its Build-from-material / Start-blank
+        # fork — the owner's point being that a lesson is a lesson, and whether you work
+        # from reference material is a choice INSIDE the builder, not a style you pick
+        # before you have decided anything. The panel itself is unchanged and is now the
+        # single door adding a lesson opens.
         self.assertIn("function BuildFromMaterialPanel(", STUDIO)
-        self.assertIn("onBuildLesson(unit.id)", STUDIO)
-        self.assertIn("Build from material", STUDIO)
-        self.assertIn("Start blank", STUDIO)
+        self.assertIn("onAdd={() => onBuildLesson(unit.id)}", STUDIO)
         self.assertIn("<BuildFromMaterialPanel", STUDIO)
         self.assertIn("applyPackage(buildForUnitId, pkg)", STUDIO)
 

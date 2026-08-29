@@ -80,11 +80,16 @@ class BuildEntryTests(unittest.TestCase):
         add_unit = STUDIO.split("const addUnitToClass", 1)[1].split("const openCourseBuild", 1)[0]
         self.assertIn("ensureBackingCourse(accessToken, targetClassId)", add_unit)
 
-    def test_lesson_build_leads_the_add_lesson_menu(self):
-        menu = STUDIO.split('role="menuitem"', 1)[1]
-        self.assertIn("Build from material", STUDIO)
-        self.assertIn("Start blank", STUDIO)
-        del menu
+    def test_adding_a_lesson_has_exactly_one_door(self):
+        # R60 gave "+ Lesson" a menu whose first item was the material path. R75 removed
+        # the menu entirely: there is one builder, and it asks about reference material
+        # itself. What R60 cared about — the material path is not buried — is stronger
+        # now, because it is the only path.
+        # Scoped to the unit's add-lesson menu specifically — other menus in this room
+        # (the outline's + Create, the step overflow) are unrelated and still stand.
+        self.assertNotIn("lessonMenuFor", STUDIO)
+        self.assertNotIn("Start blank", STUDIO)
+        self.assertIn("onAdd={() => onBuildLesson(unit.id)}", STUDIO)
 
     def test_content_list_carries_materials_only(self):
         # Assignments and quizzes moved to Activity; the outline's work rows are the

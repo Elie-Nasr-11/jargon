@@ -12078,3 +12078,24 @@ and pinned but the route computes its own inline equivalents; worth collapsing
 onto the module next pass.
 Suggested next task: owner walks Content → a book lesson and says whether
 "what exists / where it lives / how to change it" is now answerable.
+
+## Claude -> Codex / Human - 2026-08-28 00:40
+
+Status: Finished
+Summary: R75 subtraction pass (see DECISIONS). Deleted sidebar class sub-rows
+(pills are the single nav), deleted the Build-from-material/Start-blank fork
+(one add-lesson door), demoted the Books & shared content drawer to an
+on-demand Linked content panel, collapsed the Knowledge card. Four older pins
+re-stated against the new law.
+Files changed: frontend/src/features/teacher/shell/TeacherSidebar.tsx,
+frontend/src/routes/teacher.curriculum.tsx, tests (new
+test_r75_subtraction.py; r42/r45/r56/r60 re-stated), docs.
+Tests run: python 1170 green / 4 skipped; tsc clean; vite build succeeds.
+Remaining concerns: the owner asked for an AI assist at EVERY building point
+(titles, summaries, steps) — only step-drafting and the lesson builder have one
+today, so that is still owed. The builder's "use reference material" option is
+the existing panel's upload; it has not been reframed as an optional step
+inside a single new-lesson dialog yet, which is the fuller reading of "building
+from material should never be separate".
+Suggested next task: R76 — AI assist wherever content is authored, and fold the
+material picker into the one new-lesson dialog.

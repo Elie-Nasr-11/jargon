@@ -74,8 +74,11 @@ class SidebarTests(unittest.TestCase):
     def test_sidebar_has_no_global_curriculum_destination(self):
         self.assertNotIn('"/teacher/curriculum"', SIDEBAR)
         self.assertNotIn('label="Curriculum"', SIDEBAR)
-        # Classes remain the hierarchy: the active class expands into its section rows.
-        self.assertIn("CLASS_SECTIONS.map", SIDEBAR)
+        # R75: the sidebar no longer repeats the class sections — they were rendered
+        # BOTH here and as pills in the console, which is the duplication the owner hit
+        # ("why are the page links in two places"). The pills won: they sit next to the
+        # content they switch. The sidebar keeps classes only.
+        self.assertNotIn("CLASS_SECTIONS.map", SIDEBAR)
 
     def test_active_view_is_home_or_class_only(self):
         self.assertIn('activeView: "home" | "class";', SIDEBAR)

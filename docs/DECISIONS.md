@@ -2242,3 +2242,45 @@ was a generic "+ Create" that asked which lesson AFTERWARDS.
 Deliberately NOT done: no new rooms, no schema change, no re-parenting of any
 resource, and the generic create menu still exists for teachers who think
 top-down. Pinned in tests/test_r74_authoring_clarity.py.
+
+## R75 — subtracting the authoring surface (2026-08-27)
+
+Owner, after R73/R74 added yet more panels: "why is there the build course from
+material? why is there books and shared content? why are the page links in two
+places? ... why is building from material different from building from scratch?
+nothing seems to live where it should."
+
+Every one of those has the same answer: since R43 each release ADDED a surface
+and none removed the one it superseded, so the room is eight releases of
+sediment seen at once. R73/R74 contributed three of those panels — including a
+books panel added to a room that already had a books drawer. The fix for
+accretion is not more organising. It is deletion.
+
+- ONE NAV. CLASS_SECTIONS was rendered twice — sidebar sub-rows AND console
+  pills. The pills won (they sit beside the content they switch); the sidebar
+  keeps classes only, still preserving the active tab when switching class.
+- ONE BUILD DOOR. The "+ Lesson" menu forked Build-from-material vs Start blank
+  — the same act, forked before the teacher had decided anything. Gone: adding a
+  lesson opens the one builder, and whether to work from reference material is a
+  choice INSIDE it. Owner's rule: "building from material should not be a
+  separate thing ever."
+- LINKED CONTENT IS NOT A PAGE FIXTURE. The always-open "Books & shared content"
+  drawer is gone; the panel opens from a Linked content button. It is kept, not
+  deleted, because it remains the only surface that can trim what students see.
+- KNOWLEDGE IS A BY-PRODUCT, NOT A STEP. Measured before deciding: 56 published
+  lessons, 39 carry ideas/vocab, and 2,351 student_mastery rows lean on them —
+  it feeds the brain map, My Jargon and the mentor's sense of what is fading, so
+  it is load-bearing. But it is auto-drafted at publish and needs only occasional
+  review, so the card is collapsed rather than competing with Steps.
+- A RATCHET, not a target: tests pin the count of always-on section headings in
+  the authoring room at its current 21 and allow it only to FALL. A release that
+  wants a new always-on section has to retire one first — the discipline whose
+  absence caused this.
+
+Kept deliberately: resource upload to class/unit/lesson stays its own
+first-class surface (owner: "a very important part of building any content").
+Still owed: an AI assist at every building point (titles, summaries, steps), not
+only the two places that have one today.
+
+Pinned in tests/test_r75_subtraction.py; R42/R45/R56/R60 pins re-stated against
+the new law rather than dropped.

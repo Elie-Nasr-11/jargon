@@ -110,9 +110,16 @@ class ClassIsTheCourseTests(unittest.TestCase):
         self.assertNotIn("label: path.course.title", STUDIO)
         self.assertIn("label: path.unit.title", STUDIO)
 
-    def test_books_machinery_is_demoted_to_a_drawer(self):
-        self.assertIn("Books &amp; shared content", STUDIO)
+    def test_books_machinery_is_demoted_off_the_page(self):
+        # R75 demoted it one step further than R45: it was an always-rendered collapsible
+        # drawer under the curriculum, and is now a panel that only exists once a teacher
+        # asks for it. The guarantee R45 cared about is unchanged and stronger — linking
+        # shared content never competes with the class's own curriculum — and it is still
+        # the only surface that can trim what students see, so it is not deleted.
+        self.assertNotIn("Books &amp; shared content", STUDIO)
         self.assertIn("const [booksOpen, setBooksOpen] = useState(false);", STUDIO)
+        self.assertIn("selectedClass && booksOpen ? (", STUDIO)
+        self.assertIn("<LinkedCoursesPanel", STUDIO)
 
     def test_shared_units_stay_honest_without_eating_the_title(self):
         # Long peer lists live in the tooltip; the row shows a short "shared" chip and
