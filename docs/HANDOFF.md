@@ -12183,3 +12183,29 @@ found to be asserting a dead import rather than a rendered component; worth
 assuming there are others, since a substring pin cannot tell the difference.
 Suggested next task: step 3 of the brief — build the Lesson screen new against
 the split modules, and delete what it replaces in the same release.
+
+## Claude -> Codex / Human - 2026-08-29 15:20
+
+Status: Finished
+Summary: R79 (see DECISIONS) — step 3 of the rebuild brief, preceded by step 0.
+docs/LEXICON.md writes down the word list; the Lesson screen is rebuilt as four
+sections at its own route, with the old editor, its host pane, the inventory bar
+and the studio's selection state deleted. The empty steps list now does the
+drafting instead of carrying a button, and the field assist only appears where a
+teacher is actually writing.
+Files changed: new frontend/src/features/teacher/lesson/ (10 modules), new route
+teacher.class.$classId.lesson.$lessonId.tsx + routeTree, deletions in
+features/teacher/authoring/ and features/teacher/, studio cleanup in
+routes/teacher.curriculum.tsx, docs/LEXICON.md, tests (new R79 file; R42, R60,
+R60b, R74, R75, R78, brain-D and artifact-live pins re-pointed at the new home).
+Tests run: python 1215 green / 4 skipped; tsc clean; vite build succeeds; walked
+in a real browser against the offline fixture backend (screenshots in the
+session scratchpad, r79/).
+Remaining concerns: the studio (Content room) is still the pre-rebuild outline —
+step 4 rebuilds it, and it is now small enough to replace in one pass. The
+mentor-prompt assist still runs on OPENAI_API_KEY while the mentor runs on the
+Anthropic default; the brief's Part 5 says to unify. Mechanisms A, C and D
+(arrive-drafted, one command surface, selection-scoped refinement) remain step 8.
+Suggested next task: step 4 — build the Course screen new (outline only, one Add
+per level, review banner) and delete the books panel, the builder panels and the
+drawer it replaces.

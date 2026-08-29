@@ -38,6 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "frontend" / "src"
 AUTHORING = SRC / "features" / "teacher" / "authoring"
 CONSOLE = SRC / "features" / "teacher" / "console"
+LESSON = SRC / "features" / "teacher" / "lesson"
 
 # The ceiling for a module. ClassDetail is the largest at ~1,030 lines and is next
 # in the queue to be rebuilt; nothing may grow past it without a deliberate raise.
@@ -90,8 +91,7 @@ class ModuleShapeTests(unittest.TestCase):
             "fields.tsx",         # labelled input / textarea / select
             "dragList.tsx",       # the shared drag surface
             "Outline.tsx",        # units + lessons as one tree
-            "DetailPane.tsx",     # whatever the outline has selected
-            "LessonDetail.tsx",   # one lesson, open for editing
+            "coursePanels.tsx",   # the course-scale panels (build, review)
             "StepCard.tsx",       # one step, open for editing
             "referenceInput.tsx", # choosing the material a generation reads
             "generatePanels.tsx", # generate, show the diff, refine, write
@@ -99,6 +99,25 @@ class ModuleShapeTests(unittest.TestCase):
         ):
             with self.subTest(module=name):
                 self.assertTrue((AUTHORING / name).is_file())
+
+    def test_the_lesson_screen_is_four_sections_and_its_data(self):
+        # R79 (brief step 3). Four sections, one hook that owns the writes, and two
+        # pure modules — the fields both the header and the settings dialog share, and
+        # the work derivation. Nothing else belongs on a lesson.
+        for name in (
+            "LessonScreen.tsx",       # the four sections, composed
+            "LessonHeader.tsx",       # what the lesson is, and the one Save
+            "LessonSteps.tsx",        # the steps — 80% of the screen
+            "LessonWork.tsx",         # what is set, for whom, by when
+            "LessonMaterials.tsx",    # ranked: step, lesson, book
+            "LessonSettings.tsx",     # the rare, real settings, behind the menu
+            "LessonPreview.tsx",      # the lesson as a student meets it
+            "useLessonAuthoring.ts",  # its data and every write
+            "lessonMeta.ts",          # one editable payload, two editors
+            "lessonWork.ts",          # who the work is for
+        ):
+            with self.subTest(module=name):
+                self.assertTrue((LESSON / name).is_file())
 
     def test_the_console_is_split_by_room_and_manager(self):
         for name in (
@@ -127,8 +146,8 @@ class ModuleShapeTests(unittest.TestCase):
     def test_nothing_was_copied_only_moved(self):
         surface = authoring_source() + "\n" + console_source()
         for symbol in (
-            "function LessonDetail(", "function StepCard(", "function ClassworkList(",
-            "function DetailPane(", "function AiOutlinePanel(", "function AiStepsPanel(",
+            "function LessonScreen(", "function StepCard(", "function ClassworkList(",
+            "function LessonSteps(", "function AiOutlinePanel(", "function AiStepsPanel(",
             "function ClassDetail(", "function StudentDetail(", "function GradebookTable(",
             "function ResourceManager(", "function AssignmentManager(",
             "function AssessmentManager(",

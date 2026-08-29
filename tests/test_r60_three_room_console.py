@@ -28,21 +28,22 @@ class OldBuilderIsGoneTests(unittest.TestCase):
         self.assertNotIn("Lifecycle", STUDIO)
 
     def test_only_lessons_open_an_editor(self):
-        self.assertIn(
-            'const selection: Selection = search.lesson ? { type: "lesson", id: search.lesson } : null;',
-            STUDIO,
-        )
+        # R79: and an editor is no longer a pane — a lesson has its own address, so the
+        # old ?lesson= link forwards there rather than swapping the outline out.
+        self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
+        self.assertIn("params: { classId, lessonId: search.lesson }", STUDIO)
+        self.assertNotIn("const selection: Selection", STUDIO)
 
     def test_stale_pane_urls_normalize_to_the_outline(self):
         # Old bookmarks carrying ?unit/?course/?subject replace-navigate to plain
         # Content instead of resurrecting a pane.
-        self.assertIn("if (!search.lesson && (search.subject || search.course || search.unit))", STUDIO)
+        self.assertIn("if (search.subject || search.course || search.unit)", STUDIO)
         self.assertIn("replace: true", STUDIO)
 
     def test_duplicate_lands_on_the_outline_not_a_pane(self):
         # R44's fork no longer auto-selects the course node (the "builder appears
         # unbidden" path) — the success message carries the story instead.
-        dup = STUDIO.split("const duplicateSharedCourse", 1)[1].split("const crumbs", 1)[0]
+        dup = STUDIO.split("const duplicateSharedCourse", 1)[1].split("\n  return (", 1)[0]
         self.assertNotIn("selectFromId", dup)
         self.assertIn("This class now edits its own copy", dup)
 
@@ -107,7 +108,7 @@ class SharedBookTests(unittest.TestCase):
         # R50's guarantee: the server's "duplicate first" refusal always points at a
         # button that exists. With the panes gone that button must live on the list.
         self.assertIn("function SharedCourseNotice({", STUDIO)
-        root_face = STUDIO.split("selection === null ? (", 1)[1].split("<ClassworkList", 1)[0]
+        root_face = STUDIO.split("R79: and it is the ONLY", 1)[1].split("<ClassworkList", 1)[0]
         self.assertIn("<SharedCourseNotice", root_face)
 
 

@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { Save } from "lucide-react";
-import { Breadcrumb } from "@/components/Breadcrumb";
 import { RouteLoader } from "@/components/RouteLoader";
 import type { DeckSpec } from "@/lib/artifact-schema";
 import {
@@ -64,14 +63,12 @@ import type {
   ClassworkItem,
   CurriculumSearch,
   OutlineGenArgs,
-  Selection,
   StepsGenArgs,
 } from "@/features/teacher/authoring/types";
 import {
   CourseBuildProgress,
   CourseReviewPanel,
-  DetailPane,
-} from "@/features/teacher/authoring/DetailPane";
+} from "@/features/teacher/authoring/coursePanels";
 import {
   AiOutlinePanel,
   BuildFromMaterialPanel,
@@ -81,16 +78,13 @@ import { ClassworkList, SharedCourseNotice } from "@/features/teacher/authoring/
 import { stepInputFromDraft } from "@/features/teacher/authoring/stepModel";
 import type { CourseBuild, CourseBuildItem } from "@/features/teacher/authoring/stepModel";
 import {
-  buildBreadcrumb,
   byPositionThenTitle,
   cascadeRemove,
-  collectRemovedIds,
   collectRemovedRows,
   insertStepLocal,
   lessonOrder,
   mergeRows,
   nodeLabel,
-  nodePath,
   patchResourceLocal,
   patchStepLocal,
   renameNodeLocal,
@@ -230,12 +224,18 @@ export function CurriculumStudio({
     return next;
   }, []);
 
-  // R60: only lessons open an editor — the subject/course/unit panes (the pre-R47
-  // StructureDetail chrome) are gone. Stale pane URLs normalize below.
-  const selection: Selection = search.lesson ? { type: "lesson", id: search.lesson } : null;
-
+  // R79: the studio has no editor pane at all — a lesson is its own screen. An old
+  // ?lesson= link (or a stale pane URL) forwards there rather than 404ing quietly.
   useEffect(() => {
-    if (!search.lesson && (search.subject || search.course || search.unit)) {
+    if (search.lesson) {
+      navigate({
+        to: "/teacher/class/$classId/lesson/$lessonId",
+        params: { classId, lessonId: search.lesson },
+        replace: true,
+      });
+      return;
+    }
+    if (search.subject || search.course || search.unit) {
       navigate({
         to: "/teacher/class/$classId",
         params: { classId },
@@ -465,26 +465,17 @@ export function CurriculumStudio({
     [orgSubjects, coursesForSubject],
   );
 
-  // Selection rides the class route's URL (?tab=curriculum&lesson=… etc.) so lesson
-  // editing stays deep-linkable inside the class and back/forward keeps working.
-  const selectNode = useCallback(
-    (type: CurriculumNodeType, id: string) => {
+  // R79: creating a lesson lands the teacher IN it. Units and courses have no screen
+  // of their own — they are rows on this outline — so only a lesson navigates.
+  const openLesson = useCallback(
+    (lessonId: string) => {
       navigate({
-        to: "/teacher/class/$classId",
-        params: { classId },
-        search: { tab: "content", [type]: id },
+        to: "/teacher/class/$classId/lesson/$lessonId",
+        params: { classId, lessonId },
       });
     },
     [navigate, classId],
   );
-
-  const clearSelection = useCallback(() => {
-    navigate({
-      to: "/teacher/class/$classId",
-      params: { classId },
-      search: { tab: "content" },
-    });
-  }, [navigate, classId]);
 
   // --- Mutations ------------------------------------------------------------
   // Edits/deletes/reorders apply optimistically (instant; resync only on error).
@@ -549,7 +540,7 @@ export function CurriculumStudio({
           const result = await run(session.access_token, classId);
           setData(applyPending(await fetchCurriculumAuthoringData(session.user.id)));
           const sel = opts?.select?.(result);
-          if (sel) selectNode(sel.type, sel.id);
+          if (sel?.type === "lesson") openLesson(sel.id);
           opts?.onDone?.(result);
           if (opts?.successMessage) setMessage(opts.successMessage);
         } catch (error) {
@@ -560,7 +551,7 @@ export function CurriculumStudio({
         }
       })();
     },
-    [selectedClass, selectNode, refresh, applyPending],
+    [selectedClass, openLesson, refresh, applyPending],
   );
 
   const selectFromId =
@@ -699,8 +690,6 @@ export function CurriculumStudio({
     if (!selectedClass || !data) return;
     const classId = selectedClass.id;
     const removed = collectRemovedRows(data, nodeType, id); // captured for Undo
-    const restoreSelection =
-      selection && collectRemovedIds(data, nodeType, id).has(selection.id) ? selection : null;
     const key = `delete-node:${id}`;
     const transform = (d: CurriculumAuthoringData) => cascadeRemove(d, nodeType, id);
     undoable({
@@ -709,12 +698,10 @@ export function CurriculumStudio({
       optimistic: () => {
         pendingReapply.current.set(key, transform);
         setData((d) => (d ? transform(d) : d));
-        if (restoreSelection) clearSelection();
       },
       revert: () => {
         pendingReapply.current.delete(key);
         setData((d) => (d ? mergeRows(d, removed) : d));
-        if (restoreSelection) selectNode(restoreSelection.type, restoreSelection.id);
       },
       commit: () => {
         pendingReapply.current.delete(key);
@@ -1411,11 +1398,9 @@ export function CurriculumStudio({
     if (!data) return null;
     // R60: with the node panes gone the fork affordance must live on the outline too —
     // a class linked to a shared/global book still needs its "duplicate first" button.
-    const course = selection
-      ? nodePath(selection, data).course
-      : (classUnits.find(
-          ({ course: c }) => c && (!c.organization_id || peerClassNames(c.id).length),
-        )?.course ?? null);
+    const course =
+      classUnits.find(({ course: c }) => c && (!c.organization_id || peerClassNames(c.id).length))
+        ?.course ?? null;
     if (!course) return null;
     const peers = peerClassNames(course.id);
     // R50: a GLOBAL book (no owning organization) can never be edited directly, so the
@@ -1425,8 +1410,7 @@ export function CurriculumStudio({
     return peers.length || isGlobal
       ? { courseId: course.id, names: peers.join(", "), isGlobal }
       : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection?.type, selection?.id, data, peerClassNames, classUnits]);
+  }, [data, peerClassNames, classUnits]);
 
   // R44 fork-on-demand: copy the shared course for THIS class and swap the class's link
   // to the copy. The link refresh happens inside the run so the scoped outline flips to
@@ -1454,30 +1438,20 @@ export function CurriculumStudio({
       },
     );
 
-  const crumbs = buildBreadcrumb({ selection, data, goRoot: clearSelection, goNode: selectNode });
-
   return (
     <div className="flex flex-col gap-4">
-      {/* Slim toolbar — the class page above already carries the class name and section
-          switcher, so the studio only needs its content breadcrumb (the subject→lesson
-          selection) and its own controls. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Breadcrumb segments={crumbs} />
+      {/* R79: no breadcrumb and no "← Content" — the class page above names where you
+          are, and a lesson is a screen you come BACK from rather than a pane you close. */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {selection ? (
-            <button type="button" onClick={clearSelection} className="btn btn-secondary btn-sm">
-              ← Content
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={openCourseBuild}
-              disabled={busy}
-              className="btn btn-secondary btn-sm"
-            >
-              Add units &amp; lessons
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={openCourseBuild}
+            disabled={busy}
+            className="btn btn-secondary btn-sm"
+          >
+            Add units &amp; lessons
+          </button>
           <button
             type="button"
             onClick={() => void loadData()}
@@ -1549,7 +1523,7 @@ export function CurriculumStudio({
             )
           }
           onPublish={publishReviewed}
-          onOpenLesson={(lessonId) => selectNode("lesson", lessonId)}
+          onOpenLesson={openLesson}
           onClose={() => setReviewUnitId(null)}
         />
       ) : null}
@@ -1565,11 +1539,10 @@ export function CurriculumStudio({
           </div>
         </section>
       ) : data ? (
-        // R47: no aside, no tree — the list IS the surface. R60: the list is the ONLY
-        // structural surface (units + lessons + materials); a selection means a lesson
-        // and swaps the whole width to the lesson editor. Work items live in Activity.
-        selection === null ? (
-          <div className="min-w-0">
+        // R47: no aside, no tree — the list IS the surface. R79: and it is the ONLY
+        // surface here, since a lesson opens at its own address instead of taking the
+        // width away from the outline that launched it.
+        <div className="min-w-0">
             {sharedNotice ? (
               <SharedCourseNotice
                 notice={sharedNotice}
@@ -1646,7 +1619,14 @@ export function CurriculumStudio({
                 setBuildCourseId(null);
                 setBuildForUnitId(unitId);
               }}
-              onSelectLesson={(id) => selectNode("lesson", id)}
+              // R79: a lesson is its own screen now — the outline links to it rather
+              // than opening a pane beside itself.
+              onSelectLesson={(id) =>
+                void navigate({
+                  to: "/teacher/class/$classId/lesson/$lessonId",
+                  params: { classId, lessonId: id },
+                })
+              }
               onOpenItem={onOpenItem}
               onCreate={onCreate}
               onAddUnit={addUnitToClass}
@@ -1679,44 +1659,7 @@ export function CurriculumStudio({
                 />
               </div>
             ) : null}
-          </div>
-        ) : (
-          <div className="min-w-0">
-            {sharedNotice ? (
-              <SharedCourseNotice
-                notice={sharedNotice}
-                busy={busy}
-                onDuplicate={() => duplicateSharedCourse(sharedNotice.courseId)}
-              />
-            ) : null}
-            <DetailPane
-              key={selection ? `${selection.type}:${selection.id}` : "empty"}
-              selection={selection}
-              data={data}
-              workItems={workItems}
-              onOpenItem={onOpenItem}
-              onCreateForStep={onCreateForStep}
-              lessonsById={lessonsById}
-              orgUnits={orgUnits}
-              resources={data.resources}
-              busy={busy}
-              onMoveLesson={moveLesson}
-              onSaveLessonMeta={saveLessonMeta}
-              onUpsertStep={upsertStep}
-              onReorderSteps={reorderSteps}
-              onDeleteStep={deleteStep}
-              onDelete={deleteNode}
-              onBindResource={bindResource}
-              onShareResource={shareArtifact}
-              onGenerateArtifact={generateArtifact}
-              onApproveArtifact={approveArtifact}
-              onPublishLesson={(lessonId) => void setPublication("publish_lesson", lessonId)}
-              onArchiveLesson={(lessonId) => void setPublication("archive_lesson", lessonId)}
-              onGenerateSteps={generateSteps}
-              onApplySteps={applyStepDrafts}
-            />
-          </div>
-        )
+        </div>
       ) : null}
 
       {/* R75: the always-open drawer is gone. Choosing which COURSES a class teaches is

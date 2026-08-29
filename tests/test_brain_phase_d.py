@@ -83,8 +83,9 @@ class StudioKnowledgeReview(unittest.TestCase):
         self.assertIn('"publish"', CARD)
         self.assertIn('"discard"', CARD)
 
-    def test_card_mounted_in_lesson_detail(self):
-        self.assertIn("<KnowledgeCard lessonId={lesson.id} />", STUDIO)
+    def test_card_mounted_on_the_lesson(self):
+        # R79: reachable from the lesson's own menu rather than sitting open on it.
+        self.assertIn("<KnowledgeCard lessonId={lessonId} />", STUDIO)
 
 
 if __name__ == "__main__":

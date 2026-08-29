@@ -16,7 +16,7 @@ Pins the structural contract of slice 1, updated through R47:
 """
 from pathlib import Path
 import unittest
-from tests.teacher_sources import authoring_source, console_source
+from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,15 +136,23 @@ class StudioTests(unittest.TestCase):
         self.assertIn("classId: string;", STUDIO)
         # The host (TeacherConsole) gates the teacher role; the studio must not re-gate
         # or render its own chrome (shell imports gone, class picker gone).
-        self.assertNotIn("fetchPrimaryRole", STUDIO)
-        self.assertNotIn('from "@/features/teacher/shell/TeacherShell"', STUDIO)
-        self.assertNotIn('from "@/components/PageShell"', STUDIO)
-        self.assertNotIn("Class scope", STUDIO)
+        # Scoped to the studio's own module: it is mounted INSIDE the console, so it
+        # must not draw shell chrome. (The lesson screen is a route of its own and does
+        # render a shell — that is why this reads the studio rather than the surface.)
+        studio_module = AUTHORING_ROUTE.read_text(encoding="utf-8")
+        self.assertNotIn("fetchPrimaryRole", studio_module)
+        self.assertNotIn('from "@/features/teacher/shell/TeacherShell"', studio_module)
+        self.assertNotIn('from "@/components/PageShell"', studio_module)
+        self.assertNotIn("Class scope", studio_module)
 
-    def test_selection_rides_the_class_route(self):
+    def test_a_lesson_has_its_own_address(self):
+        # R42 put the selection in the URL so lesson editing was deep-linkable inside
+        # the class. R79 finished the thought: the lesson IS a route, so the link is an
+        # address rather than a query parameter, and Back works.
         self.assertIn('to: "/teacher/class/$classId"', STUDIO)
-        self.assertIn('search: { tab: "content", [type]: id }', STUDIO)
         self.assertIn('search: { tab: "content" }', STUDIO)
+        self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
+        self.assertIn("params: { classId, lessonId }", STUDIO)
 
     def test_legacy_route_redirects_into_the_first_class(self):
         self.assertIn('createFileRoute("/teacher/curriculum")', STUDIO)

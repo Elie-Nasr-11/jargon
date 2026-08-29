@@ -64,11 +64,13 @@ class DemotionTests(unittest.TestCase):
         # never had anything to do with resources, which "content" implied.
         self.assertIn('{booksOpen ? "Hide courses" : "Courses in this class"}', STUDIO)
 
-    def test_knowledge_is_collapsed_not_deleted(self):
+    def test_knowledge_is_demoted_not_deleted(self):
+        # R75 folded it into a collapsible; R79 moved it off the lesson page entirely,
+        # into the header's menu — Law 5, derived things are outputs, never fields in an
+        # authoring form. The review path is unchanged.
         self.assertIn("const [knowledgeOpen, setKnowledgeOpen] = useState(false);", STUDIO)
         self.assertIn("Ideas &amp; vocabulary", STUDIO)
-        # Still mounted when opened — the review path is intact.
-        self.assertIn("{knowledgeOpen ? <KnowledgeCard lessonId={lesson.id} /> : null}", STUDIO)
+        self.assertIn("<KnowledgeCard lessonId={lessonId} />", STUDIO)
 
     def test_the_authoring_room_may_only_get_lighter(self):
         # A RATCHET, not a target. The diagnosis behind R75 is that every release since

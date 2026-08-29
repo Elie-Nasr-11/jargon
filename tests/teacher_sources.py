@@ -24,6 +24,10 @@ SRC = ROOT / "frontend" / "src"
 
 AUTHORING_ROUTE = SRC / "routes" / "teacher.curriculum.tsx"
 AUTHORING_DIR = SRC / "features" / "teacher" / "authoring"
+# R79: the lesson moved out of the studio's pane into its own screen. It is part
+# of the same authoring surface, so pins that ask "does the console let a teacher
+# do X to a lesson" keep reading one text.
+LESSON_DIR = SRC / "features" / "teacher" / "lesson"
 CONSOLE_SHELL = SRC / "features" / "teacher" / "TeacherConsole.tsx"
 CONSOLE_DIR = SRC / "features" / "teacher" / "console"
 
@@ -44,7 +48,7 @@ def _join(paths: list[Path]) -> str:
 
 def authoring_paths() -> list[Path]:
     """Every file that makes up the authoring surface, route first."""
-    return [AUTHORING_ROUTE] + _modules(AUTHORING_DIR)
+    return [AUTHORING_ROUTE] + _modules(AUTHORING_DIR) + _modules(LESSON_DIR)
 
 
 def console_paths() -> list[Path]:

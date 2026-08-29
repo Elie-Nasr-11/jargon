@@ -2392,3 +2392,61 @@ A ceiling, written down (tests/test_r78_module_split.py). No teacher module may
 exceed 1,100 lines; the two entry points carry a stated allowance (1,800 and
 1,100) recorded as DEBT, since steps 3-7 of the brief replace them. The console
 reached 16k lines because nothing ever said stop; now something does.
+
+## R79 — step 3 of the rebuild brief: the Lesson screen, built new (2026-08-29)
+
+Step 0 first, because the brief blocks UI work behind it: `docs/LEXICON.md` is
+the word list Law 3 demands — Course, Unit, Lesson, Step, Work, Material,
+Evidence, each with what it does NOT mean, plus the retired words (Content as a
+noun, Resource in the UI, Linked content, Classwork, Seeding, Reference
+material). It is enforceable: R79's pins check this screen's copy against it.
+
+Then the screen. A lesson is what a teacher lives in daily, so it stops being a
+pane inside the outline and becomes its own address —
+`/teacher/class/$classId/lesson/$lessonId` — with four sections and nothing else:
+
+- HEADER — title, objective, where it came from (Book A1 · pp. 31–45), whether
+  students can see it, and the one Save on the screen. It sticks, so Save is
+  reachable from the bottom of a long steps list.
+- STEPS — the ordered list, dragged and edited in place. Eighty per cent of the
+  page, by design.
+- WORK — every assignment and quiz on this lesson, each row saying the three
+  things job 3 is about: who it is for, when it is due, what is owed. Both Add
+  buttons live here, on the lesson, so the dialog never asks which lesson.
+- MATERIAL — ranked closest-first: on a step, on the lesson, then from the book
+  (collapsed, and loaded only when opened).
+
+Everything rarer moved into the header's menu: settings, preview as a student,
+ideas & vocabulary, draft steps from a written brief, move, archive, delete.
+
+THE EMPTY STATE DOES THE WORK (brief mechanism B, brought forward from step 8
+because a section cannot be built without deciding what its empty state says).
+An empty lesson does not show "No steps yet" beside a Draft button. It says
+"Nothing here yet — Jargon can draft the steps from [the book pages this lesson
+follows]" and offers them in one press, with no brief to write. The proposal is
+shown before anything is written: keep them, or discard. The always-on "Draft
+steps with AI" panel is gone; the written-brief version lives in the menu.
+
+THE ASSIST IS NOT CHROME. R76 put a Draft button beside every field and the
+owner was right that it was instruction-following, not design. It now appears
+for a field that is EMPTY (nothing to lose, everything to offer) or one the
+teacher is actively writing in, and is invisible otherwise.
+
+DELETED, not deprecated (Law 6): the old lesson editor (LessonDetail, 992
+lines), the pane that hosted it (DetailPane), the R74 inventory bar and its
+module, and the studio's selection state — the outline is now the only surface
+in the Content room. An old `?lesson=` link forwards to the lesson's screen.
+
+A LIVE DEFECT FOUND ON THE WAY OUT: R74 rendered `<LessonClasswork>` TWICE on
+every lesson — the same section, duplicated, shipped 2026-08-27 and live since.
+The rebuild removes it by construction. It is named here because it is exactly
+what failure mode 8 predicts: three releases of green tests over a page nobody
+opened.
+
+WALKED, NOT ONLY TESTED. The brief's acceptance rule is that static pins cannot
+measure whether a screen makes sense, which is why everything shipped green and
+confusing. This one was driven in a real browser against the offline fixture
+backend before shipping, and the walk found three defects the 1,215 pins did
+not: the header repeated the back link, content ghosted through the gap under
+the sticky band, and the two assist buttons read as standing AI chrome. All
+three are fixed above.
