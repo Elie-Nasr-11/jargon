@@ -12057,3 +12057,24 @@ panel counts what was imported, not what the book contains; if a teacher wants
 "chapter 4 of 9 loaded" we need the source PDF's own chapter count.
 Suggested next task: owner walks the Content room on a real class and says
 whether the books panel is the right front door before any further IA work.
+
+## Claude -> Codex / Human - 2026-08-27 23:10
+
+Status: Finished
+Summary: R74 authoring clarity (see DECISIONS). New lessonInventory.ts and
+LessonInventoryBar.tsx; lesson editor gains an inventory bar and a "Classwork
+on this lesson" section that creates assignments/quizzes bound to the lesson
+(with the existing per-student picker); step-editor material list grouped into
+lesson materials vs from-the-book; outline rows mark empty lessons.
+Files changed: frontend/src/features/teacher/lessonInventory.ts (new),
+LessonInventoryBar.tsx (new), TeacherConsole.tsx (lesson-level create context),
+routes/teacher.curriculum.tsx, tests/test_r74_authoring_clarity.py (new, 11
+pins), tests/test_r73_teacher_realignment.py (one pin re-stated), docs.
+Tests run: python 1163 green / 4 skipped; tsc clean; vite build succeeds.
+Remaining concerns: the inventory bar's chips are not wired to scroll/jump yet
+(onJump is optional and currently unset) — they read as status, not navigation,
+until that lands. lessonInventory.ts's inventoryFor/groupResources are exported
+and pinned but the route computes its own inline equivalents; worth collapsing
+onto the module next pass.
+Suggested next task: owner walks Content → a book lesson and says whether
+"what exists / where it lives / how to change it" is now answerable.
