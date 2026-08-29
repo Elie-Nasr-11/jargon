@@ -2207,3 +2207,38 @@ Deliberately NOT done: no new rooms, no nav changes, no URL changes. The
 curriculum studio keeps every generic authoring path it had.
 
 Pinned in tests/test_r73_teacher_realignment.py.
+
+## R74 — making the authoring surface legible (2026-08-27)
+
+Owner, about the console he built himself: "it's not clear where to create a
+lesson, it's not clear how to edit an existing lesson, it's not clear how to
+create an assignment in a specific place and assign it to specific people...
+there's just one button that creates everything."
+
+The root cause is NOT missing capability. Assignments already bind to a
+lesson_id and carry per-student recipients; every resource already has a lesson.
+The cause is that build-from-material makes steps, a quiz, an assignment and
+materials in ONE action — so the teacher never watched the pieces appear and had
+no reason to believe they were separate, editable things — and the only door in
+was a generic "+ Create" that asked which lesson AFTERWARDS.
+
+- INVENTORY. A lesson now states what is inside it (steps, quiz steps,
+  assignments, materials) on the lesson itself, each count a place rather than a
+  statistic, and an empty count says what is missing instead of "0". A lesson
+  with no steps admits "empty" in the outline tree, because an empty lesson is
+  invisible in a list of titles and is exactly the one to open.
+- CREATION NAMES ITS TARGET. Work is created FROM the lesson it belongs to:
+  createContext.activityId = null is now a first-class case meaning "this belongs
+  to the LESSON", alongside R48's step-linked case which is untouched. The place
+  is never a question, and the dialog's existing student picker answers "for
+  whom" — capability that was always there and never reachable from the lesson.
+- RESOURCES ARE RANKED, NOT RE-PARENTED. The book import staples the chapter PDF
+  and every page image to each lesson (measured: ~11 images and ~8 PDFs per
+  lesson, 211 rows live, ZERO orphans). The attachment is correct and the
+  ranking was missing, so the attach list is grouped — lesson materials above
+  "From the book" — and no row is moved. Book material is recognised by the
+  importer's own metadata.import_key stamp, not by title matching.
+
+Deliberately NOT done: no new rooms, no schema change, no re-parenting of any
+resource, and the generic create menu still exists for teachers who think
+top-down. Pinned in tests/test_r74_authoring_clarity.py.

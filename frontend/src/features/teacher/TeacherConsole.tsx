@@ -1186,9 +1186,12 @@ function ClassDetail({
   );
   // R48: when + Create was invoked FROM a lesson step ("create the assignment for this
   // step"), the dialog locks the lesson and stamps the step link on the created row.
+  // R74: activityId null = the work belongs to the LESSON, not to one of its steps.
+  // That is the ordinary case a teacher reaches for ("an assignment on lesson 3"); the
+  // step-linked case (R48) stays exactly as it was.
   const [createContext, setCreateContext] = useState<{
     lessonId: string;
-    activityId: string;
+    activityId: string | null;
   } | null>(null);
   // A material row opened for editing from the Classwork list.
   const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
@@ -1960,6 +1963,10 @@ function ClassDetail({
                 setCreateContext(ctx);
                 setCreateOpen(kind);
               }}
+              onCreateForLesson={(kind, lessonId) => {
+                setCreateContext({ lessonId, activityId: null });
+                setCreateOpen(kind);
+              }}
             />
           </Suspense>
         </div>
@@ -2534,7 +2541,7 @@ function AssessmentManager({
   saving: boolean;
   // R48: present when the dialog was opened FROM a lesson step — the lesson is locked
   // to that step's lesson and the created row carries the step link.
-  context?: { lessonId: string; activityId: string } | null;
+  context?: { lessonId: string; activityId: string | null } | null;
   onSaveAssessment: (input: AssessmentFormValues) => Promise<void>;
 }) {
   const seedDraft = () => ({
@@ -2949,7 +2956,7 @@ function AssignmentManager({
   saving: boolean;
   // R48: present when the dialog was opened FROM a lesson step — the lesson is locked
   // to that step's lesson and the created row carries the step link.
-  context?: { lessonId: string; activityId: string } | null;
+  context?: { lessonId: string; activityId: string | null } | null;
   onSaveAssignment: (input: AssignmentFormValues) => Promise<void>;
 }) {
   const seedDraft = () => ({

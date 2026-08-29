@@ -66,6 +66,7 @@ import {
 import type { LessonReview } from "@/lib/api";
 import { bookSourceFor, bookSourceLabel } from "@/features/teacher/bookSource";
 import { BooksPanel, summarizeBooks } from "@/features/teacher/BooksPanel";
+import { LessonInventoryBar } from "@/features/teacher/LessonInventoryBar";
 import {
   extractDocxText,
   extractPptxText,
@@ -230,12 +231,16 @@ export function CurriculumStudio({
   workItems = [],
   onOpenItem,
   onCreate,
+  onCreateForLesson,
   onCreateForStep,
 }: {
   classId: string;
   workItems?: ClassworkItem[];
   onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
   onCreate?: (kind: "assignment" | "assessment" | "material") => void;
+  // R74: work created FROM a lesson, bound to that lesson. The step-linked variant
+  // below (R48) is for work that IS a step.
+  onCreateForLesson?: (kind: "assignment" | "assessment", lessonId: string) => void;
   // R48: create a work item FOR a lesson step — the console opens the matching dialog
   // with the lesson locked and stamps the step link on the created row.
   onCreateForStep?: (
@@ -391,6 +396,20 @@ export function CurriculumStudio({
 
   // R73: page ranges arrive as a plain object on the authoring payload; the outline
   // and the editor both want a Map.
+  // R74: step counts per lesson for the outline rows.
+  const stepCountByLesson = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const activity of data?.activities || []) {
+      const id = String(activity.lesson_id || "");
+      if (id) counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    return counts;
+  }, [data?.activities]);
+  const stepCountFor = useCallback(
+    (lessonId: string) => stepCountByLesson.get(lessonId) ?? 0,
+    [stepCountByLesson],
+  );
+
   const bookPages = useMemo(
     () => new Map(Object.entries(data?.bookPages || {})),
     [data?.bookPages],
@@ -1660,6 +1679,7 @@ export function CurriculumStudio({
               units={outlineUnits}
               lessonsForUnit={lessonsForUnit}
               bookPages={bookPages}
+              stepCountFor={stepCountFor}
               emptyHint="No units yet — upload a chapter with “Build a course from material”, create a unit, or open Books & shared content below to bring in existing material."
               workItems={workItems.filter((entry) => entry.kind === "material")}
               busy={busy}
@@ -1892,8 +1912,12 @@ function UnitRenameInput({
 function outlineLessonMeta(
   lesson: Lesson,
   bookPages: Map<string, { first: number; last: number }>,
+  stepCount?: number,
 ): string {
   const status = lesson.publication_status || "published";
+  // R74: an empty lesson is invisible in a tree of titles — say so on the row, because
+  // a lesson with no steps teaches nothing and is the one a teacher must open.
+  if (stepCount === 0) return status !== "published" ? `${status} · empty` : "empty";
   const source = bookSourceFor(lesson, bookPages, lesson.id);
   const pages = source?.firstPage
     ? source.lastPage && source.lastPage !== source.firstPage
@@ -1908,6 +1932,7 @@ function ClassworkList({
   units,
   lessonsForUnit,
   bookPages,
+  stepCountFor,
   emptyHint,
   workItems,
   busy,
@@ -1928,6 +1953,8 @@ function ClassworkList({
   lessonsForUnit: (unitId: string) => Lesson[];
   // R73: min/max book page per lesson, for the source line on each row.
   bookPages: Map<string, { first: number; last: number }>;
+  // R74: how many steps each lesson has, so an empty one is visible in the tree.
+  stepCountFor: (lessonId: string) => number;
   emptyHint?: string;
   workItems: ClassworkItem[];
   busy: boolean;
@@ -2154,7 +2181,7 @@ function ClassworkList({
                             // teacher can check it against the copy on their desk.
                             // Draft state still leads when there is one — that is the
                             // thing they must act on.
-                            meta={outlineLessonMeta(lesson, bookPages)}
+                            meta={outlineLessonMeta(lesson, bookPages, stepCountFor(lesson.id))}
                             metaTitle={bookSourceLabel(bookSourceFor(lesson, bookPages, lesson.id))}
                             hasChildren={false}
                             selected={false}
@@ -2393,6 +2420,7 @@ function DetailPane({
   onApplySteps,
   workItems,
   onOpenItem,
+  onCreateForLesson,
   onCreateForStep,
 }: {
   // R60: the only selectable node is a lesson — the subject/course/unit panes (the
@@ -2407,6 +2435,7 @@ function DetailPane({
   // down to StepCard's "Step work" strip.
   workItems: ClassworkItem[];
   onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
+  onCreateForLesson?: (kind: "assignment" | "assessment", lessonId: string) => void;
   onCreateForStep?: (
     kind: "assignment" | "assessment",
     ctx: { lessonId: string; activityId: string },
@@ -2464,6 +2493,7 @@ function DetailPane({
       workItems={workItems}
       onOpenItem={onOpenItem}
       onCreateForStep={onCreateForStep}
+      onCreateForLesson={onCreateForLesson}
     />
   );
 }
@@ -3146,6 +3176,7 @@ function LessonDetail({
   onApplySteps,
   workItems,
   onOpenItem,
+  onCreateForLesson,
   onCreateForStep,
 }: {
   lesson: Lesson;
@@ -3155,6 +3186,7 @@ function LessonDetail({
   busy: boolean;
   workItems: ClassworkItem[];
   onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
+  onCreateForLesson?: (kind: "assignment" | "assessment", lessonId: string) => void;
   onCreateForStep?: (
     kind: "assignment" | "assessment",
     ctx: { lessonId: string; activityId: string },
@@ -3227,6 +3259,21 @@ function LessonDetail({
     () => data.milestones.find((item) => item.lesson_id === lesson.id) || null,
     [data.milestones, lesson.id],
   );
+  // R74: the lesson's own inventory. Assignments come from the work items the console
+  // already hands down, so this counts what genuinely exists rather than re-querying.
+  const inventory = useMemo(
+    () => ({
+      steps: steps.length,
+      quizSteps: steps.filter((step) => step.response_mode === "multiple_choice").length,
+      assignments: workItems.filter(
+        (item) => item.kind === "assignment" && item.lessonId === lesson.id,
+      ).length,
+      materials: resources.filter(
+        (resource) => resource.lesson_id === lesson.id && resource.status !== "archived",
+      ).length,
+    }),
+    [steps, workItems, resources, lesson.id],
+  );
   const quizFor = (activityId: string) =>
     data.quizzes.find((quiz) => quiz.activity_id === activityId && quiz.status !== "archived") ||
     null;
@@ -3250,6 +3297,13 @@ function LessonDetail({
             <h2 className="mt-1 truncate font-serif text-display text-foreground">
               {lesson.title}
             </h2>
+            {/* R74: what is actually IN this lesson. Build-from-material creates steps,
+                a quiz, an assignment and materials in one action, so the teacher never
+                watched the pieces appear — this is where they learn the pieces exist,
+                and each count is a place they can go. */}
+            <div className="mt-2">
+              <LessonInventoryBar inventory={inventory} />
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -3383,6 +3437,20 @@ function LessonDetail({
             />
 
             <KnowledgeCard lessonId={lesson.id} />
+
+            {/* R74: the lesson's own classwork. Assignments and quizzes bind to a lesson
+                and carry per-student recipients — the capability was always there, but the
+                only way in was a generic "+ Create" that made you pick the lesson again
+                afterwards. Creating it HERE means the place is never a question, and the
+                student picker in the dialog answers "for whom". */}
+            <LessonClasswork
+              lessonId={lesson.id}
+              items={workItems.filter(
+                (item) => item.lessonId === lesson.id && item.kind !== "material",
+              )}
+              onOpenItem={onOpenItem}
+              onCreate={onCreateForLesson}
+            />
 
             <section className="rounded-card border border-border bg-depth-sub p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
@@ -3900,6 +3968,12 @@ function StepCard({
       resource.activity_id !== activity.id &&
       !(generatedFor(resource) && resource.visibility === "student_private"),
   );
+  // R74: book-imported material is stamped with the book's key by the importer; anything
+  // a teacher attached by hand has no key and outranks it.
+  const resourceTier = (resource: LessonResource): "lesson" | "book" =>
+    String((resource.metadata as { import_key?: unknown } | null)?.import_key || "")
+      ? "book"
+      : "lesson";
   const bindable = !activity.id.startsWith("temp-");
 
   const save = () => {
@@ -4257,13 +4331,31 @@ function StepCard({
                   className="jargon-input text-muted-foreground disabled:opacity-50"
                 >
                   <option value="">Attach a material…</option>
-                  {attachable.map((resource) => (
-                    <option key={resource.id} value={resource.id}>
-                      {resource.title}
-                      {resource.status !== "published" ? " (draft)" : ""}
-                      {resource.activity_id ? " — attached to another step" : ""}
-                    </option>
-                  ))}
+                  {/* R74: RANKED, not piled. The book import staples the whole chapter PDF
+                      and every page image to each lesson, so in production this list ran to
+                      ~19 entries per lesson with nothing saying which mattered. Nothing is
+                      re-parented — what a teacher chose is simply listed before what the
+                      book happened to contain. */}
+                  {[
+                    { key: "lesson", label: "Lesson materials" },
+                    { key: "book", label: "From the book" },
+                  ].map((group) => {
+                    const rows = attachable.filter(
+                      (resource) => resourceTier(resource) === group.key,
+                    );
+                    if (!rows.length) return null;
+                    return (
+                      <optgroup key={group.key} label={group.label}>
+                        {rows.map((resource) => (
+                          <option key={resource.id} value={resource.id}>
+                            {resource.title}
+                            {resource.status !== "published" ? " (draft)" : ""}
+                            {resource.activity_id ? " — attached to another step" : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
                 </select>
               ) : null}
             </div>
@@ -4332,6 +4424,84 @@ function StepCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+// R74: what work exists on THIS lesson, and the one place to make more of it.
+// Rows link to the grading view; the buttons name their target so a teacher never has
+// to re-answer "which lesson?" in the dialog that follows.
+function LessonClasswork({
+  lessonId,
+  items,
+  onOpenItem,
+  onCreate,
+}: {
+  lessonId: string;
+  items: ClassworkItem[];
+  onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
+  onCreate?: (kind: "assignment" | "assessment", lessonId: string) => void;
+}) {
+  return (
+    <section className="rounded-card border border-border bg-depth-sub p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+          Classwork on this lesson
+        </div>
+        {onCreate ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onCreate("assignment", lessonId)}
+              className="btn btn-secondary btn-sm"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Assignment
+            </button>
+            <button
+              type="button"
+              onClick={() => onCreate("assessment", lessonId)}
+              className="btn btn-secondary btn-sm"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Quiz
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {items.length ? (
+        <div className="grid gap-1.5">
+          {items.map((item) => (
+            <button
+              key={`${item.kind}-${item.id}`}
+              type="button"
+              onClick={() => onOpenItem?.(item.kind, item.id)}
+              className="flex items-center gap-2 rounded-control border border-border bg-depth-card px-3 py-2 text-left transition-colors hover:border-primary"
+            >
+              <span className="min-w-0 flex-1 truncate text-meta text-foreground">
+                {item.title}
+              </span>
+              {item.activityId ? (
+                <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                  on a step
+                </span>
+              ) : null}
+              {item.needsReviewCount ? (
+                <span className="shrink-0 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-overline uppercase tracking-[0.06em] text-warning">
+                  {item.needsReviewCount} to mark
+                </span>
+              ) : null}
+              <span className="shrink-0 text-overline uppercase tracking-[0.08em] text-muted-foreground">
+                {item.status}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-meta text-muted-foreground">
+          Nothing set on this lesson yet.
+        </p>
+      )}
+    </section>
   );
 }
 
