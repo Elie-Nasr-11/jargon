@@ -66,7 +66,10 @@ import {
 import type { LessonReview } from "@/lib/api";
 import { bookSourceFor, bookSourceLabel } from "@/features/teacher/bookSource";
 import { BooksPanel, summarizeBooks } from "@/features/teacher/BooksPanel";
+<<<<<<< HEAD
 import { LessonInventoryBar } from "@/features/teacher/LessonInventoryBar";
+=======
+>>>>>>> origin/main
 import {
   extractDocxText,
   extractPptxText,
@@ -396,6 +399,7 @@ export function CurriculumStudio({
 
   // R73: page ranges arrive as a plain object on the authoring payload; the outline
   // and the editor both want a Map.
+<<<<<<< HEAD
   // R74: step counts per lesson for the outline rows.
   const stepCountByLesson = useMemo(() => {
     const counts = new Map<string, number>();
@@ -410,6 +414,8 @@ export function CurriculumStudio({
     [stepCountByLesson],
   );
 
+=======
+>>>>>>> origin/main
   const bookPages = useMemo(
     () => new Map(Object.entries(data?.bookPages || {})),
     [data?.bookPages],
@@ -1679,7 +1685,10 @@ export function CurriculumStudio({
               units={outlineUnits}
               lessonsForUnit={lessonsForUnit}
               bookPages={bookPages}
+<<<<<<< HEAD
               stepCountFor={stepCountFor}
+=======
+>>>>>>> origin/main
               emptyHint="No units yet — upload a chapter with “Build a course from material”, create a unit, or open Books & shared content below to bring in existing material."
               workItems={workItems.filter((entry) => entry.kind === "material")}
               busy={busy}
@@ -1912,12 +1921,17 @@ function UnitRenameInput({
 function outlineLessonMeta(
   lesson: Lesson,
   bookPages: Map<string, { first: number; last: number }>,
+<<<<<<< HEAD
   stepCount?: number,
 ): string {
   const status = lesson.publication_status || "published";
   // R74: an empty lesson is invisible in a tree of titles — say so on the row, because
   // a lesson with no steps teaches nothing and is the one a teacher must open.
   if (stepCount === 0) return status !== "published" ? `${status} · empty` : "empty";
+=======
+): string {
+  const status = lesson.publication_status || "published";
+>>>>>>> origin/main
   const source = bookSourceFor(lesson, bookPages, lesson.id);
   const pages = source?.firstPage
     ? source.lastPage && source.lastPage !== source.firstPage
@@ -1932,7 +1946,10 @@ function ClassworkList({
   units,
   lessonsForUnit,
   bookPages,
+<<<<<<< HEAD
   stepCountFor,
+=======
+>>>>>>> origin/main
   emptyHint,
   workItems,
   busy,
@@ -1953,8 +1970,11 @@ function ClassworkList({
   lessonsForUnit: (unitId: string) => Lesson[];
   // R73: min/max book page per lesson, for the source line on each row.
   bookPages: Map<string, { first: number; last: number }>;
+<<<<<<< HEAD
   // R74: how many steps each lesson has, so an empty one is visible in the tree.
   stepCountFor: (lessonId: string) => number;
+=======
+>>>>>>> origin/main
   emptyHint?: string;
   workItems: ClassworkItem[];
   busy: boolean;
@@ -2181,7 +2201,11 @@ function ClassworkList({
                             // teacher can check it against the copy on their desk.
                             // Draft state still leads when there is one — that is the
                             // thing they must act on.
+<<<<<<< HEAD
                             meta={outlineLessonMeta(lesson, bookPages, stepCountFor(lesson.id))}
+=======
+                            meta={outlineLessonMeta(lesson, bookPages)}
+>>>>>>> origin/main
                             metaTitle={bookSourceLabel(bookSourceFor(lesson, bookPages, lesson.id))}
                             hasChildren={false}
                             selected={false}
