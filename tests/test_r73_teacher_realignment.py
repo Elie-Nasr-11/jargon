@@ -85,12 +85,8 @@ class BookLeadsTests(unittest.TestCase):
         self.assertIn("book.drafts && book.firstDraftUnitId", BOOKS)
 
     def test_a_lesson_row_names_its_pages(self):
-<<<<<<< HEAD
         # R74 added a step count to the same call; the page-naming guarantee is unchanged.
         self.assertIn("meta={outlineLessonMeta(lesson, bookPages, stepCountFor(lesson.id))}", ROUTE)
-=======
-        self.assertIn("meta={outlineLessonMeta(lesson, bookPages)}", ROUTE)
->>>>>>> origin/main
         body = ROUTE.split("function outlineLessonMeta(", 1)[1].split("\n}", 1)[0]
         # Draft state still leads — that is what a teacher must act on.
         self.assertIn('if (status !== "published") return pages ? `${status} · ${pages}` : status;', body)
