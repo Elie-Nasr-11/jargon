@@ -32,7 +32,7 @@ import { NumberFlip } from "@/features/teacher/HotlistFeed";
 import { AssignmentWorkView } from "@/features/teacher/AssignmentGrading";
 import { AssessmentWorkView } from "@/features/teacher/AssessmentGrading";
 // Type-only: erased at compile time, so it does NOT pull the heavy studio chunk in.
-import type { ClassworkItem } from "@/routes/teacher.curriculum";
+import type { ClassworkItem } from "@/features/teacher/authoring/types";
 // R42: the authoring studio lives inside each class's Curriculum section now. Its code
 // stays in the (heavy) route module and loads on demand the first time the section opens,
 // so the Students landing stays as light as before.
