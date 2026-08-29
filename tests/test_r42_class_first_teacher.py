@@ -16,6 +16,7 @@ Pins the structural contract of slice 1, updated through R47:
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source, console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,8 +28,8 @@ SIDEBAR = (FRONTEND / "features" / "teacher" / "shell" / "TeacherSidebar.tsx").r
 SHELL = (FRONTEND / "features" / "teacher" / "shell" / "TeacherShell.tsx").read_text(
     encoding="utf-8"
 )
-CONSOLE = (FRONTEND / "features" / "teacher" / "TeacherConsole.tsx").read_text(encoding="utf-8")
-STUDIO = (FRONTEND / "routes" / "teacher.curriculum.tsx").read_text(encoding="utf-8")
+CONSOLE = console_source()
+STUDIO = authoring_source()
 CLASS_ROUTE = (FRONTEND / "routes" / "teacher.class.$classId.tsx").read_text(encoding="utf-8")
 NOTIFICATIONS = (FRONTEND / "components" / "NotificationsMenu.tsx").read_text(encoding="utf-8")
 

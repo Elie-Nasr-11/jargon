@@ -13,6 +13,7 @@ The load-bearing rules this file pins:
 import re
 import unittest
 from pathlib import Path
+from tests.teacher_sources import authoring_source
 
 REPO = Path(__file__).resolve().parent.parent
 MIGRATION = (
@@ -234,7 +235,7 @@ class ChatLiveArtifactWire(unittest.TestCase):
         chat_messages = (
             front / "features" / "student" / "chat" / "chatMessages.ts"
         ).read_text()
-        studio = (front / "routes" / "teacher.curriculum.tsx").read_text()
+        studio = authoring_source()
         # Types: the control union + per-student visibility.
         self.assertIn('"continue" | "navigate" | "resume" | "artifact_ready"', types)
         self.assertIn('"student_private"', types)

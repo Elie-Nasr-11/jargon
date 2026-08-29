@@ -25,20 +25,22 @@ Pinned contracts:
 from pathlib import Path
 import re
 import unittest
+from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "frontend" / "src"
 STYLES = (SRC / "styles.css").read_text(encoding="utf-8")
-CONSOLE = (SRC / "features" / "teacher" / "TeacherConsole.tsx").read_text(encoding="utf-8")
-STUDIO = (SRC / "routes" / "teacher.curriculum.tsx").read_text(encoding="utf-8")
+CONSOLE = console_source()
+STUDIO = authoring_source()
 ADMIN = (SRC / "routes" / "admin.tsx").read_text(encoding="utf-8")
 
+# rglob, not glob: R78 split the console into subdirectories, and the control
+# vocabulary applies to a moved component exactly as it did before the move.
 PORTAL_FILES = (
-    list((SRC / "features" / "teacher").glob("*.tsx"))
-    + list((SRC / "features" / "admin").glob("*.tsx"))
-    + [SRC / "routes" / "teacher.curriculum.tsx", SRC / "routes" / "admin.tsx",
-       SRC / "routes" / "login.tsx"]
+    list((SRC / "features" / "teacher").rglob("*.tsx"))
+    + list((SRC / "features" / "admin").rglob("*.tsx"))
+    + [AUTHORING_ROUTE, SRC / "routes" / "admin.tsx", SRC / "routes" / "login.tsx"]
 )
 
 # The pre-R52 hand-rolled button idiom: an interactive pill drawing its own chrome.

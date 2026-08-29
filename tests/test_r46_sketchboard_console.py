@@ -14,11 +14,12 @@ still stands, pinned here:
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend" / "src"
-CONSOLE = (FRONTEND / "features" / "teacher" / "TeacherConsole.tsx").read_text(encoding="utf-8")
+CONSOLE = console_source()
 
 
 def _slice(text: str, start: str, end: str) -> str:

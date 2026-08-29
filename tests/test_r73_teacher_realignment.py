@@ -25,13 +25,14 @@ What this pins:
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source, console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "frontend" / "src" / "features" / "teacher" / "bookSource.ts").read_text(encoding="utf-8")
 BOOKS = (ROOT / "frontend" / "src" / "features" / "teacher" / "BooksPanel.tsx").read_text(encoding="utf-8")
-ROUTE = (ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text(encoding="utf-8")
-CONSOLE = (ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx").read_text(encoding="utf-8")
+ROUTE = authoring_source()
+CONSOLE = console_source()
 TYPES = (ROOT / "frontend" / "src" / "lib" / "types.ts").read_text(encoding="utf-8")
 API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
 

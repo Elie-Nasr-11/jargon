@@ -10,6 +10,7 @@ still run through the "quiz" TurnMode on the chat function — the two are
 different things (chat practice vs teacher-assigned graded checkpoints)."""
 from pathlib import Path
 import unittest
+from tests.teacher_sources import console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +26,6 @@ CHECKPOINTS = ROOT / "frontend" / "src" / "student" / "checkpoints.ts"
 # The teacher console UI moved out of the thin routes/teacher.tsx into the
 # feature module; the assessment surfaces live in TeacherConsole.tsx now,
 # with the attempt review/return half in AssessmentGrading.tsx.
-TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 GRADING = ROOT / "frontend" / "src" / "features" / "teacher" / "AssessmentGrading.tsx"
 
 
@@ -37,7 +37,7 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
         cls.api = API.read_text(encoding="utf-8")
         cls.supabase = SUPABASE.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.teacher_route = TEACHER_ROUTE.read_text(encoding="utf-8")
+        cls.teacher_route = console_source()
         cls.grading = GRADING.read_text(encoding="utf-8")
 
     def test_migration_adds_assessment_tables_with_rls_and_grants(self):
@@ -135,8 +135,6 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
             "Create quiz",
             "Assign quiz",
             "AssessmentManager",
-            "AssessmentStatusChip",
-            "AssessmentRecipientChip",
             "onReviewAssessmentItem",
             "Text response",
             "Code response",
@@ -144,9 +142,13 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.teacher_route)
-        # The attempt review/return half lives in AssessmentGrading.tsx.
+        # The attempt review/return half lives in AssessmentGrading.tsx — and so do
+        # the two status chips. R78: they used to be pinned against the console,
+        # which only ever carried them as a dead import; the chips render HERE.
         self.assertIn("onReviewAssessmentItem", self.grading)
         self.assertIn("Return result", self.grading)
+        self.assertIn("<AssessmentStatusChip", self.grading)
+        self.assertIn("<AssessmentRecipientChip", self.grading)
 
     def test_student_surface_consumes_the_attempt_api(self):
         # Restored (see docstring): the v6 formal-assessment surface is a REAL consumer of

@@ -7,6 +7,7 @@ never unshipped) but inert; the full implementation is archived on main. These t
 BOTH sides: the migration's invariants still hold, and the dead path stays dead."""
 from pathlib import Path
 import unittest
+from tests.teacher_sources import console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +16,6 @@ CHAT_FN = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 TEACHER_VIEW = ROOT / "frontend" / "src" / "features" / "teacher" / "StudentReviewSessions.tsx"
-TEACHER = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-backend.yml"
 MIGRATIONS_DIR = ROOT / "supabase" / "migrations"
 
@@ -27,7 +27,7 @@ class ReviewSessionsStaticTests(unittest.TestCase):
         cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.teacher = TEACHER.read_text(encoding="utf-8")
+        cls.teacher = console_source()
         cls.deploy = DEPLOY.read_text(encoding="utf-8")
 
     def test_greenfield_table_with_rls(self):

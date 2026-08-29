@@ -9,6 +9,7 @@ boundary. The migration/RLS, chat-fn gate, API helpers, types, and teacher
 pause/resume UI pins are all KEPT."""
 from pathlib import Path
 import unittest
+from tests.teacher_sources import console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,7 +17,6 @@ MIGRATION = ROOT / "supabase" / "migrations" / "20260729000000_session_holds.sql
 CHAT_FN = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-TEACHER = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-backend.yml"
 HOOK = ROOT / "frontend" / "src" / "student" / "useConversation.ts"
 WINDOW = ROOT / "frontend" / "src" / "student" / "ChatWindow.tsx"
@@ -29,7 +29,7 @@ class SessionHoldStaticTests(unittest.TestCase):
         cls.chat_fn = CHAT_FN.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.teacher = TEACHER.read_text(encoding="utf-8")
+        cls.teacher = console_source()
         cls.deploy = DEPLOY.read_text(encoding="utf-8")
         cls.hook = HOOK.read_text(encoding="utf-8")
         cls.window = WINDOW.read_text(encoding="utf-8")

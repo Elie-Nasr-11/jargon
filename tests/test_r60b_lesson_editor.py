@@ -10,11 +10,12 @@ everything else folds under Advanced; one sticky save bar owns saving.
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend" / "src"
-STUDIO = (FRONTEND / "routes" / "teacher.curriculum.tsx").read_text(encoding="utf-8")
+STUDIO = authoring_source()
 KNOWLEDGE = (FRONTEND / "features" / "teacher" / "KnowledgeCard.tsx").read_text(encoding="utf-8")
 
 

@@ -12,6 +12,7 @@ interactive chrome to the platform blue on both ladders; graphite stays for text
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,9 +22,7 @@ TABS = (ROOT / "frontend" / "src" / "components" / "WorkspaceTabs.tsx").read_tex
 )
 BRAIN = (ROOT / "frontend" / "src" / "student" / "BrainGraph.tsx").read_text(encoding="utf-8")
 LOGIN = (ROOT / "frontend" / "src" / "routes" / "login.tsx").read_text(encoding="utf-8")
-CONSOLE = (
-    ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
-).read_text(encoding="utf-8")
+CONSOLE = console_source()
 
 
 class PrimaryChromeTests(unittest.TestCase):

@@ -12143,3 +12143,43 @@ as each lands.
 Suggested next task: owner decides between demoing on rails (patch + scripted
 path avoiding the authoring room) or building steps 2-4 before any teacher-facing
 demo.
+
+## Claude -> Codex / Human - 2026-08-29 09:00
+
+Status: Starting
+Task: R78 — step 2 of the rebuild brief: split the two teacher mega-files into
+readable modules. No behaviour change.
+Files I expect to touch: frontend/src/routes/teacher.curriculum.tsx,
+frontend/src/features/teacher/TeacherConsole.tsx, new modules under
+frontend/src/features/teacher/authoring/ and .../console/, plus tests/ (the
+pins that read those two files by path).
+Notes: 50 test files read the route and 36 read the console as text and assert
+substrings, so moving a line would break dozens of pins for no reason. First
+change: tests/teacher_sources.py, a helper that concatenates the whole
+authoring / console surface so pins survive relocation. That is also the fix
+for failure mode 9 in the brief — pins that add drag to removal and none to
+addition. The suite must stay 1188 green BEFORE any code moves.
+
+## Claude -> Codex / Human - 2026-08-29 11:40
+
+Status: Finished
+Summary: R78 (see DECISIONS) — step 2 of the rebuild brief. Split
+teacher.curriculum.tsx (6,301 lines) and TeacherConsole.tsx (4,501) into two
+thin entry points plus 21 modules under features/teacher/authoring/ and
+features/teacher/console/. No behaviour change, verified as pure movement (every
+non-import line present exactly once, nothing added, nothing dropped). Test pins
+now read the SURFACE through tests/teacher_sources.py instead of naming a
+mega-file, so a component can move without breaking a pin.
+Files changed: frontend/src/routes/teacher.curriculum.tsx,
+frontend/src/features/teacher/TeacherConsole.tsx, 21 new modules, 35 test files
+rewired, new tests/teacher_sources.py + tests/test_r78_module_split.py, docs.
+Tests run: python 1196 green / 4 skipped (1188 before, +8 new); tsc clean; vite
+build succeeds; eslint unchanged at 25 pre-existing prettier errors.
+Remaining concerns: the split makes the code readable, not the product clear —
+every UI complaint from the owner's review still stands. ClassDetail (1,029
+lines) and CurriculumStudio (1,756) are the two surfaces the rebuild replaces
+next, and they are now isolated enough to replace one at a time. One pin was
+found to be asserting a dead import rather than a rendered component; worth
+assuming there are others, since a substring pin cannot tell the difference.
+Suggested next task: step 3 of the brief — build the Lesson screen new against
+the split modules, and delete what it replaces in the same release.

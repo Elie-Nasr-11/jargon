@@ -10,6 +10,7 @@ import json
 import re
 import unittest
 from pathlib import Path
+from tests.teacher_sources import authoring_source
 
 REPO = Path(__file__).resolve().parent.parent
 CHAT = (REPO / "supabase" / "functions" / "chat" / "index.ts").read_text()
@@ -24,7 +25,7 @@ RESOURCE_CARD = (REPO / "frontend" / "src" / "student" / "ResourceCard.tsx").rea
 # card and the MediaStage so the invariants cannot drift between the two mounts.
 RESOURCE_MEDIA = (REPO / "frontend" / "src" / "student" / "resourceMedia.ts").read_text()
 MEDIA_STAGE = (REPO / "frontend" / "src" / "student" / "MediaStage.tsx").read_text()
-CURRICULUM = (REPO / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text()
+CURRICULUM = authoring_source()
 API = (REPO / "frontend" / "src" / "lib" / "api.ts").read_text()
 FORMAT_TS = (REPO / "frontend" / "src" / "lib" / "format.ts").read_text()
 READ_ALOUD = (

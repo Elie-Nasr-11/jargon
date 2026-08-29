@@ -6,6 +6,7 @@ pins remain; the client-side pdf.js extraction stays for the studio's AI referen
 input."""
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +16,6 @@ OCR_MIGRATION = ROOT / "supabase" / "migrations" / "0016_pdf_page_assets_ocr.sql
 FUNCTION = ROOT / "supabase" / "functions" / "resource-processing" / "index.ts"
 CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 # Studio-lite keeps the client-side pdf.js extraction for the AI reference input.
-STUDIO_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx"
 PDF_EXTRACT = ROOT / "frontend" / "src" / "lib" / "pdf-extract.ts"
 PACKAGE = ROOT / "frontend" / "package.json"
 
@@ -28,7 +28,7 @@ class MediaProcessingStaticTests(unittest.TestCase):
         cls.ocr_migration = OCR_MIGRATION.read_text(encoding="utf-8")
         cls.function = FUNCTION.read_text(encoding="utf-8")
         cls.chat = CHAT_FUNCTION.read_text(encoding="utf-8")
-        cls.studio = STUDIO_ROUTE.read_text(encoding="utf-8")
+        cls.studio = authoring_source()
         cls.pdf_extract = PDF_EXTRACT.read_text(encoding="utf-8")
         cls.package = PACKAGE.read_text(encoding="utf-8")
 

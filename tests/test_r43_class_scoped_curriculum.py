@@ -15,16 +15,17 @@ Pins:
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source, console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend" / "src"
 API = (FRONTEND / "lib" / "api.ts").read_text(encoding="utf-8")
-STUDIO = (FRONTEND / "routes" / "teacher.curriculum.tsx").read_text(encoding="utf-8")
+STUDIO = authoring_source()
 PANEL = (FRONTEND / "features" / "teacher" / "LinkedCoursesPanel.tsx").read_text(
     encoding="utf-8"
 )
-CONSOLE = (FRONTEND / "features" / "teacher" / "TeacherConsole.tsx").read_text(encoding="utf-8")
+CONSOLE = console_source()
 PLATFORM = (ROOT / "docs" / "PLATFORM.md").read_text(encoding="utf-8")
 
 

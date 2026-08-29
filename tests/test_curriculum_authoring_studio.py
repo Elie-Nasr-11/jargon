@@ -6,6 +6,7 @@ point to the studio stays in the TeacherSidebar shell (docs/MVP_SCOPE.md §1/§2
 The studio itself (studio-lite) is KEPT."""
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,6 @@ API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
 CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
-ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx"
 ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
 LESSON_GROUPS = ROOT / "frontend" / "src" / "features" / "student" / "lessonGroups.ts"
 LESSON_TREE = ROOT / "frontend" / "src" / "student" / "LessonTree.tsx"
@@ -32,7 +32,7 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         cls.types = TYPES.read_text(encoding="utf-8")
         cls.supabase = SUPABASE.read_text(encoding="utf-8")
         cls.chat = CHAT_FUNCTION.read_text(encoding="utf-8")
-        cls.route = ROUTE.read_text(encoding="utf-8")
+        cls.route = authoring_source()
         cls.route_tree = ROUTE_TREE.read_text(encoding="utf-8")
         cls.lesson_groups = LESSON_GROUPS.read_text(encoding="utf-8")
         cls.lesson_tree = LESSON_TREE.read_text(encoding="utf-8")

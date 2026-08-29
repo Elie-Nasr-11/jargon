@@ -16,15 +16,14 @@ Pinned contracts:
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN = (ROOT / "supabase" / "functions" / "curriculum-admin" / "index.ts").read_text(
     encoding="utf-8"
 )
-STUDIO = (ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text(
-    encoding="utf-8"
-)
+STUDIO = authoring_source()
 
 
 def _slice(text: str, start: str, end: str) -> str:
