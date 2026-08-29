@@ -67,6 +67,7 @@ import type { LessonReview } from "@/lib/api";
 import { bookSourceFor, bookSourceLabel } from "@/features/teacher/bookSource";
 import { BooksPanel, summarizeBooks } from "@/features/teacher/BooksPanel";
 import { LessonInventoryBar } from "@/features/teacher/LessonInventoryBar";
+import { DraftFieldButton } from "@/features/teacher/DraftFieldButton";
 import {
   extractDocxText,
   extractPptxText,
@@ -3715,8 +3716,33 @@ function LessonMetaForm({
       <div className="grid gap-3">
         {/* R60b: two fields carry a lesson — title and objective. Everything else is a
             default a lazy teacher never has to see, folded under Advanced settings. */}
-        <TextInput label="Lesson title" value={title} onChange={touch(setTitle)} />
-        <TextArea label="Lesson objective" value={objective} onChange={touch(setObjective)} />
+        {/* R76: every field a teacher writes into can hand them a draft. The assist
+            never saves — it fills the box, and the teacher's own Save is still the only
+            thing that commits, so a draft can always be edited away or ignored. */}
+        <div className="grid gap-1">
+          <TextInput label="Lesson title" value={title} onChange={touch(setTitle)} />
+          <div className="justify-self-start">
+            <DraftFieldButton
+              field="lesson_title"
+              current={title}
+              lessonId={lesson.id}
+              disabled={busy}
+              onDraft={(text) => touch(setTitle)(text)}
+            />
+          </div>
+        </div>
+        <div className="grid gap-1">
+          <TextArea label="Lesson objective" value={objective} onChange={touch(setObjective)} />
+          <div className="justify-self-start">
+            <DraftFieldButton
+              field="lesson_objective"
+              current={objective}
+              lessonId={lesson.id}
+              disabled={busy}
+              onDraft={(text) => touch(setObjective)(text)}
+            />
+          </div>
+        </div>
         <Collapsible
           open={advancedOpen}
           onToggle={() => setAdvancedOpen((value) => !value)}
@@ -3739,7 +3765,22 @@ function LessonMetaForm({
                 onChange={touch((value: string) => setLessonType(value as LessonKind))}
               />
             </div>
-            <TextArea label="Mentor prompt" value={tutorPrompt} onChange={touch(setTutorPrompt)} />
+            <div className="grid gap-1">
+              <TextArea
+                label="Mentor prompt"
+                value={tutorPrompt}
+                onChange={touch(setTutorPrompt)}
+              />
+              <div className="justify-self-start">
+                <DraftFieldButton
+                  field="tutor_prompt"
+                  current={tutorPrompt}
+                  lessonId={lesson.id}
+                  disabled={busy}
+                  onDraft={(text) => touch(setTutorPrompt)(text)}
+                />
+              </div>
+            </div>
             <TextInput
               label="Skill keys (comma separated)"
               value={skillKeys}
@@ -5012,25 +5053,34 @@ function BuildFromMaterialPanel({
       <div className="flex items-start gap-2">
         <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
         <div className="min-w-0">
-          <h4 className="text-body font-medium text-foreground">Build a lesson from material</h4>
+          <h4 className="text-body font-medium text-foreground">New lesson</h4>
           <p className="mt-0.5 text-meta text-muted-foreground">
-            Upload a chapter, paste your notes, or add a link. Jargon drafts the lesson steps, a
-            wrap-up quiz, and an assignment for you to review.
+            Say what the lesson should teach. Add reference material if you have it — a chapter,
+            your notes, a link — and Jargon will ground the lesson in it. Either way you get
+            steps, a wrap-up quiz and an assignment to review before anything is published.
           </p>
         </div>
       </div>
 
       <div className="mt-3 grid gap-3">
-        <AiReferenceInput
-          resources={resources}
-          busy={busy || loading}
-          onChange={setReferenceText}
-        />
+        {/* R76: the ASK leads and the material follows. Building from material was never a
+            different kind of building — it is this same act with a source attached — so the
+            panel no longer opens by demanding an upload. */}
         <TextArea
-          label="Anything to steer it? (optional) — e.g. Grade 7, one period, focus on the diagram on page 3"
+          label="What should this lesson teach? — e.g. Grade 7, one period, how a CPU fetches an instruction"
           value={prompt}
           onChange={setPrompt}
         />
+        {/* A field label, not a new section — the R75 ratchet is right that this room
+            does not get another always-on heading. */}
+        <div className="grid gap-1.5">
+          <span className="text-meta text-muted-foreground">Reference material (optional)</span>
+          <AiReferenceInput
+            resources={resources}
+            busy={busy || loading}
+            onChange={setReferenceText}
+          />
+        </div>
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2 text-meta text-foreground">
             <input
@@ -5062,7 +5112,7 @@ function BuildFromMaterialPanel({
           </button>
           {!referenceText.trim() && !prompt.trim() ? (
             <span className="ml-2 text-meta text-muted-foreground">
-              Add material or a brief first.
+              Say what the lesson should teach first.
             </span>
           ) : null}
         </div>

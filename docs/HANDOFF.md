@@ -12099,3 +12099,27 @@ inside a single new-lesson dialog yet, which is the fuller reading of "building
 from material should never be separate".
 Suggested next task: R76 — AI assist wherever content is authored, and fold the
 material picker into the one new-lesson dialog.
+
+## Claude -> Codex / Human - 2026-08-28 02:15
+
+Status: Finished
+Summary: R76 (see DECISIONS). Server gains generate mode "text_field" (six
+allow-listed short fields, own caps, no writes); client gains draftTextField +
+DraftFieldButton, attached to lesson title, objective and mentor prompt. The
+build panel is reframed as "New lesson" — the ask leads, reference material is
+optional beneath it.
+Files changed: supabase/functions/curriculum-admin/index.ts,
+frontend/src/lib/api.ts, frontend/src/features/teacher/DraftFieldButton.tsx
+(new), frontend/src/routes/teacher.curriculum.tsx,
+tests/test_r76_assist_everywhere.py (new, 12 pins), docs.
+Tests run: python 1182 green / 4 skipped; tsc clean; vite build succeeds;
+deno check on curriculum-admin clean.
+Remaining concerns: assists are on the three lesson fields so far — unit titles
+and assignment instructions have server support (unit_title,
+assignment_instructions) but no button wired yet, since those live in the
+console's dialogs rather than this route. The generate path still uses
+OPENAI_API_KEY (callModelJson), unlike the chat function's Anthropic default —
+worth unifying so authoring quality tracks the Opus 5 benchmark.
+Suggested next task: wire the two remaining assists in the console dialogs, and
+decide whether authoring generation should move to the same provider as the
+mentor.

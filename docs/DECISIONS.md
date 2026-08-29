@@ -2284,3 +2284,36 @@ only the two places that have one today.
 
 Pinned in tests/test_r75_subtraction.py; R42/R45/R56/R60 pins re-stated against
 the new law rather than dropped.
+
+## R76 — an assistant at every building point, and one kind of building (2026-08-28)
+
+Owner: "at every building point there should be an ai assistant to help draft
+content (steps, titles, summaries, ...)" and "building from material should not
+be a separate thing ever."
+
+- SHORT-FIELD DRAFTING. New generate mode "text_field": one path that drafts a
+  lesson title, objective, unit title, mentor prompt, assignment instructions or
+  a summary. Before this, drafting existed only for a whole lesson and a whole
+  step list — the big, rare acts — while the small writing that is most of
+  authoring had no help. Fields are an ALLOW-LIST, each with its own guidance and
+  length cap; an unknown field is refused rather than free-form prompted.
+  Authorization rides whatever the field is attached to, like every other
+  authoring action, and lesson context is read once and reused for both the check
+  and the prompt.
+- THE ASSIST NEVER SAVES. It returns one string and writes nothing: the field is
+  filled, the teacher's own Save still commits, so a draft can always be edited
+  away or ignored. It passes the field's CURRENT value, so on a filled field it
+  reads "Improve" and refines rather than replacing.
+- ONE KIND OF BUILDING. The lesson builder is now "New lesson": it asks what the
+  lesson should teach FIRST, with reference material as an optional input beneath
+  it. Material was already optional in the gate (a prompt alone always worked) —
+  what was wrong was the framing, which opened by demanding an upload and made
+  working-from-material look like a different act instead of the same act with a
+  source attached.
+
+Note on the R75 ratchet: this pass first added a "Reference material" section
+heading and the ratchet failed the build at 22 > 21. The rule held — the heading
+was downgraded to a field label rather than raising the ceiling. That is the
+discipline working on the release immediately after it was introduced.
+
+Pinned in tests/test_r76_assist_everywhere.py.
