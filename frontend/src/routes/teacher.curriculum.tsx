@@ -267,7 +267,7 @@ export function CurriculumStudio({
   // R45: the books/shared-content drawer is advanced machinery — collapsed by default.
   const [booksOpen, setBooksOpen] = useState(false);
   // R60: outline-face state — a just-created unit sits with its name in edit; a unit's
-  // "Build from material" opens the R56 panel; the course-from-material entry opens the
+  // "Add lesson" opens the R56 lesson builder; "Add units & lessons" opens the
   // R57 outline panel (mutually exclusive with the unit panel).
   const [renamingUnitId, setRenamingUnitId] = useState<string | null>(null);
   const [buildForUnitId, setBuildForUnitId] = useState<string | null>(null);
@@ -1537,7 +1537,7 @@ export function CurriculumStudio({
               disabled={busy}
               className="btn btn-secondary btn-sm"
             >
-              Build a course from material
+              Add units &amp; lessons
             </button>
           )}
           <button
@@ -1643,7 +1643,7 @@ export function CurriculumStudio({
               <div className="mb-3 rounded-card border border-border bg-depth-card p-4 shadow-card">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <span className="text-body font-medium text-foreground">
-                    Build a course from material
+                    Add units &amp; lessons
                   </span>
                   <button
                     type="button"
@@ -1684,7 +1684,7 @@ export function CurriculumStudio({
                 onClick={() => setBooksOpen((value) => !value)}
                 className="btn btn-ghost btn-sm"
               >
-                {booksOpen ? "Hide linked content" : "Linked content"}
+                {booksOpen ? "Hide courses" : "Courses in this class"}
               </button>
             </div>
             <ClassworkList
@@ -1692,7 +1692,7 @@ export function CurriculumStudio({
               lessonsForUnit={lessonsForUnit}
               bookPages={bookPages}
               stepCountFor={stepCountFor}
-              emptyHint="No units yet — upload a chapter with “Build a course from material”, create a unit, or open Books & shared content below to bring in existing material."
+              emptyHint="No units yet — use “Add units &amp; lessons” above to plan the course, or add a unit by hand."
               workItems={workItems.filter((entry) => entry.kind === "material")}
               busy={busy}
               renamingUnitId={renamingUnitId}
@@ -1781,14 +1781,15 @@ export function CurriculumStudio({
         )
       ) : null}
 
-      {/* R75: the always-open "Books & shared content" drawer is gone. Linking a course
-          in or out of a class is real (it is the only surface that trims what students
-          see) but rare — it now opens from the outline's Linked content button instead of
-          sitting on the page competing with the curriculum itself. */}
+      {/* R75: the always-open drawer is gone. Choosing which COURSES a class teaches is
+          real (it is the only surface that trims what students see) but rare, so it opens
+          from the outline's "Courses in this class" button instead of sitting on the page
+          competing with the curriculum. R77 named it after what it manages — it never had
+          anything to do with resources, and calling it "content" implied it did. */}
       {!booting && data && selectedClass && booksOpen ? (
         <div className="rounded-card border border-border bg-depth-card p-4 shadow-card">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="text-body font-medium text-foreground">Linked content</span>
+            <span className="text-body font-medium text-foreground">Courses in this class</span>
             <button
               type="button"
               onClick={() => setBooksOpen(false)}
@@ -5312,15 +5313,19 @@ function AiOutlinePanel({
     <section className="rounded-card border border-border bg-depth-sub p-4">
       <div className="mb-2 flex items-center gap-2 text-title font-medium text-foreground">
         <Sparkles className="h-4 w-4" strokeWidth={1.7} />
-        Draft an outline with AI
+        Add units &amp; lessons
       </div>
       <p className="mb-3 text-meta text-muted-foreground">
-        Attach a book, chapter, or syllabus — or describe the course. The AI sees the rest of this
-        subject too. Refine individual units before anything is created, then choose whether to
-        build every lesson in one run.
+        Say what this course covers and it proposes the chapters and the lessons inside them. You
+        review every unit before anything is created, then choose whether to write the lessons too.
       </p>
-      <TextArea label="Brief" value={prompt} onChange={setPrompt} />
-      <div className="mt-3">
+      <TextArea
+        label="What does this course cover? — e.g. Grade 8 IT, one term, chapters 1–4 of Book A1"
+        value={prompt}
+        onChange={setPrompt}
+      />
+      <div className="mt-3 grid gap-1.5">
+        <span className="text-meta text-muted-foreground">Reference material (optional)</span>
         <AiReferenceInput resources={resources} busy={busy} onChange={setReferenceText} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">

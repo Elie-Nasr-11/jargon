@@ -67,8 +67,10 @@ class InlineUnitAdminTests(unittest.TestCase):
 class BuildEntryTests(unittest.TestCase):
     def test_course_build_finally_has_a_door(self):
         # R57 shipped unreachable (the course pane had no in-app link). The entry is now
-        # a visible button on the Content toolbar.
-        self.assertIn("Build a course from material", STUDIO)
+        # a visible button on the Content toolbar. R77 renamed it: planning a course's
+        # units and lessons is not a rival "build from material" path — it is the step
+        # that makes the shape, with material as an optional input inside it.
+        self.assertIn("Add units &amp; lessons", STUDIO)
         self.assertIn("onClick={openCourseBuild}", STUDIO)
         self.assertIn("<AiOutlinePanel", STUDIO)
 
