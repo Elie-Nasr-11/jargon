@@ -135,8 +135,6 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
             "Create quiz",
             "Assign quiz",
             "AssessmentManager",
-            "AssessmentStatusChip",
-            "AssessmentRecipientChip",
             "onReviewAssessmentItem",
             "Text response",
             "Code response",
@@ -144,9 +142,13 @@ class AssessmentExpansionStaticTests(unittest.TestCase):
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.teacher_route)
-        # The attempt review/return half lives in AssessmentGrading.tsx.
+        # The attempt review/return half lives in AssessmentGrading.tsx — and so do
+        # the two status chips. R78: they used to be pinned against the console,
+        # which only ever carried them as a dead import; the chips render HERE.
         self.assertIn("onReviewAssessmentItem", self.grading)
         self.assertIn("Return result", self.grading)
+        self.assertIn("<AssessmentStatusChip", self.grading)
+        self.assertIn("<AssessmentRecipientChip", self.grading)
 
     def test_student_surface_consumes_the_attempt_api(self):
         # Restored (see docstring): the v6 formal-assessment surface is a REAL consumer of

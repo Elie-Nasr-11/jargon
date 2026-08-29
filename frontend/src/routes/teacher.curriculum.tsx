@@ -1,3 +1,12 @@
+/**
+ * The authoring studio: the class's content, and every write that changes it.
+ *
+ * The route itself only forwards old bookmarks. CurriculumStudio is the piece
+ * the console mounts: it holds the authoring data, applies each edit locally and
+ * then writes it through curriculum-admin. Everything it renders - the outline,
+ * the lesson and step editors, the generate panels - lives under
+ * features/teacher/authoring/.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { Save } from "lucide-react";

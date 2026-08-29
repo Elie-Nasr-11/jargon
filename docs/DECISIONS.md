@@ -2348,3 +2348,47 @@ against the new ones rather than dropped.
 The AI-button critique from the same review is NOT addressed here — it needs the
 engineered answer in Part 5 of the brief (the assistant as empty state and
 default, not a button), which is rebuild work, not a patch.
+
+## R78 — step 2 of the rebuild brief: the teacher surface is readable (2026-08-29)
+
+Two files held the whole teacher product: teacher.curriculum.tsx at 6,301 lines
+and TeacherConsole.tsx at 4,501. The brief's step 2 is "split the mega-files —
+nothing can be designed while it's unreadable". No behaviour change; this is
+movement only, and it was verified as movement rather than asserted: every
+non-import line of both originals appears exactly once across the new files,
+same multiplicity, zero added and zero dropped.
+
+The shape. Two entry points keep what an entry point should own — state, and the
+write paths the surfaces call back into:
+
+- `routes/teacher.curriculum.tsx` (1,756 lines): the bookmark redirect, and
+  CurriculumStudio holding the authoring data and its writes.
+- `features/teacher/TeacherConsole.tsx` (969): which class, which student, which
+  section, and the console's writes.
+
+Twelve modules under `features/teacher/authoring/` and nine under
+`features/teacher/console/` hold everything they render, split by job rather
+than by size: the pure algebra (localState, derive) separated from the surfaces,
+the shared primitives (fields, dragList, chrome) separated from the screens, and
+one module per screen.
+
+PINS READ THE SURFACE, NOT THE FILE. 50 test files read the route as text and 36
+read the console, asserting substrings — which pinned each line's ADDRESS along
+with its content, so moving a component would have broken dozens of tests that
+have no opinion about where it lives. That is failure mode 9 in the brief: pins
+that add drag to removal and none to addition. `tests/teacher_sources.py` now
+exposes `authoring_source()` / `console_source()` — the route plus its modules,
+the shell plus its rooms — and every pin reads those. Counting pins keep their
+meaning: moving code preserves a count, duplicating it does not.
+
+One pin turned out to be lying. test_assessment_expansion asserted the console
+"shows assessment status chips" by matching `AssessmentStatusChip` in
+TeacherConsole.tsx — where the name appeared ONLY in an import list and rendered
+nothing. Removing the dead import as part of the split failed the pin, which is
+the pin working as designed one release too late. It now asserts `<AssessmentStatusChip`
+in AssessmentGrading.tsx, where the chip actually renders.
+
+A ceiling, written down (tests/test_r78_module_split.py). No teacher module may
+exceed 1,100 lines; the two entry points carry a stated allowance (1,800 and
+1,100) recorded as DEBT, since steps 3-7 of the brief replace them. The console
+reached 16k lines because nothing ever said stop; now something does.

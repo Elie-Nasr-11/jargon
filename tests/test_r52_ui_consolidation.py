@@ -25,7 +25,7 @@ Pinned contracts:
 from pathlib import Path
 import re
 import unittest
-from tests.teacher_sources import authoring_source, console_source
+from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,8 +40,7 @@ ADMIN = (SRC / "routes" / "admin.tsx").read_text(encoding="utf-8")
 PORTAL_FILES = (
     list((SRC / "features" / "teacher").rglob("*.tsx"))
     + list((SRC / "features" / "admin").rglob("*.tsx"))
-    + [SRC / "routes" / "teacher.curriculum.tsx", SRC / "routes" / "admin.tsx",
-       SRC / "routes" / "login.tsx"]
+    + [AUTHORING_ROUTE, SRC / "routes" / "admin.tsx", SRC / "routes" / "login.tsx"]
 )
 
 # The pre-R52 hand-rolled button idiom: an interactive pill drawing its own chrome.
