@@ -6,7 +6,12 @@ users are lazy and not tech savvy."
 Before: ~90 controls on one scrolling page — a 14-field basics form, 8 add-step
 chips, ~25 controls per expanded step, and THREE independent Save buttons whose
 unsaved state was invisible. After: a lesson reads as title + objective + steps;
-everything else folds under Advanced; one sticky save bar owns saving.
+everything else folds away; one save owns saving.
+
+R79 rebuilt the editor as its own screen (four sections at /teacher/class/$id/
+lesson/$id). Every contract below survived the rebuild and is re-stated against
+its new home: the one Save moved from a sticky bottom bar into the sticky header,
+and "Advanced settings" became the settings dialog behind the header's menu.
 """
 from pathlib import Path
 import unittest
@@ -15,8 +20,13 @@ from tests.teacher_sources import authoring_source
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend" / "src"
+LESSON = FRONTEND / "features" / "teacher" / "lesson"
 STUDIO = authoring_source()
 KNOWLEDGE = (FRONTEND / "features" / "teacher" / "KnowledgeCard.tsx").read_text(encoding="utf-8")
+SCREEN = (LESSON / "LessonScreen.tsx").read_text(encoding="utf-8")
+HEADER = (LESSON / "LessonHeader.tsx").read_text(encoding="utf-8")
+SETTINGS = (LESSON / "LessonSettings.tsx").read_text(encoding="utf-8")
+STEPS = (LESSON / "LessonSteps.tsx").read_text(encoding="utf-8")
 
 
 def _slice(text: str, start: str, end: str) -> str:
@@ -25,9 +35,7 @@ def _slice(text: str, start: str, end: str) -> str:
     return tail[1].split(end, 1)[0]
 
 
-DETAIL = _slice(STUDIO, "function LessonDetail({", "function LessonMetaForm({")
-META = _slice(STUDIO, "function LessonMetaForm({", "function StepCard({")
-STEP = _slice(STUDIO, "function StepCard({", "function LessonPreview({")
+STEP = _slice(STUDIO, "export function StepCard({", "\nfunction ")
 
 
 class OneSaveTests(unittest.TestCase):
@@ -37,19 +45,19 @@ class OneSaveTests(unittest.TestCase):
         # The strip's historical comment may mention it; no BUTTON carries the label.
         self.assertNotIn(">Save step<", STUDIO)
 
-    def test_one_sticky_bar_owns_saving(self):
-        self.assertIn('"All changes saved"', DETAIL)
-        self.assertIn("unsaved change", DETAIL)
-        self.assertEqual(DETAIL.count("Save changes"), 1)
-        self.assertIn("sticky bottom-0", DETAIL)
+    def test_one_save_owns_saving(self):
+        self.assertIn('"Everything is saved"', HEADER)
+        self.assertIn("unsaved change", HEADER)
+        # R79: it rides the header, which sticks, so it is reachable from anywhere in
+        # a long lesson without scrolling back up.
+        self.assertIn("sticky top-0", SCREEN)
+        self.assertEqual(SCREEN.count("onSave={saveAll}"), 1)
 
     def test_children_register_dirty_state_not_moved_state(self):
         # The registry holds flush closures; child field state stays in the children.
-        self.assertIn("const flushers = useRef(new Map<string, () => void>());", DETAIL)
-        self.assertIn("registerDirty", DETAIL)
-        self.assertIn("unregisterDirty", DETAIL)
-        # Both children participate.
-        self.assertIn('onDirtyState("meta", touched, () => flushRef.current());', META)
+        self.assertIn("const flushers = useRef(new Map<string, () => void>());", SCREEN)
+        self.assertIn("registerDirty", SCREEN)
+        self.assertIn("unregisterDirty", SCREEN)
         self.assertIn("onDirtyState(activity.id, touched, () => flushRef.current());", STEP)
         # The temp-id → server-id swap can't leave a stale dirty entry behind.
         self.assertIn("useEffect(() => () => onUnregister(activity.id), [activity.id", STEP)
@@ -62,40 +70,39 @@ class OneSaveTests(unittest.TestCase):
         self.assertIn("setTouched(false)", save_body)
 
     def test_publish_flushes_before_publishing(self):
-        idx = DETAIL.index("saveAll();\n                onPublish();")
-        self.assertGreater(idx, 0)
+        self.assertIn('saveAll();\n              authoring.setPublication("publish_lesson");', SCREEN)
 
     def test_steps_flush_before_meta(self):
         # The meta path may refetch; a step write racing it would visually revert.
-        body = _slice(DETAIL, "const saveAll = useCallback", "}, [dirtyIds]);")
-        self.assertIn('if (id !== "meta")', body)
+        body = _slice(SCREEN, "const saveAll = useCallback", "}, [stepDirty, meta, authoring]);")
+        self.assertLess(body.index("flushers.current.get(id)?.()"), body.index("saveMeta"))
 
     def test_meta_save_is_optimistic_once_the_milestone_exists(self):
         # Same race, structural fix: an existing milestone saves via the optimistic
         # path (no refetch); only the FIRST save (server-assigned id) reloads.
-        body = _slice(STUDIO, "const saveLessonMeta = (", "const upsertStep")
+        body = _slice(STUDIO, "const saveMeta = useCallback(", "const upsertStep")
         self.assertIn("if (!existing) {", body)
         self.assertIn("optimistic(", body)
 
 
 class QuietByDefaultTests(unittest.TestCase):
-    def test_basics_show_title_and_objective_only(self):
-        visible = _slice(META, "Lesson basics", "<Collapsible")
-        self.assertIn('label="Lesson title"', visible)
-        self.assertIn('label="Lesson objective"', visible)
+    def test_the_lesson_shows_title_and_objective_only(self):
+        self.assertIn('aria-label="Lesson title"', HEADER)
+        self.assertIn('aria-label="Lesson objective"', HEADER)
         for folded in ('label="Level"', 'label="Mentor prompt"', 'label="Help ceiling"'):
             with self.subTest(folded=folded):
-                self.assertNotIn(folded, visible)
-        self.assertIn("Advanced settings", META)
+                self.assertNotIn(folded, HEADER)
+                self.assertIn(folded, SETTINGS)
+        self.assertIn("Lesson settings…", SCREEN)
 
     def test_the_eight_chips_became_one_grouped_menu(self):
-        self.assertIn("Add step", DETAIL)
+        self.assertIn("Add a step", STEPS)
         for group in ('group: "Teach"', 'group: "Practice"', 'group: "Assess"'):
             with self.subTest(group=group):
-                self.assertIn(group, DETAIL)
+                self.assertIn(group, STEPS)
         # Still single-sourced from the mode vocabulary.
-        self.assertIn("MODE_META.filter", DETAIL)
-        self.assertIn("defaultStepForMode(meta.mode)", DETAIL)
+        self.assertIn("MODE_META.filter", STEPS)
+        self.assertIn("defaultStepForMode(meta.mode)", STEPS)
 
     def test_a_step_reads_as_title_prompt_choices_work(self):
         # Everything else sits under the per-step Advanced collapsible, and the R48
@@ -110,11 +117,11 @@ class QuietByDefaultTests(unittest.TestCase):
                 self.assertNotIn(folded, open_face)
 
     def test_lesson_lifecycle_lives_in_the_header(self):
-        self.assertIn('label="Lesson actions"', DETAIL)
-        self.assertIn('"Delete lesson"', DETAIL)
-        self.assertIn('"Move to unit…"', DETAIL)
-        self.assertIn("Publish", DETAIL)
-        self.assertIn("lesson.publication_status", DETAIL)
+        self.assertIn('label="Lesson actions"', HEADER)
+        self.assertIn('"Delete lesson"', SCREEN)
+        self.assertIn('"Move to another unit…"', SCREEN)
+        self.assertIn("Publish", HEADER)
+        self.assertIn("lesson.publication_status", HEADER)
 
     def test_knowledge_card_is_quiet_but_its_badge_still_loads(self):
         self.assertIn("bodyOpen", KNOWLEDGE)

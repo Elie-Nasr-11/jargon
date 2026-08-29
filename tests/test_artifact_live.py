@@ -248,7 +248,7 @@ class ChatLiveArtifactWire(unittest.TestCase):
         # envelope adapter, so a resubscribing surface gets the data path for free.
         self.assertIn("artifactOffer: envelope.artifact_offer ?? undefined", chat_messages)
         # Studio: the opt-in toggle + student-private oversight with the promote action.
-        self.assertIn("allow_live_artifacts: allowLiveArtifacts", studio)
+        self.assertIn("allow_live_artifacts: fields.allowLiveArtifacts", studio)
         self.assertIn("Share with class", studio)
         self.assertIn('visibility: "class_private"', studio)
         self.assertIn("student_id: null", studio)

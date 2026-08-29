@@ -13,8 +13,11 @@ appear and had no reason to believe they were separate, editable things; and the
 only way in was a generic "+ Create" that asked which lesson AFTERWARDS.
 
 The law, pinned here:
-- INVENTORY: a lesson says what is inside it — steps, quiz steps, assignments,
-  materials — on the lesson itself, and an empty lesson admits it in the tree.
+- INVENTORY: a lesson says what is inside it — steps, work, material — on the
+  lesson itself, and an empty lesson admits it in the tree. (R79 retired the
+  inventory BAR: the rebuilt lesson screen shows the things themselves in four
+  named sections, so a strip of counts pointing at them was chrome. The law is
+  unchanged; what satisfies it is now the sections.)
 - CREATION NAMES ITS TARGET: work is created FROM the lesson it belongs to
   (activityId null = lesson-level, the ordinary case; the R48 step-linked case is
   untouched), so the place is never a question and the dialog's student picker
@@ -31,31 +34,33 @@ from tests.teacher_sources import authoring_source, console_source
 ROOT = Path(__file__).resolve().parents[1]
 ROUTE = authoring_source()
 CONSOLE = console_source()
-BAR = (ROOT / "frontend" / "src" / "features" / "teacher" / "LessonInventoryBar.tsx").read_text(encoding="utf-8")
-INV = (ROOT / "frontend" / "src" / "features" / "teacher" / "lessonInventory.ts").read_text(encoding="utf-8")
+LESSON = ROOT / "frontend" / "src" / "features" / "teacher" / "lesson"
+WORK = (LESSON / "lessonWork.ts").read_text(encoding="utf-8")
 
 
 class InventoryTests(unittest.TestCase):
     def test_the_lesson_says_what_is_inside_it(self):
-        self.assertIn("<LessonInventoryBar inventory={inventory} />", ROUTE)
-        block = ROUTE.split("const inventory = useMemo(", 1)[1][:700]
-        for part in ("steps:", "quizSteps:", "assignments:", "materials:"):
-            self.assertIn(part, block)
+        # R79: the sections ARE the inventory — each one names itself and reports what
+        # it holds, so there is nothing to count separately and nowhere to jump to.
+        self.assertIn("{steps.length} step{steps.length === 1 ? \"\" : \"s\"}", ROUTE)
+        self.assertIn("<LessonSteps", ROUTE)
+        self.assertIn("<LessonWork", ROUTE)
+        self.assertIn("<LessonMaterials", ROUTE)
 
-    def test_counts_are_places_not_statistics(self):
-        # Every cell is a button, and an empty one says what is missing rather than "0".
-        self.assertIn("onJump?.(cell.key)", BAR)
-        self.assertIn("empty:", BAR)
-        self.assertIn('empty: "no assignment"', BAR)
+    def test_an_empty_section_says_what_is_missing_rather_than_zero(self):
+        self.assertIn("No assignment or quiz is set on this lesson.", ROUTE)
+        self.assertIn("Nothing here yet.", ROUTE)
+        self.assertIn("Nothing attached.", ROUTE)
 
     def test_an_empty_lesson_admits_it_in_the_tree(self):
         block = ROUTE.split("function outlineLessonMeta(", 1)[1].split("\n}", 1)[0]
         self.assertIn('if (stepCount === 0) return status !== "published" ? `${status} · empty` : "empty";', block)
 
-    def test_the_inventory_module_counts_only_this_lesson(self):
-        block = INV.split("export function inventoryFor(", 1)[1].split("\n}", 1)[0]
-        self.assertIn("step.lesson_id === lessonId", block)
-        self.assertIn('resource.status !== "archived"', block)
+    def test_the_lesson_counts_only_its_own(self):
+        block = WORK.split("export function lessonWorkRows(", 1)[1]
+        self.assertIn("assignment.lesson_id !== input.lessonId", block)
+        self.assertIn("assessment.lesson_id !== input.lessonId", block)
+        self.assertIn('resource.lesson_id === lessonId', ROUTE)
 
 
 class TargetedCreationTests(unittest.TestCase):
@@ -64,14 +69,20 @@ class TargetedCreationTests(unittest.TestCase):
         self.assertIn("activityId: string | null;\n  } | null>(null);", CONSOLE)
         self.assertIn("setCreateContext({ lessonId, activityId: null });", CONSOLE)
 
-    def test_the_lesson_offers_its_own_classwork(self):
-        self.assertIn("Classwork on this lesson", ROUTE)
-        self.assertIn('onCreate("assignment", lessonId)', ROUTE)
-        self.assertIn('onCreate("assessment", lessonId)', ROUTE)
+    def test_the_lesson_offers_its_own_work(self):
+        # R79: "Classwork on this lesson" became the Work section — same law, one word
+        # (the lexicon retired "classwork"), and the dialog titles name the target.
+        self.assertIn('onCreate("assignment")', ROUTE)
+        self.assertIn('onCreate("assessment")', ROUTE)
+        self.assertIn("New assignment on this lesson", ROUTE)
+        self.assertIn("New quiz on this lesson", ROUTE)
+        self.assertIn('context={{ lessonId, activityId: null }}', ROUTE)
 
     def test_existing_work_is_listed_where_it_lives(self):
-        block = ROUTE.split("<LessonClasswork", 1)[1][:500]
-        self.assertIn('item.lessonId === lesson.id && item.kind !== "material"', block)
+        # And it says the three things job 3 is about: who, when, and what is owed.
+        self.assertIn("recipientLabel(row.recipients)", ROUTE)
+        self.assertIn("dueLabel(row.dueAt)", ROUTE)
+        self.assertIn("{row.toMark} to mark", ROUTE)
 
     def test_the_step_linked_path_is_untouched(self):
         # R48's step-created work still flows through onCreateForStep.

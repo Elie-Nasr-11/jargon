@@ -1,135 +1,14 @@
 /**
- * The right-hand pane: whatever the outline has selected.
+ * What the outline shows about a whole COURSE, rather than one lesson.
  *
- * A lesson opens the lesson editor; a freshly built course opens its review
- * before publish; a build in flight shows its progress. Nothing else is
- * selectable, so anything unrecognised falls through to MissingNode.
+ * A build in flight reports itself lesson by lesson; a finished build opens its
+ * review before anything is published. The lesson editor used to live here too —
+ * R79 gave it its own screen, so this file holds only the course-scale panels.
  */
-import { LessonDetail } from "@/features/teacher/authoring/LessonDetail";
-import { StepCard } from "@/features/teacher/authoring/StepCard";
 import type { CourseBuild } from "@/features/teacher/authoring/stepModel";
-import type {
-  ArtifactApprovePayload,
-  ArtifactGenArgs,
-  ClassworkItem,
-  Selection,
-  StepsGenArgs,
-} from "@/features/teacher/authoring/types";
 import type { LessonReview } from "@/lib/api";
-import type {
-  CurriculumAdminResponse,
-  CurriculumAuthoringData,
-  CurriculumLessonMetaInput,
-  CurriculumMilestoneInput,
-  CurriculumNodeType,
-  CurriculumStepDraft,
-  CurriculumStepInput,
-  CurriculumUnit,
-  Lesson,
-  LessonResource,
-} from "@/lib/types";
+import type { Lesson } from "@/lib/types";
 import { AlertCircle, Check, ClipboardCheck, Loader2, Sparkles } from "lucide-react";
-
-export function DetailPane({
-  selection,
-  data,
-  lessonsById,
-  orgUnits,
-  resources,
-  busy,
-  onMoveLesson,
-  onSaveLessonMeta,
-  onUpsertStep,
-  onReorderSteps,
-  onDeleteStep,
-  onDelete,
-  onBindResource,
-  onShareResource,
-  onGenerateArtifact,
-  onApproveArtifact,
-  onPublishLesson,
-  onArchiveLesson,
-  onGenerateSteps,
-  onApplySteps,
-  workItems,
-  onOpenItem,
-  onCreateForLesson,
-  onCreateForStep,
-}: {
-  // R60: the only selectable node is a lesson — the subject/course/unit panes (the
-  // pre-R47 StructureDetail chrome) are retired; units are managed inline on the list.
-  selection: Selection;
-  data: CurriculumAuthoringData;
-  lessonsById: Map<string, Lesson>;
-  orgUnits: Array<{ unit: CurriculumUnit; courseTitle: string }>;
-  resources: LessonResource[];
-  busy: boolean;
-  // R48: the class's work items (from the console) + the step-link callbacks, threaded
-  // down to StepCard's "Step work" strip.
-  workItems: ClassworkItem[];
-  onOpenItem?: (kind: ClassworkItem["kind"], id: string) => void;
-  onCreateForLesson?: (kind: "assignment" | "assessment", lessonId: string) => void;
-  onCreateForStep?: (
-    kind: "assignment" | "assessment",
-    ctx: { lessonId: string; activityId: string },
-  ) => void;
-  onDelete: (type: CurriculumNodeType, id: string) => void;
-  onMoveLesson: (lessonId: string, targetUnitId: string) => void;
-  onSaveLessonMeta: (
-    lessonId: string,
-    meta: CurriculumLessonMetaInput,
-    milestone: CurriculumMilestoneInput,
-  ) => void;
-  onUpsertStep: (lessonId: string, step: CurriculumStepInput) => void;
-  onReorderSteps: (lessonId: string, orderedIds: string[]) => void;
-  onDeleteStep: (lessonId: string, activityId: string) => void;
-  onBindResource: (resourceId: string, activityId: string | null) => void;
-  onShareResource: (resourceId: string) => void;
-  onGenerateArtifact: (
-    lessonId: string,
-    args: ArtifactGenArgs,
-  ) => Promise<CurriculumAdminResponse | null>;
-  onApproveArtifact: (
-    lessonId: string,
-    activityId: string,
-    payload: ArtifactApprovePayload,
-  ) => void;
-  onPublishLesson: (lessonId: string) => void;
-  onArchiveLesson: (lessonId: string) => void;
-  onGenerateSteps: (lessonId: string, args: StepsGenArgs) => Promise<CurriculumStepDraft[] | null>;
-  onApplySteps: (lessonId: string, drafts: CurriculumStepDraft[]) => void;
-}) {
-  if (selection?.type !== "lesson") return <MissingNode />;
-  const lesson = lessonsById.get(selection.id);
-  if (!lesson) return <MissingNode />;
-  return (
-    <LessonDetail
-      lesson={lesson}
-      data={data}
-      orgUnits={orgUnits}
-      busy={busy}
-      onSaveMeta={(meta, milestone) => onSaveLessonMeta(lesson.id, meta, milestone)}
-      onUpsertStep={(step) => onUpsertStep(lesson.id, step)}
-      onReorderSteps={(ids) => onReorderSteps(lesson.id, ids)}
-      onDeleteStep={(activityId) => onDeleteStep(lesson.id, activityId)}
-      onBindResource={onBindResource}
-      onShareResource={onShareResource}
-      onGenerateArtifact={(args) => onGenerateArtifact(lesson.id, args)}
-      onApproveArtifact={(activityId, payload) => onApproveArtifact(lesson.id, activityId, payload)}
-      onPublish={() => onPublishLesson(lesson.id)}
-      onArchiveLesson={() => onArchiveLesson(lesson.id)}
-      onMove={(targetUnitId) => onMoveLesson(lesson.id, targetUnitId)}
-      onDelete={() => onDelete("lesson", lesson.id)}
-      resources={resources}
-      onGenerateSteps={(args) => onGenerateSteps(lesson.id, args)}
-      onApplySteps={(drafts) => onApplySteps(lesson.id, drafts)}
-      workItems={workItems}
-      onOpenItem={onOpenItem}
-      onCreateForStep={onCreateForStep}
-      onCreateForLesson={onCreateForLesson}
-    />
-  );
-}
 
 // R57: the whole-course build's face. A run is minutes long and made of many model
 // calls, so the teacher gets a live per-lesson ledger — not a spinner: what is being
