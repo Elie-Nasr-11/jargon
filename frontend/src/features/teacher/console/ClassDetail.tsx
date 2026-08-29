@@ -51,11 +51,13 @@ import type {
 } from "@/lib/types";
 import { useNavigate } from "@tanstack/react-router";
 
-// R42: the authoring studio lives inside each class's Curriculum section now. Its code
-// stays in the (heavy) route module and loads on demand the first time the section opens,
-// so the Students landing stays as light as before.
-const CurriculumStudio = lazy(() =>
-  import("@/routes/teacher.curriculum").then((module) => ({ default: module.CurriculumStudio })),
+// R42: the class's curriculum lives inside the class. R80: it is the Course screen —
+// the outline and nothing beside it — and it still loads on demand the first time the
+// section opens, so the Students landing stays as light as before.
+const CourseScreen = lazy(() =>
+  import("@/features/teacher/course/CourseScreen").then((module) => ({
+    default: module.CourseScreen,
+  })),
 );
 
 export function ClassDetail({
@@ -160,13 +162,8 @@ export function ClassDetail({
   );
   // R48: when + Create was invoked FROM a lesson step ("create the assignment for this
   // step"), the dialog locks the lesson and stamps the step link on the created row.
-  // R74: activityId null = the work belongs to the LESSON, not to one of its steps.
-  // That is the ordinary case a teacher reaches for ("an assignment on lesson 3"); the
-  // step-linked case (R48) stays exactly as it was.
-  const [createContext, setCreateContext] = useState<{
-    lessonId: string;
-    activityId: string | null;
-  } | null>(null);
+  // R80: work created from HERE belongs to the class, not to a lesson or a step —
+  // those are created on the lesson's own screen, which supplies its own context.
   // A material row opened for editing from the Classwork list.
   const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
 
@@ -915,32 +912,9 @@ export function ClassDetail({
               </section>
             }
           >
-            <CurriculumStudio
+            <CourseScreen
               classId={item.id}
-              workItems={workItems}
-              onOpenItem={(kind, id) => {
-                if (kind === "material") {
-                  setEditingResourceId(id);
-                  return;
-                }
-                navigate({
-                  to: "/teacher/class/$classId",
-                  params: { classId: item.id },
-                  search:
-                    kind === "assignment"
-                      ? { tab: "activity", assignment: id }
-                      : { tab: "activity", assessment: id },
-                });
-              }}
-              onCreate={(kind) => setCreateOpen(kind)}
-              onCreateForStep={(kind, ctx) => {
-                setCreateContext(ctx);
-                setCreateOpen(kind);
-              }}
-              onCreateForLesson={(kind, lessonId) => {
-                setCreateContext({ lessonId, activityId: null });
-                setCreateOpen(kind);
-              }}
+              onAddMaterial={() => setCreateOpen("material")}
             />
           </Suspense>
         </div>
@@ -954,7 +928,6 @@ export function ClassDetail({
         onOpenChange={(open) => {
           if (!open) {
             setCreateOpen(null);
-            setCreateContext(null);
           }
         }}
       >
@@ -969,11 +942,10 @@ export function ClassDetail({
             studentIds={studentIds}
             profilesById={profilesById}
             saving={savingAssignment}
-            context={createContext}
+            context={null}
             onSaveAssignment={async (input) => {
               await onSaveAssignment(input);
               setCreateOpen(null);
-              setCreateContext(null);
             }}
           />
         </DialogContent>
@@ -983,7 +955,6 @@ export function ClassDetail({
         onOpenChange={(open) => {
           if (!open) {
             setCreateOpen(null);
-            setCreateContext(null);
           }
         }}
       >
@@ -998,11 +969,10 @@ export function ClassDetail({
             studentIds={studentIds}
             profilesById={profilesById}
             saving={savingAssessment}
-            context={createContext}
+            context={null}
             onSaveAssessment={async (input) => {
               await onSaveAssessment(input);
               setCreateOpen(null);
-              setCreateContext(null);
             }}
           />
         </DialogContent>

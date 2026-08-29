@@ -97,7 +97,7 @@ class OwnAddressTests(unittest.TestCase):
 
     def test_the_outline_links_to_it_and_old_links_forward(self):
         self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
-        self.assertIn("params: { classId, lessonId: search.lesson }", STUDIO)
+        self.assertIn("params: { classId: first.id, lessonId: search.lesson }", STUDIO)
         self.assertIn("replace: true", STUDIO)
 
     def test_the_lesson_owns_its_data_and_its_writes(self):

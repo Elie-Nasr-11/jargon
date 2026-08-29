@@ -31,27 +31,29 @@ class OldBuilderIsGoneTests(unittest.TestCase):
         # R79: and an editor is no longer a pane — a lesson has its own address, so the
         # old ?lesson= link forwards there rather than swapping the outline out.
         self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
-        self.assertIn("params: { classId, lessonId: search.lesson }", STUDIO)
+        self.assertIn("params: { classId: first.id, lessonId: search.lesson }", STUDIO)
         self.assertNotIn("const selection: Selection", STUDIO)
 
     def test_stale_pane_urls_normalize_to_the_outline(self):
         # Old bookmarks carrying ?unit/?course/?subject replace-navigate to plain
         # Content instead of resurrecting a pane.
-        self.assertIn("if (search.subject || search.course || search.unit)", STUDIO)
+        # R80: the studio page is gone entirely — the old URL forwards into the class.
+        self.assertIn('to: "/teacher/class/$classId"', STUDIO)
+        self.assertIn('search: { tab: "content" }', STUDIO)
         self.assertIn("replace: true", STUDIO)
 
     def test_duplicate_lands_on_the_outline_not_a_pane(self):
         # R44's fork no longer auto-selects the course node (the "builder appears
         # unbidden" path) — the success message carries the story instead.
-        dup = STUDIO.split("const duplicateSharedCourse", 1)[1].split("\n  return (", 1)[0]
+        dup = STUDIO.split("const duplicateSharedCourse", 1)[1].split("\n  return {", 1)[0]
         self.assertNotIn("selectFromId", dup)
         self.assertIn("This class now edits its own copy", dup)
 
 
 class InlineUnitAdminTests(unittest.TestCase):
     def test_unit_renames_in_place(self):
-        self.assertIn("function UnitRenameInput({", STUDIO)
-        self.assertIn("renamingUnitId === unit.id", STUDIO)
+        self.assertIn("function UnitNameInput({", STUDIO)
+        self.assertIn("renaming={renamingUnitId === unit.id}", STUDIO)
         # Commit is a no-op when the title is unchanged or emptied — a misclick into
         # rename can never fire a write.
         self.assertIn("if (title && current && title !== current.title)", STUDIO)
@@ -61,9 +63,9 @@ class InlineUnitAdminTests(unittest.TestCase):
         self.assertIn("if (id) setRenamingUnitId(id);", STUDIO)
 
     def test_unit_delete_lives_on_the_row_and_keeps_the_empty_gate(self):
-        self.assertIn('"Delete unit"', STUDIO)
-        self.assertIn("canDeleteUnit={(id) => lessonsForUnit(id).length === 0}", STUDIO)
-        self.assertIn('onDeleteUnit={(id) => deleteNode("unit", id)}', STUDIO)
+        self.assertIn('label: "Delete this unit"', STUDIO)
+        self.assertIn("disabled: busy || lessons.length > 0,", STUDIO)
+        self.assertIn('onDeleteUnit={(unitId) => course.deleteNode("unit", unitId)}', STUDIO)
 
 
 class BuildEntryTests(unittest.TestCase):
@@ -73,16 +75,17 @@ class BuildEntryTests(unittest.TestCase):
         # units and lessons is not a rival "build from material" path — it is the step
         # that makes the shape, with material as an optional input inside it.
         self.assertIn("Add units &amp; lessons", STUDIO)
-        self.assertIn("onClick={openCourseBuild}", STUDIO)
+        self.assertIn("onClick: openCourseBuild", STUDIO)
+        self.assertIn("onBuildCourse={openCourseBuild}", STUDIO)
         self.assertIn("<AiOutlinePanel", STUDIO)
 
     def test_build_resolves_the_backing_course_like_new_unit_does(self):
         # One resolution for both doors — no second course-creation path to drift.
-        self.assertIn("const ensureBackingCourse = async (", STUDIO)
+        self.assertIn("const ensureBackingCourse = useCallback(", STUDIO)
         build = STUDIO.split("const openCourseBuild", 1)[1].split(";", 5)[0]
-        self.assertIn("ensureBackingCourse(accessToken, targetClassId)", build)
-        add_unit = STUDIO.split("const addUnitToClass", 1)[1].split("const openCourseBuild", 1)[0]
-        self.assertIn("ensureBackingCourse(accessToken, targetClassId)", add_unit)
+        self.assertIn("ensureBackingCourse(accessToken)", build)
+        add_unit = STUDIO.split("const addUnit = useCallback(", 1)[1].split("const addLesson", 1)[0]
+        self.assertIn("ensureBackingCourse(accessToken)", add_unit)
 
     def test_adding_a_lesson_has_exactly_one_door(self):
         # R60 gave "+ Lesson" a menu whose first item was the material path. R75 removed
@@ -93,23 +96,28 @@ class BuildEntryTests(unittest.TestCase):
         # (the outline's + Create, the step overflow) are unrelated and still stand.
         self.assertNotIn("lessonMenuFor", STUDIO)
         self.assertNotIn("Start blank", STUDIO)
-        self.assertIn("onAdd={() => onBuildLesson(unit.id)}", STUDIO)
+        # R80: one Add per level, naming its target — and an empty unit offers the
+        # drafted alternative in its own empty state rather than a second button.
+        self.assertIn("onAddLesson={() => onAddLesson(unit.id)}", STUDIO)
+        self.assertIn("Add a lesson", STUDIO)
 
-    def test_content_list_carries_materials_only(self):
-        # Assignments and quizzes moved to Activity; the outline's work rows are the
-        # teaching materials.
-        self.assertIn(
-            'workItems={workItems.filter((entry) => entry.kind === "material")}', STUDIO
-        )
+    def test_the_outline_carries_units_and_lessons_only(self):
+        # R60 moved assignments and quizzes to Activity and left materials on the
+        # outline. R80 moved those to the lesson that shows them, so the outline is
+        # units and lessons — one hierarchy, nothing hanging off it.
+        self.assertIn("units: Array<{ unit: CurriculumUnit }>;", STUDIO)
+        outline = STUDIO.split("export function CourseOutline(", 1)[1].split("function UnitBlock(", 1)[0]
+        self.assertNotIn("workItems", outline)
 
 
 class SharedBookTests(unittest.TestCase):
     def test_the_fork_banner_reaches_the_outline_root(self):
         # R50's guarantee: the server's "duplicate first" refusal always points at a
         # button that exists. With the panes gone that button must live on the list.
-        self.assertIn("function SharedCourseNotice({", STUDIO)
-        root_face = STUDIO.split("R79: and it is the ONLY", 1)[1].split("<ClassworkList", 1)[0]
-        self.assertIn("<SharedCourseNotice", root_face)
+        # R80: the notice is part of the Course screen itself, above the outline.
+        face = STUDIO.split("export function CourseScreen(", 1)[1].split("<CourseOutline", 1)[0]
+        self.assertIn("course.sharedNotice", face)
+        self.assertIn("Make a copy for this class", face)
 
 
 class CachedLinksTests(unittest.TestCase):

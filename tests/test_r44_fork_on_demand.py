@@ -97,14 +97,14 @@ class ClientTests(unittest.TestCase):
 
 class StudioTests(unittest.TestCase):
     def test_shared_strip_carries_the_fork_action(self):
-        self.assertIn("Duplicate for this class", STUDIO)
-        self.assertIn("duplicateSharedCourse(sharedNotice.courseId)", STUDIO)
+        self.assertIn("Make a copy for this class", STUDIO)
+        self.assertIn("course.duplicateSharedCourse(course.sharedNotice!.courseId)", STUDIO)
         self.assertIn("This class now edits its own copy", STUDIO)
         self.assertIn("Past student work stays with the original lessons.", STUDIO)
 
     def test_courses_are_org_filtered(self):
         self.assertIn(
-            "course.organization_id === selectedClass?.organization_id",
+            "course.organization_id === classSummary?.organization_id",
             STUDIO,
         )
 

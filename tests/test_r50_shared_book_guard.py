@@ -50,14 +50,14 @@ class SharedBookGuardTests(unittest.TestCase):
         # when no peer class links the book (previously peers-gated only).
         self.assertIn("const isGlobal = !course.organization_id;", STUDIO)
         self.assertIn("peers.length || isGlobal", STUDIO)
-        self.assertIn("This is a shared book — duplicate it to edit or add lessons", STUDIO)
+        self.assertIn("This is a shared book — make a copy for this class before editing", STUDIO)
 
     def test_r43_r44_contracts_survive(self):
         # Pinned elsewhere too; asserted here so this file fails loudly if the R50 copy
         # branch ever eats them.
         self.assertIn("This course is shared — changes here also reach", STUDIO)
-        self.assertIn("Duplicate for this class", STUDIO)
-        self.assertIn("duplicateSharedCourse(sharedNotice.courseId)", STUDIO)
+        self.assertIn("Make a copy for this class", STUDIO)
+        self.assertIn("course.duplicateSharedCourse(course.sharedNotice!.courseId)", STUDIO)
 
 
 if __name__ == "__main__":

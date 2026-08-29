@@ -167,7 +167,10 @@ class WiringTests(unittest.TestCase):
         # before you have decided anything. The panel itself is unchanged and is now the
         # single door adding a lesson opens.
         self.assertIn("function BuildFromMaterialPanel(", STUDIO)
-        self.assertIn("onAdd={() => onBuildLesson(unit.id)}", STUDIO)
+        # R80: the per-unit draft is offered by the unit's own menu and by its empty
+        # state — the panel opens over the outline instead of inside it.
+        self.assertIn('label: "Draft lessons from material…"', STUDIO)
+        self.assertIn("onDraftLessons={() => onDraftLessons(unit.id)}", STUDIO)
         self.assertIn("<BuildFromMaterialPanel", STUDIO)
         self.assertIn("applyPackage(buildForUnitId, pkg)", STUDIO)
 

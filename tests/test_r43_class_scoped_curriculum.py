@@ -56,15 +56,20 @@ class StrictStudentScopeTests(unittest.TestCase):
 class ClassScopedStudioTests(unittest.TestCase):
     def test_outline_is_scoped_to_the_class_links(self):
         self.assertIn("const linkedCourseIds = useMemo", STUDIO)
-        self.assertIn("classCoursesForSubject", STUDIO)
+        self.assertIn("if (linkedCourseIds && !linkedCourseIds.has(course.id)) continue;", STUDIO)
         # R45 flattened the outline to units — the class scoping now feeds classUnits.
-        self.assertIn("units={outlineUnits}", STUDIO)
+        self.assertIn("units={course.outlineUnits}", STUDIO)
         # Links unknown (read failed) degrades to the unscoped tree, never a hidden one.
         self.assertIn("if (!classLinks) return null;", STUDIO)
-        self.assertIn("!linkedCourseIds || linkedCourseIds.has(course.id)", STUDIO)
+        self.assertIn("if (linkedCourseIds && !linkedCourseIds.has(course.id)) continue;", STUDIO)
 
-    def test_new_subjects_stay_visible_to_build_under(self):
-        self.assertIn("coursesForSubject(subject.id).length === 0", STUDIO)
+    def test_subjects_are_invisible_plumbing(self):
+        # R80: there is no subject or course picker at all — a class's backing course is
+        # resolved (or created) on the first "Add a unit", so nothing can be stranded
+        # under a subject a teacher cannot see.
+        self.assertIn("const ensureBackingCourse = useCallback(", STUDIO)
+        outline = STUDIO.split("export function CourseOutline(", 1)[1].split("function UnitBlock(", 1)[0]
+        self.assertNotIn("Subject", outline)
 
     def test_global_orgless_subjects_are_visible(self):
         # All of prod's published courses live under organization_id=NULL (global shared
@@ -76,18 +81,18 @@ class ClassScopedStudioTests(unittest.TestCase):
         # course-from-material build) — the auto-link contract rides along.
         self.assertIn("Array.from(new Set([...mine, courseId]))", STUDIO)
         # Never write links from an unknown baseline (set_class_courses REPLACES the set).
-        self.assertIn("if (links) {", STUDIO)
-        self.assertIn("const ensureBackingCourse = async (", STUDIO)
+        self.assertIn("if (classLinks) {", STUDIO)
+        self.assertIn("const ensureBackingCourse = useCallback(", STUDIO)
 
     def test_shared_courses_are_visibly_shared(self):
         self.assertIn("peerClassNames", STUDIO)
-        self.assertIn("also in ${peers.join", STUDIO)
+        self.assertIn("changes here also reach ${course.sharedNotice.names}", STUDIO)
         self.assertIn("This course is shared — changes here also reach", STUDIO)
 
     def test_panel_is_mounted_controlled_by_the_studio(self):
         self.assertIn("<LinkedCoursesPanel", STUDIO)
-        self.assertIn("linked={linkedCourseIds}", STUDIO)
-        self.assertIn("peerNames={peerClassNames}", STUDIO)
+        self.assertIn("linked={course.linkedCourseIds}", STUDIO)
+        self.assertIn("peerNames={course.peerClassNames}", STUDIO)
         self.assertNotIn("LinkedCoursesPanel", CONSOLE)
 
 

@@ -51,18 +51,22 @@ class OneBuildDoorTests(unittest.TestCase):
         self.assertNotIn("Start blank", STUDIO)
         self.assertNotIn("lessonMenuFor", STUDIO)
 
-    def test_adding_a_lesson_opens_the_one_builder(self):
-        self.assertIn("onAdd={() => onBuildLesson(unit.id)}", STUDIO)
+    def test_adding_a_lesson_has_one_door_per_level(self):
+        # R75 collapsed the per-unit fork into one door. R80: that door is "Add a
+        # lesson" on the unit, with the drafted alternative offered by the unit's own
+        # empty state rather than a second standing button.
+        self.assertIn("onAddLesson={() => onAddLesson(unit.id)}", STUDIO)
+        self.assertIn("Draft one from your material", STUDIO)
 
 
 class DemotionTests(unittest.TestCase):
     def test_linked_content_opens_on_demand_and_still_exists(self):
         self.assertNotIn("Books &amp; shared content", STUDIO)
-        self.assertIn("selectedClass && booksOpen ? (", STUDIO)
+        self.assertIn("open={coursesOpen}", STUDIO)
         self.assertIn("<LinkedCoursesPanel", STUDIO)
         # R77 renamed it after what it manages: this panel picks the class's COURSES and
         # never had anything to do with resources, which "content" implied.
-        self.assertIn('{booksOpen ? "Hide courses" : "Courses in this class"}', STUDIO)
+        self.assertIn('label: "Courses in this class…"', STUDIO)
 
     def test_knowledge_is_demoted_not_deleted(self):
         # R75 folded it into a collapsible; R79 moved it off the lesson page entirely,

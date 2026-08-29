@@ -39,6 +39,7 @@ SRC = ROOT / "frontend" / "src"
 AUTHORING = SRC / "features" / "teacher" / "authoring"
 CONSOLE = SRC / "features" / "teacher" / "console"
 LESSON = SRC / "features" / "teacher" / "lesson"
+COURSE = SRC / "features" / "teacher" / "course"
 
 # The ceiling for a module. ClassDetail is the largest at ~1,030 lines and is next
 # in the queue to be rebuilt; nothing may grow past it without a deliberate raise.
@@ -90,8 +91,7 @@ class ModuleShapeTests(unittest.TestCase):
             "stepModel.tsx",      # what kinds of step exist
             "fields.tsx",         # labelled input / textarea / select
             "dragList.tsx",       # the shared drag surface
-            "Outline.tsx",        # units + lessons as one tree
-            "coursePanels.tsx",   # the course-scale panels (build, review)
+            "useAuthoringData.ts",  # the payload, and the two ways anything writes
             "StepCard.tsx",       # one step, open for editing
             "referenceInput.tsx", # choosing the material a generation reads
             "generatePanels.tsx", # generate, show the diff, refine, write
@@ -99,6 +99,19 @@ class ModuleShapeTests(unittest.TestCase):
         ):
             with self.subTest(module=name):
                 self.assertTrue((AUTHORING / name).is_file())
+
+    def test_the_course_screen_is_the_outline_and_its_data(self):
+        # R80 (brief step 4). The outline, the data behind it, and the build/review
+        # runner — plus the two course-scale panels the runner shows.
+        for name in (
+            "CourseScreen.tsx",    # the outline, the banner, and what opens over them
+            "CourseOutline.tsx",   # units and lessons, one Add per level
+            "coursePanels.tsx",    # a build in flight, and the review gate
+            "useCourseData.ts",    # the outline, and every write that shapes it
+            "useCourseBuild.ts",   # getting a book in, and checking what came out
+        ):
+            with self.subTest(module=name):
+                self.assertTrue((COURSE / name).is_file())
 
     def test_the_lesson_screen_is_four_sections_and_its_data(self):
         # R79 (brief step 3). Four sections, one hook that owns the writes, and two
@@ -146,8 +159,9 @@ class ModuleShapeTests(unittest.TestCase):
     def test_nothing_was_copied_only_moved(self):
         surface = authoring_source() + "\n" + console_source()
         for symbol in (
-            "function LessonScreen(", "function StepCard(", "function ClassworkList(",
+            "function LessonScreen(", "function StepCard(", "function CourseOutline(",
             "function LessonSteps(", "function AiOutlinePanel(", "function AiStepsPanel(",
+            "function CourseScreen(",
             "function ClassDetail(", "function StudentDetail(", "function GradebookTable(",
             "function ResourceManager(", "function AssignmentManager(",
             "function AssessmentManager(",
@@ -159,7 +173,7 @@ class ModuleShapeTests(unittest.TestCase):
         # R42's chunking: the Students landing must not pull the authoring code.
         console = console_source()
         self.assertIn("lazy(() =>", console)
-        self.assertIn('import("@/routes/teacher.curriculum")', console)
+        self.assertIn('import("@/features/teacher/course/CourseScreen")', console)
 
 
 class PinLocationTests(unittest.TestCase):

@@ -90,21 +90,21 @@ class SectionsTests(unittest.TestCase):
 
 class ClassIsTheCourseTests(unittest.TestCase):
     def test_outline_is_flat_units(self):
-        self.assertIn("units={outlineUnits}", STUDIO)
-        self.assertIn("const classUnits = useMemo", STUDIO)
+        self.assertIn("units={course.outlineUnits}", STUDIO)
+        self.assertIn("const outlineUnits = useMemo(", STUDIO)
         # The outline header creates units, not subjects.
         # R47: the flat unit list renders as the full-width ClassworkList (units are
         # topic headings) — still creating units, never subjects.
-        outline = STUDIO.split("function ClassworkList({")[1].split("function OutlineRow(")[0]
+        outline = STUDIO.split("export function CourseOutline({")[1].split("function UnitBlock(")[0]
         self.assertIn("onAddUnit", outline)
         self.assertNotIn("onAddSubject", outline)
         self.assertNotIn('"subject"', outline)
 
     def test_new_unit_auto_creates_the_backing_course(self):
-        self.assertIn("const addUnitToClass = ()", STUDIO)
+        self.assertIn("const addUnit = useCallback(", STUDIO)
         self.assertIn("Could not create the class curriculum home.", STUDIO)
         # The backing course/subject are titled after the class (they leak nowhere else).
-        self.assertIn("title: selectedClass!.name,", STUDIO)
+        self.assertIn("title: classSummary.name,", STUDIO)
 
     def test_breadcrumb_hides_subject_and_course(self):
         self.assertNotIn("label: path.subject.title", STUDIO)
@@ -118,16 +118,21 @@ class ClassIsTheCourseTests(unittest.TestCase):
         # shared content never competes with the class's own curriculum — and it is still
         # the only surface that can trim what students see, so it is not deleted.
         self.assertNotIn("Books &amp; shared content", STUDIO)
-        self.assertIn("const [booksOpen, setBooksOpen] = useState(false);", STUDIO)
-        self.assertIn("selectedClass && booksOpen ? (", STUDIO)
+        # R80: "which courses this class teaches" is rarer still — it opens from the
+        # Course screen's menu, and moves to the class's settings when that exists.
+        self.assertIn("const [coursesOpen, setCoursesOpen] = useState(false);", STUDIO)
+        self.assertIn("open={coursesOpen}", STUDIO)
         self.assertIn("<LinkedCoursesPanel", STUDIO)
 
     def test_shared_units_stay_honest_without_eating_the_title(self):
         # Long peer lists live in the tooltip; the row shows a short "shared" chip and
         # the meta span can never squeeze the label out (max-w + truncate).
-        self.assertIn('annotation ? "shared" : null,', STUDIO)
-        self.assertIn("metaTitle={annotation ?? undefined}", STUDIO)
-        self.assertIn("max-w-[45%] shrink-0 truncate", STUDIO)
+        # R80: a shared course says so once, in the notice above the outline, instead of
+        # annotating every unit row.
+        self.assertIn("This course is shared", STUDIO)
+        self.assertIn("changes here also reach", STUDIO)
+        # And the row's own meta can still never squeeze the lesson title out.
+        self.assertIn("min-w-0 flex-1 truncate", STUDIO)
 
 
 if __name__ == "__main__":

@@ -89,9 +89,9 @@ class SidebarTests(unittest.TestCase):
 
 class ConsoleTests(unittest.TestCase):
     def test_studio_mounts_lazily_inside_the_class_content_section(self):
-        self.assertIn('import("@/routes/teacher.curriculum")', CONSOLE)
-        self.assertIn("module.CurriculumStudio", CONSOLE)
-        self.assertIn("<CurriculumStudio", CONSOLE)
+        self.assertIn('import("@/features/teacher/course/CourseScreen")', CONSOLE)
+        self.assertIn("module.CourseScreen", CONSOLE)
+        self.assertIn("<CourseScreen", CONSOLE)
         self.assertIn('{section === "content" ? (', CONSOLE)
 
     def test_students_section_owns_the_roster_and_no_overview_remains(self):
@@ -131,8 +131,10 @@ class ConsoleTests(unittest.TestCase):
 
 
 class StudioTests(unittest.TestCase):
-    def test_studio_is_an_exported_class_scoped_component(self):
-        self.assertIn("export function CurriculumStudio({", STUDIO)
+    def test_the_course_screen_is_class_scoped(self):
+        # R42 made the studio a component the class mounts. R80 replaced it with the
+        # Course screen, which keeps the contract: it takes a class and nothing else.
+        self.assertIn("export function CourseScreen({", STUDIO)
         self.assertIn("classId: string;", STUDIO)
         # The host (TeacherConsole) gates the teacher role; the studio must not re-gate
         # or render its own chrome (shell imports gone, class picker gone).
@@ -157,10 +159,10 @@ class StudioTests(unittest.TestCase):
     def test_legacy_route_redirects_into_the_first_class(self):
         self.assertIn('createFileRoute("/teacher/curriculum")', STUDIO)
         self.assertIn("fetchTeacherClasses(session.user.id)", STUDIO)
-        self.assertIn(
-            'search: { tab: "content", ...(search.lesson ? { lesson: search.lesson } : {}) }',
-            STUDIO,
-        )
+        # R79/R80: a lesson link forwards to the lesson's own address; anything else
+        # lands on the class's Course screen.
+        self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
+        self.assertIn('search: { tab: "content" }', STUDIO)
         self.assertIn("replace: true", STUDIO)
 
     def test_class_route_carries_the_studio_selection_params(self):

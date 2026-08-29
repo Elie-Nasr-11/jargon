@@ -31,7 +31,6 @@ export function CourseReviewPanel({
   onSelectAll,
   onPublish,
   onOpenLesson,
-  onClose,
 }: {
   review: LessonReview[];
   loading: boolean;
@@ -41,7 +40,6 @@ export function CourseReviewPanel({
   onSelectAll: (next: boolean) => void;
   onPublish: () => void;
   onOpenLesson: (lessonId: string) => void;
-  onClose: () => void;
 }) {
   const drafts = review.filter((item) => item.publication_status !== "published");
   const publishable = drafts.filter((item) => item.ready);
@@ -53,16 +51,12 @@ export function CourseReviewPanel({
       <div className="p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-title font-medium text-foreground">
-              <ClipboardCheck className="h-4 w-4" strokeWidth={1.7} />
-              Review before students see it
-            </div>
-            <p className="mt-1 text-meta text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               {loading
                 ? "Reading what was written…"
                 : drafts.length
                   ? `${drafts.length} draft ${drafts.length === 1 ? "lesson" : "lessons"} — check what each one contains, then publish the ones you are happy with.`
-                  : "Every lesson in this chapter is already published."}
+                  : "Every lesson here is already published."}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -75,9 +69,6 @@ export function CourseReviewPanel({
                 {allSelected ? "Clear all" : "Select all"}
               </button>
             ) : null}
-            <button type="button" onClick={onClose} className="btn btn-ghost btn-sm">
-              Close
-            </button>
           </div>
         </div>
 

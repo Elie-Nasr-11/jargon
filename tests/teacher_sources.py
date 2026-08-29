@@ -28,6 +28,8 @@ AUTHORING_DIR = SRC / "features" / "teacher" / "authoring"
 # of the same authoring surface, so pins that ask "does the console let a teacher
 # do X to a lesson" keep reading one text.
 LESSON_DIR = SRC / "features" / "teacher" / "lesson"
+# R80: and the course outline is the other half of it.
+COURSE_DIR = SRC / "features" / "teacher" / "course"
 CONSOLE_SHELL = SRC / "features" / "teacher" / "TeacherConsole.tsx"
 CONSOLE_DIR = SRC / "features" / "teacher" / "console"
 
@@ -48,7 +50,12 @@ def _join(paths: list[Path]) -> str:
 
 def authoring_paths() -> list[Path]:
     """Every file that makes up the authoring surface, route first."""
-    return [AUTHORING_ROUTE] + _modules(AUTHORING_DIR) + _modules(LESSON_DIR)
+    return (
+        [AUTHORING_ROUTE]
+        + _modules(AUTHORING_DIR)
+        + _modules(COURSE_DIR)
+        + _modules(LESSON_DIR)
+    )
 
 
 def console_paths() -> list[Path]:

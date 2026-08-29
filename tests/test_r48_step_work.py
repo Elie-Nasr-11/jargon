@@ -209,9 +209,13 @@ class ConsoleTests(unittest.TestCase):
     def test_create_for_step_is_a_separate_seam(self):
         # test_r47 pins onCreate/createOpen; the step path is ADDITIVE — its own
         # callback and its own context state, so the plain + Create flow is untouched.
-        self.assertIn("onCreateForStep={(kind, ctx) => {", CONSOLE)
-        self.assertIn("setCreateContext(ctx);", CONSOLE)
-        self.assertIn("createContext", CONSOLE)
+        # R80: a step lives on the lesson screen, so the seam moved there with it —
+        # and the step id still rides into the dialog, which is the whole point.
+        self.assertIn("onCreateForStep={(kind, ctx) => {", STUDIO)
+        self.assertIn("setCreateForStep(ctx.activityId);", STUDIO)
+        self.assertIn("context={{ lessonId, activityId: createForStep }}", STUDIO)
+        self.assertIn("setCreateForStep(ctx.activityId);", STUDIO)
+        self.assertIn("createForStep", STUDIO)
 
     def test_managers_prefill_and_lock_the_lesson(self):
         # A step-created item is born on the step's lesson — the select locks so the

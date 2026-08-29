@@ -53,8 +53,8 @@ class InventoryTests(unittest.TestCase):
         self.assertIn("Nothing attached.", ROUTE)
 
     def test_an_empty_lesson_admits_it_in_the_tree(self):
-        block = ROUTE.split("function outlineLessonMeta(", 1)[1].split("\n}", 1)[0]
-        self.assertIn('if (stepCount === 0) return status !== "published" ? `${status} · empty` : "empty";', block)
+        block = ROUTE.split("export function lessonStateLine(", 1)[1].split("\n}", 1)[0]
+        self.assertIn('parts.push(stepCount === 0 ? "empty"', block)
 
     def test_the_lesson_counts_only_its_own(self):
         block = WORK.split("export function lessonWorkRows(", 1)[1]
@@ -66,8 +66,9 @@ class InventoryTests(unittest.TestCase):
 class TargetedCreationTests(unittest.TestCase):
     def test_lesson_level_work_is_a_first_class_case(self):
         # activityId null = belongs to the lesson, not to one of its steps.
-        self.assertIn("activityId: string | null;\n  } | null>(null);", CONSOLE)
-        self.assertIn("setCreateContext({ lessonId, activityId: null });", CONSOLE)
+        # R80: the context is declared where the work is created — on the lesson.
+        self.assertIn("const [createForStep, setCreateForStep] = useState<string | null>(null);", ROUTE)
+        self.assertIn("context={{ lessonId, activityId: createForStep }}", ROUTE)
 
     def test_the_lesson_offers_its_own_work(self):
         # R79: "Classwork on this lesson" became the Work section — same law, one word
@@ -76,7 +77,7 @@ class TargetedCreationTests(unittest.TestCase):
         self.assertIn('onCreate("assessment")', ROUTE)
         self.assertIn("New assignment on this lesson", ROUTE)
         self.assertIn("New quiz on this lesson", ROUTE)
-        self.assertIn('context={{ lessonId, activityId: null }}', ROUTE)
+        self.assertIn('context={{ lessonId, activityId: createForStep }}', ROUTE)
 
     def test_existing_work_is_listed_where_it_lives(self):
         # And it says the three things job 3 is about: who, when, and what is owed.
@@ -85,8 +86,10 @@ class TargetedCreationTests(unittest.TestCase):
         self.assertIn("{row.toMark} to mark", ROUTE)
 
     def test_the_step_linked_path_is_untouched(self):
-        # R48's step-created work still flows through onCreateForStep.
-        self.assertIn("onCreateForStep={(kind, ctx) => {", CONSOLE)
+        # R48's step-created work still flows through onCreateForStep — from the step
+        # card on the lesson screen, which is where a step now lives.
+        self.assertIn("onCreateForStep={onCreateForStep}", ROUTE)
+        self.assertIn("setCreateForStep(ctx.activityId);", ROUTE)
 
 
 class RankedResourceTests(unittest.TestCase):

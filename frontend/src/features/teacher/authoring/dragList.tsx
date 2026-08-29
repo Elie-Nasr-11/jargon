@@ -66,7 +66,3 @@ export function dropClass(state: { over: boolean }) {
   // min-w-0 lets nested rows shrink so their labels truncate instead of forcing width.
   return `min-w-0 ${state.over ? "rounded-lg ring-1 ring-foreground/40" : ""}`;
 }
-
-// ---------------------------------------------------------------------------
-// Detail pane — edits whichever node is selected.
-// ---------------------------------------------------------------------------
